@@ -80,6 +80,18 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   font-variant-numeric: tabular-nums;
 }
 .pixel-exact { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* The checked state would otherwise take the OS accent colour. */
+.toolbar input[type='checkbox'] { accent-color: var(--text-0); }
+
+/* Focus is a 1px inset neutral ring (the style spec's "weight and a 1px
+   inset ring"), never Chromium's accent-coloured outline. Pointer focus on
+   buttons and selects shows nothing; keyboard focus (and any focus in a
+   text field) shows the ring. */
+.toolbar :is(button, select, input):focus { outline: none; }
+.toolbar :is(button, select, input):focus-visible {
+  outline: 1px solid var(--text-1);
+  outline-offset: -1px;
+}
 
 .panes { flex: 1 1 auto; display: flex; min-height: 0; }
 .pane {
@@ -97,6 +109,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* The backing store is already at device resolution; this only guards against
    a fractional CSS size introducing a resample. */
 .target-canvas { display: block; image-rendering: pixelated; }
+/* The canvas itself never carries a ring: an outline over its edge would sit
+   on the very pixels under inspection. Keyboard focus in the target pane is
+   shown on the pane's own hairlines instead, which touch no page pixel. */
+.target-canvas:focus { outline: none; }
+.target-pane:has(.target-canvas:focus-visible) { border-left-color: var(--text-1); }
+.target-pane:has(.target-canvas:focus-visible) .pane-footer { border-top-color: var(--text-1); }
 
 /* Signature: each pane always states what it is showing, so a screenshot of
    Obsrv is self-documenting. */

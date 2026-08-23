@@ -46,12 +46,18 @@ export function attachSyncBus(
   let loopWarned = false
 
   function mirror(from: Pane, url: string): void {
-    if (url !== lastReported) {
+    const expected = pending[from]
+    pending[from] = null
+    // Report every commit except the echo of one already reported — the
+    // second pane committing the URL the first one was mirrored to (or both
+    // panes committing an explicit `navigate`). A same-URL commit that is not
+    // an echo is still news: Electron emits no `did-navigate` for a committed
+    // error page, so the Back that returns from one lands on the URL last
+    // reported, and the renderer clears its load-error badge on that report.
+    if (url !== lastReported || expected !== url) {
       lastReported = url
       onUrlChanged(url)
     }
-    const expected = pending[from]
-    pending[from] = null
     if (expected === url) return
 
     const to: Pane = from === 'native' ? 'target' : 'native'

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
 import {
@@ -34,8 +34,15 @@ export function Toolbar() {
   const surround = useStore(s => s.surround)
   const setSurround = useStore(s => s.setSurround)
 
+  const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(barText)
-  useEffect(() => setDraft(barText), [barText])
+
+  // The bar follows the panes — a click in the native pane, a redirect, a
+  // back — except while the user is typing in it: an `onUrlChanged` landing
+  // mid-edit must not clobber the draft. Escape discards the edit.
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setDraft(barText)
+  }, [barText])
 
   // Spec §7: the URL bar shows the filename, read-only, while in image mode.
   const readOnly = mode === 'image'
@@ -44,7 +51,10 @@ export function Toolbar() {
     e.preventDefault()
     if (readOnly || draft.trim() === '') return
     setError(null)
-    setUrl(await window.obsrv.navigate(draft))
+    const applied = await window.obsrv.navigate(draft)
+    setUrl(applied)
+    // The input keeps focus through Enter, so the sync above would skip it.
+    setDraft(applied)
   }
 
   return (
@@ -61,11 +71,15 @@ export function Toolbar() {
 
       <form className="url-form" onSubmit={submit}>
         <input
+          ref={inputRef}
           value={draft}
           readOnly={readOnly}
           spellCheck={false}
           placeholder="Enter a URL, or drop a PNG"
           onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') setDraft(barText)
+          }}
         />
       </form>
 

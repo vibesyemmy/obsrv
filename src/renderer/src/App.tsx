@@ -21,11 +21,19 @@ export function App() {
 
   // The store performs no IPC of its own; this is the one place that bridges.
   useEffect(() => {
-    void window.obsrv.getHostInfo().then(setHost)
-    void window.obsrv.getSettings().then(setSettings)
+    // A rejected query leaves the store's fallbacks in place (flat 2x scale,
+    // default settings) rather than taking the app down before first paint.
+    window.obsrv.getHostInfo().then(setHost, e => console.warn('obsrv: getHostInfo failed', e))
+    window.obsrv.getSettings().then(setSettings, e => console.warn('obsrv: getSettings failed', e))
     const offs = [
       window.obsrv.onHostChanged(setHost),
-      window.obsrv.onUrlChanged(setUrl),
+      // A committed navigation — back, forward, reload, a link — supersedes
+      // the last load failure. A *failed* load commits Chromium's error page
+      // first and reports its error after, so the badge still lands last.
+      window.obsrv.onUrlChanged(url => {
+        setError(null)
+        setUrl(url)
+      }),
       window.obsrv.onLoadError(setError),
       window.obsrv.onTargetLoading(setTargetLoading),
     ]

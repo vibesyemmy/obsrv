@@ -170,11 +170,54 @@ test('a click on the canvas lands on the same target pixel', async () => {
     .toEqual(target)
 })
 
+test('a navigation elsewhere does not clobber a URL being typed', async () => {
+  const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+  const input = page.locator('.url-form input')
+  await input.fill('https://half-typed')
+  await expect(input).toBeFocused()
+
+  // A link click in the native pane, say: SyncBus mirrors it into the target
+  // and reports the URL to the bar in the same handler, so once the target
+  // has followed, the `onUrlChanged` has been sent.
+  await app.evaluate(({}, u: string) => (globalThis as any).__obsrv.native.load(u), TALL)
+  await expect.poll(paneUrls).toEqual({ native: TALL, target: TALL })
+  await expect(input).toHaveValue('https://half-typed')
+
+  // Escape discards the draft and shows where the panes actually are —
+  // which also proves the URL change did reach the store.
+  await input.press('Escape')
+  await expect(input).toHaveValue(TALL)
+})
+
 test('a failed load leaves the error code showing in the toolbar', async () => {
   await page.fill('.url-form input', 'https://obsrv-no-such-host.invalid')
   await page.press('.url-form input', 'Enter')
 
-  // The badge must survive the `did-navigate` to Chromium's own error page.
+  // The badge must survive the `did-navigate` to Chromium's own error page:
+  // once both panes have stopped loading, every event of this navigation has
+  // been delivered, and the badge must still be there.
   await expect(page.locator('.badge-error')).toBeVisible({ timeout: 15_000 })
+  await expect
+    .poll(() =>
+      app.evaluate(() => {
+        const ctx = (globalThis as any).__obsrv
+        return ctx.native.webContents.isLoading() || ctx.target.webContents.isLoading()
+      }),
+    )
+    .toBe(false)
   await expect(page.locator('.badge-error')).toBeVisible()
+})
+
+test('a later successful navigation clears the error badge', async () => {
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.badge-error')).toHaveCount(0)
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+
+  // And a history move, which does not go through the URL form at all.
+  await app.evaluate(({}, u: string) => (globalThis as any).__obsrv.native.load('https://obsrv-no-such-host.invalid'), '')
+  await expect(page.locator('.badge-error')).toBeVisible({ timeout: 15_000 })
+  await page.click('.toolbar button[title="Back"]')
+  await expect(page.locator('.badge-error')).toHaveCount(0)
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
 })

@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { GlRenderer } from '../gl/renderer'
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
 import { selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
 
@@ -82,11 +83,13 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
     canvas.addEventListener('webglcontextrestored', onRestored)
 
     // React's onWheel is passive, so the page would scroll under the canvas.
+    // The wheel is claimed for the target only in URL mode; in image mode
+    // there is nothing to scroll in the target and the pane scrolls natively.
     // The bridge maps CSS pixels, so it divides by the CSS magnification
     // (S / DPR), not by S.
     const onWheel = (e: WheelEvent): void => {
-      e.preventDefault()
       if (useStore.getState().mode !== 'url') return
+      e.preventDefault()
       const r = canvas.getBoundingClientRect()
       const ev = wheelEvent(e, r, draw.current.scale / (window.devicePixelRatio || 1))
       if (ev) window.obsrv.sendInput(ev)
@@ -94,7 +97,10 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
     canvas.addEventListener('wheel', onWheel, { passive: false })
 
     // A drag that ends off the canvas must still release the button in the
-    // target, or it keeps dragging until the next click.
+    // target, or it keeps dragging until the next click. Leaving the canvas
+    // mid-drag is deliberately *not* a release: the pointer can come back
+    // (a scrollbar drag, a selection that overshoots the edge), and the
+    // target's own button state is what decides when the drag ends.
     const onWindowUp = (e: MouseEvent): void => {
       if (useStore.getState().mode !== 'url') return
       if (e.target === canvas) return // the canvas's own onMouseUp sent it
@@ -122,7 +128,9 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
     if (gl && gl.sourceWidth > 0) gl.draw({ scale, params })
   }, [scale, params])
 
-  const dpr = window.devicePixelRatio || 1
+  // Re-read when the window moves between a 1x and a 2x display; the CSS
+  // box and the input maths below both depend on it.
+  const dpr = useDevicePixelRatio()
 
   // Every bridge builder may return null (unnamed button, pinch gesture,
   // dead key); those events are dropped, never sent as something else.
@@ -151,11 +159,9 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
       onMouseDown={send('mouseDown')}
       onMouseUp={send('mouseUp')}
       onMouseMove={send('mouseMove')}
-      // Leaving mid-drag releases the button; the window listener above
-      // covers the case where the real mouseup lands outside the canvas.
-      onMouseLeave={e => {
-        if (e.buttons) send('mouseUp')(e)
-      }}
+      // No onMouseLeave release: the window mouseup listener above catches
+      // a release that lands outside the canvas, and a drag that crosses the
+      // edge and comes back stays a drag.
       onKeyDown={e => {
         if (mode !== 'url') return
         // Leave shortcuts to the OS and the app menu.
