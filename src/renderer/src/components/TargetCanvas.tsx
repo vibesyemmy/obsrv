@@ -95,6 +95,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   useEffect(() => {
     setFitScale(fit ? scale : null)
   }, [fit, scale, setFitScale])
+  // The setter is stable, so this cleanup runs on unmount only: a torn-down
+  // canvas must not leave a stale fit readout in the store.
+  useEffect(() => () => setFitScale(null), [setFitScale])
 
   // Read by the frame callback, which is installed once and must not go stale.
   const draw = useRef({ scale, params, smooth: fit })
@@ -113,6 +116,11 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   } | null>(null)
   const [panning, setPanning] = useState(false)
   const [altHeld, setAltHeld] = useState(false)
+  // True between a forwarded mouseDown and its forwarded mouseUp. Option only
+  // suppresses *new* gestures: a drag the page already owns must complete —
+  // its moves and its release still forward even if Option goes down
+  // mid-drag, or the page would be left dragging forever.
+  const forwardDrag = useRef(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -192,10 +200,13 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // The bridge maps CSS pixels, so it divides by the CSS magnification
     // (S / DPR), not by S.
     const onWheel = (e: WheelEvent): void => {
-      // Alt+wheel is the pan chord (1:1 only — fit has nothing to pan): it
-      // scrolls the pane in natural direction and never reaches the page.
-      if (e.altKey && useStore.getState().viewMode === '1:1') {
+      // Alt+wheel is the pan chord and never reaches the page: it scrolls
+      // the pane in natural direction in 1:1, and is a no-op in fit — fit
+      // has nothing to pan, and forwarding an Alt-modified wheel would be a
+      // different gesture to the page than the one the user made.
+      if (e.altKey) {
         e.preventDefault()
+        if (useStore.getState().viewMode !== '1:1') return
         const body = canvas.closest('.pane-body')
         if (body instanceof HTMLElement) {
           body.scrollLeft += e.deltaX
@@ -220,14 +231,19 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // target's own button state is what decides when the drag ends.
     const onWindowUp = (e: MouseEvent): void => {
       if (useStore.getState().mode !== 'url') return
-      // Fit mode and the pan chords never forward (see `send`); a release
-      // landing off the canvas obeys the same rules.
+      // Same forwarding rules as `send`: fit mode and the pan chords never
+      // forward, and Option only suppresses a release that is not completing
+      // a forwarded drag.
       if (useStore.getState().viewMode !== '1:1') return
-      if (panRef.current || e.altKey || e.button === 1) return
+      if (panRef.current || e.button === 1) return
+      if (e.altKey && !forwardDrag.current) return
       if (e.target === canvas) return // the canvas's own onMouseUp sent it
       const r = canvas.getBoundingClientRect()
       const ev = mouseEvent('mouseUp', e, r, draw.current.scale / (window.devicePixelRatio || 1))
-      if (ev) window.obsrv.sendInput(ev)
+      if (ev) {
+        window.obsrv.sendInput(ev)
+        forwardDrag.current = false
+      }
     }
     window.addEventListener('mouseup', onWindowUp)
 
@@ -406,11 +422,17 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     (e: ReactMouseEvent<HTMLCanvasElement>): void => {
       if (mode !== 'url') return
       // Fit mode and the pan chords own the pointer: nothing forwards from
-      // the overview, while a pan is live, while Option is held, or for the
-      // middle button (the pan gesture's own press and release included).
-      if (viewMode !== '1:1' || panRef.current || e.altKey || e.button === 1) return
+      // the overview, while a pan is live, or for the middle button (the pan
+      // gesture's own press and release included). Option suppresses new
+      // gestures and idle hovers only — see `forwardDrag`.
+      if (viewMode !== '1:1' || panRef.current || e.button === 1) return
+      if (e.altKey && !forwardDrag.current) return
       const out = mouseEvent(type, e, e.currentTarget.getBoundingClientRect(), scale / dpr)
-      if (out) window.obsrv.sendInput(out)
+      if (out) {
+        window.obsrv.sendInput(out)
+        if (type === 'mouseDown') forwardDrag.current = true
+        else if (type === 'mouseUp') forwardDrag.current = false
+      }
     }
 
   // Backing store is `round(viewport × S)` device pixels (the rounding is

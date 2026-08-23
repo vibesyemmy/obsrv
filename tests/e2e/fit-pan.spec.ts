@@ -47,6 +47,13 @@ const paneScroll = () =>
     return { left: b.scrollLeft, top: b.scrollTop }
   })
 
+/** How far the pane can scroll on each axis — the geometry-proof bound. */
+const paneScrollRange = () =>
+  page.evaluate(() => {
+    const b = document.querySelector('.target-pane .pane-body') as HTMLElement
+    return { left: b.scrollWidth - b.clientWidth, top: b.scrollHeight - b.clientHeight }
+  })
+
 const resetScroll = () =>
   page.evaluate(() => {
     const b = document.querySelector('.target-pane .pane-body') as HTMLElement
@@ -141,6 +148,19 @@ test('in fit, the wheel still browses the page', async () => {
 
   const b = await boxes()
   await page.mouse.move(b.canvas.x + b.canvas.width / 2, b.canvas.y + b.canvas.height / 2)
+
+  // An Alt-modified wheel is a no-op in fit: it is the pan chord, fit has
+  // nothing to pan, and it must not reach the page either. Checked first,
+  // while nothing is in flight — a forwarded wheel animates the target's
+  // scroll, and its late sync echo would poison a 'still zero' assertion.
+  await page.keyboard.down('Alt')
+  await page.mouse.wheel(0, 200)
+  await page.keyboard.up('Alt')
+  await page.waitForTimeout(300)
+  expect(await inTarget('scrollY')).toBe(0)
+  expect((await paneScroll()).top).toBe(0)
+
+  // A plain wheel forwards and browses the page.
   await page.mouse.wheel(0, 400)
   await expect.poll(() => inTarget('scrollY')).toBeGreaterThan(0)
 })
@@ -167,15 +187,28 @@ test('in 1:1, Alt+wheel pans the pane and leaves the page alone', async () => {
   await inTarget('scrollTo(0, 0)')
   await expect.poll(() => inTarget('scrollY')).toBe(0)
 
+  // Hermetic on any window/display geometry: each axis pans by the wheel
+  // delta or to the end of its scrollable range, whichever is nearer — an
+  // axis with no range simply stays at 0.
+  const range = await paneScrollRange()
+  test.skip(range.left === 0 && range.top === 0, '1:1 canvas fits this pane — nothing to pan')
+
   const b = await boxes()
-  await page.mouse.move(b.canvas.x + b.pane.width / 2, b.canvas.y + b.pane.height / 2)
+  await page.mouse.move(
+    b.canvas.x + Math.min(b.canvas.width, b.pane.width) / 2,
+    b.canvas.y + Math.min(b.canvas.height, b.pane.height) / 2,
+  )
   await page.keyboard.down('Alt')
   await page.mouse.wheel(120, 80)
   await page.keyboard.up('Alt')
 
   // Natural direction: positive deltas move right and down.
-  await expect.poll(async () => (await paneScroll()).left).toBeGreaterThan(100)
-  await expect.poll(async () => (await paneScroll()).top).toBeGreaterThan(60)
+  await expect
+    .poll(async () => Math.abs((await paneScroll()).left - Math.min(120, range.left)))
+    .toBeLessThanOrEqual(1.5)
+  await expect
+    .poll(async () => Math.abs((await paneScroll()).top - Math.min(80, range.top)))
+    .toBeLessThanOrEqual(1.5)
   // Negative case: a forwarded wheel would have scrolled the page by now.
   await page.waitForTimeout(300)
   expect(await inTarget('scrollY')).toBe(0)
@@ -187,17 +220,25 @@ test('in 1:1, a middle-button drag pans', async () => {
   await resetScroll()
   await inTarget('scrollTo(0, 0)')
 
+  // Same geometry-proof bound as the Alt+wheel spec above.
+  const range = await paneScrollRange()
+  test.skip(range.left === 0 && range.top === 0, '1:1 canvas fits this pane — nothing to pan')
+
   const b = await boxes()
-  const cx = b.canvas.x + b.pane.width / 2
-  const cy = b.canvas.y + b.pane.height / 2
+  const cx = Math.round(b.canvas.x + Math.min(b.canvas.width, b.pane.width) / 2)
+  const cy = Math.round(b.canvas.y + Math.min(b.canvas.height, b.pane.height) / 2)
   await page.mouse.move(cx, cy)
   await page.mouse.down({ button: 'middle' })
   // The content follows the pointer: dragging up-left reveals down-right.
   await page.mouse.move(cx - 150, cy - 90, { steps: 6 })
   await page.mouse.up({ button: 'middle' })
 
-  await expect.poll(async () => (await paneScroll()).left).toBeGreaterThan(120)
-  await expect.poll(async () => (await paneScroll()).top).toBeGreaterThan(70)
+  await expect
+    .poll(async () => Math.abs((await paneScroll()).left - Math.min(150, range.left)))
+    .toBeLessThanOrEqual(1.5)
+  await expect
+    .poll(async () => Math.abs((await paneScroll()).top - Math.min(90, range.top)))
+    .toBeLessThanOrEqual(1.5)
   // The gesture never reached the page.
   await page.waitForTimeout(300)
   expect(await inTarget('scrollY')).toBe(0)
