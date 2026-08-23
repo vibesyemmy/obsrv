@@ -195,3 +195,27 @@ Host nits default 500 (editable in Settings alongside diagonal).
 - **Offscreen rendering uses software compositing** in Electron — acceptable; correctness over speed. Sites with heavy WebGL may run slowly in Target.
 - **macOS font smoothing at 1x** differs from Windows ClearType — v1 shows macOS 1x truth, which still exposes hairline/weight/contrast problems. Windows build later gives Windows truth natively.
 - **Electron API drift** — `enableDeviceEmulation` and offscreen `paint` are long-standing APIs; pin Electron major version.
+
+## 13. v1.1 — Fit & pan
+
+The target pane at, say, 1920×1080 × 1.5 is a 2889×1625-device-pixel canvas
+inside an ~800 px pane. v1 relied on `overflow: auto` alone: macOS hides the
+scrollbars, the wheel forwards to the page rather than the crop, and users read
+the visible top-left corner as "cropped". Two additions, both renderer-local
+(no new IPC):
+
+- **Fit overview.** A `1:1 / Fit` segmented control in the toolbar. Fit scales
+  the whole viewport into the pane — `min(pane×dpr/viewport, S)` per axis,
+  never enlarged past 1:1 — through a LINEAR_MIPMAP_LINEAR sampler, because
+  nearest decimation at ~0.3× moirés. The exact 1:1 path stays `texelFetch`,
+  bit-identical to v1, and the panel simulation runs on the sampled colour in
+  both paths. **Caveat: fit is a map, not the product** — a minified overview
+  cannot be pixel-exact, and the footer says so (`fit ×0.42 · not
+  pixel-exact`). A click in fit jumps back to 1:1 with the clicked target
+  pixel centred in the pane; the wheel still browses the page from the
+  overview; clicks and keys never forward from it.
+- **Panning at 1:1.** Middle-button drag and Option+left-drag pan the pane
+  under pointer capture; Option+wheel pans in natural direction. While a pan
+  gesture is live (or Option is held over the canvas) nothing forwards to the
+  page; a plain wheel forwards exactly as before. Applies in image mode too —
+  the image is drawn through the same canvas.
