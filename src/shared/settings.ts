@@ -18,6 +18,7 @@ export function loadSettings(file: string): Settings {
 }
 
 export function saveSettings(file: string, s: Settings): void {
+  if (!isPositive(s.hostDiagonalInches) || !isPositive(s.hostNits)) throw new RangeError('settings values must be finite and > 0')
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(s, null, 2))
 }

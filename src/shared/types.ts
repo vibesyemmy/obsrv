@@ -48,10 +48,13 @@ export interface FrameSlice {
   data: Uint8Array
 }
 
+/** Subset of Electron's InputEvent modifiers that the app forwards. */
+export type InputModifier = 'shift' | 'control' | 'alt' | 'meta'
+
 export type TargetInputEvent =
-  | { type: 'mouseDown' | 'mouseUp' | 'mouseMove'; x: number; y: number; button: 'left' | 'middle' | 'right'; clickCount: number; modifiers: string[] }
-  | { type: 'mouseWheel'; x: number; y: number; deltaX: number; deltaY: number; modifiers: string[] }
-  | { type: 'keyDown' | 'keyUp' | 'char'; keyCode: string; modifiers: string[] }
+  | { type: 'mouseDown' | 'mouseUp' | 'mouseMove'; x: number; y: number; button: 'left' | 'middle' | 'right'; clickCount: number; modifiers: InputModifier[] }
+  | { type: 'mouseWheel'; x: number; y: number; deltaX: number; deltaY: number; modifiers: InputModifier[] }
+  | { type: 'keyDown' | 'keyUp' | 'char'; keyCode: string; modifiers: InputModifier[] }
 
 export interface LoadError {
   code: number

@@ -25,7 +25,8 @@ export function computeScale(host: HostDisplay, target: TargetScreen, pixelExact
 }
 
 export function clampViewport(width: number, height: number, max = MAX_VIEWPORT): { width: number; height: number; clamped: boolean } {
-  const w = Math.min(max, Math.max(1, Math.floor(width)))
-  const h = Math.min(max, Math.max(1, Math.floor(height)))
+  const finite = (v: number): number => (Number.isFinite(v) ? v : 1)
+  const w = Math.min(max, Math.max(1, Math.floor(finite(width))))
+  const h = Math.min(max, Math.max(1, Math.floor(finite(height))))
   return { width: w, height: h, clamped: w !== width || h !== height }
 }

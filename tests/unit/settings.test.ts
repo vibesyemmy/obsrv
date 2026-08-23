@@ -21,6 +21,10 @@ describe('settings', () => {
     writeFileSync(f, JSON.stringify({ hostDiagonalInches: 32, hostNits: 'bad', extra: 1 }))
     expect(loadSettings(f)).toEqual({ hostDiagonalInches: 32, hostNits: 500 })
   })
+  it('refuses to save invalid values', () => {
+    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 0, hostNits: 500 })).toThrow(RangeError)
+    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 27, hostNits: NaN })).toThrow(RangeError)
+  })
   it('round-trips and creates parent dirs', () => {
     const f = join(dir(), 'nested', 'settings.json')
     saveSettings(f, { hostDiagonalInches: 24, hostNits: 350 })

@@ -36,4 +36,7 @@ describe('clampViewport', () => {
   it('floors to integers and enforces a minimum of 1', () => {
     expect(clampViewport(100.7, 0)).toEqual({ width: 100, height: 1, clamped: true })
   })
+  it('replaces NaN/Infinity with 1 and flags it', () => {
+    expect(clampViewport(NaN, Infinity)).toEqual({ width: 1, height: 1, clamped: true })
+  })
 })

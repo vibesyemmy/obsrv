@@ -11,6 +11,9 @@ describe('profileToParams', () => {
   it('maps budget TN', () => {
     expect(profileToParams(findProfile('budget-tn'), 500)).toEqual({ brightness: 0.5, blackFloor: 1 / 700, gamut: 0.72, levels: 63, dither: true })
   })
+  it('rejects non-positive host nits', () => {
+    expect(() => profileToParams(findProfile('reference'), 0)).toThrow(RangeError)
+  })
 })
 
 describe('bayer', () => {
@@ -43,6 +46,10 @@ describe('simulatePixel', () => {
   it('brightness scales linear light', () => {
     const [r] = simulatePixel([255, 255, 255], { ...reference, brightness: 0.5 })
     expect(r).toBe(Math.round(Math.pow(0.5, 1 / 2.2) * 255)) // 186
+  })
+  it('black floor scales with brightness (backlight leakage)', () => {
+    const [r] = simulatePixel([0, 0, 0], { ...reference, brightness: 0.5, blackFloor: 1 / 1000 })
+    expect(r).toBe(Math.round(Math.pow(0.0005, 1 / 2.2) * 255)) // 8
   })
   it('6-bit quantises to 63 levels', () => {
     const [r] = simulatePixel([100, 100, 100], { ...reference, levels: 63 })

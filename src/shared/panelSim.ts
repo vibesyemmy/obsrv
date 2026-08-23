@@ -1,6 +1,7 @@
 import type { PanelParams, PanelProfile } from './types'
 
 export function profileToParams(p: PanelProfile, hostNits: number): PanelParams {
+  if (!(hostNits > 0)) throw new RangeError('hostNits must be > 0')
   return {
     brightness: p.nits === null ? 1 : p.nits / hostNits,
     blackFloor: p.contrastRatio === null ? 0 : 1 / p.contrastRatio,
@@ -30,8 +31,8 @@ export type RGB = [number, number, number]
  */
 export function simulatePixel(rgb: RGB, params: PanelParams, x = 0, y = 0): RGB {
   let c = rgb.map(v => toLinear(v / 255)) as RGB
-  c = c.map(v => v * params.brightness) as RGB
-  c = c.map(v => params.blackFloor + (1 - params.blackFloor) * v) as RGB
+  // Black floor is leakage through the panel's own backlight, so it scales with brightness.
+  c = c.map(v => params.brightness * (params.blackFloor + (1 - params.blackFloor) * v)) as RGB
   const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
   c = c.map(v => l + (v - l) * params.gamut) as RGB
   c = c.map(v => toEncoded(clamp01(v))) as RGB
