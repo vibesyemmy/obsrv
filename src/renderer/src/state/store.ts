@@ -16,6 +16,9 @@ import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings } from '.
 
 export type Mode = 'url' | 'image'
 
+/** How the target pane shows the render: at 1:1, or scaled down to fit the pane. */
+export type ViewMode = '1:1' | 'fit'
+
 /** The neutral field the panes sit in. Graphite by default; see the UI spec. */
 export type Surround = 'black' | 'graphite' | 'grey50'
 
@@ -55,6 +58,13 @@ export interface AppState {
   toast: string | null
   image: ImageState | null
   surround: Surround
+  viewMode: ViewMode
+  /**
+   * The magnification fit mode is actually drawing at, published by
+   * `TargetCanvas` (it owns the pane measurement) so the footer can read it;
+   * null outside fit mode.
+   */
+  fitScale: number | null
 
   setMode(mode: Mode): void
   setUrl(url: string): void
@@ -70,6 +80,8 @@ export interface AppState {
   setToast(t: string | null): void
   setImage(i: ImageState | null): void
   setSurround(s: Surround): void
+  setViewMode(v: ViewMode): void
+  setFitScale(v: number | null): void
 }
 
 function sameError(a: LoadError | null, b: LoadError | null): boolean {
@@ -95,6 +107,8 @@ export const useStore = create<AppState>()(set => ({
   toast: null,
   image: null,
   surround: 'graphite',
+  viewMode: '1:1',
+  fitScale: null,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
@@ -114,6 +128,8 @@ export const useStore = create<AppState>()(set => ({
   setToast: toast => set({ toast }),
   setImage: image => set({ image }),
   setSurround: surround => set({ surround }),
+  setViewMode: viewMode => set({ viewMode }),
+  setFitScale: fitScale => set({ fitScale }),
 
   // Spec §7: leaving image mode restores the URL that was showing before.
   setMode: mode =>
