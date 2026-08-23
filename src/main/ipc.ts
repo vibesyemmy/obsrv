@@ -1,9 +1,9 @@
 import { app, ipcMain, screen, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { join } from 'node:path'
-import type { Rect } from '../shared/api'
 import { IPC } from '../shared/ipc'
+import { parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
-import type { HostInfo, Settings, TargetInputEvent } from '../shared/types'
+import type { HostInfo } from '../shared/types'
 import type { AppContext } from './context'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
@@ -36,6 +36,11 @@ export function registerIpc(ctx: AppContext): void {
   // these channels today, but the check costs nothing and mirrors the one in
   // `attachFrameBus`. Fire-and-forget channels ignore a foreign sender;
   // request/response ones reject it.
+  //
+  // Payloads are parsed by `shared/ipcPayloads` before they touch Electron:
+  // main must never crash on a renderer message, and a throw inside an
+  // `ipcMain.on` listener is an uncaught exception in main. Malformed
+  // payloads are dropped; malformed `invoke` arguments reject the call.
   const fromRenderer = (e: IpcMainEvent | IpcMainInvokeEvent): boolean => e.sender === win.webContents
   const assertRenderer = (e: IpcMainInvokeEvent): void => {
     if (!fromRenderer(e)) throw new Error('ipc: unexpected sender')
@@ -69,13 +74,23 @@ export function registerIpc(ctx: AppContext): void {
     const v = target.setViewport(width, height)
     return { width: v.width, height: v.height }
   })
-  ipcMain.on(IPC.sendInput, (e, ev: TargetInputEvent) => {
-    if (fromRenderer(e)) target.sendInput(ev)
+  ipcMain.on(IPC.sendInput, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const ev = parseInputEvent(raw)
+    if (!ev) return
+    try {
+      target.sendInput(ev)
+    } catch {
+      // Electron rejected a well-formed event (e.g. a keyCode it cannot map);
+      // the input is lost, the app is not.
+    }
   })
 
   // --- mode -----------------------------------------------------------------
-  ipcMain.on(IPC.setMode, (e, mode: 'url' | 'image') => {
+  ipcMain.on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
+    const mode = parseMode(raw)
+    if (!mode) return
     const live = mode === 'url'
     native.setVisible(live)
     bus.setEnabled(live)
@@ -98,10 +113,13 @@ export function registerIpc(ctx: AppContext): void {
   }
   fallbackLayout()
   win.on('resize', fallbackLayout)
-  ipcMain.on(IPC.setNativeBounds, (e, rect: Rect) => {
+  ipcMain.on(IPC.setNativeBounds, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
-    rendererDrivesLayout = true
+    const rect = parseRect(raw)
+    if (!rect) return
     native.setBounds(rect)
+    // Ownership passes only once a rect has actually been applied.
+    rendererDrivesLayout = true
   })
 
   // --- host display ---------------------------------------------------------
@@ -131,12 +149,14 @@ export function registerIpc(ctx: AppContext): void {
     assertRenderer(e)
     return settings
   })
-  ipcMain.handle(IPC.setSettings, (e, s: Settings) => {
+  ipcMain.handle(IPC.setSettings, (e, raw: unknown) => {
     assertRenderer(e)
-    // A non-positive diagonal makes `ppi()` throw; refuse rather than persist it.
-    if (!(s.hostDiagonalInches > 0) || !(s.hostNits > 0)) throw new Error('invalid settings')
-    // Persist first: `saveSettings` rejects non-finite values too, and memory
-    // must never hold a value disk refused.
+    // A non-positive diagonal makes `ppi()` throw; refuse rather than persist
+    // it. `parseSettings` also copies only the two known keys, so nothing the
+    // renderer adds reaches disk or `getSettings`.
+    const s = parseSettings(raw)
+    if (!s) throw new Error('invalid settings')
+    // Persist first: memory must never hold a value disk refused.
     saveSettings(settingsFile, s)
     settings = s
   })

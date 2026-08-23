@@ -135,3 +135,30 @@ test('image mode hides the native pane and stops target frames', async () => {
 
   await page.evaluate(() => (window as any).__off())
 })
+
+test('ignores malformed payloads', async () => {
+  const before = await app.evaluate(() => (globalThis as any).__obsrv.native.getBounds())
+
+  await page.evaluate(async () => {
+    const api = window.obsrv as any
+    api.setNativeBounds({})
+    api.sendInput({ type: 'nope' })
+    api.setMode('bogus')
+    await api.setSettings({ hostDiagonalInches: 27, hostNits: 500, extra: 1 })
+  })
+  await new Promise(r => setTimeout(r, 200))
+
+  const after = await app.evaluate(() => {
+    const ctx = (globalThis as any).__obsrv
+    return { bounds: ctx.native.getBounds(), visible: ctx.native.isVisible() }
+  })
+  expect(after.bounds).toEqual(before)
+  expect(after.visible).toBe(true)
+
+  const settings = await page.evaluate(() => window.obsrv.getSettings())
+  expect(settings).toEqual({ hostDiagonalInches: 27, hostNits: 500 })
+  expect(Object.keys(settings)).toHaveLength(2)
+
+  // Main is still alive and answering.
+  expect(await page.evaluate(() => window.obsrv.setViewport(640, 480))).toEqual({ width: 640, height: 480 })
+})
