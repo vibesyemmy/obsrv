@@ -6,3 +6,5 @@ playwright-report/
 .vitest/
 .DS_Store
 *.tsbuildinfo
+obsrv-*/
+node-compile-cache/
