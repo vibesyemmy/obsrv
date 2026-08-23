@@ -2,30 +2,18 @@ import { app } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { attachFrameBus } from './frameBus'
+import { registerIpc } from './ipc'
 import { NativePane } from './nativePane'
 import { TargetSource } from './targetSource'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
 
-/** Toolbar height reserved at the top of the window; panes sit below it. */
-const TOOLBAR_H = 44
-
-/**
- * Placeholder layout: left half of the window below the toolbar. The renderer
- * takes over via IPC `setNativeBounds` once the toolbar and panes exist.
- */
-function layout(ctx: AppContext): void {
-  const [w = 0, h = 0] = ctx.win.getContentSize()
-  ctx.native.setBounds({
-    x: 0,
-    y: TOOLBAR_H,
-    width: Math.floor(w / 2),
-    height: Math.max(0, h - TOOLBAR_H),
-  })
-}
-
 function boot(): void {
   const win = createMainWindow()
+
+  // These forwards live here rather than in `registerIpc` because `NativePane`
+  // takes its callbacks at construction time. Each is guarded: a pane can still
+  // report a navigation or an error while the main window is closing.
   const native = new NativePane(win, {
     onUrlChanged: url => {
       if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
@@ -44,10 +32,11 @@ function boot(): void {
   })
 
   const bus = attachFrameBus(target, win)
-
   const ctx: AppContext = { win, native, target, bus }
-  layout(ctx)
-  win.on('resize', () => layout(ctx))
+
+  // Request/response channels, the host-display watch and the native-pane
+  // layout fallback all live in `registerIpc`.
+  registerIpc(ctx)
 
   // The offscreen target is a real BrowserWindow, so it must go before the main
   // window finishes closing — otherwise `window-all-closed` never fires and the

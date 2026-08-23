@@ -11,6 +11,8 @@ import type { TargetSource } from './targetSource'
 
 export interface FrameBus {
   detach(): void
+  /** Image mode stops target frames from overwriting the canvas texture. */
+  setEnabled(enabled: boolean): void
 }
 
 /**
@@ -18,7 +20,8 @@ export interface FrameBus {
  *
  * Delivery is gated on a handshake the renderer starts: the preload sends
  * `frameSubscribe` when its first `onFrame` subscriber appears, and only then
- * does the bus open and invalidate the target so a full frame arrives at once.
+ * does the bus open. Whenever delivery (re)opens — that handshake, or leaving
+ * image mode — the target is invalidated so a full frame arrives at once.
  * Opening on `did-finish-load` instead would race the React tree: the
  * invalidate's paint can be sent before any listener exists, and for a static
  * page that paint is often the only one — the canvas would stay blank.
@@ -34,18 +37,19 @@ export interface FrameBus {
  */
 export function attachFrameBus(target: TargetSource, win: BrowserWindow): FrameBus {
   let ready = false
+  let enabled = true
 
   const gone = (): boolean => win.isDestroyed() || win.webContents.isDestroyed()
 
   const onFrame = (msg: FrameMessage): void => {
-    if (!ready || gone()) return
+    if (!ready || !enabled || gone()) return
     win.webContents.send(IPC.frame, msg)
   }
 
   const onSubscribe = (e: IpcMainEvent): void => {
     if (gone() || e.sender !== win.webContents) return
     ready = true
-    target.invalidate()
+    if (enabled) target.invalidate()
   }
 
   const onRendererGone = (details: Event<WebContentsDidStartNavigationEventParams>): void => {
@@ -62,6 +66,10 @@ export function attachFrameBus(target: TargetSource, win: BrowserWindow): FrameB
       target.off('frame', onFrame)
       ipcMain.removeListener(IPC.frameSubscribe, onSubscribe)
       if (!gone()) win.webContents.off('did-start-navigation', onRendererGone)
+    },
+    setEnabled(next: boolean): void {
+      enabled = next
+      if (enabled && ready) target.invalidate()
     },
   }
 }

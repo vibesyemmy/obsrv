@@ -15,6 +15,7 @@ const ERR_ABORTED = -3
 export class NativePane {
   readonly view: WebContentsView
   private bounds: Rect = { x: 0, y: 0, width: 0, height: 0 }
+  private visible = true
 
   constructor(win: BrowserWindow, private readonly events: NativePaneEvents) {
     this.view = new WebContentsView({
@@ -70,6 +71,16 @@ export class NativePane {
 
   getBounds(): Rect {
     return this.bounds
+  }
+
+  /** Image mode draws the left pane in the renderer, so the OS-level view hides. */
+  setVisible(visible: boolean): void {
+    this.visible = visible
+    this.view.setVisible(visible)
+  }
+
+  isVisible(): boolean {
+    return this.visible
   }
 
   reload(): void {
