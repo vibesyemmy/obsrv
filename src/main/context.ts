@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import type { FrameBus } from './frameBus'
 import type { NativePane } from './nativePane'
 import type { TargetSource } from './targetSource'
 
@@ -7,4 +8,5 @@ export interface AppContext {
   win: BrowserWindow
   native: NativePane
   target: TargetSource
+  bus: FrameBus
 }

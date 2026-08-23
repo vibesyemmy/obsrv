@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
+import { attachFrameBus } from './frameBus'
 import { NativePane } from './nativePane'
 import { TargetSource } from './targetSource'
 import { exposeForTests } from './testHooks'
@@ -41,16 +42,20 @@ function boot(): void {
   target.on('loading', loading => {
     if (!win.isDestroyed()) win.webContents.send(IPC.targetLoading, loading)
   })
-  // Frames reach the renderer in Task 9 via attachFrameBus.
 
-  const ctx: AppContext = { win, native, target }
+  const bus = attachFrameBus(target, win)
+
+  const ctx: AppContext = { win, native, target, bus }
   layout(ctx)
   win.on('resize', () => layout(ctx))
 
   // The offscreen target is a real BrowserWindow, so it must go before the main
   // window finishes closing — otherwise `window-all-closed` never fires and the
   // app hangs after the last visible window is gone.
-  win.on('close', () => target.destroy())
+  win.on('close', () => {
+    bus.detach()
+    target.destroy()
+  })
 
   void native.load('about:blank')
   // The target loads its own about:blank in its constructor (it must own its
