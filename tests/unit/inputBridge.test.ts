@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  buttonModifiersOf,
   electronKeyCode,
   keyDownEvents,
   keyUpEvent,
@@ -48,6 +49,34 @@ describe('mouseEvent', () => {
     const ev = mouseEvent('mouseMove', { clientX: 20, clientY: 10 }, RECT, 1)
     expect(ev).toMatchObject({ button: 'left', clickCount: 1 })
   })
+  it('drops buttons Electron has no name for instead of faking a left click', () => {
+    expect(mouseEvent('mouseDown', { clientX: 20, clientY: 10, button: 3 }, RECT, 1)).toBeNull()
+    expect(mouseEvent('mouseUp', { clientX: 20, clientY: 10, button: 4 }, RECT, 1)).toBeNull()
+  })
+  it('carries the pressed-button state on a move, so a drag reads as a drag', () => {
+    expect(mouseEvent('mouseMove', { clientX: 20, clientY: 10, buttons: 1 }, RECT, 1)).toEqual({
+      type: 'mouseMove',
+      x: 0,
+      y: 0,
+      button: 'left',
+      clickCount: 1,
+      modifiers: ['leftButtonDown'],
+    })
+    expect(
+      mouseEvent('mouseMove', { clientX: 20, clientY: 10, buttons: 2, shiftKey: true }, RECT, 1),
+    ).toMatchObject({ button: 'right', modifiers: ['shift', 'rightButtonDown'] })
+    expect(mouseEvent('mouseMove', { clientX: 20, clientY: 10, buttons: 4 }, RECT, 1)).toMatchObject({
+      button: 'middle',
+      modifiers: ['middleButtonDown'],
+    })
+    expect(
+      mouseEvent('mouseDown', { clientX: 20, clientY: 10, button: 0, buttons: 1 }, RECT, 1),
+    ).toMatchObject({ button: 'left', modifiers: ['leftButtonDown'] })
+  })
+  it('decodes the DOM buttons bitmask (right is 2, middle is 4)', () => {
+    expect(buttonModifiersOf(undefined)).toEqual([])
+    expect(buttonModifiersOf(7)).toEqual(['leftButtonDown', 'middleButtonDown', 'rightButtonDown'])
+  })
 })
 
 describe('wheelEvent', () => {
@@ -74,6 +103,12 @@ describe('wheelEvent', () => {
       1,
     )
     expect(pages).toMatchObject({ deltaY: -800 })
+  })
+  it('drops ctrl/meta wheel, which is the pinch-zoom gesture', () => {
+    const base = { clientX: 20, clientY: 10, deltaX: 0, deltaY: 10, deltaMode: 0 }
+    expect(wheelEvent({ ...base, ctrlKey: true }, RECT, 1)).toBeNull()
+    expect(wheelEvent({ ...base, metaKey: true }, RECT, 1)).toBeNull()
+    expect(wheelEvent({ ...base, shiftKey: true }, RECT, 1)).toMatchObject({ modifiers: ['shift'] })
   })
 })
 
@@ -107,5 +142,13 @@ describe('keyboard', () => {
       keyCode: 'Down',
       modifiers: ['shift'],
     })
+  })
+  it('drops dead keys and IME composition', () => {
+    expect(keyDownEvents({ key: 'Dead' })).toEqual([])
+    expect(keyDownEvents({ key: 'Unidentified' })).toEqual([])
+    expect(keyDownEvents({ key: 'Process' })).toEqual([])
+    expect(keyDownEvents({ key: 'a', isComposing: true })).toEqual([])
+    expect(keyUpEvent({ key: 'Dead' })).toBeNull()
+    expect(keyUpEvent({ key: 'a', isComposing: true })).toBeNull()
   })
 })

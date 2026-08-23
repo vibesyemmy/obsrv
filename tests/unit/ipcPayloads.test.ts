@@ -39,6 +39,11 @@ describe('parseInputEvent', () => {
       modifiers: [],
     })
   })
+  it('accepts the pressed-button modifiers a drag carries', () => {
+    expect(
+      parseInputEvent({ type: 'mouseMove', x: 3, y: 4, button: 'left', clickCount: 1, modifiers: ['leftButtonDown', 'shift', 'rightButtonDown', 'middleButtonDown'] }),
+    ).toEqual({ type: 'mouseMove', x: 3, y: 4, button: 'left', clickCount: 1, modifiers: ['leftButtonDown', 'shift', 'rightButtonDown', 'middleButtonDown'] })
+  })
   it('accepts key events and treats a missing modifiers list as empty', () => {
     expect(parseInputEvent({ type: 'keyDown', keyCode: 'a' })).toEqual({ type: 'keyDown', keyCode: 'a', modifiers: [] })
     expect(parseInputEvent({ type: 'char', keyCode: 'a', modifiers: ['meta'] })).toEqual({ type: 'char', keyCode: 'a', modifiers: ['meta'] })

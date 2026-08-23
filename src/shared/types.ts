@@ -49,7 +49,19 @@ export interface FrameSlice {
 }
 
 /** Subset of Electron's InputEvent modifiers that the app forwards. */
-export type InputModifier = 'shift' | 'control' | 'alt' | 'meta'
+/**
+ * Electron's `sendInputEvent` modifier names. The three `*ButtonDown` entries
+ * carry the pressed-button state on `mouseMove`, which is how Chromium tells a
+ * drag from a hover.
+ */
+export type InputModifier =
+  | 'shift'
+  | 'control'
+  | 'alt'
+  | 'meta'
+  | 'leftButtonDown'
+  | 'middleButtonDown'
+  | 'rightButtonDown'
 
 export type TargetInputEvent =
   | { type: 'mouseDown' | 'mouseUp' | 'mouseMove'; x: number; y: number; button: 'left' | 'middle' | 'right'; clickCount: number; modifiers: InputModifier[] }

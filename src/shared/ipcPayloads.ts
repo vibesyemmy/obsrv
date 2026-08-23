@@ -24,7 +24,15 @@ export function parseRect(raw: unknown): Rect | null {
   return r
 }
 
-const MODIFIERS: ReadonlySet<string> = new Set<InputModifier>(['shift', 'control', 'alt', 'meta'])
+const MODIFIERS: ReadonlySet<string> = new Set<InputModifier>([
+  'shift',
+  'control',
+  'alt',
+  'meta',
+  'leftButtonDown',
+  'middleButtonDown',
+  'rightButtonDown',
+])
 const BUTTONS: ReadonlySet<string> = new Set(['left', 'middle', 'right'])
 
 type Button = Extract<TargetInputEvent, { button: unknown }>['button']

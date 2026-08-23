@@ -141,18 +141,16 @@ export function selectViewport(s: AppState): {
 }
 
 /**
- * Magnification for the target pane. Always a finite positive number:
- * `GlRenderer.draw` refuses anything else, so every way the inputs can be
- * unusable (host unknown, a zero diagonal, a half-typed custom field) lands
- * on the §9 fallback instead of throwing out of a selector.
+ * The calibrated magnification, or `null` when the inputs cannot support one:
+ * host unknown, a zero diagonal, a half-typed custom field, a non-finite
+ * result. `ppi` throws on a bad diagonal and `GlRenderer.draw` refuses a scale
+ * that is not finite and positive, so every guard lives here, once.
  */
-export function selectScale(s: AppState): number {
-  if (s.host.physicalWidth <= 0 || s.host.scaleFactor <= 0) return FALLBACK_SCALE
-  if (!(s.settings.hostDiagonalInches > 0)) return FALLBACK_SCALE
+function calibratedScale(s: AppState): number | null {
+  if (s.host.physicalWidth <= 0 || s.host.physicalHeight <= 0 || s.host.scaleFactor <= 0) return null
+  if (!(s.settings.hostDiagonalInches > 0)) return null
   const screen = selectScreen(s)
-  if (!(screen.diagonalInches > 0) || !(screen.width > 0) || !(screen.height > 0)) {
-    return FALLBACK_SCALE
-  }
+  if (!(screen.diagonalInches > 0) || !(screen.width > 0) || !(screen.height > 0)) return null
   const host: HostDisplay = {
     physicalWidth: s.host.physicalWidth,
     physicalHeight: s.host.physicalHeight,
@@ -160,7 +158,22 @@ export function selectScale(s: AppState): number {
     scaleFactor: s.host.scaleFactor,
   }
   const scale = computeScale(host, screen, s.pixelExact)
-  return Number.isFinite(scale) && scale > 0 ? scale : FALLBACK_SCALE
+  return Number.isFinite(scale) && scale > 0 ? scale : null
+}
+
+/** Magnification for the target pane. Always finite and positive (spec §9). */
+export function selectScale(s: AppState): number {
+  return calibratedScale(s) ?? FALLBACK_SCALE
+}
+
+/** Spec §9: true while the pane is drawn at the flat fallback, so Settings can say so. */
+export function selectScaleIsFallback(s: AppState): boolean {
+  return calibratedScale(s) === null
+}
+
+/** The host display's DPR; 1 until `getHostInfo` has answered. */
+export function selectHostScaleFactor(s: AppState): number {
+  return s.host.scaleFactor > 0 ? s.host.scaleFactor : 1
 }
 
 export function selectPanelParams(s: AppState): PanelParams {

@@ -4,8 +4,10 @@ import { DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
 import {
   CUSTOM_PRESET_ID,
   FALLBACK_SCALE,
+  selectHostScaleFactor,
   selectPanelParams,
   selectScale,
+  selectScaleIsFallback,
   selectUrlBarText,
   selectViewport,
   useStore,
@@ -55,6 +57,26 @@ describe('selectScale', () => {
     useStore.setState({ settings: { hostDiagonalInches: 0, hostNits: 500 } })
     useStore.getState().setPreset('1080p-24')
     expect(selectScale(useStore.getState())).toBe(FALLBACK_SCALE)
+  })
+  it('says when the scale is the fallback rather than calibrated', () => {
+    expect(selectScaleIsFallback(useStore.getState())).toBe(true)
+
+    useStore.setState({ host: HOST_4K, presetId: '1080p-27' })
+    expect(selectScaleIsFallback(useStore.getState())).toBe(false)
+
+    useStore.getState().setCustom({ width: 1920, height: 1080, diagonalInches: 0 })
+    expect(selectScaleIsFallback(useStore.getState())).toBe(true)
+
+    useStore.setState({ presetId: '1080p-27', settings: { hostDiagonalInches: 0, hostNits: 500 } })
+    expect(selectScaleIsFallback(useStore.getState())).toBe(true)
+  })
+})
+
+describe('selectHostScaleFactor', () => {
+  it('is 1 until the host is known, then the real DPR', () => {
+    expect(selectHostScaleFactor(useStore.getState())).toBe(1)
+    useStore.getState().setHost(HOST_4K)
+    expect(selectHostScaleFactor(useStore.getState())).toBe(2)
   })
 })
 
