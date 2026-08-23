@@ -47,16 +47,22 @@ type ElectronInputEvent = Parameters<WebContents['sendInputEvent']>[0]
  * `offscreen.deviceScaleFactor` already defaults to 1; it is passed explicitly
  * so the intent survives an Electron upgrade. The first E2E test asserts the
  * frame size equals the CSS viewport, which fails loudly if that ever changes.
+ *
+ * Every method that touches the window is a no-op once it is destroyed: the
+ * renderer's IPC can still arrive after the main window has started closing.
  */
 export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private readonly win: BrowserWindow
   private viewport = { ...DEFAULT_VIEWPORT }
   /**
-   * Settles once the surface's first navigation has committed. Chromium's
-   * offscreen renderer segfaults (exit 11, Electron 43 / macOS) when a second
-   * `loadURL` interrupts the very first one before it commits; interrupting
-   * any later navigation is an ordinary `ERR_ABORTED`. Every `load()` waits
-   * on this so the unit is safe to drive the instant it is constructed.
+   * Settles once the surface's first navigation has committed — or can never
+   * commit. Chromium's offscreen renderer segfaults (exit 11, Electron 43 /
+   * macOS) when a second `loadURL` interrupts the very first one before it
+   * commits; interrupting any later navigation is an ordinary `ERR_ABORTED`.
+   * Every `load()` waits on this so the unit is safe to drive the instant it
+   * is constructed. It also settles if the renderer dies or the surface is
+   * destroyed first, so a later `load()` never hangs on a gate that cannot
+   * open.
    */
   private readonly firstNavigation: Promise<void>
 
@@ -88,15 +94,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // commits; it carries no pixels and would advertise a 0x0 frame.
       if (image.isEmpty()) return
       const full = image.getSize()
+      const isFull = dirty.x === 0 && dirty.y === 0 && dirty.width === full.width && dirty.height === full.height
       this.emit('frame', {
         frame: {
           x: dirty.x,
           y: dirty.y,
           width: dirty.width,
           height: dirty.height,
-          // Copy: Electron reuses the backing buffer between paints.
-          // (`toBitmap()` — `getBitmap()` is a deprecated alias typed `void`.)
-          data: new Uint8Array(image.crop(dirty).toBitmap()),
+          // `toBitmap()` already returns a fresh copy of the pixels (unlike the
+          // deprecated `getBitmap()`, typed `void` in Electron 43), and a
+          // Buffer is a Uint8Array, so this is the only copy of the slice.
+          data: (isFull ? image : image.crop(dirty)).toBitmap(),
         },
         frameWidth: full.width,
         frameHeight: full.height,
@@ -112,6 +120,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     })
     wc.on('did-start-loading', () => this.emit('loading', true))
     wc.on('did-stop-loading', () => this.emit('loading', false))
+    // A dead renderer paints nothing; surface it through the same channel a
+    // failed navigation uses so the UI has something to show. A clean exit is
+    // our own teardown.
+    wc.on('render-process-gone', (_e, details) => {
+      if (details.reason === 'clean-exit') return
+      this.emit('load-error', {
+        code: details.exitCode,
+        description: `renderer crashed: ${details.reason}`,
+        url: wc.getURL(),
+      })
+    })
     // Keep target-new-window links in the same surface so both panes stay
     // comparable (mirrors NativePane). `window.open()` with no URL (or
     // 'about:blank') must not replace the current page.
@@ -121,7 +140,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     })
 
     // Own the first navigation so nothing can interrupt it (see field doc).
-    this.firstNavigation = wc.loadURL('about:blank').catch(() => undefined)
+    this.firstNavigation = new Promise<void>(settle => {
+      wc.once('render-process-gone', () => settle())
+      wc.once('destroyed', () => settle())
+      wc.loadURL('about:blank').then(() => settle(), () => settle())
+    })
   }
 
   /** Loads URL-bar input; returns the normalised URL that was requested. */
@@ -129,6 +152,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     try {
       const url = normalizeUrl(input)
       await this.firstNavigation
+      if (this.win.isDestroyed()) return url
       try {
         await this.win.webContents.loadURL(url)
       } catch {
@@ -149,8 +173,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   setViewport(width: number, height: number): AppliedViewport {
     const v = clampViewport(width, height)
     this.viewport = { width: v.width, height: v.height }
-    this.win.setContentSize(v.width, v.height)
-    this.win.webContents.invalidate()
+    if (!this.win.isDestroyed()) {
+      this.win.setContentSize(v.width, v.height)
+      this.win.webContents.invalidate()
+    }
     return v
   }
 
@@ -160,23 +186,23 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
   /** Forces a full-frame repaint, e.g. after the renderer loses its texture. */
   invalidate(): void {
-    this.win.webContents.invalidate()
+    if (!this.win.isDestroyed()) this.win.webContents.invalidate()
   }
 
   sendInput(ev: TargetInputEvent): void {
-    this.win.webContents.sendInputEvent(ev as unknown as ElectronInputEvent)
+    if (!this.win.isDestroyed()) this.win.webContents.sendInputEvent(ev as unknown as ElectronInputEvent)
   }
 
   reload(): void {
-    this.win.webContents.reload()
+    if (!this.win.isDestroyed()) this.win.webContents.reload()
   }
 
   back(): void {
-    this.win.webContents.navigationHistory.goBack()
+    if (!this.win.isDestroyed()) this.win.webContents.navigationHistory.goBack()
   }
 
   forward(): void {
-    this.win.webContents.navigationHistory.goForward()
+    if (!this.win.isDestroyed()) this.win.webContents.navigationHistory.goForward()
   }
 
   get webContents(): WebContents {
