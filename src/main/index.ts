@@ -50,9 +50,12 @@ function boot(): void {
     target.destroy()
   })
 
-  void native.load('about:blank')
   // The target loads its own about:blank in its constructor (it must own its
-  // first navigation — see TargetSource.firstNavigation).
+  // first navigation — see TargetSource.firstNavigation), so this is a
+  // deliberate double load like any `navigate`: announce it, or whichever
+  // pane commits first mirrors a pointless about:blank into the other.
+  sync.expect('about:blank')
+  void native.load('about:blank')
 
   exposeForTests(ctx)
 }

@@ -14,29 +14,56 @@ export interface SyncBus {
   detach(): void
 }
 
+type Pane = 'native' | 'target'
+
+/**
+ * Two mirrors in opposite directions closer together than this are a loop —
+ * typically a SPA that rewrites its own URL on load, so each pane's commit
+ * differs from the other's and they chase each other forever.
+ */
+const LOOP_WINDOW_MS = 1_000
+
 /** Mirrors scroll offset and navigation between the two panes. */
 export function attachSyncBus(
   native: NativePane,
   target: TargetSource,
   onUrlChanged: (url: string) => void,
 ): SyncBus {
-  /** URLs already accounted for; their `did-navigate` must not bounce back. */
-  const settled = new Set<string>()
+  /**
+   * The URL each pane is expected to commit next because we (or an explicit
+   * `navigate`) sent it there. A pane's commit always clears its own slot,
+   * matching or not: a redirect, a failed load or an aborted navigation must
+   * not leave a stale expectation that swallows a later genuine mirror.
+   */
+  const pending: Record<Pane, string | null> = { native: null, target: null }
   let lastReported = ''
+  let lastMirror: { from: Pane; at: number } | null = null
+  let loopWarned = false
 
-  function mirror(from: 'native' | 'target', url: string): void {
+  function mirror(from: Pane, url: string): void {
     if (url !== lastReported) {
       lastReported = url
       onUrlChanged(url)
     }
-    // Consumed by whichever pane reports first; the second pane then falls out
-    // on the URL comparison below.
-    if (settled.delete(url)) return
+    const expected = pending[from]
+    pending[from] = null
+    if (expected === url) return
 
+    const to: Pane = from === 'native' ? 'target' : 'native'
     const other = from === 'native' ? target : native
     if (other.webContents.isDestroyed() || other.webContents.getURL() === url) return
 
-    settled.add(url)
+    const now = Date.now()
+    if (lastMirror && lastMirror.from === to && now - lastMirror.at < LOOP_WINDOW_MS) {
+      if (!loopWarned) {
+        loopWarned = true
+        console.warn(`obsrv: navigation mirror loop broken (${from} -> ${to}: ${url})`)
+      }
+      return
+    }
+    lastMirror = { from, at: now }
+
+    pending[to] = url
     void other.load(url)
   }
 
@@ -71,7 +98,8 @@ export function attachSyncBus(
 
   return {
     expect(url: string): void {
-      settled.add(url)
+      pending.native = url
+      pending.target = url
     },
     detach(): void {
       ipcMain.off(IPC.syncScroll, onScroll)

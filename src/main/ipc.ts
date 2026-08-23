@@ -47,7 +47,12 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) throw new Error('ipc: unexpected sender')
   }
 
-  // --- navigation: both panes always move together --------------------------
+  // --- navigation -----------------------------------------------------------
+  // An explicit `navigate` drives both panes. History moves (back, forward,
+  // reload) drive the native pane only: SyncBus mirrors whatever it commits
+  // into the target, whose own history is not user-facing. Driving both would
+  // race the mirror — the target's back is aborted by the mirrored `load` and
+  // the two histories drift apart.
   ipcMain.handle(IPC.navigate, async (e, url: string) => {
     assertRenderer(e)
     // Both panes are being pointed at the same URL on purpose; tell SyncBus so
@@ -67,17 +72,17 @@ export function registerIpc(ctx: AppContext): void {
   ipcMain.on(IPC.reload, e => {
     if (!fromRenderer(e)) return
     native.reload()
+    // A reload commits the URL the target already shows, so the mirror
+    // (rightly) does nothing; reload the target on its own.
     target.reload()
   })
   ipcMain.on(IPC.back, e => {
     if (!fromRenderer(e)) return
     native.back()
-    target.back()
   })
   ipcMain.on(IPC.forward, e => {
     if (!fromRenderer(e)) return
     native.forward()
-    target.forward()
   })
 
   // --- target ---------------------------------------------------------------
