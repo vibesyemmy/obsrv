@@ -61,3 +61,9 @@ export interface LoadError {
   description: string
   url: string
 }
+
+/** Scroll offset in CSS pixels, mirrored between the panes. */
+export interface ScrollPos {
+  x: number
+  y: number
+}

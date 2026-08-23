@@ -1,17 +1,21 @@
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron'
+import { join } from 'node:path'
 import type { Rect } from '../shared/api'
 import type { LoadError } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 
 export interface NativePaneEvents {
-  onUrlChanged(url: string): void
   onLoadError(err: LoadError): void
 }
 
 /** net::ERR_ABORTED — fired for ordinary navigation cancellation, not a failure. */
 const ERR_ABORTED = -3
 
-/** The left pane: a real Chromium view at the host device scale factor. */
+/**
+ * The left pane: a real Chromium view at the host device scale factor.
+ * URL reporting and navigation mirroring belong to `SyncBus`, which subscribes
+ * to this view's `webContents` directly.
+ */
 export class NativePane {
   readonly view: WebContentsView
   private bounds: Rect = { x: 0, y: 0, width: 0, height: 0 }
@@ -19,17 +23,18 @@ export class NativePane {
 
   constructor(win: BrowserWindow, private readonly events: NativePaneEvents) {
     this.view = new WebContentsView({
-      webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+      webPreferences: {
+        preload: join(__dirname, '../preload/sync.js'),
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+      },
     })
     this.view.setBackgroundColor('#ffffff')
     win.contentView.addChildView(this.view)
     this.view.setBounds(this.bounds)
 
     const wc = this.view.webContents
-    wc.on('did-navigate', (_e, url) => this.events.onUrlChanged(url))
-    wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-      if (isMainFrame) this.events.onUrlChanged(url)
-    })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) this.events.onLoadError({ code, description, url })
     })

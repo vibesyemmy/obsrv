@@ -4,6 +4,7 @@ import type { AppContext } from './context'
 import { attachFrameBus } from './frameBus'
 import { registerIpc } from './ipc'
 import { NativePane } from './nativePane'
+import { attachSyncBus } from './syncBus'
 import { TargetSource } from './targetSource'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
@@ -15,9 +16,6 @@ function boot(): void {
   // takes its callbacks at construction time. Each is guarded: a pane can still
   // report a navigation or an error while the main window is closing.
   const native = new NativePane(win, {
-    onUrlChanged: url => {
-      if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
-    },
     onLoadError: err => {
       if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
     },
@@ -32,7 +30,12 @@ function boot(): void {
   })
 
   const bus = attachFrameBus(target, win)
-  const ctx: AppContext = { win, native, target, bus }
+  // SyncBus owns URL reporting for both panes, so the URL bar sees exactly one
+  // update per navigation whichever pane started it.
+  const sync = attachSyncBus(native, target, url => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
+  })
+  const ctx: AppContext = { win, native, target, bus, sync }
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
@@ -42,6 +45,7 @@ function boot(): void {
   // window finishes closing — otherwise `window-all-closed` never fires and the
   // app hangs after the last visible window is gone.
   win.on('close', () => {
+    sync.detach()
     bus.detach()
     target.destroy()
   })

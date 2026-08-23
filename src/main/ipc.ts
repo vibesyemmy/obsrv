@@ -4,6 +4,7 @@ import { IPC } from '../shared/ipc'
 import { parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import type { HostInfo } from '../shared/types'
+import { normalizeUrl } from '../shared/url'
 import type { AppContext } from './context'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
@@ -27,7 +28,7 @@ function hostInfo(win: BrowserWindow): HostInfo {
 }
 
 export function registerIpc(ctx: AppContext): void {
-  const { win, native, target, bus } = ctx
+  const { win, native, target, bus, sync } = ctx
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
 
@@ -49,7 +50,18 @@ export function registerIpc(ctx: AppContext): void {
   // --- navigation: both panes always move together --------------------------
   ipcMain.handle(IPC.navigate, async (e, url: string) => {
     assertRenderer(e)
-    const [applied] = await Promise.all([native.load(url), target.load(url)])
+    // Both panes are being pointed at the same URL on purpose; tell SyncBus so
+    // it does not mirror the pair back and trigger a second load. Input that
+    // does not normalise never reaches Chromium, so there is nothing to
+    // expect; the panes report it as a `LoadError` themselves.
+    let wanted = url
+    try {
+      wanted = normalizeUrl(url)
+      sync.expect(wanted)
+    } catch {
+      // Reported by `native.load` / `target.load` below.
+    }
+    const [applied] = await Promise.all([native.load(wanted), target.load(wanted)])
     return applied
   })
   ipcMain.on(IPC.reload, e => {

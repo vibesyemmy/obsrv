@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_RECT, parseInputEvent, parseMode, parseRect, parseSettings } from '../../src/shared/ipcPayloads'
+import { MAX_RECT, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings } from '../../src/shared/ipcPayloads'
 
 describe('parseRect', () => {
   it('accepts a sane rect and rounds to integers', () => {
@@ -84,5 +84,23 @@ describe('parseMode', () => {
   })
   it.each(['bogus', '', 1, null, undefined, {}])('rejects %j', raw => {
     expect(parseMode(raw)).toBeNull()
+  })
+})
+
+describe('parseScrollPos', () => {
+  it('copies exactly x and y', () => {
+    expect(parseScrollPos({ x: 12.5, y: 0, extra: 1 })).toEqual({ x: 12.5, y: 0 })
+  })
+  it.each([
+    ['not an object', 12],
+    ['null', null],
+    ['negative x', { x: -1, y: 0 }],
+    ['negative y', { x: 0, y: -0.5 }],
+    ['NaN', { x: NaN, y: 0 }],
+    ['Infinity', { x: 0, y: Infinity }],
+    ['string', { x: '0', y: 0 }],
+    ['missing key', { x: 0 }],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseScrollPos(raw)).toBeNull()
   })
 })

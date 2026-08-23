@@ -1,5 +1,6 @@
 import { BrowserWindow, type WebContents } from 'electron'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
 import { clampViewport } from '../shared/calibration'
 import type { LoadError, TargetInputEvent } from '../shared/types'
@@ -76,6 +77,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // macOS refuses window sizes larger than the display without this.
       enableLargerThanScreen: true,
       webPreferences: {
+        preload: join(__dirname, '../preload/sync.js'),
         offscreen: { deviceScaleFactor: 1 },
         contextIsolation: true,
         sandbox: true,

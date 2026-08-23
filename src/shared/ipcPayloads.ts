@@ -1,5 +1,5 @@
 import type { Rect } from './api'
-import type { InputModifier, Settings, TargetInputEvent } from './types'
+import type { InputModifier, ScrollPos, Settings, TargetInputEvent } from './types'
 
 /**
  * Parsers for everything the renderer sends main over IPC. Each returns a
@@ -75,4 +75,16 @@ export function parseSettings(raw: unknown): Settings | null {
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {
   return raw === 'url' || raw === 'image' ? raw : null
+}
+
+/**
+ * A scroll offset reported by the sync preload in a page webContents. Both
+ * axes must be finite and non-negative; anything else is dropped rather than
+ * relayed to the other pane.
+ */
+export function parseScrollPos(raw: unknown): ScrollPos | null {
+  if (!isRecord(raw)) return null
+  const { x, y } = raw
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || x < 0 || y < 0) return null
+  return { x, y }
 }
