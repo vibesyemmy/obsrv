@@ -127,8 +127,8 @@ Target pane is a scrollable region; if `viewport × S` exceeds the pane, the can
 
 Fragment shader, operating in linear light. Order:
 
-1. **Brightness:** `c *= nitsTarget / nitsHost`
-2. **Contrast (black floor):** `c = floor + (1 - floor) * c`, `floor = 1 / contrastRatio`
+1. **Contrast (black floor):** `c = floor + (1 - floor) * c`, `floor = 1 / contrastRatio`
+2. **Brightness (backlight):** `c *= nitsTarget / nitsHost` — applied after the floor so black-level leakage scales with the panel's own backlight
 3. **Gamut coverage:** `c = mix(vec3(luma(c)), c, coverage)`
 4. **Bit depth:** quantise to `2^bits` levels; if `frc` enabled, add ordered 4×4 Bayer dither before quantising
 5. **Gamma encode** to sRGB

@@ -1,0 +1,31 @@
+appId: app.obsrv.desktop
+productName: Obsrv
+copyright: © 2026 Opeyemi Ajagbe
+
+directories:
+  output: dist
+  buildResources: build
+
+# Everything the app needs at runtime is in out/; src and tests are not shipped.
+files:
+  - out/**/*
+  - package.json
+asar: true
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Turned on from the command line in step 6, so the unsigned build in step 5
+  # never waits on Apple's notary service.
+  notarize: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.dmg

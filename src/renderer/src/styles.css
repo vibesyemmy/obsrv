@@ -1,0 +1,310 @@
+:root {
+  color-scheme: dark;
+  font: 13px/1.4 system-ui, -apple-system, sans-serif;
+
+  /* Every grey is exactly neutral (R = G = B). A blue- or warm-tinted chrome
+     shifts the perceived hue of the render sitting next to it, which is the
+     one thing this app must never do. See docs/superpowers/specs/
+     2026-08-23-obsrv-ui-style.md. */
+  --void: #000000;
+  --chrome-0: #141414;
+  --chrome-1: #1c1c1c;
+  --chrome-2: #262626;
+  --line: #333333;
+  --text-0: #ededed;
+  --text-1: #8a8a8a;
+  /* Text fields sit a step below the chrome so their contents read as content. */
+  --field: #0d0d0d;
+
+  /* The only chromatic values in the whole chrome. Colour means attention,
+     never decoration — there is deliberately no brand accent. */
+  --warn: #d8a33a;
+  --error: #e5484d;
+
+  /* Overwritten by the surround control; the pane field only. */
+  --surround: #2a2a2a;
+
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+:root[data-surround='black'] { --surround: #000000; }
+:root[data-surround='graphite'] { --surround: #2a2a2a; }
+:root[data-surround='grey50'] { --surround: #808080; }
+
+html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color: var(--text-0); }
+.app { height: 100%; display: flex; flex-direction: column; }
+.muted { color: var(--text-1); }
+.warn { color: var(--warn); }
+.toolbar .warn { white-space: nowrap; }
+
+/* 44px matches TOOLBAR_H in src/main/ipc.ts, used until NativeSlot reports. */
+.toolbar {
+  flex: 0 0 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--chrome-1);
+  border-bottom: 1px solid var(--line);
+}
+.toolbar button {
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  width: 26px;
+  height: 24px;
+  cursor: pointer;
+}
+.toolbar select {
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  height: 24px;
+}
+.url-form { flex: 1 1 auto; min-width: 120px; }
+.url-form input {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  background: var(--field);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.url-form input[readonly] { color: var(--text-1); }
+.badge-error {
+  color: var(--error);
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.pixel-exact { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+/* The checked state would otherwise take the OS accent colour. */
+.toolbar input[type='checkbox'] { accent-color: var(--text-0); }
+
+/* Focus is a 1px inset neutral ring (the style spec's "weight and a 1px
+   inset ring"), never Chromium's accent-coloured outline. Pointer focus on
+   buttons and selects shows nothing; keyboard focus (and any focus in a
+   text field) shows the ring. */
+.toolbar :is(button, select, input):focus { outline: none; }
+.toolbar :is(button, select, input):focus-visible {
+  outline: 1px solid var(--text-1);
+  outline-offset: -1px;
+}
+
+.panes { flex: 1 1 auto; display: flex; min-height: 0; }
+.pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surround);
+}
+.target-pane { border-left: 1px solid var(--line); }
+/* Square corners, no shadow, no blur: a rounded or blurred pane edge would
+   destroy the very corner pixels the user opened this app to inspect. */
+.pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.native-slot { width: 100%; height: 100%; }
+/* The backing store is already at device resolution; this only guards against
+   a fractional CSS size introducing a resample. */
+.target-canvas { display: block; image-rendering: pixelated; }
+/* The canvas itself never carries a ring: an outline over its edge would sit
+   on the very pixels under inspection. Keyboard focus in the target pane is
+   shown on the pane's own hairlines instead, which touch no page pixel. */
+.target-canvas:focus { outline: none; }
+.target-pane:has(.target-canvas:focus-visible) { border-left-color: var(--text-1); }
+.target-pane:has(.target-canvas:focus-visible) .pane-footer { border-top-color: var(--text-1); }
+
+/* Signature: each pane always states what it is showing, so a screenshot of
+   Obsrv is self-documenting. */
+.pane-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 10px;
+  padding: 5px 10px;
+  font: 400 11px/1.4 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+  background: var(--chrome-1);
+  border-top: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pane-footer .role { color: var(--text-0); letter-spacing: 0.08em; }
+
+/* Segmented surround control. Active state is weight and a border, not hue. */
+.surround-control { display: flex; border: 1px solid var(--line); border-radius: 4px; }
+.surround-control button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--chrome-2);
+  cursor: pointer;
+}
+.surround-control button:last-child { border-right: 0; }
+.surround-control button[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--text-0); }
+.surround-swatch { display: block; width: 12px; height: 12px; margin: 0 auto; }
+
+/* Numbers never jitter as a slider moves. */
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* An open drawer's button: weight and a 1px border, not hue. */
+.toolbar :is(.toggle-panel, .toggle-settings)[aria-pressed='true'] {
+  border-color: var(--text-0);
+  background: var(--chrome-1);
+}
+
+/* Drawers sit beside the panes, never over them: the native WebContentsView is
+   an OS-level overlay and would cover anything painted on top of it. */
+.body { flex: 1 1 auto; display: flex; min-height: 0; }
+.panes { min-width: 0; }
+.drawer {
+  flex: 0 0 280px;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--chrome-1);
+  border-left: 1px solid var(--line);
+}
+
+/* Dense inspector: ~11px labels, the value pinned right in the mono face. */
+.controls h2 {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-1);
+}
+.controls h2:first-child { margin-top: 0; }
+.controls p { margin: 6px 0; font-size: 11px; }
+.control { display: block; margin: 10px 0; }
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-1);
+}
+.control-row .num { color: var(--text-0); }
+.control.inline { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-1); }
+.control.inline > span { margin: 0; }
+/* accent-color pins the thumb and filled track to a neutral; unset, Chromium
+   paints them in the OS accent — the one hue this chrome may never carry. */
+.control input[type='range'] { display: block; width: 100%; margin: 0; accent-color: var(--text-0); }
+.control input[type='checkbox'] { margin: 0; accent-color: var(--text-0); }
+.control input[type='number'], .control select {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  background: var(--field);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+/* A numeric field reads like the readouts: digits flush right. */
+.control input.num { text-align: right; }
+.readout {
+  font: 400 11px/1.6 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.field-error { color: var(--error); }
+
+/* Same 1px inset neutral ring as the toolbar; a range input's ring sits just
+   outside its track instead, where an inset one would cross the thumb. */
+.drawer :is(button, select, input):focus { outline: none; }
+.drawer :is(button, select, input):focus-visible {
+  outline: 1px solid var(--text-1);
+  outline-offset: -1px;
+}
+.drawer input[type='range']:focus-visible { outline-offset: 2px; }
+
+.fatal { padding: 48px; max-width: 44em; }
+.fatal h1 { font-size: 20px; margin: 0 0 12px; }
+
+/* Image mode. In normal flow, above the panes: an overlay here would sit
+   behind the native WebContentsView. */
+.strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--chrome-1);
+  border-bottom: 1px solid var(--line);
+}
+.strip button {
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  height: 24px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.strip button:focus { outline: none; }
+.strip button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
+.toolbar .close-image { width: auto; padding: 0 8px; }
+/* `safe`: a file wider than the pane scrolls from its left edge instead of
+   losing it off-screen. */
+.image-pane .pane-body { display: flex; align-items: flex-start; justify-content: safe center; }
+.image-pane img { display: block; image-rendering: pixelated; }
+
+/* Pinned to the right so they land over the target pane, never over the native
+   view on the left. The drag hint is fixed rather than a strip: a strip would
+   shift the panes under the pointer and flicker dragleave/dragenter. */
+.toast,
+.drop-hint {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  pointer-events: none;
+}
+.strip button[aria-pressed='true'] { border-color: var(--text-1); font-weight: 600; }
+
+/* Spec §9 stall notice. Inside the target pane's scroll box, never over the
+   native view on the left. Sticky rather than absolute so it stays visible
+   while the pane is scrolled; a direct block child of `.pane-body` (a sibling
+   before `.target-wrap`, not inside it), so it is the pane's width and its
+   `left: 0` holds while a wide canvas is scrolled horizontally. The fill is a
+   neutral grey: only the rule under it is red, so the one chromatic thing on
+   screen is the error itself. */
+.target-wrap { min-width: min-content; }
+.stall {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--chrome-1);
+  border-bottom: 1px solid var(--error);
+  color: var(--text-0);
+}
+.stall button {
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  height: 22px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.stall button:focus { outline: none; }
+.stall button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }

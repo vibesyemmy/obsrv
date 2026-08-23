@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>loop-fixture</title>
+    <!-- A SPA that rewrites its URL on every load. Each pane's commit differs
+         from the other's, so a naive mirror would bounce between them forever. -->
+    <script>history.replaceState(null, '', '?r=' + Math.random().toString(36).slice(2))</script>
+  </head>
+  <body></body>
+</html>
