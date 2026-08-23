@@ -1,11 +1,21 @@
 import { useShallow } from 'zustand/react/shallow'
-import { DEFAULT_SETTINGS } from '../../../shared/presets'
-import type { PanelParams } from '../../../shared/types'
-import { selectPanelParams, useStore } from '../state/store'
+import type { PanelProfile } from '../../../shared/types'
+import { selectHostNits, selectProfile, useStore } from '../state/store'
 
-/** The top of the contrast slider means "no black lift", i.e. blackFloor 0. */
+/**
+ * The top of the contrast slider means "no black lift": it commits
+ * `contrastRatio: null`, exactly what the Reference profile carries, and the
+ * readout says "off". It is the only slider with an off position. Brightness
+ * is always an absolute nits figure in a custom profile — a preset's
+ * `nits: null` ("same as host") is resolved against the host the moment the
+ * sliders take over, so the hand-tuned panel never silently changes when the
+ * host's nits setting does.
+ */
 export const CONTRAST_MAX = 3000
 
+export const CUSTOM_PROFILE_ID = 'custom'
+
+/** Slider positions, in the units a person thinks in. */
 export interface PanelControlValues {
   nits: number
   contrast: number
@@ -14,23 +24,35 @@ export interface PanelControlValues {
   frc: boolean
 }
 
-export function paramsToControls(p: PanelParams, hostNits: number): PanelControlValues {
+export function profileToControls(p: PanelProfile, hostNits: number): PanelControlValues {
   return {
-    nits: Math.round(p.brightness * hostNits),
-    contrast: p.blackFloor <= 0 ? CONTRAST_MAX : Math.round(1 / p.blackFloor),
-    gamutPct: Math.round(p.gamut * 100),
-    bits: p.levels <= 63 ? 6 : 8,
-    frc: p.dither,
+    nits: p.nits ?? hostNits,
+    contrast: p.contrastRatio ?? CONTRAST_MAX,
+    gamutPct: Math.round(p.gamutCoverage * 100),
+    bits: p.bits,
+    frc: p.frc,
   }
 }
 
-export function controlsToParams(c: PanelControlValues, hostNits: number): PanelParams {
+/**
+ * The custom profile that results from moving the sliders from `base`. With
+ * an empty patch it simulates identically to `base` (see the unit tests), so
+ * the first slider touch changes only the one value moved.
+ */
+export function customProfile(
+  base: PanelProfile,
+  hostNits: number,
+  patch: Partial<PanelControlValues>,
+): PanelProfile {
+  const c = { ...profileToControls(base, hostNits), ...patch }
   return {
-    brightness: c.nits / hostNits,
-    blackFloor: c.contrast >= CONTRAST_MAX ? 0 : 1 / c.contrast,
-    gamut: c.gamutPct / 100,
-    levels: 2 ** c.bits - 1,
-    dither: c.frc,
+    id: CUSTOM_PROFILE_ID,
+    label: 'Custom panel',
+    contrastRatio: c.contrast >= CONTRAST_MAX ? null : c.contrast,
+    gamutCoverage: c.gamutPct / 100,
+    bits: c.bits,
+    frc: c.frc,
+    nits: c.nits,
   }
 }
 
@@ -67,6 +89,7 @@ function Slider({
         max={max}
         step={step}
         value={current}
+        aria-valuetext={value}
         onChange={e => onChange(Number(e.target.value))}
       />
     </label>
@@ -74,16 +97,13 @@ function Slider({
 }
 
 export function PanelControls() {
-  const params = useStore(useShallow(selectPanelParams))
-  // Mirrors `selectPanelParams`: a non-positive nits must not divide to Infinity.
-  const hostNits = useStore(s =>
-    s.settings.hostNits > 0 ? s.settings.hostNits : DEFAULT_SETTINGS.hostNits,
-  )
-  const setParamsOverride = useStore(s => s.setParamsOverride)
+  const profile = useStore(useShallow(selectProfile))
+  const hostNits = useStore(selectHostNits)
+  const setProfileOverride = useStore(s => s.setProfileOverride)
 
-  const v = paramsToControls(params, hostNits)
+  const v = profileToControls(profile, hostNits)
   const update = (patch: Partial<PanelControlValues>): void =>
-    setParamsOverride(controlsToParams({ ...v, ...patch }, hostNits))
+    setProfileOverride(customProfile(profile, hostNits, patch))
 
   return (
     <div className="controls">
@@ -95,7 +115,7 @@ export function PanelControls() {
         value={`${v.nits} nits`}
         className="nits-slider"
         min={50}
-        // The reference profile is "same as host", which must always be reachable.
+        // "Same as host" must always be reachable.
         max={Math.max(600, hostNits)}
         step={10}
         current={v.nits}

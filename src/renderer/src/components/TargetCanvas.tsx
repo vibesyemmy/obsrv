@@ -1,6 +1,6 @@
-import { useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { GlRenderer } from '../gl/renderer'
+import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
 import { selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
@@ -15,8 +15,17 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
 
   const viewport = useStore(useShallow(selectViewport))
   const params = useStore(useShallow(selectPanelParams))
-  const scale = useStore(selectScale)
+  const requestedScale = useStore(selectScale)
   const mode = useStore(s => s.mode)
+
+  // The GPU's backing-store limit, known once the renderer exists. Until then
+  // the absolute cap stands in, which is never the binding one in practice.
+  const [maxOutput, setMaxOutput] = useState(MAX_OUTPUT_SIZE)
+
+  // The magnification that is actually drawn. `GlRenderer.draw` applies the
+  // same `fitScale`, so the CSS box and the input maths below agree with the
+  // backing store even when a huge viewport × scale had to be reduced.
+  const scale = fitScale(viewport.width, viewport.height, requestedScale, maxOutput)
 
   // Read by the frame callback, which is installed once and must not go stale.
   const draw = useRef({ scale, params })
@@ -50,6 +59,7 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
         return false
       }
       glRef.current = gl
+      setMaxOutput(gl.maxOutputSize)
       offFrame = window.obsrv.onFrame(m => {
         if (!gl) return
         // Trust the message's dims: frames painted against the previous

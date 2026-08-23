@@ -12,7 +12,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
-import type { HostInfo, LoadError, PanelParams, Settings } from '../../../shared/types'
+import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
 
@@ -43,8 +43,11 @@ export interface AppState {
   custom: TargetScreen
   pixelExact: boolean
   profileId: string
-  /** Advanced sliders; null means "follow the profile". */
-  paramsOverride: PanelParams | null
+  /**
+   * The advanced sliders' hand-tuned profile (`id: 'custom'`), in the same
+   * human units as a preset profile; null means "follow `profileId`".
+   */
+  profileOverride: PanelProfile | null
   settings: Settings
   host: HostInfo
   targetLoading: boolean
@@ -59,7 +62,7 @@ export interface AppState {
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setProfile(id: string): void
-  setParamsOverride(p: PanelParams | null): void
+  setProfileOverride(p: PanelProfile | null): void
   setSettings(s: Settings): void
   setHost(h: HostInfo): void
   setTargetLoading(v: boolean): void
@@ -83,7 +86,7 @@ export const useStore = create<AppState>()(set => ({
   custom: { width: 1920, height: 1080, diagonalInches: 24 },
   pixelExact: false,
   profileId: PANEL_PROFILES[0]!.id,
-  paramsOverride: null,
+  profileOverride: null,
   settings: { ...DEFAULT_SETTINGS },
   // Zeroes until the first `getHostInfo`; `selectScale` falls back meanwhile.
   host: { physicalWidth: 0, physicalHeight: 0, scaleFactor: 0 },
@@ -100,8 +103,8 @@ export const useStore = create<AppState>()(set => ({
   setCustom: c => set(s => ({ custom: { ...s.custom, ...c }, presetId: CUSTOM_PRESET_ID })),
   setPixelExact: pixelExact => set({ pixelExact }),
   // Picking a profile drops any hand-tuned slider values.
-  setProfile: profileId => set({ profileId, paramsOverride: null }),
-  setParamsOverride: paramsOverride => set({ paramsOverride }),
+  setProfile: profileId => set({ profileId, profileOverride: null }),
+  setProfileOverride: profileOverride => set({ profileOverride }),
   setSettings: settings => set({ settings }),
   setHost: host => set({ host }),
   setTargetLoading: targetLoading => set({ targetLoading }),
@@ -176,12 +179,20 @@ export function selectHostScaleFactor(s: AppState): number {
   return s.host.scaleFactor > 0 ? s.host.scaleFactor : 1
 }
 
-export function selectPanelParams(s: AppState): PanelParams {
-  if (s.paramsOverride) return s.paramsOverride
+/** The host's peak brightness for the panel maths; never non-positive. */
+export function selectHostNits(s: AppState): number {
   // `profileToParams` throws on a non-positive nits; settings arrive validated
   // from main, but a selector must never throw, so fall back to the default.
-  const nits = s.settings.hostNits > 0 ? s.settings.hostNits : DEFAULT_SETTINGS.hostNits
-  return profileToParams(findProfile(s.profileId), nits)
+  return s.settings.hostNits > 0 ? s.settings.hostNits : DEFAULT_SETTINGS.hostNits
+}
+
+/** The profile the target pane is simulating: the sliders' custom one, else the chosen preset. */
+export function selectProfile(s: AppState): PanelProfile {
+  return s.profileOverride ?? findProfile(s.profileId)
+}
+
+export function selectPanelParams(s: AppState): PanelParams {
+  return profileToParams(selectProfile(s), selectHostNits(s))
 }
 
 /** Spec §7: the URL bar shows the filename, read-only, while in image mode. */

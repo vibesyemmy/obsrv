@@ -13,6 +13,8 @@
   --line: #333333;
   --text-0: #ededed;
   --text-1: #8a8a8a;
+  /* Text fields sit a step below the chrome so their contents read as content. */
+  --field: #0d0d0d;
 
   /* The only chromatic values in the whole chrome. Colour means attention,
      never decoration — there is deliberately no brand accent. */
@@ -32,7 +34,8 @@
 html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color: var(--text-0); }
 .app { height: 100%; display: flex; flex-direction: column; }
 .muted { color: var(--text-1); }
-.warn { color: var(--warn); white-space: nowrap; }
+.warn { color: var(--warn); }
+.toolbar .warn { white-space: nowrap; }
 
 /* 44px matches TOOLBAR_H in src/main/ipc.ts, used until NativeSlot reports. */
 .toolbar {
@@ -66,7 +69,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   height: 24px;
   box-sizing: border-box;
   padding: 0 8px;
-  background: #0d0d0d;
+  background: var(--field);
   color: var(--text-0);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -202,11 +205,13 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   height: 24px;
   box-sizing: border-box;
   padding: 0 6px;
-  background: #0d0d0d;
+  background: var(--field);
   color: var(--text-0);
   border: 1px solid var(--line);
   border-radius: 4px;
 }
+/* A numeric field reads like the readouts: digits flush right. */
+.control input.num { text-align: right; }
 .readout {
   font: 400 11px/1.6 var(--mono);
   font-variant-numeric: tabular-nums;

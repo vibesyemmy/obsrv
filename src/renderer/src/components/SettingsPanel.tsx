@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
 import type { Settings } from '../../../shared/types'
@@ -16,18 +16,19 @@ interface NumberFieldProps {
   value: number
   min: number
   step?: number
-  /** Called only with a finite value of at least `min`. */
+  /** Called on blur or Enter, only with a finite value of at least `min`. */
   onCommit: (v: number) => void
-  /** Called with a message while the field holds something uncommittable, null once it is clean. */
+  /** Called with a message when blur or Enter finds the draft uncommittable, null once one commits. */
   onInvalid: (message: string | null) => void
 }
 
 /**
- * A numeric field that keeps its own draft. Typing "2" on the way to "27"
- * must not commit a 2-inch display, and clearing the field must not commit
- * NaN — `ppi` throws on either and main refuses to store them. The draft
- * follows the store (a `getSettings` landing after mount, say) except while
- * the field is being edited, the same guard the URL bar uses.
+ * A numeric field that commits on blur or Enter, never on a keystroke:
+ * typing "54" must not pass through a 5-inch display, and clearing the field
+ * must not commit NaN — `ppi` throws on either and main refuses to store
+ * them. Escape reverts to the store's value. The draft follows the store (a
+ * `getSettings` landing after mount, say) except while the field is being
+ * edited, the same guard the URL bar uses.
  */
 function NumberField({ className, label, unit, value, min, step, onCommit, onInvalid }: NumberFieldProps) {
   const ref = useRef<HTMLInputElement>(null)
@@ -36,6 +37,30 @@ function NumberField({ className, label, unit, value, min, step, onCommit, onInv
   useEffect(() => {
     if (document.activeElement !== ref.current) setDraft(String(value))
   }, [value])
+
+  // Returns whether the draft was committed. An uncommittable draft reports
+  // why; the caller decides whether to keep it on screen.
+  const commit = (): boolean => {
+    const n = Number(draft)
+    if (draft.trim() === '' || !Number.isFinite(n) || n < min) {
+      onInvalid(`${label} must be a number of at least ${min}.`)
+      return false
+    }
+    onInvalid(null)
+    if (n !== value) onCommit(n)
+    return true
+  }
+
+  const revert = (): void => {
+    setDraft(String(value))
+    onInvalid(null)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
+    // Enter keeps focus and, if the draft was bad, keeps it too so it can be fixed.
+    if (e.key === 'Enter') commit()
+    else if (e.key === 'Escape') revert()
+  }
 
   return (
     <label className="control">
@@ -50,21 +75,11 @@ function NumberField({ className, label, unit, value, min, step, onCommit, onInv
         min={min}
         step={step}
         value={draft}
-        onChange={e => {
-          const raw = e.target.value
-          setDraft(raw)
-          const n = Number(raw)
-          if (raw.trim() === '' || !Number.isFinite(n) || n < min) {
-            onInvalid(`${label} must be a number of at least ${min}.`)
-            return
-          }
-          onInvalid(null)
-          onCommit(n)
-        }}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={onKeyDown}
+        // Leaving a field never leaves it showing an uncommitted value.
         onBlur={() => {
-          // Leaving a half-typed field snaps it back to the last good value.
-          setDraft(String(value))
-          onInvalid(null)
+          if (!commit()) setDraft(String(value))
         }}
       />
     </label>
@@ -84,27 +99,47 @@ export function SettingsPanel() {
   const [hostError, setHostError] = useState<string | null>(null)
   const [customError, setCustomError] = useState<string | null>(null)
 
+  // Settings commits are serialised through this chain, so their rejections
+  // arrive in commit order and an earlier one cannot undo a later success.
+  // `confirmed` is the last value main accepted (or the one it loaded), which
+  // is what a rejection rolls back to; `pending` stops the store's optimistic
+  // value from being mistaken for a confirmed one.
+  const queue = useRef<Promise<void>>(Promise.resolve())
+  const confirmed = useRef<Settings>(settings)
+  const pending = useRef(0)
+  useEffect(() => {
+    if (pending.current === 0) confirmed.current = settings
+  }, [settings])
+
+  // Mirrors main's guard (`parseSettings`): anything not finite and positive
+  // is refused there, and `ppi` would throw on it here. The store is updated
+  // first so the panes follow the commit; a refusal from main rolls it back
+  // and says so, rather than leaving the panes showing an unsaved value.
+  const commit = (next: Settings): void => {
+    if (!(next.hostDiagonalInches > 0) || !(next.hostNits > 0)) return
+    pending.current++
+    setSettings(next)
+    const run = async (): Promise<void> => {
+      try {
+        await window.obsrv.setSettings(next)
+        confirmed.current = next
+      } catch (e) {
+        // Only this commit's own value is rolled back; a later commit that has
+        // already replaced it in the store owns the store now.
+        if (useStore.getState().settings === next) setSettings(confirmed.current)
+        setHostError(`Not saved: ${e instanceof Error ? e.message : String(e)}`)
+      } finally {
+        pending.current--
+      }
+    }
+    queue.current = queue.current.then(run, run)
+  }
+
   const displayKnown = host.physicalWidth > 0 && host.physicalHeight > 0 && host.scaleFactor > 0
   const hostPpi =
     displayKnown && settings.hostDiagonalInches > 0
       ? ppi(host.physicalWidth, host.physicalHeight, settings.hostDiagonalInches)
       : null
-
-  // Mirrors main's guard (`parseSettings`): anything not finite and positive
-  // is refused there, and `ppi` would throw on it here. The store is updated
-  // first so the panes follow the keystroke; a refusal from main rolls it back
-  // and says so, rather than leaving the panes showing an unsaved value.
-  const commit = async (next: Settings): Promise<void> => {
-    if (!(next.hostDiagonalInches > 0) || !(next.hostNits > 0)) return
-    const prev = settings
-    setSettings(next)
-    try {
-      await window.obsrv.setSettings(next)
-    } catch (e) {
-      setSettings(prev)
-      setHostError(`Not saved: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  }
 
   const error = (message: string | null) =>
     message ? <p className="field-error" role="alert">{message}</p> : null
@@ -126,7 +161,7 @@ export function SettingsPanel() {
         value={settings.hostDiagonalInches}
         min={5}
         step={0.1}
-        onCommit={v => void commit({ ...settings, hostDiagonalInches: v })}
+        onCommit={v => commit({ ...useStore.getState().settings, hostDiagonalInches: v })}
         onInvalid={setHostError}
       />
 
@@ -137,7 +172,7 @@ export function SettingsPanel() {
         value={settings.hostNits}
         min={50}
         step={10}
-        onCommit={v => void commit({ ...settings, hostNits: v })}
+        onCommit={v => commit({ ...useStore.getState().settings, hostNits: v })}
         onInvalid={setHostError}
       />
 

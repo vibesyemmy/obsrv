@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { GlRenderer } from '../../src/renderer/src/gl/renderer'
+import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../../src/renderer/src/gl/renderer'
 import { profileToParams, simulatePixel } from '../../src/shared/panelSim'
 import { PANEL_PROFILES } from '../../src/shared/presets'
 import type { FrameSlice } from '../../src/shared/types'
@@ -81,7 +81,52 @@ describe('panel shader matches the TS reference', () => {
   }
 })
 
+describe('fitScale', () => {
+  it('leaves a scale alone while the output fits', () => {
+    expect(fitScale(1920, 1080, 2, 4096)).toBe(2)
+  })
+  it('reduces both axes by the same factor when one would not fit', () => {
+    const s = fitScale(1920, 1080, 3, 4096)
+    expect(Math.round(1920 * s)).toBe(4096)
+    expect(s).toBeCloseTo(4096 / 1920, 10)
+  })
+  it('passes a bad scale through for draw() to refuse', () => {
+    expect(fitScale(64, 64, 0, 4096)).toBe(0)
+    expect(fitScale(64, 64, Number.NaN, 4096)).toBeNaN()
+  })
+})
+
 describe('GlRenderer', () => {
+  it('clamps a huge magnification to what the backing store can hold, and still draws', () => {
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    renderer.resizeSource(2, 1)
+    renderer.uploadSlice({
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 1,
+      data: new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255]),
+    })
+    expect(renderer.maxOutputSize).toBeGreaterThan(0)
+    expect(renderer.maxOutputSize).toBeLessThanOrEqual(MAX_OUTPUT_SIZE)
+
+    expect(renderer.draw({ scale: 1e6, params: REFERENCE })).toBe(true)
+    expect(renderer.outputWidth).toBeLessThanOrEqual(renderer.maxOutputSize)
+    expect(renderer.outputHeight).toBeLessThanOrEqual(renderer.maxOutputSize)
+    // Reduced uniformly: the 2:1 source is still 2:1 on screen.
+    expect(renderer.outputWidth).toBe(renderer.maxOutputSize)
+    expect(renderer.outputHeight).toBe(Math.round(renderer.maxOutputSize / 2))
+    expect(renderer.appliedScale).toBe(renderer.maxOutputSize / 2)
+
+    // And an ordinary scale is applied as asked.
+    expect(renderer.draw({ scale: 4, params: REFERENCE })).toBe(true)
+    expect(renderer.appliedScale).toBe(4)
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([8, 4])
+    renderer.dispose()
+  })
+
   it('upscales with nearest neighbour, not interpolation', () => {
     const renderer = new GlRenderer(document.createElement('canvas'), {
       preserveDrawingBuffer: true,

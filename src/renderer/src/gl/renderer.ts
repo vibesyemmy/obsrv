@@ -7,6 +7,27 @@ export interface DrawOptions {
   params: PanelParams
 }
 
+/**
+ * Absolute ceiling on either backing-store axis, whatever the GPU reports.
+ * A 4096-wide viewport at a large magnification could otherwise ask for a
+ * canvas Chromium silently refuses (it then paints nothing, with no error).
+ */
+export const MAX_OUTPUT_SIZE = 16384
+
+/**
+ * The magnification actually drawable for a `srcW`×`srcH` source: `scale`
+ * unless `round(src × scale)` would exceed `max` on either axis, in which case
+ * the scale is reduced uniformly — both axes by the same factor — so the
+ * whole frame still fits. Pure, so `TargetCanvas` can size its CSS box and
+ * input maths from the same number the renderer draws with.
+ */
+export function fitScale(srcW: number, srcH: number, scale: number, max: number): number {
+  if (!(scale > 0 && Number.isFinite(scale))) return scale
+  if (srcW <= 0 || srcH <= 0) return scale
+  if (Math.round(srcW * scale) <= max && Math.round(srcH * scale) <= max) return scale
+  return Math.min(max / srcW, max / srcH)
+}
+
 export interface GlRendererOptions {
   /** Keeps the drawing buffer after composite so `readPixels` is reliable. */
   preserveDrawingBuffer?: boolean
@@ -73,8 +94,10 @@ export class GlRenderer {
   private readonly tex: WebGLTexture
   private readonly vao: WebGLVertexArrayObject
   private readonly u: Uniforms
+  private readonly maxOutput: number
   private width = 0
   private height = 0
+  private applied = 0
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -105,6 +128,12 @@ export class GlRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     // Dirty rects are tightly packed at any width.
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
+
+    this.maxOutput = Math.min(
+      MAX_OUTPUT_SIZE,
+      gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
+      gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+    )
 
     this.u = {
       tex: gl.getUniformLocation(this.program, 'uTex'),
@@ -138,6 +167,19 @@ export class GlRenderer {
 
   get outputHeight(): number {
     return this.canvas.height
+  }
+
+  /** Largest backing-store axis this context will draw: the GPU's limit or `MAX_OUTPUT_SIZE`. */
+  get maxOutputSize(): number {
+    return this.maxOutput
+  }
+
+  /**
+   * The magnification the last `draw` used — the requested scale, or the
+   * uniformly reduced one when the backing store had to be clamped.
+   */
+  get appliedScale(): number {
+    return this.applied
   }
 
   /** (Re)allocates the texture. Contents are undefined until the next upload. */
@@ -189,11 +231,14 @@ export class GlRenderer {
 
   /**
    * One fullscreen draw. Returns `false` and touches nothing when `scale` is
-   * not a positive finite number (a zero-sized pane mid-layout, say).
+   * not a positive finite number (a zero-sized pane mid-layout, say). A scale
+   * the backing store cannot hold is reduced with `fitScale`, never refused.
    */
-  draw({ scale, params }: DrawOptions): boolean {
-    if (!(scale > 0 && Number.isFinite(scale))) return false
+  draw({ scale: requested, params }: DrawOptions): boolean {
+    if (!(requested > 0 && Number.isFinite(requested))) return false
     const gl = this.gl
+    const scale = fitScale(this.width, this.height, requested, this.maxOutput)
+    this.applied = scale
     const w = Math.max(1, Math.round(this.width * scale))
     const h = Math.max(1, Math.round(this.height * scale))
     if (this.canvas.width !== w) this.canvas.width = w

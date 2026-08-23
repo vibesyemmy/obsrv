@@ -1,6 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { PANEL_PROFILES } from '../../../shared/presets'
-import { selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
+import { selectPanelParams, selectProfile, selectScale, selectViewport, useStore } from '../state/store'
 
 export interface PaneFooterProps {
   role: string
@@ -30,8 +29,8 @@ export function TargetFooter() {
   const viewport = useStore(useShallow(selectViewport))
   const params = useStore(useShallow(selectPanelParams))
   const scale = useStore(selectScale)
-  const profileId = useStore(s => s.profileId)
-  const override = useStore(s => s.paramsOverride)
+  // The sliders' custom profile is labelled "Custom panel"; a preset, by its name.
+  const profile = useStore(selectProfile)
   const image = useStore(s => s.image)
   const mode = useStore(s => s.mode)
 
@@ -40,7 +39,6 @@ export function TargetFooter() {
       ? `${image.width}×${image.height}`
       : `${viewport.width}×${viewport.height}`
   const depth = params.levels <= 63 ? '6-bit' : '8-bit'
-  const profile = PANEL_PROFILES.find(p => p.id === profileId)
 
   return (
     <PaneFooter
@@ -48,7 +46,7 @@ export function TargetFooter() {
       facts={[
         size,
         `×${scale.toFixed(2)}`,
-        override ? 'Custom panel' : (profile?.label ?? profileId),
+        profile.label,
         params.dither ? `${depth}+FRC` : depth,
       ]}
     />

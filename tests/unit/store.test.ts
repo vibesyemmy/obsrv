@@ -25,7 +25,7 @@ describe('defaults', () => {
     expect(s.presetId).toBe('1080p-24')
     expect(s.profileId).toBe('reference')
     expect(s.settings).toEqual(DEFAULT_SETTINGS)
-    expect(s.paramsOverride).toBeNull()
+    expect(s.profileOverride).toBeNull()
     expect(s.surround).toBe('graphite')
   })
 })
@@ -111,12 +111,24 @@ describe('selectPanelParams', () => {
     )
   })
   it('lets the advanced sliders win, and choosing a profile clears them', () => {
-    const override = { brightness: 0.3, blackFloor: 0.01, gamut: 0.5, levels: 63, dither: true }
-    useStore.getState().setParamsOverride(override)
-    expect(selectPanelParams(useStore.getState())).toEqual(override)
+    const custom = {
+      id: 'custom',
+      label: 'Custom panel',
+      contrastRatio: 100,
+      gamutCoverage: 0.5,
+      bits: 6 as const,
+      frc: true,
+      nits: 150,
+    }
+    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    useStore.getState().setProfileOverride(custom)
+    expect(selectPanelParams(useStore.getState())).toEqual(profileToParams(custom, 500))
 
     useStore.getState().setProfile('office-ips')
-    expect(useStore.getState().paramsOverride).toBeNull()
+    expect(useStore.getState().profileOverride).toBeNull()
+    expect(selectPanelParams(useStore.getState())).toEqual(
+      profileToParams(findProfile('office-ips'), 500),
+    )
   })
   it('falls back to the default nits instead of throwing on bad settings', () => {
     useStore.setState({
