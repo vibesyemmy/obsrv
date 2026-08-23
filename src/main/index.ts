@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { NativePane } from './nativePane'
+import { TargetSource } from './targetSource'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
 
@@ -33,11 +34,28 @@ function boot(): void {
     },
   })
 
-  const ctx: AppContext = { win, native }
+  const target = new TargetSource()
+  target.on('load-error', err => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
+  })
+  target.on('loading', loading => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.targetLoading, loading)
+  })
+  // Frames reach the renderer in Task 9 via attachFrameBus.
+
+  const ctx: AppContext = { win, native, target }
   layout(ctx)
   win.on('resize', () => layout(ctx))
 
+  // The offscreen target is a real BrowserWindow, so it must go before the main
+  // window finishes closing — otherwise `window-all-closed` never fires and the
+  // app hangs after the last visible window is gone.
+  win.on('close', () => target.destroy())
+
   void native.load('about:blank')
+  // The target loads its own about:blank in its constructor (it must own its
+  // first navigation — see TargetSource.firstNavigation).
+
   exposeForTests(ctx)
 }
 
