@@ -33,22 +33,25 @@ export function TargetFooter() {
   const profile = useStore(selectProfile)
   const image = useStore(s => s.image)
   const mode = useStore(s => s.mode)
+  const viewMode = useStore(s => s.viewMode)
+  const fitScale = useStore(s => s.fitScale)
 
   const size =
     mode === 'image' && image
       ? `${image.width}×${image.height}`
       : `${viewport.width}×${viewport.height}`
   const depth = params.levels <= 63 ? '6-bit' : '8-bit'
+  // Fit mode's readout states the drawn magnification and disclaims it: a
+  // minified overview is a map, never the 1x truth the pane exists for.
+  const magnification =
+    viewMode === 'fit' && fitScale !== null
+      ? [`fit ×${fitScale.toFixed(2)}`, 'not pixel-exact']
+      : [`×${scale.toFixed(2)}`]
 
   return (
     <PaneFooter
       role="TARGET"
-      facts={[
-        size,
-        `×${scale.toFixed(2)}`,
-        profile.label,
-        params.dither ? `${depth}+FRC` : depth,
-      ]}
+      facts={[size, ...magnification, profile.label, params.dither ? `${depth}+FRC` : depth]}
     />
   )
 }

@@ -171,3 +171,23 @@ describe('image mode', () => {
     expect(selectUrlBarText(useStore.getState())).toBe('https://example.com')
   })
 })
+
+describe('view mode', () => {
+  it('starts at 1:1 with no fit scale published', () => {
+    const s = useStore.getState()
+    expect(s.viewMode).toBe('1:1')
+    expect(s.fitScale).toBeNull()
+  })
+
+  it('switches modes and carries the published fit scale', () => {
+    useStore.getState().setViewMode('fit')
+    useStore.getState().setFitScale(0.42)
+    expect(useStore.getState().viewMode).toBe('fit')
+    expect(useStore.getState().fitScale).toBe(0.42)
+
+    useStore.getState().setViewMode('1:1')
+    useStore.getState().setFitScale(null)
+    expect(useStore.getState().viewMode).toBe('1:1')
+    expect(useStore.getState().fitScale).toBeNull()
+  })
+})

@@ -308,3 +308,30 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .stall button:focus { outline: none; }
 .stall button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
+
+/* v1.1 fit & pan. The 1:1/Fit segmented control follows the surround
+   control's grammar: active state is weight and an inset ring, never hue. */
+.view-control { display: flex; border: 1px solid var(--line); border-radius: 4px; }
+.view-control button {
+  width: auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--chrome-2);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.view-control button:last-child { border-right: 0; }
+.view-control button[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1px var(--text-0);
+  font-weight: 600;
+}
+
+/* The overview invites the jump-to-1:1 click; the pan chords (middle drag,
+   Option+drag) show the grab affordances. Cursors only — no overlay may sit
+   on the pixels under inspection. */
+.target-canvas.fit { cursor: zoom-in; }
+.target-canvas.pan-ready { cursor: grab; }
+.target-canvas.panning { cursor: grabbing; }

@@ -31,6 +31,12 @@ the advanced sliders. Enter your own monitor's diagonal in Settings once so the 
 pane renders at true physical size. Drop a 2x/3x PNG or JPG export to check a design
 before it's built.
 
+The target pane opens at 1:1, which usually overflows the pane: pan with a
+middle-button drag, Option+drag or Option+wheel, or switch the toolbar's
+`1:1 / Fit` control to a fit-to-pane overview (smoothly minified, so not
+pixel-exact — the footer says so) and click anywhere in it to jump back to 1:1
+at that spot.
+
 ## Develop
 
 ```bash
