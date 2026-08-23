@@ -1,16 +1,41 @@
-import { app, BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { app } from 'electron'
+import { IPC } from '../shared/ipc'
+import type { AppContext } from './context'
+import { NativePane } from './nativePane'
+import { exposeForTests } from './testHooks'
+import { createMainWindow } from './window'
 
-function createWindow(): void {
-  const win = new BrowserWindow({
-    width: 1600,
-    height: 1000,
-    title: 'Obsrv',
-    webPreferences: { preload: join(__dirname, '../preload/app.js'), contextIsolation: true, sandbox: true },
+/** Toolbar height reserved at the top of the window; panes sit below it. */
+const TOOLBAR_H = 44
+
+/**
+ * Placeholder layout: left half of the window below the toolbar. The renderer
+ * takes over via IPC `setNativeBounds` once the toolbar and panes exist.
+ */
+function layout(ctx: AppContext): void {
+  const [w = 0, h = 0] = ctx.win.getContentSize()
+  ctx.native.setBounds({
+    x: 0,
+    y: TOOLBAR_H,
+    width: Math.floor(w / 2),
+    height: Math.max(0, h - TOOLBAR_H),
   })
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-app.whenReady().then(createWindow)
+function boot(): void {
+  const win = createMainWindow()
+  const native = new NativePane(win, {
+    onUrlChanged: url => win.webContents.send(IPC.urlChanged, url),
+    onLoadError: err => win.webContents.send(IPC.loadError, err),
+  })
+
+  const ctx: AppContext = { win, native }
+  layout(ctx)
+  win.on('resize', () => layout(ctx))
+
+  void native.load('about:blank')
+  exposeForTests(ctx)
+}
+
+void app.whenReady().then(boot)
 app.on('window-all-closed', () => app.quit())
