@@ -6,14 +6,7 @@ import { launchApp, rendererWindow } from './launch'
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 const REDIRECT = pathToFileURL(resolve(__dirname, '../fixtures/redirect.html')).href
-
-/**
- * SyncBus drops a mirror that reverses direction within this long of the
- * previous one (its SPA loop breaker — see `LOOP_WINDOW_MS` in syncBus.ts).
- * A test that navigates one pane right after the other pane's commit was
- * mirrored must let the window pass first, or it is testing the breaker.
- */
-const LOOP_WINDOW_MS = 1_000
+const LOOP = pathToFileURL(resolve(__dirname, '../fixtures/loop.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -94,8 +87,8 @@ test('navigating the native pane pulls the target along', async () => {
 })
 
 test('navigating the target pulls the native pane along', async () => {
-  // The previous test's mirror ran native -> target; this one reverses it.
-  await new Promise(r => setTimeout(r, LOOP_WINDOW_MS))
+  // The previous test's mirror ran native -> target; a single reversal like
+  // this one must pass the loop breaker untouched.
   await app.evaluate((_electron, url: string) => (globalThis as any).__obsrv.target.load(url), TALL)
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: TALL, target: TALL })
 })
@@ -127,9 +120,6 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   // it with HAIRLINE, so neither expectation is met by the URL they end on.
   await page.evaluate(u => window.obsrv.navigate(u), REDIRECT)
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
-  // Whichever pane replaced first mirrored HAIRLINE into the other; the next
-  // mirror may run the opposite way, so wait out the loop breaker's window.
-  await new Promise(r => setTimeout(r, LOOP_WINDOW_MS))
 
   // Now the native pane alone goes back to REDIRECT. The target must follow
   // it — through REDIRECT, or straight to its replacement if the mirrored
@@ -150,4 +140,53 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   })
   expect(seen.length).toBeGreaterThanOrEqual(1)
   expect(seen.at(-1)).toBe(HAIRLINE)
+})
+
+test('a page that rewrites its own URL trips the loop breaker, once', async () => {
+  await app.evaluate(() => {
+    const g = globalThis as any
+    g.__warns = [] as string[]
+    g.__warn = console.warn
+    console.warn = (...a: unknown[]) => {
+      g.__warns.push(a.map(String).join(' '))
+      g.__warn(...a)
+    }
+    // Count cross-document commits: the fixture's own `replaceState` is a
+    // same-document navigation (`did-navigate-in-page`), not a mirror, and a
+    // mirrored load superseded before it commits never bounced anything.
+    g.__loads = { native: 0, target: 0 }
+    g.__onNative = () => g.__loads.native++
+    g.__onTarget = () => g.__loads.target++
+    g.__obsrv.native.webContents.on('did-navigate', g.__onNative)
+    g.__obsrv.target.webContents.on('did-navigate', g.__onTarget)
+  })
+
+  await page.evaluate(u => window.obsrv.navigate(u), LOOP)
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__warns.length), { timeout: 5_000 }).toBe(1)
+
+  // Let the loads in flight at the trip land and the breaker's window reset,
+  // then check the panes stay put: the loop must not pick up again once the
+  // window has passed.
+  await new Promise(r => setTimeout(r, 1_200))
+  const before = await urls(app)
+  await new Promise(r => setTimeout(r, 500))
+  const after = await urls(app)
+  expect(after).toEqual(before)
+  expect(after.native.startsWith(LOOP)).toBe(true)
+  expect(after.target.startsWith(LOOP)).toBe(true)
+
+  const seen = await app.evaluate(() => {
+    const g = globalThis as any
+    console.warn = g.__warn
+    g.__obsrv.native.webContents.off('did-navigate', g.__onNative)
+    g.__obsrv.target.webContents.off('did-navigate', g.__onTarget)
+    return { warns: g.__warns as string[], loads: g.__loads as { native: number; target: number } }
+  })
+  expect(seen.warns).toHaveLength(1)
+  expect(seen.warns[0]).toContain('mirror loop broken')
+  // One explicit load per pane; then the breaker allows one reversal, and a
+  // mirrored load can bounce back twice (the URL, then its rewrite) — so at
+  // most one mirror out, four back, and the reversing third alternation is
+  // the one dropped.
+  expect(seen.loads.native + seen.loads.target - 2).toBeLessThanOrEqual(5)
 })

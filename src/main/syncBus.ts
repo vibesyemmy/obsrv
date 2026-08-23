@@ -17,11 +17,14 @@ export interface SyncBus {
 type Pane = 'native' | 'target'
 
 /**
- * Two mirrors in opposite directions closer together than this are a loop —
+ * Mirrors that keep reversing direction closer together than this are a loop —
  * typically a SPA that rewrites its own URL on load, so each pane's commit
- * differs from the other's and they chase each other forever.
+ * differs from the other's and they chase each other forever. One reversal is
+ * legitimate (a redirect mirrored one way, then a navigation the other way);
+ * the third alternation within the window is the loop's signature.
  */
 const LOOP_WINDOW_MS = 1_000
+const LOOP_ALTERNATIONS = 2
 
 /** Mirrors scroll offset and navigation between the two panes. */
 export function attachSyncBus(
@@ -38,6 +41,8 @@ export function attachSyncBus(
   const pending: Record<Pane, string | null> = { native: null, target: null }
   let lastReported = ''
   let lastMirror: { from: Pane; at: number } | null = null
+  /** Consecutive direction reversals within `LOOP_WINDOW_MS` of each other. */
+  let alternations = 0
   let loopWarned = false
 
   function mirror(from: Pane, url: string): void {
@@ -54,14 +59,20 @@ export function attachSyncBus(
     if (other.webContents.isDestroyed() || other.webContents.getURL() === url) return
 
     const now = Date.now()
-    if (lastMirror && lastMirror.from === to && now - lastMirror.at < LOOP_WINDOW_MS) {
+    // Same-direction mirrors leave the count alone: a mirrored load commits
+    // twice when the page rewrites its URL, and only a quiet window resets.
+    if (!lastMirror || now - lastMirror.at >= LOOP_WINDOW_MS) alternations = 0
+    else if (lastMirror.from === to) alternations++
+    // A dropped attempt is recorded too, so a loop that keeps committing stays
+    // broken until it has been quiet for the whole window.
+    lastMirror = { from, at: now }
+    if (alternations >= LOOP_ALTERNATIONS) {
       if (!loopWarned) {
         loopWarned = true
         console.warn(`obsrv: navigation mirror loop broken (${from} -> ${to}: ${url})`)
       }
       return
     }
-    lastMirror = { from, at: now }
 
     pending[to] = url
     void other.load(url)
