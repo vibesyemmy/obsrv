@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp } from './launch'
+import { launchApp, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 const TOOLBAR_H = 44
@@ -14,17 +14,6 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await app.close()
 })
-
-/**
- * The native pane's `WebContentsView` is a second Chromium page target that
- * Playwright discovers exactly like the main `BrowserWindow` does, so
- * `app.firstWindow()` races between the two and can resolve to either one.
- * Select the renderer's own window by URL instead of trusting arrival order.
- */
-async function rendererWindow(electronApp: ElectronApplication) {
-  const existing = electronApp.windows().find(w => w.url().endsWith('/renderer/index.html'))
-  return existing ?? electronApp.waitForEvent('window', w => w.url().endsWith('/renderer/index.html'))
-}
 
 test('main window opens with the renderer loaded', async () => {
   const page = await rendererWindow(app)
