@@ -12,6 +12,7 @@ const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i
 export function normalizeUrl(input: string): string {
   const s = input.trim()
   if (s === '') throw new Error('empty url')
+  if (/\s/.test(s)) throw new Error('invalid URL')
   if (s.startsWith('/')) return `file://${s}`
   if (LOOPBACK.test(s)) return `http://${s}`
   if (SCHEME.test(s)) return s

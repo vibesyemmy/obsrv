@@ -33,22 +33,34 @@ export class NativePane {
       if (isMainFrame && code !== ERR_ABORTED) this.events.onLoadError({ code, description, url })
     })
     // Keep target-new-window links in the same pane so both panes stay comparable.
+    // `window.open()` with no URL (or 'about:blank') must not replace the
+    // current page — only navigate when a real target URL was requested.
     wc.setWindowOpenHandler(({ url }) => {
-      void this.load(url)
+      if (url && url !== 'about:blank') void this.load(url)
       return { action: 'deny' }
     })
   }
 
   /** Loads URL-bar input; returns the normalised URL that was requested. */
   async load(input: string): Promise<string> {
-    const url = normalizeUrl(input)
     try {
-      await this.view.webContents.loadURL(url)
-    } catch {
-      // Chromium renders its own error page and `did-fail-load` already
-      // reported the code; swallow so callers are not forced into try/catch.
+      const url = normalizeUrl(input)
+      try {
+        await this.view.webContents.loadURL(url)
+      } catch {
+        // Chromium renders its own error page and `did-fail-load` already
+        // reported the code; swallow so callers are not forced into try/catch.
+      }
+      return url
+    } catch (e) {
+      // Invalid input (e.g. empty) never reaches Chromium, so `did-fail-load`
+      // never fires; report it through the same LoadError path instead of
+      // rejecting, so callers still never need try/catch. `code: 0` marks
+      // this as an input failure rather than a Chromium net:: error code.
+      const description = e instanceof Error ? e.message : String(e)
+      this.events.onLoadError({ code: 0, description, url: input })
+      return input
     }
-    return url
   }
 
   setBounds(rect: Rect): void {

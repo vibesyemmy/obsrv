@@ -26,4 +26,13 @@ describe('normalizeUrl', () => {
   it('rejects empty input', () => {
     expect(() => normalizeUrl('   ')).toThrow(/empty url/)
   })
+  it('rejects input containing whitespace', () => {
+    expect(() => normalizeUrl('search term')).toThrow(/invalid URL/)
+  })
+  it('preserves scheme casing and leaves it otherwise unchanged', () => {
+    expect(normalizeUrl('HTTPS://Example.com')).toBe('HTTPS://Example.com')
+  })
+  it('treats [::1] as loopback', () => {
+    expect(normalizeUrl('[::1]:3000')).toBe('http://[::1]:3000')
+  })
 })

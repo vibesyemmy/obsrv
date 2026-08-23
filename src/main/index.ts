@@ -25,8 +25,12 @@ function layout(ctx: AppContext): void {
 function boot(): void {
   const win = createMainWindow()
   const native = new NativePane(win, {
-    onUrlChanged: url => win.webContents.send(IPC.urlChanged, url),
-    onLoadError: err => win.webContents.send(IPC.loadError, err),
+    onUrlChanged: url => {
+      if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
+    },
+    onLoadError: err => {
+      if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
+    },
   })
 
   const ctx: AppContext = { win, native }
