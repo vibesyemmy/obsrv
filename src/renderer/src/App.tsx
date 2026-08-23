@@ -3,12 +3,17 @@ import { useShallow } from 'zustand/react/shallow'
 import { Fatal } from './components/Fatal'
 import { NativeSlot } from './components/NativeSlot'
 import { TargetFooter } from './components/PaneFooter'
+import { PanelControls } from './components/PanelControls'
+import { SettingsPanel } from './components/SettingsPanel'
 import { TargetCanvas } from './components/TargetCanvas'
-import { Toolbar } from './components/Toolbar'
+import { Toolbar, type Drawer } from './components/Toolbar'
 import { selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
+  const [drawer, setDrawer] = useState<Drawer>('none')
+  const toggle = (which: 'panel' | 'settings') => () =>
+    setDrawer(d => (d === which ? 'none' : which))
 
   const setHost = useStore(s => s.setHost)
   const setSettings = useStore(s => s.setSettings)
@@ -59,15 +64,27 @@ export function App() {
 
   return (
     <div className="app">
-      <Toolbar />
-      <div className="panes">
-        <NativeSlot />
-        <div className="pane target-pane">
-          <div className="pane-body">
-            <TargetCanvas onFatal={setFatal} />
+      <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
+      <div className="body">
+        <div className="panes">
+          <NativeSlot />
+          <div className="pane target-pane">
+            <div className="pane-body">
+              <TargetCanvas onFatal={setFatal} />
+            </div>
+            <TargetFooter />
           </div>
-          <TargetFooter />
         </div>
+        {drawer === 'panel' && (
+          <aside className="drawer">
+            <PanelControls />
+          </aside>
+        )}
+        {drawer === 'settings' && (
+          <aside className="drawer">
+            <SettingsPanel />
+          </aside>
+        )}
       </div>
     </div>
   )

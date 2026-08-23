@@ -151,5 +151,77 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* Numbers never jitter as a slider moves. */
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
+/* An open drawer's button: weight and a 1px border, not hue. */
+.toolbar :is(.toggle-panel, .toggle-settings)[aria-pressed='true'] {
+  border-color: var(--text-0);
+  background: var(--chrome-1);
+}
+
+/* Drawers sit beside the panes, never over them: the native WebContentsView is
+   an OS-level overlay and would cover anything painted on top of it. */
+.body { flex: 1 1 auto; display: flex; min-height: 0; }
+.panes { min-width: 0; }
+.drawer {
+  flex: 0 0 280px;
+  overflow: auto;
+  padding: 12px 14px;
+  background: var(--chrome-1);
+  border-left: 1px solid var(--line);
+}
+
+/* Dense inspector: ~11px labels, the value pinned right in the mono face. */
+.controls h2 {
+  margin: 18px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-1);
+}
+.controls h2:first-child { margin-top: 0; }
+.controls p { margin: 6px 0; font-size: 11px; }
+.control { display: block; margin: 10px 0; }
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-1);
+}
+.control-row .num { color: var(--text-0); }
+.control.inline { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-1); }
+.control.inline > span { margin: 0; }
+/* accent-color pins the thumb and filled track to a neutral; unset, Chromium
+   paints them in the OS accent — the one hue this chrome may never carry. */
+.control input[type='range'] { display: block; width: 100%; margin: 0; accent-color: var(--text-0); }
+.control input[type='checkbox'] { margin: 0; accent-color: var(--text-0); }
+.control input[type='number'], .control select {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 6px;
+  background: #0d0d0d;
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.readout {
+  font: 400 11px/1.6 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-1);
+}
+.field-error { color: var(--error); }
+
+/* Same 1px inset neutral ring as the toolbar; a range input's ring sits just
+   outside its track instead, where an inset one would cross the thumb. */
+.drawer :is(button, select, input):focus { outline: none; }
+.drawer :is(button, select, input):focus-visible {
+  outline: 1px solid var(--text-1);
+  outline-offset: -1px;
+}
+.drawer input[type='range']:focus-visible { outline-offset: 2px; }
+
 .fatal { padding: 48px; max-width: 44em; }
 .fatal h1 { font-size: 20px; margin: 0 0 12px; }

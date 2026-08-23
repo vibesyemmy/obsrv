@@ -16,7 +16,16 @@ const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
   { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
 ]
 
-export function Toolbar() {
+export type Drawer = 'none' | 'panel' | 'settings'
+
+export interface ToolbarProps {
+  /** Which drawer is open, so its button can show as pressed. */
+  drawer: Drawer
+  onTogglePanel: () => void
+  onToggleSettings: () => void
+}
+
+export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
   const mode = useStore(s => s.mode)
   const presetId = useStore(s => s.presetId)
   const profileId = useStore(s => s.profileId)
@@ -144,6 +153,27 @@ export function Toolbar() {
           </button>
         ))}
       </div>
+
+      <button
+        className="toggle-panel"
+        type="button"
+        title="Panel controls"
+        aria-label="Panel controls"
+        aria-pressed={drawer === 'panel'}
+        onClick={onTogglePanel}
+      >
+        ▦
+      </button>
+      <button
+        className="toggle-settings"
+        type="button"
+        title="Settings"
+        aria-label="Settings"
+        aria-pressed={drawer === 'settings'}
+        onClick={onToggleSettings}
+      >
+        ⚙
+      </button>
     </div>
   )
 }
