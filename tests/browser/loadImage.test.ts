@@ -54,6 +54,19 @@ describe('loadImage', () => {
     expect(Array.from(out.bgra.slice(0, 4))).toEqual([255, 255, 255, 255])
   })
 
+  it('refuses an export whose 1x result would not fit the texture', async () => {
+    const file = await png(8, 4, ctx => {
+      ctx.fillStyle = '#00ff00'
+      ctx.fillRect(0, 0, 8, 4)
+    })
+    await expect(loadImage(file, 2, { maxDimension: 3, maxBytes: 1 << 20 })).rejects.toThrow(
+      /Image too large \(max 3×3 px at 1x, 1 MB decoded\)/,
+    )
+    // The same file fits once the cap admits a 4-wide 1x result.
+    const out = await loadImage(file, 2, { maxDimension: 4, maxBytes: 1 << 20 })
+    expect({ w: out.oneX.width, h: out.oneX.height }).toEqual({ w: 4, h: 2 })
+  })
+
   it('refuses a file that is not a PNG or JPEG', async () => {
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' })
     await expect(loadImage(file, 2)).rejects.toThrow(/Unsupported file type/)

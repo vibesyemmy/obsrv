@@ -49,10 +49,15 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
 
   // The bar follows the panes — a click in the native pane, a redirect, a
   // back — except while the user is typing in it: an `onUrlChanged` landing
-  // mid-edit must not clobber the draft. Escape discards the edit.
+  // mid-edit must not clobber the draft. Escape discards the edit. A mode
+  // change overrides even a focused edit: the filename (or the restored URL)
+  // is what the bar must show, and the edit was moot the moment it changed.
+  const lastMode = useRef(mode)
   useEffect(() => {
-    if (document.activeElement !== inputRef.current) setDraft(barText)
-  }, [barText])
+    const modeChanged = lastMode.current !== mode
+    lastMode.current = mode
+    if (modeChanged || document.activeElement !== inputRef.current) setDraft(barText)
+  }, [barText, mode])
 
   // View → Open Location (Cmd+L) arrives over IPC so it also works while the
   // native pane, an OS-level view outside this document, holds the focus.

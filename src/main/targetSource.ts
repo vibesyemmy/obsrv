@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
 import { clampViewport } from '../shared/calibration'
+import { classifyFileNavigation } from '../shared/fileNav'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 
@@ -133,6 +134,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
         url: wc.getURL(),
       })
     })
+    // Same local-file guard as NativePane, so a page script (or a drop the
+    // OS somehow lands here) cannot navigate the target to a file the native
+    // pane refused. A dropped export is handled by the native pane alone.
+    wc.on('will-navigate', (e, url) => {
+      if (classifyFileNavigation(wc.getURL(), url) !== 'allow') e.preventDefault()
+    })
+
     // Keep target-new-window links in the same surface so both panes stay
     // comparable (mirrors NativePane). `window.open()` with no URL (or
     // 'about:blank') must not replace the current page.

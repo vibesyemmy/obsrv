@@ -20,4 +20,6 @@ export const IPC = {
   applyScroll: 'obsrv:apply-scroll',
   openImage: 'obsrv:open-image',
   focusUrl: 'obsrv:focus-url',
+  openImagePath: 'obsrv:open-image-path',
+  readImageFile: 'obsrv:read-image-file',
 } as const

@@ -1,5 +1,7 @@
 import { app, ipcMain, screen, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
 import { parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
@@ -9,6 +11,9 @@ import type { AppContext } from './context'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
 const TOOLBAR_H = 44
+
+/** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
+export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024
 
 /**
  * Physical pixels of the display the window currently sits on. All zeroes mean
@@ -176,5 +181,20 @@ export function registerIpc(ctx: AppContext): void {
     // Persist first: memory must never hold a value disk refused.
     saveSettings(settingsFile, s)
     settings = s
+  })
+
+  // --- image mode -----------------------------------------------------------
+  // The only file read main does for the renderer: a design export dropped on
+  // the native pane (see NativePane's will-navigate). Extension and size are
+  // checked here, so a page script steering the pane at `file:///…` can at
+  // most make the app decode a local image, never read anything else.
+  ipcMain.handle(IPC.readImageFile, async (e, raw: unknown) => {
+    assertRenderer(e)
+    if (typeof raw !== 'string' || !IMAGE_EXTENSIONS.test(raw)) throw new Error('Unsupported file type')
+    const { size } = await stat(raw)
+    if (size > MAX_IMAGE_FILE_BYTES) {
+      throw new Error(`Image file too large (max ${MAX_IMAGE_FILE_BYTES / 1048576} MB)`)
+    }
+    return readFile(raw)
   })
 }

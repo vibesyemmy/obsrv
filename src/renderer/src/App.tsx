@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../shared/api'
 import { DropZone } from './components/DropZone'
@@ -11,13 +11,16 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { TargetCanvas } from './components/TargetCanvas'
 import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
-import { loadImage, type LoadedImage } from './image/loadImage'
+import { probeMaxTextureSize } from './gl/renderer'
+import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadImage'
 import { selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
   const [image, setImage] = useState<LoadedImage | null>(null)
+  // Latest drop wins: a slow decode must not land after a quicker later one.
+  const dropToken = useRef(0)
   const toggle = (which: 'panel' | 'settings') => () =>
     setDrawer(d => (d === which ? 'none' : which))
 
@@ -74,8 +77,17 @@ export function App() {
   // lands before `setMode('image')` so the readouts never see a mode without
   // a file.
   const onImage = async (file: File, exportScale: number): Promise<void> => {
+    const token = ++dropToken.current
     try {
-      const loaded = await loadImage(file, exportScale)
+      const limits = {
+        ...DEFAULT_IMAGE_LIMITS,
+        maxDimension: Math.min(DEFAULT_IMAGE_LIMITS.maxDimension, probeMaxTextureSize()),
+      }
+      const loaded = await loadImage(file, exportScale, limits)
+      if (token !== dropToken.current) {
+        URL.revokeObjectURL(loaded.objectUrl)
+        return
+      }
       setImage(previous => {
         if (previous) URL.revokeObjectURL(previous.objectUrl)
         return loaded
@@ -87,7 +99,13 @@ export function App() {
         height: loaded.oneX.height,
       })
       setMode('image')
+      // `boxDownsample` floors: a file that is not a whole number of 1x
+      // pixels loses a partial row/column at the right and bottom edges.
+      if (loaded.natural.width % exportScale || loaded.natural.height % exportScale) {
+        setToast(`Edge pixels dropped: not a multiple of ${exportScale}x`)
+      }
     } catch (e) {
+      if (token !== dropToken.current) return
       setToast(e instanceof Error ? e.message : 'Could not read that file')
     }
   }

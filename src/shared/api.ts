@@ -34,6 +34,14 @@ export interface ObsrvApi {
   onOpenImage(cb: () => void): () => void
   /** View → Open Location (Cmd+L) in the app menu; the renderer focuses its URL bar. */
   onFocusUrl(cb: () => void): () => void
+  /**
+   * A design export was dropped on the native pane. Main refused the
+   * navigation and hands the path over; the renderer reads it with
+   * `readImageFile` and feeds the same decode path as a drop on itself.
+   */
+  onOpenImagePath(cb: (path: string) => void): () => void
+  /** The bytes of a PNG/JPEG at `path`; rejects on any other extension or an oversized file. */
+  readImageFile(path: string): Promise<Uint8Array>
 }
 
 declare global {

@@ -259,9 +259,11 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .image-pane .pane-body { display: flex; align-items: flex-start; justify-content: safe center; }
 .image-pane img { display: block; image-rendering: pixelated; }
 
-/* Pinned to the right so it lands over the target pane, never over the native
-   view on the left. */
-.toast {
+/* Pinned to the right so they land over the target pane, never over the native
+   view on the left. The drag hint is fixed rather than a strip: a strip would
+   shift the panes under the pointer and flicker dragleave/dragenter. */
+.toast,
+.drop-hint {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -270,4 +272,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   color: var(--text-0);
   border: 1px solid var(--line);
   border-radius: 6px;
+  pointer-events: none;
 }
+.strip button[aria-pressed='true'] { border-color: var(--text-1); font-weight: 600; }

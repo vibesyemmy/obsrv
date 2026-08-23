@@ -20,6 +20,10 @@ function boot(): void {
     onLoadError: err => {
       if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
     },
+    // The renderer reads the file back over `readImageFile`; no bytes here.
+    onImageDrop: path => {
+      if (!win.isDestroyed()) win.webContents.send(IPC.openImagePath, path)
+    },
   })
 
   const target = new TargetSource()

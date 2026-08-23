@@ -1,11 +1,15 @@
 import { WebContentsView, type BrowserWindow, type WebContents } from 'electron'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Rect } from '../shared/api'
+import { classifyFileNavigation } from '../shared/fileNav'
 import type { LoadError } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 
 export interface NativePaneEvents {
   onLoadError(err: LoadError): void
+  /** A PNG/JPEG was dropped on the pane; it was not navigated to. */
+  onImageDrop(path: string): void
 }
 
 /** net::ERR_ABORTED — fired for ordinary navigation cancellation, not a failure. */
@@ -37,6 +41,15 @@ export class NativePane {
     const wc = this.view.webContents
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) this.events.onLoadError({ code, description, url })
+    })
+    // An OS file drop navigates the view to `file:///…` and SyncBus would
+    // mirror it. A design export is rerouted to image mode; other local files
+    // are refused unless the page already is one (see classifyFileNavigation).
+    wc.on('will-navigate', (e, url) => {
+      const verdict = classifyFileNavigation(wc.getURL(), url)
+      if (verdict === 'allow') return
+      e.preventDefault()
+      if (verdict === 'image') this.events.onImageDrop(fileURLToPath(url))
     })
     // Keep target-new-window links in the same pane so both panes stay comparable.
     // `window.open()` with no URL (or 'about:blank') must not replace the

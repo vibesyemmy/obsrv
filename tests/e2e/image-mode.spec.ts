@@ -1,5 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { resolve } from 'node:path'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
 
@@ -159,4 +161,106 @@ test('the menu nudges the renderer rather than acting on the shell', async () =>
   await expect(page.locator('.url-form input')).not.toBeFocused()
   await app.evaluate(() => (globalThis as any).__obsrv.win.webContents.send('obsrv:focus-url'))
   await expect(page.locator('.url-form input')).toBeFocused()
+})
+
+test('Enter takes the 2x default, Escape cancels, and a partial edge is reported', async () => {
+  await drop(page, 401, 201, 'odd@2x.png')
+  await expect(page.locator('.scale-prompt')).toContainText('odd@2x.png')
+  await expect(page.locator('.scale-2x')).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.scale-prompt')).toHaveCount(0)
+  await expect(page.locator('.url-form input')).not.toHaveAttribute('readonly', '')
+
+  await drop(page, 401, 201, 'odd@2x.png')
+  await expect(page.locator('.scale-prompt')).toContainText('odd@2x.png')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.url-form input')).toHaveValue('odd@2x.png')
+  // 401×201 at 2x floors to 200×100 and says so.
+  await expect(page.locator('.toast')).toHaveText('Edge pixels dropped: not a multiple of 2x')
+  await expect(page.locator('.target-pane .pane-footer')).toContainText('200×100')
+
+  await page.click('.close-image')
+  await expect(page.locator('.url-form input')).toHaveValue(FIXTURE)
+})
+
+/**
+ * Both panes' URLs from main. Evaluating in main right as a navigation
+ * commits occasionally trips Playwright's inspector ("Resulting promise was
+ * garbage collected"); that is the harness, not the app, so retry it.
+ */
+async function paneUrls(): Promise<{ native: string; target: string }> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await app.evaluate(() => {
+        const g = (globalThis as any).__obsrv
+        return { native: g.native.webContents.getURL(), target: g.target.webContents.getURL() }
+      })
+    } catch (e) {
+      if (attempt >= 4 || !/garbage collected/.test(String(e))) throw e
+      await new Promise(r => setTimeout(r, 100))
+    }
+  }
+}
+
+/**
+ * Steers the native pane at `url` from inside its page, the way an OS drop
+ * would. Fire-and-forget: a script whose navigation succeeds never reports
+ * a result, so awaiting it would leave a promise pending in main.
+ */
+const steerNative = (url: string) =>
+  app.evaluate((_electron, u: string) => {
+    void (globalThis as any).__obsrv.native.webContents.executeJavaScript(
+      `location.href = ${JSON.stringify(u)}; 0`,
+    )
+  }, url)
+
+test('a design export dropped on the native pane opens image mode instead of navigating it', async () => {
+  // A real file on disk: main reads it back for the renderer.
+  const b64 = await page.evaluate(async () => {
+    const canvas = new OffscreenCanvas(40, 20)
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#0000ff'
+    ctx.fillRect(0, 0, 40, 20)
+    const blob = await canvas.convertToBlob({ type: 'image/png' })
+    const buf = new Uint8Array(await blob.arrayBuffer())
+    let s = ''
+    for (const b of buf) s += String.fromCharCode(b)
+    return btoa(s)
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'obsrv-drop-'))
+  const file = join(dir, 'native drop@2x.png')
+  writeFileSync(file, Buffer.from(b64, 'base64'))
+
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+  await steerNative(pathToFileURL(file).href)
+
+  await expect(page.locator('.scale-prompt')).toContainText('native drop@2x.png')
+  // Neither pane went anywhere.
+  expect(await paneUrls()).toEqual({ native: FIXTURE, target: FIXTURE })
+
+  await page.click('.scale-2x')
+  await expect(page.locator('.url-form input')).toHaveValue('native drop@2x.png')
+  await expect(page.locator('.url-form input')).toHaveAttribute('readonly', '')
+  await expect(page.locator('.target-pane .pane-footer')).toContainText('20×10')
+
+  await page.click('.close-image')
+  await expect(page.locator('.url-form input')).toHaveValue(FIXTURE)
+  expect(await paneUrls()).toEqual({ native: FIXTURE, target: FIXTURE })
+})
+
+test('any other local file dropped on a remote page is refused by both panes', async () => {
+  await page.evaluate(() => window.obsrv.navigate('about:blank'))
+  await expect.poll(paneUrls).toEqual({ native: 'about:blank', target: 'about:blank' })
+
+  await steerNative(FIXTURE)
+  await page.waitForTimeout(600)
+  expect(await paneUrls()).toEqual({ native: 'about:blank', target: 'about:blank' })
+  await expect(page.locator('.scale-prompt')).toHaveCount(0)
+
+  // A local page may still reach a sibling local page (the redirect fixture).
+  await page.evaluate(u => window.obsrv.navigate(u), FIXTURE)
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+  const sibling = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+  await steerNative(sibling)
+  await expect.poll(paneUrls).toEqual({ native: sibling, target: sibling })
 })

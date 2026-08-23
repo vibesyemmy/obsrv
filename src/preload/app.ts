@@ -63,6 +63,8 @@ const api: ObsrvApi = {
       ipcRenderer.removeListener(IPC.focusUrl, listener)
     }
   },
+  onOpenImagePath: cb => subscribe<string>(IPC.openImagePath, cb),
+  readImageFile: path => ipcRenderer.invoke(IPC.readImageFile, path),
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

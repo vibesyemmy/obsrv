@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isSupported } from '../../src/renderer/src/image/loadImage'
+import { exceedsLimits, isSupported } from '../../src/renderer/src/image/loadImage'
 
 describe('isSupported', () => {
   it('accepts PNG and JPEG by MIME type', () => {
@@ -13,5 +13,19 @@ describe('isSupported', () => {
   it('rejects everything else', () => {
     expect(isSupported({ type: 'text/plain', name: 'notes.txt' })).toBe(false)
     expect(isSupported({ type: 'image/gif', name: 'loop.gif' })).toBe(false)
+  })
+})
+
+describe('exceedsLimits', () => {
+  const limits = { maxDimension: 100, maxBytes: 4 * 200 * 200 }
+  it('measures the dimension cap on the 1x result, not the file', () => {
+    expect(exceedsLimits(200, 100, 2, limits)).toBe(false)
+    expect(exceedsLimits(202, 100, 2, limits)).toBe(true)
+    expect(exceedsLimits(101, 10, 1, limits)).toBe(true)
+    expect(exceedsLimits(10, 303, 3, limits)).toBe(true)
+  })
+  it('measures the byte cap on the decoded file', () => {
+    expect(exceedsLimits(200, 200, 3, limits)).toBe(false)
+    expect(exceedsLimits(201, 200, 3, limits)).toBe(true)
   })
 })

@@ -28,6 +28,25 @@ export function fitScale(srcW: number, srcH: number, scale: number, max: number)
   return Math.min(max / srcW, max / srcH)
 }
 
+let probedMaxTexture: number | null = null
+
+/**
+ * The largest texture axis this GPU accepts, capped at `MAX_OUTPUT_SIZE`.
+ * Probed once on a throwaway context (released straight away) so the image
+ * loader can refuse an export before decoding it; `MAX_OUTPUT_SIZE` alone if
+ * WebGL2 is unavailable — `TargetCanvas` reports that as fatal anyway.
+ */
+export function probeMaxTextureSize(): number {
+  if (probedMaxTexture !== null) return probedMaxTexture
+  const gl = document.createElement('canvas').getContext('webgl2')
+  const max = gl
+    ? Math.min(MAX_OUTPUT_SIZE, gl.getParameter(gl.MAX_TEXTURE_SIZE) as number)
+    : MAX_OUTPUT_SIZE
+  gl?.getExtension('WEBGL_lose_context')?.loseContext()
+  probedMaxTexture = max
+  return max
+}
+
 export interface GlRendererOptions {
   /** Keeps the drawing buffer after composite so `readPixels` is reliable. */
   preserveDrawingBuffer?: boolean
