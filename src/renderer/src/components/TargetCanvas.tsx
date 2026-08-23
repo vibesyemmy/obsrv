@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
@@ -12,6 +12,9 @@ export interface TargetCanvasProps {
   imageFrame: FrameMessage | null
 }
 
+/** Spec §9: no paint for this long, when one was expected, is a stall. */
+const STALL_MS = 2000
+
 export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<GlRenderer | null>(null)
@@ -20,6 +23,21 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const params = useStore(useShallow(selectPanelParams))
   const requestedScale = useStore(selectScale)
   const mode = useStore(s => s.mode)
+  const targetLoading = useStore(s => s.targetLoading)
+  const [stalled, setStalled] = useState(false)
+  const stallTimer = useRef(0)
+  const wasLoading = useRef(false)
+
+  const disarm = useCallback((): void => {
+    window.clearTimeout(stallTimer.current)
+    setStalled(false)
+  }, [])
+
+  const arm = useCallback((): void => {
+    window.clearTimeout(stallTimer.current)
+    setStalled(false)
+    stallTimer.current = window.setTimeout(() => setStalled(true), STALL_MS)
+  }, [])
 
   // The GPU's backing-store limit, known once the renderer exists. Until then
   // the absolute cap stands in, which is never the binding one in practice.
@@ -79,6 +97,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         schedule()
       }
       offFrame = window.obsrv.onFrame(m => {
+        disarm()
         if (!gl) return
         // Main stops frames on `setMode('image')`, but one already in flight
         // must not land on top of the dropped file's pixels.
@@ -150,7 +169,29 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       canvas.removeEventListener('wheel', onWheel)
       window.removeEventListener('mouseup', onWindowUp)
     }
-  }, [onFatal])
+  }, [onFatal, disarm])
+
+  // Arm on the rising edge of loading only. Arming when loading *finishes*
+  // would fire on every static page, which paints once and then stops.
+  // Image mode never arms: main stops target frames on `setMode('image')` by
+  // design, so "no frame" is the normal state there, and a Cmd+R that reloads
+  // the hidden panes is tolerated for the same reason.
+  useEffect(() => {
+    const started = targetLoading && !wasLoading.current
+    wasLoading.current = targetLoading
+    if (mode !== 'url') {
+      disarm()
+      return
+    }
+    if (started) arm()
+  }, [targetLoading, mode, arm, disarm])
+
+  // A viewport change invalidates the target, so a frame is owed.
+  useEffect(() => {
+    if (mode === 'url') arm()
+  }, [viewport.width, viewport.height, mode, arm])
+
+  useEffect(() => () => window.clearTimeout(stallTimer.current), [])
 
   // Scale and panel params can change without a new frame arriving.
   useEffect(() => {
@@ -193,29 +234,47 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const cssW = Math.round(source.width * scale) / dpr
   const cssH = Math.round(source.height * scale) / dpr
 
+  // The notice sits inside the target pane's own scroll box — never over the
+  // left pane, which the native view owns.
   return (
-    <canvas
-      ref={canvasRef}
-      className="target-canvas"
-      tabIndex={0}
-      style={{ width: `${cssW}px`, height: `${cssH}px` }}
-      onMouseDown={send('mouseDown')}
-      onMouseUp={send('mouseUp')}
-      onMouseMove={send('mouseMove')}
-      // No onMouseLeave release: the window mouseup listener above catches
-      // a release that lands outside the canvas, and a drag that crosses the
-      // edge and comes back stays a drag.
-      onKeyDown={e => {
-        if (mode !== 'url') return
-        // Leave shortcuts to the OS and the app menu.
-        if (!e.metaKey && !e.ctrlKey) e.preventDefault()
-        for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
-      }}
-      onKeyUp={e => {
-        if (mode !== 'url') return
-        const ev = keyUpEvent(e)
-        if (ev) window.obsrv.sendInput(ev)
-      }}
-    />
+    <div className="target-wrap">
+      {stalled && (
+        <div className="stall" role="alert">
+          <span>No frames from target renderer</span>
+          <button
+            type="button"
+            onClick={() => {
+              arm()
+              window.obsrv.reload()
+            }}
+          >
+            Reload
+          </button>
+        </div>
+      )}
+      <canvas
+        ref={canvasRef}
+        className="target-canvas"
+        tabIndex={0}
+        style={{ width: `${cssW}px`, height: `${cssH}px` }}
+        onMouseDown={send('mouseDown')}
+        onMouseUp={send('mouseUp')}
+        onMouseMove={send('mouseMove')}
+        // No onMouseLeave release: the window mouseup listener above catches
+        // a release that lands outside the canvas, and a drag that crosses the
+        // edge and comes back stays a drag.
+        onKeyDown={e => {
+          if (mode !== 'url') return
+          // Leave shortcuts to the OS and the app menu.
+          if (!e.metaKey && !e.ctrlKey) e.preventDefault()
+          for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
+        }}
+        onKeyUp={e => {
+          if (mode !== 'url') return
+          const ev = keyUpEvent(e)
+          if (ev) window.obsrv.sendInput(ev)
+        }}
+      />
+    </div>
   )
 }
