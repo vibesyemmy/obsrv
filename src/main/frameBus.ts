@@ -1,4 +1,10 @@
-import type { BrowserWindow } from 'electron'
+import {
+  ipcMain,
+  type BrowserWindow,
+  type Event,
+  type IpcMainEvent,
+  type WebContentsDidStartNavigationEventParams,
+} from 'electron'
 import type { FrameMessage } from '../shared/api'
 import { IPC } from '../shared/ipc'
 import type { TargetSource } from './targetSource'
@@ -10,47 +16,52 @@ export interface FrameBus {
 /**
  * Ships 1x frames from the offscreen target to the renderer.
  *
- * Two things it has to get right:
+ * Delivery is gated on a handshake the renderer starts: the preload sends
+ * `frameSubscribe` when its first `onFrame` subscriber appears, and only then
+ * does the bus open and invalidate the target so a full frame arrives at once.
+ * Opening on `did-finish-load` instead would race the React tree: the
+ * invalidate's paint can be sent before any listener exists, and for a static
+ * page that paint is often the only one — the canvas would stay blank.
  *
- *  - Nothing is sent before the renderer has finished loading. `send` to a
- *    renderer whose preload has not run yet is dropped silently, and for a
- *    static page the first paint is often the only paint — the canvas would
- *    stay blank forever.
- *  - When the renderer (re)loads, the target is invalidated so the freshly
- *    mounted canvas gets a full frame immediately instead of waiting for the
- *    page to damage itself.
+ * The gate closes when the main frame starts a cross-document navigation —
+ * the preload module, and with it every subscriber, is about to be torn down,
+ * and the reloaded page re-subscribes on its own. `did-start-navigation`
+ * filtered to the main frame is used rather than `did-start-loading`: the
+ * latter also fires for subframe loads, which would shut the gate with nobody
+ * left to reopen it.
  *
  * Throttling belongs to `TargetSource` (`setFrameRate`), not here.
  */
 export function attachFrameBus(target: TargetSource, win: BrowserWindow): FrameBus {
   let ready = false
 
+  const gone = (): boolean => win.isDestroyed() || win.webContents.isDestroyed()
+
   const onFrame = (msg: FrameMessage): void => {
-    if (!ready || win.isDestroyed() || win.webContents.isDestroyed()) return
+    if (!ready || gone()) return
     win.webContents.send(IPC.frame, msg)
   }
 
-  const onRendererReady = (): void => {
+  const onSubscribe = (e: IpcMainEvent): void => {
+    if (gone() || e.sender !== win.webContents) return
     ready = true
     target.invalidate()
   }
 
-  const onRendererGone = (): void => {
-    ready = false
+  const onRendererGone = (details: Event<WebContentsDidStartNavigationEventParams>): void => {
+    if (details.isMainFrame && !details.isSameDocument) ready = false
   }
 
   target.on('frame', onFrame)
-  win.webContents.on('did-finish-load', onRendererReady)
-  win.webContents.on('did-start-loading', onRendererGone)
+  ipcMain.on(IPC.frameSubscribe, onSubscribe)
+  win.webContents.on('did-start-navigation', onRendererGone)
 
   return {
     detach(): void {
       ready = false
       target.off('frame', onFrame)
-      if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
-        win.webContents.off('did-finish-load', onRendererReady)
-        win.webContents.off('did-start-loading', onRendererGone)
-      }
+      ipcMain.removeListener(IPC.frameSubscribe, onSubscribe)
+      if (!gone()) win.webContents.off('did-start-navigation', onRendererGone)
     },
   }
 }

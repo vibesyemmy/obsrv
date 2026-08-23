@@ -11,6 +11,7 @@ export const IPC = {
   getSettings: 'obsrv:get-settings',
   setSettings: 'obsrv:set-settings',
   frame: 'obsrv:frame',
+  frameSubscribe: 'obsrv:frame-subscribe',
   urlChanged: 'obsrv:url-changed',
   loadError: 'obsrv:load-error',
   hostChanged: 'obsrv:host-changed',
