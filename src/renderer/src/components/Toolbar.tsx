@@ -7,6 +7,7 @@ import {
   selectViewport,
   useStore,
   type Surround,
+  type ViewMode,
 } from '../state/store'
 
 /** The neutral field the panes sit in — see the UI style spec. */
@@ -14,6 +15,12 @@ const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
   { id: 'black', label: 'Black surround', swatch: '#000000' },
   { id: 'graphite', label: 'Graphite surround', swatch: '#2a2a2a' },
   { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
+]
+
+/** The target-pane view control. Fit is an overview, so its label says so. */
+const VIEWS: { id: ViewMode; label: string; title: string }[] = [
+  { id: '1:1', label: '1:1', title: 'Actual size' },
+  { id: 'fit', label: 'Fit', title: 'Fit the pane — not pixel-exact' },
 ]
 
 export type Drawer = 'none' | 'panel' | 'settings'
@@ -43,6 +50,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setError = useStore(s => s.setError)
   const surround = useStore(s => s.surround)
   const setSurround = useStore(s => s.setSurround)
+  const viewMode = useStore(s => s.viewMode)
+  const setViewMode = useStore(s => s.setViewMode)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(barText)
@@ -143,6 +152,21 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           clamped to {viewport.width}×{viewport.height}
         </span>
       )}
+
+      <div className="view-control" role="group" aria-label="Target view">
+        {VIEWS.map(v => (
+          <button
+            key={v.id}
+            type="button"
+            className={v.id === 'fit' ? 'view-fit' : 'view-1x'}
+            title={v.title}
+            aria-pressed={viewMode === v.id}
+            onClick={() => setViewMode(v.id)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
 
       <select
         className="profile-select"

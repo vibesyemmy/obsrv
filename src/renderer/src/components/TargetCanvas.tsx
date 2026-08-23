@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
 import { selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
+import { computeFitScale, jumpScroll } from '../view/viewMath'
 
 export interface TargetCanvasProps {
   onFatal: (message: string) => void
@@ -23,6 +32,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const params = useStore(useShallow(selectPanelParams))
   const requestedScale = useStore(selectScale)
   const mode = useStore(s => s.mode)
+  const viewMode = useStore(s => s.viewMode)
+  const setViewMode = useStore(s => s.setViewMode)
+  const setFitScale = useStore(s => s.setFitScale)
   const [stalled, setStalled] = useState(false)
   const stallTimer = useRef(0)
   const armedOnce = useRef(false)
@@ -48,16 +60,59 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     ? { width: imageFrame.frameWidth, height: imageFrame.frameHeight }
     : viewport
 
-  // The magnification that is actually drawn. `GlRenderer.draw` applies the
+  // Re-read when the window moves between a 1x and a 2x display; the CSS
+  // box and the input maths below both depend on it.
+  const dpr = useDevicePixelRatio()
+
+  // The pane's CSS box, observed so fit mode tracks a window resize or a
+  // drawer opening. Measured on `.pane-body`, the scroll container.
+  const [pane, setPane] = useState({ width: 0, height: 0 })
+  useEffect(() => {
+    const body = canvasRef.current?.closest('.pane-body')
+    if (!(body instanceof HTMLElement)) return
+    const measure = (): void => setPane({ width: body.clientWidth, height: body.clientHeight })
+    const ro = new ResizeObserver(measure)
+    ro.observe(body)
+    measure()
+    return () => ro.disconnect()
+  }, [])
+
+  // The 1:1 magnification actually drawable. `GlRenderer.draw` applies the
   // same `fitScale`, so the CSS box and the input maths below agree with the
   // backing store even when a huge viewport × scale had to be reduced.
-  const scale = fitScale(source.width, source.height, requestedScale, maxOutput)
+  const oneToOne = fitScale(source.width, source.height, requestedScale, maxOutput)
+
+  // Fit mode scales the whole viewport into the pane — never enlarged past
+  // 1:1 — and minifies through the renderer's smooth sampler, because
+  // nearest decimation at a small fraction moirés.
+  const fit = viewMode === 'fit'
+  const scale = fit
+    ? computeFitScale(pane.width, pane.height, dpr, source.width, source.height, oneToOne)
+    : oneToOne
+
+  // The footer reads fit's actual magnification from the store; null outside
+  // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps.
+  useEffect(() => {
+    setFitScale(fit ? scale : null)
+  }, [fit, scale, setFitScale])
 
   // Read by the frame callback, which is installed once and must not go stale.
-  const draw = useRef({ scale, params })
+  const draw = useRef({ scale, params, smooth: fit })
   // Read by `start` after a context restore, so the image is re-uploaded
   // without waiting for a frame that image mode will never send.
   const imageRef = useRef(imageFrame)
+
+  // The live pan gesture (middle drag or Option+left drag), read by the
+  // once-installed listeners below as well as the React handlers.
+  const panRef = useRef<{
+    pointerId: number
+    x: number
+    y: number
+    left: number
+    top: number
+  } | null>(null)
+  const [panning, setPanning] = useState(false)
+  const [altHeld, setAltHeld] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -137,6 +192,19 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // The bridge maps CSS pixels, so it divides by the CSS magnification
     // (S / DPR), not by S.
     const onWheel = (e: WheelEvent): void => {
+      // Alt+wheel is the pan chord (1:1 only — fit has nothing to pan): it
+      // scrolls the pane in natural direction and never reaches the page.
+      if (e.altKey && useStore.getState().viewMode === '1:1') {
+        e.preventDefault()
+        const body = canvas.closest('.pane-body')
+        if (body instanceof HTMLElement) {
+          body.scrollLeft += e.deltaX
+          body.scrollTop += e.deltaY
+        }
+        return
+      }
+      // A plain wheel forwards in fit mode too, so the page can be browsed
+      // from the overview.
       if (useStore.getState().mode !== 'url') return
       e.preventDefault()
       const r = canvas.getBoundingClientRect()
@@ -152,6 +220,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // target's own button state is what decides when the drag ends.
     const onWindowUp = (e: MouseEvent): void => {
       if (useStore.getState().mode !== 'url') return
+      // Fit mode and the pan chords never forward (see `send`); a release
+      // landing off the canvas obeys the same rules.
+      if (useStore.getState().viewMode !== '1:1') return
+      if (panRef.current || e.altKey || e.button === 1) return
       if (e.target === canvas) return // the canvas's own onMouseUp sent it
       const r = canvas.getBoundingClientRect()
       const ev = mouseEvent('mouseUp', e, r, draw.current.scale / (window.devicePixelRatio || 1))
@@ -204,12 +276,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
   useEffect(() => () => window.clearTimeout(stallTimer.current), [])
 
-  // Scale and panel params can change without a new frame arriving.
+  // Scale, panel params and the view mode can change without a new frame.
   useEffect(() => {
-    draw.current = { scale, params }
+    draw.current = { scale, params, smooth: fit }
     const gl = glRef.current
-    if (gl && gl.sourceWidth > 0) gl.draw({ scale, params })
-  }, [scale, params])
+    if (gl && gl.sourceWidth > 0) gl.draw(draw.current)
+  }, [scale, params, fit])
 
   // Live frames are already stopped by main's `setMode`, so there is no race.
   // On the way back to URL mode the next live frame (main resends a full one)
@@ -223,9 +295,109 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     gl.draw(draw.current)
   }, [imageFrame])
 
-  // Re-read when the window moves between a 1x and a 2x display; the CSS
-  // box and the input maths below both depend on it.
-  const dpr = useDevicePixelRatio()
+  // Option held over the canvas advertises the pan chord (`grab` cursor)
+  // and suppresses forwarding; released — or the window blurred with the key
+  // still down — forwarding resumes.
+  useEffect(() => {
+    const down = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(true)
+    }
+    const up = (e: KeyboardEvent): void => {
+      if (e.key === 'Alt') setAltHeld(false)
+    }
+    const clear = (): void => setAltHeld(false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', clear)
+    }
+  }, [])
+
+  // A pan drags the pane's scroll position, so the gesture needs the scroll
+  // container; the pointer is captured so a drag survives leaving the pane.
+  const paneBody = (): HTMLElement | null => {
+    const body = canvasRef.current?.closest('.pane-body')
+    return body instanceof HTMLElement ? body : null
+  }
+
+  const startPan = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (viewMode !== '1:1') return
+    if (!(e.button === 1 || (e.button === 0 && e.altKey))) return
+    const body = paneBody()
+    if (!body) return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    panRef.current = {
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      left: body.scrollLeft,
+      top: body.scrollTop,
+    }
+    setPanning(true)
+  }
+  const movePan = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    const pan = panRef.current
+    if (!pan || e.pointerId !== pan.pointerId) return
+    const body = paneBody()
+    if (!body) return
+    // The content follows the pointer; the browser clamps the positions.
+    body.scrollLeft = pan.left - (e.clientX - pan.x)
+    body.scrollTop = pan.top - (e.clientY - pan.y)
+  }
+  const endPan = (e: ReactPointerEvent<HTMLCanvasElement>, cancelled: boolean): void => {
+    const pan = panRef.current
+    if (!pan || e.pointerId !== pan.pointerId) return
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    setPanning(false)
+    if (cancelled) {
+      panRef.current = null
+      return
+    }
+    // The compatibility mouseup for this same release is dispatched after
+    // this handler, in the same task, and must not forward as a phantom
+    // release; the ref clears once that task has drained.
+    window.setTimeout(() => {
+      if (panRef.current === pan) panRef.current = null
+    }, 0)
+  }
+
+  // A click in fit mode is the way back: 1:1 with the clicked target pixel
+  // centred. The scroll applies in a layout effect, after React has
+  // committed the 1:1 canvas box — before that, the fit-sized content would
+  // clamp both offsets to 0.
+  const pendingJump = useRef<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    if (viewMode !== '1:1' || !pendingJump.current) return
+    const body = paneBody()
+    if (body) {
+      body.scrollLeft = pendingJump.current.left
+      body.scrollTop = pendingJump.current.top
+    }
+    pendingJump.current = null
+  }, [viewMode])
+
+  const jumpTo1x = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+    if (viewMode !== 'fit') return
+    const r = e.currentTarget.getBoundingClientRect()
+    pendingJump.current = jumpScroll(
+      e.clientX - r.left,
+      e.clientY - r.top,
+      dpr,
+      scale,
+      oneToOne,
+      pane.width,
+      pane.height,
+      source.width,
+      source.height,
+    )
+    setViewMode('1:1')
+  }
 
   // Every bridge builder may return null (unnamed button, pinch gesture,
   // dead key); those events are dropped, never sent as something else.
@@ -233,6 +405,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     (type: 'mouseDown' | 'mouseUp' | 'mouseMove') =>
     (e: ReactMouseEvent<HTMLCanvasElement>): void => {
       if (mode !== 'url') return
+      // Fit mode and the pan chords own the pointer: nothing forwards from
+      // the overview, while a pan is live, while Option is held, or for the
+      // middle button (the pan gesture's own press and release included).
+      if (viewMode !== '1:1' || panRef.current || e.altKey || e.button === 1) return
       const out = mouseEvent(type, e, e.currentTarget.getBoundingClientRect(), scale / dpr)
       if (out) window.obsrv.sendInput(out)
     }
@@ -269,9 +445,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       <div className="target-wrap">
         <canvas
           ref={canvasRef}
-          className="target-canvas"
+          className={`target-canvas${fit ? ' fit' : panning ? ' panning' : altHeld ? ' pan-ready' : ''}`}
           tabIndex={0}
           style={{ width: `${cssW}px`, height: `${cssH}px` }}
+          onClick={jumpTo1x}
+          onPointerDown={startPan}
+          onPointerMove={movePan}
+          onPointerUp={e => endPan(e, false)}
+          onPointerCancel={e => endPan(e, true)}
           onMouseDown={send('mouseDown')}
           onMouseUp={send('mouseUp')}
           onMouseMove={send('mouseMove')}
@@ -279,13 +460,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
           // a release that lands outside the canvas, and a drag that crosses
           // the edge and comes back stays a drag.
           onKeyDown={e => {
-            if (mode !== 'url') return
+            // Fit is a look, not a session: keys never forward from it.
+            if (mode !== 'url' || viewMode !== '1:1') return
             // Leave shortcuts to the OS and the app menu.
             if (!e.metaKey && !e.ctrlKey) e.preventDefault()
             for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
           }}
           onKeyUp={e => {
-            if (mode !== 'url') return
+            if (mode !== 'url' || viewMode !== '1:1') return
             const ev = keyUpEvent(e)
             if (ev) window.obsrv.sendInput(ev)
           }}
