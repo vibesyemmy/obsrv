@@ -5,3 +5,4 @@ test-results/
 playwright-report/
 .vitest/
 .DS_Store
+*.tsbuildinfo
