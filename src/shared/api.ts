@@ -30,6 +30,10 @@ export interface ObsrvApi {
   onLoadError(cb: (e: LoadError) => void): () => void
   onHostChanged(cb: (h: HostInfo) => void): () => void
   onTargetLoading(cb: (loading: boolean) => void): () => void
+  /** File → Open Image… in the app menu; the renderer opens its own picker. */
+  onOpenImage(cb: () => void): () => void
+  /** View → Open Location (Cmd+L) in the app menu; the renderer focuses its URL bar. */
+  onFocusUrl(cb: () => void): () => void
 }
 
 declare global {

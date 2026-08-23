@@ -18,4 +18,6 @@ export const IPC = {
   targetLoading: 'obsrv:target-loading',
   syncScroll: 'obsrv:sync-scroll',
   applyScroll: 'obsrv:apply-scroll',
+  openImage: 'obsrv:open-image',
+  focusUrl: 'obsrv:focus-url',
 } as const

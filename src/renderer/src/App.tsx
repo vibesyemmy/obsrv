@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import type { FrameMessage } from '../../shared/api'
+import { DropZone } from './components/DropZone'
 import { Fatal } from './components/Fatal'
+import { ImagePane } from './components/ImagePane'
 import { NativeSlot } from './components/NativeSlot'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls } from './components/PanelControls'
 import { SettingsPanel } from './components/SettingsPanel'
 import { TargetCanvas } from './components/TargetCanvas'
+import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
+import { loadImage, type LoadedImage } from './image/loadImage'
 import { selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
+  const [image, setImage] = useState<LoadedImage | null>(null)
   const toggle = (which: 'panel' | 'settings') => () =>
     setDrawer(d => (d === which ? 'none' : which))
 
@@ -20,6 +26,9 @@ export function App() {
   const setUrl = useStore(s => s.setUrl)
   const setError = useStore(s => s.setError)
   const setTargetLoading = useStore(s => s.setTargetLoading)
+  const setImageMeta = useStore(s => s.setImage)
+  const setMode = useStore(s => s.setMode)
+  const setToast = useStore(s => s.setToast)
   const mode = useStore(s => s.mode)
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
@@ -60,17 +69,73 @@ export function App() {
     document.documentElement.dataset.surround = surround
   }, [surround])
 
+  // The decoded pixels stay component state (they never need a selector); the
+  // store carries only the metadata the toolbar and footer read. `setImage`
+  // lands before `setMode('image')` so the readouts never see a mode without
+  // a file.
+  const onImage = async (file: File, exportScale: number): Promise<void> => {
+    try {
+      const loaded = await loadImage(file, exportScale)
+      setImage(previous => {
+        if (previous) URL.revokeObjectURL(previous.objectUrl)
+        return loaded
+      })
+      setImageMeta({
+        name: file.name,
+        exportScale,
+        width: loaded.oneX.width,
+        height: loaded.oneX.height,
+      })
+      setMode('image')
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : 'Could not read that file')
+    }
+  }
+
+  // Leaving image mode (the ✕ button) drops the decoded file and its blob URL.
+  useEffect(() => {
+    if (mode === 'image') return
+    setImage(previous => {
+      if (previous) URL.revokeObjectURL(previous.objectUrl)
+      return null
+    })
+  }, [mode])
+
+  const imageFrame = useMemo<FrameMessage | null>(() => {
+    if (mode !== 'image' || !image) return null
+    return {
+      frame: {
+        x: 0,
+        y: 0,
+        width: image.oneX.width,
+        height: image.oneX.height,
+        data: image.bgra,
+      },
+      frameWidth: image.oneX.width,
+      frameHeight: image.oneX.height,
+    }
+  }, [mode, image])
+
   if (fatal) return <Fatal message={fatal} />
 
   return (
     <div className="app">
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
+      <DropZone onImage={onImage} />
       <div className="body">
         <div className="panes">
-          <NativeSlot />
+          {mode === 'image' && image ? (
+            <ImagePane
+              src={image.objectUrl}
+              width={image.natural.width}
+              height={image.natural.height}
+            />
+          ) : (
+            <NativeSlot />
+          )}
           <div className="pane target-pane">
             <div className="pane-body">
-              <TargetCanvas onFatal={setFatal} />
+              <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
             </div>
             <TargetFooter />
           </div>
@@ -86,6 +151,7 @@ export function App() {
           </aside>
         )}
       </div>
+      <Toast />
     </div>
   )
 }

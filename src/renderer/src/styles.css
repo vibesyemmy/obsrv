@@ -230,3 +230,44 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 
 .fatal { padding: 48px; max-width: 44em; }
 .fatal h1 { font-size: 20px; margin: 0 0 12px; }
+
+/* Image mode. In normal flow, above the panes: an overlay here would sit
+   behind the native WebContentsView. */
+.strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--chrome-1);
+  border-bottom: 1px solid var(--line);
+}
+.strip button {
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  height: 24px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.strip button:focus { outline: none; }
+.strip button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
+.toolbar .close-image { width: auto; padding: 0 8px; }
+/* `safe`: a file wider than the pane scrolls from its left edge instead of
+   losing it off-screen. */
+.image-pane .pane-body { display: flex; align-items: flex-start; justify-content: safe center; }
+.image-pane img { display: block; image-rendering: pixelated; }
+
+/* Pinned to the right so it lands over the target pane, never over the native
+   view on the left. */
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}

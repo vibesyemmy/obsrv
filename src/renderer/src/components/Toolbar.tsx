@@ -36,6 +36,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const viewport = useStore(useShallow(selectViewport))
 
   const setUrl = useStore(s => s.setUrl)
+  const setMode = useStore(s => s.setMode)
   const setPreset = useStore(s => s.setPreset)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
@@ -52,6 +53,15 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   useEffect(() => {
     if (document.activeElement !== inputRef.current) setDraft(barText)
   }, [barText])
+
+  // View → Open Location (Cmd+L) arrives over IPC so it also works while the
+  // native pane, an OS-level view outside this document, holds the focus.
+  useEffect(() => {
+    return window.obsrv.onFocusUrl(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
+  }, [])
 
   // Spec §7: the URL bar shows the filename, read-only, while in image mode.
   const readOnly = mode === 'image'
@@ -91,6 +101,17 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           }}
         />
       </form>
+      {mode === 'image' && (
+        <button
+          className="close-image"
+          type="button"
+          title="Back to the live page"
+          aria-label="Back to the live page"
+          onClick={() => setMode('url')}
+        >
+          ✕
+        </button>
+      )}
 
       {loading && <span className="muted">loading…</span>}
       {error && (

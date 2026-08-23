@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
@@ -7,9 +8,11 @@ import { selectPanelParams, selectScale, selectViewport, useStore } from '../sta
 
 export interface TargetCanvasProps {
   onFatal: (message: string) => void
+  /** In image mode the pixels come from a dropped file, not from the target. */
+  imageFrame: FrameMessage | null
 }
 
-export function TargetCanvas({ onFatal }: TargetCanvasProps) {
+export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<GlRenderer | null>(null)
 
@@ -22,13 +25,22 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
   // the absolute cap stands in, which is never the binding one in practice.
   const [maxOutput, setMaxOutput] = useState(MAX_OUTPUT_SIZE)
 
+  // Whichever source is live sizes the element: the dropped file's 1x pixels
+  // in image mode, the target viewport otherwise.
+  const source = imageFrame
+    ? { width: imageFrame.frameWidth, height: imageFrame.frameHeight }
+    : viewport
+
   // The magnification that is actually drawn. `GlRenderer.draw` applies the
   // same `fitScale`, so the CSS box and the input maths below agree with the
   // backing store even when a huge viewport × scale had to be reduced.
-  const scale = fitScale(viewport.width, viewport.height, requestedScale, maxOutput)
+  const scale = fitScale(source.width, source.height, requestedScale, maxOutput)
 
   // Read by the frame callback, which is installed once and must not go stale.
   const draw = useRef({ scale, params })
+  // Read by `start` after a context restore, so the image is re-uploaded
+  // without waiting for a frame that image mode will never send.
+  const imageRef = useRef(imageFrame)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -60,8 +72,17 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
       }
       glRef.current = gl
       setMaxOutput(gl.maxOutputSize)
+      const image = imageRef.current
+      if (image) {
+        gl.resizeSource(image.frameWidth, image.frameHeight)
+        gl.uploadSlice(image.frame)
+        schedule()
+      }
       offFrame = window.obsrv.onFrame(m => {
         if (!gl) return
+        // Main stops frames on `setMode('image')`, but one already in flight
+        // must not land on top of the dropped file's pixels.
+        if (useStore.getState().mode !== 'url') return
         // Trust the message's dims: frames painted against the previous
         // viewport are still in flight for a moment after a resize.
         gl.resizeSource(m.frameWidth, m.frameHeight)
@@ -138,6 +159,18 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
     if (gl && gl.sourceWidth > 0) gl.draw({ scale, params })
   }, [scale, params])
 
+  // Live frames are already stopped by main's `setMode`, so there is no race.
+  // On the way back to URL mode the next live frame (main resends a full one)
+  // resizes the source again; nothing to undo here.
+  useEffect(() => {
+    imageRef.current = imageFrame
+    const gl = glRef.current
+    if (!gl || !imageFrame) return
+    gl.resizeSource(imageFrame.frameWidth, imageFrame.frameHeight)
+    gl.uploadSlice(imageFrame.frame)
+    gl.draw(draw.current)
+  }, [imageFrame])
+
   // Re-read when the window moves between a 1x and a 2x display; the CSS
   // box and the input maths below both depend on it.
   const dpr = useDevicePixelRatio()
@@ -157,8 +190,8 @@ export function TargetCanvas({ onFatal }: TargetCanvasProps) {
   // maps it 1:1 instead of resampling. For the moment after a viewport change
   // when frames of the old size are still arriving, the backing store lags
   // this box — those frames are stale by definition.
-  const cssW = Math.round(viewport.width * scale) / dpr
-  const cssH = Math.round(viewport.height * scale) / dpr
+  const cssW = Math.round(source.width * scale) / dpr
+  const cssH = Math.round(source.height * scale) / dpr
 
   return (
     <canvas

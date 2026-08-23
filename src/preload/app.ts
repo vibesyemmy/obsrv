@@ -49,6 +49,20 @@ const api: ObsrvApi = {
   onLoadError: cb => subscribe<LoadError>(IPC.loadError, cb),
   onHostChanged: cb => subscribe<HostInfo>(IPC.hostChanged, cb),
   onTargetLoading: cb => subscribe<boolean>(IPC.targetLoading, cb),
+  onOpenImage: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.openImage, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.openImage, listener)
+    }
+  },
+  onFocusUrl: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.focusUrl, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.focusUrl, listener)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

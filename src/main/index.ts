@@ -3,6 +3,7 @@ import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { attachFrameBus } from './frameBus'
 import { registerIpc } from './ipc'
+import { installMenu } from './menu'
 import { NativePane } from './nativePane'
 import { attachSyncBus } from './syncBus'
 import { TargetSource } from './targetSource'
@@ -40,6 +41,7 @@ function boot(): void {
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
   registerIpc(ctx)
+  installMenu(ctx)
 
   // The offscreen target is a real BrowserWindow, so it must go before the main
   // window finishes closing — otherwise `window-all-closed` never fires and the
