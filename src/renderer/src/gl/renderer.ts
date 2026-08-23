@@ -23,7 +23,8 @@ export class WebGL2UnavailableError extends Error {
 interface Uniforms {
   tex: WebGLUniformLocation | null
   scale: WebGLUniformLocation | null
-  srcH: WebGLUniformLocation | null
+  canvasH: WebGLUniformLocation | null
+  srcSize: WebGLUniformLocation | null
   brightness: WebGLUniformLocation | null
   blackFloor: WebGLUniformLocation | null
   gamut: WebGLUniformLocation | null
@@ -108,7 +109,8 @@ export class GlRenderer {
     this.u = {
       tex: gl.getUniformLocation(this.program, 'uTex'),
       scale: gl.getUniformLocation(this.program, 'uScale'),
-      srcH: gl.getUniformLocation(this.program, 'uSrcH'),
+      canvasH: gl.getUniformLocation(this.program, 'uCanvasH'),
+      srcSize: gl.getUniformLocation(this.program, 'uSrcSize'),
       brightness: gl.getUniformLocation(this.program, 'uBrightness'),
       blackFloor: gl.getUniformLocation(this.program, 'uBlackFloor'),
       gamut: gl.getUniformLocation(this.program, 'uGamut'),
@@ -123,6 +125,19 @@ export class GlRenderer {
 
   get sourceHeight(): number {
     return this.height
+  }
+
+  /**
+   * Backing-store size in host (physical) pixels after the last `draw`. The
+   * CSS box must be exactly `outputWidth / devicePixelRatio` wide (and the
+   * same for height) or Chromium resamples the canvas and the 1x pixels blur.
+   */
+  get outputWidth(): number {
+    return this.canvas.width
+  }
+
+  get outputHeight(): number {
+    return this.canvas.height
   }
 
   /** (Re)allocates the texture. Contents are undefined until the next upload. */
@@ -172,7 +187,12 @@ export class GlRenderer {
     return true
   }
 
-  draw({ scale, params }: DrawOptions): void {
+  /**
+   * One fullscreen draw. Returns `false` and touches nothing when `scale` is
+   * not a positive finite number (a zero-sized pane mid-layout, say).
+   */
+  draw({ scale, params }: DrawOptions): boolean {
+    if (!(scale > 0 && Number.isFinite(scale))) return false
     const gl = this.gl
     const w = Math.max(1, Math.round(this.width * scale))
     const h = Math.max(1, Math.round(this.height * scale))
@@ -187,7 +207,8 @@ export class GlRenderer {
 
     gl.uniform1i(this.u.tex, 0)
     gl.uniform1f(this.u.scale, scale)
-    gl.uniform1f(this.u.srcH, this.height)
+    gl.uniform1f(this.u.canvasH, h)
+    gl.uniform2i(this.u.srcSize, this.width, this.height)
     gl.uniform1f(this.u.brightness, params.brightness)
     gl.uniform1f(this.u.blackFloor, params.blackFloor)
     gl.uniform1f(this.u.gamut, params.gamut)
@@ -195,6 +216,7 @@ export class GlRenderer {
     gl.uniform1f(this.u.dither, params.dither ? 1 : 0)
 
     gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return true
   }
 
   /** RGBA rows top-down, matching the frame and image conventions. */

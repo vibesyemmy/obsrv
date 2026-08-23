@@ -24,7 +24,8 @@ precision highp int;
 
 uniform sampler2D uTex;
 uniform float uScale;      // host pixels per target pixel
-uniform float uSrcH;       // target viewport height, for the row flip
+uniform float uCanvasH;    // backing-store height in host pixels, for the row flip
+uniform ivec2 uSrcSize;    // target viewport size, for edge clamping
 uniform float uBrightness;
 uniform float uBlackFloor;
 uniform float uGamut;
@@ -35,21 +36,27 @@ out vec4 fragColor;
 
 const float GAMMA = 2.2;
 
-/** Must match bayer() in src/shared/panelSim.ts. */
+/** Must match BAYER4 in src/shared/panelSim.ts. */
+const float BAYER[16] = float[16](
+   0.0,  8.0,  2.0, 10.0,
+  12.0,  4.0, 14.0,  6.0,
+   3.0, 11.0,  1.0,  9.0,
+  15.0,  7.0, 13.0,  5.0
+);
+
 float bayer4(ivec2 p) {
-  float m[16] = float[16](
-    0.0,  8.0,  2.0, 10.0,
-   12.0,  4.0, 14.0,  6.0,
-    3.0, 11.0,  1.0,  9.0,
-   15.0,  7.0, 13.0,  5.0
-  );
-  return m[(p.y & 3) * 4 + (p.x & 3)] / 16.0;
+  return BAYER[(p.y & 3) * 4 + (p.x & 3)] / 16.0;
 }
 
 void main() {
   // gl_FragCoord is bottom-up; the texture rows arrive top-down from Chromium.
-  vec2 tp = floor(gl_FragCoord.xy / uScale);
-  ivec2 t = ivec2(int(tp.x), int(uSrcH - 1.0 - tp.y));
+  // Flip into host space first so both axes are anchored at the top-left, then
+  // divide: for a fractional uScale the partial target pixel lands on the
+  // right/bottom edge, never the left/top. Clamp so the n.5 rounding of the
+  // canvas size cannot fetch one texel past the edge.
+  vec2 host = vec2(gl_FragCoord.x, uCanvasH - gl_FragCoord.y);
+  ivec2 t = ivec2(floor(host / uScale));
+  t = clamp(t, ivec2(0), max(uSrcSize - 1, ivec2(0)));
 
   vec3 c = texelFetch(uTex, t, 0).bgr;
 

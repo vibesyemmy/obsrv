@@ -38,6 +38,14 @@ describe('panel shader matches the TS reference', () => {
 
   beforeAll(() => {
     canvas = document.createElement('canvas')
+    // Which GL backend ran the parity check (SwiftShader in headless CI, a real
+    // GPU on a dev box); it shows up in the run log once.
+    const gl = canvas.getContext('webgl2')
+    const info = gl?.getExtension('WEBGL_debug_renderer_info')
+    console.log(
+      'WebGL2 renderer:',
+      gl && info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : 'unknown',
+    )
     renderer = new GlRenderer(canvas, { preserveDrawingBuffer: true })
     renderer.resizeSource(W, H)
     renderer.uploadSlice(slice)
@@ -139,6 +147,102 @@ describe('GlRenderer', () => {
     renderer.draw({ scale: 1, params: REFERENCE })
     const out = renderer.readPixels()
     expect([out[0], out[4]]).toEqual([255, 255])
+    renderer.dispose()
+  })
+
+  it('places a sub-rect at a non-zero y on the right row after the flip', () => {
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    // 1x2 source, all black; then a white 1x1 slice at y = 1 (Chromium's
+    // top-down y), which must come out on the bottom row of the canvas.
+    renderer.resizeSource(1, 2)
+    renderer.uploadSlice({ x: 0, y: 0, width: 1, height: 2, data: new Uint8Array(8) })
+    renderer.uploadSlice({
+      x: 0,
+      y: 1,
+      width: 1,
+      height: 1,
+      data: new Uint8Array([255, 255, 255, 255]),
+    })
+
+    renderer.draw({ scale: 1, params: REFERENCE })
+    let out = renderer.readPixels() // 1x2, top-down
+    expect([out[0], out[4]]).toEqual([0, 255])
+
+    renderer.draw({ scale: 2, params: REFERENCE })
+    out = renderer.readPixels() // 2x4, top-down
+    const red = (x: number, y: number): number => out[(y * 2 + x) * 4]!
+    expect([red(0, 0), red(1, 1), red(0, 2), red(1, 3)]).toEqual([0, 0, 255, 255])
+    renderer.dispose()
+  })
+
+  it('anchors a fractional scale at the top-left', () => {
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    // 2x2 source: texel (x, y) carries red = x * 255 and green = y * 255.
+    renderer.resizeSource(2, 2)
+    renderer.uploadSlice({
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 2,
+      // BGRA, rows top-down.
+      data: new Uint8Array([
+        0, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 0, 255, 255, 255,
+      ]),
+    })
+    renderer.draw({ scale: 1.5, params: REFERENCE })
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([3, 3])
+
+    const out = renderer.readPixels() // 3x3, top-down
+    const texelX = (x: number, y: number): number => out[(y * 3 + x) * 4]! / 255
+    const texelY = (x: number, y: number): number => out[(y * 3 + x) * 4 + 1]! / 255
+    // Host pixel centres 0.5, 1.5, 2.5 divided by 1.5 fall in texels 0, 1, 1:
+    // the partial target pixel lands on the right/bottom edge, never the left/top.
+    expect([texelX(0, 0), texelX(1, 0), texelX(2, 0)]).toEqual([0, 1, 1])
+    expect([texelY(0, 0), texelY(0, 1), texelY(0, 2)]).toEqual([0, 1, 1])
+    renderer.dispose()
+  })
+
+  it('clamps the edge texel when the scaled size rounds up', () => {
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    // 3 x 1.5 = 4.5 rounds to 5 host pixels; the last one maps to texel
+    // floor(4.5 / 1.5) = 3, one past the edge, and must clamp to texel 2.
+    renderer.resizeSource(3, 1)
+    renderer.uploadSlice({
+      x: 0,
+      y: 0,
+      width: 3,
+      height: 1,
+      data: new Uint8Array(12).fill(255),
+    })
+    renderer.draw({ scale: 1.5, params: REFERENCE })
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([5, 2])
+
+    const out = renderer.readPixels() // 5x2, top-down
+    const red = (x: number, y: number): number => out[(y * 5 + x) * 4]!
+    expect([red(4, 0), red(4, 1), red(0, 1)]).toEqual([255, 255, 255])
+    renderer.dispose()
+  })
+
+  it('skips the draw for a non-positive or non-finite scale', () => {
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    renderer.resizeSource(2, 1)
+    renderer.uploadSlice({ x: 0, y: 0, width: 2, height: 1, data: new Uint8Array(8).fill(255) })
+    expect(renderer.draw({ scale: 2, params: REFERENCE })).toBe(true)
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([4, 2])
+
+    for (const scale of [0, -1, NaN, Infinity]) {
+      expect(renderer.draw({ scale, params: REFERENCE })).toBe(false)
+    }
+    // The backing store is untouched by the skipped draws.
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([4, 2])
     renderer.dispose()
   })
 })
