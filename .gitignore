@@ -9,3 +9,4 @@ playwright-report/
 obsrv-*/
 node-compile-cache/
 playwright-transform-cache-*/
+tsx-*/
