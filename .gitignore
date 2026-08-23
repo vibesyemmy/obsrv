@@ -8,3 +8,4 @@ playwright-report/
 *.tsbuildinfo
 obsrv-*/
 node-compile-cache/
+playwright-transform-cache-*/
