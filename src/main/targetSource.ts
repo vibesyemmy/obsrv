@@ -17,6 +17,13 @@ export interface TargetSourceEventMap {
   'url-changed': [string]
   'load-error': [LoadError]
   loading: [boolean]
+  /**
+   * A main-frame, cross-document navigation started: a paint is now owed.
+   * Distinct from `loading`, which also fires for subframe loads — an iframe
+   * on a healthy static page changes no pixel and owes no frame, so a stall
+   * watchdog keyed to `loading` would cry wolf on it.
+   */
+  navigating: []
 }
 
 export interface AppliedViewport {
@@ -123,6 +130,9 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     })
     wc.on('did-start-loading', () => this.emit('loading', true))
     wc.on('did-stop-loading', () => this.emit('loading', false))
+    wc.on('did-start-navigation', details => {
+      if (details.isMainFrame && !details.isSameDocument) this.emit('navigating')
+    })
     // A dead renderer paints nothing; surface it through the same channel a
     // failed navigation uses so the UI has something to show. A clean exit is
     // our own teardown.

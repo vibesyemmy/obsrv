@@ -278,8 +278,11 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 
 /* Spec §9 stall notice. Inside the target pane's scroll box, never over the
    native view on the left. Sticky rather than absolute so it stays visible
-   while the pane is scrolled. The fill is a neutral grey: only the rule under
-   it is red, so the one chromatic thing on screen is the error itself. */
+   while the pane is scrolled; a direct block child of `.pane-body` (a sibling
+   before `.target-wrap`, not inside it), so it is the pane's width and its
+   `left: 0` holds while a wide canvas is scrolled horizontally. The fill is a
+   neutral grey: only the rule under it is red, so the one chromatic thing on
+   screen is the error itself. */
 .target-wrap { min-width: min-content; }
 .stall {
   position: sticky;

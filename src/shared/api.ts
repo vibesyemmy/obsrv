@@ -30,6 +30,12 @@ export interface ObsrvApi {
   onLoadError(cb: (e: LoadError) => void): () => void
   onHostChanged(cb: (h: HostInfo) => void): () => void
   onTargetLoading(cb: (loading: boolean) => void): () => void
+  /**
+   * The target started a main-frame, cross-document navigation — a paint is
+   * owed. `onTargetLoading` also fires for subframe loads, which owe nothing;
+   * the stall watchdog keys off this, the toolbar spinner off that.
+   */
+  onTargetNavigating(cb: () => void): () => void
   /** File → Open Image… in the app menu; the renderer opens its own picker. */
   onOpenImage(cb: () => void): () => void
   /** View → Open Location (Cmd+L) in the app menu; the renderer focuses its URL bar. */

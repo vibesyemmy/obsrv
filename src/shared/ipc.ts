@@ -16,6 +16,7 @@ export const IPC = {
   loadError: 'obsrv:load-error',
   hostChanged: 'obsrv:host-changed',
   targetLoading: 'obsrv:target-loading',
+  targetNavigating: 'obsrv:target-navigating',
   syncScroll: 'obsrv:sync-scroll',
   applyScroll: 'obsrv:apply-scroll',
   openImage: 'obsrv:open-image',

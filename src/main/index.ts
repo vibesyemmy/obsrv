@@ -33,6 +33,9 @@ function boot(): void {
   target.on('loading', loading => {
     if (!win.isDestroyed()) win.webContents.send(IPC.targetLoading, loading)
   })
+  target.on('navigating', () => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.targetNavigating)
+  })
 
   const bus = attachFrameBus(target, win)
   // SyncBus owns URL reporting for both panes, so the URL bar sees exactly one

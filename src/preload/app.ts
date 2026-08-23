@@ -49,6 +49,13 @@ const api: ObsrvApi = {
   onLoadError: cb => subscribe<LoadError>(IPC.loadError, cb),
   onHostChanged: cb => subscribe<HostInfo>(IPC.hostChanged, cb),
   onTargetLoading: cb => subscribe<boolean>(IPC.targetLoading, cb),
+  onTargetNavigating: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.targetNavigating, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.targetNavigating, listener)
+    }
+  },
   onOpenImage: cb => {
     const listener = (): void => cb()
     ipcRenderer.on(IPC.openImage, listener)

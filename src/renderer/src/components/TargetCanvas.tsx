@@ -23,10 +23,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const params = useStore(useShallow(selectPanelParams))
   const requestedScale = useStore(selectScale)
   const mode = useStore(s => s.mode)
-  const targetLoading = useStore(s => s.targetLoading)
   const [stalled, setStalled] = useState(false)
   const stallTimer = useRef(0)
-  const wasLoading = useRef(false)
+  const armedOnce = useRef(false)
 
   const disarm = useCallback((): void => {
     window.clearTimeout(stallTimer.current)
@@ -171,23 +170,35 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     }
   }, [onFatal, disarm])
 
-  // Arm on the rising edge of loading only. Arming when loading *finishes*
-  // would fire on every static page, which paints once and then stops.
-  // Image mode never arms: main stops target frames on `setMode('image')` by
-  // design, so "no frame" is the normal state there, and a Cmd+R that reloads
-  // the hidden panes is tolerated for the same reason.
+  // Arm on a main-frame, cross-document navigation only — not on
+  // `targetLoading`, which also rises for a subframe load: an iframe on a
+  // healthy static page changes no pixel and owes no frame, so a watchdog
+  // keyed to loading would cry wolf on it. (`targetLoading` still drives the
+  // toolbar spinner.) Image mode never arms: main stops target frames on
+  // `setMode('image')` by design, so "no frame" is the normal state there,
+  // and a Cmd+R that reloads the hidden panes is tolerated for the same
+  // reason.
+  useEffect(
+    () =>
+      window.obsrv.onTargetNavigating(() => {
+        if (useStore.getState().mode === 'url') arm()
+      }),
+    [arm],
+  )
+
   useEffect(() => {
-    const started = targetLoading && !wasLoading.current
-    wasLoading.current = targetLoading
-    if (mode !== 'url') {
-      disarm()
+    if (mode !== 'url') disarm()
+  }, [mode, disarm])
+
+  // A viewport change invalidates the target, so a frame is owed. Not on
+  // mount, though: the shell's own boot sequence (viewport push, frame
+  // handshake) can take longer than STALL_MS on a cold start, and the notice
+  // would flash before the first frame of a perfectly healthy target.
+  useEffect(() => {
+    if (!armedOnce.current) {
+      armedOnce.current = true
       return
     }
-    if (started) arm()
-  }, [targetLoading, mode, arm, disarm])
-
-  // A viewport change invalidates the target, so a frame is owed.
-  useEffect(() => {
     if (mode === 'url') arm()
   }, [viewport.width, viewport.height, mode, arm])
 
@@ -235,9 +246,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const cssH = Math.round(source.height * scale) / dpr
 
   // The notice sits inside the target pane's own scroll box — never over the
-  // left pane, which the native view owns.
+  // left pane, which the native view owns. It is a sibling *before* the
+  // canvas-width wrap, not inside it: as a direct block child of the
+  // `.pane-body` scroll container it is the pane's width, so its sticky
+  // `left: 0` holds while a wide canvas is scrolled horizontally.
   return (
-    <div className="target-wrap">
+    <>
       {stalled && (
         <div className="stall" role="alert">
           <span>No frames from target renderer</span>
@@ -252,29 +266,31 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
           </button>
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        className="target-canvas"
-        tabIndex={0}
-        style={{ width: `${cssW}px`, height: `${cssH}px` }}
-        onMouseDown={send('mouseDown')}
-        onMouseUp={send('mouseUp')}
-        onMouseMove={send('mouseMove')}
-        // No onMouseLeave release: the window mouseup listener above catches
-        // a release that lands outside the canvas, and a drag that crosses the
-        // edge and comes back stays a drag.
-        onKeyDown={e => {
-          if (mode !== 'url') return
-          // Leave shortcuts to the OS and the app menu.
-          if (!e.metaKey && !e.ctrlKey) e.preventDefault()
-          for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
-        }}
-        onKeyUp={e => {
-          if (mode !== 'url') return
-          const ev = keyUpEvent(e)
-          if (ev) window.obsrv.sendInput(ev)
-        }}
-      />
-    </div>
+      <div className="target-wrap">
+        <canvas
+          ref={canvasRef}
+          className="target-canvas"
+          tabIndex={0}
+          style={{ width: `${cssW}px`, height: `${cssH}px` }}
+          onMouseDown={send('mouseDown')}
+          onMouseUp={send('mouseUp')}
+          onMouseMove={send('mouseMove')}
+          // No onMouseLeave release: the window mouseup listener above catches
+          // a release that lands outside the canvas, and a drag that crosses
+          // the edge and comes back stays a drag.
+          onKeyDown={e => {
+            if (mode !== 'url') return
+            // Leave shortcuts to the OS and the app menu.
+            if (!e.metaKey && !e.ctrlKey) e.preventDefault()
+            for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
+          }}
+          onKeyUp={e => {
+            if (mode !== 'url') return
+            const ev = keyUpEvent(e)
+            if (ev) window.obsrv.sendInput(ev)
+          }}
+        />
+      </div>
+    </>
   )
 }

@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
+const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -35,6 +36,25 @@ test('a page that simply finishes painting is not called a stall', async () => {
   // The fixture is static: no further paints ever arrive. The watchdog must
   // stay quiet, or it would fire on every static page in existence.
   await new Promise(r => setTimeout(r, 4000))
+  await expect(page.locator('.stall')).toBeHidden()
+})
+
+test('a subframe load on a healthy page is not a stall', async () => {
+  // `did-start-loading` fires for an iframe too, and a hidden one changes no
+  // pixel, so no frame follows. Only a main-frame navigation owes a frame.
+  await app.evaluate(async (_electron, src: string) => {
+    const ctx = (globalThis as any).__obsrv
+    await ctx.target.webContents.executeJavaScript(
+      `new Promise(r => {
+        const f = document.createElement('iframe')
+        f.hidden = true
+        f.src = ${JSON.stringify(src)}
+        f.onload = () => r(true)
+        document.body.append(f)
+      })`,
+    )
+  }, TALL)
+  await new Promise(r => setTimeout(r, 3000))
   await expect(page.locator('.stall')).toBeHidden()
 })
 
