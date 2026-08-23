@@ -291,3 +291,67 @@ describe('GlRenderer', () => {
     renderer.dispose()
   })
 })
+
+describe('smooth minification (fit mode)', () => {
+  const { slice } = gradient()
+
+  it('matches the exact path within one step at a whole 1:1 scale', () => {
+    // At scale 1 the normalized coordinates land on texel centres, so the
+    // LINEAR_MIPMAP_LINEAR sampler reads level 0 verbatim; only 32-bit float
+    // rounding separates the two paths.
+    const renderer = new GlRenderer(document.createElement('canvas'), {
+      preserveDrawingBuffer: true,
+    })
+    renderer.resizeSource(W, H)
+    renderer.uploadSlice(slice)
+
+    expect(renderer.draw({ scale: 1, params: REFERENCE })).toBe(true)
+    const exact = renderer.readPixels()
+    expect(renderer.draw({ scale: 1, params: REFERENCE, smooth: true })).toBe(true)
+    const smooth = renderer.readPixels()
+
+    let worst = 0
+    for (let i = 0; i < exact.length; i++) {
+      const diff = Math.abs(exact[i]! - smooth[i]!)
+      if (diff > worst) worst = diff
+    }
+    expect(worst).toBeLessThanOrEqual(1)
+    renderer.dispose()
+  })
+
+  it('draws a downscale without GL errors at the requested size', () => {
+    const canvas = document.createElement('canvas')
+    const renderer = new GlRenderer(canvas, { preserveDrawingBuffer: true })
+    renderer.resizeSource(W, H)
+    renderer.uploadSlice(slice)
+
+    // ~0.3×: the decimation ratio that moirés on the nearest path.
+    expect(renderer.draw({ scale: 0.3, params: REFERENCE, smooth: true })).toBe(true)
+    expect([renderer.outputWidth, renderer.outputHeight]).toEqual([
+      Math.round(W * 0.3),
+      Math.round(H * 0.3),
+    ])
+
+    // Same canvas, same context: getError sees everything the draw did
+    // (generateMipmap, the filter switch, the sampler draw).
+    const gl = canvas.getContext('webgl2')!
+    expect(gl.getError()).toBe(gl.NO_ERROR)
+
+    // The output is a plausible average of the gradient, not garbage: every
+    // pixel opaque, with real variation across the downscaled image.
+    const out = renderer.readPixels()
+    let min = 255
+    let max = 0
+    for (let i = 0; i < out.length; i += 4) {
+      expect(out[i + 3]).toBe(255)
+      if (out[i]! < min) min = out[i]!
+      if (out[i]! > max) max = out[i]!
+    }
+    expect(max - min).toBeGreaterThan(64)
+
+    // And the way back is still bit-usable: an exact draw after a smooth one.
+    expect(renderer.draw({ scale: 1, params: REFERENCE })).toBe(true)
+    expect(gl.getError()).toBe(gl.NO_ERROR)
+    renderer.dispose()
+  })
+})

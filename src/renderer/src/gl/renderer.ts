@@ -5,6 +5,12 @@ export interface DrawOptions {
   /** Host pixels per target pixel. */
   scale: number
   params: PanelParams
+  /**
+   * Fit mode's minification filter: sample through LINEAR_MIPMAP_LINEAR with
+   * normalized coordinates instead of `texelFetch`, so a ~0.3× overview does
+   * not moiré. Off (the default) is bit-identical to the v1 exact path.
+   */
+  smooth?: boolean
 }
 
 /**
@@ -70,6 +76,7 @@ interface Uniforms {
   gamut: WebGLUniformLocation | null
   levels: WebGLUniformLocation | null
   dither: WebGLUniformLocation | null
+  smooth: WebGLUniformLocation | null
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -117,6 +124,9 @@ export class GlRenderer {
   private width = 0
   private height = 0
   private applied = 0
+  private smoothFilter = false
+  /** Mip levels stale after an upload; regenerated lazily, only for smooth draws. */
+  private mipsDirty = true
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -164,6 +174,7 @@ export class GlRenderer {
       gamut: gl.getUniformLocation(this.program, 'uGamut'),
       levels: gl.getUniformLocation(this.program, 'uLevels'),
       dither: gl.getUniformLocation(this.program, 'uDither'),
+      smooth: gl.getUniformLocation(this.program, 'uSmooth'),
     }
   }
 
@@ -209,6 +220,7 @@ export class GlRenderer {
     const gl = this.gl
     gl.bindTexture(gl.TEXTURE_2D, this.tex)
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    this.mipsDirty = true
   }
 
   /**
@@ -245,6 +257,7 @@ export class GlRenderer {
       gl.UNSIGNED_BYTE,
       slice.data,
     )
+    this.mipsDirty = true
     return true
   }
 
@@ -253,7 +266,7 @@ export class GlRenderer {
    * not a positive finite number (a zero-sized pane mid-layout, say). A scale
    * the backing store cannot hold is reduced with `fitScale`, never refused.
    */
-  draw({ scale: requested, params }: DrawOptions): boolean {
+  draw({ scale: requested, params, smooth = false }: DrawOptions): boolean {
     if (!(requested > 0 && Number.isFinite(requested))) return false
     const gl = this.gl
     const scale = fitScale(this.width, this.height, requested, this.maxOutput)
@@ -269,6 +282,21 @@ export class GlRenderer {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, this.tex)
 
+    // The min filter follows the draw's path; mips are (re)generated only
+    // while smooth mode is asking for them, never on the exact path.
+    if (smooth !== this.smoothFilter) {
+      this.smoothFilter = smooth
+      gl.texParameteri(
+        gl.TEXTURE_2D,
+        gl.TEXTURE_MIN_FILTER,
+        smooth ? gl.LINEAR_MIPMAP_LINEAR : gl.NEAREST,
+      )
+    }
+    if (smooth && this.mipsDirty) {
+      gl.generateMipmap(gl.TEXTURE_2D)
+      this.mipsDirty = false
+    }
+
     gl.uniform1i(this.u.tex, 0)
     gl.uniform1f(this.u.scale, scale)
     gl.uniform1f(this.u.canvasH, h)
@@ -278,6 +306,7 @@ export class GlRenderer {
     gl.uniform1f(this.u.gamut, params.gamut)
     gl.uniform1f(this.u.levels, params.levels)
     gl.uniform1f(this.u.dither, params.dither ? 1 : 0)
+    gl.uniform1f(this.u.smooth, smooth ? 1 : 0)
 
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     return true

@@ -31,6 +31,7 @@ uniform float uBlackFloor;
 uniform float uGamut;
 uniform float uLevels;
 uniform float uDither;     // 0.0 or 1.0
+uniform float uSmooth;     // 0.0 = texelFetch (bit-exact), 1.0 = mipmapped texture()
 
 out vec4 fragColor;
 
@@ -58,7 +59,18 @@ void main() {
   ivec2 t = ivec2(floor(host / uScale));
   t = clamp(t, ivec2(0), max(uSrcSize - 1, ivec2(0)));
 
-  vec3 c = texelFetch(uTex, t, 0).bgr;
+  // The smooth path is fit mode's: nearest decimation at a small fraction
+  // moirés, so it samples with normalized coordinates through the sampler's
+  // LINEAR_MIPMAP_LINEAR filter instead (CLAMP_TO_EDGE absorbs the fraction
+  // of a texel the n.5 canvas rounding can overshoot by). The exact path is
+  // bit-identical to v1, and the panel simulation below runs on the sampled
+  // colour either way.
+  vec3 c;
+  if (uSmooth > 0.5) {
+    c = texture(uTex, host / (uScale * vec2(uSrcSize))).bgr;
+  } else {
+    c = texelFetch(uTex, t, 0).bgr;
+  }
 
   c = pow(c, vec3(GAMMA));                          // to linear light
   c = uBrightness * (uBlackFloor + (1.0 - uBlackFloor) * c); // backlight × (black floor + signal)
