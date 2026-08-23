@@ -17,7 +17,9 @@ test.afterAll(async () => {
 
 test('main window opens with the renderer loaded', async () => {
   const page = await rendererWindow(app)
-  await expect(page.locator('#root')).toContainText('Obsrv')
+  // The shell's signature readouts (Task 14) prove the React tree mounted.
+  await expect(page.locator('#root')).toContainText('NATIVE')
+  await expect(page.locator('#root')).toContainText('TARGET')
 })
 
 test('native pane loads a URL', async () => {
@@ -30,15 +32,21 @@ test('native pane loads a URL', async () => {
 })
 
 test('native pane fills the left half below the toolbar', async () => {
+  // Main's fallback layout (x 0, y TOOLBAR_H, half width) holds only until
+  // the renderer's NativeSlot reports; from Task 14 that happens within the
+  // first paint, so what is observable is the renderer-driven layout: the
+  // left half, below the toolbar, above the pane footer. The exact
+  // slot-equals-bounds check lives in panes.spec.ts.
   const seen = await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
     const [width = 0, height = 0] = ctx.win.getContentSize()
     return { bounds: ctx.native.getBounds(), content: { width, height } }
   })
   expect(seen.bounds.x).toBe(0)
-  expect(seen.bounds.y).toBe(TOOLBAR_H)
-  expect(seen.bounds.width).toBe(Math.floor(seen.content.width / 2))
-  expect(seen.bounds.height).toBe(seen.content.height - TOOLBAR_H)
+  expect(seen.bounds.y).toBeGreaterThanOrEqual(TOOLBAR_H)
+  expect(Math.abs(seen.bounds.width - seen.content.width / 2)).toBeLessThanOrEqual(1)
+  expect(seen.bounds.height).toBeLessThanOrEqual(seen.content.height - TOOLBAR_H)
+  expect(seen.bounds.height).toBeGreaterThan((seen.content.height - TOOLBAR_H) * 0.8)
 })
 
 test('back returns to the previous document', async () => {

@@ -91,19 +91,31 @@ test('settings round-trip, and impossible values are refused', async () => {
 
 test('the renderer takes over native pane layout for good', async () => {
   await page.evaluate(() => window.obsrv.setNativeBounds({ x: 10, y: 50, width: 300, height: 200 }))
-  await new Promise(r => setTimeout(r, 200))
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds()))
+    .toEqual({ x: 10, y: 50, width: 300, height: 200 })
 
-  const seen = await app.evaluate(async () => {
-    const ctx = (globalThis as any).__obsrv
-    const set = ctx.native.getBounds()
-    ctx.win.setContentSize(1200, 800)
-    await new Promise(r => setTimeout(r, 300))
-    return { set, afterResize: ctx.native.getBounds() }
-  })
-
-  expect(seen.set).toEqual({ x: 10, y: 50, width: 300, height: 200 })
-  // Main's fallback layout must not fight the renderer once it has spoken.
-  expect(seen.afterResize).toEqual(seen.set)
+  // A window resize is where main's fallback layout would reassert itself.
+  // From Task 14 the renderer's NativeSlot re-measures on resize too, so the
+  // bounds must land on the slot's rectangle — never on the fallback's
+  // `{ 0, TOOLBAR_H, width / 2, height - TOOLBAR_H }`.
+  await app.evaluate(({}) => (globalThis as any).__obsrv.win.setContentSize(1200, 800))
+  const slot = () =>
+    page.evaluate(() => {
+      const r = document.querySelector('.native-slot')!.getBoundingClientRect()
+      return {
+        x: Math.round(r.left),
+        y: Math.round(r.top),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      }
+    })
+  await expect.poll(slot).toMatchObject({ width: 600 })
+  const expected = await slot()
+  expect(expected).not.toEqual({ x: 0, y: 44, width: 600, height: 756 })
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds()))
+    .toEqual(expected)
 })
 
 test('image mode hides the native pane and stops target frames', async () => {

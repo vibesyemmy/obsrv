@@ -28,6 +28,17 @@ export async function launchApp(extraArgs: string[] = []): Promise<ElectronAppli
       throw new Error('OBSRV_TEST hook missing: boot() did not publish globalThis.__obsrv')
     }
   })
+  // From Task 14 the React shell does IPC of its own on mount: `setViewport`,
+  // `setNativeBounds`, `setMode`, the frame handshake. A spec that drives
+  // main before those land races them (its own `setViewport` is overwritten
+  // by the shell's, say). The NATIVE readout shows the slot's size only after
+  // the mount effects have run, so wait for it before handing the app over.
+  const page = await rendererWindow(app)
+  await page.waitForFunction(
+    () => /NATIVE\s*[1-9]\d*×[1-9]/.test(document.body.textContent ?? ''),
+    undefined,
+    { timeout: 10_000 },
+  )
   return app
 }
 

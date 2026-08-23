@@ -189,8 +189,25 @@ test('forwards clicks into the offscreen page', async () => {
     ctx.target.setViewport(400, 200)
     const html =
       '<body style="margin:0">' +
-      '<button style="width:400px;height:200px" onclick="document.title=\'clicked\'">x</button>'
+      '<button style="width:400px;height:200px;background:#00ff00;border:0" onclick="document.title=\'clicked\'">x</button>'
+    // `load()` resolves on did-finish-load, which can precede the page's
+    // first paint; a click dispatched before then has nothing to hit. Wait
+    // for a frame that shows the green button (sampled away from its label)
+    // — the previous page repainted at 400x200 is not green, so no false match.
+    const painted = (globalThis as any).__waitForFrame(
+      ctx.target,
+      (m: any) => {
+        const f = m.frame
+        const px = 40 - f.x
+        const py = 40 - f.y
+        if (px < 0 || py < 0 || px >= f.width || py >= f.height) return false
+        const i = (py * f.width + px) * 4
+        return f.data[i] === 0 && f.data[i + 1] === 255 && f.data[i + 2] === 0
+      },
+      'green button',
+    )
     await ctx.target.load('data:text/html,' + encodeURIComponent(html))
+    await painted
 
     const common = { button: 'left' as const, clickCount: 1, modifiers: [] as never[] }
     ctx.target.sendInput({ type: 'mouseDown', x: 200, y: 100, ...common })
