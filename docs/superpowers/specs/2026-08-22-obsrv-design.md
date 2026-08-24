@@ -111,13 +111,24 @@ Rate cap 30 fps via `webContents.setFrameRate(30)`. Full-frame 1920×1080 BGRA i
 
 Host PPI: `screen.getPrimaryDisplay().size × scaleFactor` gives physical pixels; diagonal entered by user once in Settings (default 27", editable). If the window is moved to another display, recompute from that display.
 
-| Preset | Viewport | Diagonal | PPI |
-|---|---|---|---|
-| 1080p 24" | 1920×1080 | 24 | 92 |
-| 1080p 27" | 1920×1080 | 27 | 82 |
-| Laptop 15.6" | 1366×768 | 15.6 | 100 |
-| 1440p 27" | 2560×1440 | 27 | 109 |
-| Custom | user | user | computed |
+| Preset | Group | Viewport | Diagonal | PPI |
+|---|---|---|---|---|
+| 1366×768 15.6" | Laptop | 1366×768 | 15.6 | 100 |
+| 1366×768 14" | Laptop | 1366×768 | 14 | 112 |
+| 1366×768 11.6" (Chromebook) | Laptop | 1366×768 | 11.6 | 135 |
+| 1280×800 11.6" (Chromebook) | Laptop | 1280×800 | 11.6 | 130 |
+| 1600×900 17.3" | Laptop | 1600×900 | 17.3 | 106 |
+| 1080p 15.6" | Laptop | 1920×1080 | 15.6 | 141 |
+| 1080p 24" | Desktop | 1920×1080 | 24 | 92 |
+| 1080p 27" | Desktop | 1920×1080 | 27 | 82 |
+| 1440p 27" | Desktop | 2560×1440 | 27 | 109 |
+| 1280×1024 19" (5:4) | Desktop | 1280×1024 | 19 | 86 |
+| 1440×900 19" | Desktop | 1440×900 | 19 | 89 |
+| Custom | — | user | user | computed |
+
+The preset dropdown is grouped (Laptops / Desktops); the default is 1080p 24". v1.2
+added the seven low-end entries — 1366×768 at 14"/11.6", 1280×800 11.6", 1600×900
+17.3", 1080p 15.6", 1280×1024 19" and 1440×900 19".
 
 "Pixel-exact ×2" toggle forces `S = 2` regardless of PPI — useful when the user wants to inspect pixels rather than judge physical size.
 

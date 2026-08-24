@@ -139,11 +139,20 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         value={presetId}
         onChange={e => setPreset(e.target.value)}
       >
-        {SCREEN_PRESETS.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
+        <optgroup label="Laptops">
+          {SCREEN_PRESETS.filter(p => p.group === 'laptop').map(p => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Desktops">
+          {SCREEN_PRESETS.filter(p => p.group === 'desktop').map(p => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </optgroup>
         <option value={CUSTOM_PRESET_ID}>Custom</option>
       </select>
 
