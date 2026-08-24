@@ -94,7 +94,7 @@ export const useStore = create<AppState>()(set => ({
   mode: 'url',
   url: '',
   lastUrl: '',
-  presetId: SCREEN_PRESETS[0]!.id,
+  presetId: '1080p-24',
   custom: { width: 1920, height: 1080, diagonalInches: 24 },
   pixelExact: false,
   profileId: PANEL_PROFILES[0]!.id,

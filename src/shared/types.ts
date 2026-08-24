@@ -1,9 +1,12 @@
+export type PresetGroup = 'laptop' | 'desktop'
+
 export interface ScreenPreset {
   id: string
   label: string
   width: number
   height: number
   diagonalInches: number
+  group: PresetGroup
 }
 
 export interface PanelProfile {
