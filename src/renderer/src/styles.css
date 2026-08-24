@@ -335,3 +335,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .target-canvas.fit { cursor: zoom-in; }
 .target-canvas.pan-ready { cursor: grab; }
 .target-canvas.panning { cursor: grabbing; }
+
+/* Notice shown when the renderer loads outside Electron (plain browser tab). */
+.browser-notice {
+  max-width: 32rem;
+  margin: 20vh auto 0;
+  padding: 1.5rem;
+  background: var(--chrome-1);
+  border: 1px solid var(--chrome-2);
+  color: var(--text-0);
+  line-height: 1.5;
+}
+.browser-notice p { margin: 0.75rem 0 0; color: var(--text-1); }
+.browser-notice code { font-family: var(--mono); }
