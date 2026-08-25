@@ -1,13 +1,15 @@
 import { app, ipcMain, screen, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { CONTROL_FILE_NAME, type AgentUiState } from '../shared/control'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
-import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings, parseUiState } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import type { HostInfo } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import type { AppContext } from './context'
+import { ControlServer } from './controlServer'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
 const TOOLBAR_H = 44
@@ -58,8 +60,10 @@ export function registerIpc(ctx: AppContext): void {
   // into the target, whose own history is not user-facing. Driving both would
   // race the mirror — the target's back is aborted by the mirrored `load` and
   // the two histories drift apart.
-  ipcMain.handle(IPC.navigate, async (e, url: string) => {
-    assertRenderer(e)
+  //
+  // Shared with the agent-control server, which must navigate through exactly
+  // this path — never a parallel one.
+  const navigateBoth = async (url: string): Promise<string> => {
     // Both panes are being pointed at the same URL on purpose; tell SyncBus so
     // it does not mirror the pair back and trigger a second load. Input that
     // does not normalise never reaches Chromium, so there is nothing to
@@ -73,6 +77,10 @@ export function registerIpc(ctx: AppContext): void {
     }
     const [applied] = await Promise.all([native.load(wanted), target.load(wanted)])
     return applied
+  }
+  ipcMain.handle(IPC.navigate, (e, url: string) => {
+    assertRenderer(e)
+    return navigateBoth(url)
   })
   ipcMain.on(IPC.reload, e => {
     if (!fromRenderer(e)) return
@@ -179,14 +187,71 @@ export function registerIpc(ctx: AppContext): void {
   ipcMain.handle(IPC.setSettings, (e, raw: unknown) => {
     assertRenderer(e)
     // A non-positive diagonal makes `ppi()` throw; refuse rather than persist
-    // it. `parseSettings` also copies only the two known keys, so nothing the
+    // it. `parseSettings` also copies only the known keys, so nothing the
     // renderer adds reaches disk or `getSettings`.
     const s = parseSettings(raw)
     if (!s) throw new Error('invalid settings')
     // Persist first: memory must never hold a value disk refused.
     saveSettings(settingsFile, s)
+    const wasEnabled = settings.agentControl
     settings = s
+    if (s.agentControl !== wasEnabled) applyAgentControl(s.agentControl)
   })
+
+  // --- agent control --------------------------------------------------------
+  // The loopback control server (see `controlServer.ts`). `status` answers
+  // from a main-side mirror of the renderer's toolbar state, kept fresh by
+  // the renderer's `uiState` reports — main never blocks a request on a
+  // renderer round-trip. The mirror starts at the store's initial values and
+  // the renderer reports on mount, so it is honest before the first change.
+  const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+  ipcMain.on(IPC.uiState, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const s = parseUiState(raw)
+    if (s) Object.assign(uiState, s)
+  })
+
+  const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
+    status: () => {
+      let url = ''
+      try {
+        url = target.webContents.getURL()
+      } catch {
+        // The target is mid-recreation or the app is closing; '' is honest.
+      }
+      return { version: app.getVersion(), url, ...uiState }
+    },
+    navigate: navigateBoth,
+    apply: patch => {
+      if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
+    },
+    captureVisible: async () => {
+      const image = await win.webContents.capturePage()
+      const size = image.getSize()
+      return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
+    },
+    activity: () => {
+      if (!win.isDestroyed()) win.webContents.send(IPC.agentActivity)
+    },
+  })
+  const applyAgentControl = (enabled: boolean): void => {
+    if (enabled) {
+      control.start().catch((e: unknown) => {
+        console.error('obsrv: agent-control server failed to start', e)
+      })
+    } else {
+      control.stop()
+    }
+  }
+  // OBSRV_AGENT_CONTROL=1 force-enables the server for this session (the
+  // e2e harness uses it). It flips the in-memory setting so the toolbar
+  // toggle reflects reality and toggling off works normally; nothing is
+  // persisted until the next settings write.
+  if (process.env.OBSRV_AGENT_CONTROL === '1') settings = { ...settings, agentControl: true }
+  if (settings.agentControl) applyAgentControl(true)
+  // The discovery file must not outlive the process; `stop` removes it
+  // synchronously before quit proceeds.
+  app.on('will-quit', () => control.stop())
 
   // --- image mode -----------------------------------------------------------
   // The only file read main does for the renderer: a design export dropped on
