@@ -4,10 +4,12 @@ import {
   UsageError,
   buildDiffArgs,
   buildSnapArgs,
+  extractTrailingJson,
   killBudgetMs,
   listCatalog,
   shouldInlineImage,
   stderrTail,
+  urlSchemeError,
 } from '../../src/mcp/lib'
 
 const URL = 'https://x.test'
@@ -60,6 +62,53 @@ describe('buildDiffArgs', () => {
       'diff', URL, '--preset', 'laptop-768', '--profile', 'old-laptop', '--out-dir', DIR,
     ])
   })
+  it('waitMs / timeoutMs pass through to --wait / --timeout', () => {
+    expect(buildDiffArgs({ url: URL, waitMs: 500, timeoutMs: 60000 }, DIR)).toEqual([
+      'diff', URL, '--wait', '500', '--timeout', '60000', '--out-dir', DIR,
+    ])
+  })
+})
+
+describe('urlSchemeError', () => {
+  it('accepts http, https and file URLs, case-insensitively and trimmed', () => {
+    for (const url of [
+      'https://x.test/page',
+      'http://localhost:5173',
+      'file:///tmp/fixture.html',
+      'HTTPS://X.TEST',
+      '  https://x.test  ',
+    ]) {
+      expect(urlSchemeError(url)).toBeNull()
+    }
+  })
+  it('accepts scheme-relative and bare-host forms (they normalise downstream)', () => {
+    for (const url of ['//x.test/page', 'localhost:5173', 'localhost:5173/app', 'example.com/page']) {
+      expect(urlSchemeError(url)).toBeNull()
+    }
+  })
+  it('rejects other schemes with a message naming the allowed ones', () => {
+    for (const url of ['javascript:alert(1)', 'data:text/html,hi', 'chrome://settings', 'about:blank', 'ftp://x.test']) {
+      const err = urlSchemeError(url)
+      expect(err).toMatch(/http/)
+      expect(err).toMatch(/file:/)
+    }
+    expect(urlSchemeError('javascript:alert(1)')).toContain('javascript:')
+  })
+})
+
+describe('extractTrailingJson', () => {
+  it('parses clean CLI stdout', () => {
+    expect(extractTrailingJson('{\n  "settled": true\n}\n')).toEqual({ settled: true })
+  })
+  it('skips stray Chromium noise ahead of the JSON', () => {
+    const noisy = '[1234:0821] Fontconfig warning: {weird}\nanother line\n{\n  "preset": "laptop-768"\n}\n'
+    expect(extractTrailingJson(noisy)).toEqual({ preset: 'laptop-768' })
+  })
+  it('returns null for output with no JSON object', () => {
+    expect(extractTrailingJson('no json here')).toBeNull()
+    expect(extractTrailingJson('')).toBeNull()
+    expect(extractTrailingJson('[1, 2, 3]')).toBeNull()
+  })
 })
 
 describe('shouldInlineImage', () => {
@@ -75,6 +124,10 @@ describe('killBudgetMs', () => {
   it('is the per-render budget times renders plus Electron boot headroom', () => {
     expect(killBudgetMs(1, 30_000)).toBe(90_000)
     expect(killBudgetMs(2, 30_000)).toBe(120_000)
+  })
+  it('counts waitMs into every render, so a healthy long --wait is never killed', () => {
+    expect(killBudgetMs(1, 30_000, 90_000)).toBe(180_000)
+    expect(killBudgetMs(2, 30_000, 90_000)).toBe(300_000)
   })
 })
 

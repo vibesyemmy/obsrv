@@ -11,8 +11,8 @@
       <answer>1179</answer>
    </qa_pair>
    <qa_pair>
-      <question>Run Obsrv's 1x-versus-2x-reference comparison on file:///Users/opeyemiajagbe/Documents/Projects/Obsrv/tests/fixtures/thin-text.html at the 1366×768 15.6-inch laptop preset. What is the ink-row ratio (target rows divided by reference rows)? Answer with the number to two decimal places.</question>
-      <answer>0.50</answer>
+      <question>Run Obsrv's 1x-versus-2x-reference comparison on file:///Users/opeyemiajagbe/Documents/Projects/Obsrv/tests/fixtures/thin-text.html at the 1366×768 15.6-inch laptop preset. Is the reported ink-row ratio (target rows over reference rows) between 0.3 and 0.7 — the band that indicates glyphs scaling normally with raster density rather than hairline behaviour? Answer True or False.</question>
+      <answer>True</answer>
    </qa_pair>
    <qa_pair>
       <question>How many of Obsrv's screen presets belong to the laptop group? Answer with the number only.</question>

@@ -33,6 +33,8 @@ export interface DiffToolInput {
   url: string
   preset?: string | undefined
   profile?: string | undefined
+  waitMs?: number | undefined
+  timeoutMs?: number | undefined
 }
 
 /**
@@ -80,6 +82,8 @@ export function buildDiffArgs(input: DiffToolInput, outDir: string): string[] {
   const args = ['diff', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
+  if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   args.push('--out-dir', outDir)
   return args
 }
@@ -92,16 +96,66 @@ export function shouldInlineImage(byteLength: number): boolean {
 /**
  * Outer kill budget for one CLI invocation: the CLI polices each render with
  * its own --timeout, so the server only guards against a wedged Electron —
- * per-render budget × renders, plus boot/encode headroom.
+ * (per-render budget + settle wait) × renders, plus boot/encode headroom.
+ * --wait counts per render (a diff waits in both the target and reference
+ * renders), so a healthy long-wait run is never killed mid-flight.
  */
-export function killBudgetMs(renders: number, timeoutMs: number): number {
-  return renders * timeoutMs + 60_000
+export function killBudgetMs(renders: number, timeoutMs: number, waitMs: number = 0): number {
+  return renders * (timeoutMs + waitMs) + 60_000
 }
 
 /** The tail of the CLI's stderr, trimmed and capped for a tool-error message. */
 export function stderrTail(stderr: string, max: number = STDERR_TAIL_CHARS): string {
   const trimmed = stderr.trim()
   return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`
+}
+
+/** Schemes a tool call may hand to the CLI. */
+export const ALLOWED_URL_SCHEMES = ['http:', 'https:', 'file:'] as const
+
+/**
+ * Rejects URLs whose explicit scheme is outside the allowlist (javascript:,
+ * data:, chrome:, …) with an actionable message, or returns null when the URL
+ * may proceed. Scheme-relative (`//host`), bare-host (`example.com/page`) and
+ * host:port (`localhost:5173`) forms pass — they normalise to http(s)
+ * downstream.
+ */
+export function urlSchemeError(url: string): string | null {
+  const trimmed = url.trim()
+  const match = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)
+  if (!match) return null // bare host or scheme-relative
+  const scheme = `${match[1]!.toLowerCase()}:`
+  if ((ALLOWED_URL_SCHEMES as readonly string[]).includes(scheme)) return null
+  // `localhost:5173`-style host:port, not a scheme: the "scheme" is followed
+  // by a bare port number.
+  if (/^[a-z0-9.-]+:\d+(\/|$)/i.test(trimmed)) return null
+  return (
+    `unsupported URL scheme "${scheme}" — obsrv renders ` +
+    `${ALLOWED_URL_SCHEMES.map(s => `${s}//`).join(', ')} URLs only ` +
+    `(bare hosts like example.com also work; they normalise to http(s)).`
+  )
+}
+
+/**
+ * Parses the CLI's machine output: the trailing JSON object on stdout.
+ * Tolerant of stray runtime noise ahead of it (e.g. Chromium warnings that
+ * escape onto stdout) by scanning line-start `{` candidates until one parses
+ * to the end.
+ */
+export function extractTrailingJson(stdout: string): Record<string, unknown> | null {
+  const text = stdout.trim()
+  for (let i = text.indexOf('{'); i >= 0; i = text.indexOf('{', i + 1)) {
+    if (i > 0 && text[i - 1] !== '\n') continue
+    try {
+      const parsed: unknown = JSON.parse(text.slice(i))
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      // Not JSON from here; keep scanning.
+    }
+  }
+  return null
 }
 
 export interface PresetEntry {

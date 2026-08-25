@@ -14,10 +14,12 @@ import {
   UsageError,
   buildDiffArgs,
   buildSnapArgs,
+  extractTrailingJson,
   killBudgetMs,
   listCatalog,
   shouldInlineImage,
   stderrTail,
+  urlSchemeError,
   type DiffToolInput,
   type SnapToolInput,
 } from './lib'
@@ -50,25 +52,36 @@ interface CliRun {
   killed: boolean
 }
 
-/** Spawns `node bin/obsrv.js <args>`; SIGTERMs a wedged run after `killAfterMs`. */
+/** Grace between SIGTERM and SIGKILL for a run that ignores the former. */
+const SIGKILL_GRACE_MS = 10_000
+
+/**
+ * Spawns `node bin/obsrv.js <args>`; SIGTERMs a wedged run after
+ * `killAfterMs`, and SIGKILLs it if it still has not exited after
+ * SIGKILL_GRACE_MS more.
+ */
 function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
   return new Promise((done, fail) => {
     const child = spawn(process.execPath, [CLI_BIN, ...args], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     let killed = false
+    let killTimer: ReturnType<typeof setTimeout> | undefined
     const timer = setTimeout(() => {
       killed = true
       child.kill('SIGTERM')
+      killTimer = setTimeout(() => child.kill('SIGKILL'), SIGKILL_GRACE_MS)
     }, killAfterMs)
     child.stdout.on('data', d => (stdout += String(d)))
     child.stderr.on('data', d => (stderr += String(d)))
     child.on('error', err => {
       clearTimeout(timer)
+      clearTimeout(killTimer)
       fail(err)
     })
     child.on('close', code => {
       clearTimeout(timer)
+      clearTimeout(killTimer)
       done({ code, stdout, stderr, killed })
     })
   })
@@ -85,15 +98,6 @@ function cliFailure(command: 'snap' | 'diff', run: CliRun, killAfterMs: number):
     )
   }
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
-}
-
-function parseCliJson(stdout: string): Record<string, unknown> | null {
-  try {
-    const parsed: unknown = JSON.parse(stdout)
-    return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
-  } catch {
-    return null
-  }
 }
 
 /** An inline image block for a PNG within the cap, else a text block saying why not. */
@@ -115,7 +119,10 @@ async function imageOrNote(pngPath: string, label: string, suggestion: string): 
 const PRESET_IDS = SCREEN_PRESETS.map(p => p.id) as [string, ...string[]]
 const PROFILE_IDS = PANEL_PROFILES.map(p => p.id) as [string, ...string[]]
 
-const urlField = z.string().min(1).describe('Page to render: an http(s):// or file:// URL.')
+const urlField = z
+  .string()
+  .min(1)
+  .describe('Page to render: an http://, https:// or file:// URL (bare hosts also work). Other schemes are rejected.')
 const profileField = z
   .enum(PROFILE_IDS)
   .optional()
@@ -169,12 +176,21 @@ const diffInputShape = {
     .boolean()
     .optional()
     .describe('Also inline target.png and reference.png as images (each subject to the 1.5 MiB cap). Default: paths only.'),
+  waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, applied to both renders. Default 0.'),
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(`Per-render budget for load + paint quiescence, in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 const diffOutputShape = {
   url: z.string(),
   preset: z.string(),
   profile: z.string(),
+  // Always present: buildDiffArgs unconditionally passes --out-dir, and the
+  // CLI writes both PNGs whenever it is given one.
   files: z
     .object({ target: z.string(), reference: z.string() })
     .describe('PNGs on the same 1x grid, kept in a per-call temp dir.'),
@@ -239,20 +255,22 @@ server.registerTool(
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
   async (input: SnapToolInput): Promise<CallToolResult> => {
+    const badScheme = urlSchemeError(input.url)
+    if (badScheme) return toolError(badScheme)
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
     let args: string[]
     try {
-      args = buildSnapArgs(input, pngPath)
+      args = buildSnapArgs({ ...input, url: input.url.trim() }, pngPath)
     } catch (e) {
       await rm(dir, { recursive: true, force: true })
       if (e instanceof UsageError) return toolError(e.message)
       throw e
     }
-    const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+    const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
     const run = await runCli(args, killAfterMs)
     if (run.killed || run.code !== 0) return cliFailure('snap', run, killAfterMs)
-    const meta = parseCliJson(run.stdout)
+    const meta = extractTrailingJson(run.stdout)
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const structured = { ...meta, pngPath }
@@ -286,13 +304,18 @@ server.registerTool(
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
   async (input: DiffToolInput & { includeImages?: boolean | undefined }): Promise<CallToolResult> => {
+    const badScheme = urlSchemeError(input.url)
+    if (badScheme) return toolError(badScheme)
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
-    const args = buildDiffArgs({ url: input.url, preset: input.preset, profile: input.profile }, dir)
+    const args = buildDiffArgs(
+      { url: input.url.trim(), preset: input.preset, profile: input.profile, waitMs: input.waitMs, timeoutMs: input.timeoutMs },
+      dir,
+    )
     // Two renders per diff: the target and its 2x reference.
-    const killAfterMs = killBudgetMs(2, DEFAULT_TIMEOUT_MS)
+    const killAfterMs = killBudgetMs(2, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
     const run = await runCli(args, killAfterMs)
     if (run.killed || run.code !== 0) return cliFailure('diff', run, killAfterMs)
-    const metrics = parseCliJson(run.stdout)
+    const metrics = extractTrailingJson(run.stdout)
     if (!metrics) return toolError(`obsrv diff exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(metrics, null, 2) }]
