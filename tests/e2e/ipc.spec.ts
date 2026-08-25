@@ -67,14 +67,14 @@ test('reports the host display in physical pixels', async () => {
 
 test('settings round-trip, and impossible values are refused', async () => {
   const saved = await page.evaluate(async () => {
-    await window.obsrv.setSettings({ hostDiagonalInches: 32, hostNits: 400 })
+    await window.obsrv.setSettings({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
     return window.obsrv.getSettings()
   })
-  expect(saved).toEqual({ hostDiagonalInches: 32, hostNits: 400 })
+  expect(saved).toEqual({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
 
   const outcome = await page.evaluate(async () => {
     try {
-      await window.obsrv.setSettings({ hostDiagonalInches: 0, hostNits: 400 })
+      await window.obsrv.setSettings({ hostDiagonalInches: 0, hostNits: 400, agentControl: false })
       return 'accepted'
     } catch {
       return 'rejected'
@@ -86,6 +86,7 @@ test('settings round-trip, and impossible values are refused', async () => {
   expect(await page.evaluate(() => window.obsrv.getSettings())).toEqual({
     hostDiagonalInches: 32,
     hostNits: 400,
+    agentControl: false,
   })
 })
 
@@ -156,6 +157,7 @@ test('ignores malformed payloads', async () => {
     api.setNativeBounds({})
     api.sendInput({ type: 'nope' })
     api.setMode('bogus')
+    await api.setSettings({ hostDiagonalInches: 27, hostNits: 500, agentControl: 'yes' }).catch(() => {})
     await api.setSettings({ hostDiagonalInches: 27, hostNits: 500, extra: 1 })
   })
   await new Promise(r => setTimeout(r, 200))
@@ -168,8 +170,8 @@ test('ignores malformed payloads', async () => {
   expect(after.visible).toBe(true)
 
   const settings = await page.evaluate(() => window.obsrv.getSettings())
-  expect(settings).toEqual({ hostDiagonalInches: 27, hostNits: 500 })
-  expect(Object.keys(settings)).toHaveLength(2)
+  expect(settings).toEqual({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
+  expect(Object.keys(settings)).toHaveLength(3)
 
   // Main is still alive and answering.
   expect(await page.evaluate(() => window.obsrv.setViewport(640, 480))).toEqual({ width: 640, height: 480 })

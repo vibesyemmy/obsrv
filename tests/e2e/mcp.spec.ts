@@ -25,7 +25,18 @@ let client: Client
 
 test.beforeAll(async () => {
   client = new Client({ name: 'obsrv-mcp-spec', version: '0.0.0' })
-  await client.connect(new StdioClientTransport({ command: process.execPath, args: [MCP_BIN], cwd: ROOT }))
+  // Point discovery at a file that cannot exist: these are the *no running
+  // app* tests, and they must stay headless even when the developer has a
+  // control-enabled Obsrv open (see mcp-live.spec.ts for the live path).
+  const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [MCP_BIN],
+      cwd: ROOT,
+      env: { ...env, OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json') },
+    }),
+  )
 })
 
 test.afterAll(async () => {
@@ -35,24 +46,29 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: three read-only tools with schemas', async () => {
+test('initialize + tools/list: four tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
-  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_diff', 'obsrv_presets', 'obsrv_snap'])
+  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_snap'])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
-    expect(tool.annotations?.readOnlyHint).toBe(true)
+    // obsrv_drive mutates visible app state and says so; the rest are reads.
+    expect(tool.annotations?.readOnlyHint).toBe(tool.name !== 'obsrv_drive')
     expect(tool.inputSchema).toMatchObject({ type: 'object' })
     expect(tool.outputSchema).toMatchObject({ type: 'object' })
   }
   const snap = tools.find(t => t.name === 'obsrv_snap')!
   expect(Object.keys(snap.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs']),
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs', 'mode']),
   )
   const diff = tools.find(t => t.name === 'obsrv_diff')!
   expect(Object.keys(diff.inputSchema.properties ?? {})).toEqual(
     expect.arrayContaining(['url', 'preset', 'profile', 'includeImages']),
+  )
+  const drive = tools.find(t => t.name === 'obsrv_drive')!
+  expect(Object.keys(drive.inputSchema.properties ?? {})).toEqual(
+    expect.arrayContaining(['url', 'preset', 'profile', 'viewMode']),
   )
 })
 
@@ -78,6 +94,8 @@ test('obsrv_snap: laptop-768 render returns metadata and an inline PNG', async (
 
   const meta = r.structuredContent as Record<string, unknown>
   expect(meta).toMatchObject({
+    // No app is reachable, so the default auto mode reports headless.
+    mode: 'headless',
     preset: 'laptop-768',
     cssWidth: 1366,
     cssHeight: 768,
@@ -132,4 +150,14 @@ test('obsrv_snap: preset plus custom dims is a usage error with the fix', async 
   const r = await call('obsrv_snap', { url: fixture('hairline.html'), preset: 'laptop-768', width: 100, height: 100 })
   expect(r.isError).toBe(true)
   expect((r.content[0] as { text: string }).text).toMatch(/mutually exclusive/)
+})
+
+test('live drive without a running app: snap mode:"live" and obsrv_drive error actionably', async () => {
+  const snap = await call('obsrv_snap', { url: fixture('hairline.html'), mode: 'live' })
+  expect(snap.isError).toBe(true)
+  expect((snap.content[0] as { text: string }).text).toMatch(/Agent control/)
+
+  const drive = await call('obsrv_drive', { preset: 'laptop-768' })
+  expect(drive.isError).toBe(true)
+  expect((drive.content[0] as { text: string }).text).toMatch(/Agent control/)
 })

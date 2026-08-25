@@ -15,11 +15,11 @@ import { join, resolve } from 'node:path'
  * `boot()` registered its continuation at module load, before any evaluate
  * can register one, so awaiting `whenReady()` from here orders after it.
  */
-export async function launchApp(extraArgs: string[] = []): Promise<ElectronApplication> {
+export async function launchApp(extraArgs: string[] = [], extraEnv: Record<string, string> = {}): Promise<ElectronApplication> {
   const userData = mkdtempSync(join(tmpdir(), 'obsrv-e2e-'))
   const app = await electron.launch({
     args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${userData}`, ...extraArgs],
-    env: { ...process.env, OBSRV_TEST: '1' },
+    env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
   })
   app.on('close', () => rmSync(userData, { recursive: true, force: true }))
   await app.evaluate(async ({ app: electronApp }) => {
