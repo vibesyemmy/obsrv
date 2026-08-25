@@ -72,6 +72,18 @@ export function parseInputEvent(raw: unknown): TargetInputEvent | null {
   }
 }
 
+/**
+ * `setViewport`'s device scale factor. Real screens run 1x-3x; 4 leaves
+ * headroom without letting a renderer ask for an absurd raster. A missing
+ * value means 1 (the pre-mobile wire shape); anything else out of range is
+ * refused, never clamped — main must not guess at a malformed payload.
+ */
+export function parseDeviceScaleFactor(raw: unknown): number | null {
+  if (raw === undefined) return 1
+  if (!isFiniteNumber(raw) || raw < 1 || raw > 4) return null
+  return raw
+}
+
 /** Copies exactly the two known keys; both must be finite and positive. */
 export function parseSettings(raw: unknown): Settings | null {
   if (!isRecord(raw)) return null
