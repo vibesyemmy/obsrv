@@ -208,8 +208,12 @@ export function registerIpc(ctx: AppContext): void {
   const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', mode: 'url' }
   // A patch sent before the renderer has mounted its listeners would vanish;
   // the first uiState report is the renderer saying "I'm listening", so
-  // anything an early agent asked for is queued until then.
+  // anything an early agent asked for is queued until then. The queue is
+  // bounded — an agent hammering a never-mounting renderer must not grow
+  // main's heap — dropping the oldest, which the newest supersedes anyway.
+  const MAX_PENDING_APPLIES = 32
   let rendererReported = false
+  let warnedPendingOverflow = false
   const pendingApplies: AgentApplyPatch[] = []
   ipcMain.on(IPC.uiState, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
@@ -250,6 +254,13 @@ export function registerIpc(ctx: AppContext): void {
     apply: patch => {
       if (win.isDestroyed()) return
       if (!rendererReported) {
+        if (pendingApplies.length >= MAX_PENDING_APPLIES) {
+          if (!warnedPendingOverflow) {
+            warnedPendingOverflow = true
+            console.warn('obsrv: agent-apply queue full before the renderer mounted; dropping oldest entries')
+          }
+          pendingApplies.shift()
+        }
         pendingApplies.push(patch)
         return
       }

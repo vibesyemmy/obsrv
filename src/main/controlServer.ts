@@ -126,6 +126,16 @@ export class ControlServer {
 
   private async route(req: IncomingMessage): Promise<Reply> {
     if (req.method !== 'POST' || req.url !== '/') return reply(404, { error: 'POST / only' })
+    // Defence-in-depth against browser-launched requests (the token is the
+    // real gate; these close the browser-shaped path outright): a browser's
+    // cross-site POST always carries an Origin header — same-user node
+    // clients never do — and a no-cors "simple request" cannot send an
+    // application/json content type.
+    if (req.headers.origin !== undefined) return reply(403, { error: 'cross-origin requests are refused' })
+    const contentType = req.headers['content-type'] ?? ''
+    if (!/^application\/json\b/i.test(contentType)) {
+      return reply(415, { error: 'content-type must be application/json' })
+    }
     const raw = await this.readBody(req)
     if (raw === null) return reply(413, { error: `body over ${MAX_BODY_BYTES} bytes` })
     let parsed: unknown

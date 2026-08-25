@@ -377,5 +377,16 @@ headlessly with a note (even under explicit `live`); `waitMs` is ignored live
 with a note; `mode: "live"` with no app is an actionable error, never a
 silent fallback. `obsrv_drive` (`readOnlyHint: false` — it changes what the
 user's window shows) applies `{ url?, preset?, profile?, viewMode? }` and
-returns the confirming status. `obsrv_diff` stays headless-only: the
+returns the confirming status. `obsrv_snap` keeps `readOnlyHint: true` (it
+renders and captures), but its description states plainly that a live snap
+steers the open app window — navigation, preset flip — as its means of
+capture, so auto-approving clients are not surprised: that visible steering
+is the feature. `obsrv_diff` stays headless-only: the
 comparison needs both rasters, which the visible app cannot show.
+
+The server itself adds browser-shaped defence-in-depth ahead of the token
+check: any request carrying an `Origin` header is refused (403 — a browser's
+cross-site POST always sends one; same-user local clients never do), and the
+`Content-Type` must be `application/json` (415 — a no-cors "simple request"
+cannot send it). The renderer-mount apply queue is bounded (32 entries,
+oldest dropped with a one-time warning).

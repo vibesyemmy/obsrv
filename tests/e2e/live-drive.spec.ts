@@ -26,14 +26,25 @@ interface Reply {
 }
 
 /** One control-protocol POST; `token: null` sends a body with no token at all. */
-function call(command: string, payload?: Record<string, unknown>, token?: string | null): Promise<Reply> {
+function call(
+  command: string,
+  payload?: Record<string, unknown>,
+  token?: string | null,
+  headers?: Record<string, string>,
+): Promise<Reply> {
   return new Promise((done, fail) => {
     const body: Record<string, unknown> = { command }
     if (token !== null) body.token = token ?? info.token
     if (payload) body.payload = payload
     const data = JSON.stringify(body)
     const req = request(
-      { host: '127.0.0.1', port: info.port, method: 'POST', path: '/', headers: { 'content-type': 'application/json' } },
+      {
+        host: '127.0.0.1',
+        port: info.port,
+        method: 'POST',
+        path: '/',
+        headers: { 'content-type': 'application/json', ...headers },
+      },
       res => {
         let text = ''
         res.on('data', d => (text += String(d)))
@@ -96,6 +107,19 @@ test('a wrong or missing token is a detail-free 403; unknown commands name the a
   expect(unknown.status).toBe(400)
   expect(String(unknown.body.error)).toContain('captureVisible')
   expect(String(unknown.body.error)).toContain('navigate')
+})
+
+test('browser-shaped requests are refused before the token is even read', async () => {
+  // A browser's cross-site POST always carries an Origin header; even a
+  // valid token does not get it past the door.
+  const origin = await call('status', undefined, undefined, { origin: 'http://evil.test' })
+  expect(origin.status).toBe(403)
+  expect(String(origin.body.error)).toContain('cross-origin')
+
+  // A no-cors "simple request" cannot send application/json.
+  const textPlain = await call('status', undefined, undefined, { 'content-type': 'text/plain' })
+  expect(textPlain.status).toBe(415)
+  expect(String(textPlain.body.error)).toContain('application/json')
 })
 
 test('navigate + setPreset over HTTP actually drive the app', async () => {

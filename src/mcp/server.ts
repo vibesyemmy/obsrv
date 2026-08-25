@@ -400,7 +400,9 @@ server.registerTool(
       `returned PNG is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` ` +
       `otherwise). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
       `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
-      `touches it.`,
+      `touches it. Note: although this tool is annotated read-only (it renders and captures), a live snap steers ` +
+      `the open app window — navigating it and flipping its preset in front of the user — as its means of ` +
+      `capture; that visible steering is the point of live mode.`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
