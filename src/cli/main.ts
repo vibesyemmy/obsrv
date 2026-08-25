@@ -54,6 +54,8 @@ interface RenderResult {
   /** Applied CSS viewport (after clamping / full-page growth). */
   cssWidth: number
   cssHeight: number
+  /** Everything warned to stderr during this render, for the machine output. */
+  warnings: string[]
 }
 
 interface RenderOptions {
@@ -68,11 +70,22 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
   const target = new TargetSource(30, { mobileEmulation: options.mobileEmulation ?? true })
   try {
     // Boxed rather than a `let`: TS's flow analysis cannot see the listener
-    // assignment, and would narrow a plain local back to null.
+    // assignment, and would narrow a plain local back to null. Renderer
+    // crashes surface here too (TargetSource reports render-process-gone
+    // through the same load-error channel).
     const failure: { error: LoadError | null } = { error: null }
     target.on('load-error', e => {
       failure.error ??= e
     })
+    const failed = (): Error | null =>
+      failure.error
+        ? new Error(`render failed: ${failure.error.description} (code ${failure.error.code}) — ${failure.error.url}`)
+        : null
+    const warnings: string[] = []
+    const warn = (message: string): void => {
+      warnings.push(message)
+      human(message)
+    }
     const applied = target.setViewport(spec.cssWidth, spec.cssHeight, spec.deviceScaleFactor)
 
     // `load()` resolves on did-finish-load but a dead server can sit in
@@ -89,7 +102,16 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     if (failure.error) {
       throw new Error(`load failed: ${failure.error.description} (code ${failure.error.code}) — ${failure.error.url}`)
     }
-    if (options.waitMs > 0) await sleep(options.waitMs)
+    if (options.waitMs > 0) {
+      // Polled, not a single sleep: a renderer crash mid-wait must fail now,
+      // not after the wait plus a doomed capture.
+      const until = Date.now() + options.waitMs
+      while (Date.now() < until) {
+        const err = failed()
+        if (err) throw err
+        await sleep(Math.min(50, until - Date.now()))
+      }
+    }
 
     let cssHeight = applied.height
     if (options.fullPage) {
@@ -107,7 +129,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         const limit = maxCssViewport(spec.deviceScaleFactor)
         const wanted = Math.min(scrollHeight, limit)
         if (scrollHeight > limit) {
-          human(
+          warn(
             `warning: full page is ${scrollHeight} CSS px tall; clamped to ${wanted} ` +
               `(device pixels are capped at 4096 per axis)`,
           )
@@ -117,8 +139,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       }
     }
 
-    const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: human })
-    return { frame, cssWidth: applied.width, cssHeight }
+    const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed })
+    return { frame, cssWidth: applied.width, cssHeight, warnings }
   } finally {
     target.destroy()
   }
@@ -150,6 +172,10 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
       profile: profile.id,
+      // False means a best-effort capture of a page that never went
+      // paint-quiet (animation); machine consumers can gate on it.
+      settled: r.frame.settled,
+      warnings: r.warnings,
     })
   }
   await machine(cmd.matrix ? results : results[0])
@@ -208,20 +234,37 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
 // --- boot --------------------------------------------------------------------
 
 // A throwaway user-data dir: the CLI must never share (or pollute) the GUI
-// app's profile, and parallel CLI runs must not fight over one.
-const userData = mkdtempSync(join(tmpdir(), 'obsrv-cli-'))
+// app's profile, and parallel CLI runs must not fight over one. bin/obsrv.js
+// creates and *deletes* it (OBSRV_CLI_USER_DATA): Chromium flushes profile
+// files after the last main-process JS runs, so only a parent that outlives
+// Chromium can remove it reliably. The in-process cleanups below remain as
+// best effort for direct `electron out/main/cli.js` invocations.
+const userData = process.env.OBSRV_CLI_USER_DATA ?? mkdtempSync(join(tmpdir(), 'obsrv-cli-'))
 app.setPath('userData', userData)
-process.on('exit', () => {
+const cleanupUserData = (): void => {
   try {
     rmSync(userData, { recursive: true, force: true })
   } catch {
     // Best-effort cleanup of a tmp dir.
   }
-})
+}
+// Twice on purpose: once before `app.exit` (below), and once on 'quit' —
+// the last JS to run — because Chromium flushes profile files (Session
+// Storage, Local State) during shutdown and was observed to recreate the
+// dir after a single pre-exit removal.
+app.on('quit', cleanupUserData)
 
 // The offscreen windows come and go (dsf changes recreate them); the CLI owns
 // its exit explicitly, so "all windows closed" must never quit underneath it.
 app.on('window-all-closed', () => {})
+
+// bin/obsrv.js forwards SIGINT/SIGTERM here; exit promptly and leak-free.
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    cleanupUserData()
+    app.exit(1)
+  })
+}
 
 void app.whenReady().then(async () => {
   app.dock?.hide()
@@ -239,5 +282,6 @@ void app.whenReady().then(async () => {
     code = e instanceof ArgError ? 2 : 1
     human(`obsrv: ${e instanceof Error ? e.message : String(e)}`)
   }
+  cleanupUserData()
   app.exit(code)
 })

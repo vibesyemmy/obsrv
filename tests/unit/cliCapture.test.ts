@@ -65,6 +65,33 @@ describe('captureQuiescent', () => {
   it('rejects when nothing ever paints', async () => {
     await expect(captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 150 })).rejects.toThrow(/no full frame/)
   })
+  it('reports settled: true for a quiet capture', async () => {
+    const got = await captureQuiescent(new FakeSource([fullFrame(1, 1, 1)]), { settleMs: 20, timeoutMs: 1000 })
+    expect(got.settled).toBe(true)
+  })
+  it('a covered but never-quiet page is captured best-effort with settled: false', async () => {
+    // Repaints keep arriving faster than the settle window for the whole budget.
+    const src = new FakeSource([fullFrame(1, 1, 8)])
+    const noisy = setInterval(() => src.invalidate(), 10)
+    try {
+      const warnings: string[] = []
+      const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 300, onWarn: m => warnings.push(m) })
+      expect(got.settled).toBe(false)
+      expect(Array.from(got.bgra)).toEqual(Array(4).fill(8))
+      expect(warnings.join(' ')).toMatch(/kept painting/)
+    } finally {
+      clearInterval(noisy)
+    }
+  })
+  it('an external failure aborts immediately instead of burning the timeout', async () => {
+    const t0 = Date.now()
+    let failed: Error | null = null
+    setTimeout(() => (failed = new Error('renderer crashed: oom')), 50)
+    await expect(
+      captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 10_000, failure: () => failed }),
+    ).rejects.toThrow(/renderer crashed/)
+    expect(Date.now() - t0).toBeLessThan(2000)
+  })
 })
 
 describe('bgraToRgba', () => {

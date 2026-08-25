@@ -79,6 +79,7 @@ diff flags:
   --out-dir <dir>      Also write target.png and reference.png.
   --json               JSON metrics to stdout (already the default; accepted for clarity).
 
+Repeated flags: the last occurrence wins.
 Machine output (JSON) goes to stdout; everything human goes to stderr.
 Exit code 0 on success — diff findings are informational, never a failure.`
 }

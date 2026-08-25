@@ -100,6 +100,12 @@ describe('parseArgs: snap', () => {
     expect(() => snap('x.test', '--out-dir', 'd')).toThrow(/diff/)
     expect(() => snap('x.test', '--json')).toThrow(/diff/)
   })
+  it('repeated flags: the last occurrence wins (documented in --help)', () => {
+    const cmd = snap('x.test', '--preset', 'laptop-768', '--preset', '1080p-24')
+    expect(cmd.specs[0]!.presetId).toBe('1080p-24')
+    const help = parseArgs(['--help'])
+    if (help.command === 'help') expect(help.text).toContain('last occurrence wins')
+  })
   it('rejects unknown flags and flags missing their value', () => {
     expect(() => snap('x.test', '--bogus')).toThrow(/unknown flag: --bogus/)
     expect(() => snap('x.test', '--preset')).toThrow(/--preset requires a value/)

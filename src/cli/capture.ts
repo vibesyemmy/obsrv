@@ -20,6 +20,11 @@ export interface CapturedFrame {
   height: number
   /** BGRA, row-major, no padding — the layout Chromium's paint events emit. */
   bgra: Uint8Array
+  /**
+   * True when paints went quiet within the budget; false for a best-effort
+   * capture of a page that never stopped painting (animation, video).
+   */
+  settled: boolean
 }
 
 export interface CaptureOptions {
@@ -28,6 +33,12 @@ export interface CaptureOptions {
   /** Overall budget; an animating page is captured as-is at this bound. */
   timeoutMs?: number
   onWarn?: (message: string) => void
+  /**
+   * Checked every poll: a returned error aborts the capture immediately —
+   * how a renderer crash mid-capture fails fast instead of burning the
+   * timeout and reporting a misleading "no full frame painted".
+   */
+  failure?: () => Error | null
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
@@ -99,17 +110,21 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   source.on('frame', onFrame)
   try {
     source.invalidate()
+    let settled = true
     const deadline = Date.now() + timeoutMs
     for (;;) {
+      const failed = options.failure?.()
+      if (failed) throw failed
       if (covered && Date.now() - lastPaint >= settleMs) break
       if (Date.now() >= deadline) {
         if (!covered) throw new Error(`no full frame painted within ${timeoutMs} ms`)
         options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
+        settled = false
         break
       }
       await sleep(Math.min(50, settleMs))
     }
-    return { width, height, bgra: buffer.slice() }
+    return { width, height, bgra: buffer.slice(), settled }
   } finally {
     source.off('frame', onFrame)
   }

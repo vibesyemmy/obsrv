@@ -8,7 +8,8 @@
 'use strict'
 
 const { spawn } = require('node:child_process')
-const { existsSync } = require('node:fs')
+const { existsSync, mkdtempSync, rmSync } = require('node:fs')
+const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 
 const cliEntry = join(__dirname, '..', 'out', 'main', 'cli.js')
@@ -34,9 +35,39 @@ const env = { ...process.env }
 // Must boot the real Electron runtime, not Node-mode.
 delete env.ELECTRON_RUN_AS_NODE
 
+// The launcher owns the throwaway user-data dir: Chromium flushes profile
+// files (Session Storage, Local State) *after* the last main-process JS runs,
+// so the Electron child cannot reliably delete its own profile — the plain
+// Node parent, which outlives Chromium, can.
+const userData = mkdtempSync(join(tmpdir(), 'obsrv-cli-'))
+env.OBSRV_CLI_USER_DATA = userData
+const cleanup = () => {
+  try {
+    rmSync(userData, { recursive: true, force: true })
+  } catch {
+    // Best-effort removal of a tmp dir.
+  }
+}
+
 const child = spawn(electron, [cliEntry, '--', ...process.argv.slice(2)], { stdio: 'inherit', env })
 child.on('error', err => {
   console.error(`obsrv: failed to launch electron: ${err.message}`)
+  cleanup()
   process.exit(1)
 })
-child.on('exit', (code, signal) => process.exit(signal ? 1 : code ?? 1))
+child.on('exit', (code, signal) => {
+  cleanup()
+  // A run we forwarded a signal into is not a success, even though Chromium's
+  // native SIGTERM shutdown reports exit code 0.
+  process.exit(signal || signalled ? 1 : code ?? 1)
+})
+
+// Forward termination to the Electron child rather than dying and orphaning
+// it; the child's exit then drives our own (and the cleanup) above.
+let signalled = false
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    signalled = true
+    child.kill(signal)
+  })
+}

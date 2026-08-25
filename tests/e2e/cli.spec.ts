@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -61,6 +61,8 @@ test('snap: solid red at laptop-768 — dims, JSON contract, true RGB red', asyn
     cssHeight: 768,
     deviceScaleFactor: 1,
     profile: 'reference',
+    settled: true,
+    warnings: [],
   })
   expect(r.stderr).toContain('1366×768 device px')
 
@@ -111,6 +113,8 @@ test('snap: --full-page grows to the page height and warns when clamped', async 
   expect(r.stderr).toMatch(/clamped to 4096/)
   const json = JSON.parse(r.stdout)
   expect(json.cssHeight).toBe(4096)
+  expect(json.settled).toBe(true)
+  expect(json.warnings.join(' ')).toMatch(/clamped to 4096/)
   const png = decodePng(readFileSync(out))
   expect(png.width).toBe(1366)
   expect(png.height).toBe(4096)
@@ -143,6 +147,62 @@ test('diff: thin text at laptop-768 — parseable JSON, the 2:1 row finding, ban
   const reference = decodePng(readFileSync(join(dir, 'reference.png')))
   expect([target.width, target.height]).toEqual([1366, 768])
   expect([reference.width, reference.height]).toEqual([1366, 768])
+})
+
+test('snap leaves no obsrv-cli-* user-data dirs behind in os.tmpdir', async () => {
+  const staleDirs = (): Set<string> => new Set(readdirSync(tmpdir()).filter(n => n.startsWith('obsrv-cli-') && !n.startsWith('obsrv-cli-spec-')))
+  const before = staleDirs()
+  const r = await runCli(['snap', fixture('solid-red.html'), '--preset', 'laptop-768', '--out', join(outDir, 'leak.png')])
+  expect(r.code).toBe(0)
+  const leaked = [...staleDirs()].filter(n => !before.has(n))
+  expect(leaked).toEqual([])
+})
+
+test('SIGTERM to the launcher takes the Electron child down, leak-free', async () => {
+  const marker = `sigterm-probe-${Date.now()}`
+  const before = new Set(readdirSync(tmpdir()).filter(n => n.startsWith('obsrv-cli-')))
+  // --wait keeps the render alive long enough to signal it mid-flight.
+  const child = spawn(process.execPath, [
+    BIN, 'snap', fixture('solid-red.html'), '--preset', 'laptop-768', '--wait', '60000', '--out', join(outDir, `${marker}.png`),
+  ], { cwd: resolve(__dirname, '../..') })
+  const closed = new Promise<void>(done => child.on('close', () => done()))
+  try {
+    // The Electron child's argv carries both the built entry and our unique
+    // marker; the node launcher carries only the marker, helpers neither.
+    const findElectron = (): number | null => {
+      for (const line of execFileSync('ps', ['-axo', 'pid=,command=']).toString().split('\n')) {
+        if (line.includes('out/main/cli.js') && line.includes(marker)) return Number.parseInt(line.trim(), 10)
+      }
+      return null
+    }
+    let pid: number | null = null
+    const bootDeadline = Date.now() + 30_000
+    while (pid === null && Date.now() < bootDeadline) {
+      pid = findElectron()
+      if (pid === null) await new Promise(r => setTimeout(r, 200))
+    }
+    expect(pid).not.toBeNull()
+
+    child.kill('SIGTERM')
+    await closed
+
+    let alive = true
+    const exitDeadline = Date.now() + 10_000
+    while (alive && Date.now() < exitDeadline) {
+      try {
+        process.kill(pid!, 0)
+        await new Promise(r => setTimeout(r, 100))
+      } catch {
+        alive = false
+      }
+    }
+    expect(alive).toBe(false)
+    // The CLI's own SIGTERM handler cleaned its user-data dir on the way out.
+    const leaked = readdirSync(tmpdir()).filter(n => n.startsWith('obsrv-cli-') && !before.has(n))
+    expect(leaked).toEqual([])
+  } finally {
+    child.kill('SIGKILL')
+  }
 })
 
 test('diff: refuses dsf>1 presets with a clear 1x-only error', async () => {
