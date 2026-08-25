@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>responsive-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* Wide layouts are blue, phone layouts red: the media query is the test. */
+      body { background: #0000ff; }
+      @media (max-width: 500px) {
+        body { background: #ff0000; }
+      }
+    </style>
+  </head>
+  <body>
+    <p>responsive</p>
+  </body>
+</html>

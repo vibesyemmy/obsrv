@@ -153,6 +153,13 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
             </option>
           ))}
         </optgroup>
+        <optgroup label="Mobile">
+          {SCREEN_PRESETS.filter(p => p.group === 'mobile').map(p => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </optgroup>
         <option value={CUSTOM_PRESET_ID}>Custom</option>
       </select>
 

@@ -3,7 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
-import { parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import type { HostInfo } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
@@ -91,9 +91,14 @@ export function registerIpc(ctx: AppContext): void {
   })
 
   // --- target ---------------------------------------------------------------
-  ipcMain.handle(IPC.setViewport, (e, width: number, height: number) => {
+  ipcMain.handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
     assertRenderer(e)
-    const v = target.setViewport(width, height)
+    // Width and height survive any garbage (clampViewport sanitises), but a
+    // bad scale factor would decide the offscreen window's raster density —
+    // refuse it rather than guess.
+    const dsf = parseDeviceScaleFactor(rawDsf)
+    if (dsf === null) throw new Error('invalid deviceScaleFactor')
+    const v = target.setViewport(width, height, dsf)
     return { width: v.width, height: v.height }
   })
   ipcMain.on(IPC.sendInput, (e, raw: unknown) => {

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   clampViewport,
   computeScale,
+  maxCssViewport,
   type HostDisplay,
   type TargetScreen,
 } from '../../../shared/calibration'
@@ -145,8 +146,21 @@ export const useStore = create<AppState>()(set => ({
 export function selectScreen(s: AppState): TargetScreen {
   const preset = SCREEN_PRESETS.find(p => p.id === s.presetId)
   return preset
-    ? { width: preset.width, height: preset.height, diagonalInches: preset.diagonalInches }
+    ? {
+        width: preset.width,
+        height: preset.height,
+        diagonalInches: preset.diagonalInches,
+        deviceScaleFactor: preset.deviceScaleFactor,
+      }
     : s.custom
+}
+
+/**
+ * Device pixels per CSS pixel of the target screen: 1 for every monitor
+ * preset and the custom entry, the real 2x/3x factor for mobile presets.
+ */
+export function selectDeviceScaleFactor(s: AppState): number {
+  return selectScreen(s).deviceScaleFactor ?? 1
 }
 
 /** The 1x viewport handed to `TargetSource`; `clamped` drives the §9 warning. */
@@ -156,7 +170,9 @@ export function selectViewport(s: AppState): {
   clamped: boolean
 } {
   const screen = selectScreen(s)
-  return clampViewport(screen.width, screen.height)
+  // The 4096 limit is on *device* pixels, so the CSS budget shrinks with the
+  // device scale factor (393x852 at 3x = 1179x2556 device pixels, fits).
+  return clampViewport(screen.width, screen.height, maxCssViewport(screen.deviceScaleFactor ?? 1))
 }
 
 /**

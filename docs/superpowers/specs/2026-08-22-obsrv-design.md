@@ -124,15 +124,67 @@ Host PPI: `screen.getPrimaryDisplay().size × scaleFactor` gives physical pixels
 | 1440p 27" | Desktop | 2560×1440 | 27 | 109 |
 | 1280×1024 19" (5:4) | Desktop | 1280×1024 | 19 | 86 |
 | 1440×900 19" | Desktop | 1440×900 | 19 | 89 |
+| Budget Android 6.5" @2x | Mobile | 360×800 @2x (720×1600) | 6.5 | 270 |
+| iPhone SE 4.7" @2x | Mobile | 375×667 @2x (750×1334) | 4.7 | 326 |
+| iPhone 6.1" @3x | Mobile | 393×852 @3x (1179×2556) | 6.1 | 461 |
+| iPad 10.9" @2x | Mobile | 820×1180 @2x (1640×2360) | 10.9 | 264 |
 | Custom | — | user | user | computed |
 
-The preset dropdown is grouped (Laptops / Desktops); the default is 1080p 24". v1.2
-added the seven low-end entries — 1366×768 at 14"/11.6", 1280×800 11.6", 1600×900
-17.3", 1080p 15.6", 1280×1024 19" and 1440×900 19".
+The preset dropdown is grouped (Laptops / Desktops / Mobile); the default is 1080p
+24". v1.2 added the seven low-end entries — 1366×768 at 14"/11.6", 1280×800 11.6",
+1600×900 17.3", 1080p 15.6", 1280×1024 19" and 1440×900 19". v1.3 added the four
+mobile entries; the Custom screen stays 1x for now.
 
-"Pixel-exact ×2" toggle forces `S = 2` regardless of PPI — useful when the user wants to inspect pixels rather than judge physical size.
+"Pixel-exact ×2" toggle forces `S = 2` regardless of PPI — useful when the user wants to inspect pixels rather than judge physical size. (More precisely `S = host scaleFactor`: device pixels shown 1:1, on mobile presets too.)
 
-Target pane is a scrollable region; if `viewport × S` exceeds the pane, the canvas scrolls. Viewport dimensions clamp to 4096 per axis with a warning.
+Target pane is a scrollable region; if `viewport × S` exceeds the pane, the canvas scrolls. Viewport dimensions clamp to 4096 per axis with a warning; on a mobile preset the clamp budget is *device* pixels, so the CSS limit shrinks by the factor (393×852 @3x = 1179×2556 fits).
+
+### 5.1 Mobile presets (v1.3)
+
+Real phones are 2x/3x — a phone preset rasterised at 1x would look *worse* than any
+real device. A mobile preset therefore rasterises at the device's true
+`deviceScaleFactor` and is shown at true physical size, which on a desktop monitor
+means *minified*: an iPhone 6.1" packs 461 device PPI, so on a ~138 PPI host each
+device pixel gets S ≈ 0.30 host pixels. All the calibration maths is per device
+pixel — `targetPPI = hypot(cssW·dsf, cssH·dsf) / diagonal` — and the target-pane
+footer states both the density and the per-device-pixel magnification:
+`393×852 @3x · ×0.30`. Because S < 1, the 1:1 view minifies through the same
+smooth (mipmapped) sampler fit mode uses; nearest decimation below 1 would moiré.
+
+Implementation notes, verified by spike and asserted in `tests/e2e/mobile.spec.ts`:
+
+- **Raster density.** `offscreen.deviceScaleFactor` is fixed at BrowserWindow
+  creation, so changing the factor recreates the offscreen window (new window
+  first, then destroy the old — the reverse order was observed to tear the
+  replacement down with the old one). Each fresh window re-arms the
+  first-navigation crash gate, and the page the target was showing is reloaded
+  once the new gate settles. Paint frames are always CSS × dsf (1179×2556 for
+  the iPhone 6.1"), and in-page `devicePixelRatio` equals the factor. The
+  page to restore comes from tracked intended-URL state (set by `load()` and
+  by committed navigations), never read off the dying window — mid-recreation
+  that window shows `about:blank` and a rapid second density change would
+  silently drop the real page. A density change does reset the target's own
+  navigation history and scroll position (its history is not user-facing;
+  scroll re-syncs on the next mirrored move).
+  `enableDeviceEmulation` alone was tested and rejected for this job: under OSR
+  it never scales paint bitmaps, whatever `deviceScaleFactor` it is given.
+- **Viewport semantics.** `enableDeviceEmulation({ screenPosition: 'mobile' })`
+  *does* work under OSR for layout: a page without `<meta name="viewport">` lays
+  out at Chromium's 980px virtual viewport and is scaled to fit (visualViewport
+  scale 393/980), while a page with the meta lays out at the preset's CSS width —
+  both proven in e2e. Two caveats found by spike: Chromium wipes the emulation on
+  every cross-document navigation (so it is re-applied in `did-navigate`, the
+  earliest post-commit moment), and applying it before a window's first
+  navigation commits segfaults the OSR renderer (so it is never applied earlier).
+- **User agent.** Mobile presets set one Android-style mobile Chrome UA on the
+  target webContents only (the native pane is "your dev view" and keeps its
+  desktop UA). A single constant for phones and the iPad alike is a deliberate
+  simplification; the Chrome version comes from the running Electron. Mobile-ness
+  is keyed on dsf > 1 — the only signal the viewport payload carries — so a
+  hypothetical 2x desktop preset would also be treated as mobile.
+- **Sync.** URL and scroll sync keep working across the pair; scroll magnitudes
+  can diverge when the two panes lay the page out at different widths, which is
+  accepted (the panes are showing genuinely different layouts).
 
 ## 6. Panel simulation
 

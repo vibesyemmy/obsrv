@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { selectPanelParams, selectProfile, selectScale, selectViewport, useStore } from '../state/store'
+import { selectDeviceScaleFactor, selectPanelParams, selectProfile, selectScale, selectViewport, useStore } from '../state/store'
 
 export interface PaneFooterProps {
   role: string
@@ -35,11 +35,14 @@ export function TargetFooter() {
   const mode = useStore(s => s.mode)
   const viewMode = useStore(s => s.viewMode)
   const fitScale = useStore(s => s.fitScale)
+  const dsf = useStore(selectDeviceScaleFactor)
 
+  // Mobile presets say their raster density; the magnification readout is
+  // already per device pixel (`computeScale` divides by device-pixel PPI).
   const size =
     mode === 'image' && image
       ? `${image.width}×${image.height}`
-      : `${viewport.width}×${viewport.height}`
+      : `${viewport.width}×${viewport.height}${dsf > 1 ? ` @${dsf}x` : ''}`
   const depth = params.levels <= 63 ? '6-bit' : '8-bit'
   // Fit mode's readout states the drawn magnification and disclaims it: a
   // minified overview is a map, never the 1x truth the pane exists for.

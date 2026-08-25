@@ -18,6 +18,12 @@ Obsrv shows any URL (or a dropped 2x design export) two ways, side by side:
 
 Both panes stay in lock-step (scroll, navigation) and the 1x pane is fully interactive.
 
+- **Mobile presets** — phone and tablet presets (iPhone 6.1" @3x, budget Android @2x, …)
+  rasterise at the device's *true* 2x/3x DPR, wear a mobile user agent, get real mobile
+  viewport semantics (a page without a viewport meta lays out at 980px and shrinks to
+  fit), and are shown at true physical size — usually a small, dense render on a
+  desktop monitor, exactly like the phone in your hand.
+
 ## Use
 
 ```bash
@@ -26,7 +32,7 @@ npm run dev
 ```
 
 Type a URL (localhost is fine), pick a target screen preset (1080p 24", 1366×768
-laptop, …), pick a panel profile (Reference, Office IPS, Budget TN, Old laptop) or open
+laptop, iPhone 6.1" @3x, …), pick a panel profile (Reference, Office IPS, Budget TN, Old laptop) or open
 the advanced sliders. Enter your own monitor's diagonal in Settings once so the target
 pane renders at true physical size. Drop a 2x/3x PNG or JPG export to check a design
 before it's built.

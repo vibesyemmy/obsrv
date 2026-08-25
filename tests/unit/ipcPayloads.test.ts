@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_RECT, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings } from '../../src/shared/ipcPayloads'
+import { MAX_RECT, parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings } from '../../src/shared/ipcPayloads'
 
 describe('parseRect', () => {
   it('accepts a sane rect and rounds to integers', () => {
@@ -107,5 +107,31 @@ describe('parseScrollPos', () => {
     ['missing key', { x: 0 }],
   ])('rejects %s', (_name, raw) => {
     expect(parseScrollPos(raw)).toBeNull()
+  })
+})
+
+describe('parseDeviceScaleFactor', () => {
+  it('accepts factors between 1 and 4', () => {
+    expect(parseDeviceScaleFactor(1)).toBe(1)
+    expect(parseDeviceScaleFactor(2)).toBe(2)
+    expect(parseDeviceScaleFactor(3)).toBe(3)
+    expect(parseDeviceScaleFactor(4)).toBe(4)
+    expect(parseDeviceScaleFactor(1.5)).toBe(1.5)
+  })
+  it('defaults a missing factor to 1', () => {
+    expect(parseDeviceScaleFactor(undefined)).toBe(1)
+  })
+  it.each([
+    ['zero', 0],
+    ['below one', 0.5],
+    ['above four', 4.1],
+    ['negative', -2],
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['string', '2'],
+    ['null', null],
+    ['object', {}],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseDeviceScaleFactor(raw)).toBeNull()
   })
 })

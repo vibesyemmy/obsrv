@@ -1,11 +1,14 @@
-export type PresetGroup = 'laptop' | 'desktop'
+export type PresetGroup = 'laptop' | 'desktop' | 'mobile'
 
 export interface ScreenPreset {
   id: string
   label: string
+  /** CSS-pixel viewport; the raster is `width x height` x `deviceScaleFactor`. */
   width: number
   height: number
   diagonalInches: number
+  /** Device pixels per CSS pixel on the real screen; 1 for every 1x monitor. */
+  deviceScaleFactor: number
   group: PresetGroup
 }
 

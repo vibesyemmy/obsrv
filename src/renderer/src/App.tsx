@@ -13,7 +13,7 @@ import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
 import { probeMaxTextureSize } from './gl/renderer'
 import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadImage'
-import { selectViewport, useStore } from './state/store'
+import { selectDeviceScaleFactor, selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
@@ -35,6 +35,7 @@ export function App() {
   const mode = useStore(s => s.mode)
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
+  const deviceScaleFactor = useStore(selectDeviceScaleFactor)
 
   // The store performs no IPC of its own; this is the one place that bridges.
   useEffect(() => {
@@ -60,8 +61,8 @@ export function App() {
   }, [setHost, setSettings, setUrl, setError, setTargetLoading])
 
   useEffect(() => {
-    void window.obsrv.setViewport(viewport.width, viewport.height)
-  }, [viewport.width, viewport.height])
+    void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)
+  }, [viewport.width, viewport.height, deviceScaleFactor])
 
   useEffect(() => {
     window.obsrv.setMode(mode)
