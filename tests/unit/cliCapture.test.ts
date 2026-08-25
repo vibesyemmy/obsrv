@@ -1,0 +1,64 @@
+import { describe, it, expect } from 'vitest'
+import { EventEmitter } from 'node:events'
+import type { FrameMessage } from '../../src/shared/api'
+import { bgraToRgba, captureQuiescent } from '../../src/cli/capture'
+
+/** Emits scripted frames when poked; `invalidate()` replays the script once. */
+class FakeSource extends EventEmitter {
+  constructor(private readonly script: FrameMessage[]) {
+    super()
+  }
+  invalidate(): void {
+    for (const m of this.script) this.emit('frame', m)
+  }
+}
+
+const fullFrame = (w: number, h: number, byte: number): FrameMessage => ({
+  frame: { x: 0, y: 0, width: w, height: h, data: new Uint8Array(w * h * 4).fill(byte) },
+  frameWidth: w,
+  frameHeight: h,
+})
+
+describe('captureQuiescent', () => {
+  it('resolves with the composited full frame once paints go quiet', async () => {
+    const src = new FakeSource([fullFrame(2, 2, 7)])
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    expect(got.width).toBe(2)
+    expect(got.height).toBe(2)
+    expect(Array.from(got.bgra)).toEqual(Array(16).fill(7))
+  })
+  it('composites a later dirty slice at its offset', async () => {
+    const slice: FrameMessage = {
+      frame: { x: 1, y: 1, width: 1, height: 1, data: new Uint8Array([9, 9, 9, 9]) },
+      frameWidth: 2,
+      frameHeight: 2,
+    }
+    const src = new FakeSource([fullFrame(2, 2, 0), slice])
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    expect(Array.from(got.bgra.subarray(12, 16))).toEqual([9, 9, 9, 9])
+    expect(Array.from(got.bgra.subarray(0, 4))).toEqual([0, 0, 0, 0])
+  })
+  it('a frame-size change resets coverage: stale small frames never satisfy a bigger viewport', async () => {
+    // Full 1x1 frame, then only a partial slice of the new 2x2 size: coverage
+    // is never re-established, so the capture must time out, not resolve.
+    const partial: FrameMessage = {
+      frame: { x: 0, y: 0, width: 1, height: 1, data: new Uint8Array(4).fill(3) },
+      frameWidth: 2,
+      frameHeight: 2,
+    }
+    const src = new FakeSource([fullFrame(1, 1, 5), partial])
+    await expect(captureQuiescent(src, { settleMs: 20, timeoutMs: 200 })).rejects.toThrow(/no full frame/)
+  })
+  it('rejects when nothing ever paints', async () => {
+    await expect(captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 150 })).rejects.toThrow(/no full frame/)
+  })
+})
+
+describe('bgraToRgba', () => {
+  it('swaps channels and forces alpha opaque', () => {
+    const rgba = bgraToRgba(new Uint8Array([10, 20, 30, 40]), 1, 1)
+    expect(Array.from(rgba.data)).toEqual([30, 20, 10, 255])
+    expect(rgba.width).toBe(1)
+    expect(rgba.height).toBe(1)
+  })
+})
