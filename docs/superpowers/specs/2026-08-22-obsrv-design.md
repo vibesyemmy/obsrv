@@ -282,3 +282,48 @@ the visible top-left corner as "cropped". Two additions, both renderer-local
   gesture is live (or Option is held over the canvas) nothing forwards to the
   page; a plain wheel forwards exactly as before. Applies in image mode too —
   the image is drawn through the same canvas.
+
+## 14. Headless CLI (v1.2)
+
+**What.** `bin/obsrv.js` (plain Node) spawns `electron out/main/cli.js -- <argv>`:
+a second main-process entry that drives the same `TargetSource` the app uses —
+same offscreen raster density, mobile UA/emulation, dsf recreation and crash
+gates — with no window ever shown (`app.dock.hide()`, throwaway user-data dir).
+Machine output (JSON) goes to stdout, human output to stderr; exit 0 success,
+1 render failure, 2 usage error.
+
+- `obsrv snap <url>` — render at a preset (or `--width/--height/--dsf`),
+  optionally `--full-page` and a `--profile` panel simulation (mapped on the
+  CPU through `simulatePixel`, the shader's parity-tested reference), write a
+  PNG (`nativeImage.createFromBitmap` over the composited BGRA frame; channel
+  order pinned by an e2e test decoding the PNG independently of Electron).
+  `--matrix id,id,…` renders several presets per run.
+- `obsrv diff <url>` — render the preset (the *target*, profile applied) and a
+  *reference*: the same CSS viewport at dsf 2 — what a HiDPI dev sees —
+  box-downsampled onto the target's 1x grid. Prints ink coverage, ink-row
+  counts (reference rows counted on the raw 2x raster, so the ratio reproduces
+  §10's 2:1 device-row finding), 8 horizontal band deltas, and humanised
+  findings. Findings are informational; thresholds are the caller's job.
+
+**Why.** Agents and CI need the product's truth without the GUI: "render this
+URL the way a 1366×768 Chromebook or budget Android sees it, give me the PNG
+and machine-readable findings" — then judge legibility from the image and
+numbers, fix CSS, re-render.
+
+**Quiescence.** `load()` resolves on did-finish-load, but paints trail it. The
+capture forces a full repaint (`invalidate()`), composites dirty BGRA slices
+into a device-pixel buffer, and settles once no paint has arrived for 400 ms
+*and* a full-coverage frame has been seen since the last frame-size change.
+At `--timeout` a covered-but-noisy page (animation) is captured as-is with a
+warning; a never-covered surface is an error. `--full-page` measures
+`scrollHeight` after the first settle, regrows the viewport (clamped to the
+4096 device-px budget, warning when clamped) and re-settles.
+
+**dsf > 1 diff limitation.** `diff` is 1x-only in v1: for a dense preset the
+"reference at 2× the density on the same grid" comparison would need a 4x/6x
+raster past the 4096 budget, and the mobile presets already *are* the dense
+render. Dense presets exit with a clear error pointing at `snap`. Likewise CSS
+viewports over 2048px (1440p-27) cannot fit their 2x reference in the budget.
+The reference render reuses `TargetSource` with a `mobileEmulation: false`
+constructor opt-out (CLI-only; the app's dsf>1 ⇒ mobile coupling is unchanged)
+so it stays a desktop page — only the raster density differs.
