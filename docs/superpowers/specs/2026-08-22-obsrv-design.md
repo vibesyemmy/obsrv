@@ -159,7 +159,13 @@ Implementation notes, verified by spike and asserted in `tests/e2e/mobile.spec.t
   replacement down with the old one). Each fresh window re-arms the
   first-navigation crash gate, and the page the target was showing is reloaded
   once the new gate settles. Paint frames are always CSS × dsf (1179×2556 for
-  the iPhone 6.1"), and in-page `devicePixelRatio` equals the factor.
+  the iPhone 6.1"), and in-page `devicePixelRatio` equals the factor. The
+  page to restore comes from tracked intended-URL state (set by `load()` and
+  by committed navigations), never read off the dying window — mid-recreation
+  that window shows `about:blank` and a rapid second density change would
+  silently drop the real page. A density change does reset the target's own
+  navigation history and scroll position (its history is not user-facing;
+  scroll re-syncs on the next mirrored move).
   `enableDeviceEmulation` alone was tested and rejected for this job: under OSR
   it never scales paint bitmaps, whatever `deviceScaleFactor` it is given.
 - **Viewport semantics.** `enableDeviceEmulation({ screenPosition: 'mobile' })`

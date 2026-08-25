@@ -14,10 +14,12 @@ let page: Page
  * Mobile presets drive the whole pipeline from the toolbar: selecting one
  * recreates the offscreen window at the device's real scale factor (the
  * offscreen dsf is fixed at creation), swaps in a mobile UA, and re-applies
- * mobile device emulation on every navigation. These specs assert each layer:
+ * mobile device emulation on every navigation. These specs assert each layer —
  * frame dims (CSS x dsf), in-page devicePixelRatio, viewport-meta vs 980px
  * layout, UA on target-not-native, input mapping through the scaled canvas,
- * and full restoration on the way back to a desktop preset.
+ * restoration on the way back to a desktop preset — plus the recreation
+ * races: rapid density switches, a navigation issued mid-swap, destruction
+ * mid-swap. Each test selects its own preset, so they run standalone.
  */
 async function installFrameHelper(a: ElectronApplication): Promise<void> {
   await a.evaluate(() => {
@@ -53,6 +55,20 @@ async function inTarget(expr: string, fallback: unknown = null): Promise<unknown
   )
 }
 
+/** Picks a preset in the toolbar and waits for its density to be live. */
+async function selectPreset(id: string, dpr: number): Promise<void> {
+  await page.selectOption('.preset-select', id)
+  await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(dpr)
+}
+
+async function targetUrl(): Promise<string> {
+  return app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL())
+}
+
+async function targetTitle(): Promise<string> {
+  return app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getTitle())
+}
+
 test.beforeAll(async () => {
   app = await launchApp()
   page = await rendererWindow(app)
@@ -63,10 +79,7 @@ test.afterAll(async () => {
 })
 
 test('iPhone preset rasterises at 3x: frames are CSS×3 and the page sees dpr 3', async () => {
-  await page.selectOption('.preset-select', 'iphone-61')
-
-  // The recreated window reports the device's dpr once its reload commits.
-  await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(3)
+  await selectPreset('iphone-61', 3)
 
   const f = await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
@@ -86,10 +99,9 @@ test('iPhone preset rasterises at 3x: frames are CSS×3 and the page sees dpr 3'
 })
 
 test('a page with a viewport meta lays out at the preset CSS width', async () => {
+  await selectPreset('iphone-61', 3)
   await page.evaluate(u => window.obsrv.navigate(u), RESPONSIVE)
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()))
-    .toBe(RESPONSIVE)
+  await expect.poll(targetUrl).toBe(RESPONSIVE)
 
   await expect.poll(() => inTarget('innerWidth', 0)).toBe(393)
   // The phone-width media query is live, not just the raw viewport number.
@@ -97,6 +109,7 @@ test('a page with a viewport meta lays out at the preset CSS width', async () =>
 })
 
 test('the target wears a mobile UA; the native pane keeps its desktop one', async () => {
+  await selectPreset('iphone-61', 3)
   const uas = await app.evaluate(() => {
     const ctx = (globalThis as any).__obsrv
     return {
@@ -114,10 +127,9 @@ test('the target wears a mobile UA; the native pane keeps its desktop one', asyn
 })
 
 test('without a viewport meta the page lays out at the 980px virtual viewport', async () => {
+  await selectPreset('iphone-61', 3)
   await page.evaluate(u => window.obsrv.navigate(u), NO_VIEWPORT)
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()))
-    .toBe(NO_VIEWPORT)
+  await expect.poll(targetUrl).toBe(NO_VIEWPORT)
 
   await expect.poll(() => inTarget('document.documentElement.clientWidth', 0)).toBe(980)
   // …zoomed out to fit the 393-CSS-px view, exactly as a phone shows it.
@@ -127,10 +139,9 @@ test('without a viewport meta the page lays out at the 980px virtual viewport', 
 })
 
 test('a click on the canvas lands on the page through the device-pixel scale', async () => {
+  await selectPreset('iphone-61', 3)
   await page.evaluate(u => window.obsrv.navigate(u), BUTTON)
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getTitle()))
-    .toBe('ready')
+  await expect.poll(targetTitle).toBe('ready')
   // The click must hit painted pixels, not a mid-navigation blank.
   await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
@@ -145,15 +156,15 @@ test('a click on the canvas lands on the page through the device-pixel scale', a
   if (!box) throw new Error('target canvas not visible')
   await page.mouse.click(box.x + 20, box.y + 20)
 
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getTitle()))
-    .toBe('clicked')
+  await expect.poll(targetTitle).toBe('clicked')
 })
 
 test('switching back to a desktop preset restores 1x frames, dpr 1 and the desktop UA', async () => {
-  await page.selectOption('.preset-select', '1080p-24')
+  await selectPreset('iphone-61', 3)
+  await page.evaluate(u => window.obsrv.navigate(u), BUTTON)
+  await expect.poll(targetUrl).toBe(BUTTON)
 
-  await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(1)
+  await selectPreset('1080p-24', 1)
 
   const f = await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
@@ -183,4 +194,78 @@ test('switching back to a desktop preset restores 1x frames, dpr 1 and the deskt
   // Desktop layout again: no 980px virtual viewport, no emulation left over.
   await expect.poll(() => inTarget('document.documentElement.clientWidth', 0)).toBe(1920)
   await expect(page.locator('.target-pane .pane-footer')).not.toContainText('@3x')
+})
+
+test('rapid density switches land on the final preset with the page intact', async () => {
+  await selectPreset('1080p-24', 1)
+  await page.evaluate(u => window.obsrv.navigate(u), BUTTON)
+  await expect.poll(targetTitle).toBe('ready')
+
+  // Back-to-back, no waiting between them: the second recreation starts
+  // before the first one's restore has committed. The intended URL must
+  // survive the pile-up — reading it off the dying (mid-recreation) window
+  // would see about:blank and silently blank the target.
+  await page.selectOption('.preset-select', 'iphone-61')
+  await page.selectOption('.preset-select', 'android-65')
+
+  await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(2)
+  const f = await app.evaluate(async () => {
+    const ctx = (globalThis as any).__obsrv
+    const painted = (globalThis as any).__waitForFrame(
+      ctx.target,
+      (m: any) => m.frameWidth === 720 && m.frameHeight === 1600,
+      '720x1600',
+    )
+    ctx.target.invalidate()
+    const m = await painted
+    return { width: m.frameWidth, height: m.frameHeight, dsf: ctx.target.getDeviceScaleFactor() }
+  })
+  expect(f).toEqual({ width: 720, height: 1600, dsf: 2 })
+
+  // The page, not just the surface: still the button fixture, fully loaded.
+  await expect.poll(targetUrl).toBe(BUTTON)
+  await expect.poll(targetTitle).toBe('ready')
+  await expect.poll(() => inTarget("document.querySelector('button') !== null", false)).toBe(true)
+})
+
+test('a navigation issued mid-recreation lands on the new window', async () => {
+  await selectPreset('1080p-27', 1)
+  await page.evaluate(u => window.obsrv.navigate(u), BUTTON)
+  await expect.poll(targetUrl).toBe(BUTTON)
+
+  // Change density and navigate immediately — the load()'s window can be
+  // destroyed under it, so the recorded intent, not the old window's URL,
+  // must decide what the fresh window shows.
+  await page.selectOption('.preset-select', 'iphone-61')
+  await page.evaluate(u => window.obsrv.navigate(u), RESPONSIVE)
+
+  await expect.poll(targetUrl).toBe(RESPONSIVE)
+  await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(3)
+  await expect.poll(() => inTarget('innerWidth', 0)).toBe(393)
+})
+
+test('destroying the source mid-recreation neither throws nor kills main', async () => {
+  const survived = await app.evaluate(async () => {
+    const ctx = (globalThis as any).__obsrv
+    // A second, throwaway TargetSource — same class the app runs.
+    const TS = ctx.target.constructor as new () => any
+    const t = new TS()
+    try {
+      // Recreation before the first window's gate has settled…
+      t.setViewport(375, 667, 2)
+      // …and destruction while that recreation is still in flight.
+      t.destroy()
+      // load() waits on the (settled-by-destruction) gate; resolving without
+      // throwing proves the pending recreation continuation bailed cleanly.
+      const echoed = await t.load('about:blank')
+      return echoed === 'about:blank'
+    } catch {
+      return false
+    }
+  })
+  expect(survived).toBe(true)
+
+  // Main is still alive and serving IPC.
+  const host = await page.evaluate(() => window.obsrv.getHostInfo())
+  expect(host.scaleFactor).toBeGreaterThan(0)
 })

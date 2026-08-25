@@ -112,6 +112,16 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** True once the current window's first-navigation gate has settled. */
   private firstNavDone = false
   /**
+   * The URL the target is meant to be showing: set the moment `load()`
+   * accepts a navigation and updated by every committed non-internal
+   * main-frame navigation. Recreation restores from *this*, never from the
+   * dying window's `getURL()` — mid-recreation that reads the replacement's
+   * `about:blank` and a second density change would silently drop the real
+   * page; likewise an in-flight `load()` whose window is destroyed under it
+   * still gets its URL restored, because it was recorded before the gate.
+   */
+  private intendedUrl: string | null = null
+  /**
    * True while a recreated window loads its internal `about:blank`. Those
    * navigation events are plumbing, not news: reported, SyncBus would mirror
    * `about:blank` into the native pane every time the preset changes density.
@@ -179,13 +189,22 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // Chromium wiped any device emulation with the old document; re-apply
       // before reporting, so the page lays out mobile from its first paint.
       this.applyEmulation()
-      if (!this.internal) this.emit('url-changed', url)
+      if (this.internal) return
+      this.intendedUrl = url
+      this.emit('url-changed', url)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-      if (isMainFrame && !this.internal) this.emit('url-changed', url)
+      if (isMainFrame && !this.internal) {
+        this.intendedUrl = url
+        this.emit('url-changed', url)
+      }
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
-      if (isMainFrame && code !== ERR_ABORTED) this.emit('load-error', { code, description, url })
+      // Internal plumbing failures (the recreation `about:blank` of a window
+      // that was itself superseded or destroyed) are not the page's news.
+      if (isMainFrame && code !== ERR_ABORTED && !this.internal) {
+        this.emit('load-error', { code, description, url })
+      }
     })
     wc.on('did-start-loading', () => {
       if (!this.internal) this.emit('loading', true)
@@ -258,7 +277,6 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    */
   private recreate(): void {
     const old = this.win
-    const oldUrl = old.isDestroyed() ? '' : old.webContents.getURL()
     this.internal = true
     this.createWindow()
     if (!old.isDestroyed()) old.destroy()
@@ -267,9 +285,15 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // A newer recreation owns the flags now; leave everything to it.
       if (this.disposed || this.win !== win || win.isDestroyed()) return
       this.internal = false
-      if (oldUrl && oldUrl !== 'about:blank') {
+      // `intendedUrl` is read here, at settle time, not captured when the
+      // recreation started: a `load()` issued while the swap was in flight
+      // has already recorded its URL and this restore is what applies it
+      // (the load's own `loadURL` also fires post-gate; same URL, and
+      // whichever loses commits nothing but an ERR_ABORTED).
+      const url = this.intendedUrl
+      if (url && url !== 'about:blank') {
         try {
-          await win.webContents.loadURL(oldUrl)
+          await win.webContents.loadURL(url)
         } catch {
           // `did-fail-load` already reported it; Chromium renders its error page.
         }
@@ -283,6 +307,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   async load(input: string): Promise<string> {
     try {
       const url = normalizeUrl(input)
+      // Recorded before the gate: if a recreation swaps the window while this
+      // load waits (or destroys it mid-`loadURL`), the restore still knows
+      // what the target was meant to show.
+      this.intendedUrl = url
       // The gate is per-window: a dsf change mid-wait swaps in a fresh window
       // with a fresh first navigation, so wait for whichever gate is current.
       let gate: Promise<void>
