@@ -338,6 +338,11 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
   }
   if (!settled) warnings.push('the app did not confirm the navigation before capture; the PNG may show the previous page.')
 
+  // One short grace after the state settles: the renderer repaints the pane
+  // (and any preset resize) a frame or two after the store confirms, and a
+  // capture racing that would show a half-applied flip.
+  await sleep(300)
+
   let capture: Record<string, unknown>
   try {
     capture = await controlCall(info, 'captureVisible', {}, LIVE_CAPTURE_TIMEOUT_MS)
