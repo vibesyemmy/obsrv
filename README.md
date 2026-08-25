@@ -1,5 +1,9 @@
 # Obsrv
 
+[![CI](https://github.com/vibesyemmy/obsrv/actions/workflows/ci.yml/badge.svg)](https://github.com/vibesyemmy/obsrv/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/getobsrv)](https://www.npmjs.com/package/getobsrv)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 See your site the way 1x screens see it.
 
 Designers and developers work on HiDPI (2x–3x) monitors. A large share of users are on
