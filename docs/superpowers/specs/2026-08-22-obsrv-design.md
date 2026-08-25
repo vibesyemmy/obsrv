@@ -327,3 +327,16 @@ viewports over 2048px (1440p-27) cannot fit their 2x reference in the budget.
 The reference render reuses `TargetSource` with a `mobileEmulation: false`
 constructor opt-out (CLI-only; the app's dsf>1 ⇒ mobile coupling is unchanged)
 so it stays a desktop page — only the raster density differs.
+
+**MCP server (v1.3).** `bin/obsrv-mcp.js` runs `out/mcp/server.js` (compiled
+by `tsconfig.mcp.json`, chained into `npm run build`): a stateless stdio MCP
+server exposing the CLI as three read-only tools. `obsrv_snap` maps tool input
+onto CLI argv (preset XOR custom dims validated up front), spawns
+`bin/obsrv.js` into a per-call temp dir and returns the CLI's JSON as
+structured content plus the PNG as an inline image (≤1.5 MiB, else the path
+with a note); `obsrv_diff` returns the metrics JSON and the target/reference
+paths (inline images opt-in); `obsrv_presets` serves the presets/profiles
+catalog straight from `src/shared/presets.ts` without spawning. The server
+never re-implements capture: the CLI keeps signals, user-data isolation and
+crash fast-fail, and its stderr tail becomes the tool-error message (a wedged
+run is SIGTERMed after the per-render budget plus boot headroom).

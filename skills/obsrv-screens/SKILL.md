@@ -43,6 +43,10 @@ node $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 `budget-tn`, `old-laptop`), and flag (`--width/--height/--dsf`, `--wait`,
 `--timeout`).
 
+If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
+`obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
+comes back inline.
+
 ## The loop that catches real regressions
 
 1. Snap the dev URL across `--matrix laptop-768,android-65,1080p-24`, plus a
