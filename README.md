@@ -43,6 +43,31 @@ middle-button drag, Option+drag or Option+wheel, or switch the toolbar's
 pixel-exact — the footer says so) and click anywhere in it to jump back to 1:1
 at that spot.
 
+## Agent & CI use
+
+The same rendering pipeline runs headless — no window, JSON on stdout, humans
+on stderr — so agents (Claude Code) and CI can ask "how does this URL look on
+a 1366×768 laptop / budget Android?" without the GUI. Build first
+(`npm run build`; the CLI runs the built `out/`), then:
+
+```bash
+# One PNG at a preset's true raster density (+ metadata JSON on stdout):
+node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --out shot.png
+
+# A matrix of screens, cheap-panel simulation, full-page capture:
+node bin/obsrv.js snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out shots/
+node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out tn.png
+node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
+
+# Machine-readable 1x-vs-2x comparison (ink coverage, row ratios, band deltas):
+node bin/obsrv.js diff http://localhost:5173 --preset laptop-768 --out-dir diffout
+```
+
+`node bin/obsrv.js --help` lists every preset, profile and flag. Diff findings
+are informational (exit 0); CI thresholds are the caller's job. A ready-made
+Claude Code skill that wraps the loop (snap matrix → read the PNGs → diff →
+fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md).
+
 ## Develop
 
 ```bash
