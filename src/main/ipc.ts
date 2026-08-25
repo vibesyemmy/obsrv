@@ -1,7 +1,8 @@
 import { app, ipcMain, screen, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { CONTROL_FILE_NAME, type AgentUiState } from '../shared/control'
+import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
 import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings, parseUiState } from '../shared/ipcPayloads'
@@ -205,11 +206,35 @@ export function registerIpc(ctx: AppContext): void {
   // renderer round-trip. The mirror starts at the store's initial values and
   // the renderer reports on mount, so it is honest before the first change.
   const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+  // A patch sent before the renderer has mounted its listeners would vanish;
+  // the first uiState report is the renderer saying "I'm listening", so
+  // anything an early agent asked for is queued until then.
+  let rendererReported = false
+  const pendingApplies: AgentApplyPatch[] = []
   ipcMain.on(IPC.uiState, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
-    if (s) Object.assign(uiState, s)
+    if (!s) return
+    Object.assign(uiState, s)
+    if (!rendererReported) {
+      rendererReported = true
+      for (const patch of pendingApplies.splice(0)) {
+        if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
+      }
+    }
   })
+
+  // Unpackaged (dev, e2e) `app.getVersion()` is Electron's own version; the
+  // app's version lives in package.json two levels above out/main — the same
+  // file inside app.asar when packaged.
+  const appVersion = ((): string => {
+    try {
+      const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version?: string }
+      return pkg.version ?? app.getVersion()
+    } catch {
+      return app.getVersion()
+    }
+  })()
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     status: () => {
@@ -219,11 +244,16 @@ export function registerIpc(ctx: AppContext): void {
       } catch {
         // The target is mid-recreation or the app is closing; '' is honest.
       }
-      return { version: app.getVersion(), url, ...uiState }
+      return { version: appVersion, url, ...uiState }
     },
     navigate: navigateBoth,
     apply: patch => {
-      if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
+      if (win.isDestroyed()) return
+      if (!rendererReported) {
+        pendingApplies.push(patch)
+        return
+      }
+      win.webContents.send(IPC.agentApply, patch)
     },
     captureVisible: async () => {
       const image = await win.webContents.capturePage()
