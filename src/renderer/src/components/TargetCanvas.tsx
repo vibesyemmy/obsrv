@@ -12,7 +12,7 @@ import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
-import { selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
+import { selectDeviceScaleFactor, selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
 import { computeFitScale, jumpScroll } from '../view/viewMath'
 
 export interface TargetCanvasProps {
@@ -30,6 +30,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
   const viewport = useStore(useShallow(selectViewport))
   const params = useStore(useShallow(selectPanelParams))
+  const dsf = useStore(selectDeviceScaleFactor)
   const requestedScale = useStore(selectScale)
   const mode = useStore(s => s.mode)
   const viewMode = useStore(s => s.viewMode)
@@ -55,10 +56,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const [maxOutput, setMaxOutput] = useState(MAX_OUTPUT_SIZE)
 
   // Whichever source is live sizes the element: the dropped file's 1x pixels
-  // in image mode, the target viewport otherwise.
+  // in image mode, the target's *device* pixels otherwise — a mobile preset
+  // paints CSS x dsf, and every downstream number (scale, CSS box, input
+  // maths) is per device pixel.
   const source = imageFrame
     ? { width: imageFrame.frameWidth, height: imageFrame.frameHeight }
-    : viewport
+    : { width: viewport.width * dsf, height: viewport.height * dsf }
 
   // Re-read when the window moves between a 1x and a 2x display; the CSS
   // box and the input maths below both depend on it.
@@ -89,6 +92,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const scale = fit
     ? computeFitScale(pane.width, pane.height, dpr, source.width, source.height, oneToOne)
     : oneToOne
+  // 1:1 on a mobile preset usually minifies too (a 460 PPI phone pixel gets
+  // ~0.3 host pixels), and nearest decimation below 1 is as wrong there as in
+  // fit mode — smooth whenever the drawn scale actually shrinks the source.
+  const smooth = fit || scale < 1
 
   // The footer reads fit's actual magnification from the store; null outside
   // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps.
@@ -99,8 +106,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // canvas must not leave a stale fit readout in the store.
   useEffect(() => () => setFitScale(null), [setFitScale])
 
-  // Read by the frame callback, which is installed once and must not go stale.
-  const draw = useRef({ scale, params, smooth: fit })
+  // Read by the frame callback, which is installed once and must not go
+  // stale. `dsf` rides along for the input bridge: the canvas shows device
+  // pixels, `sendInputEvent` wants CSS ones.
+  const draw = useRef({ scale, params, smooth, dsf })
   // Read by `start` after a context restore, so the image is re-uploaded
   // without waiting for a frame that image mode will never send.
   const imageRef = useRef(imageFrame)
@@ -219,7 +228,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       if (useStore.getState().mode !== 'url') return
       e.preventDefault()
       const r = canvas.getBoundingClientRect()
-      const ev = wheelEvent(e, r, draw.current.scale / (window.devicePixelRatio || 1))
+      const cssPerTarget = (draw.current.scale * draw.current.dsf) / (window.devicePixelRatio || 1)
+      const ev = wheelEvent(e, r, cssPerTarget)
       if (ev) window.obsrv.sendInput(ev)
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
@@ -239,7 +249,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       if (e.altKey && !forwardDrag.current) return
       if (e.target === canvas) return // the canvas's own onMouseUp sent it
       const r = canvas.getBoundingClientRect()
-      const ev = mouseEvent('mouseUp', e, r, draw.current.scale / (window.devicePixelRatio || 1))
+      const cssPerTarget = (draw.current.scale * draw.current.dsf) / (window.devicePixelRatio || 1)
+      const ev = mouseEvent('mouseUp', e, r, cssPerTarget)
       if (ev) {
         window.obsrv.sendInput(ev)
         forwardDrag.current = false
@@ -288,16 +299,16 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       return
     }
     if (mode === 'url') arm()
-  }, [viewport.width, viewport.height, mode, arm])
+  }, [viewport.width, viewport.height, dsf, mode, arm])
 
   useEffect(() => () => window.clearTimeout(stallTimer.current), [])
 
   // Scale, panel params and the view mode can change without a new frame.
   useEffect(() => {
-    draw.current = { scale, params, smooth: fit }
+    draw.current = { scale, params, smooth, dsf }
     const gl = glRef.current
     if (gl && gl.sourceWidth > 0) gl.draw(draw.current)
-  }, [scale, params, fit])
+  }, [scale, params, smooth, dsf])
 
   // Live frames are already stopped by main's `setMode`, so there is no race.
   // On the way back to URL mode the next live frame (main resends a full one)
@@ -427,7 +438,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       // gestures and idle hovers only — see `forwardDrag`.
       if (viewMode !== '1:1' || panRef.current || e.button === 1) return
       if (e.altKey && !forwardDrag.current) return
-      const out = mouseEvent(type, e, e.currentTarget.getBoundingClientRect(), scale / dpr)
+      // The canvas shows device pixels at `scale` host px each; the target
+      // page takes CSS coordinates, `dsf` device pixels big.
+      const out = mouseEvent(type, e, e.currentTarget.getBoundingClientRect(), (scale * dsf) / dpr)
       if (out) {
         window.obsrv.sendInput(out)
         if (type === 'mouseDown') forwardDrag.current = true

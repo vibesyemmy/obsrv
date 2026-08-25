@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
 import {
   CUSTOM_PRESET_ID,
   FALLBACK_SCALE,
+  selectDeviceScaleFactor,
   selectHostScaleFactor,
   selectPanelParams,
   selectScale,
@@ -72,6 +73,20 @@ describe('selectScale', () => {
   })
 })
 
+describe('selectDeviceScaleFactor', () => {
+  it('is 1 for monitor presets and the custom screen', () => {
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(1)
+    useStore.getState().setCustom({ width: 800, height: 600, diagonalInches: 10 })
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(1)
+  })
+  it('is the device factor for mobile presets', () => {
+    useStore.setState({ presetId: 'iphone-61' })
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(3)
+    useStore.setState({ presetId: 'ipad-109' })
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(2)
+  })
+})
+
 describe('selectHostScaleFactor', () => {
   it('is 1 until the host is known, then the real DPR', () => {
     expect(selectHostScaleFactor(useStore.getState())).toBe(1)
@@ -89,6 +104,14 @@ describe('selectViewport', () => {
       clamped: false,
     })
   })
+  it('keeps mobile presets in CSS pixels: 393x852 at 3x fits the device clamp', () => {
+    useStore.setState({ presetId: 'iphone-61' })
+    expect(selectViewport(useStore.getState())).toEqual({
+      width: 393,
+      height: 852,
+      clamped: false,
+    })
+  })
   it('clamps an oversized custom screen and says so', () => {
     useStore.getState().setCustom({ width: 6000, height: 900, diagonalInches: 40 })
     expect(useStore.getState().presetId).toBe(CUSTOM_PRESET_ID)
@@ -97,6 +120,18 @@ describe('selectViewport', () => {
       height: 900,
       clamped: true,
     })
+  })
+})
+
+describe('selectScale on a mobile preset', () => {
+  it('is per device pixel: iPhone 6.1" on a 4K 27" host is ~0.35', () => {
+    useStore.setState({
+      host: HOST_4K,
+      presetId: 'iphone-61',
+      settings: { hostDiagonalInches: 27, hostNits: 500 },
+    })
+    // hostPPI 163.18 / devicePPI 461.4
+    expect(selectScale(useStore.getState())).toBeCloseTo(0.3537, 3)
   })
 })
 
