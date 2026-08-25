@@ -15,30 +15,33 @@ where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
 ## Commands
 
-Prerequisite: `npm run build` must have been run in the Obsrv repo (the CLI
-runs the built `out/`). If a snap fails with "out/main/cli.js is missing", run
-`npm run build` in `/Users/opeyemiajagbe/Documents/Projects/Obsrv` first.
+Prerequisite: none when using `npx -y getobsrv` (npm downloads everything,
+including Electron, on first run). In a local Obsrv checkout, run
+`npm install && npm run build` there first.
 
 ```bash
-OBSRV=/Users/opeyemiajagbe/Documents/Projects/Obsrv/bin/obsrv.js
+# Installed anywhere via npm (first run downloads Electron):
+OBSRV="npx -y getobsrv"
+# Or, in a local Obsrv checkout (faster, no download):
+# OBSRV="node /path/to/Obsrv/bin/obsrv.js"
 
 # One screen, one PNG (+ JSON metadata on stdout, humans on stderr):
-node $OBSRV snap http://localhost:5173 --preset laptop-768 --out shots/laptop.png
+$OBSRV snap http://localhost:5173 --preset laptop-768 --out shots/laptop.png
 
 # The recommended matrix — small laptop, budget phone, 1080p desktop:
-node $OBSRV snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out shots/
+$OBSRV snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out shots/
 
 # Worst realistic panel (cheap TN) on the small laptop:
-node $OBSRV snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out shots/laptop-tn.png
+$OBSRV snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out shots/laptop-tn.png
 
 # Whole page, not just the first viewport (device px cap 4096, warns if clamped):
-node $OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --out shots/full.png
+$OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --out shots/full.png
 
 # Numbers instead of eyeballs: 1x target vs a 2x-reference downsample, JSON to stdout:
-node $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
+$OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 ```
 
-`node $OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
+`$OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
 `android-65`, `iphone-61`, …), profile (`reference`, `office-ips`,
 `budget-tn`, `old-laptop`), and flag (`--width/--height/--dsf`, `--wait`,
 `--timeout`).

@@ -52,18 +52,18 @@ a 1366×768 laptop / budget Android?" without the GUI. Build first
 
 ```bash
 # One PNG at a preset's true raster density (+ metadata JSON on stdout):
-node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --out shot.png
+npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --out shot.png
 
 # A matrix of screens, cheap-panel simulation, full-page capture:
-node bin/obsrv.js snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out shots/
-node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out tn.png
-node bin/obsrv.js snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
+npx -y getobsrv snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out shots/
+npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out tn.png
+npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
 
 # Machine-readable 1x-vs-2x comparison (ink coverage, row ratios, band deltas):
-node bin/obsrv.js diff http://localhost:5173 --preset laptop-768 --out-dir diffout
+npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
 ```
 
-`node bin/obsrv.js --help` lists every preset, profile and flag. Diff findings
+`npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings
 are informational (exit 0); CI thresholds are the caller's job. A ready-made
 Claude Code skill that wraps the loop (snap matrix → read the PNGs → diff →
 fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md).
@@ -77,7 +77,7 @@ raster density — the PNG comes back as an inline image up to 1.5 MiB),
 (every preset and panel profile, no render). Build first, then register:
 
 ```bash
-claude mcp add --scope user obsrv -- node /Users/opeyemiajagbe/Documents/Projects/Obsrv/bin/obsrv-mcp.js
+claude mcp add --scope user obsrv -- npx -y getobsrv mcp
 ```
 
 ## Develop

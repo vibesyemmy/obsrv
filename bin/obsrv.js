@@ -12,6 +12,14 @@ const { existsSync, mkdtempSync, rmSync } = require('node:fs')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 
+// `obsrv mcp` serves the MCP server (plain node, no Electron) so one npx
+// invocation covers both: `npx -y getobsrv mcp`.
+if (process.argv[2] === 'mcp') {
+  process.argv.splice(2, 1)
+  require('./obsrv-mcp.js')
+  return
+}
+
 const cliEntry = join(__dirname, '..', 'out', 'main', 'cli.js')
 if (!existsSync(cliEntry)) {
   console.error('obsrv: out/main/cli.js is missing — run `npm run build` in the Obsrv repo first')
