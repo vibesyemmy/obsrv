@@ -9,7 +9,7 @@
   },
   "private": true,
   "author": "Opeyemi Ajagbe <auto-report@hydrogenpay.com>",
-  "homepage": "https://github.com/opeyemiajagbe/getobsrv",
+  "homepage": "https://github.com/vibesyemmy/obsrv",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build && npm run build:mcp",
@@ -43,5 +43,9 @@
     "vite": "^6.4.3",
     "vitest": "^3.2.7"
   },
-  "productName": "Obsrv"
+  "productName": "Obsrv",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vibesyemmy/obsrv.git"
+  }
 }
