@@ -19,16 +19,26 @@ describe('settings', () => {
   it('merges valid numeric fields over defaults and ignores junk', () => {
     const f = join(dir(), 'settings.json')
     writeFileSync(f, JSON.stringify({ hostDiagonalInches: 32, hostNits: 'bad', extra: 1 }))
-    expect(loadSettings(f)).toEqual({ hostDiagonalInches: 32, hostNits: 500 })
+    expect(loadSettings(f)).toEqual({ hostDiagonalInches: 32, hostNits: 500, agentControl: false })
+  })
+  it('reads agentControl only as a literal true — anything else stays off', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, agentControl: true }))
+    expect(loadSettings(f).agentControl).toBe(true)
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, agentControl: 1 }))
+    expect(loadSettings(f).agentControl).toBe(false)
   })
   it('refuses to save invalid values', () => {
-    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 0, hostNits: 500 })).toThrow(RangeError)
-    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 27, hostNits: NaN })).toThrow(RangeError)
+    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 0, hostNits: 500, agentControl: false })).toThrow(RangeError)
+    expect(() => saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 27, hostNits: NaN, agentControl: false })).toThrow(RangeError)
+    expect(() =>
+      saveSettings(join(dir(), 's.json'), { hostDiagonalInches: 27, hostNits: 500, agentControl: 'yes' as unknown as boolean }),
+    ).toThrow(RangeError)
   })
   it('round-trips and creates parent dirs', () => {
     const f = join(dir(), 'nested', 'settings.json')
-    saveSettings(f, { hostDiagonalInches: 24, hostNits: 350 })
-    expect(JSON.parse(readFileSync(f, 'utf8'))).toEqual({ hostDiagonalInches: 24, hostNits: 350 })
-    expect(loadSettings(f)).toEqual({ hostDiagonalInches: 24, hostNits: 350 })
+    saveSettings(f, { hostDiagonalInches: 24, hostNits: 350, agentControl: true })
+    expect(JSON.parse(readFileSync(f, 'utf8'))).toEqual({ hostDiagonalInches: 24, hostNits: 350, agentControl: true })
+    expect(loadSettings(f)).toEqual({ hostDiagonalInches: 24, hostNits: 350, agentControl: true })
   })
 })

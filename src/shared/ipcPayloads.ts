@@ -1,4 +1,5 @@
 import type { Rect } from './api'
+import type { AgentUiState } from './control'
 import type { InputModifier, ScrollPos, Settings, TargetInputEvent } from './types'
 
 /**
@@ -84,17 +85,44 @@ export function parseDeviceScaleFactor(raw: unknown): number | null {
   return raw
 }
 
-/** Copies exactly the two known keys; both must be finite and positive. */
+/**
+ * Copies exactly the three known keys; the numbers must be finite and
+ * positive. A missing `agentControl` means false (the pre-live-drive wire
+ * shape); any non-boolean value is refused, never coerced.
+ */
 export function parseSettings(raw: unknown): Settings | null {
   if (!isRecord(raw)) return null
   const { hostDiagonalInches, hostNits } = raw
   if (!isFiniteNumber(hostDiagonalInches) || hostDiagonalInches <= 0) return null
   if (!isFiniteNumber(hostNits) || hostNits <= 0) return null
-  return { hostDiagonalInches, hostNits }
+  const agentControl = raw.agentControl ?? false
+  if (typeof agentControl !== 'boolean') return null
+  return { hostDiagonalInches, hostNits, agentControl }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {
   return raw === 'url' || raw === 'image' ? raw : null
+}
+
+/** Longest preset/profile id the UI-state mirror will store. */
+const MAX_UI_ID = 64
+
+/**
+ * The renderer's UI-state report (`IPC.uiState`), mirrored main-side so the
+ * agent-control server can answer `status` without a renderer round-trip.
+ * Ids are copied as opaque strings (bounded — the mirror must not store an
+ * arbitrarily long one) rather than checked against the preset table: the
+ * report *describes* renderer state, and refusing an id main does not know
+ * would leave the mirror lying about it.
+ */
+export function parseUiState(raw: unknown): AgentUiState | null {
+  if (!isRecord(raw)) return null
+  const { presetId, profileId, viewMode, mode } = raw
+  if (typeof presetId !== 'string' || presetId.length === 0 || presetId.length > MAX_UI_ID) return null
+  if (typeof profileId !== 'string' || profileId.length === 0 || profileId.length > MAX_UI_ID) return null
+  if (viewMode !== '1:1' && viewMode !== 'fit') return null
+  if (mode !== 'url' && mode !== 'image') return null
+  return { presetId, profileId, viewMode, mode }
 }
 
 /**

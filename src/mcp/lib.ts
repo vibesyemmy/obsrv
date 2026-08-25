@@ -110,31 +110,10 @@ export function stderrTail(stderr: string, max: number = STDERR_TAIL_CHARS): str
   return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`
 }
 
-/** Schemes a tool call may hand to the CLI. */
-export const ALLOWED_URL_SCHEMES = ['http:', 'https:', 'file:'] as const
-
-/**
- * Rejects URLs whose explicit scheme is outside the allowlist (javascript:,
- * data:, chrome:, …) with an actionable message, or returns null when the URL
- * may proceed. Scheme-relative (`//host`), bare-host (`example.com/page`) and
- * host:port (`localhost:5173`) forms pass — they normalise to http(s)
- * downstream.
- */
-export function urlSchemeError(url: string): string | null {
-  const trimmed = url.trim()
-  const match = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)
-  if (!match) return null // bare host or scheme-relative
-  const scheme = `${match[1]!.toLowerCase()}:`
-  if ((ALLOWED_URL_SCHEMES as readonly string[]).includes(scheme)) return null
-  // `localhost:5173`-style host:port, not a scheme: the "scheme" is followed
-  // by a bare port number.
-  if (/^[a-z0-9.-]+:\d+(\/|$)/i.test(trimmed)) return null
-  return (
-    `unsupported URL scheme "${scheme}" — obsrv renders ` +
-    `${ALLOWED_URL_SCHEMES.map(s => `${s}//`).join(', ')} URLs only ` +
-    `(bare hosts like example.com also work; they normalise to http(s)).`
-  )
-}
+// The scheme allowlist lives in shared/url.ts so the agent-control server
+// applies the identical check; re-exported so existing importers (and their
+// unit tests) keep their path.
+export { ALLOWED_URL_SCHEMES, urlSchemeError } from '../shared/url'
 
 /**
  * Parses the CLI's machine output: the trailing JSON object on stdout.
