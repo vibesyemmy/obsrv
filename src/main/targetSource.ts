@@ -2,7 +2,7 @@ import { BrowserWindow, type WebContents } from 'electron'
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
-import { clampViewport } from '../shared/calibration'
+import { clampViewport, maxCssViewport } from '../shared/calibration'
 import { classifyFileNavigation } from '../shared/fileNav'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
@@ -41,6 +41,17 @@ const DEFAULT_FPS = 30
 const DEFAULT_VIEWPORT = { width: 1920, height: 1080 }
 
 /**
+ * One Android-style mobile Chrome UA for every mobile preset — the phones and
+ * the iPad alike. Deliberate simplification: sites key their mobile layouts on
+ * "Mobile"/Android vs desktop, and per-preset UA strings would multiply
+ * constants without changing what renders. Chrome's version comes from the
+ * running Electron so it never drifts from the engine actually rendering.
+ */
+export const MOBILE_USER_AGENT =
+  `Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) ` +
+  `Chrome/${process.versions.chrome ?? '120.0.0.0'} Mobile Safari/537.36`
+
+/**
  * `TargetInputEvent` is deliberately Electron-free so the renderer can build
  * one. Its shape matches Electron's input events except that `modifiers` is a
  * plain `string[]` where Electron narrows to a literal union, so the value is
@@ -50,34 +61,73 @@ type ElectronInputEvent = Parameters<WebContents['sendInputEvent']>[0]
 
 /**
  * The right pane's pixel source: an offscreen Chromium window that rasterises
- * at deviceScaleFactor 1 whatever the host display does. Its `paint` bitmaps
- * are the true 1x raster the whole product exists to show.
+ * at the chosen deviceScaleFactor (1 for monitor presets, the real 2x/3x for
+ * mobile ones) whatever the host display does. Its `paint` bitmaps are the
+ * true device-pixel raster the whole product exists to show: `frameWidth` and
+ * `frameHeight` are always CSS viewport × dsf.
  *
- * `offscreen.deviceScaleFactor` already defaults to 1; it is passed explicitly
- * so the intent survives an Electron upgrade. The first E2E test asserts the
- * frame size equals the CSS viewport, which fails loudly if that ever changes.
+ * `offscreen.deviceScaleFactor` is fixed at window creation, so changing it
+ * means recreating the window (`setDeviceScaleFactor`). Order matters: the
+ * replacement is created *before* the old window is destroyed — destroying
+ * the previous OSR window first was observed (Electron 43 / macOS) to tear
+ * the new one down with it, failing its `about:blank` load and leaving a
+ * destroyed window. Each fresh window owns a fresh first navigation, so the
+ * crash gate below is re-armed per window.
+ *
+ * Mobile fidelity (dsf > 1) — a documented simplification keyed on the factor
+ * alone, because dsf is the only thing the viewport payload carries:
+ * - the webContents gets `MOBILE_USER_AGENT` (the native pane keeps its
+ *   desktop UA: it is "your dev view");
+ * - `enableDeviceEmulation({ screenPosition: 'mobile', … })` supplies mobile
+ *   viewport semantics — a page without `<meta name="viewport">` lays out at
+ *   Chromium's 980px virtual viewport and is scaled to fit, exactly as phones
+ *   do. Chromium wipes the emulation on every cross-document navigation (and
+ *   applying it before the first commit segfaults the OSR renderer), so it is
+ *   re-applied in `did-navigate`, the earliest post-commit moment. Emulation
+ *   never changes paint sizes under OSR — the raster density comes from the
+ *   recreated window alone; emulation only shapes layout.
  *
  * Every method that touches the window is a no-op once it is destroyed: the
  * renderer's IPC can still arrive after the main window has started closing.
  */
 export class TargetSource extends EventEmitter<TargetSourceEventMap> {
-  private readonly win: BrowserWindow
+  private win!: BrowserWindow
   private viewport = { ...DEFAULT_VIEWPORT }
+  private dsf = 1
+  private readonly fps: number
+  /** Electron's own UA, captured from the first window and restored for dsf 1. */
+  private defaultUserAgent: string | null = null
   /**
-   * Settles once the surface's first navigation has committed — or can never
-   * commit. Chromium's offscreen renderer segfaults (exit 11, Electron 43 /
-   * macOS) when a second `loadURL` interrupts the very first one before it
-   * commits; interrupting any later navigation is an ordinary `ERR_ABORTED`.
-   * Every `load()` waits on this so the unit is safe to drive the instant it
-   * is constructed. It also settles if the renderer dies or the surface is
-   * destroyed first, so a later `load()` never hangs on a gate that cannot
-   * open.
+   * Settles once the current window's first navigation has committed — or can
+   * never commit. Chromium's offscreen renderer segfaults (exit 11, Electron
+   * 43 / macOS) when a second `loadURL` interrupts the very first one before
+   * it commits; interrupting any later navigation is an ordinary
+   * `ERR_ABORTED`. Every `load()` waits on this so the unit is safe to drive
+   * the instant it is constructed — and re-waits if a recreation swapped in a
+   * fresh window (with a fresh first navigation) mid-wait. It also settles if
+   * the renderer dies or the surface is destroyed first, so a later `load()`
+   * never hangs on a gate that cannot open.
    */
-  private readonly firstNavigation: Promise<void>
+  private firstNavigation!: Promise<void>
+  /** True once the current window's first-navigation gate has settled. */
+  private firstNavDone = false
+  /**
+   * True while a recreated window loads its internal `about:blank`. Those
+   * navigation events are plumbing, not news: reported, SyncBus would mirror
+   * `about:blank` into the native pane every time the preset changes density.
+   * Frames still flow — a blank paint is stale for a moment, never wrong.
+   */
+  private internal = false
+  private disposed = false
 
   constructor(fps: number = DEFAULT_FPS) {
     super()
-    this.win = new BrowserWindow({
+    this.fps = fps
+    this.createWindow()
+  }
+
+  private createWindow(): void {
+    const win = new BrowserWindow({
       show: false,
       width: this.viewport.width,
       height: this.viewport.height,
@@ -86,17 +136,21 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       enableLargerThanScreen: true,
       webPreferences: {
         preload: join(__dirname, '../preload/sync.js'),
-        offscreen: { deviceScaleFactor: 1 },
+        offscreen: { deviceScaleFactor: this.dsf },
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
         backgroundThrottling: false,
       },
     })
+    this.win = win
+    this.firstNavDone = false
 
-    const wc = this.win.webContents
-    wc.setFrameRate(fps)
+    const wc = win.webContents
+    wc.setFrameRate(this.fps)
     wc.setAudioMuted(true)
+    this.defaultUserAgent ??= wc.getUserAgent()
+    wc.setUserAgent(this.dsf > 1 ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
     wc.on('paint', (_event, dirty, image) => {
       if (dirty.width <= 0 || dirty.height <= 0) return
@@ -121,17 +175,26 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       })
     })
 
-    wc.on('did-navigate', (_e, url) => this.emit('url-changed', url))
+    wc.on('did-navigate', (_e, url) => {
+      // Chromium wiped any device emulation with the old document; re-apply
+      // before reporting, so the page lays out mobile from its first paint.
+      this.applyEmulation()
+      if (!this.internal) this.emit('url-changed', url)
+    })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-      if (isMainFrame) this.emit('url-changed', url)
+      if (isMainFrame && !this.internal) this.emit('url-changed', url)
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) this.emit('load-error', { code, description, url })
     })
-    wc.on('did-start-loading', () => this.emit('loading', true))
-    wc.on('did-stop-loading', () => this.emit('loading', false))
+    wc.on('did-start-loading', () => {
+      if (!this.internal) this.emit('loading', true)
+    })
+    wc.on('did-stop-loading', () => {
+      if (!this.internal) this.emit('loading', false)
+    })
     wc.on('did-start-navigation', details => {
-      if (details.isMainFrame && !details.isSameDocument) this.emit('navigating')
+      if (!this.internal && details.isMainFrame && !details.isSameDocument) this.emit('navigating')
     })
     // A dead renderer paints nothing; surface it through the same channel a
     // failed navigation uses so the UI has something to show. A clean exit is
@@ -160,10 +223,59 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     })
 
     // Own the first navigation so nothing can interrupt it (see field doc).
-    this.firstNavigation = new Promise<void>(settle => {
+    const gate = new Promise<void>(settle => {
       wc.once('render-process-gone', () => settle())
       wc.once('destroyed', () => settle())
       wc.loadURL('about:blank').then(() => settle(), () => settle())
+    })
+    this.firstNavigation = gate.then(() => {
+      if (this.win === win) this.firstNavDone = true
+    })
+  }
+
+  /**
+   * Mobile viewport semantics for dsf > 1 (see class doc). Post-commit only:
+   * enabling emulation before a window's first navigation commits segfaults
+   * the OSR renderer, so callers are either the `did-navigate` handler (by
+   * definition post-commit) or gated on `firstNavDone`.
+   */
+  private applyEmulation(): void {
+    if (this.dsf <= 1 || this.win.isDestroyed()) return
+    this.win.webContents.enableDeviceEmulation({
+      screenPosition: 'mobile',
+      screenSize: { width: this.viewport.width, height: this.viewport.height },
+      viewPosition: { x: 0, y: 0 },
+      viewSize: { width: this.viewport.width, height: this.viewport.height },
+      deviceScaleFactor: this.dsf,
+      scale: 1,
+    })
+  }
+
+  /**
+   * Swaps in a fresh window at the current viewport and dsf, then restores
+   * the page the old one was showing. Created before the old is destroyed —
+   * see the class doc for why that order is load-bearing.
+   */
+  private recreate(): void {
+    const old = this.win
+    const oldUrl = old.isDestroyed() ? '' : old.webContents.getURL()
+    this.internal = true
+    this.createWindow()
+    if (!old.isDestroyed()) old.destroy()
+    const win = this.win
+    void this.firstNavigation.then(async () => {
+      // A newer recreation owns the flags now; leave everything to it.
+      if (this.disposed || this.win !== win || win.isDestroyed()) return
+      this.internal = false
+      if (oldUrl && oldUrl !== 'about:blank') {
+        try {
+          await win.webContents.loadURL(oldUrl)
+        } catch {
+          // `did-fail-load` already reported it; Chromium renders its error page.
+        }
+      } else {
+        win.webContents.invalidate()
+      }
     })
   }
 
@@ -171,7 +283,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   async load(input: string): Promise<string> {
     try {
       const url = normalizeUrl(input)
-      await this.firstNavigation
+      // The gate is per-window: a dsf change mid-wait swaps in a fresh window
+      // with a fresh first navigation, so wait for whichever gate is current.
+      let gate: Promise<void>
+      do {
+        gate = this.firstNavigation
+        await gate
+      } while (gate !== this.firstNavigation)
       if (this.win.isDestroyed()) return url
       try {
         await this.win.webContents.loadURL(url)
@@ -189,19 +307,47 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     }
   }
 
-  /** Resizes the offscreen surface. Returns the applied (possibly clamped) size. */
-  setViewport(width: number, height: number): AppliedViewport {
-    const v = clampViewport(width, height)
+  /**
+   * Resizes the offscreen surface; `width`/`height` are CSS pixels and the
+   * clamp budget is device pixels (`maxCssViewport`). A changed
+   * `deviceScaleFactor` recreates the window (the offscreen dsf is fixed at
+   * creation); a same-dsf resize is the cheap `setContentSize` path. Returns
+   * the applied (possibly clamped) CSS size.
+   */
+  setViewport(width: number, height: number, deviceScaleFactor = 1): AppliedViewport {
+    const dsf = Number.isFinite(deviceScaleFactor) && deviceScaleFactor >= 1 ? deviceScaleFactor : 1
+    const v = clampViewport(width, height, maxCssViewport(dsf))
     this.viewport = { width: v.width, height: v.height }
-    if (!this.win.isDestroyed()) {
+    if (dsf !== this.dsf) {
+      this.dsf = dsf
+      if (!this.disposed) this.recreate()
+    } else if (!this.win.isDestroyed()) {
       this.win.setContentSize(v.width, v.height)
+      // The emulated screen must track the viewport, and Chromium only reads
+      // it on (re-)application. Safe here only once the first navigation has
+      // committed; before that, the did-navigate re-apply picks up the new
+      // size on its own.
+      if (this.firstNavDone) this.applyEmulation()
       this.win.webContents.invalidate()
     }
     return v
   }
 
+  /**
+   * Changes the raster density alone, keeping the current CSS viewport
+   * (re-clamped for the new device-pixel budget). Same recreation path as
+   * `setViewport` with a new factor.
+   */
+  setDeviceScaleFactor(deviceScaleFactor: number): AppliedViewport {
+    return this.setViewport(this.viewport.width, this.viewport.height, deviceScaleFactor)
+  }
+
   getViewport(): { width: number; height: number } {
     return { ...this.viewport }
+  }
+
+  getDeviceScaleFactor(): number {
+    return this.dsf
   }
 
   /** Forces a full-frame repaint, e.g. after the renderer loses its texture. */
@@ -230,6 +376,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   }
 
   destroy(): void {
+    this.disposed = true
     this.removeAllListeners()
     if (!this.win.isDestroyed()) this.win.destroy()
   }

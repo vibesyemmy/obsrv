@@ -18,7 +18,11 @@ export interface ObsrvApi {
   reload(): void
   back(): void
   forward(): void
-  setViewport(width: number, height: number): Promise<{ width: number; height: number }>
+  /**
+   * `width`/`height` are CSS pixels; `deviceScaleFactor` (default 1) is the
+   * raster density — the target paints `width x height` x the factor.
+   */
+  setViewport(width: number, height: number, deviceScaleFactor?: number): Promise<{ width: number; height: number }>
   setNativeBounds(rect: Rect): void
   setMode(mode: 'url' | 'image'): void
   sendInput(ev: TargetInputEvent): void

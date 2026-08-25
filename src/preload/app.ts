@@ -37,7 +37,8 @@ const api: ObsrvApi = {
   reload: () => ipcRenderer.send(IPC.reload),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),
-  setViewport: (width, height) => ipcRenderer.invoke(IPC.setViewport, width, height),
+  setViewport: (width, height, deviceScaleFactor) =>
+    ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
   setMode: mode => ipcRenderer.send(IPC.setMode, mode),
   sendInput: ev => ipcRenderer.send(IPC.sendInput, ev),
