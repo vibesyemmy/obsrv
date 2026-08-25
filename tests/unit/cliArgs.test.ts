@@ -124,6 +124,10 @@ describe('parseArgs: diff', () => {
     expect(() => diff('x.test', '--preset', 'iphone-61')).toThrow(/1x/)
     expect(() => diff('x.test', '--width', '360', '--height', '800', '--dsf', '2')).toThrow(/1x/)
   })
+  it('rejects presets too wide for a 2x reference within the 4096 device-px budget', () => {
+    expect(() => diff('x.test', '--preset', '1440p-27')).toThrow(/2x reference/)
+    expect(() => diff('x.test', '--width', '2100', '--height', '900')).toThrow(/2x reference/)
+  })
   it('rejects snap-only flags', () => {
     expect(() => diff('x.test', '--matrix', 'laptop-768')).toThrow(/snap/)
     expect(() => diff('x.test', '--full-page')).toThrow(/snap/)

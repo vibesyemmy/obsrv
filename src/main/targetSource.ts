@@ -59,6 +59,17 @@ export const MOBILE_USER_AGENT =
  */
 type ElectronInputEvent = Parameters<WebContents['sendInputEvent']>[0]
 
+export interface TargetSourceOptions {
+  /**
+   * Whether dsf > 1 implies phone fidelity (mobile UA + viewport emulation).
+   * The app always wants that coupling; the headless CLI's HiDPI *reference*
+   * render (`obsrv diff`) wants a desktop page rasterised dense — desktop UA,
+   * desktop viewport semantics, only the raster density changed — so it opts
+   * out. Defaults to true, so app behaviour is unchanged.
+   */
+  mobileEmulation?: boolean
+}
+
 /**
  * The right pane's pixel source: an offscreen Chromium window that rasterises
  * at the chosen deviceScaleFactor (1 for monitor presets, the real 2x/3x for
@@ -95,6 +106,8 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private viewport = { ...DEFAULT_VIEWPORT }
   private dsf = 1
   private readonly fps: number
+  /** See TargetSourceOptions.mobileEmulation. */
+  private readonly mobileEmulation: boolean
   /** Electron's own UA, captured from the first window and restored for dsf 1. */
   private defaultUserAgent: string | null = null
   /**
@@ -130,9 +143,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private internal = false
   private disposed = false
 
-  constructor(fps: number = DEFAULT_FPS) {
+  constructor(fps: number = DEFAULT_FPS, options: TargetSourceOptions = {}) {
     super()
     this.fps = fps
+    this.mobileEmulation = options.mobileEmulation ?? true
     this.createWindow()
   }
 
@@ -160,7 +174,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     wc.setFrameRate(this.fps)
     wc.setAudioMuted(true)
     this.defaultUserAgent ??= wc.getUserAgent()
-    wc.setUserAgent(this.dsf > 1 ? MOBILE_USER_AGENT : this.defaultUserAgent)
+    wc.setUserAgent(this.dsf > 1 && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
     wc.on('paint', (_event, dirty, image) => {
       if (dirty.width <= 0 || dirty.height <= 0) return
@@ -259,7 +273,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * definition post-commit) or gated on `firstNavDone`.
    */
   private applyEmulation(): void {
-    if (this.dsf <= 1 || this.win.isDestroyed()) return
+    if (this.dsf <= 1 || !this.mobileEmulation || this.win.isDestroyed()) return
     this.win.webContents.enableDeviceEmulation({
       screenPosition: 'mobile',
       screenSize: { width: this.viewport.width, height: this.viewport.height },

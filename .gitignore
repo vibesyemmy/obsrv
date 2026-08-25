@@ -11,3 +11,4 @@ node-compile-cache/
 playwright-transform-cache-*/
 tsx-*/
 playwright-artifacts-*/
+obsrv-*.png

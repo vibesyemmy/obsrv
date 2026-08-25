@@ -231,6 +231,14 @@ export function parseArgs(argv: string[]): CliCommand {
         `Use a 1x preset (e.g. laptop-768, 1080p-24) or plain \`obsrv snap\` for dense presets.`,
     )
   }
+  const referenceMax = maxCssViewport(2)
+  if (spec.cssWidth > referenceMax || spec.cssHeight > referenceMax) {
+    throw new ArgError(
+      `diff renders a 2x reference, so the CSS viewport must fit ${referenceMax}px per axis ` +
+        `(4096 device px at 2x) — "${spec.presetId}" is ${spec.cssWidth}×${spec.cssHeight}. ` +
+        `Use \`obsrv snap\` for this preset instead.`,
+    )
+  }
   const outDir = typeof flags.get('out-dir') === 'string' ? (flags.get('out-dir') as string) : null
   return { command, url, spec, profileId, outDir, waitMs, timeoutMs }
 }

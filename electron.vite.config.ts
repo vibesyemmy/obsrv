@@ -5,7 +5,15 @@ import { resolve } from 'node:path'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    build: { lib: { entry: resolve(__dirname, 'src/main/index.ts') } },
+    build: {
+      lib: {
+        entry: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          // Headless CLI entry (bin/obsrv.js spawns `electron out/main/cli.js`).
+          cli: resolve(__dirname, 'src/cli/main.ts'),
+        },
+      },
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
