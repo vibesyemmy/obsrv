@@ -17,9 +17,11 @@
     "test": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
     "test:e2e": "npm run build && playwright test",
-    "dist": "npm run build && electron-builder --mac",
+    "dist": "npm run build && electron-builder --mac --publish never",
     "build:mcp": "tsc -p tsconfig.mcp.json",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "node scripts/electron-dep.js to-prod",
+    "postpack": "node scripts/electron-dep.js to-dev"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
@@ -27,8 +29,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3",
-    "zustand": "^5.0.15",
-    "electron": "^43.4.1"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -42,7 +43,8 @@
     "playwright": "^1.62.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "electron": "^43.4.1"
   },
   "productName": "Obsrv",
   "repository": {
