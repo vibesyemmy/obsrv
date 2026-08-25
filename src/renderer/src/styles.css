@@ -155,9 +155,23 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* An open drawer's button: weight and a 1px border, not hue. */
-.toolbar :is(.toggle-panel, .toggle-settings)[aria-pressed='true'] {
+.toolbar :is(.toggle-panel, .toggle-settings, .agent-toggle)[aria-pressed='true'] {
   border-color: var(--text-0);
   background: var(--chrome-1);
+}
+
+/* Agent control: same neutral chrome as every other toggle; the activity
+   badge is text-weight only — an agent driving the window is a status, not
+   an alert. */
+.toolbar .agent-toggle { width: auto; padding: 0 8px; white-space: nowrap; }
+.agent-activity {
+  color: var(--text-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 /* Drawers sit beside the panes, never over them: the native WebContentsView is

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_RECT, parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings } from '../../src/shared/ipcPayloads'
+import { MAX_RECT, parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings, parseUiState } from '../../src/shared/ipcPayloads'
 
 describe('parseRect', () => {
   it('accepts a sane rect and rounds to integers', () => {
@@ -67,8 +67,19 @@ describe('parseInputEvent', () => {
 })
 
 describe('parseSettings', () => {
-  it('copies exactly the two known keys', () => {
-    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, extra: 1 })).toEqual({ hostDiagonalInches: 27, hostNits: 500 })
+  it('copies exactly the three known keys', () => {
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, agentControl: true, extra: 1 })).toEqual({
+      hostDiagonalInches: 27,
+      hostNits: 500,
+      agentControl: true,
+    })
+  })
+  it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500 })).toEqual({
+      hostDiagonalInches: 27,
+      hostNits: 500,
+      agentControl: false,
+    })
   })
   it.each([
     ['not an object', 27],
@@ -77,8 +88,31 @@ describe('parseSettings', () => {
     ['Infinity', { hostDiagonalInches: Infinity, hostNits: 400 }],
     ['string', { hostDiagonalInches: '27', hostNits: 400 }],
     ['missing key', { hostDiagonalInches: 27 }],
+    ['truthy non-boolean agentControl', { hostDiagonalInches: 27, hostNits: 400, agentControl: 1 }],
+    ['string agentControl', { hostDiagonalInches: 27, hostNits: 400, agentControl: 'true' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseSettings(raw)).toBeNull()
+  })
+})
+
+describe('parseUiState', () => {
+  const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', mode: 'url' }
+  it('copies exactly the four known keys', () => {
+    expect(parseUiState({ ...good, extra: 1 })).toEqual(good)
+  })
+  it('carries ids main does not know (the report describes renderer state)', () => {
+    expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom' })
+  })
+  it.each([
+    ['not an object', 'url'],
+    ['empty presetId', { ...good, presetId: '' }],
+    ['oversized presetId', { ...good, presetId: 'x'.repeat(65) }],
+    ['numeric profileId', { ...good, profileId: 7 }],
+    ['bad viewMode', { ...good, viewMode: 'fill' }],
+    ['bad mode', { ...good, mode: 'video' }],
+    ['missing mode', { presetId: 'a', profileId: 'b', viewMode: '1:1' }],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseUiState(raw)).toBeNull()
   })
 })
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
   buildDiffArgs,
@@ -7,6 +8,7 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  planSnapPath,
   shouldInlineImage,
   stderrTail,
   urlSchemeError,
@@ -141,6 +143,44 @@ describe('stderrTail', () => {
     expect(tail.length).toBeLessThanOrEqual(2001)
     expect(tail.startsWith('…')).toBe(true)
     expect(tail.endsWith('THE END')).toBe(true)
+  })
+})
+
+describe('planSnapPath', () => {
+  it('headless mode never probes and carries no notes', () => {
+    expect(planSnapPath({}, 'headless', true)).toEqual({ path: 'headless', notes: [] })
+    expect(planSnapPath({ fullPage: true }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
+  })
+  it('auto without a reachable app is a silent headless fallback', () => {
+    expect(planSnapPath({}, 'auto', false)).toEqual({ path: 'headless', notes: [] })
+  })
+  it('auto with a reachable app goes live', () => {
+    expect(planSnapPath({}, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  })
+  it('live without a reachable app is an actionable error, never a fallback', () => {
+    const r = planSnapPath({}, 'live', false)
+    expect(r).toHaveProperty('error')
+    expect((r as { error: string }).error).toBe(APP_NOT_REACHABLE)
+    expect(APP_NOT_REACHABLE).toMatch(/Agent control/)
+  })
+  it('custom dims fall back to headless with a note, even under explicit live', () => {
+    for (const input of [{ width: 800, height: 600 }, { deviceScaleFactor: 2 }, { diagonalInches: 14 }]) {
+      for (const mode of ['auto', 'live'] as const) {
+        const r = planSnapPath(input, mode, true)
+        expect(r).toMatchObject({ path: 'headless' })
+        expect((r as { notes: string[] }).notes.join(' ')).toMatch(/custom dimensions/)
+      }
+    }
+  })
+  it('fullPage falls back to headless with a note', () => {
+    const r = planSnapPath({ fullPage: true }, 'auto', true)
+    expect(r).toMatchObject({ path: 'headless' })
+    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/fullPage/)
+  })
+  it('waitMs stays live but is noted as ignored', () => {
+    const r = planSnapPath({ waitMs: 500 }, 'auto', true)
+    expect(r).toMatchObject({ path: 'live' })
+    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/waitMs/)
   })
 })
 

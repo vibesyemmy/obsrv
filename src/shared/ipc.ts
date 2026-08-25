@@ -23,4 +23,7 @@ export const IPC = {
   focusUrl: 'obsrv:focus-url',
   openImagePath: 'obsrv:open-image-path',
   readImageFile: 'obsrv:read-image-file',
+  uiState: 'obsrv:ui-state',
+  agentApply: 'obsrv:agent-apply',
+  agentActivity: 'obsrv:agent-activity',
 } as const

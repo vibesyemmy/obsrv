@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { FrameMessage, ObsrvApi } from '../shared/api'
+import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { HostInfo, LoadError } from '../shared/types'
 
@@ -73,6 +74,15 @@ const api: ObsrvApi = {
   },
   onOpenImagePath: cb => subscribe<string>(IPC.openImagePath, cb),
   readImageFile: path => ipcRenderer.invoke(IPC.readImageFile, path),
+  reportUiState: s => ipcRenderer.send(IPC.uiState, s),
+  onAgentApply: cb => subscribe<AgentApplyPatch>(IPC.agentApply, cb),
+  onAgentActivity: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.agentActivity, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.agentActivity, listener)
+    }
+  },
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

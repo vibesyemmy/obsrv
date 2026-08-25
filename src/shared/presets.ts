@@ -2,7 +2,7 @@ import type { PanelProfile, ScreenPreset, Settings } from './types'
 
 export const MAX_VIEWPORT = 4096
 
-export const DEFAULT_SETTINGS: Settings = { hostDiagonalInches: 27, hostNits: 500 }
+export const DEFAULT_SETTINGS: Settings = { hostDiagonalInches: 27, hostNits: 500, agentControl: false }
 
 export const SCREEN_PRESETS: readonly ScreenPreset[] = [
   // Laptops — ordered largest to smallest panel, then the denser 1080p outlier.

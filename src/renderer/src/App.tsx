@@ -36,6 +36,9 @@ export function App() {
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
   const deviceScaleFactor = useStore(selectDeviceScaleFactor)
+  const presetId = useStore(s => s.presetId)
+  const profileId = useStore(s => s.profileId)
+  const viewMode = useStore(s => s.viewMode)
 
   // The store performs no IPC of its own; this is the one place that bridges.
   useEffect(() => {
@@ -67,6 +70,24 @@ export function App() {
   useEffect(() => {
     window.obsrv.setMode(mode)
   }, [mode])
+
+  // Main mirrors this for the agent-control server's `status`; the first run
+  // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
+  useEffect(() => {
+    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode })
+  }, [presetId, profileId, viewMode, mode])
+
+  // An agent-control command lands exactly as a toolbar interaction would:
+  // the same store actions, so the viewport effect above (and everything else
+  // hanging off the store) follows a remote preset flip like a local click.
+  useEffect(() => {
+    return window.obsrv.onAgentApply(patch => {
+      const s = useStore.getState()
+      if (patch.presetId !== undefined) s.setPreset(patch.presetId)
+      if (patch.profileId !== undefined) s.setProfile(patch.profileId)
+      if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
+    })
+  }, [])
 
   // The surround control only repaints the field the panes sit in.
   useEffect(() => {

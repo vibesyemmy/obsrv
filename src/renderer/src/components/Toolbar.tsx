@@ -52,9 +52,37 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setSurround = useStore(s => s.setSurround)
   const viewMode = useStore(s => s.viewMode)
   const setViewMode = useStore(s => s.setViewMode)
+  const agentControl = useStore(s => s.settings.agentControl)
+  const setSettings = useStore(s => s.setSettings)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(barText)
+
+  // Lit while an authenticated agent-control command arrived in the last ~3 s,
+  // so the user can see the visible app is being driven.
+  const [agentActive, setAgentActive] = useState(false)
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const off = window.obsrv.onAgentActivity(() => {
+      setAgentActive(true)
+      clearTimeout(timer)
+      timer = setTimeout(() => setAgentActive(false), 3000)
+    })
+    return () => {
+      clearTimeout(timer)
+      off()
+    }
+  }, [])
+
+  // The toggle owns the whole flip: optimistic store update so the button
+  // answers immediately, rolled back if main refuses the write (mirrors the
+  // SettingsPanel commit path, minus its queue — a boolean cannot interleave).
+  const toggleAgent = (): void => {
+    const current = useStore.getState().settings
+    const next = { ...current, agentControl: !current.agentControl }
+    setSettings(next)
+    window.obsrv.setSettings(next).catch(() => setSettings(current))
+  }
 
   // The bar follows the panes — a click in the native pane, a redirect, a
   // back — except while the user is typing in it: an `onUrlChanged` landing
@@ -219,6 +247,18 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           </button>
         ))}
       </div>
+
+      {agentActive && <span className="agent-activity">AGENT</span>}
+      <button
+        className="agent-toggle"
+        type="button"
+        title="Agent control — let a local agent drive this window"
+        aria-label="Agent control"
+        aria-pressed={agentControl}
+        onClick={toggleAgent}
+      >
+        Agent
+      </button>
 
       <button
         className="toggle-panel"

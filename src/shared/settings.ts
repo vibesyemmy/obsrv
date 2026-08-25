@@ -11,6 +11,9 @@ export function loadSettings(file: string): Settings {
     return {
       hostDiagonalInches: isPositive(raw.hostDiagonalInches) ? raw.hostDiagonalInches : DEFAULT_SETTINGS.hostDiagonalInches,
       hostNits: isPositive(raw.hostNits) ? raw.hostNits : DEFAULT_SETTINGS.hostNits,
+      // Anything but a literal true (older files have no key at all) means off:
+      // a network-facing capability must never be enabled by a malformed file.
+      agentControl: raw.agentControl === true,
     }
   } catch {
     return { ...DEFAULT_SETTINGS }
@@ -19,6 +22,7 @@ export function loadSettings(file: string): Settings {
 
 export function saveSettings(file: string, s: Settings): void {
   if (!isPositive(s.hostDiagonalInches) || !isPositive(s.hostNits)) throw new RangeError('settings values must be finite and > 0')
+  if (typeof s.agentControl !== 'boolean') throw new RangeError('agentControl must be a boolean')
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(s, null, 2))
 }

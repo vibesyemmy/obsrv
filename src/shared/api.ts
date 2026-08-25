@@ -1,3 +1,4 @@
+import type { AgentApplyPatch, AgentUiState } from './control'
 import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent } from './types'
 
 export interface FrameMessage {
@@ -52,6 +53,18 @@ export interface ObsrvApi {
   onOpenImagePath(cb: (path: string) => void): () => void
   /** The bytes of a PNG/JPEG at `path`; rejects on any other extension or an oversized file. */
   readImageFile(path: string): Promise<Uint8Array>
+  /**
+   * Reports the toolbar's state to main, which mirrors it so the
+   * agent-control server can answer `status` without a renderer round-trip.
+   */
+  reportUiState(s: AgentUiState): void
+  /**
+   * An agent-control command asks for a preset / profile / view-mode change;
+   * the renderer applies it through the same store actions the toolbar uses.
+   */
+  onAgentApply(cb: (patch: AgentApplyPatch) => void): () => void
+  /** An authenticated agent-control command arrived; the toolbar shows its AGENT indicator. */
+  onAgentActivity(cb: () => void): () => void
 }
 
 declare global {

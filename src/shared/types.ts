@@ -43,6 +43,12 @@ export interface HostInfo {
 export interface Settings {
   hostDiagonalInches: number
   hostNits: number
+  /**
+   * Whether the loopback agent-control server runs (spec §14 "Live drive").
+   * Off by default: the toolbar toggle turns it on, and
+   * `OBSRV_AGENT_CONTROL=1` force-enables it for the session at boot.
+   */
+  agentControl: boolean
 }
 
 /** A dirty-rect slice of the 1x target frame. `data` is BGRA, row-major, no padding. */

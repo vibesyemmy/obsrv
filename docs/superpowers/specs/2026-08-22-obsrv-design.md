@@ -340,3 +340,53 @@ catalog straight from `src/shared/presets.ts` without spawning. The server
 never re-implements capture: the CLI keeps signals, user-data isolation and
 crash fast-fail, and its stderr tail becomes the tool-error message (a wedged
 run is SIGTERMed after the per-render budget plus boot headroom).
+
+**Live drive (v1.4).** Headless renders are invisible; when the user has the
+desktop app open, agent commands should drive the *visible* window — the URL
+loads, presets flip, panel profiles apply on screen — while the agent still
+gets captures back. A toolbar toggle "Agent control" (neutral chrome,
+`aria-pressed`, persisted as `settings.agentControl`, default **off**;
+`OBSRV_AGENT_CONTROL=1` force-enables a session in memory) starts a loopback
+control server in main (`src/main/controlServer.ts`): plain `node:http` bound
+to **127.0.0.1** on an ephemeral port, discovered through `control.json`
+(`{ port, token }`, mode **0600**, in `userData`; removed on toggle-off and
+quit). One endpoint, `POST /` with `{ token, command, payload? }`; the token
+(32 random bytes, hex) is compared constant-time (hash-then-`timingSafeEqual`)
+on **every** command, `status` included — the 0600 file already proves "same
+user", so a token-free status would only leak state for no benefit; a wrong
+token is a detail-free 403. Commands re-enter existing validated paths only:
+`navigate` through the same normalise/`sync.expect`/both-panes path as
+`IPC.navigate` plus the MCP scheme allowlist; `setPreset` / `setProfile` /
+`setViewMode` forward an `IPC.agentApply` patch the renderer store applies
+with its own toolbar actions (the custom preset is refused — it means
+"whatever is typed in the fields"), confirmed against a main-side mirror the
+renderer keeps fresh over `IPC.uiState`; `status` reads that mirror plus the
+target's URL; `captureVisible` is `win.webContents.capturePage()` — the
+window as the user sees it. Received commands light a small neutral AGENT
+badge in the toolbar for ~3 s (`IPC.agentActivity`).
+
+MCP side: discovery derives the per-platform userData path under plain node
+(`OBSRV_CONTROL_FILE` overrides; group/other-readable or malformed files are
+treated as "not reachable") and proves liveness with a tokened `status`
+(500 ms). `obsrv_snap` gains `mode: auto | headless | live` (default auto):
+live when the app answers — navigate, optional preset/profile, a bounded
+redirect-tolerant wait for `status.url`, then the window PNG, with
+`mode: "live"` in the result — else the unchanged headless render, now
+labelled `mode: "headless"`. Custom dims and `fullPage` always render
+headlessly with a note (even under explicit `live`); `waitMs` is ignored live
+with a note; `mode: "live"` with no app is an actionable error, never a
+silent fallback. `obsrv_drive` (`readOnlyHint: false` — it changes what the
+user's window shows) applies `{ url?, preset?, profile?, viewMode? }` and
+returns the confirming status. `obsrv_snap` keeps `readOnlyHint: true` (it
+renders and captures), but its description states plainly that a live snap
+steers the open app window — navigation, preset flip — as its means of
+capture, so auto-approving clients are not surprised: that visible steering
+is the feature. `obsrv_diff` stays headless-only: the
+comparison needs both rasters, which the visible app cannot show.
+
+The server itself adds browser-shaped defence-in-depth ahead of the token
+check: any request carrying an `Origin` header is refused (403 — a browser's
+cross-site POST always sends one; same-user local clients never do), and the
+`Content-Type` must be `application/json` (415 — a no-cors "simple request"
+cannot send it). The renderer-mount apply queue is bounded (32 entries,
+oldest dropped with a one-time warning).

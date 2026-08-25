@@ -110,30 +110,61 @@ export function stderrTail(stderr: string, max: number = STDERR_TAIL_CHARS): str
   return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`
 }
 
-/** Schemes a tool call may hand to the CLI. */
-export const ALLOWED_URL_SCHEMES = ['http:', 'https:', 'file:'] as const
+// The scheme allowlist lives in shared/url.ts so the agent-control server
+// applies the identical check; re-exported so existing importers (and their
+// unit tests) keep their path.
+export { ALLOWED_URL_SCHEMES, urlSchemeError } from '../shared/url'
+
+// --- live drive --------------------------------------------------------------
+
+export type SnapMode = 'auto' | 'headless' | 'live'
+
+export interface SnapPathPlan {
+  path: 'live' | 'headless'
+  /** Human notes about inputs that changed the path or were ignored on it. */
+  notes: string[]
+}
+
+export const APP_NOT_REACHABLE =
+  'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
+  '(or pass mode: "headless" to render without it).'
 
 /**
- * Rejects URLs whose explicit scheme is outside the allowlist (javascript:,
- * data:, chrome:, …) with an actionable message, or returns null when the URL
- * may proceed. Scheme-relative (`//host`), bare-host (`example.com/page`) and
- * host:port (`localhost:5173`) forms pass — they normalise to http(s)
- * downstream.
+ * Decides whether an `obsrv_snap` call drives the visible app or renders
+ * headlessly (spec §14 "Live drive"), given whether a control-enabled app
+ * answered discovery. Documented calls, exercised in tests/unit/mcpLib.test.ts:
+ *
+ * - custom dims (width/height/dsf/diagonal) always render headlessly — the
+ *   live path drives the app's preset table only — with a note, even under
+ *   an explicit `mode: 'live'`.
+ * - `fullPage` always renders headlessly (the visible window cannot show a
+ *   full page), with a note.
+ * - `waitMs` is honoured headlessly; on the live path it is ignored with a
+ *   note (the live capture settles on the app's own committed navigation).
+ * - `mode: 'live'` with no reachable app is an error, never a silent
+ *   headless fallback — the caller asked to watch.
  */
-export function urlSchemeError(url: string): string | null {
-  const trimmed = url.trim()
-  const match = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)
-  if (!match) return null // bare host or scheme-relative
-  const scheme = `${match[1]!.toLowerCase()}:`
-  if ((ALLOWED_URL_SCHEMES as readonly string[]).includes(scheme)) return null
-  // `localhost:5173`-style host:port, not a scheme: the "scheme" is followed
-  // by a bare port number.
-  if (/^[a-z0-9.-]+:\d+(\/|$)/i.test(trimmed)) return null
-  return (
-    `unsupported URL scheme "${scheme}" — obsrv renders ` +
-    `${ALLOWED_URL_SCHEMES.map(s => `${s}//`).join(', ')} URLs only ` +
-    `(bare hosts like example.com also work; they normalise to http(s)).`
-  )
+export function planSnapPath(
+  input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs'>,
+  mode: SnapMode,
+  liveReachable: boolean,
+): SnapPathPlan | { error: string } {
+  if (mode === 'headless') return { path: 'headless', notes: [] }
+  if (!liveReachable) {
+    if (mode === 'live') return { error: APP_NOT_REACHABLE }
+    return { path: 'headless', notes: [] }
+  }
+  const notes: string[] = []
+  const custom =
+    input.width !== undefined ||
+    input.height !== undefined ||
+    input.deviceScaleFactor !== undefined ||
+    input.diagonalInches !== undefined
+  if (custom) notes.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
+  if (input.fullPage) notes.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
+  if (notes.length > 0) return { path: 'headless', notes }
+  if (input.waitMs !== undefined) notes.push('waitMs is headless-only and was ignored in live mode.')
+  return { path: 'live', notes }
 }
 
 /**
