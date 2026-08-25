@@ -47,5 +47,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vibesyemmy/obsrv.git"
-  }
+  },
+  "license": "MIT"
 }
