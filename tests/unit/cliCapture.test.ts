@@ -38,6 +38,19 @@ describe('captureQuiescent', () => {
     expect(Array.from(got.bgra.subarray(12, 16))).toEqual([9, 9, 9, 9])
     expect(Array.from(got.bgra.subarray(0, 4))).toEqual([0, 0, 0, 0])
   })
+  it('partial slices that together cover the frame count as covered (post-resize tiled repaints)', async () => {
+    // Chromium was observed to repaint a grown surface as several dirty
+    // slices with no single full-frame paint; cumulative coverage must do.
+    const half = (y: number, byte: number): FrameMessage => ({
+      frame: { x: 0, y, width: 2, height: 1, data: new Uint8Array(8).fill(byte) },
+      frameWidth: 2,
+      frameHeight: 2,
+    })
+    const src = new FakeSource([half(0, 4), half(1, 6)])
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    expect(Array.from(got.bgra.subarray(0, 8))).toEqual(Array(8).fill(4))
+    expect(Array.from(got.bgra.subarray(8, 16))).toEqual(Array(8).fill(6))
+  })
   it('a frame-size change resets coverage: stale small frames never satisfy a bigger viewport', async () => {
     // Full 1x1 frame, then only a partial slice of the new 2x2 size: coverage
     // is never re-established, so the capture must time out, not resolve.

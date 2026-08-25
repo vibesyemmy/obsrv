@@ -91,10 +91,13 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
     if (options.waitMs > 0) await sleep(options.waitMs)
 
-    let frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: human })
     let cssHeight = applied.height
-
     if (options.fullPage) {
+      // Layout is final at did-finish-load (+ --wait for late movers), so the
+      // page height needs no pixels: resize *before* the one and only capture
+      // rather than capturing, growing, and paying for a second full raster —
+      // at 1366×4096 the software rasteriser is slow enough that capturing
+      // twice was observed to blow the render budget on a loaded machine.
       const scrollHeight = Math.ceil(
         (await target.webContents.executeJavaScript(
           'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
@@ -110,11 +113,11 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           )
         }
         target.setViewport(applied.width, wanted, spec.deviceScaleFactor)
-        frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: human })
         cssHeight = wanted
       }
     }
 
+    const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: human })
     return { frame, cssWidth: applied.width, cssHeight }
   } finally {
     target.destroy()

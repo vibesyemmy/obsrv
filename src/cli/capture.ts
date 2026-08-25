@@ -36,9 +36,12 @@ export const DEFAULT_SETTLE_MS = 400
 
 /**
  * Forces a repaint, composites dirty BGRA slices into a full device-pixel
- * buffer, and resolves once no paint has arrived for `settleMs` *and* at
- * least one full-coverage frame has been seen since the last frame-size
- * change (partial slices against an uncovered buffer are not a picture).
+ * buffer, and resolves once no paint has arrived for `settleMs` *and* every
+ * pixel has been painted at least once since the last frame-size change
+ * (partial slices against an uncovered buffer are not a picture). Coverage is
+ * cumulative: after a viewport growth (--full-page) Chromium was observed to
+ * deliver the repaint of a large surface as several dirty slices and never a
+ * single full-frame one, so a "one full paint" flag would wait forever.
  * At `timeoutMs` a covered-but-noisy page (animation, video) is captured
  * as-is with a warning; a never-covered surface is an error.
  */
@@ -50,6 +53,9 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   let height = 0
   let buffer = new Uint8Array(0)
   let covered = false
+  /** Per-pixel paint accounting; freed the moment coverage completes. */
+  let mask: Uint8Array | null = null
+  let uncovered = 0
   let lastPaint = Date.now()
 
   const onFrame = (m: FrameMessage): void => {
@@ -59,16 +65,34 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       height = m.frameHeight
       buffer = new Uint8Array(width * height * 4)
       covered = false
+      mask = new Uint8Array(width * height)
+      uncovered = width * height
     }
     const { x, y, width: w, height: h, data } = m.frame
     if (x === 0 && y === 0 && w === width && h === height) {
       buffer.set(data)
       covered = true
+      mask = null
       return
     }
     for (let row = 0; row < h; row++) {
       const src = row * w * 4
       buffer.set(data.subarray(src, src + w * 4), ((y + row) * width + x) * 4)
+    }
+    if (!covered && mask) {
+      for (let row = 0; row < h; row++) {
+        let p = (y + row) * width + x
+        for (let col = 0; col < w; col++, p++) {
+          if (mask[p] === 0) {
+            mask[p] = 1
+            uncovered--
+          }
+        }
+      }
+      if (uncovered === 0) {
+        covered = true
+        mask = null
+      }
     }
   }
 
