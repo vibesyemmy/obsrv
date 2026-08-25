@@ -68,6 +68,18 @@ are informational (exit 0); CI thresholds are the caller's job. A ready-made
 Claude Code skill that wraps the loop (snap matrix → read the PNGs → diff →
 fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md).
 
+### MCP server
+
+The same CLI is also wrapped as an MCP server (stdio, stateless) so MCP
+clients get the tools natively: `obsrv_snap` (render a URL at a preset's true
+raster density — the PNG comes back as an inline image up to 1.5 MiB),
+`obsrv_diff` (the 1x-vs-2x metrics as structured output) and `obsrv_presets`
+(every preset and panel profile, no render). Build first, then register:
+
+```bash
+claude mcp add --scope user obsrv -- node /Users/opeyemiajagbe/Documents/Projects/Obsrv/bin/obsrv-mcp.js
+```
+
 ## Develop
 
 ```bash

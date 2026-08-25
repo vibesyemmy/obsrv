@@ -1,0 +1,33 @@
+<!--
+  Evaluation set for the Obsrv MCP server (bin/obsrv-mcp.js — obsrv_snap /
+  obsrv_diff / obsrv_presets). Questions run only read-only tools against the
+  repo's committed fixtures, so every answer is stable and was verified by
+  actually calling the tools before being written down. Verify by direct
+  string comparison.
+-->
+<evaluation>
+   <qa_pair>
+      <question>Using the Obsrv tools, snap file:///Users/opeyemiajagbe/Documents/Projects/Obsrv/tests/fixtures/hairline.html on the iPhone 6.1-inch preset. How many device pixels wide is the resulting PNG? Answer with the number only.</question>
+      <answer>1179</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Run Obsrv's 1x-versus-2x-reference comparison on file:///Users/opeyemiajagbe/Documents/Projects/Obsrv/tests/fixtures/thin-text.html at the 1366×768 15.6-inch laptop preset. Is the reported ink-row ratio (target rows over reference rows) between 0.3 and 0.7 — the band that indicates glyphs scaling normally with raster density rather than hairline behaviour? Answer True or False.</question>
+      <answer>True</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>How many of Obsrv's screen presets belong to the laptop group? Answer with the number only.</question>
+      <answer>6</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Obsrv can simulate a cheap TN panel. What panel contrast ratio does that Budget TN profile simulate, as the N of N:1? Answer with the number only.</question>
+      <answer>700</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Across every screen preset Obsrv ships, what is the highest physical pixel density in ppi? Answer with the number only.</question>
+      <answer>461</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Take a full-page snap of file:///Users/opeyemiajagbe/Documents/Projects/Obsrv/tests/fixtures/tall.html at the laptop-768 preset (the page is taller than the device-pixel budget allows). What CSS pixel height does the capture metadata report? Answer with the number only.</question>
+      <answer>4096</answer>
+   </qa_pair>
+</evaluation>
