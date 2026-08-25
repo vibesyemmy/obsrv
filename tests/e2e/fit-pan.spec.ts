@@ -101,6 +101,32 @@ test('fit draws the whole viewport inside the pane and the footer says so', asyn
   await expect(footer).not.toContainText('fit ×')
 })
 
+/**
+ * boxes(), but only once fit's layout is self-consistent: the canvas box must
+ * be the fit of the *current* pane box (canvas CSS width = round(viewport ×
+ * fitScale) / dpr, exactly as TargetCanvas builds it). Entering fit can take
+ * two layout passes when classic (space-taking) scrollbars are in play: the
+ * first fit render sizes the canvas from the pane measured while 1:1's
+ * scrollbars were up; the scrollbars then vanish, the pane widens, and a
+ * ResizeObserver round-trip re-renders the canvas one frame later. A read
+ * between those passes pairs the new pane with the old canvas and computes a
+ * jump the app — consistent within either pass — never performs. macOS shows
+ * classic scrollbars when no pointing device is attached (CI runners), so
+ * that window never opens on a dev machine; on a loaded runner it is wide
+ * enough to lose deterministically.
+ */
+const settledFitBoxes = async (oneToOne: number): Promise<Awaited<ReturnType<typeof boxes>>> => {
+  let b = await boxes()
+  await expect
+    .poll(async () => {
+      b = await boxes()
+      const fs = computeFitScale(b.pane.width, b.pane.height, b.dpr, VP.width, VP.height, oneToOne)
+      return Math.abs(b.canvas.width * b.dpr - Math.round(VP.width * fs))
+    })
+    .toBeLessThanOrEqual(1)
+  return b
+}
+
 test('a click in fit jumps to 1:1 with the clicked target pixel centred', async () => {
   await load(TALL)
   await setView('1:1')
@@ -111,8 +137,10 @@ test('a click in fit jumps to 1:1 with the clicked target pixel centred', async 
 
   await setView('fit')
   // The pane's scroll clamps to 0 the moment the content fits, so the canvas
-  // sits at the pane origin and its box is the click's frame of reference.
-  const b = await boxes()
+  // sits at the pane origin and its box is the click's frame of reference —
+  // once the canvas has caught up with the scrollbar-free pane (see
+  // settledFitBoxes).
+  const b = await settledFitBoxes(oneToOne)
   const px = Math.round(b.canvas.x + b.canvas.width * 0.7)
   const py = Math.round(b.canvas.y + b.canvas.height * 0.65)
   const clickX = px - b.canvas.x
