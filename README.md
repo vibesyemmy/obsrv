@@ -99,6 +99,16 @@ Architecture, decisions and the full spec live in
 the UI style rationale (why the chrome is strictly neutral) is in
 [docs/superpowers/specs/2026-08-23-obsrv-ui-style.md](docs/superpowers/specs/2026-08-23-obsrv-ui-style.md).
 
+## Install (desktop app)
+
+Grab the DMG for your chip from [Releases](https://github.com/vibesyemmy/obsrv/releases),
+drag Obsrv.app to Applications, then clear the quarantine flag once (the build is not
+yet notarised, so macOS falsely reports it as "damaged"):
+
+```bash
+xattr -cr /Applications/Obsrv.app
+```
+
 ## Distribution
 
 Obsrv will publish to npm as **`getobsrv`** (the installed commands remain `obsrv`
