@@ -87,7 +87,7 @@ function cliFailure(command: 'snap' | 'diff', run: CliRun, killAfterMs: number):
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
 }
 
-function parseCliJson(command: 'snap' | 'diff', stdout: string): Record<string, unknown> | null {
+function parseCliJson(stdout: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(stdout)
     return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : null
@@ -252,7 +252,7 @@ server.registerTool(
     const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS)
     const run = await runCli(args, killAfterMs)
     if (run.killed || run.code !== 0) return cliFailure('snap', run, killAfterMs)
-    const meta = parseCliJson('snap', run.stdout)
+    const meta = parseCliJson(run.stdout)
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const structured = { ...meta, pngPath }
@@ -292,7 +292,7 @@ server.registerTool(
     const killAfterMs = killBudgetMs(2, DEFAULT_TIMEOUT_MS)
     const run = await runCli(args, killAfterMs)
     if (run.killed || run.code !== 0) return cliFailure('diff', run, killAfterMs)
-    const metrics = parseCliJson('diff', run.stdout)
+    const metrics = parseCliJson(run.stdout)
     if (!metrics) return toolError(`obsrv diff exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(metrics, null, 2) }]
