@@ -95,6 +95,12 @@ Architecture, decisions and the full spec live in
 the UI style rationale (why the chrome is strictly neutral) is in
 [docs/superpowers/specs/2026-08-23-obsrv-ui-style.md](docs/superpowers/specs/2026-08-23-obsrv-ui-style.md).
 
+## Distribution
+
+Obsrv will publish to npm as **`getobsrv`** (the installed commands remain `obsrv`
+and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name
+belongs to an unrelated package.
+
 ## Known v1 limits
 
 - Rendering truth is the host OS's 1x rasteriser (macOS today). Windows ClearType at 1x
