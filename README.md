@@ -78,7 +78,15 @@ The same CLI is also wrapped as an MCP server (stdio, stateless) so MCP
 clients get the tools natively: `obsrv_snap` (render a URL at a preset's true
 raster density — the PNG comes back as an inline image up to 1.5 MiB),
 `obsrv_diff` (the 1x-vs-2x metrics as structured output) and `obsrv_presets`
-(every preset and panel profile, no render). Build first, then register:
+(every preset and panel profile, no render).
+
+If the desktop app is open with the toolbar's **Agent control** toggle on,
+`obsrv_snap` drives the *visible* window instead: you watch the URL load and
+the preset flip, and the agent gets back a capture of the app exactly as you
+see it (plus `obsrv_drive` to flip URL/preset/profile directly). With no app
+running, everything falls back to the headless render automatically.
+
+Build first, then register:
 
 ```bash
 claude mcp add --scope user obsrv -- npx -y getobsrv mcp
