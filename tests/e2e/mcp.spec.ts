@@ -1,0 +1,135 @@
+import { test, expect } from '@playwright/test'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+/**
+ * Drives the real MCP server: the SDK client spawns `node bin/obsrv-mcp.js`
+ * (the built out/mcp/server.js) and speaks JSON-RPC over stdio, the way
+ * Claude Code would after `claude mcp add`. Snap/diff boot a full Electron
+ * per call, so those tests carry CLI-sized budgets.
+ */
+
+const ROOT = resolve(__dirname, '../..')
+const MCP_BIN = resolve(ROOT, 'bin/obsrv-mcp.js')
+const fixture = (name: string): string => pathToFileURL(resolve(__dirname, `../fixtures/${name}`)).href
+
+// Long enough for two Electron boots (diff) on a loaded machine.
+const CALL_TIMEOUT_MS = 150_000
+test.describe.configure({ timeout: 180_000 })
+
+let client: Client
+
+test.beforeAll(async () => {
+  client = new Client({ name: 'obsrv-mcp-spec', version: '0.0.0' })
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: [MCP_BIN], cwd: ROOT }))
+})
+
+test.afterAll(async () => {
+  await client?.close()
+})
+
+const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
+  client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
+
+test('initialize + tools/list: three read-only tools with schemas', async () => {
+  expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
+
+  const { tools } = await client.listTools()
+  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_diff', 'obsrv_presets', 'obsrv_snap'])
+  for (const tool of tools) {
+    expect(tool.description).toBeTruthy()
+    expect(tool.annotations?.readOnlyHint).toBe(true)
+    expect(tool.inputSchema).toMatchObject({ type: 'object' })
+    expect(tool.outputSchema).toMatchObject({ type: 'object' })
+  }
+  const snap = tools.find(t => t.name === 'obsrv_snap')!
+  expect(Object.keys(snap.inputSchema.properties ?? {})).toEqual(
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs']),
+  )
+  const diff = tools.find(t => t.name === 'obsrv_diff')!
+  expect(Object.keys(diff.inputSchema.properties ?? {})).toEqual(
+    expect.arrayContaining(['url', 'preset', 'profile', 'includeImages']),
+  )
+})
+
+test('obsrv_presets: the full catalog, straight from presets.ts', async () => {
+  const r = await call('obsrv_presets', {})
+  expect(r.isError).toBeFalsy()
+  const catalog = r.structuredContent as {
+    presets: { id: string; cssWidth: number; deviceScaleFactor: number; ppi: number }[]
+    profiles: { id: string; contrastRatio: number | null; summary: string }[]
+  }
+  expect(catalog.presets).toHaveLength(15)
+  expect(catalog.profiles).toHaveLength(4)
+  expect(catalog.presets.find(p => p.id === 'laptop-768')).toMatchObject({ cssWidth: 1366, deviceScaleFactor: 1, ppi: 100 })
+  expect(catalog.profiles.find(p => p.id === 'budget-tn')?.contrastRatio).toBe(700)
+  // The text block carries the same payload for structured-content-blind clients.
+  const text = r.content.find(c => c.type === 'text')
+  expect(JSON.parse((text as { text: string }).text).presets).toHaveLength(15)
+})
+
+test('obsrv_snap: laptop-768 render returns metadata and an inline PNG', async () => {
+  const r = await call('obsrv_snap', { url: fixture('hairline.html'), preset: 'laptop-768' })
+  expect(r.isError).toBeFalsy()
+
+  const meta = r.structuredContent as Record<string, unknown>
+  expect(meta).toMatchObject({
+    preset: 'laptop-768',
+    cssWidth: 1366,
+    cssHeight: 768,
+    deviceScaleFactor: 1,
+    profile: 'reference',
+    settled: true,
+    warnings: [],
+  })
+  expect(typeof meta.pngPath).toBe('string')
+  expect(existsSync(meta.pngPath as string)).toBe(true)
+
+  const image = r.content.find(c => c.type === 'image') as { data: string; mimeType: string } | undefined
+  expect(image).toBeTruthy()
+  expect(image!.mimeType).toBe('image/png')
+  const png = Buffer.from(image!.data, 'base64')
+  // PNG magic bytes: \x89PNG\r\n\x1a\n.
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(Buffer.compare(png, readFileSync(meta.pngPath as string))).toBe(0)
+})
+
+test('obsrv_diff: thin text reproduces the ~0.5 row ratio, files on disk', async () => {
+  const r = await call('obsrv_diff', { url: fixture('thin-text.html'), preset: 'laptop-768' })
+  expect(r.isError).toBeFalsy()
+
+  const m = r.structuredContent as {
+    preset: string
+    rows: { target: number; reference: number; ratio: number | null }
+    bands: unknown[]
+    findings: unknown[]
+    files: { target: string; reference: string }
+  }
+  expect(m.preset).toBe('laptop-768')
+  expect(m.rows.ratio).toBeGreaterThan(0.3)
+  expect(m.rows.ratio).toBeLessThan(0.7)
+  expect(m.bands).toHaveLength(8)
+  expect(Array.isArray(m.findings)).toBe(true)
+  expect(existsSync(m.files.target)).toBe(true)
+  expect(existsSync(m.files.reference)).toBe(true)
+  // No inline images unless includeImages is passed.
+  expect(r.content.every(c => c.type !== 'image')).toBe(true)
+})
+
+test('obsrv_snap: an unknown preset is a tool error naming the valid ids', async () => {
+  const r = await call('obsrv_snap', { url: fixture('hairline.html'), preset: 'nope' })
+  expect(r.isError).toBe(true)
+  const text = (r.content[0] as { text: string }).text
+  expect(text).toContain('obsrv_snap')
+  expect(text).toContain('laptop-768') // the message lists the valid options
+})
+
+test('obsrv_snap: preset plus custom dims is a usage error with the fix', async () => {
+  const r = await call('obsrv_snap', { url: fixture('hairline.html'), preset: 'laptop-768', width: 100, height: 100 })
+  expect(r.isError).toBe(true)
+  expect((r.content[0] as { text: string }).text).toMatch(/mutually exclusive/)
+})
