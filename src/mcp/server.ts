@@ -3,13 +3,16 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { DEFAULT_TIMEOUT_MS } from '../cli/args'
+import { parseControlStatus } from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
+import { controlCall, discoverControl, type LiveApp } from './control'
 import {
+  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
   buildDiffArgs,
@@ -17,10 +20,12 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  planSnapPath,
   shouldInlineImage,
   stderrTail,
   urlSchemeError,
   type DiffToolInput,
+  type SnapMode,
   type SnapToolInput,
 } from './lib'
 
@@ -151,18 +156,36 @@ const snapInputShape = {
     .min(1)
     .optional()
     .describe(`Per-render budget for load + paint quiescence, in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  mode: z
+    .enum(['auto', 'headless', 'live'])
+    .optional()
+    .describe(
+      'auto (default): drive the visible Obsrv app when it is open with Agent control on, else render headlessly. ' +
+        'live: require the app (error if unreachable). headless: never touch the app.',
+    ),
 }
 
 const snapOutputShape = {
-  out: z.string().describe('PNG path the CLI wrote (same file as pngPath).'),
-  preset: z.string().describe('Preset id, or "custom" for width/height runs.'),
-  cssWidth: z.number().describe('Applied CSS viewport width.'),
-  cssHeight: z.number().describe('Applied CSS viewport height (grown under fullPage).'),
-  deviceScaleFactor: z.number(),
-  profile: z.string(),
-  settled: z.boolean().describe('False: the page never went paint-quiet (e.g. animation) and the capture is best-effort.'),
+  mode: z
+    .enum(['headless', 'live'])
+    .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
+  out: z.string().optional().describe('Headless only: PNG path the CLI wrote (same file as pngPath).'),
+  preset: z.string().optional().describe('Headless only: preset id, or "custom" for width/height runs.'),
+  cssWidth: z.number().optional().describe('Headless only: applied CSS viewport width.'),
+  cssHeight: z.number().optional().describe('Headless only: applied CSS viewport height (grown under fullPage).'),
+  deviceScaleFactor: z.number().optional().describe('Headless only.'),
+  profile: z.string().optional().describe('Headless only: applied panel profile id.'),
+  settled: z
+    .boolean()
+    .describe('Headless: the page went paint-quiet. Live: the app confirmed the navigation before the capture.'),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
+  url: z.string().optional().describe('Live only: the URL the app reports showing.'),
+  presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
+  profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
+  viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
+  width: z.number().optional().describe('Live only: captured app-window width in px.'),
+  height: z.number().optional().describe('Live only: captured app-window height in px.'),
 }
 
 const diffInputShape = {
@@ -233,6 +256,123 @@ const presetsOutputShape = {
   ),
 }
 
+const driveInputShape = {
+  url: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Navigate the app (both panes) to this http://, https:// or file:// URL (bare hosts also work).'),
+  preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
+  profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
+  viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
+}
+
+const driveOutputShape = {
+  version: z.string().describe('The running app version.'),
+  url: z.string().describe('The URL the target pane reports showing.'),
+  presetId: z.string(),
+  profileId: z.string(),
+  viewMode: z.string(),
+  mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
+}
+
+// --- live drive --------------------------------------------------------------
+
+/** Budget for one control `status` round-trip once the app is known live. */
+const LIVE_STATUS_TIMEOUT_MS = 2_000
+/** Budget for a preset/profile/view-mode apply (the server confirms, bounded). */
+const LIVE_APPLY_TIMEOUT_MS = 5_000
+/** Budget for `captureVisible` (a full-window PNG over loopback). */
+const LIVE_CAPTURE_TIMEOUT_MS = 30_000
+/** How long a live snap waits for `status.url` to reflect the navigation. */
+const LIVE_SETTLE_MS = 5_000
+
+function liveFailure(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  return (
+    `${msg}. If the Obsrv app was closed or Agent control was toggled off mid-call, ` +
+    `re-open the app and re-enable the toolbar toggle — or pass mode: "headless".`
+  )
+}
+
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
+
+/**
+ * The live `obsrv_snap` path: navigate the visible app (plus preset/profile
+ * when given), wait — bounded — for the app to report the navigation, then
+ * capture the window exactly as the user sees it.
+ */
+async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Promise<CallToolResult> {
+  const { info } = app
+  const warnings = [...notes]
+  const before = app.status.url
+  let applied = ''
+  try {
+    // The navigate command answers once both panes finished loading, so it
+    // carries the same per-render budget the headless path polices.
+    const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) + 10_000)
+    applied = typeof nav['url'] === 'string' ? nav['url'] : ''
+    if (input.preset !== undefined) await controlCall(info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+    if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
+  } catch (e) {
+    return toolError(liveFailure(e))
+  }
+
+  // The app settles when it reports the applied URL — or, after a redirect,
+  // any committed non-blank URL that is no longer the pre-navigation one.
+  let status = app.status
+  let settled = false
+  const deadline = Date.now() + LIVE_SETTLE_MS
+  for (;;) {
+    try {
+      const s = parseControlStatus(await controlCall(info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
+      if (s) {
+        status = s
+        settled = s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
+      }
+    } catch (e) {
+      return toolError(liveFailure(e))
+    }
+    if (settled || Date.now() >= deadline) break
+    await sleep(250)
+  }
+  if (!settled) warnings.push('the app did not confirm the navigation before capture; the PNG may show the previous page.')
+
+  let capture: Record<string, unknown>
+  try {
+    capture = await controlCall(info, 'captureVisible', {}, LIVE_CAPTURE_TIMEOUT_MS)
+  } catch (e) {
+    return toolError(liveFailure(e))
+  }
+  const { data, width, height } = capture
+  if (typeof data !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+    return toolError('the control server returned a malformed capture')
+  }
+  const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
+  const pngPath = join(dir, 'live.png')
+  await writeFile(pngPath, Buffer.from(data, 'base64'))
+
+  const structured = {
+    mode: 'live',
+    url: status.url,
+    presetId: status.presetId,
+    profileId: status.profileId,
+    viewMode: status.viewMode,
+    width,
+    height,
+    settled,
+    warnings,
+    pngPath,
+  }
+  return {
+    content: [
+      { type: 'text', text: JSON.stringify(structured, null, 2) },
+      await imageOrNote(pngPath, 'The captured app window', 'read the file at pngPath'),
+    ],
+    structuredContent: structured,
+  }
+}
+
 // --- server ------------------------------------------------------------------
 
 const server = new McpServer({ name: 'obsrv-mcp-server', version: VERSION })
@@ -249,14 +389,34 @@ server.registerTool(
       `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both. ` +
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap; larger ` +
-      `captures (typically fullPage) stay on disk with a note.`,
+      `captures (typically fullPage) stay on disk with a note.\n\n` +
+      `Live drive: when the Obsrv desktop app is open with its "Agent control" toolbar toggle on, \`mode: "auto"\` ` +
+      `(the default) drives the *visible* app instead — the user watches the URL load and the preset flip, and the ` +
+      `returned PNG is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` ` +
+      `otherwise). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
+      `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
+      `touches it.`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: SnapToolInput): Promise<CallToolResult> => {
+  async (input: SnapToolInput & { mode?: SnapMode }): Promise<CallToolResult> => {
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
+
+    // The live path first (spec §14 "Live drive"): a reachable control-enabled
+    // app wins under auto, is required under live, and is never probed under
+    // headless. planSnapPath documents the fallback rules.
+    const requestedMode = input.mode ?? 'auto'
+    let liveNotes: string[] = []
+    if (requestedMode !== 'headless') {
+      const live = await discoverControl()
+      const plan = planSnapPath(input, requestedMode, live !== null)
+      if ('error' in plan) return toolError(plan.error)
+      if (plan.path === 'live' && live) return liveSnap(live, input, plan.notes)
+      liveNotes = plan.notes
+    }
+
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
     let args: string[]
@@ -273,7 +433,8 @@ server.registerTool(
     const meta = extractTrailingJson(run.stdout)
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
-    const structured = { ...meta, pngPath }
+    const cliWarnings = Array.isArray(meta['warnings']) ? (meta['warnings'] as string[]) : []
+    const structured = { ...meta, mode: 'headless', warnings: [...cliWarnings, ...liveNotes], pngPath }
     return {
       content: [
         { type: 'text', text: JSON.stringify(structured, null, 2) },
@@ -298,7 +459,10 @@ server.registerTool(
       `paths of target.png / reference.png in a per-call temp dir. \`includeImages: true\` also inlines both ` +
       `PNGs (1.5 MiB cap each).\n\n` +
       `1x presets only (e.g. laptop-768, 1080p-24): dense presets (phones) and CSS viewports over 2048px are ` +
-      `refused with an explanatory error — use obsrv_snap for those.`,
+      `refused with an explanatory error — use obsrv_snap for those.\n\n` +
+      `Headless-only: a diff always performs its own two renders and never drives a running Obsrv app window ` +
+      `(the comparison needs both rasters, which the visible app cannot show) — use obsrv_snap or obsrv_drive ` +
+      `for live drive.`,
     inputSchema: diffInputShape,
     outputSchema: diffOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -327,6 +491,51 @@ server.registerTool(
       content.push(await imageOrNote(files.reference, 'reference.png', ''))
     }
     return { content, structuredContent: metrics }
+  },
+)
+
+server.registerTool(
+  'obsrv_drive',
+  {
+    title: 'Drive the visible Obsrv app',
+    description:
+      `Drive the Obsrv desktop app the user is looking at: navigate it to a URL, apply a screen preset, a panel ` +
+      `profile, or the target pane's 1:1/fit view — each applied exactly as clicking the toolbar would, while the ` +
+      `user watches. Applies whichever inputs are given (none = just read the current state) and returns the ` +
+      `resulting status: app version, the URL showing, and the selected preset/profile/view.\n\n` +
+      `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
+      `mutates visible app state (it changes what the user's window shows) but renders nothing itself — use ` +
+      `obsrv_snap for a capture.`,
+    inputSchema: driveInputShape,
+    outputSchema: driveOutputShape,
+    // Honest annotation: this changes what the user's window is showing.
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  },
+  async (input: { url?: string; preset?: string; profile?: string; viewMode?: '1:1' | 'fit' }): Promise<CallToolResult> => {
+    if (input.url !== undefined) {
+      const badScheme = urlSchemeError(input.url)
+      if (badScheme) return toolError(badScheme)
+    }
+    const live = await discoverControl()
+    if (!live) return toolError(APP_NOT_REACHABLE)
+    try {
+      if (input.url !== undefined) {
+        await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      }
+      if (input.preset !== undefined) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+      if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
+      if (input.viewMode !== undefined) {
+        await controlCall(live.info, 'setViewMode', { mode: input.viewMode }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
+      if (!status) return toolError('the control server returned a malformed status')
+      return {
+        content: [{ type: 'text', text: JSON.stringify(status, null, 2) }],
+        structuredContent: { ...status },
+      }
+    } catch (e) {
+      return toolError(liveFailure(e))
+    }
   },
 )
 

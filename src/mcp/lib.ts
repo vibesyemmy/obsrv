@@ -115,6 +115,58 @@ export function stderrTail(stderr: string, max: number = STDERR_TAIL_CHARS): str
 // unit tests) keep their path.
 export { ALLOWED_URL_SCHEMES, urlSchemeError } from '../shared/url'
 
+// --- live drive --------------------------------------------------------------
+
+export type SnapMode = 'auto' | 'headless' | 'live'
+
+export interface SnapPathPlan {
+  path: 'live' | 'headless'
+  /** Human notes about inputs that changed the path or were ignored on it. */
+  notes: string[]
+}
+
+export const APP_NOT_REACHABLE =
+  'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
+  '(or pass mode: "headless" to render without it).'
+
+/**
+ * Decides whether an `obsrv_snap` call drives the visible app or renders
+ * headlessly (spec §14 "Live drive"), given whether a control-enabled app
+ * answered discovery. Documented calls, exercised in tests/unit/mcpLib.test.ts:
+ *
+ * - custom dims (width/height/dsf/diagonal) always render headlessly — the
+ *   live path drives the app's preset table only — with a note, even under
+ *   an explicit `mode: 'live'`.
+ * - `fullPage` always renders headlessly (the visible window cannot show a
+ *   full page), with a note.
+ * - `waitMs` is honoured headlessly; on the live path it is ignored with a
+ *   note (the live capture settles on the app's own committed navigation).
+ * - `mode: 'live'` with no reachable app is an error, never a silent
+ *   headless fallback — the caller asked to watch.
+ */
+export function planSnapPath(
+  input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs'>,
+  mode: SnapMode,
+  liveReachable: boolean,
+): SnapPathPlan | { error: string } {
+  if (mode === 'headless') return { path: 'headless', notes: [] }
+  if (!liveReachable) {
+    if (mode === 'live') return { error: APP_NOT_REACHABLE }
+    return { path: 'headless', notes: [] }
+  }
+  const notes: string[] = []
+  const custom =
+    input.width !== undefined ||
+    input.height !== undefined ||
+    input.deviceScaleFactor !== undefined ||
+    input.diagonalInches !== undefined
+  if (custom) notes.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
+  if (input.fullPage) notes.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
+  if (notes.length > 0) return { path: 'headless', notes }
+  if (input.waitMs !== undefined) notes.push('waitMs is headless-only and was ignored in live mode.')
+  return { path: 'live', notes }
+}
+
 /**
  * Parses the CLI's machine output: the trailing JSON object on stdout.
  * Tolerant of stray runtime noise ahead of it (e.g. Chromium warnings that
