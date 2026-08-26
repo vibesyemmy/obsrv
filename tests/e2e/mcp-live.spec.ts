@@ -104,8 +104,15 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
     highlight: { x: 40, y: 40, width: 120, height: 60, durationMs: 8000 },
   })
   expect(r.isError).toBeFalsy()
-  // The result is the final status, reflecting everything that ran.
-  expect(r.structuredContent).toMatchObject({ url: TALL, presetId: 'laptop-768', mode: 'url' })
+  // The result is the final status, reflecting everything that ran — plus the
+  // scroll round-trip, so an agent can tell a scroll from a clamp.
+  expect(r.structuredContent).toMatchObject({
+    url: TALL,
+    presetId: 'laptop-768',
+    mode: 'url',
+    scrolled: { x: 0, y: 800 },
+    scroller: 'root',
+  })
 
   // The steering really happened in the visible app: the preset resized the
   // target, the scroll landed in both panes, the overlay is up.
@@ -119,6 +126,18 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
   await expect.poll(() => scrollY('native'), { timeout: 5_000 }).toBe(800)
   const page = await rendererWindow(app)
   await expect(page.locator('.agent-highlight')).toHaveCount(1)
+})
+
+test('obsrv_drive reports the inner scroller it found on an app shell', async () => {
+  const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
+  const r = await call('obsrv_drive', { url: APP_SHELL, scroll: { x: 0, y: 1500 } })
+  expect(r.isError).toBeFalsy()
+  // `window.scrollTo` would clamp to 0 here and used to answer a bare ok.
+  expect(r.structuredContent).toMatchObject({ url: APP_SHELL, scrolled: { x: 0, y: 1500 }, scroller: 'element' })
+
+  const miss = await call('obsrv_drive', { scroll: { x: 0, y: 100, scrollSelector: '#absent' } })
+  expect(miss.isError).toBeFalsy()
+  expect((miss.structuredContent as { warnings: string[] }).warnings.join(' ')).toMatch(/matched no element/)
 })
 
 test('a click that navigates is reflected in the returned obsrv_drive status', async () => {

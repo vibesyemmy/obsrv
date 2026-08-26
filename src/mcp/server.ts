@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus } from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
+import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { controlCall, discoverControl, type LiveApp } from './control'
 import {
   APP_NOT_REACHABLE,
@@ -185,7 +186,11 @@ const snapOutputShape = {
   profile: z.string().optional().describe('Headless only: applied panel profile id.'),
   settled: z
     .boolean()
-    .describe('Headless: the page went paint-quiet. Live: the app confirmed the navigation before the capture.'),
+    .describe(
+      'Headless: the page went paint-quiet and every pixel painted. False is still a usable capture — a page that ' +
+        'kept animating, or one whose repaint never completed, is returned as-is with a warning saying what was ' +
+        'missing. Live: the app confirmed the navigation before the capture.',
+    ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
   url: z.string().optional().describe('Live only: the URL the app reports showing.'),
@@ -291,9 +296,27 @@ const driveInputShape = {
   back: z.boolean().optional().describe('true: history back (native pane history; the target mirrors the committed page).'),
   forward: z.boolean().optional().describe('true: history forward (native pane history; the target mirrors it).'),
   scroll: z
-    .object({ x: z.number().min(0), y: z.number().min(0) })
+    .object({
+      x: z.number().min(0),
+      y: z.number().min(0),
+      scrollSelector: z
+        .string()
+        .min(1)
+        .max(MAX_SCROLL_SELECTOR)
+        .optional()
+        .describe(
+          'Escape hatch: a CSS selector naming the element to scroll, for pages whose scroll host the automatic ' +
+            'detection misjudges (several large scrollers, a virtualised list that translates content). No fallback ' +
+            'if it matches nothing — the result says so.',
+        ),
+    })
     .optional()
-    .describe('Scroll both panes to this absolute page offset in CSS px.'),
+    .describe(
+      'Scroll both panes to this absolute page offset in CSS px. Pages whose root cannot scroll (app shells with ' +
+        '`html, body { overflow: hidden }` and an inner `overflow-y: auto` container) are handled: the largest ' +
+        'visible inner scroller is found and scrolled instead. Check `scrolled` in the result for the offset ' +
+        'actually reached — that is how you tell a real scroll from one that clamped.',
+    ),
   panTo: z
     .object({ x: z.number().min(0), y: z.number().min(0) })
     .optional()
@@ -324,6 +347,20 @@ const driveOutputShape = {
   profileId: z.string(),
   viewMode: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
+  scrolled: z
+    .object({ x: z.number(), y: z.number() })
+    .nullable()
+    .optional()
+    .describe(
+      'Only when `scroll` was requested: the offset the target pane actually reached, read back after the write. ' +
+        'Less than you asked for means the content clamped (short page, or the wrong scroller). Null means the ' +
+        'pane did not confirm in time — the scroll may still have landed.',
+    ),
+  scroller: z
+    .enum(['root', 'element'])
+    .optional()
+    .describe("Only when `scroll` was requested: 'root' if the document scrolled, 'element' if an inner scroll container did."),
+  warnings: z.array(z.string()).optional().describe('Anything worth knowing about the commands that ran (e.g. a scrollSelector that matched nothing).'),
 }
 
 // --- live drive --------------------------------------------------------------
@@ -581,7 +618,10 @@ server.registerTool(
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
       `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/profile/view. A ` +
-      `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. ` +
+      `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
+      `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
+      `\`scrolled\` with what you asked for rather than trusting the call's success, and use \`scroll.scrollSelector\` ` +
+      `when the automatic scroll-host detection picks the wrong container.\n\n` +
       `Coordinates: click takes CSS-viewport px of the page (the valid range is 0 up to but not including the ` +
       `viewport size); panTo and highlight take target-pane pixels (device px of the render — identical to CSS px ` +
       `on 1x presets); scroll takes page CSS px.\n\n` +
@@ -603,7 +643,7 @@ server.registerTool(
     reload?: boolean
     back?: boolean
     forward?: boolean
-    scroll?: { x: number; y: number }
+    scroll?: { x: number; y: number; scrollSelector?: string }
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
     highlight?: { x: number; y: number; width: number; height: number; durationMs?: number }
@@ -632,7 +672,21 @@ server.registerTool(
       if (input.reload) await controlCall(live.info, 'reload', {}, LIVE_APPLY_TIMEOUT_MS)
       if (input.back) await controlCall(live.info, 'back', {}, LIVE_APPLY_TIMEOUT_MS)
       if (input.forward) await controlCall(live.info, 'forward', {}, LIVE_APPLY_TIMEOUT_MS)
-      if (input.scroll !== undefined) await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
+      // The scroll answer is the interesting half: it reports the offset the
+      // pane reached, which is the only way to tell a scroll from a clamp.
+      let scrolled: { x: number; y: number } | null | undefined
+      let scroller: 'root' | 'element' | undefined
+      const warnings: string[] = []
+      if (input.scroll !== undefined) {
+        const r = await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
+        const at = r['scrolled']
+        scrolled =
+          at !== null && typeof at === 'object' && typeof (at as { x?: unknown }).x === 'number' && typeof (at as { y?: unknown }).y === 'number'
+            ? { x: (at as { x: number }).x, y: (at as { y: number }).y }
+            : null
+        if (r['scroller'] === 'root' || r['scroller'] === 'element') scroller = r['scroller']
+        if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') warnings.push(w)
+      }
       if (input.panTo !== undefined) await controlCall(live.info, 'panTo', input.panTo, LIVE_APPLY_TIMEOUT_MS)
       if (input.click !== undefined) {
         // A click may navigate. Note the URL first, then wait — bounded and
@@ -652,9 +706,15 @@ server.registerTool(
       if (input.highlight !== undefined) await controlCall(live.info, 'highlight', input.highlight, LIVE_APPLY_TIMEOUT_MS)
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
+      const structured = {
+        ...status,
+        ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
+        ...(scroller !== undefined ? { scroller } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
+      }
       return {
-        content: [{ type: 'text', text: JSON.stringify(status, null, 2) }],
-        structuredContent: { ...status },
+        content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }],
+        structuredContent: structured,
       }
     } catch (e) {
       return toolError(liveFailure(e))

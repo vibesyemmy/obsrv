@@ -91,3 +91,34 @@ export interface ScrollPos {
   x: number
   y: number
 }
+
+/**
+ * Which scroller a pane's sync preload actually moved: the document root, or
+ * an inner `overflow-y: auto` container it had to find because the root had
+ * nothing to scroll (the app-shell pattern — `html, body { overflow: hidden }`
+ * with a scrolling flex child).
+ */
+export type ScrollerKind = 'root' | 'element'
+
+/** Longest `scrollSelector` accepted; a CSS selector far beyond any real one. */
+export const MAX_SCROLL_SELECTOR = 512
+
+/**
+ * What main sends a pane over `IPC.applyScroll`. `id` is the correlation id an
+ * agent-driven scroll uses to await the offset actually reached; the pane-sync
+ * mirror omits it and wants no reply. `selector` is the caller's escape hatch
+ * for pages whose scroll host the heuristic misjudges.
+ */
+export interface ScrollRequest extends ScrollPos {
+  id?: number
+  selector?: string
+}
+
+/** A pane's `IPC.scrollResult` reply: the offset reached, read back after the write. */
+export interface ScrollReport {
+  id: number
+  x: number
+  y: number
+  scroller: ScrollerKind
+  warnings: string[]
+}

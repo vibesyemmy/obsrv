@@ -6,9 +6,17 @@ import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../s
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
-import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings, parseUiState } from '../shared/ipcPayloads'
+import {
+  parseDeviceScaleFactor,
+  parseInputEvent,
+  parseMode,
+  parseRect,
+  parseScrollReport,
+  parseSettings,
+  parseUiState,
+} from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
-import type { HostInfo } from '../shared/types'
+import type { HostInfo, ScrollReport, ScrollRequest } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
@@ -18,6 +26,15 @@ const TOOLBAR_H = 44
 
 /** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
 export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024
+
+/**
+ * How long an agent scroll waits for the target pane to report the offset it
+ * reached. A scroll is a synchronous DOM write in the isolated world, so a
+ * healthy pane answers within a frame; a second is generous even for a page
+ * mid-layout, and short enough that a busy renderer degrades to "could not be
+ * confirmed" instead of hanging the control request.
+ */
+const SCROLL_REPLY_TIMEOUT_MS = 1_000
 
 /**
  * Physical pixels of the display the window currently sits on. All zeroes mean
@@ -166,6 +183,58 @@ export function registerIpc(ctx: AppContext): void {
     rendererDrivesLayout = true
   })
 
+  // --- scroll round-trip ----------------------------------------------------
+  // `applyScroll` carries a correlation id when someone is waiting for the
+  // answer. It has to: on an app-shell page (`html, body { overflow: hidden }`
+  // with an inner scroller) `window.scrollTo` clamps to 0 without throwing, so
+  // "the command was sent" says nothing about whether anything moved. The sync
+  // preload writes the offset, reads it back, and replies here.
+  //
+  // Replies come from the *page* webContents, so the sender check is the
+  // inverse of the renderer one above — the same shape SyncBus uses for
+  // `syncScroll` — and the payload is parsed like any other renderer message.
+  let scrollSeq = 0
+  const scrollWaiters = new Map<number, (report: ScrollReport) => void>()
+  ipcMain.on(IPC.scrollResult, (e, raw: unknown) => {
+    if (e.sender !== target.webContents && e.sender !== native.webContents) return
+    const report = parseScrollReport(raw)
+    if (!report) return
+    const waiter = scrollWaiters.get(report.id)
+    if (!waiter) return
+    scrollWaiters.delete(report.id)
+    waiter(report)
+  })
+  /**
+   * Drives both panes to an absolute offset and resolves with what the *target*
+   * pane reached — the pane every agent capture crops to. The native pane gets
+   * the identical apply, unwaited: it is the user's own dev view, and holding
+   * the control response on a second round-trip would double the latency of
+   * every scroll to report an offset nobody reads.
+   *
+   * Null means the target could not confirm (destroyed, or too busy to answer
+   * within the budget); the caller reports that rather than inventing one.
+   */
+  const scrollBoth = async (req: ScrollRequest): Promise<ScrollReport | null> => {
+    const base: ScrollRequest = { x: req.x, y: req.y }
+    if (req.selector !== undefined) base.selector = req.selector
+    if (!native.webContents.isDestroyed()) native.webContents.send(IPC.applyScroll, base)
+    const wc = target.webContents
+    if (wc.isDestroyed()) return null
+    const id = ++scrollSeq
+    const answered = new Promise<ScrollReport | null>(resolve => {
+      const timer = setTimeout(() => {
+        scrollWaiters.delete(id)
+        resolve(null)
+      }, SCROLL_REPLY_TIMEOUT_MS)
+      scrollWaiters.set(id, report => {
+        clearTimeout(timer)
+        resolve(report)
+      })
+    })
+    wc.send(IPC.applyScroll, { ...base, id })
+    return answered
+  }
+
   // --- host display ---------------------------------------------------------
   ipcMain.handle(IPC.getHostInfo, e => {
     assertRenderer(e)
@@ -300,16 +369,12 @@ export function registerIpc(ctx: AppContext): void {
       }
     },
     viewport: () => target.getViewport(),
-    scroll: pos => {
-      // An agent scroll drives both panes over the same `applyScroll` channel
-      // the pane-sync mirror uses — each pane's sync preload applies it and
-      // suppresses its own echo, so the two arrive together with no loop.
-      // Relying on the mirror instead would be silent: an applied scroll is
-      // deliberately not re-reported (see preload/sync.ts).
-      for (const wc of [native.webContents, target.webContents]) {
-        if (!wc.isDestroyed()) wc.send(IPC.applyScroll, pos)
-      }
-    },
+    // An agent scroll drives both panes over the same `applyScroll` channel
+    // the pane-sync mirror uses — each pane's sync preload applies it and
+    // suppresses its own echo, so the two arrive together with no loop.
+    // Relying on the mirror instead would be silent: an applied scroll is
+    // deliberately not re-reported (see preload/sync.ts).
+    scroll: scrollBoth,
     click: c => {
       // Built as the wire shape and passed through parseInputEvent, so a
       // remote click reaches `sendInput` exactly as a canvas-forwarded one.

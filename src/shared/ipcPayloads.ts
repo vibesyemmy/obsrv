@@ -1,6 +1,6 @@
 import type { Rect } from './api'
 import type { AgentUiReport } from './control'
-import type { InputModifier, ScrollPos, Settings, TargetInputEvent } from './types'
+import { MAX_SCROLL_SELECTOR, type InputModifier, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
 
 /**
  * Parsers for everything the renderer sends main over IPC. Each returns a
@@ -12,6 +12,9 @@ import type { InputModifier, ScrollPos, Settings, TargetInputEvent } from './typ
 
 /** Largest coordinate or size a pane rect may carry; far beyond any real window. */
 export const MAX_RECT = 16384
+
+/** Most warnings a pane's scroll reply may carry; the preload sends at most one. */
+const MAX_SCROLL_WARNINGS = 4
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
@@ -140,4 +143,42 @@ export function parseScrollPos(raw: unknown): ScrollPos | null {
   const { x, y } = raw
   if (!isFiniteNumber(x) || !isFiniteNumber(y) || x < 0 || y < 0) return null
   return { x, y }
+}
+
+/**
+ * A `scroll` command payload: an offset plus the optional `scrollSelector`
+ * escape hatch. The selector is only ever handed to `document.querySelector`
+ * in the preload's isolated world — never evaluated — but it is still bounded
+ * and type-checked here so a malformed one is refused with an explanation
+ * rather than silently ignored by the page. Returns the parsed request, or the
+ * error message.
+ */
+export function parseScrollRequest(raw: unknown): ScrollRequest | string {
+  const pos = parseScrollPos(raw)
+  if (!pos) return 'scroll payload must be { x, y } with finite, non-negative CSS-pixel offsets'
+  const selector = (raw as Record<string, unknown>).scrollSelector
+  if (selector === undefined || selector === null) return pos
+  if (typeof selector !== 'string') return 'scrollSelector must be a CSS selector string'
+  const trimmed = selector.trim()
+  if (trimmed === '') return 'scrollSelector must not be empty'
+  if (trimmed.length > MAX_SCROLL_SELECTOR) return `scrollSelector must be at most ${MAX_SCROLL_SELECTOR} characters`
+  return { ...pos, selector: trimmed }
+}
+
+/**
+ * A pane's `IPC.scrollResult` reply. Sent by the sync preload, which runs
+ * beside a third-party page, so it is parsed exactly like any renderer
+ * message; anything malformed is dropped and the caller times out rather than
+ * reporting an offset it cannot trust.
+ */
+export function parseScrollReport(raw: unknown): ScrollReport | null {
+  if (!isRecord(raw)) return null
+  const { id, x, y, scroller } = raw
+  if (!isFiniteNumber(id)) return null
+  if (!isFiniteNumber(x) || !isFiniteNumber(y)) return null
+  if (scroller !== 'root' && scroller !== 'element') return null
+  const warnings = Array.isArray(raw.warnings)
+    ? raw.warnings.filter((w): w is string => typeof w === 'string').slice(0, MAX_SCROLL_WARNINGS)
+    : []
+  return { id, x, y, scroller, warnings }
 }

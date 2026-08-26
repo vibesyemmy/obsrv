@@ -19,6 +19,7 @@ export const IPC = {
   targetNavigating: 'obsrv:target-navigating',
   syncScroll: 'obsrv:sync-scroll',
   applyScroll: 'obsrv:apply-scroll',
+  scrollResult: 'obsrv:scroll-result',
   openImage: 'obsrv:open-image',
   focusUrl: 'obsrv:focus-url',
   openImagePath: 'obsrv:open-image-path',

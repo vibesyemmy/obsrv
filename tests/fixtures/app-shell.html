@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App shell — inner scroller</title>
+    <!--
+      The app-shell pattern that defeats `window.scrollTo`: the root has
+      `overflow: hidden` and the real scroller is an inner flex child. Used by
+      tests/e2e/live-drive.spec.ts to prove `scroll` finds the inner scroller
+      and reports the offset it actually reached.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 100%; overflow: hidden; margin: 0; }
+      body {
+        display: flex;
+        flex-direction: column;
+        font: 16px/1.4 system-ui, sans-serif;
+        background: #fff;
+        color: #111;
+      }
+      header {
+        flex: 0 0 auto;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        background: #101828;
+        color: #fff;
+        font-weight: 600;
+      }
+      /* The actual scroller — the only element with anything to scroll. */
+      #scroller {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 16px;
+      }
+      /* A decoy: overflow-y:auto but nothing to scroll, so detection must skip it. */
+      aside { overflow-y: auto; height: 24px; }
+      .marker {
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        font-weight: 700;
+        border-bottom: 2px solid #d0d5dd;
+      }
+      .marker:nth-child(odd) { background: #f2f4f7; }
+    </style>
+  </head>
+  <body>
+    <header>Fixed chrome</header>
+    <aside>decoy scroller (nothing to scroll)</aside>
+    <main id="scroller">
+      <div class="marker" data-offset="0">0</div>
+      <div class="marker" data-offset="300">300</div>
+      <div class="marker" data-offset="600">600</div>
+      <div class="marker" data-offset="900">900</div>
+      <div class="marker" data-offset="1200">1200</div>
+      <div class="marker" data-offset="1500">1500</div>
+      <div class="marker" data-offset="1800">1800</div>
+      <div class="marker" data-offset="2100">2100</div>
+      <div class="marker" data-offset="2400">2400</div>
+      <div class="marker" data-offset="2700">2700</div>
+      <div class="marker" data-offset="3000">3000</div>
+      <div class="marker" data-offset="3300">3300</div>
+    </main>
+  </body>
+</html>

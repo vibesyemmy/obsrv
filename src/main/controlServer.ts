@@ -17,8 +17,8 @@ import {
   type AgentClick,
   type ControlStatus,
 } from '../shared/control'
-import { parseScrollPos } from '../shared/ipcPayloads'
-import type { ScrollPos } from '../shared/types'
+import { parseScrollPos, parseScrollRequest } from '../shared/ipcPayloads'
+import type { ScrollReport, ScrollRequest } from '../shared/types'
 import { urlSchemeError } from '../shared/url'
 
 /**
@@ -67,8 +67,12 @@ export interface ControlDeps {
   captureTarget(): Promise<{ data: string; width: number; height: number; warnings: string[] }>
   /** The target's current CSS viewport, for `click` bounds validation. */
   viewport(): { width: number; height: number }
-  /** Absolute page scroll of both panes over the pane-sync `applyScroll` channel. */
-  scroll(pos: ScrollPos): void
+  /**
+   * Absolute page scroll of both panes over the pane-sync `applyScroll`
+   * channel; resolves with the offset the target pane actually reached, or
+   * null when it could not confirm within the budget.
+   */
+  scroll(req: ScrollRequest): Promise<ScrollReport | null>
   /** A validated click, delivered through the same `sendInput` path the canvas uses. */
   click(c: AgentClick): void
   /** The toolbar's history/reload actions, byte-for-byte (native-only history; reload reloads both). */
@@ -227,10 +231,21 @@ export class ControlServer {
       }
 
       case 'scroll': {
-        const pos = parseScrollPos(payload)
-        if (!pos) return reply(400, { error: 'scroll payload must be { x, y } with finite, non-negative CSS-pixel offsets' })
-        this.deps.scroll(pos)
-        return reply(200, { ok: true })
+        const req = parseScrollRequest(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        // `scrolled` is the point of the round-trip: a page whose root cannot
+        // scroll (an app shell with an inner scroller) used to answer a bare
+        // `ok: true` while nothing moved, which no caller could tell from a
+        // real scroll. Null means the pane did not confirm in time — honest,
+        // and still not an error: the scroll may well have landed.
+        const result = await this.deps.scroll(req)
+        if (!result) return reply(200, { ok: true, scrolled: null, warnings: ['scroll offset could not be confirmed'] })
+        return reply(200, {
+          ok: true,
+          scrolled: { x: result.x, y: result.y },
+          scroller: result.scroller,
+          ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
+        })
       }
 
       case 'panTo': {
