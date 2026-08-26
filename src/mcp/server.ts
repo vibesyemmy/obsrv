@@ -244,6 +244,14 @@ const diffInputShape = {
 }
 
 const diffOutputShape = {
+  settled: z
+    .boolean()
+    .describe(
+      'False when either render was a best-effort capture of a page that never stopped painting. The two captures ' +
+        'are then different frames, so the band deltas are frame-to-frame noise rather than rendering evidence — ' +
+        '`findings` says so instead of interpreting them.',
+    ),
+  warnings: z.array(z.string()).describe('Anything either render warned about, prefixed target: / reference:.'),
   url: z.string(),
   preset: z.string(),
   profile: z.string(),
@@ -658,6 +666,9 @@ server.registerTool(
       `8 horizontal band deltas with humanised findings (informational — apply your own thresholds), and the ` +
       `paths of target.png / reference.png in a per-call temp dir. \`includeImages: true\` also inlines both ` +
       `PNGs (1.5 MiB cap each).\n\n` +
+      `Check \`settled\` before believing the bands: a page that never stops painting (animation, video) yields ` +
+      `two captures of *different frames*, so every delta is frame-to-frame noise. When it is false the numbers ` +
+      `are still returned but \`findings\` says so instead of interpreting them.\n\n` +
       `1x presets only (e.g. laptop-768, 1080p-24): dense presets (phones) and CSS viewports over 2048px are ` +
       `refused with an explanatory error — use obsrv_snap for those.\n\n` +
       `Headless-only: a diff always performs its own two renders and never drives a running Obsrv app window ` +

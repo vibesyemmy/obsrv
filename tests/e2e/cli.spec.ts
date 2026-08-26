@@ -238,6 +238,40 @@ test('SIGTERM to the launcher takes the Electron child down, leak-free', async (
   }
 })
 
+test('diff: an animating page reports settled:false and withholds the band claims', async () => {
+  // Two captures of a page that never goes quiet are two different frames, so
+  // every band delta is frame-to-frame noise. diff used to emit confident
+  // "strokes thickening" findings from exactly this.
+  const r = await runCli([
+    'diff',
+    fixture('animated.html'),
+    '--preset',
+    'laptop-768',
+    '--timeout',
+    '3000',
+  ])
+  expect(r.code).toBe(0)
+
+  const json = JSON.parse(r.stdout)
+  expect(json.settled).toBe(false)
+  expect(json.warnings.join(' ')).toMatch(/kept painting/)
+
+  // The measurements survive; only the interpretation is withheld.
+  expect(json.bands).toHaveLength(8)
+  expect(json.inkCoverage.target).toBeGreaterThan(0)
+  expect(json.findings).toHaveLength(1)
+  expect(json.findings[0]).toMatch(/did not go paint-quiet/)
+  expect(json.findings.some((f: string) => f.startsWith('band '))).toBe(false)
+})
+
+test('diff: a static page still reports settled:true and interprets its bands', async () => {
+  const r = await runCli(['diff', fixture('thin-text.html'), '--preset', 'laptop-768'])
+  expect(r.code).toBe(0)
+  const json = JSON.parse(r.stdout)
+  expect(json.settled).toBe(true)
+  expect(json.warnings).toEqual([])
+})
+
 test('diff: refuses dsf>1 presets with a clear 1x-only error', async () => {
   const r = await runCli(['diff', fixture('thin-text.html'), '--preset', 'iphone-61'])
   expect(r.code).not.toBe(0)

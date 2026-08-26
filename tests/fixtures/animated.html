@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>animated-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* A continuous transform animation: the compositor never goes quiet, so
+         a capture can only ever be a best-effort frame. Large and dark enough
+         that consecutive frames differ by more than the band threshold. */
+      .spin {
+        width: 400px;
+        height: 400px;
+        margin: 100px;
+        background: #000;
+        animation: spin 900ms linear infinite;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body><div class="spin"></div></body>
+</html>

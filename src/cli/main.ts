@@ -203,7 +203,15 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
   const referenceDeviceRows = inkRows(referenceFull)
   const reference = boxDownsample(referenceFull, 2)
 
-  const metrics = diffMetrics(target, reference, referenceDeviceRows)
+  // Both captures must have gone quiet for the comparison to mean anything:
+  // an animated page yields two different frames, and every band delta is then
+  // frame-to-frame noise. The renders already know; diff used to discard it.
+  const settled = t.frame.settled && r.frame.settled
+  const warnings = [
+    ...t.warnings.map(w => `target: ${w}`),
+    ...r.warnings.map(w => `reference: ${w}`),
+  ]
+  const metrics = diffMetrics(target, reference, referenceDeviceRows, settled)
 
   let files: { target: string; reference: string } | undefined
   if (cmd.outDir) {
@@ -219,7 +227,7 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
     `diff ${cmd.url} @ ${cmd.spec.presetId} (profile ${profile.id}): ` +
       `ink ${pct(metrics.inkCoverage.target)} vs ${pct(metrics.inkCoverage.reference)} reference, ` +
       `rows ${metrics.rows.target}/${metrics.rows.reference} (ratio ${metrics.rows.ratio?.toFixed(2) ?? 'n/a'}), ` +
-      `${metrics.findings.length} finding(s)`,
+      `${metrics.findings.length} finding(s)${settled ? '' : ' — UNSETTLED, deltas are not rendering evidence'}`,
   )
   // Findings are informational — CI thresholds are the caller's job.
   await machine({
@@ -228,6 +236,7 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
     profile: profile.id,
     ...(files ? { files } : {}),
     ...metrics,
+    warnings,
   })
 }
 

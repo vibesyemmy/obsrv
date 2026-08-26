@@ -57,7 +57,23 @@ export interface Band {
   delta: number
 }
 
+/**
+ * What a diff says when the renders never went paint-quiet. The bands are
+ * still reported — a measurement is a measurement — but the band *findings*
+ * are claims about rasterisation, and two captures of different animation
+ * frames cannot support one.
+ */
+export const UNSETTLED_FINDING =
+  'renders did not go paint-quiet within the budget (animation or video), so the two captures are ' +
+  'different frames — the band deltas below are frame-to-frame noise, not evidence about rasterisation. ' +
+  'Compare a static page, or pass a longer --timeout if the page merely settles late.'
+
 export interface DiffMetrics {
+  /**
+   * False when either render was a best-effort capture of a page that kept
+   * painting. Callers must not read the band deltas as rendering evidence.
+   */
+  settled: boolean
   inkCoverage: { target: number; reference: number; delta: number }
   rows: {
     /** Ink rows in the 1x target raster. */
@@ -90,8 +106,17 @@ const pct = (v: number): string => `${(v * 100).toFixed(2)}%`
  * is the ink-row count of the raw 2x raster, so `rows.ratio` reproduces the
  * 2:1 device-row finding of rendering.spec.ts instead of comparing a raster
  * to its own resample.
+ *
+ * `settled` is the AND of both captures' quiescence. When false the numbers
+ * are still returned and the interpretation is withheld — see
+ * `UNSETTLED_FINDING`.
  */
-export function diffMetrics(target: RGBAImage, reference: RGBAImage, referenceDeviceRows: number): DiffMetrics {
+export function diffMetrics(
+  target: RGBAImage,
+  reference: RGBAImage,
+  referenceDeviceRows: number,
+  settled = true,
+): DiffMetrics {
   if (target.width !== reference.width || target.height !== reference.height) {
     throw new RangeError(
       `diffMetrics: mismatched dimensions (target ${target.width}x${target.height}, reference ${reference.width}x${reference.height})`,
@@ -123,6 +148,7 @@ export function diffMetrics(target: RGBAImage, reference: RGBAImage, referenceDe
   }
 
   return {
+    settled,
     inkCoverage: { target: targetCoverage, reference: referenceCoverage, delta: targetCoverage - referenceCoverage },
     rows: {
       target: targetRows,
@@ -130,6 +156,6 @@ export function diffMetrics(target: RGBAImage, reference: RGBAImage, referenceDe
       ratio: referenceDeviceRows > 0 ? targetRows / referenceDeviceRows : null,
     },
     bands,
-    findings,
+    findings: settled ? findings : [UNSETTLED_FINDING],
   }
 }
