@@ -119,7 +119,16 @@ xattr -cr /Applications/Obsrv.app
 
 ## Distribution
 
-Obsrv will publish to npm as **`getobsrv`** (the installed commands remain `obsrv`
+Publish via a packed tarball, never bare `npm publish`: `npm publish` snapshots
+package.json before lifecycle hooks run, which silently skips the prepack
+electron dev→prod dependency swap (this shipped a broken 0.4.0). The flow is:
+
+```bash
+npm run release:pack
+npm publish ./getobsrv-<version>.tgz
+```
+
+Obsrv publishes to npm as **`getobsrv`** (the installed commands remain `obsrv`
 and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name
 belongs to an unrelated package.
 
