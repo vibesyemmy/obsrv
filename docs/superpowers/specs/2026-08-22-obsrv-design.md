@@ -548,3 +548,24 @@ wrong until this revision:
 
 `obsrv_drive` remains the only way to capture a state that took several
 commands to reach, because it never navigates unless given `url`.
+
+#### 14.2 What a capture waits for, and what it frames (v0.7.1)
+
+A preset change recreates the offscreen target at a new viewport and reloads
+the page. `setPreset` confirms only that the *renderer store* applied the
+change, so a capture fired straight after photographed the previous texture —
+and the status returned beside it described the new state. The tool contradicted
+itself: `presetId: laptop-768` next to a 360x800 render.
+
+`captureTarget` and `captureVisible` now settle first: poll `getViewport()`
+until two identical reads (the resize has stopped), force a repaint, wait for
+that frame, then allow a short draw window. Bounded at 4 s; on expiry the
+capture still returns, with a warning saying it may show a transitional frame.
+`navigate` never needed this — it already awaits both panes' `loadURL`.
+
+`captureTarget` also crops to the **render** rather than the pane: the renderer
+reports `canvasBounds` (the canvas rect clipped to the pane) alongside
+`targetBounds`, and the capture uses it. At 1:1 a desktop render overflows the
+pane and the crop is the visible part; minified — a mobile preset, or fit mode —
+the crop hugs the render, so the PNG is the screen under test and nothing
+else.

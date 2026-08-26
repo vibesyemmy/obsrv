@@ -173,6 +173,34 @@ const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const paneScrollY = (a: ElectronApplication): Promise<number> =>
   a.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('window.scrollY') as Promise<number>)
 
+test('a capture after a preset change shows the new preset, cropped to the render', async () => {
+  // One assertion, two defects. Before the fix the capture cropped to the
+  // *pane* (landscape, whatever the preset) and fired before the resize had
+  // landed (so it showed the *previous* preset). A phone preset is portrait,
+  // so only cropping to the render AND waiting for the resize makes this hold.
+  await call('obsrv_drive', { url: FIXTURE, preset: '1080p-24', capture: 'pane' })
+
+  const phone = await call('obsrv_drive', { preset: 'iphone-61', capture: 'pane' })
+  expect(phone.isError).toBeFalsy()
+  const m = phone.structuredContent as Record<string, number>
+
+  expect(m.height).toBeGreaterThan(m.width)
+  expect(m.width / m.height).toBeCloseTo(393 / 852, 1)
+})
+
+test('a desktop capture in fit mode hugs the render', async () => {
+  // At 1:1 a desktop render overflows the pane, so the crop is correctly the
+  // visible part — pane-shaped. In fit mode the whole render is inside the
+  // pane, so cropping to it must give the preset's aspect and nothing else.
+  const fit = await call('obsrv_drive', { preset: '1080p-24', viewMode: 'fit', capture: 'pane' })
+  expect(fit.isError).toBeFalsy()
+  const m = fit.structuredContent as Record<string, number>
+  expect(m.width / m.height).toBeCloseTo(1920 / 1080, 1)
+
+  // And back to 1:1, where the crop is the pane because the render overflows.
+  await call('obsrv_drive', { viewMode: '1:1' })
+})
+
 test('obsrv_drive captures the scrolled state it just produced', async () => {
   const r = await call('obsrv_drive', {
     url: TALL,

@@ -170,8 +170,9 @@ const snapInputShape = {
     .enum(['window', 'pane'])
     .optional()
     .describe(
-      "Live mode only: what the returned PNG shows — 'window' (default) is the whole app window, 'pane' is just " +
-        'the target pane (its footer readout included). Ignored (with a note) when the render is headless.',
+      "Live mode only: what the returned PNG shows — 'window' (default) is the whole app window, 'pane' is the " +
+        'rendered screen cropped to itself, so a minified mobile preset is phone-shaped rather than a small phone ' +
+        'in a large rectangle. Ignored (with a note) when the render is headless.',
     ),
 }
 
@@ -361,10 +362,11 @@ const driveInputShape = {
     .enum(['window', 'pane'])
     .optional()
     .describe(
-      "Capture the app after the commands run: 'pane' crops to the target pane (the 1x render on its own), " +
-        "'window' takes the whole app window. This is how you see a scrolled or panned state — unlike obsrv_snap, " +
-        'nothing is navigated, so the scroll position survives. The PNG comes back inline when it is within the ' +
-        '1.5 MiB cap, and always as pngPath.',
+      "Capture the app after the commands run: 'pane' crops to the rendered screen itself (the render, not the " +
+        "empty pane around it — a minified mobile preset comes back phone-shaped), 'window' takes the whole app " +
+        'window. The capture waits for a preset resize to finish first, so the PNG matches the status beside it. ' +
+        'This is how you see a scrolled or panned state — unlike obsrv_snap, nothing is navigated, so the scroll ' +
+        'position survives. The PNG comes back inline when it is within the 1.5 MiB cap, and always as pngPath.',
     ),
 }
 
