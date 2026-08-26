@@ -167,3 +167,49 @@ test('obsrv_snap live capture:"pane" returns a PNG smaller than the window captu
   expect(paneMeta.width as number).toBeLessThan(wholeMeta.width as number)
   expect(paneMeta.height as number).toBeLessThan(wholeMeta.height as number)
 })
+
+const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+
+const paneScrollY = (a: ElectronApplication): Promise<number> =>
+  a.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('window.scrollY') as Promise<number>)
+
+test('obsrv_drive captures the scrolled state it just produced', async () => {
+  const r = await call('obsrv_drive', {
+    url: TALL,
+    preset: 'laptop-768',
+    scroll: { x: 0, y: 900 },
+    capture: 'pane',
+  })
+  expect(r.isError).toBeFalsy()
+
+  const meta = r.structuredContent as Record<string, unknown>
+  expect(meta).toMatchObject({ url: TALL, scrolled: { x: 0, y: 900 }, scroller: 'root' })
+
+  expect(existsSync(meta.pngPath as string)).toBe(true)
+  const png = readFileSync(meta.pngPath as string)
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(meta.width as number).toBeGreaterThan(0)
+  expect(meta.height as number).toBeGreaterThan(0)
+
+  // The point of the whole thing: capturing did not reset the page. A capture
+  // that navigated to take the shot would leave the pane back at the top.
+  expect(await paneScrollY(app)).toBe(900)
+})
+
+test('a live obsrv_snap of the page already showing keeps its scroll position', async () => {
+  await call('obsrv_drive', { url: TALL, preset: 'laptop-768' })
+  const scrolled = await call('obsrv_drive', { scroll: { x: 0, y: 1200 } })
+  expect(scrolled.structuredContent).toMatchObject({ scrolled: { x: 0, y: 1200 } })
+
+  // Same URL: no reload, so the capture shows where the page actually is.
+  const same = await call('obsrv_snap', { url: TALL, capture: 'pane' })
+  expect(same.isError).toBeFalsy()
+  expect(same.structuredContent).toMatchObject({ mode: 'live', url: TALL, navigated: false, settled: true })
+  expect(await paneScrollY(app)).toBe(1200)
+
+  // A different URL is a real navigation, and a fresh load starts at the top.
+  const moved = await call('obsrv_snap', { url: FIXTURE, capture: 'pane' })
+  expect(moved.isError).toBeFalsy()
+  expect(moved.structuredContent).toMatchObject({ mode: 'live', url: FIXTURE, navigated: true })
+  expect(await paneScrollY(app)).toBe(0)
+})

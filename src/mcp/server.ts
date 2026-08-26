@@ -11,6 +11,7 @@ import { DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus } from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
+import { normalizeUrl } from '../shared/url'
 import { controlCall, discoverControl, type LiveApp } from './control'
 import {
   APP_NOT_REACHABLE,
@@ -189,7 +190,16 @@ const snapOutputShape = {
     .describe(
       'Headless: the page went paint-quiet and every pixel painted. False is still a usable capture — a page that ' +
         'kept animating, or one whose repaint never completed, is returned as-is with a warning saying what was ' +
-        'missing. Live: the app confirmed the navigation before the capture.',
+        'missing. Live: the app confirmed the navigation before the capture (trivially true when the app was ' +
+        'already showing the URL and nothing was navigated).',
+    ),
+  navigated: z
+    .boolean()
+    .optional()
+    .describe(
+      'Live only: false when the app was already showing this URL, so no reload was issued and the capture kept ' +
+        'the current scroll position, pan and in-page state. True when the app was pointed somewhere new — that is ' +
+        'a fresh load, which starts at the top of the page.',
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
@@ -339,6 +349,15 @@ const driveInputShape = {
       'Draw a temporary neutral marker over this target-pixel rect in the pane (durationMs default 2000, clamped ' +
         '250-10000). A new highlight replaces the previous one.',
     ),
+  capture: z
+    .enum(['window', 'pane'])
+    .optional()
+    .describe(
+      "Capture the app after the commands run: 'pane' crops to the target pane (the 1x render on its own), " +
+        "'window' takes the whole app window. This is how you see a scrolled or panned state — unlike obsrv_snap, " +
+        'nothing is navigated, so the scroll position survives. The PNG comes back inline when it is within the ' +
+        '1.5 MiB cap, and always as pngPath.',
+    ),
 }
 
 const driveOutputShape = {
@@ -362,6 +381,15 @@ const driveOutputShape = {
     .optional()
     .describe("Only when `scroll` was requested: 'root' if the document scrolled, 'element' if an inner scroll container did."),
   warnings: z.array(z.string()).optional().describe('Anything worth knowing about the commands that ran (e.g. a scrollSelector that matched nothing).'),
+  pngPath: z.string().optional().describe('Only when `capture` was requested: absolute path of the PNG (kept in a per-call temp dir).'),
+  width: z
+    .number()
+    .optional()
+    .describe('Only when `capture` was requested: captured width in device-independent px; the raster is this times the display scale.'),
+  height: z
+    .number()
+    .optional()
+    .describe('Only when `capture` was requested: captured height in device-independent px.'),
 }
 
 // --- live drive --------------------------------------------------------------
@@ -393,20 +421,89 @@ function liveFailure(e: unknown): string {
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
 /**
- * The live `obsrv_snap` path: navigate the visible app (plus preset/profile
- * when given), wait — bounded — for the app to report the navigation, then
- * capture the window exactly as the user sees it.
+ * One short grace before a live capture: the renderer repaints the pane a
+ * frame or two after the store confirms, and a capture racing that would show
+ * a half-applied flip.
+ */
+const LIVE_CAPTURE_GRACE_MS = 300
+
+/**
+ * Is the app already showing this page? Compared as parsed URLs so a request
+ * for `http://host:5173` matches the `http://host:5173/` the browser commits,
+ * and through the same normaliser the URL bar uses so a bare host works too.
+ * Anything unparseable falls back to a trimmed string compare.
+ */
+function sameUrl(a: string, b: string): boolean {
+  const norm = (raw: string): string => {
+    const t = raw.trim()
+    if (t === '') return ''
+    try {
+      return new URL(normalizeUrl(t)).href
+    } catch {
+      return t
+    }
+  }
+  const x = norm(a)
+  const y = norm(b)
+  return x !== '' && x === y
+}
+
+interface LiveCapture {
+  pngPath: string
+  width: number
+  height: number
+  warnings: string[]
+}
+
+/**
+ * Capture the app window — or just the target pane — over the control server
+ * and write it to a per-call temp PNG. Shared by the live `obsrv_snap` path
+ * and `obsrv_drive`'s `capture`, so both produce byte-identical results.
+ */
+async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane'): Promise<LiveCapture> {
+  // `pane` crops to the target pane; both answer with the same
+  // { data, width, height } shape plus their own warnings (e.g. the pre-mount
+  // full-window fallback), which join the tool's.
+  const command = what === 'pane' ? 'captureTarget' : 'captureVisible'
+  const capture = await controlCall(info, command, {}, LIVE_CAPTURE_TIMEOUT_MS)
+  const { data, width, height } = capture
+  if (typeof data !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+    throw new Error('the control server returned a malformed capture')
+  }
+  const warnings: string[] = []
+  if (Array.isArray(capture['warnings'])) {
+    for (const w of capture['warnings']) if (typeof w === 'string') warnings.push(w)
+  }
+  const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
+  const pngPath = join(dir, 'live.png')
+  await writeFile(pngPath, Buffer.from(data, 'base64'))
+  return { pngPath, width, height, warnings }
+}
+
+/**
+ * The live `obsrv_snap` path: point the visible app at the URL (plus
+ * preset/profile when given), wait — bounded — for it to report the
+ * navigation, then capture the window exactly as the user sees it.
+ *
+ * When the app is already showing that URL the navigation is skipped entirely.
+ * A navigate is a fresh `loadURL`, which resets the scroll position, so
+ * reloading here would make `obsrv_drive { scroll }` followed by a snap of the
+ * same page always capture the top. `navigated: false` says which happened.
  */
 async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Promise<CallToolResult> {
   const { info } = app
   const warnings = [...notes]
   const before = app.status.url
-  let applied = ''
+  // Already there? Then leave the page alone — see the note above.
+  const navigated = !sameUrl(before, input.url)
+  let applied = before
   try {
-    // The navigate command answers once both panes finished loading, so it
-    // carries the same per-render budget the headless path polices.
-    const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) + 10_000)
-    applied = typeof nav['url'] === 'string' ? nav['url'] : ''
+    if (navigated) {
+      // The navigate command answers once both panes finished loading, so it
+      // carries the same per-render budget the headless path polices.
+      const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) + 10_000)
+      applied = typeof nav['url'] === 'string' ? nav['url'] : ''
+    }
     if (input.preset !== undefined) await controlCall(info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
     if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
   } catch (e) {
@@ -415,15 +512,17 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
 
   // The app settles when it reports the applied URL — or, after a redirect,
   // any committed non-blank URL that is no longer the pre-navigation one.
+  // Nothing to settle when no navigation was issued; one status read still
+  // refreshes the preset/profile/view the result reports.
   let status = app.status
-  let settled = false
+  let settled = !navigated
   const deadline = Date.now() + LIVE_SETTLE_MS
   for (;;) {
     try {
       const s = parseControlStatus(await controlCall(info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (s) {
         status = s
-        settled = s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
+        if (navigated) settled = s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
       }
     } catch (e) {
       return toolError(liveFailure(e))
@@ -433,31 +532,16 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
   }
   if (!settled) warnings.push('the app did not confirm the navigation before capture; the PNG may show the previous page.')
 
-  // One short grace after the state settles: the renderer repaints the pane
-  // (and any preset resize) a frame or two after the store confirms, and a
-  // capture racing that would show a half-applied flip.
-  await sleep(300)
+  await sleep(LIVE_CAPTURE_GRACE_MS)
 
-  // `capture: 'pane'` crops to the target pane; the command answers with the
-  // same { data, width, height } shape plus its own warnings (e.g. the
-  // pre-mount full-window fallback), which join the tool's.
-  let capture: Record<string, unknown>
+  let capture: LiveCapture
   try {
-    const command = input.capture === 'pane' ? 'captureTarget' : 'captureVisible'
-    capture = await controlCall(info, command, {}, LIVE_CAPTURE_TIMEOUT_MS)
+    capture = await liveCapture(info, input.capture === 'pane' ? 'pane' : 'window')
   } catch (e) {
     return toolError(liveFailure(e))
   }
-  const { data, width, height } = capture
-  if (typeof data !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
-    return toolError('the control server returned a malformed capture')
-  }
-  if (Array.isArray(capture['warnings'])) {
-    for (const w of capture['warnings']) if (typeof w === 'string') warnings.push(w)
-  }
-  const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
-  const pngPath = join(dir, 'live.png')
-  await writeFile(pngPath, Buffer.from(data, 'base64'))
+  warnings.push(...capture.warnings)
+  const { pngPath, width, height } = capture
 
   const structured = {
     mode: 'live',
@@ -468,6 +552,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     width,
     height,
     settled,
+    navigated,
     warnings,
     pngPath,
   }
@@ -505,7 +590,10 @@ server.registerTool(
       `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
       `touches it. Note: although this tool is annotated read-only (it renders and captures), a live snap steers ` +
       `the open app window — navigating it and flipping its preset in front of the user — as its means of ` +
-      `capture; that visible steering is the point of live mode.`,
+      `capture; that visible steering is the point of live mode.\n\n` +
+      `A live snap only navigates when the app is showing a different URL; the result's \`navigated\` says which ` +
+      `happened. Navigating is a fresh load, so it starts at the top of the page — to photograph a scrolled or ` +
+      `panned state, use obsrv_drive with \`capture\` instead, which never navigates unless you ask it to.`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -617,7 +705,8 @@ server.registerTool(
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight. ` +
+      `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `capture. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
@@ -626,9 +715,12 @@ server.registerTool(
       `Coordinates: click takes CSS-viewport px of the page (the valid range is 0 up to but not including the ` +
       `viewport size); panTo and highlight take target-pane pixels (device px of the render — identical to CSS px ` +
       `on 1x presets); scroll takes page CSS px.\n\n` +
+      `Pass \`capture\` to get a PNG back once the commands have run. Nothing in this tool navigates unless you ` +
+      `pass \`url\`, so this is how you photograph a scrolled or panned state: scroll, then capture, in one call. ` +
+      `obsrv_snap is the other way round — it points the app at a URL first, and pointing it somewhere new is a ` +
+      `fresh load that starts at the top.\n\n` +
       `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
-      `mutates visible app state (it changes what the user's window shows, and a click can act on the live page) ` +
-      `but renders nothing itself — use obsrv_snap for a capture.`,
+      `mutates visible app state (it changes what the user's window shows, and a click can act on the live page).`,
     inputSchema: driveInputShape,
     outputSchema: driveOutputShape,
     // Honest annotation: this changes what the user's window is showing.
@@ -648,6 +740,7 @@ server.registerTool(
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
     highlight?: { x: number; y: number; width: number; height: number; durationMs?: number }
+    capture?: 'window' | 'pane'
   }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
@@ -705,6 +798,17 @@ server.registerTool(
         }
       }
       if (input.highlight !== undefined) await controlCall(live.info, 'highlight', input.highlight, LIVE_APPLY_TIMEOUT_MS)
+
+      // Capture last, so the PNG shows everything the commands above did.
+      // Nothing here navigates, so a scroll or pan applied in this same call
+      // is still in place when the shutter fires.
+      let capture: LiveCapture | null = null
+      if (input.capture !== undefined) {
+        await sleep(LIVE_CAPTURE_GRACE_MS)
+        capture = await liveCapture(live.info, input.capture)
+        warnings.push(...capture.warnings)
+      }
+
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
       const structured = {
@@ -712,11 +816,14 @@ server.registerTool(
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(capture !== null ? { pngPath: capture.pngPath, width: capture.width, height: capture.height } : {}),
       }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }],
-        structuredContent: structured,
+      const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(structured, null, 2) }]
+      if (capture !== null) {
+        const label = input.capture === 'pane' ? 'The captured target pane' : 'The captured app window'
+        content.push(await imageOrNote(capture.pngPath, label, 'read the file at pngPath'))
       }
+      return { content, structuredContent: structured }
     } catch (e) {
       return toolError(liveFailure(e))
     }

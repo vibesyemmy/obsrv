@@ -528,3 +528,23 @@ tell "scrolled" from "clamped" without taking a capture and diffing it.
 `'pane'` uses `captureTarget` and includes the pane's footer readout; the
 reported width/height are DIPs, the PNG raster is DIPs × display scale);
 headless renders note the option was ignored.
+
+#### 14.1 Capturing a driven state (v0.6.1)
+
+A navigate is a fresh `loadURL`, so it resets scroll. Two consequences were
+wrong until this revision:
+
+- `liveSnap` navigated on *every* live snap, even when the app was already
+  showing that URL. It now compares the requested URL against `status.url`
+  (parsed, through `normalizeUrl`, so `http://h:5173` matches the committed
+  `http://h:5173/`) and skips the navigation when they match. The result
+  carries `navigated`, and `settled` is trivially true when nothing moved.
+- `obsrv_drive` could scroll but not photograph; `obsrv_snap` could
+  photograph but only after navigating. Neither could answer "show me the
+  page scrolled to y". `obsrv_drive` now takes `capture: 'window' | 'pane'`,
+  running last in the fixed order (…→ highlight → capture), and returns
+  `pngPath`, `width` and `height` plus the inline image. Both tools share one
+  `liveCapture` helper, so the PNGs are produced identically.
+
+`obsrv_drive` remains the only way to capture a state that took several
+commands to reach, because it never navigates unless given `url`.
