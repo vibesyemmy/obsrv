@@ -91,6 +91,13 @@ root cannot scroll, and takes a `scrollSelector` when you need to name the
 container yourself. With no app running, everything falls back to the headless
 render automatically.
 
+To photograph a scrolled or panned state, pass `capture: 'window' | 'pane'` to
+`obsrv_drive`: it captures after its commands run, and nothing in that tool
+navigates unless you pass `url`, so the scroll survives the shutter. A live
+`obsrv_snap` only navigates when the app is showing a *different* URL — its
+`navigated` field says which happened — and navigating is a fresh load, which
+starts at the top of the page.
+
 A headless `snap` returns `settled: true` when the page went paint-quiet and
 every pixel painted. `settled: false` is still a usable capture, not a
 failure — a page that kept animating, or one whose repaint never completed,

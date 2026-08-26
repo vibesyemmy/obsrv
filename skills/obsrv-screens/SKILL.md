@@ -54,6 +54,13 @@ comes back inline. If the Obsrv desktop app is open with "Agent control" on
 click, pan and highlight to walk the user through what it found; no app
 means the usual headless render.
 
+To see anything below the fold, scroll and capture in the **same**
+`obsrv_drive` call — `{ scroll: { x: 0, y: 1500 }, capture: 'pane' }`. That
+tool never navigates unless you pass `url`, so the scroll is still in place
+when the PNG is taken. Reaching for `obsrv_snap` after a scroll works only
+when the app is already on that exact URL (it answers `navigated: false`);
+snapping a different URL is a fresh load and lands back at the top.
+
 ## The loop that catches real regressions
 
 1. Snap the dev URL across `--matrix laptop-768,android-65,1080p-24`, plus a
