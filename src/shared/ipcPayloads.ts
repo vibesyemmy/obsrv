@@ -135,7 +135,14 @@ export function parseUiState(raw: unknown): AgentUiReport | null {
   if (typeof profileId !== 'string' || profileId.length === 0 || profileId.length > MAX_UI_ID) return null
   if (viewMode !== '1:1' && viewMode !== 'fit') return null
   if (mode !== 'url' && mode !== 'image') return null
-  return { presetId, profileId, viewMode, mode, targetBounds: parseRect(raw.targetBounds) }
+  return {
+    presetId,
+    profileId,
+    viewMode,
+    mode,
+    targetBounds: parseRect(raw.targetBounds),
+    canvasBounds: parseRect(raw.canvasBounds),
+  }
 }
 
 /**

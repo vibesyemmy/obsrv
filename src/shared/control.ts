@@ -56,6 +56,13 @@ export interface AgentUiState {
  */
 export interface AgentUiReport extends AgentUiState {
   targetBounds?: { x: number; y: number; width: number; height: number } | null
+  /**
+   * Where the rendered screen itself sits, in the same window-relative CSS
+   * pixels — the canvas rect clipped to the pane. `captureTarget` crops to
+   * this rather than to the pane, so a minified mobile preset comes back
+   * phone-sized instead of phone-sized inside a mostly-empty rectangle.
+   */
+  canvasBounds?: { x: number; y: number; width: number; height: number } | null
 }
 
 /** What `status` returns: the UI mirror plus app version and the target's URL. */

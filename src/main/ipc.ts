@@ -289,6 +289,10 @@ export function registerIpc(ctx: AppContext): void {
   // Null until the renderer's first measured report; the capture then falls
   // back to the full window with a warning rather than failing.
   let targetBounds: Rect | null = null
+  // Where the rendered screen actually sits — the canvas clipped to the pane.
+  // `captureTarget` crops to this so the PNG is the screen under test, not the
+  // screen plus whatever empty pane surrounds it.
+  let canvasBounds: Rect | null = null
   // A patch sent before the renderer has mounted its listeners would vanish;
   // the first uiState report is the renderer saying "I'm listening", so
   // anything an early agent asked for is queued until then. The queue is
@@ -302,15 +306,71 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
     if (!s) return
-    const { targetBounds: bounds, ...state } = s
+    const { targetBounds: bounds, canvasBounds: canvas, ...state } = s
     Object.assign(uiState, state)
     targetBounds = bounds ?? null
+    canvasBounds = canvas ?? null
     if (!rendererReported) {
       rendererReported = true
       for (const patch of pendingApplies.splice(0)) {
         if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
       }
     }
+  })
+
+  // --- capture settling ------------------------------------------------------
+  // A preset change recreates the offscreen target at a new viewport and
+  // reloads the page. `setPreset` confirms only that the renderer store
+  // applied the change, so a capture fired straight after photographs the old
+  // texture — the status then disagrees with the image. Wait for the viewport
+  // to stop moving and a fresh frame to land before the shutter.
+  const SETTLE_POLL_MS = 80
+  /** Two identical reads means the resize has stopped. */
+  const SETTLE_STABLE_READS = 2
+  const SETTLE_BUDGET_MS = 4_000
+  /** After the frame reaches the renderer it still has to draw it. */
+  const SETTLE_DRAW_MS = 120
+
+  const nextFrame = (budgetMs: number): Promise<boolean> =>
+    new Promise(resolve => {
+      const timer = setTimeout(() => {
+        target.off('frame', onFrame)
+        resolve(false)
+      }, budgetMs)
+      const onFrame = (): void => {
+        clearTimeout(timer)
+        target.off('frame', onFrame)
+        resolve(true)
+      }
+      target.on('frame', onFrame)
+      target.invalidate()
+    })
+
+  /** False when the budget ran out before things went quiet; never throws. */
+  const settleTarget = async (): Promise<boolean> => {
+    const deadline = Date.now() + SETTLE_BUDGET_MS
+    let last = ''
+    let stable = 0
+    while (Date.now() < deadline) {
+      const v = target.getViewport()
+      const key = `${v.width}x${v.height}`
+      stable = key === last ? stable + 1 : 0
+      last = key
+      if (stable >= SETTLE_STABLE_READS) break
+      await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
+    }
+    if (stable < SETTLE_STABLE_READS) return false
+    const painted = await nextFrame(Math.max(0, deadline - Date.now()))
+    await new Promise(r => setTimeout(r, SETTLE_DRAW_MS))
+    return painted
+  }
+
+  /** capturePage wants integer CSS pixels; a fractional rect crops short. */
+  const roundRect = (r: Rect): Rect => ({
+    x: Math.round(r.x),
+    y: Math.round(r.y),
+    width: Math.max(1, Math.round(r.width)),
+    height: Math.max(1, Math.round(r.height)),
   })
 
   // Unpackaged (dev, e2e) `app.getVersion()` is Electron's own version; the
@@ -407,22 +467,30 @@ export function registerIpc(ctx: AppContext): void {
       win.webContents.send(IPC.agentApply, patch)
     },
     captureVisible: async () => {
+      await settleTarget()
       const image = await win.webContents.capturePage()
       const size = image.getSize()
       return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
     },
     captureTarget: async () => {
+      const settled = await settleTarget()
       // `capturePage(rect)` crops in the same CSS coordinates the renderer
-      // measured, so the reported pane rect needs no conversion.
-      const bounds = targetBounds
+      // measured, so the reported rect needs no conversion. Crop to the
+      // rendered screen, not the pane: a minified mobile preset otherwise
+      // comes back as a small phone inside a large empty rectangle.
+      const bounds = canvasBounds ?? targetBounds
       const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
-      const image = await win.webContents.capturePage(known ? bounds : undefined)
+      const image = await win.webContents.capturePage(known ? roundRect(bounds) : undefined)
       const size = image.getSize()
+      const warnings: string[] = []
+      if (!known) warnings.push('the renderer has not reported the pane bounds yet; captured the full window instead')
+      else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
+      if (!settled) warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
       return {
         data: image.toPNG().toString('base64'),
         width: size.width,
         height: size.height,
-        warnings: known ? [] : ['the renderer has not reported the target pane bounds yet; captured the full window instead'],
+        warnings,
       }
     },
     viewport: () => target.getViewport(),

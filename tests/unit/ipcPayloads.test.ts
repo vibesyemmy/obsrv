@@ -79,6 +79,18 @@ describe('parseInputEvent', () => {
 })
 
 describe('parseSettings', () => {
+  it('carries canvasBounds, and nulls it when absent or malformed', () => {
+    const base = { presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+    expect(parseUiState({ ...base, canvasBounds: { x: 10, y: 20, width: 300, height: 400 } })?.canvasBounds).toEqual({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 400,
+    })
+    expect(parseUiState(base)?.canvasBounds).toBeNull()
+    expect(parseUiState({ ...base, canvasBounds: { x: 'a' } })?.canvasBounds).toBeNull()
+  })
+
   it('copies exactly the five known keys', () => {
     expect(
       parseSettings({
@@ -124,24 +136,27 @@ describe('parseSettings', () => {
 
 describe('parseUiState', () => {
   const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', mode: 'url' }
+  /** Both rects default to null before the renderer has measured. */
+  const unmeasured = { targetBounds: null, canvasBounds: null }
   it('copies exactly the known keys; missing targetBounds means null (pre-mount)', () => {
-    expect(parseUiState({ ...good, extra: 1 })).toEqual({ ...good, targetBounds: null })
+    expect(parseUiState({ ...good, extra: 1 })).toEqual({ ...good, ...unmeasured })
   })
   it('carries ids main does not know (the report describes renderer state)', () => {
-    expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom', targetBounds: null })
+    expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom', ...unmeasured })
   })
   it('carries the target pane bounds, rounded like any pane rect', () => {
     expect(parseUiState({ ...good, targetBounds: { x: 683.4, y: 44, width: 682.6, height: 700 } })).toEqual({
       ...good,
+      canvasBounds: null,
       targetBounds: { x: 683, y: 44, width: 683, height: 700 },
     })
   })
   it('drops malformed bounds without losing the rest of the report', () => {
     expect(parseUiState({ ...good, targetBounds: { x: -1, y: 0, width: 10, height: 10 } })).toEqual({
       ...good,
-      targetBounds: null,
+      ...unmeasured,
     })
-    expect(parseUiState({ ...good, targetBounds: 'rect' })).toEqual({ ...good, targetBounds: null })
+    expect(parseUiState({ ...good, targetBounds: 'rect' })).toEqual({ ...good, ...unmeasured })
   })
   it.each([
     ['not an object', 'url'],

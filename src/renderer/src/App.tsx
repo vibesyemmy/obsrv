@@ -26,6 +26,7 @@ export function App() {
   // pane. Null until the pane has mounted and been measured.
   const targetPaneRef = useRef<HTMLDivElement>(null)
   const [targetBounds, setTargetBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  const [canvasBounds, setCanvasBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const toggle = (which: 'panel' | 'settings') => () =>
     setDrawer(d => (d === which ? 'none' : which))
 
@@ -87,21 +88,46 @@ export function App() {
   useEffect(() => {
     const el = targetPaneRef.current
     if (!el) return
+
+    // The rendered screen is the canvas, which at 1:1 usually overflows the
+    // pane and when minified sits inside it — so the useful crop is the
+    // intersection of the two, not the pane.
     const measure = (): void => {
-      const r = el.getBoundingClientRect()
-      setTargetBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
+      const pane = el.getBoundingClientRect()
+      setTargetBounds({ x: pane.x, y: pane.y, width: pane.width, height: pane.height })
+
+      const canvas = el.querySelector('canvas')
+      if (!canvas) {
+        setCanvasBounds(null)
+        return
+      }
+      const c = canvas.getBoundingClientRect()
+      const x = Math.max(pane.x, c.x)
+      const y = Math.max(pane.y, c.y)
+      const right = Math.min(pane.x + pane.width, c.x + c.width)
+      const bottom = Math.min(pane.y + pane.height, c.y + c.height)
+      setCanvasBounds(right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null)
     }
+
     const ro = new ResizeObserver(measure)
     ro.observe(el)
+    const canvas = el.querySelector('canvas')
+    if (canvas) ro.observe(canvas)
+    // A ResizeObserver does not fire on scroll, but panning moves the canvas
+    // under the pane, which changes the crop.
+    el.addEventListener('scroll', measure, { passive: true })
     measure()
-    return () => ro.disconnect()
+    return () => {
+      ro.disconnect()
+      el.removeEventListener('scroll', measure)
+    }
   }, [])
 
   // Main mirrors this for the agent-control server's `status`; the first run
   // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
   useEffect(() => {
-    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode, targetBounds })
-  }, [presetId, profileId, viewMode, mode, targetBounds])
+    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode, targetBounds, canvasBounds })
+  }, [presetId, profileId, viewMode, mode, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
