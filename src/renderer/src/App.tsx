@@ -34,6 +34,7 @@ export function App() {
   const setUrl = useStore(s => s.setUrl)
   const setError = useStore(s => s.setError)
   const setTargetLoading = useStore(s => s.setTargetLoading)
+  const setUpdate = useStore(s => s.setUpdate)
   const setImageMeta = useStore(s => s.setImage)
   const setMode = useStore(s => s.setMode)
   const setToast = useStore(s => s.setToast)
@@ -51,6 +52,9 @@ export function App() {
     // default settings) rather than taking the app down before first paint.
     window.obsrv.getHostInfo().then(setHost, e => console.warn('obsrv: getHostInfo failed', e))
     window.obsrv.getSettings().then(setSettings, e => console.warn('obsrv: getSettings failed', e))
+    // Re-read on every mount: a renderer reload would otherwise show nothing
+    // until the next daily check.
+    window.obsrv.getUpdate().then(setUpdate, e => console.warn('obsrv: getUpdate failed', e))
     const offs = [
       window.obsrv.onHostChanged(setHost),
       // A committed navigation — back, forward, reload, a link — supersedes
@@ -62,11 +66,12 @@ export function App() {
       }),
       window.obsrv.onLoadError(setError),
       window.obsrv.onTargetLoading(setTargetLoading),
+      window.obsrv.onUpdateStatus(setUpdate),
     ]
     return () => {
       for (const off of offs) off()
     }
-  }, [setHost, setSettings, setUrl, setError, setTargetLoading])
+  }, [setHost, setSettings, setUrl, setError, setTargetLoading, setUpdate])
 
   useEffect(() => {
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)

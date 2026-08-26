@@ -14,7 +14,7 @@ import {
   findProfile,
 } from '../../../shared/presets'
 import type { AgentHighlight } from '../../../shared/control'
-import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings } from '../../../shared/types'
+import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
 
@@ -58,6 +58,8 @@ export interface AppState {
   targetLoading: boolean
   error: LoadError | null
   toast: string | null
+  /** Null until the first `getUpdate` resolves; main seeds a real value. */
+  update: UpdateState | null
   image: ImageState | null
   surround: Surround
   viewMode: ViewMode
@@ -91,6 +93,7 @@ export interface AppState {
   setHost(h: HostInfo): void
   setTargetLoading(v: boolean): void
   setError(e: LoadError | null): void
+  setUpdate(u: UpdateState | null): void
   setToast(t: string | null): void
   setImage(i: ImageState | null): void
   setSurround(s: Surround): void
@@ -128,6 +131,7 @@ export const useStore = create<AppState>()(set => ({
   targetLoading: false,
   error: null,
   toast: null,
+  update: null,
   image: null,
   surround: 'graphite',
   viewMode: '1:1',
@@ -154,6 +158,7 @@ export const useStore = create<AppState>()(set => ({
   // Both panes report the same `loadError` for one failed navigation; the
   // duplicate must not replace the object and re-render everything twice.
   setError: error => set(s => (sameError(s.error, error) ? {} : { error })),
+  setUpdate: update => set({ update }),
   setToast: toast => set({ toast }),
   setImage: image => set({ image }),
   setSurround: surround => set({ surround }),
