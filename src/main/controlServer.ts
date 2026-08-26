@@ -6,20 +6,27 @@ import {
   CONTROL_COMMANDS,
   CONTROL_TOKEN_BYTES,
   isControlCommand,
+  parseClick,
+  parseHighlight,
+  pixelExactApplyError,
   presetApplyError,
   profileApplyError,
   tokenEqual,
   viewModeApplyError,
   type AgentApplyPatch,
+  type AgentClick,
   type ControlStatus,
 } from '../shared/control'
+import { parseScrollPos } from '../shared/ipcPayloads'
+import type { ScrollPos } from '../shared/types'
 import { urlSchemeError } from '../shared/url'
 
 /**
- * The agent-control server (spec §14 "Live drive"): a loopback-only HTTP
- * server that lets a local agent drive the *visible* app — navigate, flip
- * presets and panel profiles, capture the window as the user sees it — while
- * the user watches. Owned by the "Agent control" toolbar toggle (persisted as
+ * The agent-control server (spec §14 "Live drive" / "Drive controls"): a
+ * loopback-only HTTP server that lets a local agent drive the *visible* app —
+ * navigate, flip presets and panel profiles, scroll, pan, click, highlight,
+ * step history, capture the window or just the target pane — while the user
+ * watches. Owned by the "Agent control" toolbar toggle (persisted as
  * `settings.agentControl`, default off) and force-enabled for a session by
  * `OBSRV_AGENT_CONTROL=1`.
  *
@@ -53,6 +60,23 @@ export interface ControlDeps {
   apply(patch: AgentApplyPatch): void
   /** The app window exactly as the user sees it, as a base64 PNG. */
   captureVisible(): Promise<{ data: string; width: number; height: number }>
+  /**
+   * The window capture cropped to the target pane's reported bounds; the
+   * full window (with a warning) when the renderer has not reported them.
+   */
+  captureTarget(): Promise<{ data: string; width: number; height: number; warnings: string[] }>
+  /** The target's current CSS viewport, for `click` bounds validation. */
+  viewport(): { width: number; height: number }
+  /** Absolute page scroll of both panes over the pane-sync `applyScroll` channel. */
+  scroll(pos: ScrollPos): void
+  /** A validated click, delivered through the same `sendInput` path the canvas uses. */
+  click(c: AgentClick): void
+  /** The toolbar's history/reload actions, byte-for-byte (native-only history; reload reloads both). */
+  back(): void
+  forward(): void
+  reload(): void
+  /** Bring the app window to the front. */
+  focusWindow(): void
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
 }
@@ -196,6 +220,65 @@ export class ControlServer {
         const capture = await this.deps.captureVisible()
         return reply(200, { ok: true, ...capture })
       }
+
+      case 'captureTarget': {
+        const capture = await this.deps.captureTarget()
+        return reply(200, { ok: true, ...capture })
+      }
+
+      case 'scroll': {
+        const pos = parseScrollPos(payload)
+        if (!pos) return reply(400, { error: 'scroll payload must be { x, y } with finite, non-negative CSS-pixel offsets' })
+        this.deps.scroll(pos)
+        return reply(200, { ok: true })
+      }
+
+      case 'panTo': {
+        // Same shape and rules as a scroll offset: finite, non-negative.
+        const pos = parseScrollPos(payload)
+        if (!pos) return reply(400, { error: 'panTo payload must be { x, y } with finite, non-negative target-pixel coordinates' })
+        this.deps.apply({ panTo: pos })
+        return reply(200, { ok: true })
+      }
+
+      case 'click': {
+        const click = parseClick(payload, this.deps.viewport())
+        if (typeof click === 'string') return reply(400, { error: click })
+        // The click lands in the live page, so it can navigate — which then
+        // mirrors between the panes exactly like a user click would.
+        this.deps.click(click)
+        return reply(200, { ok: true })
+      }
+
+      case 'highlight': {
+        const highlight = parseHighlight(payload)
+        if (typeof highlight === 'string') return reply(400, { error: highlight })
+        this.deps.apply({ highlight })
+        return reply(200, { ok: true })
+      }
+
+      case 'back':
+        this.deps.back()
+        return reply(200, { ok: true })
+
+      case 'forward':
+        this.deps.forward()
+        return reply(200, { ok: true })
+
+      case 'reload':
+        this.deps.reload()
+        return reply(200, { ok: true })
+
+      case 'setPixelExact': {
+        const err = pixelExactApplyError(payload.on)
+        if (err) return reply(400, { error: err })
+        this.deps.apply({ pixelExact: payload.on as boolean })
+        return reply(200, { ok: true })
+      }
+
+      case 'focusWindow':
+        this.deps.focusWindow()
+        return reply(200, { ok: true })
     }
   }
 

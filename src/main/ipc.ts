@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
+import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { IPC } from '../shared/ipc'
 import { parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseSettings, parseUiState } from '../shared/ipcPayloads'
@@ -83,20 +84,27 @@ export function registerIpc(ctx: AppContext): void {
     assertRenderer(e)
     return navigateBoth(url)
   })
-  ipcMain.on(IPC.reload, e => {
-    if (!fromRenderer(e)) return
+  // The toolbar's history/reload actions, shared verbatim with the
+  // agent-control server's back/forward/reload commands.
+  const reloadBoth = (): void => {
     native.reload()
     // A reload commits the URL the target already shows, so the mirror
     // (rightly) does nothing; reload the target on its own.
     target.reload()
+  }
+  const goBack = (): void => native.back()
+  const goForward = (): void => native.forward()
+  ipcMain.on(IPC.reload, e => {
+    if (!fromRenderer(e)) return
+    reloadBoth()
   })
   ipcMain.on(IPC.back, e => {
     if (!fromRenderer(e)) return
-    native.back()
+    goBack()
   })
   ipcMain.on(IPC.forward, e => {
     if (!fromRenderer(e)) return
-    native.forward()
+    goForward()
   })
 
   // --- target ---------------------------------------------------------------
@@ -206,6 +214,10 @@ export function registerIpc(ctx: AppContext): void {
   // renderer round-trip. The mirror starts at the store's initial values and
   // the renderer reports on mount, so it is honest before the first change.
   const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+  // The target pane's window-relative bounds (CSS px), for `captureTarget`.
+  // Null until the renderer's first measured report; the capture then falls
+  // back to the full window with a warning rather than failing.
+  let targetBounds: Rect | null = null
   // A patch sent before the renderer has mounted its listeners would vanish;
   // the first uiState report is the renderer saying "I'm listening", so
   // anything an early agent asked for is queued until then. The queue is
@@ -219,7 +231,9 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
     if (!s) return
-    Object.assign(uiState, s)
+    const { targetBounds: bounds, ...state } = s
+    Object.assign(uiState, state)
+    targetBounds = bounds ?? null
     if (!rendererReported) {
       rendererReported = true
       for (const patch of pendingApplies.splice(0)) {
@@ -270,6 +284,52 @@ export function registerIpc(ctx: AppContext): void {
       const image = await win.webContents.capturePage()
       const size = image.getSize()
       return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
+    },
+    captureTarget: async () => {
+      // `capturePage(rect)` crops in the same CSS coordinates the renderer
+      // measured, so the reported pane rect needs no conversion.
+      const bounds = targetBounds
+      const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
+      const image = await win.webContents.capturePage(known ? bounds : undefined)
+      const size = image.getSize()
+      return {
+        data: image.toPNG().toString('base64'),
+        width: size.width,
+        height: size.height,
+        warnings: known ? [] : ['the renderer has not reported the target pane bounds yet; captured the full window instead'],
+      }
+    },
+    viewport: () => target.getViewport(),
+    scroll: pos => {
+      // An agent scroll drives both panes over the same `applyScroll` channel
+      // the pane-sync mirror uses — each pane's sync preload applies it and
+      // suppresses its own echo, so the two arrive together with no loop.
+      // Relying on the mirror instead would be silent: an applied scroll is
+      // deliberately not re-reported (see preload/sync.ts).
+      for (const wc of [native.webContents, target.webContents]) {
+        if (!wc.isDestroyed()) wc.send(IPC.applyScroll, pos)
+      }
+    },
+    click: c => {
+      // Built as the wire shape and passed through parseInputEvent, so a
+      // remote click reaches `sendInput` exactly as a canvas-forwarded one.
+      const down = parseInputEvent({ type: 'mouseDown', x: c.x, y: c.y, button: c.button, clickCount: 1 })
+      const up = parseInputEvent({ type: 'mouseUp', x: c.x, y: c.y, button: c.button, clickCount: 1 })
+      if (!down || !up) return
+      try {
+        target.sendInput(down)
+        target.sendInput(up)
+      } catch {
+        // Electron rejected the event; the click is lost, the app is not.
+      }
+    },
+    back: goBack,
+    forward: goForward,
+    reload: reloadBoth,
+    focusWindow: () => {
+      if (win.isDestroyed()) return
+      win.show()
+      win.focus()
     },
     activity: () => {
       if (!win.isDestroyed()) win.webContents.send(IPC.agentActivity)
