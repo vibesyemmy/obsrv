@@ -297,7 +297,21 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    `left: 0` holds while a wide canvas is scrolled horizontally. The fill is a
    neutral grey: only the rule under it is red, so the one chromatic thing on
    screen is the error itself. */
-.target-wrap { min-width: min-content; }
+/* position: relative anchors the agent highlight to the canvas origin. */
+.target-wrap { min-width: min-content; position: relative; }
+
+/* Agent-control highlight: a temporary neutral marker over the target-pixel
+   rect an agent is pointing at. Style-spec law: no hue — a light outline with
+   a dark dashed inner edge reads on any page without tinting it — and no
+   pointer interception over the pixels under inspection. */
+.agent-highlight {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  outline: 2px solid var(--text-0);
+  border: 1px dashed var(--chrome-0);
+  box-sizing: border-box;
+}
 .stall {
   position: sticky;
   top: 0;

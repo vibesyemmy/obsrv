@@ -1,4 +1,4 @@
-import type { AgentApplyPatch, AgentUiState } from './control'
+import type { AgentApplyPatch, AgentUiReport } from './control'
 import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent } from './types'
 
 export interface FrameMessage {
@@ -54,10 +54,12 @@ export interface ObsrvApi {
   /** The bytes of a PNG/JPEG at `path`; rejects on any other extension or an oversized file. */
   readImageFile(path: string): Promise<Uint8Array>
   /**
-   * Reports the toolbar's state to main, which mirrors it so the
-   * agent-control server can answer `status` without a renderer round-trip.
+   * Reports the toolbar's state (plus the target pane's window-relative
+   * bounds, once measured) to main, which mirrors it so the agent-control
+   * server can answer `status` — and crop `captureTarget` — without a
+   * renderer round-trip.
    */
-  reportUiState(s: AgentUiState): void
+  reportUiState(s: AgentUiReport): void
   /**
    * An agent-control command asks for a preset / profile / view-mode change;
    * the renderer applies it through the same store actions the toolbar uses.

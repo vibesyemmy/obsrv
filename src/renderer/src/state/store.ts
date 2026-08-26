@@ -13,6 +13,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
+import type { AgentHighlight } from '../../../shared/control'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
@@ -66,6 +67,18 @@ export interface AppState {
    * null outside fit mode.
    */
   fitScale: number | null
+  /**
+   * A pending agent-control `panTo`: centre this target pixel in the pane's
+   * 1:1 view. `TargetCanvas` (which owns the pane measurement and scale)
+   * applies it and clears it; `seq` distinguishes repeated requests for the
+   * same pixel.
+   */
+  agentPan: { x: number; y: number; seq: number } | null
+  /**
+   * The agent-control highlight currently showing over the target canvas;
+   * a new one replaces the previous (fresh `seq` restarts the lifetime).
+   */
+  agentHighlight: (AgentHighlight & { seq: number }) | null
 
   setMode(mode: Mode): void
   setUrl(url: string): void
@@ -83,6 +96,10 @@ export interface AppState {
   setSurround(s: Surround): void
   setViewMode(v: ViewMode): void
   setFitScale(v: number | null): void
+  requestAgentPan(p: { x: number; y: number }): void
+  clearAgentPan(): void
+  showAgentHighlight(h: AgentHighlight): void
+  clearAgentHighlight(): void
 }
 
 function sameError(a: LoadError | null, b: LoadError | null): boolean {
@@ -110,6 +127,8 @@ export const useStore = create<AppState>()(set => ({
   surround: 'graphite',
   viewMode: '1:1',
   fitScale: null,
+  agentPan: null,
+  agentHighlight: null,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
@@ -131,6 +150,10 @@ export const useStore = create<AppState>()(set => ({
   setSurround: surround => set({ surround }),
   setViewMode: viewMode => set({ viewMode }),
   setFitScale: fitScale => set({ fitScale }),
+  requestAgentPan: p => set(s => ({ agentPan: { ...p, seq: (s.agentPan?.seq ?? 0) + 1 } })),
+  clearAgentPan: () => set({ agentPan: null }),
+  showAgentHighlight: h => set(s => ({ agentHighlight: { ...h, seq: (s.agentHighlight?.seq ?? 0) + 1 } })),
+  clearAgentHighlight: () => set({ agentHighlight: null }),
 
   // Spec §7: leaving image mode restores the URL that was showing before.
   setMode: mode =>

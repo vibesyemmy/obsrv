@@ -13,7 +13,7 @@ import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
 import { selectDeviceScaleFactor, selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
-import { computeFitScale, jumpScroll } from '../view/viewMath'
+import { centreScroll, computeFitScale, jumpScroll } from '../view/viewMath'
 
 export interface TargetCanvasProps {
   onFatal: (message: string) => void
@@ -426,6 +426,42 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     setViewMode('1:1')
   }
 
+  // An agent-control `panTo` centres a target pixel exactly as a fit click
+  // would: from fit mode the same pending-jump path switches to 1:1 centred
+  // there; already at 1:1 the pane scrolls directly. Applied here — not in
+  // App — because the centring needs the pane measurement and 1:1 scale this
+  // component owns.
+  const agentPan = useStore(s => s.agentPan)
+  const clearAgentPan = useStore(s => s.clearAgentPan)
+  useEffect(() => {
+    if (!agentPan) return
+    clearAgentPan()
+    const jump = centreScroll(agentPan.x, agentPan.y, dpr, oneToOne, pane.width, pane.height, source.width, source.height)
+    if (viewMode === 'fit') {
+      pendingJump.current = jump
+      setViewMode('1:1')
+      return
+    }
+    const body = paneBody()
+    if (body) {
+      body.scrollLeft = jump.left
+      body.scrollTop = jump.top
+    }
+    // The other values are read, not reacted to: the effect fires on a new
+    // request and applies it with whatever geometry is current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentPan])
+
+  // The agent-control highlight's lifetime; a replacement highlight (fresh
+  // seq) cancels this timer through the effect cleanup and starts its own.
+  const agentHighlight = useStore(s => s.agentHighlight)
+  const clearAgentHighlight = useStore(s => s.clearAgentHighlight)
+  useEffect(() => {
+    if (!agentHighlight) return
+    const t = window.setTimeout(clearAgentHighlight, agentHighlight.durationMs)
+    return () => window.clearTimeout(t)
+  }, [agentHighlight, clearAgentHighlight])
+
   // Every bridge builder may return null (unnamed button, pinch gesture,
   // dead key); those events are dropped, never sent as something else.
   const send =
@@ -507,6 +543,22 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
             if (ev) window.obsrv.sendInput(ev)
           }}
         />
+        {agentHighlight && (
+          // The agent-control highlight: a target-pixel rect drawn at the
+          // canvas's own scale, absolutely positioned inside the scroll
+          // content so it rides the pane's scroll. Neutral by style-spec law
+          // (no hue) and pointer-events: none, so it never intercepts the
+          // input the canvas forwards.
+          <div
+            className="agent-highlight"
+            style={{
+              left: `${(agentHighlight.x * scale) / dpr}px`,
+              top: `${(agentHighlight.y * scale) / dpr}px`,
+              width: `${(agentHighlight.width * scale) / dpr}px`,
+              height: `${(agentHighlight.height * scale) / dpr}px`,
+            }}
+          />
+        )}
       </div>
     </>
   )

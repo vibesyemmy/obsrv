@@ -21,6 +21,11 @@ export function App() {
   const [image, setImage] = useState<LoadedImage | null>(null)
   // Latest drop wins: a slow decode must not land after a quicker later one.
   const dropToken = useRef(0)
+  // The target pane's window-relative bounds (CSS px), reported to main so
+  // the agent-control `captureTarget` can crop the window capture to the
+  // pane. Null until the pane has mounted and been measured.
+  const targetPaneRef = useRef<HTMLDivElement>(null)
+  const [targetBounds, setTargetBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const toggle = (which: 'panel' | 'settings') => () =>
     setDrawer(d => (d === which ? 'none' : which))
 
@@ -71,21 +76,42 @@ export function App() {
     window.obsrv.setMode(mode)
   }, [mode])
 
+  // The pane's bounds change with the window, the drawers and the panes'
+  // 50/50 split, and every one of those also resizes the pane — so a
+  // ResizeObserver is the one signal needed to keep the measurement fresh.
+  useEffect(() => {
+    const el = targetPaneRef.current
+    if (!el) return
+    const measure = (): void => {
+      const r = el.getBoundingClientRect()
+      setTargetBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
+    }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
+  }, [])
+
   // Main mirrors this for the agent-control server's `status`; the first run
   // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
   useEffect(() => {
-    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode })
-  }, [presetId, profileId, viewMode, mode])
+    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode, targetBounds })
+  }, [presetId, profileId, viewMode, mode, targetBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
   // hanging off the store) follows a remote preset flip like a local click.
+  // panTo and highlight park in the store for TargetCanvas, which owns the
+  // pane measurement and scale the two need.
   useEffect(() => {
     return window.obsrv.onAgentApply(patch => {
       const s = useStore.getState()
       if (patch.presetId !== undefined) s.setPreset(patch.presetId)
       if (patch.profileId !== undefined) s.setProfile(patch.profileId)
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
+      if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)
+      if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
+      if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)
     })
   }, [])
 
@@ -173,7 +199,7 @@ export function App() {
           ) : (
             <NativeSlot />
           )}
-          <div className="pane target-pane">
+          <div className="pane target-pane" ref={targetPaneRef}>
             <div className="pane-body">
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
             </div>
