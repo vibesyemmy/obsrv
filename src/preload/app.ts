@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { FrameMessage, ObsrvApi } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
-import type { HostInfo, LoadError } from '../shared/types'
+import type { HostInfo, LoadError, UpdateState } from '../shared/types'
 
 /** Wraps `ipcRenderer.on` so every subscriber gets an unsubscribe function. */
 function subscribe<T>(channel: string, cb: (v: T) => void): () => void {
@@ -83,6 +83,10 @@ const api: ObsrvApi = {
       ipcRenderer.removeListener(IPC.agentActivity, listener)
     }
   },
+  getUpdate: () => ipcRenderer.invoke(IPC.getUpdate),
+  checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
+  openRelease: () => ipcRenderer.invoke(IPC.openRelease),
+  onUpdateStatus: cb => subscribe<UpdateState>(IPC.updateStatus, cb),
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

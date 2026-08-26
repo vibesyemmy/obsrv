@@ -49,6 +49,14 @@ export interface Settings {
    * `OBSRV_AGENT_CONTROL=1` force-enables it for the session at boot.
    */
   agentControl: boolean
+  /**
+   * Whether the app asks GitHub about newer releases once a day. On by
+   * default — unlike `agentControl` this opens no port and accepts nothing;
+   * it is a single unauthenticated GET carrying no identifiers.
+   */
+  updateCheck: boolean
+  /** Epoch ms of the last completed check, success or failure. 0 = never. */
+  lastUpdateCheck: number
 }
 
 /** A dirty-rect slice of the 1x target frame. `data` is BGRA, row-major, no padding. */
@@ -121,4 +129,24 @@ export interface ScrollReport {
   y: number
   scroller: ScrollerKind
   warnings: string[]
+}
+
+export type UpdateStatus = 'current' | 'available' | 'error'
+
+/**
+ * What the renderer knows about updates. The release URL is deliberately not
+ * here: main keeps it and opens it itself, so nothing the renderer holds can
+ * become a string handed to the OS. See the update spec §9.
+ */
+export interface UpdateState {
+  status: UpdateStatus
+  /**
+   * The running app version. Always present, so Settings can show it before
+   * any check has completed.
+   */
+  current: string
+  /** Release version without a leading `v`. Present only when available. */
+  latest?: string
+  /** Epoch ms of the last completed attempt, success or failure. 0 = never. */
+  checkedAt: number
 }

@@ -49,6 +49,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
   const surround = useStore(s => s.surround)
+  const update = useStore(s => s.update)
   const setSurround = useStore(s => s.setSurround)
   const viewMode = useStore(s => s.viewMode)
   const setViewMode = useStore(s => s.setViewMode)
@@ -232,6 +233,17 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         />
         Pixel-exact
       </label>
+
+      {update?.status === 'available' && update.latest !== undefined && (
+        <button
+          className="update-button"
+          type="button"
+          title={`Obsrv ${update.latest} is available — opens the download page`}
+          onClick={() => void window.obsrv.openRelease()}
+        >
+          v{update.latest} ↓
+        </button>
+      )}
 
       <div className="surround-control" role="group" aria-label="Pane surround">
         {SURROUNDS.map(s => (

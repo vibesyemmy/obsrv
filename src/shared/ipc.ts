@@ -27,4 +27,8 @@ export const IPC = {
   uiState: 'obsrv:ui-state',
   agentApply: 'obsrv:agent-apply',
   agentActivity: 'obsrv:agent-activity',
+  getUpdate: 'obsrv:get-update',
+  checkUpdate: 'obsrv:check-update',
+  openRelease: 'obsrv:open-release',
+  updateStatus: 'obsrv:update-status',
 } as const

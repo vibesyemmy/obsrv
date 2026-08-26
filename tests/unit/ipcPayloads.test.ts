@@ -79,11 +79,22 @@ describe('parseInputEvent', () => {
 })
 
 describe('parseSettings', () => {
-  it('copies exactly the three known keys', () => {
-    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, agentControl: true, extra: 1 })).toEqual({
+  it('copies exactly the five known keys', () => {
+    expect(
+      parseSettings({
+        hostDiagonalInches: 27,
+        hostNits: 500,
+        agentControl: true,
+        updateCheck: false,
+        lastUpdateCheck: 1700000000000,
+        extra: 1,
+      }),
+    ).toEqual({
       hostDiagonalInches: 27,
       hostNits: 500,
       agentControl: true,
+      updateCheck: false,
+      lastUpdateCheck: 1700000000000,
     })
   })
   it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
@@ -91,6 +102,10 @@ describe('parseSettings', () => {
       hostDiagonalInches: 27,
       hostNits: 500,
       agentControl: false,
+      // The opposite default: absent means on, so a renderer from before this
+      // feature does not silently disable the check when it saves settings.
+      updateCheck: true,
+      lastUpdateCheck: 0,
     })
   })
   it.each([

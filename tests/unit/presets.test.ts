@@ -57,6 +57,12 @@ describe('presets', () => {
   })
   it('exposes limits and defaults', () => {
     expect(MAX_VIEWPORT).toBe(4096)
-    expect(DEFAULT_SETTINGS).toEqual({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
+    expect(DEFAULT_SETTINGS).toEqual({
+      hostDiagonalInches: 27,
+      hostNits: 500,
+      agentControl: false,
+      updateCheck: true,
+      lastUpdateCheck: 0,
+    })
   })
 })

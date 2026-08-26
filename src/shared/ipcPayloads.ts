@@ -89,9 +89,10 @@ export function parseDeviceScaleFactor(raw: unknown): number | null {
 }
 
 /**
- * Copies exactly the three known keys; the numbers must be finite and
- * positive. A missing `agentControl` means false (the pre-live-drive wire
- * shape); any non-boolean value is refused, never coerced.
+ * Copies exactly the five known keys; the numbers must be finite and
+ * positive. A missing `agentControl` means false and a missing `updateCheck`
+ * means true (the pre-feature wire shapes); any non-boolean value is refused,
+ * never coerced.
  */
 export function parseSettings(raw: unknown): Settings | null {
   if (!isRecord(raw)) return null
@@ -100,7 +101,11 @@ export function parseSettings(raw: unknown): Settings | null {
   if (!isFiniteNumber(hostNits) || hostNits <= 0) return null
   const agentControl = raw.agentControl ?? false
   if (typeof agentControl !== 'boolean') return null
-  return { hostDiagonalInches, hostNits, agentControl }
+  const updateCheck = raw.updateCheck ?? true
+  if (typeof updateCheck !== 'boolean') return null
+  const lastUpdateCheck = raw.lastUpdateCheck ?? 0
+  if (!isFiniteNumber(lastUpdateCheck) || lastUpdateCheck < 0) return null
+  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {

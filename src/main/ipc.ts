@@ -1,4 +1,4 @@
-import { app, ipcMain, screen, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -16,10 +16,12 @@ import {
   parseUiState,
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
-import type { HostInfo, ScrollReport, ScrollRequest } from '../shared/types'
+import type { HostInfo, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
+import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
+import { checkForUpdate } from './updateCheck'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
 const TOOLBAR_H = 44
@@ -322,6 +324,61 @@ export function registerIpc(ctx: AppContext): void {
       return app.getVersion()
     }
   })()
+
+  // --- update check ---------------------------------------------------------
+  // The release URL lives here and only here; `openRelease` takes no argument,
+  // so the renderer can never hand the OS a string of its own.
+  //
+  // Seeded rather than null: Settings shows the running version from the first
+  // paint, and `checkedAt: 0` reads as "never" until a check completes.
+  let update: UpdateState = { status: 'current', current: appVersion, checkedAt: 0 }
+  let releaseUrl = ''
+
+  const runUpdateCheck = async (): Promise<UpdateState> => {
+    const now = Date.now()
+    const { state, url } = await checkForUpdate(appVersion, now)
+    update = state
+    releaseUrl = state.status === 'available' && isReleaseUrl(url) ? url : ''
+    // Stamped on failures too, so an offline machine retries once a day
+    // rather than on every launch.
+    const next = { ...settings, lastUpdateCheck: now }
+    try {
+      saveSettings(settingsFile, next)
+      settings = next
+    } catch {
+      // A read-only settings file must not break the app; the check simply
+      // repeats next launch.
+    }
+    if (!win.isDestroyed()) win.webContents.send(IPC.updateStatus, state)
+    return state
+  }
+
+  ipcMain.handle(IPC.getUpdate, e => {
+    assertRenderer(e)
+    return update
+  })
+  ipcMain.handle(IPC.checkUpdate, e => {
+    assertRenderer(e)
+    return runUpdateCheck()
+  })
+  ipcMain.handle(IPC.openRelease, async e => {
+    assertRenderer(e)
+    if (releaseUrl === '') return false
+    await shell.openExternal(releaseUrl)
+    return true
+  })
+
+  // Fired after the window exists and never awaited, so a hung network cannot
+  // delay the first paint.
+  //
+  // Under OBSRV_TEST the boot check is skipped unless a stand-in endpoint is
+  // given: otherwise every e2e spec would call GitHub on launch, and the
+  // settings write that follows would race the specs that assert on settings.
+  // `update.spec.ts` sets OBSRV_RELEASES_API and so still exercises this path.
+  const bootCheckAllowed = process.env.OBSRV_TEST !== '1' || process.env.OBSRV_RELEASES_API !== undefined
+  if (bootCheckAllowed && settings.updateCheck && isCheckDue(settings.lastUpdateCheck, Date.now())) {
+    void runUpdateCheck()
+  }
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     status: () => {

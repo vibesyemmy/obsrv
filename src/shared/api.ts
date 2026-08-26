@@ -1,5 +1,5 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
-import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent } from './types'
+import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent, UpdateState } from './types'
 
 export interface FrameMessage {
   frame: FrameSlice
@@ -67,6 +67,17 @@ export interface ObsrvApi {
   onAgentApply(cb: (patch: AgentApplyPatch) => void): () => void
   /** An authenticated agent-control command arrived; the toolbar shows its AGENT indicator. */
   onAgentActivity(cb: () => void): () => void
+  /** The current update state. Seeded with the running version before any check. */
+  getUpdate(): Promise<UpdateState>
+  /** Check now, ignoring the daily throttle. Resolves with the new state. */
+  checkUpdate(): Promise<UpdateState>
+  /**
+   * Open the release page. Takes no URL by design: main opens the string it
+   * validated itself, so the renderer cannot ask the OS to open anything.
+   * Resolves false when there is no stored URL to open.
+   */
+  openRelease(): Promise<boolean>
+  onUpdateStatus(cb: (s: UpdateState) => void): () => void
 }
 
 declare global {

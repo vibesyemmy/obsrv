@@ -381,3 +381,49 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .browser-notice p { margin: 0.75rem 0 0; color: var(--text-1); }
 .browser-notice code { font-family: var(--mono); }
+
+/* An update is neither a warning nor an error, so it carries no colour: the
+   only chromatic pixels in this chrome stay reserved for real attention. */
+/* `.toolbar button` is (0,1,1) and pins every button to a 26px square, so this
+   needs two classes to outrank it — a bare `.update-button` renders as "v0.". */
+.toolbar .update-button {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0 8px;
+}
+.version-block { margin: 8px 0; }
+.version-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  color: var(--text-1);
+}
+.version-row .version-current,
+.version-row .version-latest,
+.version-row .version-checked {
+  color: var(--text-0);
+  text-align: right;
+}
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-0);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.check-now {
+  width: 100%;
+  height: 24px;
+  margin-top: 8px;
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
