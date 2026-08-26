@@ -97,11 +97,24 @@ describe('parseSettings', () => {
 
 describe('parseUiState', () => {
   const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', mode: 'url' }
-  it('copies exactly the four known keys', () => {
-    expect(parseUiState({ ...good, extra: 1 })).toEqual(good)
+  it('copies exactly the known keys; missing targetBounds means null (pre-mount)', () => {
+    expect(parseUiState({ ...good, extra: 1 })).toEqual({ ...good, targetBounds: null })
   })
   it('carries ids main does not know (the report describes renderer state)', () => {
-    expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom' })
+    expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom', targetBounds: null })
+  })
+  it('carries the target pane bounds, rounded like any pane rect', () => {
+    expect(parseUiState({ ...good, targetBounds: { x: 683.4, y: 44, width: 682.6, height: 700 } })).toEqual({
+      ...good,
+      targetBounds: { x: 683, y: 44, width: 683, height: 700 },
+    })
+  })
+  it('drops malformed bounds without losing the rest of the report', () => {
+    expect(parseUiState({ ...good, targetBounds: { x: -1, y: 0, width: 10, height: 10 } })).toEqual({
+      ...good,
+      targetBounds: null,
+    })
+    expect(parseUiState({ ...good, targetBounds: 'rect' })).toEqual({ ...good, targetBounds: null })
   })
   it.each([
     ['not an object', 'url'],

@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { join } from 'node:path'
+import { parseRect } from './ipcPayloads'
 import { PANEL_PROFILES, SCREEN_PRESETS } from './presets'
 
 /**
@@ -47,17 +48,53 @@ export interface AgentUiState {
   mode: 'url' | 'image'
 }
 
+/**
+ * The `IPC.uiState` wire report: the UI mirror plus the target pane's
+ * window-relative bounds in CSS pixels, which `captureTarget` crops the
+ * window capture to. Null (or absent) before the pane has mounted — the
+ * capture then falls back to the full window with a warning, never errors.
+ */
+export interface AgentUiReport extends AgentUiState {
+  targetBounds?: { x: number; y: number; width: number; height: number } | null
+}
+
 /** What `status` returns: the UI mirror plus app version and the target's URL. */
 export interface ControlStatus extends AgentUiState {
   version: string
   url: string
 }
 
-/** What `setPreset` / `setProfile` / `setViewMode` forward to the renderer. */
+/** A validated `highlight` payload: a target-pixel rect plus its lifetime. */
+export interface AgentHighlight {
+  x: number
+  y: number
+  width: number
+  height: number
+  durationMs: number
+}
+
+/** A validated `click` payload: CSS-pixel coordinates within the target viewport. */
+export interface AgentClick {
+  x: number
+  y: number
+  button: 'left' | 'middle' | 'right'
+}
+
+/**
+ * What the renderer-applied commands forward over `IPC.agentApply`. Every
+ * field is optional; the renderer applies exactly the ones present with its
+ * own store actions (`setPreset`, `setPixelExact`, …) or pane maths
+ * (`panTo`, `highlight`).
+ */
 export interface AgentApplyPatch {
   presetId?: string
   profileId?: string
   viewMode?: AgentViewMode
+  pixelExact?: boolean
+  /** Centre this target pixel in the pane's 1:1 view (fit jumps to 1:1 there). */
+  panTo?: { x: number; y: number }
+  /** Draw a temporary neutral overlay over this target-pixel rect. */
+  highlight?: AgentHighlight
 }
 
 export const CONTROL_COMMANDS = [
@@ -67,6 +104,17 @@ export const CONTROL_COMMANDS = [
   'setProfile',
   'setViewMode',
   'captureVisible',
+  // v0.5 drive controls (spec §14 "Drive controls").
+  'scroll',
+  'panTo',
+  'click',
+  'highlight',
+  'back',
+  'forward',
+  'reload',
+  'setPixelExact',
+  'captureTarget',
+  'focusWindow',
 ] as const
 
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number]
@@ -166,6 +214,60 @@ export function profileApplyError(id: unknown): string | null {
 
 export function viewModeApplyError(v: unknown): string | null {
   return v === '1:1' || v === 'fit' ? null : `setViewMode payload must be { mode: '1:1' | 'fit' }`
+}
+
+export function pixelExactApplyError(v: unknown): string | null {
+  return typeof v === 'boolean' ? null : 'setPixelExact payload must be { on: boolean }'
+}
+
+/**
+ * Validates a `click` payload against the target's *current* CSS viewport:
+ * `sendInputEvent` takes CSS coordinates, and a click past the viewport edge
+ * would land on nothing (or, worse, on whatever the page scrolled there),
+ * so it is refused rather than clamped. The button defaults to left.
+ * Returns the validated click, or the error message.
+ */
+export function parseClick(raw: unknown, viewport: { width: number; height: number }): AgentClick | string {
+  const shape = 'click payload must be { x, y, button? } with finite CSS-pixel coordinates'
+  if (!isRecord(raw)) return shape
+  const { x, y } = raw
+  if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) return shape
+  if (x < 0 || y < 0 || x > viewport.width || y > viewport.height) {
+    return `click (${x}, ${y}) is outside the current CSS viewport ${viewport.width}x${viewport.height}`
+  }
+  const button = raw.button ?? 'left'
+  if (button !== 'left' && button !== 'middle' && button !== 'right') {
+    return 'click button must be left, middle or right'
+  }
+  return { x, y, button }
+}
+
+/** How long a highlight overlay stays up when the payload does not say. */
+export const HIGHLIGHT_DURATION_DEFAULT_MS = 2_000
+/** Shorter would flash imperceptibly; the payload is clamped, not refused. */
+export const HIGHLIGHT_DURATION_MIN_MS = 250
+/** Longer would squat on the pixels under inspection; clamped likewise. */
+export const HIGHLIGHT_DURATION_MAX_MS = 10_000
+
+/**
+ * Validates a `highlight` payload: the rect is checked exactly like a pane
+ * rect (`parseRect` — finite, non-negative, bounded, rounded) and must be at
+ * least 1×1 after rounding (an invisible highlight answering ok would lie).
+ * `durationMs` defaults and clamps rather than erroring — the exact lifetime
+ * is presentation, not correctness — but a non-numeric one is refused, never
+ * guessed. Returns the validated highlight, or the error message.
+ */
+export function parseHighlight(raw: unknown): AgentHighlight | string {
+  const rect = parseRect(raw)
+  if (!rect) return 'highlight payload must be { x, y, width, height, durationMs? } with finite, non-negative target-pixel bounds'
+  if (rect.width < 1 || rect.height < 1) return 'highlight rect must be at least 1x1 target pixels'
+  const d = (raw as Record<string, unknown>).durationMs
+  if (d === undefined) return { ...rect, durationMs: HIGHLIGHT_DURATION_DEFAULT_MS }
+  if (typeof d !== 'number' || !Number.isFinite(d)) return 'highlight durationMs must be a finite number of milliseconds'
+  return {
+    ...rect,
+    durationMs: Math.min(Math.max(Math.round(d), HIGHLIGHT_DURATION_MIN_MS), HIGHLIGHT_DURATION_MAX_MS),
+  }
 }
 
 /** Validates a control server `status` response on the client side. */
