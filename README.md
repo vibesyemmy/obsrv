@@ -85,8 +85,17 @@ If the desktop app is open with the toolbar's **Agent control** toggle on,
 the preset flip, and the agent gets back a capture of the app exactly as you
 see it (plus `obsrv_drive` to flip URL/preset/profile directly). Agents can
 also scroll, click, pan and highlight while you watch — a drive session works
-as a guided demo. With no app running, everything falls back to the headless
+as a guided demo. A `scroll` reports the offset it actually reached
+(`scrolled` / `scroller`), finds the inner scroll container on pages whose
+root cannot scroll, and takes a `scrollSelector` when you need to name the
+container yourself. With no app running, everything falls back to the headless
 render automatically.
+
+A headless `snap` returns `settled: true` when the page went paint-quiet and
+every pixel painted. `settled: false` is still a usable capture, not a
+failure — a page that kept animating, or one whose repaint never completed,
+comes back as-is (exit code 0) with a warning saying what was missing. Only a
+render that painted nothing at all is an error.
 
 Build first, then register:
 
@@ -140,6 +149,12 @@ belongs to an unrelated package.
   looks different again; a Windows build would show Windows truth natively.
 - Panel simulation is an approximation, not colourimetric.
 - Non-ASCII text input does not type into the target pane (Electron `sendInputEvent`
-  limitation); nested scroll containers aren't mirrored.
+  limitation).
+- Inner-scroller *reporting* is one-way. An agent `scroll` finds the page's real scroll
+  host — the app-shell pattern (`html, body { overflow: hidden }` with an inner
+  `overflow-y: auto` container) is handled, and the result reports the offset actually
+  reached — but scrolling a nested container **by hand** in the native pane is not
+  mirrored to the target: element scroll events don't bubble to `window`, so the report
+  side never sees them. Dragging the page itself still syncs both ways.
 - Frame delivery has no renderer-side backpressure mailbox (see plan header); at 30 fps
   with dirty rects it has not been needed.
