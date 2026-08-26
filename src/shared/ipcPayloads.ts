@@ -1,5 +1,5 @@
 import type { Rect } from './api'
-import type { AgentUiState } from './control'
+import type { AgentUiReport } from './control'
 import type { InputModifier, ScrollPos, Settings, TargetInputEvent } from './types'
 
 /**
@@ -114,15 +114,20 @@ const MAX_UI_ID = 64
  * arbitrarily long one) rather than checked against the preset table: the
  * report *describes* renderer state, and refusing an id main does not know
  * would leave the mirror lying about it.
+ *
+ * `targetBounds` (the pane rect `captureTarget` crops to) is advisory:
+ * malformed or missing bounds become null — the capture falls back to the
+ * full window — rather than dropping the whole report and starving the
+ * mirror of the state it *is* sure about.
  */
-export function parseUiState(raw: unknown): AgentUiState | null {
+export function parseUiState(raw: unknown): AgentUiReport | null {
   if (!isRecord(raw)) return null
   const { presetId, profileId, viewMode, mode } = raw
   if (typeof presetId !== 'string' || presetId.length === 0 || presetId.length > MAX_UI_ID) return null
   if (typeof profileId !== 'string' || profileId.length === 0 || profileId.length > MAX_UI_ID) return null
   if (viewMode !== '1:1' && viewMode !== 'fit') return null
   if (mode !== 'url' && mode !== 'image') return null
-  return { presetId, profileId, viewMode, mode }
+  return { presetId, profileId, viewMode, mode, targetBounds: parseRect(raw.targetBounds) }
 }
 
 /**

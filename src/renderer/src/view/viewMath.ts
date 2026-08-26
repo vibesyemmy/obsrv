@@ -27,14 +27,40 @@ export function computeFitScale(
 }
 
 /**
- * Scroll offsets (CSS px) that centre the clicked target pixel in the pane
- * after the fit→1:1 switch. `clickX`/`clickY` are canvas-relative CSS pixels
- * in fit mode; the target pixel under them is `click × dpr / fitScale`, and
- * at 1:1 that pixel sits `target × oneToOneScale / dpr` CSS pixels from the
+ * Scroll offsets (CSS px) that centre the target pixel `(x, y)` in the pane
+ * at 1:1: that pixel sits `target × oneToOneScale / dpr` CSS pixels from the
  * canvas origin. Each axis clamps to the scrollable range
  * `[0, vp × S / dpr − pane]` — zero when the 1:1 canvas is smaller than the
  * pane. Bad inputs (non-finite, non-positive scales or sizes) yield the
- * origin rather than NaN scroll positions.
+ * origin rather than NaN scroll positions. Drives both the fit→1:1 click
+ * jump (via `jumpScroll`) and the agent-control `panTo` command.
+ */
+export function centreScroll(
+  x: number,
+  y: number,
+  dpr: number,
+  oneToOneScale: number,
+  paneW: number,
+  paneH: number,
+  vpW: number,
+  vpH: number,
+): { left: number; top: number } {
+  if (!usable(dpr, oneToOneScale, paneW, paneH, vpW, vpH) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return { left: 0, top: 0 }
+  }
+  const axis = (target: number, pane: number, vp: number): number => {
+    const want = (target * oneToOneScale) / dpr - pane / 2
+    const max = (vp * oneToOneScale) / dpr - pane
+    return Math.min(Math.max(want, 0), Math.max(max, 0))
+  }
+  return { left: axis(x, paneW, vpW), top: axis(y, paneH, vpH) }
+}
+
+/**
+ * Scroll offsets (CSS px) that centre the clicked target pixel in the pane
+ * after the fit→1:1 switch. `clickX`/`clickY` are canvas-relative CSS pixels
+ * in fit mode; the target pixel under them is `click × dpr / fitScale`, and
+ * the centring itself is `centreScroll`.
  */
 export function jumpScroll(
   clickX: number,
@@ -47,18 +73,16 @@ export function jumpScroll(
   vpW: number,
   vpH: number,
 ): { left: number; top: number } {
-  if (
-    !usable(dpr, fitScale, oneToOneScale, paneW, paneH, vpW, vpH) ||
-    !Number.isFinite(clickX) ||
-    !Number.isFinite(clickY)
-  ) {
-    return { left: 0, top: 0 }
-  }
-  const axis = (click: number, pane: number, vp: number): number => {
-    const target = (click * dpr) / fitScale
-    const want = (target * oneToOneScale) / dpr - pane / 2
-    const max = (vp * oneToOneScale) / dpr - pane
-    return Math.min(Math.max(want, 0), Math.max(max, 0))
-  }
-  return { left: axis(clickX, paneW, vpW), top: axis(clickY, paneH, vpH) }
+  if (!usable(fitScale) || !Number.isFinite(clickX) || !Number.isFinite(clickY)) return { left: 0, top: 0 }
+  if (!usable(dpr)) return { left: 0, top: 0 }
+  return centreScroll(
+    (clickX * dpr) / fitScale,
+    (clickY * dpr) / fitScale,
+    dpr,
+    oneToOneScale,
+    paneW,
+    paneH,
+    vpW,
+    vpH,
+  )
 }

@@ -50,8 +50,9 @@ If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
 `obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
 comes back inline. If the Obsrv desktop app is open with "Agent control" on
 (toolbar toggle), snaps drive the visible window — the user watches — and
-`obsrv_drive` flips its URL/preset/profile directly; no app means the usual
-headless render.
+`obsrv_drive` flips its URL/preset/profile directly, and can also scroll,
+click, pan and highlight to walk the user through what it found; no app
+means the usual headless render.
 
 ## The loop that catches real regressions
 

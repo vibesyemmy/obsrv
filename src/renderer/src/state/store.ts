@@ -13,6 +13,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
+import type { AgentHighlight } from '../../../shared/control'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
@@ -66,6 +67,18 @@ export interface AppState {
    * null outside fit mode.
    */
   fitScale: number | null
+  /**
+   * A pending agent-control `panTo`: centre this target pixel in the pane's
+   * 1:1 view. `TargetCanvas` (which owns the pane measurement and scale)
+   * applies it and clears it; `seq` distinguishes repeated requests for the
+   * same pixel.
+   */
+  agentPan: { x: number; y: number; seq: number } | null
+  /**
+   * The agent-control highlight currently showing over the target canvas;
+   * a new one replaces the previous (fresh `seq` restarts the lifetime).
+   */
+  agentHighlight: (AgentHighlight & { seq: number }) | null
 
   setMode(mode: Mode): void
   setUrl(url: string): void
@@ -83,6 +96,15 @@ export interface AppState {
   setSurround(s: Surround): void
   setViewMode(v: ViewMode): void
   setFitScale(v: number | null): void
+  requestAgentPan(p: { x: number; y: number }): void
+  clearAgentPan(): void
+  showAgentHighlight(h: AgentHighlight): void
+  /**
+   * With `seq`, clears only the highlight it names — the expiry timer's
+   * guard, so a timeout that fires as a replacement lands never removes the
+   * newer highlight. Without `seq`, clears unconditionally.
+   */
+  clearAgentHighlight(seq?: number): void
 }
 
 function sameError(a: LoadError | null, b: LoadError | null): boolean {
@@ -110,12 +132,18 @@ export const useStore = create<AppState>()(set => ({
   surround: 'graphite',
   viewMode: '1:1',
   fitScale: null,
+  agentPan: null,
+  agentHighlight: null,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
-  setUrl: url => set({ url }),
-  setPreset: presetId => set({ presetId }),
-  setCustom: c => set(s => ({ custom: { ...s.custom, ...c }, presetId: CUSTOM_PRESET_ID })),
+  // Does clear the agent highlight: it marked pixels of the page that was
+  // showing, and a committed navigation (a reload included) replaces them.
+  setUrl: url => set({ url, agentHighlight: null }),
+  // A screen change re-rasters the target, so a highlight's target-pixel rect
+  // no longer marks what it marked; the same for the custom fields below.
+  setPreset: presetId => set({ presetId, agentHighlight: null }),
+  setCustom: c => set(s => ({ custom: { ...s.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null })),
   setPixelExact: pixelExact => set({ pixelExact }),
   // Picking a profile drops any hand-tuned slider values.
   setProfile: profileId => set({ profileId, profileOverride: null }),
@@ -131,15 +159,22 @@ export const useStore = create<AppState>()(set => ({
   setSurround: surround => set({ surround }),
   setViewMode: viewMode => set({ viewMode }),
   setFitScale: fitScale => set({ fitScale }),
+  requestAgentPan: p => set(s => ({ agentPan: { ...p, seq: (s.agentPan?.seq ?? 0) + 1 } })),
+  clearAgentPan: () => set({ agentPan: null }),
+  showAgentHighlight: h => set(s => ({ agentHighlight: { ...h, seq: (s.agentHighlight?.seq ?? 0) + 1 } })),
+  clearAgentHighlight: seq =>
+    set(s => (seq === undefined || s.agentHighlight?.seq === seq ? { agentHighlight: null } : {})),
 
   // Spec §7: leaving image mode restores the URL that was showing before.
+  // Either direction swaps what the target pane shows, so a highlight over
+  // the old content is dropped with it.
   setMode: mode =>
     set(s =>
       mode === s.mode
         ? {}
         : mode === 'image'
-          ? { mode, lastUrl: s.url }
-          : { mode, url: s.lastUrl, image: null },
+          ? { mode, lastUrl: s.url, agentHighlight: null }
+          : { mode, url: s.lastUrl, image: null, agentHighlight: null },
     ),
 }))
 

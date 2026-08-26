@@ -1,6 +1,6 @@
 {
   "name": "getobsrv",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "See your site the way 1x screens see it",
   "main": "./out/main/index.js",
   "bin": {

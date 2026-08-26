@@ -390,3 +390,42 @@ cross-site POST always sends one; same-user local clients never do), and the
 `Content-Type` must be `application/json` (415 — a no-cors "simple request"
 cannot send it). The renderer-mount apply queue is bounded (32 entries,
 oldest dropped with a one-time warning).
+
+**Drive controls (v1.5).** Live drive chooses *what* the app shows; ten more
+commands let a drive session steer *where the user looks* and interact, so it
+works as a guided demo. Same rules as v1.4: every payload through a shared
+validator, every effect through an existing validated path — no
+`executeJavaScript`, no new privileged surface.
+
+| Command | Payload | Effect |
+|---|---|---|
+| `scroll` | `{ x, y }` (CSS px, `parseScrollPos`) | Absolute page scroll, sent to *both* panes over the pane-sync `applyScroll` channel (an applied scroll is deliberately not re-reported, so main fans out rather than relying on the mirror). |
+| `panTo` | `{ x, y }` (target px, finite ≥ 0) | Centres the target pixel in the pane's 1:1 view via `IPC.agentApply` → the same clamped `centreScroll` maths as a fit click; from fit it jumps to 1:1 centred there. |
+| `click` | `{ x, y, button? }` (CSS px; validated inside the live viewport, refused not clamped) | mouseDown + mouseUp (clickCount 1) through `parseInputEvent` → `target.sendInput` — the canvas-forwarding path. A click may navigate; that mirrors as usual. |
+| `highlight` | `{ x, y, width, height, durationMs? }` (rect like `parseRect`, ≥ 1×1; duration default 2000, clamped 250–10000) | A temporary neutral overlay (light outline, dark dashed inner edge — no hue, per the style spec) drawn over the rect at the canvas scale, `pointer-events: none`; a new highlight replaces the previous, auto-removed after its duration. |
+| `back` / `forward` / `reload` | — | The toolbar handlers verbatim: native-only history (the mirror carries the target), reload reloads both panes. |
+| `setPixelExact` | `{ on: boolean }` | `IPC.agentApply` → the store's own toggle. |
+| `captureTarget` | — | `capturePage` cropped to the target pane's window-relative bounds (CSS px), which the renderer reports with every `uiState` (measured by ResizeObserver); unknown bounds fall back to the full window with a warning. |
+| `focusWindow` | — | `win.show(); win.focus()`. |
+
+Confirmation: `setPreset` / `setProfile` / `setViewMode` keep their v1.4
+mirror-confirmed replies (`applied: true`), because the uiState mirror
+carries those fields. `setPixelExact`, `panTo` and `highlight` are
+accepted-not-confirmed — the reply's `ok: true` means the validated patch
+was queued for the renderer (fire-and-forget), not that it has visibly
+applied; the mirror does not carry them, and confirming would add a
+renderer round-trip for presentation-only state. Stale-highlight hygiene is
+the renderer's: a committed navigation (reload included), a preset/custom
+viewport change or a mode switch clears any showing highlight, and the
+expiry timer is seq-guarded so it can never remove a newer highlight than
+the one it was armed for.
+
+MCP: `obsrv_drive` gains the matching optional inputs, run in a documented
+fixed order — focus → url → preset → profile → viewMode → pixelExact →
+reload → back → forward → scroll → panTo → click → highlight — with the
+final `status` as the result; after a click the server polls status briefly
+(2 s bound), so a click that navigates is reflected in that result.
+`obsrv_snap` live mode gains `capture: 'window' | 'pane'` (default window;
+`'pane'` uses `captureTarget` and includes the pane's footer readout; the
+reported width/height are DIPs, the PNG raster is DIPs × display scale);
+headless renders note the option was ignored.

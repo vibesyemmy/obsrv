@@ -83,8 +83,10 @@ raster density — the PNG comes back as an inline image up to 1.5 MiB),
 If the desktop app is open with the toolbar's **Agent control** toggle on,
 `obsrv_snap` drives the *visible* window instead: you watch the URL load and
 the preset flip, and the agent gets back a capture of the app exactly as you
-see it (plus `obsrv_drive` to flip URL/preset/profile directly). With no app
-running, everything falls back to the headless render automatically.
+see it (plus `obsrv_drive` to flip URL/preset/profile directly). Agents can
+also scroll, click, pan and highlight while you watch — a drive session works
+as a guided demo. With no app running, everything falls back to the headless
+render automatically.
 
 Build first, then register:
 

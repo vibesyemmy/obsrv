@@ -182,6 +182,23 @@ describe('planSnapPath', () => {
     expect(r).toMatchObject({ path: 'live' })
     expect((r as { notes: string[] }).notes.join(' ')).toMatch(/waitMs/)
   })
+  it("capture: 'pane' rides the live path silently", () => {
+    expect(planSnapPath({ capture: 'pane' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  })
+  it("capture: 'pane' is noted as ignored on every headless path", () => {
+    for (const r of [
+      planSnapPath({ capture: 'pane' }, 'headless', true),
+      planSnapPath({ capture: 'pane' }, 'auto', false),
+      planSnapPath({ capture: 'pane', fullPage: true }, 'auto', true),
+    ]) {
+      expect(r).toMatchObject({ path: 'headless' })
+      expect((r as { notes: string[] }).notes.join(' ')).toMatch(/capture/)
+    }
+  })
+  it("capture: 'window' adds no note anywhere", () => {
+    expect(planSnapPath({ capture: 'window' }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
+    expect(planSnapPath({ capture: 'window' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  })
 })
 
 describe('listCatalog', () => {

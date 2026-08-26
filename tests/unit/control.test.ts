@@ -2,11 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { join } from 'node:path'
 import {
   CONTROL_COMMANDS,
+  HIGHLIGHT_DURATION_DEFAULT_MS,
+  HIGHLIGHT_DURATION_MAX_MS,
+  HIGHLIGHT_DURATION_MIN_MS,
   controlFileModeOk,
   defaultControlFilePath,
   isControlCommand,
+  parseClick,
   parseControlFile,
   parseControlStatus,
+  parseHighlight,
+  pixelExactApplyError,
   presetApplyError,
   profileApplyError,
   tokenEqual,
@@ -79,16 +85,27 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the six commands', () => {
+  it('knows exactly the sixteen commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
+      'back',
+      'captureTarget',
       'captureVisible',
+      'click',
+      'focusWindow',
+      'forward',
+      'highlight',
       'navigate',
+      'panTo',
+      'reload',
+      'scroll',
+      'setPixelExact',
       'setPreset',
       'setProfile',
       'setViewMode',
       'status',
     ])
     expect(isControlCommand('status')).toBe(true)
+    expect(isControlCommand('click')).toBe(true)
     expect(isControlCommand('eval')).toBe(false)
     expect(isControlCommand(undefined)).toBe(false)
   })
@@ -112,6 +129,94 @@ describe('command validation', () => {
     expect(viewModeApplyError('fit')).toBeNull()
     expect(viewModeApplyError('fill')).toMatch(/1:1/)
     expect(viewModeApplyError(undefined)).toMatch(/1:1/)
+  })
+
+  it('pixelExactApplyError: exactly the two booleans', () => {
+    expect(pixelExactApplyError(true)).toBeNull()
+    expect(pixelExactApplyError(false)).toBeNull()
+    expect(pixelExactApplyError(1)).toMatch(/on: boolean/)
+    expect(pixelExactApplyError('true')).toMatch(/on: boolean/)
+    expect(pixelExactApplyError(undefined)).toMatch(/on: boolean/)
+  })
+})
+
+describe('parseClick', () => {
+  const vp = { width: 1366, height: 768 }
+  it('accepts an in-viewport click and defaults the button to left', () => {
+    expect(parseClick({ x: 100, y: 50 }, vp)).toEqual({ x: 100, y: 50, button: 'left' })
+  })
+  it('accepts the in-viewport edges and every named button', () => {
+    expect(parseClick({ x: 0, y: 0, button: 'middle' }, vp)).toEqual({ x: 0, y: 0, button: 'middle' })
+    expect(parseClick({ x: 1365.5, y: 767.5, button: 'right' }, vp)).toEqual({ x: 1365.5, y: 767.5, button: 'right' })
+  })
+  it('rejects a click outside the current CSS viewport, naming it', () => {
+    const err = parseClick({ x: 1367, y: 10 }, vp)
+    expect(err).toMatch(/outside the current CSS viewport 1366x768/)
+    expect(parseClick({ x: 10, y: 769 }, vp)).toMatch(/outside/)
+    expect(parseClick({ x: -1, y: 10 }, vp)).toMatch(/outside/)
+  })
+  it('rejects the exact viewport size: pixel row width/height is the first one outside', () => {
+    expect(parseClick({ x: 1366, y: 10 }, vp)).toMatch(/outside/)
+    expect(parseClick({ x: 10, y: 768 }, vp)).toMatch(/outside/)
+  })
+  it.each([
+    ['not an object', 'click'],
+    ['missing y', { x: 10 }],
+    ['NaN', { x: NaN, y: 0 }],
+    ['Infinity', { x: 0, y: Infinity }],
+    ['string coordinate', { x: '10', y: 10 }],
+  ])('rejects %s with the shape message', (_name, raw) => {
+    expect(parseClick(raw, vp)).toMatch(/must be \{ x, y, button\? \}/)
+  })
+  it('rejects an unknown button', () => {
+    expect(parseClick({ x: 1, y: 1, button: 'back' }, vp)).toMatch(/left, middle or right/)
+  })
+})
+
+describe('parseHighlight', () => {
+  it('accepts a rect and defaults the duration', () => {
+    expect(parseHighlight({ x: 10, y: 20, width: 300, height: 80 })).toEqual({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 80,
+      durationMs: HIGHLIGHT_DURATION_DEFAULT_MS,
+    })
+  })
+  it('rounds coordinates like a pane rect and never passes unknown keys through', () => {
+    expect(parseHighlight({ x: 10.4, y: 19.6, width: 300, height: 80, durationMs: 500, extra: 1 })).toEqual({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 80,
+      durationMs: 500,
+    })
+  })
+  it('clamps the duration into 250-10000 ms and rounds it', () => {
+    expect(parseHighlight({ x: 0, y: 0, width: 1, height: 1, durationMs: 1 })).toMatchObject({
+      durationMs: HIGHLIGHT_DURATION_MIN_MS,
+    })
+    expect(parseHighlight({ x: 0, y: 0, width: 1, height: 1, durationMs: 60_000 })).toMatchObject({
+      durationMs: HIGHLIGHT_DURATION_MAX_MS,
+    })
+    expect(parseHighlight({ x: 0, y: 0, width: 1, height: 1, durationMs: 999.6 })).toMatchObject({ durationMs: 1000 })
+  })
+  it('rejects a non-numeric duration rather than guessing', () => {
+    expect(parseHighlight({ x: 0, y: 0, width: 1, height: 1, durationMs: '2000' })).toMatch(/durationMs/)
+    expect(parseHighlight({ x: 0, y: 0, width: 1, height: 1, durationMs: NaN })).toMatch(/durationMs/)
+  })
+  it('rejects a rect that would be invisible', () => {
+    expect(parseHighlight({ x: 0, y: 0, width: 0, height: 10 })).toMatch(/at least 1x1/)
+    expect(parseHighlight({ x: 0, y: 0, width: 10, height: 0.2 })).toMatch(/at least 1x1/)
+  })
+  it.each([
+    ['not an object', 'rect'],
+    ['missing fields', { x: 0, y: 0 }],
+    ['NaN', { x: NaN, y: 0, width: 1, height: 1 }],
+    ['negative origin', { x: -1, y: 0, width: 1, height: 1 }],
+    ['absurd size', { x: 0, y: 0, width: 16385, height: 1 }],
+  ])('rejects %s with the shape message', (_name, raw) => {
+    expect(parseHighlight(raw)).toMatch(/highlight payload must be/)
   })
 })
 
