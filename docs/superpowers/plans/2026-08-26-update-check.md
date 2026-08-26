@@ -321,7 +321,7 @@ export function formatAge(checkedAt: number, now: number): string {
 ```bash
 npx vitest run --project unit tests/unit/update.test.ts
 ```
-Expected: `19 passed`.
+Expected: `18 passed`.
 
 - [ ] **Step 6: Commit**
 

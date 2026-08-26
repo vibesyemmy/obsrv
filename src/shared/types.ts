@@ -122,3 +122,23 @@ export interface ScrollReport {
   scroller: ScrollerKind
   warnings: string[]
 }
+
+export type UpdateStatus = 'current' | 'available' | 'error'
+
+/**
+ * What the renderer knows about updates. The release URL is deliberately not
+ * here: main keeps it and opens it itself, so nothing the renderer holds can
+ * become a string handed to the OS. See the update spec §9.
+ */
+export interface UpdateState {
+  status: UpdateStatus
+  /**
+   * The running app version. Always present, so Settings can show it before
+   * any check has completed.
+   */
+  current: string
+  /** Release version without a leading `v`. Present only when available. */
+  latest?: string
+  /** Epoch ms of the last completed attempt, success or failure. 0 = never. */
+  checkedAt: number
+}
