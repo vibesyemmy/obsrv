@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
+import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
 import {
   selectScale,
@@ -89,6 +90,7 @@ function NumberField({ className, label, unit, value, min, step, onCommit, onInv
 export function SettingsPanel() {
   const host = useStore(useShallow(s => s.host))
   const settings = useStore(useShallow(s => s.settings))
+  const update = useStore(s => s.update)
   const custom = useStore(useShallow(s => s.custom))
   const viewport = useStore(useShallow(selectViewport))
   const scale = useStore(selectScale)
@@ -233,6 +235,56 @@ export function SettingsPanel() {
         {custom.diagonalInches > 0
           ? `${ppi(custom.width, custom.height, custom.diagonalInches).toFixed(0)} PPI`
           : 'Enter a diagonal to compute PPI'}
+      </p>
+
+      <h2>Updates</h2>
+
+      <div className="version-block">
+        <div className="version-row">
+          <span>Version</span>
+          <span className="version-current num">{update?.current ?? '—'}</span>
+        </div>
+        <div className="version-row">
+          <span>Latest</span>
+          <span className="version-latest">
+            {update === null && 'Not checked yet'}
+            {update?.status === 'current' && update.checkedAt === 0 && 'Not checked yet'}
+            {update?.status === 'current' && update.checkedAt > 0 && 'Up to date'}
+            {update?.status === 'error' && 'Couldn’t check'}
+            {update?.status === 'available' && update.latest !== undefined && (
+              <>
+                <span className="num">{update.latest}</span>
+                {' · '}
+                <button type="button" className="link" onClick={() => void window.obsrv.openRelease()}>
+                  Download
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+        <div className="version-row">
+          <span>Last checked</span>
+          <span className="version-checked num">
+            {update === null ? 'never' : formatAge(update.checkedAt, Date.now())}
+          </span>
+        </div>
+      </div>
+
+      <label className="control inline update-check-toggle">
+        <input
+          type="checkbox"
+          checked={settings.updateCheck}
+          onChange={e => commit({ ...settings, updateCheck: e.target.checked })}
+        />
+        <span>Check for updates automatically</span>
+      </label>
+
+      <button type="button" className="check-now" onClick={() => void window.obsrv.checkUpdate()}>
+        Check now
+      </button>
+
+      <p className="muted">
+        One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
       </p>
     </div>
   )

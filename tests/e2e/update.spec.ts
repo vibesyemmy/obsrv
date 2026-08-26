@@ -90,3 +90,58 @@ test('the state survives a renderer reload', async () => {
     .poll(() => page.evaluate(() => window.obsrv.getUpdate()), { timeout: 10_000 })
     .toMatchObject({ status: 'available', latest: '99.0.0' })
 })
+
+test('the toolbar offers the update only when there is one', async () => {
+  reply = { code: 200, body: release('v99.0.0') }
+  await check()
+  await expect(page.locator('.update-button')).toHaveText('v99.0.0 ↓')
+  // Rendered width, not just DOM text: `.toolbar button` pins every button to
+  // a 26px square, and a bare `.update-button` rule loses to it on specificity
+  // — the text is then correct in the DOM and reads "v99." on screen.
+  const box = await page.locator('.update-button').boundingBox()
+  expect(box!.width).toBeGreaterThan(60)
+
+  reply = { code: 200, body: release('v0.0.1') }
+  await check()
+  await expect(page.locator('.update-button')).toHaveCount(0)
+
+  reply = { code: 500, body: '' }
+  await check()
+  // An error must never reach the toolbar.
+  await expect(page.locator('.update-button')).toHaveCount(0)
+})
+
+test('the Settings block reports every state', async () => {
+  await page.click('.toggle-settings')
+
+  reply = { code: 200, body: release('v99.0.0') }
+  await check()
+  await expect(page.locator('.version-block')).toContainText('99.0.0')
+  await expect(page.locator('.version-latest')).toContainText('Download')
+
+  reply = { code: 200, body: release('v0.0.1') }
+  await check()
+  await expect(page.locator('.version-latest')).toHaveText('Up to date')
+
+  reply = { code: 500, body: '' }
+  await check()
+  await expect(page.locator('.version-latest')).toHaveText('Couldn’t check')
+  await expect(page.locator('.version-checked')).not.toHaveText('never')
+})
+
+test('the automatic-check toggle round-trips through main', async () => {
+  await page.uncheck('.update-check-toggle input')
+  await expect
+    .poll(() => page.evaluate(() => window.obsrv.getSettings()))
+    .toMatchObject({ updateCheck: false })
+
+  await page.reload()
+  await expect(page.locator('.toggle-settings')).toBeVisible()
+  await page.click('.toggle-settings')
+  await expect(page.locator('.update-check-toggle input')).not.toBeChecked()
+
+  await page.check('.update-check-toggle input')
+  await expect
+    .poll(() => page.evaluate(() => window.obsrv.getSettings()))
+    .toMatchObject({ updateCheck: true })
+})
