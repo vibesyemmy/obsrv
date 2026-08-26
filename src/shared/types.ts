@@ -49,6 +49,14 @@ export interface Settings {
    * `OBSRV_AGENT_CONTROL=1` force-enables it for the session at boot.
    */
   agentControl: boolean
+  /**
+   * Whether the app asks GitHub about newer releases once a day. On by
+   * default — unlike `agentControl` this opens no port and accepts nothing;
+   * it is a single unauthenticated GET carrying no identifiers.
+   */
+  updateCheck: boolean
+  /** Epoch ms of the last completed check, success or failure. 0 = never. */
+  lastUpdateCheck: number
 }
 
 /** A dirty-rect slice of the 1x target frame. `data` is BGRA, row-major, no padding. */
