@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME } from '../../src/shared/control'
-import { launchApp } from './launch'
+import { launchApp, rendererWindow } from './launch'
 
 /**
  * The MCP server against a *running*, control-enabled app: `obsrv_snap`
@@ -92,4 +92,49 @@ test('obsrv_snap mode:"headless" ignores the running app', async () => {
   const meta = r.structuredContent as Record<string, unknown>
   // A headless render of the page, not a window capture: CLI metadata shape.
   expect(meta).toMatchObject({ mode: 'headless', preset: 'laptop-768', cssWidth: 1366, cssHeight: 768 })
+})
+
+test('one obsrv_drive call combines preset + scroll + highlight and returns the final status', async () => {
+  const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+  const r = await call('obsrv_drive', {
+    focus: true,
+    url: TALL,
+    preset: 'laptop-768',
+    scroll: { x: 0, y: 800 },
+    highlight: { x: 40, y: 40, width: 120, height: 60, durationMs: 8000 },
+  })
+  expect(r.isError).toBeFalsy()
+  // The result is the final status, reflecting everything that ran.
+  expect(r.structuredContent).toMatchObject({ url: TALL, presetId: 'laptop-768', mode: 'url' })
+
+  // The steering really happened in the visible app: the preset resized the
+  // target, the scroll landed in both panes, the overlay is up.
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.target.getViewport())).toEqual({ width: 1366, height: 768 })
+  const scrollY = (pane: 'native' | 'target') =>
+    app.evaluate(
+      (_e, p: string) => (globalThis as any).__obsrv[p].webContents.executeJavaScript('window.scrollY') as Promise<number>,
+      pane,
+    )
+  await expect.poll(() => scrollY('target'), { timeout: 5_000 }).toBe(800)
+  await expect.poll(() => scrollY('native'), { timeout: 5_000 }).toBe(800)
+  const page = await rendererWindow(app)
+  await expect(page.locator('.agent-highlight')).toHaveCount(1)
+})
+
+test('obsrv_snap live capture:"pane" returns a PNG smaller than the window capture', async () => {
+  const whole = await call('obsrv_snap', { url: FIXTURE, preset: 'laptop-768' })
+  expect(whole.isError).toBeFalsy()
+  const wholeMeta = whole.structuredContent as Record<string, unknown>
+  expect(wholeMeta.mode).toBe('live')
+
+  const pane = await call('obsrv_snap', { url: FIXTURE, preset: 'laptop-768', capture: 'pane' })
+  expect(pane.isError).toBeFalsy()
+  const paneMeta = pane.structuredContent as Record<string, unknown>
+  expect(paneMeta.mode).toBe('live')
+  expect(existsSync(paneMeta.pngPath as string)).toBe(true)
+  const png = readFileSync(paneMeta.pngPath as string)
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  // The pane is a crop of the window: strictly smaller on both axes.
+  expect(paneMeta.width as number).toBeLessThan(wholeMeta.width as number)
+  expect(paneMeta.height as number).toBeLessThan(wholeMeta.height as number)
 })
