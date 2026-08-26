@@ -169,7 +169,7 @@ const snapInputShape = {
     .optional()
     .describe(
       "Live mode only: what the returned PNG shows — 'window' (default) is the whole app window, 'pane' is just " +
-        'the target pane. Ignored (with a note) when the render is headless.',
+        'the target pane (its footer readout included). Ignored (with a note) when the render is headless.',
     ),
 }
 
@@ -192,8 +192,20 @@ const snapOutputShape = {
   presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
-  width: z.number().optional().describe('Live only: captured width in px (the app window, or the target pane under capture: "pane").'),
-  height: z.number().optional().describe('Live only: captured height in px (the app window, or the target pane under capture: "pane").'),
+  width: z
+    .number()
+    .optional()
+    .describe(
+      'Live only: captured width in device-independent px (the app window, or the target pane under capture: ' +
+        '"pane"); the PNG raster is this times the display scale.',
+    ),
+  height: z
+    .number()
+    .optional()
+    .describe(
+      'Live only: captured height in device-independent px (the app window, or the target pane under capture: ' +
+        '"pane"); the PNG raster is this times the display scale.',
+    ),
 }
 
 const diffInputShape = {
@@ -324,6 +336,13 @@ const LIVE_APPLY_TIMEOUT_MS = 5_000
 const LIVE_CAPTURE_TIMEOUT_MS = 30_000
 /** How long a live snap waits for `status.url` to reflect the navigation. */
 const LIVE_SETTLE_MS = 5_000
+/**
+ * How long an `obsrv_drive` click waits for a navigation it may have caused,
+ * so the returned status reflects it. Deliberately short: most clicks do not
+ * navigate, and every non-navigating one pays this in full.
+ */
+const CLICK_SETTLE_MS = 2_000
+const CLICK_SETTLE_POLL_MS = 250
 
 function liveFailure(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
@@ -561,9 +580,11 @@ server.registerTool(
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
       `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight. ` +
-      `The result is the final status: app version, the URL showing, and the selected preset/profile/view. ` +
-      `Coordinates: click takes CSS-viewport px of the page; panTo and highlight take target-pane pixels (device ` +
-      `px of the render — identical to CSS px on 1x presets); scroll takes page CSS px.\n\n` +
+      `The result is the final status: app version, the URL showing, and the selected preset/profile/view. A ` +
+      `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. ` +
+      `Coordinates: click takes CSS-viewport px of the page (the valid range is 0 up to but not including the ` +
+      `viewport size); panTo and highlight take target-pane pixels (device px of the render — identical to CSS px ` +
+      `on 1x presets); scroll takes page CSS px.\n\n` +
       `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
       `mutates visible app state (it changes what the user's window shows, and a click can act on the live page) ` +
       `but renders nothing itself — use obsrv_snap for a capture.`,
@@ -613,7 +634,21 @@ server.registerTool(
       if (input.forward) await controlCall(live.info, 'forward', {}, LIVE_APPLY_TIMEOUT_MS)
       if (input.scroll !== undefined) await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
       if (input.panTo !== undefined) await controlCall(live.info, 'panTo', input.panTo, LIVE_APPLY_TIMEOUT_MS)
-      if (input.click !== undefined) await controlCall(live.info, 'click', input.click, LIVE_APPLY_TIMEOUT_MS)
+      if (input.click !== undefined) {
+        // A click may navigate. Note the URL first, then wait — bounded and
+        // short, the same settle idea as a live snap — for the status to move
+        // off it, so the returned status reflects what the click did. A click
+        // that navigates nowhere simply rides out the short deadline.
+        const before = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))?.url ?? ''
+        await controlCall(live.info, 'click', input.click, LIVE_APPLY_TIMEOUT_MS)
+        const deadline = Date.now() + CLICK_SETTLE_MS
+        for (;;) {
+          const s = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
+          if (s && s.url !== before && s.url !== 'about:blank') break
+          if (Date.now() >= deadline) break
+          await sleep(CLICK_SETTLE_POLL_MS)
+        }
+      }
       if (input.highlight !== undefined) await controlCall(live.info, 'highlight', input.highlight, LIVE_APPLY_TIMEOUT_MS)
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')

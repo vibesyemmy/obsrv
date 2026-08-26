@@ -319,6 +319,21 @@ test('highlight draws a neutral overlay at rect × scale, replaces, and expires'
   await expect(overlay).toHaveCount(0, { timeout: 3_000 })
 })
 
+test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
+  const r = await call('highlight', { x: 10, y: 10, width: 100, height: 60, durationMs: 8000 })
+  expect(r.status).toBe(200)
+  const overlay = page.locator('.agent-highlight')
+  await expect(overlay).toHaveCount(1)
+
+  // The rect marked pixels of the laptop-768 raster; a preset change
+  // re-rasters the target, so the overlay is dropped with the old content —
+  // well before its own 8 s lifetime.
+  const preset = await call('setPreset', { id: '1080p-24' })
+  expect(preset.status).toBe(200)
+  expect(preset.body).toMatchObject({ ok: true, applied: true })
+  await expect(overlay).toHaveCount(0)
+})
+
 test('click reaches the live page and can act on it; out-of-viewport is refused', async () => {
   const nav = await call('navigate', { url: BUTTON })
   expect(nav.status).toBe(200)

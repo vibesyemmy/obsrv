@@ -281,6 +281,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   position: fixed;
   right: 16px;
   bottom: 16px;
+  /* Above the stall notice (2) and the agent highlight (1): these are the
+     app talking to the user and must not sit under an overlay in the pane. */
+  z-index: 3;
   padding: 8px 12px;
   background: var(--chrome-2);
   color: var(--text-0);
@@ -316,7 +319,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   position: sticky;
   top: 0;
   left: 0;
-  z-index: 1;
+  /* Above the agent highlight (z-index 1): an error notice outranks a
+     demo marker. */
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;

@@ -121,6 +121,16 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
   await expect(page.locator('.agent-highlight')).toHaveCount(1)
 })
 
+test('a click that navigates is reflected in the returned obsrv_drive status', async () => {
+  // link.html is one viewport-filling <a href="hairline.html">: the drive
+  // call's click navigates the target, and the server's bounded settle poll
+  // must return the post-navigation URL, not the page that was clicked.
+  const LINK = pathToFileURL(resolve(__dirname, '../fixtures/link.html')).href
+  const r = await call('obsrv_drive', { url: LINK, click: { x: 100, y: 100 } })
+  expect(r.isError).toBeFalsy()
+  expect((r.structuredContent as Record<string, unknown>).url).toBe(FIXTURE)
+})
+
 test('obsrv_snap live capture:"pane" returns a PNG smaller than the window capture', async () => {
   const whole = await call('obsrv_snap', { url: FIXTURE, preset: 'laptop-768' })
   expect(whole.isError).toBeFalsy()

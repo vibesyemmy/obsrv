@@ -224,15 +224,17 @@ export function pixelExactApplyError(v: unknown): string | null {
  * Validates a `click` payload against the target's *current* CSS viewport:
  * `sendInputEvent` takes CSS coordinates, and a click past the viewport edge
  * would land on nothing (or, worse, on whatever the page scrolled there),
- * so it is refused rather than clamped. The button defaults to left.
- * Returns the validated click, or the error message.
+ * so it is refused rather than clamped. The coordinate space is
+ * `[0, width) × [0, height)` — pixel row `height` is the first one *outside*
+ * a `height`-pixel viewport. The button defaults to left. Returns the
+ * validated click, or the error message.
  */
 export function parseClick(raw: unknown, viewport: { width: number; height: number }): AgentClick | string {
   const shape = 'click payload must be { x, y, button? } with finite CSS-pixel coordinates'
   if (!isRecord(raw)) return shape
   const { x, y } = raw
   if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) return shape
-  if (x < 0 || y < 0 || x > viewport.width || y > viewport.height) {
+  if (x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) {
     return `click (${x}, ${y}) is outside the current CSS viewport ${viewport.width}x${viewport.height}`
   }
   const button = raw.button ?? 'left'

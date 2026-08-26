@@ -145,15 +145,19 @@ describe('parseClick', () => {
   it('accepts an in-viewport click and defaults the button to left', () => {
     expect(parseClick({ x: 100, y: 50 }, vp)).toEqual({ x: 100, y: 50, button: 'left' })
   })
-  it('accepts the viewport edges and every named button', () => {
+  it('accepts the in-viewport edges and every named button', () => {
     expect(parseClick({ x: 0, y: 0, button: 'middle' }, vp)).toEqual({ x: 0, y: 0, button: 'middle' })
-    expect(parseClick({ x: 1366, y: 768, button: 'right' }, vp)).toEqual({ x: 1366, y: 768, button: 'right' })
+    expect(parseClick({ x: 1365.5, y: 767.5, button: 'right' }, vp)).toEqual({ x: 1365.5, y: 767.5, button: 'right' })
   })
   it('rejects a click outside the current CSS viewport, naming it', () => {
     const err = parseClick({ x: 1367, y: 10 }, vp)
     expect(err).toMatch(/outside the current CSS viewport 1366x768/)
     expect(parseClick({ x: 10, y: 769 }, vp)).toMatch(/outside/)
     expect(parseClick({ x: -1, y: 10 }, vp)).toMatch(/outside/)
+  })
+  it('rejects the exact viewport size: pixel row width/height is the first one outside', () => {
+    expect(parseClick({ x: 1366, y: 10 }, vp)).toMatch(/outside/)
+    expect(parseClick({ x: 10, y: 768 }, vp)).toMatch(/outside/)
   })
   it.each([
     ['not an object', 'click'],

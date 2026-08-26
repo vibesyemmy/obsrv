@@ -226,3 +226,43 @@ describe('view mode', () => {
     expect(useStore.getState().fitScale).toBeNull()
   })
 })
+
+describe('agent highlight lifecycle', () => {
+  const HIGHLIGHT = { x: 10, y: 20, width: 100, height: 60, durationMs: 2000 }
+  const show = () => useStore.getState().showAgentHighlight(HIGHLIGHT)
+
+  it('is cleared by whatever replaces the content it marked', () => {
+    for (const change of [
+      () => useStore.getState().setUrl('https://next.test/'),
+      () => useStore.getState().setPreset('laptop-768'),
+      () => useStore.getState().setCustom({ width: 800 }),
+      () => useStore.getState().setMode('image'),
+    ]) {
+      show()
+      expect(useStore.getState().agentHighlight).toMatchObject(HIGHLIGHT)
+      change()
+      expect(useStore.getState().agentHighlight).toBeNull()
+    }
+    // Leaving image mode swaps the content back; that clears too.
+    useStore.getState().setMode('image')
+    show()
+    useStore.getState().setMode('url')
+    expect(useStore.getState().agentHighlight).toBeNull()
+  })
+
+  it('a seq-guarded clear removes only the highlight it was armed for', () => {
+    show()
+    const first = useStore.getState().agentHighlight!
+    show() // the replacement bumps seq
+    const second = useStore.getState().agentHighlight!
+    expect(second.seq).toBe(first.seq + 1)
+
+    // The first highlight's expiry timer fires late: a no-op.
+    useStore.getState().clearAgentHighlight(first.seq)
+    expect(useStore.getState().agentHighlight).toBe(second)
+
+    // Its own timer (or an unconditional clear) removes it.
+    useStore.getState().clearAgentHighlight(second.seq)
+    expect(useStore.getState().agentHighlight).toBeNull()
+  })
+})

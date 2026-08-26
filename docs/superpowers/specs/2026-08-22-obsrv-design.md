@@ -408,9 +408,24 @@ validator, every effect through an existing validated path — no
 | `captureTarget` | — | `capturePage` cropped to the target pane's window-relative bounds (CSS px), which the renderer reports with every `uiState` (measured by ResizeObserver); unknown bounds fall back to the full window with a warning. |
 | `focusWindow` | — | `win.show(); win.focus()`. |
 
+Confirmation: `setPreset` / `setProfile` / `setViewMode` keep their v1.4
+mirror-confirmed replies (`applied: true`), because the uiState mirror
+carries those fields. `setPixelExact`, `panTo` and `highlight` are
+accepted-not-confirmed — the reply's `ok: true` means the validated patch
+was queued for the renderer (fire-and-forget), not that it has visibly
+applied; the mirror does not carry them, and confirming would add a
+renderer round-trip for presentation-only state. Stale-highlight hygiene is
+the renderer's: a committed navigation (reload included), a preset/custom
+viewport change or a mode switch clears any showing highlight, and the
+expiry timer is seq-guarded so it can never remove a newer highlight than
+the one it was armed for.
+
 MCP: `obsrv_drive` gains the matching optional inputs, run in a documented
 fixed order — focus → url → preset → profile → viewMode → pixelExact →
 reload → back → forward → scroll → panTo → click → highlight — with the
-final `status` as the result. `obsrv_snap` live mode gains
-`capture: 'window' | 'pane'` (default window; `'pane'` uses
-`captureTarget`); headless renders note the option was ignored.
+final `status` as the result; after a click the server polls status briefly
+(2 s bound), so a click that navigates is reflected in that result.
+`obsrv_snap` live mode gains `capture: 'window' | 'pane'` (default window;
+`'pane'` uses `captureTarget` and includes the pane's footer readout; the
+reported width/height are DIPs, the PNG raster is DIPs × display scale);
+headless renders note the option was ignored.

@@ -454,11 +454,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
   // The agent-control highlight's lifetime; a replacement highlight (fresh
   // seq) cancels this timer through the effect cleanup and starts its own.
+  // The seq rides into the clear as a guard: a timeout that has already been
+  // queued when a replacement lands (or when a navigation clears the store)
+  // must remove only the highlight it was armed for, never a newer one.
   const agentHighlight = useStore(s => s.agentHighlight)
   const clearAgentHighlight = useStore(s => s.clearAgentHighlight)
   useEffect(() => {
     if (!agentHighlight) return
-    const t = window.setTimeout(clearAgentHighlight, agentHighlight.durationMs)
+    const t = window.setTimeout(() => clearAgentHighlight(agentHighlight.seq), agentHighlight.durationMs)
     return () => window.clearTimeout(t)
   }, [agentHighlight, clearAgentHighlight])
 
