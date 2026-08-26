@@ -307,7 +307,8 @@ const driveInputShape = {
         .describe(
           'Escape hatch: a CSS selector naming the element to scroll, for pages whose scroll host the automatic ' +
             'detection misjudges (several large scrollers, a virtualised list that translates content). No fallback ' +
-            'if it matches nothing — the result says so.',
+            'if it matches nothing — the result says so. Same reach as the detection: light DOM of the top-level ' +
+            'document only, so a scroller inside a shadow root or an iframe cannot be targeted.',
         ),
     })
     .optional()

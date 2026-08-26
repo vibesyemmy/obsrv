@@ -50,7 +50,7 @@ const SCROLL_RESULT = 'obsrv:scroll-result' satisfies typeof IPC.scrollResult
  * therefore the whole scroll round-trip — walking a million elements. Beyond
  * this the best candidate found so far wins; the root is the fallback.
  */
-const MAX_VISITED = 2000
+export const MAX_VISITED = 2000
 
 /** Slack for sub-pixel layout: a one-pixel overflow is not a scroller. */
 const SCROLL_EPSILON = 1
@@ -114,16 +114,50 @@ function canScroll(el: Element): boolean {
 }
 
 /**
+ * Whether an element is visible enough to be the page's scroll host.
+ * `checkVisibility` is the only cheap way to see through `visibility: hidden`,
+ * `opacity: 0` and `content-visibility: hidden` — all of which keep full
+ * client area, so a closed drawer would otherwise win "largest scroller".
+ * Guarded: the preload runs beside whatever page the user navigates to, and on
+ * an engine without the method a missing check must not veto every candidate.
+ *
+ * An element translated off-canvas (`transform: translateX(-100%)`) is still
+ * "visible" to this test and remains eligible. Transforms are how a great many
+ * *open* panels are positioned too, so excluding them would cost more than it
+ * saves; `scrollSelector` is the escape hatch if a page ever hits it.
+ */
+function isVisible(el: Element): boolean {
+  const check = (el as Element & { checkVisibility?: (options?: unknown) => boolean }).checkVisibility
+  if (typeof check !== 'function') return el.getClientRects().length > 0
+  return check.call(el, { visibilityProperty: true, opacityProperty: true })
+}
+
+/**
  * The page's real scroll host: the largest-by-client-area visible descendant
  * that is a scroll container with something to scroll. Depth-first, so an
  * exact tie between an ancestor-side and a later candidate keeps the one found
- * first. Zero-area subtrees (`display: none`, collapsed panels, closed
- * drawers) are skipped whole — their descendants cannot be the visible
- * scroller either — and the walk is bounded by `MAX_VISITED`.
+ * first. The walk is bounded by `MAX_VISITED`.
+ *
+ * Only `display: none` subtrees are pruned, and only after a computed-style
+ * check. Client area cannot stand in for "has no box": an inline wrapper
+ * (`<span>`, `<a>`) and a `display: contents` wrapper both report
+ * `clientWidth === clientHeight === 0`, and pruning on that hid every scroller
+ * beneath them. `checkVisibility` cannot stand in either — it answers false
+ * for `display: contents` exactly as it does for `display: none`. So the
+ * boxless case resolves the ambiguity with `getComputedStyle`, which runs for
+ * the handful of boxless elements only, never for the whole tree. Elements
+ * inside a `display: none` subtree could never win anyway (their geometry is
+ * all zeroes); the prune is there so a hidden mega-list cannot eat the budget
+ * and starve the real scroller.
+ *
+ * Reach limits: the walk sees light DOM in this document only. A scroller
+ * inside a shadow root or an iframe is unreachable — and so is
+ * `scrollSelector`, since `document.querySelector` does not cross either
+ * boundary — which leaves a web-component app with no escape hatch.
  *
  * Returns null when nothing qualifies, which the caller reads as "use the
- * root". Exported shape kept simple on purpose: the deliberate follow-up that
- * mirrors a *user's* inner-scroller scrolling needs exactly this function.
+ * root". Exported: the deliberate follow-up that mirrors a *user's*
+ * inner-scroller scrolling needs exactly this function.
  */
 export function findScroller(root: Element | null = document.body): Element | null {
   if (!root) return null
@@ -135,10 +169,10 @@ export function findScroller(root: Element | null = document.body): Element | nu
     const el = stack.pop()!
     if (visited++ >= MAX_VISITED) break
     const area = el.clientWidth * el.clientHeight
-    // A zero-area box paints nothing and contains nothing painted; skipping
-    // the subtree is what keeps a hidden mega-list off the walk's budget.
-    if (area <= 0) continue
-    if (area > bestArea && canScroll(el)) {
+    if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') continue
+    // `isVisible` runs last: it is the expensive half, and only an element
+    // that would otherwise win needs to answer for its visibility.
+    if (area > bestArea && canScroll(el) && isVisible(el)) {
       best = el
       bestArea = area
     }
@@ -152,14 +186,20 @@ export function findScroller(root: Element | null = document.body): Element | nu
 
 /**
  * The scroll host to apply an offset to, or null for the root. Cached per
- * document because the walk is the expensive part of a round-trip; the cache
- * is validated (still attached, still scrollable) on every use and dropped the
- * moment the root can scroll again, so a navigation, a re-render or a layout
- * change never leaves it pointing at a stale element.
+ * document because the walk is the expensive part of a round-trip.
+ *
+ * The cache is revalidated on every use, but only against the element it
+ * holds: it is dropped when that element detaches, stops being able to scroll,
+ * or when the root becomes scrollable again. It does *not* re-run the walk to
+ * see whether a *better* candidate has appeared, so an SPA that mounts a
+ * larger scroller beside the cached one keeps scrolling the cached one until
+ * that one goes away. Re-running the search per scroll would pay the walk on
+ * every command for a case no page has hit yet; `scrollSelector` names the
+ * container outright when it does.
  */
 let cachedScroller: Element | null = null
 
-function resolveScroller(): Element | null {
+export function resolveScroller(): Element | null {
   if (rootScrolls()) {
     cachedScroller = null
     return null

@@ -156,5 +156,9 @@ belongs to an unrelated package.
   reached — but scrolling a nested container **by hand** in the native pane is not
   mirrored to the target: element scroll events don't bubble to `window`, so the report
   side never sees them. Dragging the page itself still syncs both ways.
+- Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
+  shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
+  (`document.querySelector` doesn't cross either boundary), so a web-component app that
+  hides its scroller in a shadow root has no escape hatch.
 - Frame delivery has no renderer-side backpressure mailbox (see plan header); at 30 fps
   with dirty rects it has not been needed.

@@ -49,23 +49,45 @@ export const DEFAULT_SETTLE_MS = 400
  * The uncovered region's bounding box, for the rescue warning: "which part of
  * the frame never painted" is the one thing that makes an unsettled capture
  * actionable. Null when everything is covered.
+ *
+ * Four directional scans with early exit rather than one sweep of the whole
+ * raster: each edge stops at the first line that contains an uncovered pixel,
+ * so a region touching an edge — which is what an unfinished repaint almost
+ * always leaves — costs O(width + height) instead of O(width x height). That
+ * matters on `--full-page` at dsf 3, where the full sweep is tens of millions
+ * of iterations on an already-slow path. A single uncovered pixel dead centre
+ * still degenerates to the old cost; it is one pass either way.
  */
 function uncoveredBounds(mask: Uint8Array, width: number, height: number): { x: number; y: number; width: number; height: number } | null {
-  let x0 = width
-  let y0 = height
-  let x1 = -1
-  let y1 = -1
-  for (let y = 0; y < height; y++) {
+  const rowHasGap = (y: number): boolean => {
     const row = y * width
-    for (let x = 0; x < width; x++) {
-      if (mask[row + x] !== 0) continue
-      if (x < x0) x0 = x
-      if (x > x1) x1 = x
-      if (y < y0) y0 = y
-      if (y > y1) y1 = y
+    for (let x = 0; x < width; x++) if (mask[row + x] === 0) return true
+    return false
+  }
+  let y0 = -1
+  for (let y = 0; y < height; y++) {
+    if (rowHasGap(y)) {
+      y0 = y
+      break
     }
   }
-  return x1 < 0 ? null : { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 }
+  if (y0 < 0) return null
+  let y1 = y0
+  for (let y = height - 1; y > y0; y--) {
+    if (rowHasGap(y)) {
+      y1 = y
+      break
+    }
+  }
+  const columnHasGap = (x: number): boolean => {
+    for (let y = y0; y <= y1; y++) if (mask[y * width + x] === 0) return true
+    return false
+  }
+  let x0 = 0
+  while (x0 < width && !columnHasGap(x0)) x0++
+  let x1 = width - 1
+  while (x1 > x0 && !columnHasGap(x1)) x1--
+  return { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 }
 }
 
 /**
@@ -164,11 +186,16 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         }
         const total = width * height
         const box = mask ? uncoveredBounds(mask, width, height) : null
+        // Name what those pixels *are*, not just where: the buffer starts
+        // zero-filled, so an unpainted region is fully transparent BGRA
+        // (0,0,0,0) — which an agent could otherwise read as a black or blank
+        // band of the page.
         options.onWarn?.(
           `warning: ${((uncovered / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
             `never painted within ${timeoutMs} ms` +
             (box ? ` (uncovered region ${box.width}x${box.height} at ${box.x},${box.y})` : '') +
-            `; returning the frame as captured (settled: false)`,
+            `; those pixels are transparent, not page content. ` +
+            `Returning the frame as captured (settled: false)`,
         )
         break
       }

@@ -465,10 +465,28 @@ reply was indistinguishable from a real scroll. Two changes:
   which actually overflows, depth-first tiebreak — and writes the offset to
   *its* `scrollTop`/`scrollLeft`. Absolute-offset semantics and two-pane
   synchronisation survive: both panes run the same detection over the same
-  DOM. The walk visits at most 2000 elements and skips zero-area subtrees, so
-  a pathological DOM cannot stall the preload; the resolved element is cached
-  per document and revalidated (still attached, still scrollable, root still
-  unscrollable) on every use.
+  DOM. The walk visits at most 2000 elements, beyond which the best candidate
+  so far wins, so a pathological DOM cannot stall the preload.
+
+  Visibility is `checkVisibility({ visibilityProperty: true, opacityProperty:
+  true })` (guarded for engines without it): `visibility: hidden`, `opacity: 0`
+  and hidden `content-visibility` all keep full client area, so a closed drawer
+  would otherwise win "largest scroller". An element translated off-canvas is
+  still eligible — transforms position a great many *open* panels too, and
+  `scrollSelector` covers a page that ever hits it. Only `display: none`
+  subtrees are pruned, and only after a computed-style check: client area
+  cannot stand in for "has no box" (an inline `<span>` wrapper and a `display:
+  contents` wrapper both report zero client area, and pruning on that hid every
+  scroller beneath them), and `checkVisibility` cannot either (it answers false
+  for `display: contents` exactly as for `display: none`). The style lookup
+  runs for boxless elements only, never the whole tree.
+
+  The resolved element is cached per document. The cache is revalidated against
+  the element it holds — dropped when it detaches, stops being able to scroll,
+  or the root becomes scrollable again — but it does *not* re-run the walk to
+  see whether a larger candidate has appeared, so an SPA that mounts a bigger
+  scroller beside the cached one keeps scrolling the cached one until that one
+  goes away. `scrollSelector` names the container outright when that bites.
 - *Achieved-offset reply.* `applyScroll` carries a correlation id when someone
   is waiting. The preload writes the offset (`behavior: 'instant'`, so a
   page's `scroll-behavior: smooth` cannot make the read-back lie), reads it
@@ -484,6 +502,14 @@ preload passes it to `document.querySelector` in its isolated world — never
 evaluated as code — and never falls back: a selector that matches nothing, or
 an element that cannot reach the offset, comes back with `scrolled` reflecting
 reality plus a warning saying so.
+
+**Reach limit.** Both the walk and `scrollSelector` see the light DOM of the
+top-level document only: neither `children` traversal nor `querySelector`
+crosses a shadow root or an iframe boundary. A scroller inside either is
+unreachable, and since the escape hatch has the same reach, a web-component
+app that puts its scroller in a shadow root has no way through at all. Piercing
+would mean walking `shadowRoot` and same-origin frame documents, and driving a
+cross-origin frame is not something this path should grow.
 
 Reporting stays one-way: only `window` scroll events are mirrored back, so a
 user dragging an *inner* scroller in the native pane is not reflected in the
