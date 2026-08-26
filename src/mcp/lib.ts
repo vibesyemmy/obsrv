@@ -27,6 +27,8 @@ export interface SnapToolInput {
   fullPage?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
+  /** Live mode only: capture the whole app window (default) or just the target pane. */
+  capture?: 'window' | 'pane' | undefined
 }
 
 export interface DiffToolInput {
@@ -129,6 +131,9 @@ export const APP_NOT_REACHABLE =
   'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
   '(or pass mode: "headless" to render without it).'
 
+export const PANE_CAPTURE_HEADLESS_NOTE =
+  "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored."
+
 /**
  * Decides whether an `obsrv_snap` call drives the visible app or renders
  * headlessly (spec §14 "Live drive"), given whether a control-enabled app
@@ -141,18 +146,21 @@ export const APP_NOT_REACHABLE =
  *   full page), with a note.
  * - `waitMs` is honoured headlessly; on the live path it is ignored with a
  *   note (the live capture settles on the app's own committed navigation).
+ * - `capture: 'pane'` shapes the live capture only; any headless outcome
+ *   notes that it was ignored.
  * - `mode: 'live'` with no reachable app is an error, never a silent
  *   headless fallback — the caller asked to watch.
  */
 export function planSnapPath(
-  input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs'>,
+  input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs' | 'capture'>,
   mode: SnapMode,
   liveReachable: boolean,
 ): SnapPathPlan | { error: string } {
-  if (mode === 'headless') return { path: 'headless', notes: [] }
+  const paneNote = input.capture === 'pane' ? [PANE_CAPTURE_HEADLESS_NOTE] : []
+  if (mode === 'headless') return { path: 'headless', notes: paneNote }
   if (!liveReachable) {
     if (mode === 'live') return { error: APP_NOT_REACHABLE }
-    return { path: 'headless', notes: [] }
+    return { path: 'headless', notes: paneNote }
   }
   const notes: string[] = []
   const custom =
@@ -162,7 +170,7 @@ export function planSnapPath(
     input.diagonalInches !== undefined
   if (custom) notes.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
   if (input.fullPage) notes.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
-  if (notes.length > 0) return { path: 'headless', notes }
+  if (notes.length > 0) return { path: 'headless', notes: [...notes, ...paneNote] }
   if (input.waitMs !== undefined) notes.push('waitMs is headless-only and was ignored in live mode.')
   return { path: 'live', notes }
 }

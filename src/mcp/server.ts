@@ -14,6 +14,7 @@ import { controlCall, discoverControl, type LiveApp } from './control'
 import {
   APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
+  PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildDiffArgs,
   buildSnapArgs,
@@ -163,6 +164,13 @@ const snapInputShape = {
       'auto (default): drive the visible Obsrv app when it is open with Agent control on, else render headlessly. ' +
         'live: require the app (error if unreachable). headless: never touch the app.',
     ),
+  capture: z
+    .enum(['window', 'pane'])
+    .optional()
+    .describe(
+      "Live mode only: what the returned PNG shows — 'window' (default) is the whole app window, 'pane' is just " +
+        'the target pane. Ignored (with a note) when the render is headless.',
+    ),
 }
 
 const snapOutputShape = {
@@ -184,8 +192,8 @@ const snapOutputShape = {
   presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
-  width: z.number().optional().describe('Live only: captured app-window width in px.'),
-  height: z.number().optional().describe('Live only: captured app-window height in px.'),
+  width: z.number().optional().describe('Live only: captured width in px (the app window, or the target pane under capture: "pane").'),
+  height: z.number().optional().describe('Live only: captured height in px (the app window, or the target pane under capture: "pane").'),
 }
 
 const diffInputShape = {
@@ -265,6 +273,36 @@ const driveInputShape = {
   preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
+  pixelExact: z.boolean().optional().describe("Toggle the toolbar's pixel-exact checkbox (pins the magnification to the host scale)."),
+  focus: z.boolean().optional().describe('true: bring the Obsrv window to the front first, so the user sees what follows.'),
+  reload: z.boolean().optional().describe('true: reload both panes (the same action as the toolbar reload).'),
+  back: z.boolean().optional().describe('true: history back (native pane history; the target mirrors the committed page).'),
+  forward: z.boolean().optional().describe('true: history forward (native pane history; the target mirrors it).'),
+  scroll: z
+    .object({ x: z.number().min(0), y: z.number().min(0) })
+    .optional()
+    .describe('Scroll both panes to this absolute page offset in CSS px.'),
+  panTo: z
+    .object({ x: z.number().min(0), y: z.number().min(0) })
+    .optional()
+    .describe("Centre this target-pane pixel (device px of the render) in the pane's 1:1 view; from fit this jumps to 1:1 there."),
+  click: z
+    .object({ x: z.number().min(0), y: z.number().min(0) })
+    .optional()
+    .describe('Left-click the live page at these CSS-viewport coordinates (may navigate; refused outside the viewport).'),
+  highlight: z
+    .object({
+      x: z.number().min(0),
+      y: z.number().min(0),
+      width: z.number().min(1),
+      height: z.number().min(1),
+      durationMs: z.number().optional(),
+    })
+    .optional()
+    .describe(
+      'Draw a temporary neutral marker over this target-pixel rect in the pane (durationMs default 2000, clamped ' +
+        '250-10000). A new highlight replaces the previous one.',
+    ),
 }
 
 const driveOutputShape = {
@@ -343,15 +381,22 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
   // capture racing that would show a half-applied flip.
   await sleep(300)
 
+  // `capture: 'pane'` crops to the target pane; the command answers with the
+  // same { data, width, height } shape plus its own warnings (e.g. the
+  // pre-mount full-window fallback), which join the tool's.
   let capture: Record<string, unknown>
   try {
-    capture = await controlCall(info, 'captureVisible', {}, LIVE_CAPTURE_TIMEOUT_MS)
+    const command = input.capture === 'pane' ? 'captureTarget' : 'captureVisible'
+    capture = await controlCall(info, command, {}, LIVE_CAPTURE_TIMEOUT_MS)
   } catch (e) {
     return toolError(liveFailure(e))
   }
   const { data, width, height } = capture
   if (typeof data !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
     return toolError('the control server returned a malformed capture')
+  }
+  if (Array.isArray(capture['warnings'])) {
+    for (const w of capture['warnings']) if (typeof w === 'string') warnings.push(w)
   }
   const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
   const pngPath = join(dir, 'live.png')
@@ -398,7 +443,8 @@ server.registerTool(
       `Live drive: when the Obsrv desktop app is open with its "Agent control" toolbar toggle on, \`mode: "auto"\` ` +
       `(the default) drives the *visible* app instead — the user watches the URL load and the preset flip, and the ` +
       `returned PNG is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` ` +
-      `otherwise). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
+      `otherwise). \`capture: "pane"\` crops a live capture to just the target pane (headless renders ignore it ` +
+      `with a note). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
       `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
       `touches it. Note: although this tool is annotated read-only (it renders and captures), a live snap steers ` +
       `the open app window — navigating it and flipping its preset in front of the user — as its means of ` +
@@ -422,6 +468,8 @@ server.registerTool(
       if ('error' in plan) return toolError(plan.error)
       if (plan.path === 'live' && live) return liveSnap(live, input, plan.notes)
       liveNotes = plan.notes
+    } else if (input.capture === 'pane') {
+      liveNotes = [PANE_CAPTURE_HEADLESS_NOTE]
     }
 
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
@@ -507,18 +555,38 @@ server.registerTool(
     title: 'Drive the visible Obsrv app',
     description:
       `Drive the Obsrv desktop app the user is looking at: navigate it to a URL, apply a screen preset, a panel ` +
-      `profile, or the target pane's 1:1/fit view — each applied exactly as clicking the toolbar would, while the ` +
-      `user watches. Applies whichever inputs are given (none = just read the current state) and returns the ` +
-      `resulting status: app version, the URL showing, and the selected preset/profile/view.\n\n` +
+      `profile, the target pane's 1:1/fit view or pixel-exact toggle — each exactly as clicking the toolbar would ` +
+      `— and steer the session like a guided demo: focus the window, step history (back/forward/reload), scroll ` +
+      `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
+      `neutral marker, all while the user watches.\n\n` +
+      `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
+      `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight. ` +
+      `The result is the final status: app version, the URL showing, and the selected preset/profile/view. ` +
+      `Coordinates: click takes CSS-viewport px of the page; panTo and highlight take target-pane pixels (device ` +
+      `px of the render — identical to CSS px on 1x presets); scroll takes page CSS px.\n\n` +
       `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
-      `mutates visible app state (it changes what the user's window shows) but renders nothing itself — use ` +
-      `obsrv_snap for a capture.`,
+      `mutates visible app state (it changes what the user's window shows, and a click can act on the live page) ` +
+      `but renders nothing itself — use obsrv_snap for a capture.`,
     inputSchema: driveInputShape,
     outputSchema: driveOutputShape,
     // Honest annotation: this changes what the user's window is showing.
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   },
-  async (input: { url?: string; preset?: string; profile?: string; viewMode?: '1:1' | 'fit' }): Promise<CallToolResult> => {
+  async (input: {
+    url?: string
+    preset?: string
+    profile?: string
+    viewMode?: '1:1' | 'fit'
+    pixelExact?: boolean
+    focus?: boolean
+    reload?: boolean
+    back?: boolean
+    forward?: boolean
+    scroll?: { x: number; y: number }
+    panTo?: { x: number; y: number }
+    click?: { x: number; y: number }
+    highlight?: { x: number; y: number; width: number; height: number; durationMs?: number }
+  }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
@@ -526,6 +594,9 @@ server.registerTool(
     const live = await discoverControl()
     if (!live) return toolError(APP_NOT_REACHABLE)
     try {
+      // The documented execution order: window attention first, then what is
+      // showing, then how it is shown, then the in-page steering.
+      if (input.focus) await controlCall(live.info, 'focusWindow', {}, LIVE_APPLY_TIMEOUT_MS)
       if (input.url !== undefined) {
         await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
       }
@@ -534,6 +605,16 @@ server.registerTool(
       if (input.viewMode !== undefined) {
         await controlCall(live.info, 'setViewMode', { mode: input.viewMode }, LIVE_APPLY_TIMEOUT_MS)
       }
+      if (input.pixelExact !== undefined) {
+        await controlCall(live.info, 'setPixelExact', { on: input.pixelExact }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.reload) await controlCall(live.info, 'reload', {}, LIVE_APPLY_TIMEOUT_MS)
+      if (input.back) await controlCall(live.info, 'back', {}, LIVE_APPLY_TIMEOUT_MS)
+      if (input.forward) await controlCall(live.info, 'forward', {}, LIVE_APPLY_TIMEOUT_MS)
+      if (input.scroll !== undefined) await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
+      if (input.panTo !== undefined) await controlCall(live.info, 'panTo', input.panTo, LIVE_APPLY_TIMEOUT_MS)
+      if (input.click !== undefined) await controlCall(live.info, 'click', input.click, LIVE_APPLY_TIMEOUT_MS)
+      if (input.highlight !== undefined) await controlCall(live.info, 'highlight', input.highlight, LIVE_APPLY_TIMEOUT_MS)
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
       return {
