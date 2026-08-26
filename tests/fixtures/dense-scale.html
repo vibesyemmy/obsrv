@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dense-scale capture regression</title>
+    <!--
+      Reproduces the shape that stalled dense-DPR snaps (field report, 0.5.0):
+      a fractionally `transform: scale(...)`-ed ~1060x640 subtree that Chromium
+      rasterises as several partial damage rects, plus a canvas near the page
+      bottom. At dsf >= 2 those partial paints exposed the dirty-rect unit bug
+      in the capture coverage gate — nothing here animates, so a capture that
+      does not settle is the gate's fault, not the page's.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #fff; color: #111; font: 16px/1.4 system-ui, sans-serif; }
+      .stage {
+        width: 1060px;
+        height: 640px;
+        /* Fractional scale: a composited layer whose raster grid does not line
+           up with the device-pixel grid at any dsf. */
+        transform: scale(0.6137);
+        transform-origin: top left;
+        border: 1px solid #d0d5dd;
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        grid-auto-rows: 100px;
+        gap: 8px;
+        padding: 8px;
+        background: linear-gradient(135deg, #eef2ff, #fff 60%);
+      }
+      .cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        font-weight: 600;
+        background: #fff;
+        border: 1px solid #98a2b3;
+        border-radius: 6px;
+      }
+      .cell:nth-child(3n) { background: #101828; color: #fff; }
+      h1 { font-size: 20px; margin: 12px; }
+      canvas { display: block; margin: 12px; border: 1px solid #475467; }
+    </style>
+  </head>
+  <body>
+    <h1>dense-scale</h1>
+    <div class="stage" id="stage"></div>
+    <canvas id="c" width="320" height="120"></canvas>
+    <script>
+      const stage = document.getElementById('stage')
+      for (let i = 0; i < 30; i++) {
+        const d = document.createElement('div')
+        d.className = 'cell'
+        d.textContent = String(i)
+        stage.appendChild(d)
+      }
+      // One paint, no rAF loop: the page must be genuinely idle after load.
+      const ctx = document.getElementById('c').getContext('2d')
+      ctx.fillStyle = '#101828'
+      ctx.fillRect(0, 0, 320, 120)
+      ctx.fillStyle = '#f2f4f7'
+      for (let i = 0; i < 8; i++) ctx.fillRect(8 + i * 40, 8, 24, 104)
+    </script>
+  </body>
+</html>
