@@ -370,7 +370,13 @@ export function registerIpc(ctx: AppContext): void {
 
   // Fired after the window exists and never awaited, so a hung network cannot
   // delay the first paint.
-  if (settings.updateCheck && isCheckDue(settings.lastUpdateCheck, Date.now())) {
+  //
+  // Under OBSRV_TEST the boot check is skipped unless a stand-in endpoint is
+  // given: otherwise every e2e spec would call GitHub on launch, and the
+  // settings write that follows would race the specs that assert on settings.
+  // `update.spec.ts` sets OBSRV_RELEASES_API and so still exercises this path.
+  const bootCheckAllowed = process.env.OBSRV_TEST !== '1' || process.env.OBSRV_RELEASES_API !== undefined
+  if (bootCheckAllowed && settings.updateCheck && isCheckDue(settings.lastUpdateCheck, Date.now())) {
     void runUpdateCheck()
   }
 

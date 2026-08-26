@@ -93,7 +93,7 @@ test('a field commits on blur or Enter, never on a keystroke', async () => {
 test('settings persist through main', async () => {
   await openDrawer('settings')
   await enter('.host-nits', '420')
-  await expect.poll(storedSettings).toEqual({ hostDiagonalInches: 32, hostNits: 420, agentControl: false })
+  await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32, hostNits: 420, agentControl: false })
 })
 
 test('an invalid setting is refused without taking the app down', async () => {
@@ -105,13 +105,13 @@ test('an invalid setting is refused without taking the app down', async () => {
   await field.blur()
   await expect(page.locator('.drawer .field-error')).toBeVisible()
   await expect(field).toHaveValue('32')
-  await expect.poll(storedSettings).toEqual({ hostDiagonalInches: 32, hostNits: 420, agentControl: false })
+  await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32, hostNits: 420, agentControl: false })
   // The flat-2x fallback is not in play: the calibrated scale survived.
   await expect(page.locator('.drawer .warn')).toHaveCount(0)
 
   await enter('.host-diagonal', '27')
   await expect(page.locator('.drawer .field-error')).toHaveCount(0)
-  await expect.poll(storedSettings).toEqual({ hostDiagonalInches: 27, hostNits: 420, agentControl: false })
+  await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 27, hostNits: 420, agentControl: false })
 })
 
 test('an oversized custom screen clamps and says so in the toolbar', async () => {

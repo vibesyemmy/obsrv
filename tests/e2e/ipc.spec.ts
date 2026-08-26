@@ -70,7 +70,7 @@ test('settings round-trip, and impossible values are refused', async () => {
     await window.obsrv.setSettings({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
     return window.obsrv.getSettings()
   })
-  expect(saved).toEqual({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
+  expect(saved).toMatchObject({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
 
   const outcome = await page.evaluate(async () => {
     try {
@@ -83,7 +83,7 @@ test('settings round-trip, and impossible values are refused', async () => {
   expect(outcome).toBe('rejected')
 
   // The rejected write must not have clobbered the stored value.
-  expect(await page.evaluate(() => window.obsrv.getSettings())).toEqual({
+  expect(await page.evaluate(() => window.obsrv.getSettings())).toMatchObject({
     hostDiagonalInches: 32,
     hostNits: 400,
     agentControl: false,
@@ -170,8 +170,11 @@ test('ignores malformed payloads', async () => {
   expect(after.visible).toBe(true)
 
   const settings = await page.evaluate(() => window.obsrv.getSettings())
-  expect(settings).toEqual({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
-  expect(Object.keys(settings)).toHaveLength(3)
+  expect(settings).toMatchObject({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
+  // Exactly the known keys: nothing the renderer bolted on reaches disk.
+  expect(Object.keys(settings).sort()).toEqual(
+    ['agentControl', 'hostDiagonalInches', 'hostNits', 'lastUpdateCheck', 'updateCheck'],
+  )
 
   // Main is still alive and answering.
   expect(await page.evaluate(() => window.obsrv.setViewport(640, 480))).toEqual({ width: 640, height: 480 })

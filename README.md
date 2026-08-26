@@ -128,6 +128,11 @@ yet notarised, so macOS falsely reports it as "damaged"):
 xattr -cr /Applications/Obsrv.app
 ```
 
+Obsrv checks GitHub for a newer release once a day and, when there is one, shows
+it in the toolbar; clicking opens the release page. It is a single
+unauthenticated request carrying no identifiers, and Settings → Updates turns it
+off.
+
 ## Distribution
 
 Publish via a packed tarball, never bare `npm publish`: `npm publish` snapshots
