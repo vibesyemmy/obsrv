@@ -129,6 +129,9 @@ export function registerIpc(ctx: AppContext): void {
   // --- target ---------------------------------------------------------------
   ipcMain.handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
     assertRenderer(e)
+    // The resize the pending flag was waiting for has arrived; from here
+    // `awaitViewportStable` can watch the viewport itself rather than guess.
+    viewportArrived = true
     // Width and height survive any garbage (clampViewport sanitises), but a
     // bad scale factor would decide the offscreen window's raster density —
     // refuse it rather than guess.
@@ -217,6 +220,10 @@ export function registerIpc(ctx: AppContext): void {
    * within the budget); the caller reports that rather than inventing one.
    */
   const scrollBoth = async (req: ScrollRequest): Promise<ScrollReport | null> => {
+    // A preset change reloads the page at a new viewport. Scrolling before
+    // that lands finds the pre-reflow document — on an app shell that means
+    // the root rather than the inner scroller, and the offset clamps to 0.
+    await awaitViewportStable()
     const base: ScrollRequest = { x: req.x, y: req.y }
     if (req.selector !== undefined) base.selector = req.selector
     if (!native.webContents.isDestroyed()) native.webContents.send(IPC.applyScroll, base)
@@ -317,6 +324,30 @@ export function registerIpc(ctx: AppContext): void {
       }
     }
   })
+
+  // --- viewport settling -----------------------------------------------------
+  // A preset change travels renderer-ward as an apply, comes back as
+  // `setViewport`, and only then does the target recreate and reflow. Anything
+  // that reads layout in between — a scroll, a capture — must wait for it.
+  // Nothing waits when no resize is pending, so an ordinary scroll keeps its
+  // millisecond latency.
+  let viewportPending = false
+  let viewportArrived = false
+  /** How long to wait for an announced resize to actually reach setViewport. */
+  const VIEWPORT_ARRIVAL_MS = 600
+
+  const awaitViewportStable = async (): Promise<void> => {
+    if (!viewportPending) return
+    viewportPending = false
+    const arrivalDeadline = Date.now() + VIEWPORT_ARRIVAL_MS
+    while (!viewportArrived && Date.now() < arrivalDeadline) {
+      await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
+    }
+    // The preset may resolve to the size already applied, in which case no
+    // setViewport ever arrives — the wait above simply expires and the poll
+    // below confirms the viewport is steady.
+    await settleTarget()
+  }
 
   // --- capture settling ------------------------------------------------------
   // A preset change recreates the offscreen target at a new viewport and
@@ -453,6 +484,12 @@ export function registerIpc(ctx: AppContext): void {
     navigate: navigateBoth,
     apply: patch => {
       if (win.isDestroyed()) return
+      // Only a preset resizes the target; view mode and pixel-exact change the
+      // magnification, which reflows nothing in the page under test.
+      if (patch.presetId !== undefined) {
+        viewportPending = true
+        viewportArrived = false
+      }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {
           if (!warnedPendingOverflow) {
@@ -467,12 +504,14 @@ export function registerIpc(ctx: AppContext): void {
       win.webContents.send(IPC.agentApply, patch)
     },
     captureVisible: async () => {
+      await awaitViewportStable()
       await settleTarget()
       const image = await win.webContents.capturePage()
       const size = image.getSize()
       return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
     },
     captureTarget: async () => {
+      await awaitViewportStable()
       const settled = await settleTarget()
       // `capturePage(rect)` crops in the same CSS coordinates the renderer
       // measured, so the reported rect needs no conversion. Crop to the

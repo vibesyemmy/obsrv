@@ -128,6 +128,33 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
   await expect(page.locator('.agent-highlight')).toHaveCount(1)
 })
 
+test('a scroll in the same call as a preset waits for the resize', async () => {
+  // A preset change reloads the page at a new viewport. Scrolling before that
+  // lands finds the pre-reflow document: on an app shell that is the root
+  // rather than the inner scroller, and the offset clamps to 0. The two must
+  // work in one call, in the documented order.
+  const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
+  await call('obsrv_drive', { url: APP_SHELL, preset: '1080p-24' })
+
+  const started = Date.now()
+  const r = await call('obsrv_drive', { preset: 'laptop-768', scroll: { x: 0, y: 1500 } })
+  const elapsed = Date.now() - started
+
+  expect(r.isError).toBeFalsy()
+  expect(r.structuredContent).toMatchObject({
+    presetId: 'laptop-768',
+    scrolled: { x: 0, y: 1500 },
+    scroller: 'element',
+  })
+
+  // The outcome alone cannot prove the wait happened: a local fixture reloads
+  // fast enough to win the race by luck, which is exactly why the bug only
+  // showed on a real site. Assert the mechanism instead — settling costs two
+  // stable viewport polls, a forced repaint and a draw window, so a call that
+  // skipped it comes back in tens of milliseconds.
+  expect(elapsed).toBeGreaterThan(200)
+})
+
 test('obsrv_drive reports the inner scroller it found on an app shell', async () => {
   const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
   const r = await call('obsrv_drive', { url: APP_SHELL, scroll: { x: 0, y: 1500 } })
