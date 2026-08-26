@@ -79,3 +79,37 @@ describe('diffMetrics', () => {
     expect(() => diffMetrics(img(2, 8), img(2, 9), 0)).toThrow(/dimensions/)
   })
 })
+
+describe('diffMetrics on renders that never went paint-quiet', () => {
+  // A page that keeps animating gives two captures of *different frames*, so
+  // any band delta is frame-to-frame noise, not evidence about rasterisation.
+  const target = img(8, 16, Array.from({ length: 8 }, (_, x) => [x, 4] as [number, number]))
+  const reference = img(8, 16)
+
+  it('reports settled, defaulting to true so existing callers are unchanged', () => {
+    expect(diffMetrics(target, reference, 4).settled).toBe(true)
+    expect(diffMetrics(target, reference, 4, true).settled).toBe(true)
+    expect(diffMetrics(target, reference, 4, false).settled).toBe(false)
+  })
+
+  it('keeps the raw numbers when unsettled — measurements are still measurements', () => {
+    const quiet = diffMetrics(target, reference, 4, true)
+    const noisy = diffMetrics(target, reference, 4, false)
+    expect(noisy.inkCoverage).toEqual(quiet.inkCoverage)
+    expect(noisy.rows).toEqual(quiet.rows)
+    expect(noisy.bands).toEqual(quiet.bands)
+  })
+
+  it('replaces the band findings with one honest statement', () => {
+    const quiet = diffMetrics(target, reference, 4, true)
+    // The fixture is chosen to trip at least one band finding when settled.
+    expect(quiet.findings.length).toBeGreaterThan(0)
+    expect(quiet.findings.some(f => f.startsWith('band '))).toBe(true)
+
+    const noisy = diffMetrics(target, reference, 4, false)
+    expect(noisy.findings).toHaveLength(1)
+    expect(noisy.findings[0]).toMatch(/did not go paint-quiet/)
+    // No band claim survives: "strokes thickening" would be a false assertion.
+    expect(noisy.findings.some(f => f.startsWith('band '))).toBe(false)
+  })
+})

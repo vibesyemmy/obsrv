@@ -80,6 +80,9 @@ happened on the matrix snaps.
   not colorimetry of one specific panel.
 - `diff` is 1x-only in v1: dsf>1 presets and CSS viewports over 2048px exit
   with an error. Its findings are informational — apply your own thresholds.
+- `diff` on an animating page compares two different frames. Check `settled`
+  in its output: when false the band deltas are frame-to-frame noise and
+  `findings` says so rather than interpreting them. Snap that page instead.
 - `diff` cannot say "the hairline vanished": a 0.5px hairline renders one
   device row at 1x *and* 2x. It reports ink deltas and row ratios; vanishing
   is judged by reading the PNG.
