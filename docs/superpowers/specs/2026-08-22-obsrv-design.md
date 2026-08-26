@@ -569,3 +569,26 @@ reports `canvasBounds` (the canvas rect clipped to the pane) alongside
 pane and the crop is the visible part; minified — a mobile preset, or fit mode —
 the crop hugs the render, so the PNG is the screen under test and nothing
 else.
+
+#### 14.3 Scrolling after a resize (v0.7.2)
+
+The same gap reached `scroll`. A preset change travels renderer-ward as an
+apply, returns as `setViewport`, and only then does the target recreate and
+reflow — so a scroll issued in the same call read the pre-reflow document. On
+an app shell that means the root rather than the inner scroller, and the offset
+clamped to 0. The round-trip reported it honestly (`scrolled: {y: 0}`,
+`scroller: 'root'`), but the documented command order implied a guarantee it
+did not deliver.
+
+Main now tracks a pending resize: the apply path sets the flag when a patch
+carries `presetId`, `setViewport` marks its arrival, and `awaitViewportStable`
+waits for both before `scrollBoth` and before either capture. It costs nothing
+when no resize is pending, so an ordinary scroll keeps its millisecond latency.
+
+Only `presetId` sets the flag — view mode and pixel-exact change magnification,
+which reflows nothing in the page under test.
+
+**Testing note.** A local fixture reloads fast enough to win this race by luck,
+so asserting the outcome proves nothing; the e2e asserts the *mechanism*
+instead, timing the call to show the wait actually happened. Verified in both
+directions — 33 ms with the settle stubbed out, over 200 ms with it in place.
