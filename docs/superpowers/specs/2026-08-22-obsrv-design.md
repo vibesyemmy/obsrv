@@ -314,10 +314,43 @@ numbers, fix CSS, re-render.
 capture forces a full repaint (`invalidate()`), composites dirty BGRA slices
 into a device-pixel buffer, and settles once no paint has arrived for 400 ms
 *and* a full-coverage frame has been seen since the last frame-size change.
-At `--timeout` a covered-but-noisy page (animation) is captured as-is with a
-warning; a never-covered surface is an error. `--full-page` measures
-`scrollHeight` after the first settle, regrows the viewport (clamped to the
-4096 device-px budget, warning when clamped) and re-settles.
+`--full-page` measures `scrollHeight` after the first settle, regrows the
+viewport (clamped to the 4096 device-px budget, warning when clamped) and
+re-settles.
+
+At `--timeout` the capture is *rescued*, never failed, as long as any pixels
+arrived: a covered-but-noisy page (animation) and a page whose coverage never
+completed both come back `settled: false`, exit code 0, with a warning naming
+what was missing (uncovered percentage and the bounding box of the region that
+never painted). An unsettled picture beats no picture, and machine consumers
+gate on the flag. Only a surface that painted *nothing* is an error — there is
+no image to return. The accumulated buffer is the rescue image on purpose:
+`capturePage()` does work on an offscreen window but hands back a 1x
+(DIP-sized) bitmap — 393×852 for a dsf-2 render whose raster is 786×1704,
+`getScaleFactors()` `[1]` — and silently dropping to a fraction of the device
+pixels would be a worse lie than an unsettled frame.
+
+**Paint dirty-rect units (v1.6 fix).** Chromium's offscreen `paint` damage
+rects are in device pixels — the same space as `image.getSize()` — *except*
+the repaint `webContents.invalidate()` forces, which arrives in DIPs. Measured
+on Electron 43 / macOS at CSS 400×300: an ordinary partial repaint of a CSS
+box at (100, 60) 40×30 reports `200,120 80×60` at dsf 2 and `300,180 120×90`
+at dsf 3, while `invalidate()` reports `0,0 400×300` at every density against
+an 800×600 / 1200×900 bitmap. Read literally that is a top-left slice covering
+1/dsf² of the frame, so the cumulative coverage gate stalled at exactly 75 %
+(dsf 2) or 88.9 % (dsf 3) uncovered and dense-DPR snaps failed with "no full
+frame painted within N ms" — page-dependently, because a page that happens to
+emit one *ordinary* full-frame paint after the invalidate is rescued by it.
+`shared/paint.ts` `isFullFrame` recognises both spellings of "the whole
+frame"; a device-pixel partial repaint landing exactly on the DIP full-view
+rect is read as full too, which is the safe direction (the caller sends the
+entire correct bitmap instead of a slice — bandwidth, never pixels). The crop
+was *not* mis-regioned by this: the DIP rect is anchored at (0, 0), so the
+cropped pixels were the correct top-left quadrant, composited in the correct
+place. The shipped consequence for the app was staleness rather than
+corruption — an `invalidate()` at a mobile preset refreshed only the top-left
+1/dsf² of the target pane, leaving the rest until the page repainted
+naturally.
 
 **dsf > 1 diff limitation.** `diff` is 1x-only in v1: for a dense preset the
 "reference at 2× the density on the same grid" comparison would need a 4x/6x
@@ -399,7 +432,7 @@ validator, every effect through an existing validated path — no
 
 | Command | Payload | Effect |
 |---|---|---|
-| `scroll` | `{ x, y }` (CSS px, `parseScrollPos`) | Absolute page scroll, sent to *both* panes over the pane-sync `applyScroll` channel (an applied scroll is deliberately not re-reported, so main fans out rather than relying on the mirror). |
+| `scroll` | `{ x, y, scrollSelector? }` (CSS px, `parseScrollRequest`; selector non-empty, ≤ 512 chars) | Absolute page scroll, sent to *both* panes over the pane-sync `applyScroll` channel (an applied scroll is deliberately not re-reported, so main fans out rather than relying on the mirror). Replies `{ ok: true, scrolled: { x, y }, scroller: 'root' \| 'element' }` — see "Scroll round-trip" below. |
 | `panTo` | `{ x, y }` (target px, finite ≥ 0) | Centres the target pixel in the pane's 1:1 view via `IPC.agentApply` → the same clamped `centreScroll` maths as a fit click; from fit it jumps to 1:1 centred there. |
 | `click` | `{ x, y, button? }` (CSS px; validated inside the live viewport, refused not clamped) | mouseDown + mouseUp (clickCount 1) through `parseInputEvent` → `target.sendInput` — the canvas-forwarding path. A click may navigate; that mirrors as usual. |
 | `highlight` | `{ x, y, width, height, durationMs? }` (rect like `parseRect`, ≥ 1×1; duration default 2000, clamped 250–10000) | A temporary neutral overlay (light outline, dark dashed inner edge — no hue, per the style spec) drawn over the rect at the canvas scale, `pointer-events: none`; a new highlight replaces the previous, auto-removed after its duration. |
@@ -420,11 +453,77 @@ viewport change or a mode switch clears any showing highlight, and the
 expiry timer is seq-guarded so it can never remove a newer highlight than
 the one it was armed for.
 
+**Scroll round-trip (v1.6).** `scroll` used to be fire-and-forget, which made
+it a silent no-op on the app-shell pattern: with `html, body { overflow:
+hidden }` and an inner `overflow-y: auto` scroller (dashboards, editors, most
+"web app" landings) `window.scrollTo` clamps to 0 without throwing, and the
+reply was indistinguishable from a real scroll. Two changes:
+
+- *Scroll-host detection.* When `document.scrollingElement` has nothing to
+  scroll, the sync preload finds the scroll host — the largest-by-client-area
+  visible descendant whose computed `overflow-x/y` is `auto` or `scroll` and
+  which actually overflows, depth-first tiebreak — and writes the offset to
+  *its* `scrollTop`/`scrollLeft`. Absolute-offset semantics and two-pane
+  synchronisation survive: both panes run the same detection over the same
+  DOM. The walk visits at most 2000 elements, beyond which the best candidate
+  so far wins, so a pathological DOM cannot stall the preload.
+
+  Visibility is `checkVisibility({ visibilityProperty: true, opacityProperty:
+  true })` (guarded for engines without it): `visibility: hidden`, `opacity: 0`
+  and hidden `content-visibility` all keep full client area, so a closed drawer
+  would otherwise win "largest scroller". An element translated off-canvas is
+  still eligible — transforms position a great many *open* panels too, and
+  `scrollSelector` covers a page that ever hits it. Only `display: none`
+  subtrees are pruned, and only after a computed-style check: client area
+  cannot stand in for "has no box" (an inline `<span>` wrapper and a `display:
+  contents` wrapper both report zero client area, and pruning on that hid every
+  scroller beneath them), and `checkVisibility` cannot either (it answers false
+  for `display: contents` exactly as for `display: none`). The style lookup
+  runs for boxless elements only, never the whole tree.
+
+  The resolved element is cached per document. The cache is revalidated against
+  the element it holds — dropped when it detaches, stops being able to scroll,
+  or the root becomes scrollable again — but it does *not* re-run the walk to
+  see whether a larger candidate has appeared, so an SPA that mounts a bigger
+  scroller beside the cached one keeps scrolling the cached one until that one
+  goes away. `scrollSelector` names the container outright when that bites.
+- *Achieved-offset reply.* `applyScroll` carries a correlation id when someone
+  is waiting. The preload writes the offset (`behavior: 'instant'`, so a
+  page's `scroll-behavior: smooth` cannot make the read-back lie), reads it
+  back, and replies on `IPC.scrollResult`. Main awaits the **target** pane's
+  reply, bounded at 1 s, and answers `{ ok: true, scrolled: { x, y },
+  scroller }`; on timeout `{ ok: true, scrolled: null, warnings: ['scroll
+  offset could not be confirmed'] }`. The native pane gets the identical
+  apply, unwaited. The pane-sync mirror sends no id and expects no reply.
+
+`scrollSelector` is the escape hatch for pages the heuristic misjudges
+(several large scrollers, a virtualised list that translates content). The
+preload passes it to `document.querySelector` in its isolated world — never
+evaluated as code — and never falls back: a selector that matches nothing, or
+an element that cannot reach the offset, comes back with `scrolled` reflecting
+reality plus a warning saying so.
+
+**Reach limit.** Both the walk and `scrollSelector` see the light DOM of the
+top-level document only: neither `children` traversal nor `querySelector`
+crosses a shadow root or an iframe boundary. A scroller inside either is
+unreachable, and since the escape hatch has the same reach, a web-component
+app that puts its scroller in a shadow root has no way through at all. Piercing
+would mean walking `shadowRoot` and same-origin frame documents, and driving a
+cross-origin frame is not something this path should grow.
+
+Reporting stays one-way: only `window` scroll events are mirrored back, so a
+user dragging an *inner* scroller in the native pane is not reflected in the
+target. Element scroll events do not bubble to `window`, so the report side
+never sees it. Mirroring that is a deliberate follow-up; `findScroller` in
+`src/preload/sync.ts` is written to be reusable by it.
+
 MCP: `obsrv_drive` gains the matching optional inputs, run in a documented
 fixed order — focus → url → preset → profile → viewMode → pixelExact →
 reload → back → forward → scroll → panTo → click → highlight — with the
 final `status` as the result; after a click the server polls status briefly
-(2 s bound), so a click that navigates is reflected in that result.
+(2 s bound), so a click that navigates is reflected in that result. A `scroll`
+adds `scrolled`, `scroller` and any `warnings` to that result, so an agent can
+tell "scrolled" from "clamped" without taking a capture and diffing it.
 `obsrv_snap` live mode gains `capture: 'window' | 'pane'` (default window;
 `'pane'` uses `captureTarget` and includes the pane's footer readout; the
 reported width/height are DIPs, the PNG raster is DIPs × display scale);

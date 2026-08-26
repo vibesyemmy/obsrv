@@ -16,6 +16,7 @@ import { launchApp, rendererWindow } from './launch'
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
+const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -202,7 +203,7 @@ test('setPixelExact pins the footer magnification to the host scale', async () =
   await expect(page.locator('.target-pane .pane-footer')).toContainText(`×${dpr.toFixed(2)}`)
 })
 
-test('scroll drives the page offset of both panes through the sync channel', async () => {
+test('scroll drives the page offset of both panes and reports the offset reached', async () => {
   const nav = await call('navigate', { url: TALL })
   expect(nav.status).toBe(200)
 
@@ -212,7 +213,9 @@ test('scroll drives the page offset of both panes through the sync channel', asy
 
   const r = await call('scroll', { x: 0, y: 1200 })
   expect(r.status).toBe(200)
-  expect(r.body).toEqual({ ok: true })
+  // A normal long page still scrolls the document root, and the round-trip
+  // answers with what it actually reached rather than a bare ok.
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root' })
   await expect.poll(() => paneScrollY('target'), { timeout: 5_000 }).toBe(1200)
   await expect.poll(() => paneScrollY('native'), { timeout: 5_000 }).toBe(1200)
 })
@@ -252,6 +255,84 @@ test('back / forward / reload keep the Task-11 semantics over HTTP', async () =>
       }
     })
   await expect.poll(markers, { timeout: 5_000 }).toEqual({ native: 'undefined', target: 'undefined' })
+})
+
+/** `scrollTop` of a named element in a pane's page, straight from its webContents. */
+function paneElementScrollTop(pane: 'native' | 'target', selector: string): Promise<number> {
+  return app.evaluate(
+    (_electron, [p, sel]: string[]) =>
+      (globalThis as any).__obsrv[p!].webContents.executeJavaScript(
+        `document.querySelector(${JSON.stringify(sel)}).scrollTop`,
+      ) as Promise<number>,
+    [pane, selector],
+  )
+}
+
+test('scroll finds the inner scroller on an app shell whose root cannot scroll', async () => {
+  // `html, body { overflow: hidden }` with a scrolling flex child: the shape
+  // that made `window.scrollTo` clamp to 0 and answer ok anyway.
+  const nav = await call('navigate', { url: APP_SHELL })
+  expect(nav.status).toBe(200)
+
+  const r = await call('scroll', { x: 0, y: 1500 })
+  expect(r.status).toBe(200)
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element' })
+
+  // The reported offset is not the whole claim: the inner scroller really
+  // moved, in both panes, while the window itself never left the top.
+  await expect.poll(() => paneElementScrollTop('target', '#scroller'), { timeout: 5_000 }).toBe(1500)
+  await expect.poll(() => paneElementScrollTop('native', '#scroller'), { timeout: 5_000 }).toBe(1500)
+  expect(await paneScrollY('target')).toBe(0)
+
+  // The marker at 1500 is what the pane now shows at the top of the scroller.
+  const topMarker = await app.evaluate(
+    () =>
+      (globalThis as any).__obsrv.target.webContents.executeJavaScript(
+        `(() => { const s = document.querySelector('#scroller');
+                  const r = s.getBoundingClientRect();
+                  return document.elementFromPoint(r.left + r.width / 2, r.top + 4).dataset.offset })()`,
+      ) as Promise<string>,
+  )
+  expect(topMarker).toBe('1500')
+})
+
+test('scroll clamps honestly: the reported offset is the one reached, not the one asked for', async () => {
+  const r = await call('scroll', { x: 0, y: 999_999 })
+  expect(r.status).toBe(200)
+  expect(r.body.ok).toBe(true)
+  expect(r.body.scroller).toBe('element')
+  const reached = r.body.scrolled as { x: number; y: number }
+  expect(reached.y).toBeGreaterThan(1500)
+  expect(reached.y).toBeLessThan(999_999)
+  expect(await paneElementScrollTop('target', '#scroller')).toBe(reached.y)
+})
+
+test('scrollSelector targets a named container, and says so when it matches nothing', async () => {
+  const back = await call('scroll', { x: 0, y: 0 })
+  expect(back.status).toBe(200)
+
+  const named = await call('scroll', { x: 0, y: 900, scrollSelector: '#scroller' })
+  expect(named.status).toBe(200)
+  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element' })
+  expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
+
+  // A selector that matches nothing must report the mismatch, not quietly
+  // scroll something else that happens to work.
+  const missing = await call('scroll', { x: 0, y: 1500, scrollSelector: '#not-here' })
+  expect(missing.status).toBe(200)
+  expect(missing.body.ok).toBe(true)
+  expect(String((missing.body.warnings as string[])[0])).toContain('matched no element')
+  expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
+
+  // A matched element that cannot scroll is reported the same honest way.
+  const decoy = await call('scroll', { x: 0, y: 1500, scrollSelector: 'aside' })
+  expect(decoy.status).toBe(200)
+  expect(decoy.body).toMatchObject({ ok: true, scroller: 'element', scrolled: { x: 0, y: 0 } })
+  expect(String((decoy.body.warnings as string[])[0])).toContain('could not reach')
+
+  const empty = await call('scroll', { x: 0, y: 10, scrollSelector: '   ' })
+  expect(empty.status).toBe(400)
+  expect(String(empty.body.error)).toContain('scrollSelector')
 })
 
 test('panTo centres the target pixel in the pane, clamped to the scroll range', async () => {

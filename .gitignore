@@ -13,3 +13,6 @@ tsx-*/
 playwright-artifacts-*/
 obsrv-*.png
 getobsrv-*.tgz
+
+# Vitest browser-mode failure screenshots.
+tests/browser/__screenshots__/

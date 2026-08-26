@@ -87,6 +87,39 @@ test('snap: iphone-61 rasterises at the true 3x device resolution', async () => 
   expect(png.height).toBe(2556)
 })
 
+/**
+ * Regression for the dense-DPR stall (0.5.0): `captureQuiescent` opens with
+ * `webContents.invalidate()`, whose damage rect arrives in DIPs while the
+ * bitmap is device pixels. Read literally that is a top-left slice covering
+ * 1/dsf² of the frame, so an idle page — one that emits no *other* full-frame
+ * paint to rescue it — never completed coverage and the snap failed. `--wait`
+ * guarantees the page is quiet before the capture starts, which is exactly the
+ * condition that made it fail: without the fix these report 75.0% (dsf 2) and
+ * 88.9% (dsf 3) of the frame never painted.
+ */
+for (const [preset, dsf, cssW, cssH] of [
+  ['iphone-61', 3, 393, 852],
+  ['android-65', 2, 360, 800],
+] as const) {
+  test(`snap: a quiet dense-scale page settles at ${preset} (dsf ${dsf})`, async () => {
+    const out = join(outDir, `dense-${preset}.png`)
+    const r = await runCli(['snap', fixture('dense-scale.html'), '--preset', preset, '--wait', '800', '--timeout', '30000', '--out', out])
+    expect(r.code).toBe(0)
+    const json = JSON.parse(r.stdout)
+    expect(json.settled).toBe(true)
+    expect(json.warnings).toEqual([])
+    const png = decodePng(readFileSync(out))
+    expect(png.width).toBe(cssW * dsf)
+    expect(png.height).toBe(cssH * dsf)
+    // Outside the top-left 1/dsf² quadrant the buffer would still be its
+    // zero-filled self (opaque black) had only the DIP-sized slice landed.
+    const [red, green, blue] = pixelAt(png, cssW * dsf - 8, cssH * dsf - 8)
+    expect(red).toBeGreaterThan(200)
+    expect(green).toBeGreaterThan(200)
+    expect(blue).toBeGreaterThan(200)
+  })
+}
+
 test('snap: a panel profile changes the pixels', async () => {
   const ref = join(outDir, 'profile-ref.png')
   const tn = join(outDir, 'profile-tn.png')

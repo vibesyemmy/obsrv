@@ -46,6 +46,51 @@ const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(r
 export const DEFAULT_SETTLE_MS = 400
 
 /**
+ * The uncovered region's bounding box, for the rescue warning: "which part of
+ * the frame never painted" is the one thing that makes an unsettled capture
+ * actionable. Null when everything is covered.
+ *
+ * Four directional scans with early exit rather than one sweep of the whole
+ * raster: each edge stops at the first line that contains an uncovered pixel,
+ * so a region touching an edge — which is what an unfinished repaint almost
+ * always leaves — costs O(width + height) instead of O(width x height). That
+ * matters on `--full-page` at dsf 3, where the full sweep is tens of millions
+ * of iterations on an already-slow path. A single uncovered pixel dead centre
+ * still degenerates to the old cost; it is one pass either way.
+ */
+function uncoveredBounds(mask: Uint8Array, width: number, height: number): { x: number; y: number; width: number; height: number } | null {
+  const rowHasGap = (y: number): boolean => {
+    const row = y * width
+    for (let x = 0; x < width; x++) if (mask[row + x] === 0) return true
+    return false
+  }
+  let y0 = -1
+  for (let y = 0; y < height; y++) {
+    if (rowHasGap(y)) {
+      y0 = y
+      break
+    }
+  }
+  if (y0 < 0) return null
+  let y1 = y0
+  for (let y = height - 1; y > y0; y--) {
+    if (rowHasGap(y)) {
+      y1 = y
+      break
+    }
+  }
+  const columnHasGap = (x: number): boolean => {
+    for (let y = y0; y <= y1; y++) if (mask[y * width + x] === 0) return true
+    return false
+  }
+  let x0 = 0
+  while (x0 < width && !columnHasGap(x0)) x0++
+  let x1 = width - 1
+  while (x1 > x0 && !columnHasGap(x1)) x1--
+  return { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 }
+}
+
+/**
  * Forces a repaint, composites dirty BGRA slices into a full device-pixel
  * buffer, and resolves once no paint has arrived for `settleMs` *and* every
  * pixel has been painted at least once since the last frame-size change
@@ -53,8 +98,19 @@ export const DEFAULT_SETTLE_MS = 400
  * cumulative: after a viewport growth (--full-page) Chromium was observed to
  * deliver the repaint of a large surface as several dirty slices and never a
  * single full-frame one, so a "one full paint" flag would wait forever.
- * At `timeoutMs` a covered-but-noisy page (animation, video) is captured
- * as-is with a warning; a never-covered surface is an error.
+ *
+ * At `timeoutMs` the capture is rescued rather than failed, as long as any
+ * pixels arrived: a covered-but-noisy page (animation, video) and a page whose
+ * coverage never completed both come back `settled: false` with a warning
+ * naming what was missing. An unsettled picture of the page beats no picture,
+ * and the caller can gate on the flag. Only a surface that painted *nothing*
+ * is an error — there is no image to return.
+ *
+ * The accumulated buffer is the rescue image on purpose. `capturePage()` does
+ * work on an offscreen window, but it hands back a 1x (DIP-sized) bitmap —
+ * 393x852 for a dsf-2 render whose raster is 786x1704, `getScaleFactors()`
+ * `[1]` — and a snap that silently dropped to a third of the device pixels
+ * would be a worse lie than an unsettled frame.
  */
 export async function captureQuiescent(source: FrameEmitter, options: CaptureOptions = {}): Promise<CapturedFrame> {
   const settleMs = options.settleMs ?? DEFAULT_SETTLE_MS
@@ -68,9 +124,12 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   let mask: Uint8Array | null = null
   let uncovered = 0
   let lastPaint = Date.now()
+  /** Any pixels at all? The difference between a rescue and a hard failure. */
+  let frames = 0
 
   const onFrame = (m: FrameMessage): void => {
     lastPaint = Date.now()
+    frames++
     if (m.frameWidth !== width || m.frameHeight !== height) {
       width = m.frameWidth
       height = m.frameHeight
@@ -117,9 +176,27 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       if (failed) throw failed
       if (covered && Date.now() - lastPaint >= settleMs) break
       if (Date.now() >= deadline) {
-        if (!covered) throw new Error(`no full frame painted within ${timeoutMs} ms`)
-        options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
         settled = false
+        if (covered) {
+          options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
+          break
+        }
+        if (frames === 0 || width === 0 || height === 0) {
+          throw new Error(`no frame painted within ${timeoutMs} ms`)
+        }
+        const total = width * height
+        const box = mask ? uncoveredBounds(mask, width, height) : null
+        // Name what those pixels *are*, not just where: the buffer starts
+        // zero-filled, so an unpainted region is fully transparent BGRA
+        // (0,0,0,0) — which an agent could otherwise read as a black or blank
+        // band of the page.
+        options.onWarn?.(
+          `warning: ${((uncovered / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
+            `never painted within ${timeoutMs} ms` +
+            (box ? ` (uncovered region ${box.width}x${box.height} at ${box.x},${box.y})` : '') +
+            `; those pixels are transparent, not page content. ` +
+            `Returning the frame as captured (settled: false)`,
+        )
         break
       }
       await sleep(Math.min(50, settleMs))

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
 import { clampViewport, maxCssViewport } from '../shared/calibration'
 import { classifyFileNavigation } from '../shared/fileNav'
+import { fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 
@@ -182,13 +183,20 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // commits; it carries no pixels and would advertise a 0x0 frame.
       if (image.isEmpty()) return
       const full = image.getSize()
-      const isFull = dirty.x === 0 && dirty.y === 0 && dirty.width === full.width && dirty.height === full.height
+      // Damage rects are device pixels — except the one `invalidate()` forces,
+      // which arrives in DIPs and would otherwise be cropped as a top-left
+      // 1/dsf² slice. See shared/paint.ts for the measurements.
+      const isFull = isFullFrame(dirty, full.width, full.height, this.dsf)
+      // A partial rect that does not fit the bitmap is uninterpretable; a
+      // mis-composited slice is worse than a dropped one, and the next paint
+      // (or the capture's own invalidate) supplies the pixels anyway.
+      if (!isFull && !fitsFrame(dirty, full.width, full.height)) return
       this.emit('frame', {
         frame: {
-          x: dirty.x,
-          y: dirty.y,
-          width: dirty.width,
-          height: dirty.height,
+          x: isFull ? 0 : dirty.x,
+          y: isFull ? 0 : dirty.y,
+          width: isFull ? full.width : dirty.width,
+          height: isFull ? full.height : dirty.height,
           // `toBitmap()` already returns a fresh copy of the pixels (unlike the
           // deprecated `getBitmap()`, typed `void` in Electron 43), and a
           // Buffer is a Uint8Array, so this is the only copy of the slice.

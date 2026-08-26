@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_RECT, parseDeviceScaleFactor, parseInputEvent, parseMode, parseRect, parseScrollPos, parseSettings, parseUiState } from '../../src/shared/ipcPayloads'
+import {
+  MAX_RECT,
+  parseDeviceScaleFactor,
+  parseInputEvent,
+  parseMode,
+  parseRect,
+  parseScrollPos,
+  parseScrollReport,
+  parseScrollRequest,
+  parseSettings,
+  parseUiState,
+} from '../../src/shared/ipcPayloads'
+import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
 
 describe('parseRect', () => {
   it('accepts a sane rect and rounds to integers', () => {
@@ -180,5 +192,49 @@ describe('parseDeviceScaleFactor', () => {
     ['object', {}],
   ])('rejects %s', (_name, raw) => {
     expect(parseDeviceScaleFactor(raw)).toBeNull()
+  })
+})
+
+describe('parseScrollRequest', () => {
+  it('accepts a bare offset', () => {
+    expect(parseScrollRequest({ x: 0, y: 1500 })).toEqual({ x: 0, y: 1500 })
+  })
+  it('accepts and trims a scrollSelector', () => {
+    expect(parseScrollRequest({ x: 0, y: 10, scrollSelector: '  .landing-v2 ' })).toEqual({ x: 0, y: 10, selector: '.landing-v2' })
+  })
+  it('treats a missing or null selector as absent', () => {
+    expect(parseScrollRequest({ x: 1, y: 2, scrollSelector: null })).toEqual({ x: 1, y: 2 })
+  })
+  it.each([
+    ['a bad offset', { x: -1, y: 0 }],
+    ['a non-string selector', { x: 0, y: 0, scrollSelector: 42 }],
+    ['an empty selector', { x: 0, y: 0, scrollSelector: '   ' }],
+    ['an over-long selector', { x: 0, y: 0, scrollSelector: 'a'.repeat(MAX_SCROLL_SELECTOR + 1) }],
+  ])('refuses %s with a message', (_name, raw) => {
+    expect(typeof parseScrollRequest(raw)).toBe('string')
+  })
+})
+
+describe('parseScrollReport', () => {
+  it('accepts a well-formed reply', () => {
+    expect(parseScrollReport({ id: 3, x: 0, y: 1500, scroller: 'element', warnings: ['hm'] })).toEqual({
+      id: 3,
+      x: 0,
+      y: 1500,
+      scroller: 'element',
+      warnings: ['hm'],
+    })
+  })
+  it('defaults missing warnings to an empty list and drops non-strings', () => {
+    expect(parseScrollReport({ id: 1, x: 0, y: 0, scroller: 'root' })?.warnings).toEqual([])
+    expect(parseScrollReport({ id: 1, x: 0, y: 0, scroller: 'root', warnings: [1, 'ok'] })?.warnings).toEqual(['ok'])
+  })
+  it.each([
+    ['not an object', 'nope'],
+    ['a missing id', { x: 0, y: 0, scroller: 'root' }],
+    ['a non-numeric offset', { id: 1, x: '0', y: 0, scroller: 'root' }],
+    ['an unknown scroller kind', { id: 1, x: 0, y: 0, scroller: 'window' }],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseScrollReport(raw)).toBeNull()
   })
 })

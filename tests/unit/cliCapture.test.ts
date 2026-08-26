@@ -51,19 +51,29 @@ describe('captureQuiescent', () => {
     expect(Array.from(got.bgra.subarray(0, 8))).toEqual(Array(8).fill(4))
     expect(Array.from(got.bgra.subarray(8, 16))).toEqual(Array(8).fill(6))
   })
-  it('a frame-size change resets coverage: stale small frames never satisfy a bigger viewport', async () => {
+  it('a frame-size change resets coverage: a never-covered frame is rescued, not failed', async () => {
     // Full 1x1 frame, then only a partial slice of the new 2x2 size: coverage
-    // is never re-established, so the capture must time out, not resolve.
+    // is never re-established. The pixels that did arrive are still a better
+    // answer than an error, so the capture comes back settled: false with a
+    // warning naming the region that never painted.
     const partial: FrameMessage = {
       frame: { x: 0, y: 0, width: 1, height: 1, data: new Uint8Array(4).fill(3) },
       frameWidth: 2,
       frameHeight: 2,
     }
     const src = new FakeSource([fullFrame(1, 1, 5), partial])
-    await expect(captureQuiescent(src, { settleMs: 20, timeoutMs: 200 })).rejects.toThrow(/no full frame/)
+    const warnings: string[] = []
+    const got = await captureQuiescent(src, { settleMs: 20, timeoutMs: 200, onWarn: m => warnings.push(m) })
+    expect(got.settled).toBe(false)
+    expect(got.width).toBe(2)
+    expect(got.height).toBe(2)
+    expect(Array.from(got.bgra.subarray(0, 4))).toEqual([3, 3, 3, 3])
+    expect(warnings.join(' ')).toMatch(/75\.0% of the 2x2 frame never painted/)
+    // The bounding box of the three pixels that never arrived.
+    expect(warnings.join(' ')).toMatch(/uncovered region 2x2 at 0,0/)
   })
-  it('rejects when nothing ever paints', async () => {
-    await expect(captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 150 })).rejects.toThrow(/no full frame/)
+  it('rejects only when nothing ever paints', async () => {
+    await expect(captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 150 })).rejects.toThrow(/no frame painted/)
   })
   it('reports settled: true for a quiet capture', async () => {
     const got = await captureQuiescent(new FakeSource([fullFrame(1, 1, 1)]), { settleMs: 20, timeoutMs: 1000 })
