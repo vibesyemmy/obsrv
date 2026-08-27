@@ -206,6 +206,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   cursor: pointer;
 }
 .menu-row:hover { background: var(--chrome-3); }
+/* Which drawer is open. The fill step is the chrome's one pressed idiom,
+   shared with `.segmented`; `:hover` is the same fill, so the pressed row also
+   carries a 2px inset rule down its leading edge. That marker is the part that
+   survives hover — hovering any row fills it, but only the open drawer's row
+   keeps the rule — and it is the same neutral weight the surround control uses
+   to mark its selection. No hue, here or anywhere else in the chrome. */
+.menu-row[aria-pressed='true'] {
+  background: var(--chrome-3);
+  box-shadow: inset 2px 0 0 var(--text-0);
+}
 .menu-sep { height: 1px; margin: 5px 0; background: var(--line); }
 .overflow-menu input[type='checkbox'] { accent-color: var(--text-0); }
 
@@ -258,11 +268,29 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .pane-footer .role { color: var(--text-0); letter-spacing: 0.08em; }
 
-/* Segmented surround control. Active state is weight and a border, not hue. */
-.surround-control { display: flex; border: 1px solid var(--line); border-radius: 4px; }
+/* Segmented surround control: the same 30px border-box as `.segmented` and
+   `.select-shell`, so the screen row has one hit-target rhythm. `box-sizing`
+   for the same reason `.segmented` needs it — a `div` gets no border-box from
+   the UA, so the 1px border would otherwise push the group to 32px.
+
+   The swatch stays 12px: the swatch is the affordance, the button around it is
+   just the target. The pressed state stays an inset `--text-0` ring, and is
+   the one place the chrome does not use the `--chrome-3` fill step — a fill
+   ringing a 12px swatch competes with the swatch for the eye, and `--chrome-3`
+   lands two steps from the graphite swatch itself. This is the one control
+   whose whole job is judging a tint, so the marker stays off the tint. */
+.surround-control {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: inline-flex;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
 .surround-control button {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 100%;
   border: 0;
   border-right: 1px solid var(--line);
   border-radius: 0;
