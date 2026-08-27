@@ -942,6 +942,18 @@ export function Select({ className, value, label, ariaLabel, onChange, children 
 
 - [ ] **Step 3: Write `OverflowMenu.tsx`**
 
+> **Partly superseded during review — do not copy this block verbatim.** Two things
+> below shipped and were then changed in `8f49198`. First, the `role="menu"` /
+> `role="menuitem"` markup: `aria-pressed` is not valid on `menuitem`, and the roles
+> oblige arrow-key roving focus and type-ahead this popover does not implement, so
+> claiming them was worse than omitting them. It is now a plain popover —
+> `aria-haspopup="true"` and `aria-expanded` on the trigger, `aria-pressed` on the
+> drawer buttons, labelled checkboxes for the rest. Second, the `mousedown`
+> dismissal below is not sufficient on its own: the native pane is an OS-level
+> `WebContentsView`, so a click there delivers no DOM event to the renderer — and in
+> an unfocused window, not even a `blur`. Main observes `native.webContents` gaining
+> focus and forwards it over `obsrv:native-focused`.
+
 ```tsx
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from './Icon'
