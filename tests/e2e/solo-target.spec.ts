@@ -58,6 +58,16 @@ test('the target pane takes the whole window and gives it back', async () => {
 test('the native view is repositioned before it is shown again', async () => {
   await page.click('.panes-target')
   await expect.poll(nativeVisible).toBe(false)
+
+  // The layout has to change while the slot is unmounted, or this test cannot
+  // fail: with the row the same width on the way back, the stale rectangle and
+  // the fresh one are the same rectangle and the assertion below is vacuous.
+  // The drawer narrows the row, so a view that was never repositioned keeps its
+  // wider solo-era bounds and is caught.
+  // NOTE(task-7): `.toggle-panel` moves into an overflow menu. This click needs
+  // `openOverflow(page)` in front of it then — it is load-bearing, not clutter.
+  await page.click('.toggle-panel')
+
   await page.click('.panes-both')
   await expect.poll(nativeVisible).toBe(true)
 
@@ -71,4 +81,7 @@ test('the native view is repositioned before it is shown again', async () => {
   expect(view.width).toBe(slot.width)
   expect(view.x).toBe(slot.x)
   expect(view.y).toBe(slot.y)
+
+  // Leave the drawer as it was found, for whatever runs after this.
+  await page.click('.toggle-panel')
 })
