@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -278,4 +278,40 @@ test('diff: refuses dsf>1 presets with a clear 1x-only error', async () => {
   expect(r.stdout).toBe('')
   expect(r.stderr).toMatch(/1x/)
   expect(r.stderr).toMatch(/iphone-61/)
+})
+
+test('install-skill: installs, is idempotent, and refuses to clobber a divergent copy', async () => {
+  const dest = mkdtempSync(join(tmpdir(), 'obsrv-skills-'))
+  const installed = join(dest, 'obsrv-screens', 'SKILL.md')
+
+  const first = await runCli(['install-skill', '--dest', dest])
+  expect(first.code).toBe(0)
+  expect(first.stderr).toContain('installed to')
+  // The copy is the packaged skill, byte for byte.
+  const packaged = readFileSync(resolve(__dirname, '../../skills/obsrv-screens/SKILL.md'))
+  expect(readFileSync(installed).equals(packaged)).toBe(true)
+
+  // Running it again is a no-op, not a duplicate or an error.
+  const again = await runCli(['install-skill', '--dest', dest])
+  expect(again.code).toBe(0)
+  expect(again.stderr).toContain('already up to date')
+
+  // A locally edited skill is never silently overwritten…
+  writeFileSync(installed, '# edited by the user\n')
+  const refused = await runCli(['install-skill', '--dest', dest])
+  expect(refused.code).toBe(1)
+  expect(refused.stderr).toContain('--force')
+  expect(readFileSync(installed, 'utf8')).toBe('# edited by the user\n')
+
+  // …until asked.
+  const forced = await runCli(['install-skill', '--dest', dest, '--force'])
+  expect(forced.code).toBe(0)
+  expect(readFileSync(installed).equals(packaged)).toBe(true)
+
+  // --print emits the skill on stdout for other agent frameworks.
+  const printed = await runCli(['install-skill', '--print'])
+  expect(printed.code).toBe(0)
+  expect(printed.stdout).toBe(packaged.toString('utf8'))
+
+  rmSync(dest, { recursive: true, force: true })
 })

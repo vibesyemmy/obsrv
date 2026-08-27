@@ -59,6 +59,8 @@ export function usage(): string {
 Usage:
   obsrv snap <url> [flags]   Render <url> on a target screen; write a PNG, print JSON.
   obsrv diff <url> [flags]   Render <url> at 1x and against a 2x reference; print JSON metrics.
+  obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
+  obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
 
 Shared flags:
   --preset <id>        Screen preset (default ${DEFAULT_PRESET}):

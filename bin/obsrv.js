@@ -20,6 +20,14 @@ if (process.argv[2] === 'mcp') {
   return
 }
 
+// `obsrv install-skill` copies the packaged Claude Code skill into the user's
+// skills directory. Also plain node — it never renders anything.
+if (process.argv[2] === 'install-skill') {
+  process.argv.splice(2, 1)
+  require('./install-skill.js')
+  return
+}
+
 const cliEntry = join(__dirname, '..', 'out', 'main', 'cli.js')
 if (!existsSync(cliEntry)) {
   console.error('obsrv: out/main/cli.js is missing — run `npm run build` in the Obsrv repo first')

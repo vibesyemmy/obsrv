@@ -28,6 +28,38 @@ Both panes stay in lock-step (scroll, navigation) and the 1x pane is fully inter
   fit), and are shown at true physical size — usually a small, dense render on a
   desktop monitor, exactly like the phone in your hand.
 
+## Quickstart
+
+**The desktop app** — download the DMG for your chip from
+[Releases](https://github.com/vibesyemmy/obsrv/releases), drag Obsrv.app to
+Applications, then clear the quarantine flag once (the build is not yet
+notarised, so macOS falsely reports it as "damaged"):
+
+```bash
+xattr -cr /Applications/Obsrv.app
+```
+
+Open it and set your monitor's diagonal in Settings — that one number is what
+makes the target pane render at true physical size.
+
+**The CLI, and Claude Code / MCP clients:**
+
+```bash
+npm i -g getobsrv                                          # or use npx -y getobsrv
+obsrv install-skill                                        # teach Claude Code when to use it
+claude mcp add --scope user obsrv -- npx -y getobsrv mcp   # give it the tools
+```
+
+`install-skill` copies the [obsrv-screens skill](skills/obsrv-screens/SKILL.md)
+into `~/.claude/skills/` (`--dest` for elsewhere, `--print` to pipe it into
+another agent framework). The skill is what makes an agent reach for Obsrv on
+its own when frontend work needs checking; the MCP registration is what gives
+it the tools to do so. New sessions pick both up.
+
+**Both together** — install the app *and* the tools, then flip **Agent control**
+on in the app's toolbar: agent testing now drives the window you are watching
+instead of rendering invisibly.
+
 ## Use
 
 ```bash
@@ -70,7 +102,8 @@ npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings
 are informational (exit 0); CI thresholds are the caller's job. A ready-made
 Claude Code skill that wraps the loop (snap matrix → read the PNGs → diff →
-fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md).
+fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md);
+`obsrv install-skill` copies it into `~/.claude/skills/` so agents find it.
 
 ### MCP server
 
