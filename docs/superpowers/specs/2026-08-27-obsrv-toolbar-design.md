@@ -4,7 +4,8 @@
 **Status:** Approved 2026-08-27
 **Supersedes nothing.** Extends `2026-08-23-obsrv-ui-style.md`, which still governs
 colour, neutrality and the pane surround.
-**Ships as:** 0.8.0
+**Ships as:** 0.9.0 — 0.8.0 was tagged and released earlier the same day, before
+this work began, so the number was already spent.
 
 ## The problem
 
