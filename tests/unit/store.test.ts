@@ -208,9 +208,11 @@ describe('image mode', () => {
 })
 
 describe('view mode', () => {
-  it('starts at 1:1 with no fit scale published', () => {
+  it('starts in fit with no fit scale published yet', () => {
     const s = useStore.getState()
-    expect(s.viewMode).toBe('1:1')
+    // Fit is the opening view; `fitScale` stays null until `TargetCanvas`
+    // measures the pane and publishes the magnification it actually drew at.
+    expect(s.viewMode).toBe('fit')
     expect(s.fitScale).toBeNull()
   })
 

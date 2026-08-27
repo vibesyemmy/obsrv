@@ -316,7 +316,7 @@ export function registerIpc(ctx: AppContext): void {
   // the renderer's `uiState` reports — main never blocks a request on a
   // renderer round-trip. The mirror starts at the store's initial values and
   // the renderer reports on mount, so it is honest before the first change.
-  const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', panes: 'both', mode: 'url' }
+  const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url' }
   // The target pane's window-relative bounds (CSS px), for `captureTarget`.
   // Null until the renderer's first measured report; the capture then falls
   // back to the full window with a warning rather than failing.

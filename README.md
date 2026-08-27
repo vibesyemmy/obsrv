@@ -73,12 +73,16 @@ the advanced sliders. Enter your own monitor's diagonal in Settings once so the 
 pane renders at true physical size. Drop a 2x/3x PNG or JPG export to check a design
 before it's built.
 
-The target pane opens at 1:1, which usually overflows the pane: pan with a
-middle-button drag, Option+drag or Option+wheel, or switch the toolbar's
-`1:1 / Fit` control to a fit-to-pane overview (smoothly minified, so not
-pixel-exact — the footer says so). Fit is fully interactive: clicks, drags, the
-wheel and the keyboard all reach the page, and **Option+click** jumps back to
-1:1 with the clicked spot centred.
+The target pane opens in **Fit**, a fit-to-pane view of the whole render. Fit
+never enlarges past 1:1, so a render that already fits is shown at true size;
+a larger one is smoothly minified to fit, which is not pixel-exact — the footer
+says so, and names the magnification. Fit is fully interactive: clicks, drags,
+the wheel and the keyboard all reach the page.
+
+Switch the toolbar's `1:1 / Fit` control to **1:1** for true magnification,
+which usually overflows the pane: pan with a middle-button drag, Option+drag or
+Option+wheel. From fit, **Option+click** jumps straight to 1:1 with the clicked
+spot centred (plain clicks belong to the page).
 
 The `Both / Target` control beside it hides the native pane so the target render
 takes the whole window — useful for a small mobile preset that would otherwise

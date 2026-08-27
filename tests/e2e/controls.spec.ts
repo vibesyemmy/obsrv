@@ -39,6 +39,11 @@ test.beforeAll(async () => {
   // The canvas is sized from the viewport and scale, so it has a real size as
   // soon as the shell's first render has landed.
   await expect.poll(() => backingWidth(page)).toBeGreaterThan(0)
+  // 1:1 explicitly. This spec reads magnification off the backing store, and
+  // fit — the app's opening view — clamps the drawn scale to whatever shows
+  // the whole viewport, which would swallow the very change being measured.
+  await page.click('.view-1x')
+  await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
 })
 test.afterAll(async () => {
   await app.close()

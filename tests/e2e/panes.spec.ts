@@ -108,6 +108,10 @@ test('main positions the native view exactly over the slot', async () => {
 })
 
 test('the canvas is the target viewport magnified by S', async () => {
+  // 1:1 explicitly: the app opens in fit, which clamps the drawn scale to the
+  // pane, and the backing store below is asserted at true magnification.
+  await page.click('.view-1x')
+  await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
   // Pixel-exact pins S to the host scale factor, so the maths is checkable
   // without knowing the test machine's physical screen size.
   await openOverflow(page)

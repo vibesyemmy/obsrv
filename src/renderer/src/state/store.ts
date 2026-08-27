@@ -143,7 +143,12 @@ export const useStore = create<AppState>()(set => ({
   update: null,
   image: null,
   surround: 'graphite',
-  viewMode: '1:1',
+  // Fit, not 1:1: fit never enlarges past 1:1, so a render that already fits
+  // its pane opens at true magnification anyway, while one that does not is
+  // shown whole instead of as its top-left corner. Fit is interactive, so
+  // this costs nothing — and the footer names the actual magnification
+  // whenever fit is minifying.
+  viewMode: 'fit',
   panes: 'both',
   fitScale: null,
   agentPan: null,

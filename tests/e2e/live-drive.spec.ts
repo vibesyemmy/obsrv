@@ -88,7 +88,10 @@ test('writes a 0600 discovery file with a port and a 64-hex token', async () => 
 test('status answers with the app state, and the toolbar shows the AGENT badge', async () => {
   const r = await call('status')
   expect(r.status).toBe(200)
-  expect(r.body).toMatchObject({ ok: true, presetId: '1080p-24', profileId: 'reference', viewMode: '1:1', mode: 'url' })
+  // `viewMode: 'fit'` is the app's opening view — and, because main answers
+  // `status` from its own mirror of the renderer's reports, this is also the
+  // check that the mirror's seed matches the store's initial value.
+  expect(r.body).toMatchObject({ ok: true, presetId: '1080p-24', profileId: 'reference', viewMode: 'fit', mode: 'url' })
   expect(typeof r.body.version).toBe('string')
   expect(typeof r.body.url).toBe('string')
   // Any authenticated command nudges the renderer's activity indicator.
@@ -202,6 +205,9 @@ test('setPixelExact pins the footer magnification to the host scale', async () =
   const r = await call('setPixelExact', { on: true })
   expect(r.status).toBe(200)
   expect(r.body).toEqual({ ok: true })
+  // 1:1 explicitly: the app opens in fit, whose footer names the fit
+  // magnification instead — the host scale is what pixel-exact pins.
+  expect((await call('setViewMode', { mode: '1:1' })).status).toBe(200)
   const dpr = await page.evaluate(() => window.devicePixelRatio)
   await expect(page.locator('.target-pane .pane-footer')).toContainText(`×${dpr.toFixed(2)}`)
 })

@@ -169,6 +169,11 @@ test('a scroll in solo target still reaches the hidden native pane', async () =>
 // an oversized one becomes unreachable by scrolling — so both are asserted.
 test('a render smaller than the pane is centred, an oversized one is not', async () => {
   await page.click('.panes-target')
+  // 1:1 explicitly: the app opens in fit, where a render never overflows its
+  // pane by construction, so the oversized half of this test could not exist
+  // there. Both alignments are a 1:1 concern.
+  await page.click('.view-1x')
+  await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
 
   const gaps = async () =>
     page.evaluate(() => {
@@ -195,5 +200,6 @@ test('a render smaller than the pane is centred, an oversized one is not', async
   await expect.poll(async () => (await gaps()).right, { timeout: 5000 }).toBeLessThan(0)
   expect((await gaps()).left).toBe(0)
 
+  await page.click('.view-fit')
   await page.click('.panes-both')
 })

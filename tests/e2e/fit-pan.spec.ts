@@ -80,6 +80,16 @@ const boxes = () =>
     }
   })
 
+// First in the file on purpose: every test below drives the view control, so
+// the opening state is only readable before any of them has run.
+test('the app opens in fit', async () => {
+  await expect(page.locator('.view-fit')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'false')
+  // Not just the toggle: the pane is actually drawing the fit view, which the
+  // footer only names while fit is the live mode.
+  await expect(page.locator('.target-pane .pane-footer')).toContainText('fit ×')
+})
+
 test('fit draws the whole viewport inside the pane and the footer says so', async () => {
   await load(TALL)
   await setView('1:1')
