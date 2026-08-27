@@ -189,17 +189,32 @@ test('a render smaller than the pane is centred, an oversized one is not', async
       }
     })
 
+  // The window is sized deliberately rather than trusting a preset to fit or
+  // overflow: which it does depends on the host's display calibration, so an
+  // earlier version of this test passed here and failed on CI, where there is
+  // no real display and the scale falls back.
+  const setWindow = (width: number, height: number) =>
+    app.evaluate(({ BrowserWindow }, size) => {
+      BrowserWindow.getAllWindows()[0]!.setContentSize(size.width, size.height)
+    }, { width, height })
+
+  // Roomy window, smallest preset: fits on both axes, so it centres.
+  await setWindow(1900, 1100)
   await page.selectOption('.preset-select', 'android-65')
   await expect.poll(async () => (await gaps()).left, { timeout: 5000 }).toBeGreaterThan(0)
   const small = await gaps()
+  expect(small.right).toBeGreaterThan(0)
   expect(Math.abs(small.left - small.right)).toBeLessThanOrEqual(1)
   expect(Math.abs(small.top - small.bottom)).toBeLessThanOrEqual(1)
 
-  // Wider than the pane: start-aligned, so scrolling still reaches its origin.
-  await page.selectOption('.preset-select', 'laptop-768')
+  // Smallest window the app allows, largest preset: overflows whatever the
+  // calibration, so it must start-align and leave its origin reachable.
+  await setWindow(900, 600)
+  await page.selectOption('.preset-select', '1080p-24')
   await expect.poll(async () => (await gaps()).right, { timeout: 5000 }).toBeLessThan(0)
   expect((await gaps()).left).toBe(0)
 
+  await setWindow(1600, 1000)
   await page.click('.view-fit')
   await page.click('.panes-both')
 })
