@@ -24,7 +24,10 @@ import { ControlServer } from './controlServer'
 import { checkForUpdate } from './updateCheck'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
-const TOOLBAR_H = 44
+// 82px matches the two `.chrome-row` heights in styles.css (44 + 38, both
+// border-box). Main lays the native view out with this until NativeSlot's
+// first report takes ownership.
+const TOOLBAR_H = 82
 
 /** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
 export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024

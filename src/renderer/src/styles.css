@@ -10,6 +10,7 @@
   --chrome-0: #141414;
   --chrome-1: #1c1c1c;
   --chrome-2: #262626;
+  --chrome-3: #3a3a3a;
   --line: #333333;
   --text-0: #ededed;
   --text-1: #8a8a8a;
@@ -35,66 +36,187 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .app { height: 100%; display: flex; flex-direction: column; }
 .muted { color: var(--text-1); }
 .warn { color: var(--warn); }
-.toolbar .warn { white-space: nowrap; }
+.chrome .warn { white-space: nowrap; }
 
-/* 44px matches TOOLBAR_H in src/main/ipc.ts, used until NativeSlot reports. */
-.toolbar {
-  flex: 0 0 44px;
+/* Two strips. Browsing above; the controls that describe the simulated
+   screen below, on a darker ground so the rows read as separate registers.
+   44 + 38 = 82 must equal TOOLBAR_H in src/main/ipc.ts. Pinned heights also
+   keep a late reflow from resizing the panes under NativeSlot's observer. */
+.chrome { flex: 0 0 auto; }
+.chrome-row {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  background: var(--chrome-1);
   border-bottom: 1px solid var(--line);
 }
-.toolbar button {
+.chrome-browse { height: 44px; background: var(--chrome-1); }
+.chrome-screen { height: 38px; background: var(--chrome-0); }
+.chrome-spacer { flex: 1 1 auto; }
+
+/* No blanket `button` rule here, ever. The old `.toolbar button { width:
+   26px }` was specificity (0,1,1) and silently clipped the update button to
+   "v0."; every control now sizes itself. */
+.icon-button {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--chrome-2);
   color: var(--text-0);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  width: 26px;
-  height: 24px;
+  border-radius: 5px;
   cursor: pointer;
 }
-.toolbar select {
-  background: var(--chrome-2);
-  color: var(--text-0);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  height: 24px;
-}
-.url-form { flex: 1 1 auto; min-width: 120px; }
+
+.url-form { flex: 1 1 auto; min-width: 160px; }
 .url-form input {
   width: 100%;
-  height: 24px;
+  height: 30px;
   box-sizing: border-box;
-  padding: 0 8px;
+  padding: 0 10px;
+  font-size: 12.5px;
   background: var(--field);
   color: var(--text-0);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 5px;
 }
 .url-form input[readonly] { color: var(--text-1); }
+
+.status-cluster { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; font-size: 10px; }
 .badge-error {
   color: var(--error);
   border: 1px solid var(--error);
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 2px 6px;
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
-.pixel-exact { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-/* The checked state would otherwise take the OS accent colour. */
-.toolbar input[type='checkbox'] { accent-color: var(--text-0); }
+/* An update is neither a warning nor an error, so it carries no colour. */
+.update-button {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
 
-/* Focus is a 1px inset neutral ring (the style spec's "weight and a 1px
-   inset ring"), never Chromium's accent-coloured outline. Pointer focus on
-   buttons and selects shows nothing; keyboard focus (and any focus in a
-   text field) shows the ring. */
-.toolbar :is(button, select, input):focus { outline: none; }
-.toolbar :is(button, select, input):focus-visible {
+/* Our surface, the platform's popup: the real select sits transparent on
+   top, keeping the native menu, keyboard handling and Playwright's
+   `selectOption` working unchanged. */
+.select-shell {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 26px 0 9px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  background: var(--chrome-2);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.select-shell select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+.select-shell .select-chevron {
+  position: absolute;
+  right: 7px;
+  display: flex;
+  color: var(--text-1);
+  pointer-events: none;
+}
+
+/* Segmented groups. Pressed is a fill step and weight, never hue. */
+.segmented {
+  flex: 0 0 auto;
+  display: inline-flex;
+  height: 30px;
+  /* A `div`, unlike a `button`, does not get the UA's border-box: without
+     this the 1px border makes the group 32px and it sits 1px proud of every
+     other 30px control in the row. */
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.segmented button {
+  height: 100%;
+  padding: 0 11px;
+  font-size: 11.5px;
+  background: var(--chrome-2);
+  color: var(--text-1);
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  cursor: pointer;
+}
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
+
+/* Right-aligned deliberately: the native pane is an OS-level WebContentsView
+   that covers renderer paint, so a menu reaching the left half of the window
+   would be invisible. 200px against a 900px minWidth always fits the target
+   pane. */
+.overflow { position: relative; flex: 0 0 auto; }
+.overflow-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  width: 200px;
+  padding: 5px 0;
+  font-size: 11.5px;
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 11px;
+  text-align: left;
+  background: none;
+  color: var(--text-0);
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+.menu-row:hover { background: var(--chrome-3); }
+.menu-sep { height: 1px; margin: 5px 0; background: var(--line); }
+.overflow-menu input[type='checkbox'] { accent-color: var(--text-0); }
+
+/* Focus is a 1px inset neutral ring, never Chromium's accent outline. */
+.chrome :is(button, select, input):focus { outline: none; }
+.chrome :is(button, select, input):focus-visible {
   outline: 1px solid var(--text-1);
   outline-offset: -1px;
 }
+/* The real select is transparent, so its ring must land on the shell. */
+.select-shell:has(select:focus-visible) { outline: 1px solid var(--text-1); outline-offset: -1px; }
 
 .panes { flex: 1 1 auto; display: flex; min-height: 0; }
 .pane {
@@ -151,44 +273,25 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .surround-control button[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--text-0); }
 .surround-swatch { display: block; width: 12px; height: 12px; margin: 0 auto; }
 
-/* Same segmented treatment as the surround control: weight, never hue. */
-.panes-control { display: flex; border: 1px solid var(--line); border-radius: 4px; }
-.panes-control button {
-  width: auto;
-  padding: 0 8px;
-  border: 0;
-  border-right: 1px solid var(--line);
-  border-radius: 0;
-  white-space: nowrap;
-}
-.panes-control button:last-child { border-right: 0; }
-.panes-control button[aria-pressed='true'] { border-color: var(--text-0); background: var(--chrome-1); }
-
 /* Nothing sits to the target pane's left in solo view, so the divider goes. */
 .panes[data-panes='target'] .target-pane { border-left: 0; }
 
 /* Numbers never jitter as a slider moves. */
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
-/* An open drawer's button: weight and a 1px border, not hue. */
-.toolbar :is(.toggle-panel, .toggle-settings, .agent-toggle)[aria-pressed='true'] {
-  border-color: var(--text-0);
-  background: var(--chrome-1);
-}
-
-/* Agent control: same neutral chrome as every other toggle; the activity
-   badge is text-weight only — an agent driving the window is a status, not
-   an alert. */
-.toolbar .agent-toggle { width: auto; padding: 0 8px; white-space: nowrap; }
+/* Agent control opens a loopback server, so the chip persists while it is
+   enabled; recent activity is a brighter text weight, not a colour. */
 .agent-activity {
+  flex: 0 0 auto;
   color: var(--text-1);
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 11px;
-  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
+.agent-activity.active { color: var(--text-0); border-color: var(--text-0); }
 
 /* Drawers sit beside the panes, never over them: the native WebContentsView is
    an OS-level overlay and would cover anything painted on top of it. */
@@ -283,7 +386,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .strip button:focus { outline: none; }
 .strip button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
-.toolbar .close-image { width: auto; padding: 0 8px; }
 /* `safe`: a file wider than the pane scrolls from its left edge instead of
    losing it off-screen. */
 .image-pane .pane-body { display: flex; align-items: flex-start; justify-content: safe center; }
@@ -358,25 +460,10 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .stall button:focus { outline: none; }
 .stall button:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
 
-/* v1.1 fit & pan. The 1:1/Fit segmented control follows the surround
-   control's grammar: active state is weight and an inset ring, never hue. */
-.view-control { display: flex; border: 1px solid var(--line); border-radius: 4px; }
-.view-control button {
-  width: auto;
-  height: 22px;
-  padding: 0 8px;
-  border: 0;
-  border-right: 1px solid var(--line);
-  border-radius: 0;
-  background: var(--chrome-2);
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.view-control button:last-child { border-right: 0; }
-.view-control button[aria-pressed='true'] {
-  box-shadow: inset 0 0 0 1px var(--text-0);
-  font-weight: 600;
-}
+/* v1.1 fit & pan. The 1:1/Fit control is a `Segmented`, so `.segmented` is
+   the whole of its styling — the old `.view-control button` rules lived here,
+   and being (0,1,1) and later in the file they beat `.segmented button` and
+   split the two groups apart. Nothing about 1:1/Fit is control-specific. */
 
 /* The overview invites the jump-to-1:1 click; the pan chords (middle drag,
    Option+drag) show the grab affordances. Cursors only — no overlay may sit
@@ -398,18 +485,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .browser-notice p { margin: 0.75rem 0 0; color: var(--text-1); }
 .browser-notice code { font-family: var(--mono); }
 
-/* An update is neither a warning nor an error, so it carries no colour: the
-   only chromatic pixels in this chrome stay reserved for real attention. */
-/* `.toolbar button` is (0,1,1) and pins every button to a 26px square, so this
-   needs two classes to outrank it — a bare `.update-button` renders as "v0.". */
-.toolbar .update-button {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  width: auto;
-  flex: 0 0 auto;
-  padding: 0 8px;
-}
 .version-block { margin: 8px 0; }
 .version-row {
   display: flex;
