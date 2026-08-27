@@ -23,7 +23,9 @@ export interface SelectProps {
 export function Select({ className, value, label, ariaLabel, onChange, children }: SelectProps) {
   return (
     <div className="select-shell">
-      <span className="select-label">{label}</span>
+      <span className="select-label" aria-hidden="true">
+        {label}
+      </span>
       <span className="select-chevron">
         <Icon name="chevron" size={14} />
       </span>

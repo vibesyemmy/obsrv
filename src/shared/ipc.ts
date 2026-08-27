@@ -18,6 +18,7 @@ export const IPC = {
   hostChanged: 'obsrv:host-changed',
   targetLoading: 'obsrv:target-loading',
   targetNavigating: 'obsrv:target-navigating',
+  nativeFocused: 'obsrv:native-focused',
   syncScroll: 'obsrv:sync-scroll',
   applyScroll: 'obsrv:apply-scroll',
   scrollResult: 'obsrv:scroll-result',

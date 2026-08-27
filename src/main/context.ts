@@ -11,4 +11,10 @@ export interface AppContext {
   target: TargetSource
   bus: FrameBus
   sync: SyncBus
+  /**
+   * Main's `TOOLBAR_H`, carried on the context so a test can read the real
+   * value instead of restating it. `.chrome` must render exactly this tall or
+   * main's cold-start layout puts the native pane in the wrong place.
+   */
+  toolbarH: number
 }

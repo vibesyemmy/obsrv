@@ -77,7 +77,9 @@ than one 82px slab.
 
 ### Overflow menu (`⋮`)
 
-Pixel-exact · Panel controls · Settings · Agent control · Check for updates.
+Pixel-exact · Panel controls · Settings · Agent control. (Checking for updates is
+not a menu item — Settings already carries a check-now button, and the toolbar
+surfaces an available update on its own.)
 
 Rare controls only. Panel controls and Settings still open the existing drawers; the
 menu item shows their open state.

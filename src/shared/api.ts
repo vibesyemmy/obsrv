@@ -47,6 +47,14 @@ export interface ObsrvApi {
    * the stall watchdog keys off this, the toolbar spinner off that.
    */
   onTargetNavigating(cb: () => void): () => void
+  /**
+   * The native pane's `WebContentsView` took focus — which is what a click on
+   * the live page looks like from the renderer's side, since an OS-level view
+   * delivers no DOM event to this document at all. A window `blur` covers the
+   * same click while the window holds OS focus; this covers it when it does
+   * not, so a popover has a dismissal signal either way.
+   */
+  onNativeFocused(cb: () => void): () => void
   /** File → Open Image… in the app menu; the renderer opens its own picker. */
   onOpenImage(cb: () => void): () => void
   /** View → Open Location (Cmd+L) in the app menu; the renderer focuses its URL bar. */

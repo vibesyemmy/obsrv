@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { attachFrameBus } from './frameBus'
-import { registerIpc } from './ipc'
+import { registerIpc, TOOLBAR_H } from './ipc'
 import { installMenu } from './menu'
 import { NativePane } from './nativePane'
 import { attachSyncBus } from './syncBus'
@@ -26,6 +26,14 @@ function boot(): void {
     },
   })
 
+  // A click on the native pane is invisible to the renderer: the view is an
+  // OS-level overlay, so no DOM event reaches the renderer's document and — in
+  // an unfocused window — not even a `blur`. Main can see it, so main says so.
+  // The renderer's overflow menu uses this to dismiss itself.
+  native.webContents.on('focus', () => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.nativeFocused)
+  })
+
   const target = new TargetSource()
   target.on('load-error', err => {
     if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
@@ -43,7 +51,7 @@ function boot(): void {
   const sync = attachSyncBus(native, target, url => {
     if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
   })
-  const ctx: AppContext = { win, native, target, bus, sync }
+  const ctx: AppContext = { win, native, target, bus, sync, toolbarH: TOOLBAR_H }
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.

@@ -233,7 +233,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
               <button
                 className="menu-row toggle-panel"
                 type="button"
-                role="menuitem"
                 aria-pressed={drawer === 'panel'}
                 onClick={() => {
                   onTogglePanel()
@@ -246,7 +245,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
               <button
                 className="menu-row toggle-settings"
                 type="button"
-                role="menuitem"
                 aria-pressed={drawer === 'settings'}
                 onClick={() => {
                   onToggleSettings()
