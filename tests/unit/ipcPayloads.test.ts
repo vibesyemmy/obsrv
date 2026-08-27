@@ -135,11 +135,15 @@ describe('parseSettings', () => {
 })
 
 describe('parseUiState', () => {
-  const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', mode: 'url' }
+  const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url' }
   /** Both rects default to null before the renderer has measured. */
   const unmeasured = { targetBounds: null, canvasBounds: null }
   it('copies exactly the known keys; missing targetBounds means null (pre-mount)', () => {
     expect(parseUiState({ ...good, extra: 1 })).toEqual({ ...good, ...unmeasured })
+  })
+  it('carries a solo-target report, and defaults panes when the field is absent', () => {
+    expect(parseUiState({ ...good, panes: 'target' })?.panes).toBe('target')
+    expect(parseUiState({ ...good, panes: undefined })?.panes).toBe('both')
   })
   it('carries ids main does not know (the report describes renderer state)', () => {
     expect(parseUiState({ ...good, presetId: 'custom' })).toEqual({ ...good, presetId: 'custom', ...unmeasured })
@@ -165,6 +169,7 @@ describe('parseUiState', () => {
     ['numeric profileId', { ...good, profileId: 7 }],
     ['bad viewMode', { ...good, viewMode: 'fill' }],
     ['bad mode', { ...good, mode: 'video' }],
+    ['bad panes', { ...good, panes: 'native' }],
     ['missing mode', { presetId: 'a', profileId: 'b', viewMode: '1:1' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseUiState(raw)).toBeNull()

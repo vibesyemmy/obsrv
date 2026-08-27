@@ -12,6 +12,7 @@ import {
   presetApplyError,
   profileApplyError,
   tokenEqual,
+  panesApplyError,
   viewModeApplyError,
   type AgentApplyPatch,
   type AgentClick,
@@ -218,6 +219,13 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const mode = payload.mode as '1:1' | 'fit'
         return this.applyAndConfirm({ viewMode: mode }, s => s.viewMode === mode)
+      }
+
+      case 'setPanes': {
+        const err = panesApplyError(payload.panes)
+        if (err) return reply(400, { error: err })
+        const panes = payload.panes as 'both' | 'target'
+        return this.applyAndConfirm({ panes }, s => s.panes === panes)
       }
 
       case 'captureVisible': {

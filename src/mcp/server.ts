@@ -208,6 +208,7 @@ const snapOutputShape = {
   presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
+  panes: z.string().optional().describe("Live only: 'both' (native pane beside the target) or 'target' (the target render has the whole window)."),
   width: z
     .number()
     .optional()
@@ -309,6 +310,12 @@ const driveInputShape = {
   preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
+  panes: z
+    .enum(['both', 'target'])
+    .optional()
+    .describe(
+      "Show both panes, or give the target render the whole window ('target'). Solo target is usually what you want before a capture.",
+    ),
   pixelExact: z.boolean().optional().describe("Toggle the toolbar's pixel-exact checkbox (pins the magnification to the host scale)."),
   focus: z.boolean().optional().describe('true: bring the Obsrv window to the front first, so the user sees what follows.'),
   reload: z.boolean().optional().describe('true: reload both panes (the same action as the toolbar reload).'),
@@ -376,6 +383,7 @@ const driveOutputShape = {
   presetId: z.string(),
   profileId: z.string(),
   viewMode: z.string(),
+  panes: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
   scrolled: z
     .object({ x: z.number(), y: z.number() })
@@ -559,6 +567,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     presetId: status.presetId,
     profileId: status.profileId,
     viewMode: status.viewMode,
+    panes: status.panes,
     width,
     height,
     settled,
@@ -718,7 +727,7 @@ server.registerTool(
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → profile → viewMode → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → profile → viewMode → panes → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
@@ -744,6 +753,7 @@ server.registerTool(
     preset?: string
     profile?: string
     viewMode?: '1:1' | 'fit'
+    panes?: 'both' | 'target'
     pixelExact?: boolean
     focus?: boolean
     reload?: boolean
@@ -772,6 +782,9 @@ server.registerTool(
       if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
       if (input.viewMode !== undefined) {
         await controlCall(live.info, 'setViewMode', { mode: input.viewMode }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.panes !== undefined) {
+        await controlCall(live.info, 'setPanes', { panes: input.panes }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.pixelExact !== undefined) {
         await controlCall(live.info, 'setPixelExact', { on: input.pixelExact }, LIVE_APPLY_TIMEOUT_MS)

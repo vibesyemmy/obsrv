@@ -40,11 +40,15 @@ export interface ControlInfo {
 /** How the target pane shows the render — mirrors the renderer store's ViewMode. */
 export type AgentViewMode = '1:1' | 'fit'
 
+/** Whether the native pane shares the window — mirrors the renderer store's Panes. */
+export type AgentPanes = 'both' | 'target'
+
 /** The renderer-owned UI state main mirrors for the control server's `status`. */
 export interface AgentUiState {
   presetId: string
   profileId: string
   viewMode: AgentViewMode
+  panes: AgentPanes
   mode: 'url' | 'image'
 }
 
@@ -97,6 +101,7 @@ export interface AgentApplyPatch {
   presetId?: string
   profileId?: string
   viewMode?: AgentViewMode
+  panes?: AgentPanes
   pixelExact?: boolean
   /** Centre this target pixel in the pane's 1:1 view (fit jumps to 1:1 there). */
   panTo?: { x: number; y: number }
@@ -110,6 +115,7 @@ export const CONTROL_COMMANDS = [
   'setPreset',
   'setProfile',
   'setViewMode',
+  'setPanes',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
   'scroll',
@@ -223,6 +229,10 @@ export function viewModeApplyError(v: unknown): string | null {
   return v === '1:1' || v === 'fit' ? null : `setViewMode payload must be { mode: '1:1' | 'fit' }`
 }
 
+export function panesApplyError(v: unknown): string | null {
+  return v === 'both' || v === 'target' ? null : `setPanes payload must be { panes: 'both' | 'target' }`
+}
+
 export function pixelExactApplyError(v: unknown): string | null {
   return typeof v === 'boolean' ? null : 'setPixelExact payload must be { on: boolean }'
 }
@@ -287,5 +297,10 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (typeof presetId !== 'string' || typeof profileId !== 'string') return null
   if (viewMode !== '1:1' && viewMode !== 'fit') return null
   if (mode !== 'url' && mode !== 'image') return null
-  return { version, url, presetId, profileId, viewMode, mode }
+  // An app older than this field is common — the MCP server ships on npm and
+  // the app ships as a DMG, so they update independently. Absent defaults;
+  // present-but-wrong is still a malformed status.
+  const panes = raw.panes ?? 'both'
+  if (panes !== 'both' && panes !== 'target') return null
+  return { version, url, presetId, profileId, viewMode, panes, mode }
 }

@@ -459,6 +459,29 @@ test('captureTarget returns a PNG of just the target pane', async () => {
   expect(ihdrW).toBeLessThan(wholePng.readUInt32BE(16))
 })
 
+test('setPanes gives the target the window and reports it in status', async () => {
+  const applied = await call('setPanes', { panes: 'target' })
+  expect(applied.status).toBe(200)
+  expect(applied.body).toMatchObject({ ok: true, applied: true, panes: 'target' })
+  // The native pane is really gone from the layout, not merely reported gone.
+  await expect(page.locator('.native-slot')).toHaveCount(0)
+  // And a plain status agrees — this is the state an agent reads before a capture.
+  expect((await call('status')).body).toMatchObject({ ok: true, panes: 'target' })
+
+  const back = await call('setPanes', { panes: 'both' })
+  expect(back.status).toBe(200)
+  expect(back.body).toMatchObject({ ok: true, applied: true, panes: 'both' })
+  await expect(page.locator('.native-slot')).toHaveCount(1)
+})
+
+test('setPanes refuses an unknown value', async () => {
+  const bad = await call('setPanes', { panes: 'native' })
+  expect(bad.status).toBe(400)
+  expect(String(bad.body.error)).toContain('setPanes payload')
+  // Refused, not half-applied: both panes are still up.
+  await expect(page.locator('.native-slot')).toHaveCount(1)
+})
+
 test('toggling agent control off stops the server and removes the discovery file', async () => {
   // The real user flow: the toolbar toggle persists agentControl: false and
   // main stops the server.

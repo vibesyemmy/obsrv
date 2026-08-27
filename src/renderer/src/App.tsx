@@ -135,8 +135,8 @@ export function App() {
   // Main mirrors this for the agent-control server's `status`; the first run
   // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
   useEffect(() => {
-    window.obsrv.reportUiState({ presetId, profileId, viewMode, mode, targetBounds, canvasBounds })
-  }, [presetId, profileId, viewMode, mode, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds })
+  }, [presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -149,6 +149,7 @@ export function App() {
       if (patch.presetId !== undefined) s.setPreset(patch.presetId)
       if (patch.profileId !== undefined) s.setProfile(patch.profileId)
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
+      if (patch.panes !== undefined) s.setPanes(patch.panes)
       if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)
       if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
       if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)

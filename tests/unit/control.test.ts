@@ -11,6 +11,7 @@ import {
   parseClick,
   parseControlFile,
   parseControlStatus,
+  panesApplyError,
   parseHighlight,
   pixelExactApplyError,
   presetApplyError,
@@ -85,7 +86,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the sixteen commands', () => {
+  it('knows exactly the seventeen commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -98,6 +99,7 @@ describe('command validation', () => {
       'panTo',
       'reload',
       'scroll',
+      'setPanes',
       'setPixelExact',
       'setPreset',
       'setProfile',
@@ -129,6 +131,13 @@ describe('command validation', () => {
     expect(viewModeApplyError('fit')).toBeNull()
     expect(viewModeApplyError('fill')).toMatch(/1:1/)
     expect(viewModeApplyError(undefined)).toMatch(/1:1/)
+  })
+
+  it('panesApplyError: exactly both and target', () => {
+    expect(panesApplyError('both')).toBeNull()
+    expect(panesApplyError('target')).toBeNull()
+    expect(panesApplyError('native')).toMatch(/setPanes payload/)
+    expect(panesApplyError(undefined)).toMatch(/setPanes payload/)
   })
 
   it('pixelExactApplyError: exactly the two booleans', () => {
@@ -221,9 +230,18 @@ describe('parseHighlight', () => {
 })
 
 describe('parseControlStatus', () => {
-  const good = { version: '0.3.2', url: 'https://a.test/', presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+  const good = { version: '0.3.2', url: 'https://a.test/', presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url', panes: 'both' }
   it('accepts a full status', () => {
     expect(parseControlStatus(good)).toEqual(good)
+  })
+  it('reads panes when present', () => {
+    expect(parseControlStatus({ ...good, panes: 'target' })?.panes).toBe('target')
+  })
+  // Version skew is real: the MCP server is npm-installed and the app is a
+  // DMG, so a new server routinely talks to an older app. An absent field
+  // must default, never fail the whole status.
+  it('defaults panes to both when an older app omits it', () => {
+    expect(parseControlStatus({ ...good, panes: undefined })?.panes).toBe('both')
   })
   it.each([
     ['null', null],
@@ -231,6 +249,7 @@ describe('parseControlStatus', () => {
     ['bad viewMode', { ...good, viewMode: 'fill' }],
     ['bad mode', { ...good, mode: 'video' }],
     ['numeric version', { ...good, version: 3 }],
+    ['malformed panes', { ...good, panes: 'native' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseControlStatus(raw)).toBeNull()
   })
