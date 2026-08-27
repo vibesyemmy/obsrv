@@ -523,8 +523,10 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    and being (0,1,1) and later in the file they beat `.segmented button` and
    split the two groups apart. Nothing about 1:1/Fit is control-specific. */
 
-/* The overview invites the jump-to-1:1 click; the pan chords (middle drag,
-   Option+drag) show the grab affordances. Cursors only — no overlay may sit
+/* Option is what a view gesture needs, so Option is what the cursor answers:
+   the jump-to-1:1 zoom in fit, the grab affordances for the pan chords
+   (middle drag, Option+drag) at 1:1. Unmodified, both views are interactive
+   and the page's own cursors show through. Cursors only — no overlay may sit
    on the pixels under inspection. */
 .target-canvas.fit { cursor: zoom-in; }
 .target-canvas.pan-ready { cursor: grab; }

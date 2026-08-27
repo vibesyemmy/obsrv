@@ -76,8 +76,9 @@ before it's built.
 The target pane opens at 1:1, which usually overflows the pane: pan with a
 middle-button drag, Option+drag or Option+wheel, or switch the toolbar's
 `1:1 / Fit` control to a fit-to-pane overview (smoothly minified, so not
-pixel-exact — the footer says so) and click anywhere in it to jump back to 1:1
-at that spot.
+pixel-exact — the footer says so). Fit is fully interactive: clicks, drags, the
+wheel and the keyboard all reach the page, and **Option+click** jumps back to
+1:1 with the clicked spot centred.
 
 The `Both / Target` control beside it hides the native pane so the target render
 takes the whole window — useful for a small mobile preset that would otherwise

@@ -6,6 +6,7 @@ import { launchApp, rendererWindow } from './launch'
 
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
+const KEYS = pathToFileURL(resolve(__dirname, '../fixtures/keys.html')).href
 
 /** The default preset's viewport (1080p 24"). */
 const VP = { width: 1920, height: 1080 }
@@ -127,7 +128,7 @@ const settledFitBoxes = async (oneToOne: number): Promise<Awaited<ReturnType<typ
   return b
 }
 
-test('a click in fit jumps to 1:1 with the clicked target pixel centred', async () => {
+test('an Option+click in fit jumps to 1:1 with the clicked target pixel centred', async () => {
   await load(TALL)
   await setView('1:1')
   const at1x = await boxes()
@@ -158,7 +159,10 @@ test('a click in fit jumps to 1:1 with the clicked target pixel centred', async 
     VP.height,
   )
 
+  // Option, not a plain click: a plain click belongs to the page now.
+  await page.keyboard.down('Alt')
   await page.mouse.click(px, py)
+  await page.keyboard.up('Alt')
   await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
   await expect
     .poll(async () => Math.abs((await paneScroll()).left - expected.left))
@@ -193,19 +197,71 @@ test('in fit, the wheel still browses the page', async () => {
   await expect.poll(() => inTarget('scrollY')).toBeGreaterThan(0)
 })
 
-test('in fit, a click switches views without reaching the page', async () => {
+test('in fit, a plain click reaches the page and leaves the view alone', async () => {
   await load(BUTTON)
   await expect.poll(() => inTarget('document.title')).toBe('ready')
   await setView('fit')
 
   const b = await boxes()
   await page.mouse.click(b.canvas.x + b.canvas.width / 2, b.canvas.y + b.canvas.height / 2)
-  // The click's only effect is the view switch…
+  // The viewport-sized button under the pointer is pressed: the click was
+  // translated through fit's own magnification and forwarded to the page.
+  await expect.poll(() => inTarget('document.title')).toBe('clicked')
+  // And the view did not move: the jump is Option's job now.
+  await expect(page.locator('.view-fit')).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('in fit, the keyboard reaches the page too', async () => {
+  await load(KEYS)
+  await expect.poll(() => inTarget('document.title')).toBe('ready')
+  await setView('fit')
+
+  // The click both focuses the canvas in the shell and lands in the page, so
+  // the keystroke that follows has somewhere to go.
+  const b = await boxes()
+  await page.mouse.click(b.canvas.x + b.canvas.width / 2, b.canvas.y + b.canvas.height / 2)
+  await page.keyboard.press('k')
+  await expect.poll(() => inTarget('document.title')).toBe('key:k')
+})
+
+test('in fit, an Option+click switches views without reaching the page', async () => {
+  await load(BUTTON)
+  await expect.poll(() => inTarget('document.title')).toBe('ready')
+  await setView('fit')
+
+  const b = await boxes()
+  await page.keyboard.down('Alt')
+  await page.mouse.click(b.canvas.x + b.canvas.width / 2, b.canvas.y + b.canvas.height / 2)
+  await page.keyboard.up('Alt')
+  // The Option+click's only effect is the view switch…
   await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
   // …never the viewport-sized button under it. Negative case: give a
   // forwarded click time to land before reading the title.
   await page.waitForTimeout(300)
   expect(await inTarget('document.title')).toBe('ready')
+})
+
+test('the cursor answers Option, not the view', async () => {
+  await load(TALL)
+  const cursor = () =>
+    page.evaluate(() => getComputedStyle(document.querySelector('.target-pane canvas')!).cursor)
+
+  // Fit rests as a plain pointer now — the pane is interactive, so the page's
+  // own cursors show through — and offers the jump only while Option is down.
+  await setView('fit')
+  expect(await cursor()).not.toBe('zoom-in')
+  await page.keyboard.down('Alt')
+  await expect.poll(cursor).toBe('zoom-in')
+  await page.keyboard.up('Alt')
+  await expect.poll(cursor).not.toBe('zoom-in')
+
+  // At 1:1 the same modifier offers the pan instead.
+  await setView('1:1')
+  expect(await cursor()).not.toBe('grab')
+  await page.keyboard.down('Alt')
+  await expect.poll(cursor).toBe('grab')
+  await page.keyboard.up('Alt')
+  await expect.poll(cursor).not.toBe('grab')
 })
 
 test('in 1:1, Alt+wheel pans the pane and leaves the page alone', async () => {

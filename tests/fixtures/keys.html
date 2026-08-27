@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ready</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* Viewport-filling, like button.html, so any forwarded click lands in it. */
+      p { margin: 0; width: 100vw; height: 100vh; font-size: 48px; }
+    </style>
+  </head>
+  <body>
+    <p>type</p>
+    <script>
+      // The last key the page actually received, read through `document.title`
+      // the way button.html reports a click.
+      addEventListener('keydown', e => {
+        document.title = 'key:' + e.key
+      })
+    </script>
+  </body>
+</html>

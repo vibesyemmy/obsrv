@@ -241,10 +241,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // target's own button state is what decides when the drag ends.
     const onWindowUp = (e: MouseEvent): void => {
       if (useStore.getState().mode !== 'url') return
-      // Same forwarding rules as `send`: fit mode and the pan chords never
-      // forward, and Option only suppresses a release that is not completing
+      // Same forwarding rules as `send`: both views forward, the pan chords
+      // never do, and Option only suppresses a release that is not completing
       // a forwarded drag.
-      if (useStore.getState().viewMode !== '1:1') return
       if (panRef.current || e.button === 1) return
       if (e.altKey && !forwardDrag.current) return
       if (e.target === canvas) return // the canvas's own onMouseUp sent it
@@ -351,7 +350,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   }
 
   const startPan = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (viewMode !== '1:1') return
+    // Never in fit: the render fits by construction, so there is nothing to
+    // pan — and a pan started on an Option+left press would set `panRef` and
+    // swallow the Option+click jump below.
+    if (fit) return
     if (!(e.button === 1 || (e.button === 0 && e.altKey))) return
     const body = paneBody()
     if (!body) return
@@ -394,8 +396,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     }, 0)
   }
 
-  // A click in fit mode is the way back: 1:1 with the clicked target pixel
-  // centred. The scroll applies in a layout effect, after React has
+  // An Option+click in fit mode is the way back: 1:1 with the clicked target
+  // pixel centred. The scroll applies in a layout effect, after React has
   // committed the 1:1 canvas box — before that, the fit-sized content would
   // clamp both offsets to 0.
   const pendingJump = useRef<{ left: number; top: number } | null>(null)
@@ -410,7 +412,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   }, [viewMode])
 
   const jumpTo1x = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
-    if (viewMode !== 'fit') return
+    // Option+click, never a plain one. Fit forwards input to the page now, so
+    // a plain click is the page's; one press cannot both act on the page and
+    // change the view. Option is already this pane's view-manipulation
+    // modifier (Option+drag and Option+wheel pan at 1:1) and `send` below
+    // drops Option-modified events, so the two gestures cannot collide.
+    if (!fit || !e.altKey) return
     const r = e.currentTarget.getBoundingClientRect()
     pendingJump.current = jumpScroll(
       e.clientX - r.left,
@@ -471,11 +478,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     (type: 'mouseDown' | 'mouseUp' | 'mouseMove') =>
     (e: ReactMouseEvent<HTMLCanvasElement>): void => {
       if (mode !== 'url') return
-      // Fit mode and the pan chords own the pointer: nothing forwards from
-      // the overview, while a pan is live, or for the middle button (the pan
-      // gesture's own press and release included). Option suppresses new
-      // gestures and idle hovers only — see `forwardDrag`.
-      if (viewMode !== '1:1' || panRef.current || e.button === 1) return
+      // Both views forward: fit is interactive, at its own magnification,
+      // which the `scale` below already carries. The pan chords still own the
+      // pointer — nothing forwards while a pan is live, or for the middle
+      // button (the pan gesture's own press and release included). Option
+      // suppresses new gestures and idle hovers only — see `forwardDrag`.
+      if (panRef.current || e.button === 1) return
       if (e.altKey && !forwardDrag.current) return
       // The canvas shows device pixels at `scale` host px each; the target
       // page takes CSS coordinates, `dsf` device pixels big.
@@ -519,7 +527,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       <div className="target-wrap">
         <canvas
           ref={canvasRef}
-          className={`target-canvas${fit ? ' fit' : panning ? ' panning' : altHeld ? ' pan-ready' : ''}`}
+          // Resting state carries no class in either view: the pane is
+          // interactive, so the page's own cursors show through. Option is
+          // what reveals a view gesture — the jump in fit, the pan at 1:1.
+          className={`target-canvas${panning ? ' panning' : altHeld ? (fit ? ' fit' : ' pan-ready') : ''}`}
           tabIndex={0}
           style={{ width: `${cssW}px`, height: `${cssH}px` }}
           onClick={jumpTo1x}
@@ -534,14 +545,15 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
           // a release that lands outside the canvas, and a drag that crosses
           // the edge and comes back stays a drag.
           onKeyDown={e => {
-            // Fit is a look, not a session: keys never forward from it.
-            if (mode !== 'url' || viewMode !== '1:1') return
+            // Keys forward from either view: a field focused by a forwarded
+            // click in fit must be typeable, or fit would be half a session.
+            if (mode !== 'url') return
             // Leave shortcuts to the OS and the app menu.
             if (!e.metaKey && !e.ctrlKey) e.preventDefault()
             for (const ev of keyDownEvents(e)) window.obsrv.sendInput(ev)
           }}
           onKeyUp={e => {
-            if (mode !== 'url' || viewMode !== '1:1') return
+            if (mode !== 'url') return
             const ev = keyUpEvent(e)
             if (ev) window.obsrv.sendInput(ev)
           }}
