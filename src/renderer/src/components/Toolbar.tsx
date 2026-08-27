@@ -10,6 +10,10 @@ import {
   type Surround,
   type ViewMode,
 } from '../state/store'
+import { Icon } from './Icon'
+import { OverflowMenu } from './OverflowMenu'
+import { Segmented } from './Segmented'
+import { Select } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
 const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
@@ -128,194 +132,225 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
     setDraft(applied)
   }
 
+  // The shell paints the label itself, so it needs the chosen option's text.
+  const presetLabel = SCREEN_PRESETS.find(p => p.id === presetId)?.label ?? 'Custom'
+  const profileLabel = PANEL_PROFILES.find(p => p.id === profileId)?.label ?? profileId
+
   return (
-    <div className="toolbar">
-      <button type="button" title="Back" onClick={() => window.obsrv.back()}>
-        ‹
-      </button>
-      <button type="button" title="Forward" onClick={() => window.obsrv.forward()}>
-        ›
-      </button>
-      <button type="button" title="Reload" onClick={() => window.obsrv.reload()}>
-        ⟳
-      </button>
-
-      <form className="url-form" onSubmit={submit}>
-        <input
-          ref={inputRef}
-          value={draft}
-          readOnly={readOnly}
-          spellCheck={false}
-          placeholder="Enter a URL, or drop a PNG"
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Escape') setDraft(barText)
-          }}
-        />
-      </form>
-      {mode === 'image' && (
+    <div className="chrome">
+      <div className="chrome-row chrome-browse">
         <button
-          className="close-image"
+          className="icon-button"
           type="button"
-          title="Back to the live page"
-          aria-label="Back to the live page"
-          onClick={() => setMode('url')}
+          title="Back"
+          aria-label="Back"
+          onClick={() => window.obsrv.back()}
         >
-          ✕
+          <Icon name="back" />
         </button>
-      )}
-
-      {loading && <span className="muted">loading…</span>}
-      {error && (
-        <span className="badge-error" title={error.description}>
-          {error.code}
-        </span>
-      )}
-
-      <select
-        className="preset-select"
-        value={presetId}
-        onChange={e => setPreset(e.target.value)}
-      >
-        <optgroup label="Laptops">
-          {SCREEN_PRESETS.filter(p => p.group === 'laptop').map(p => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Desktops">
-          {SCREEN_PRESETS.filter(p => p.group === 'desktop').map(p => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Mobile">
-          {SCREEN_PRESETS.filter(p => p.group === 'mobile').map(p => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </optgroup>
-        <option value={CUSTOM_PRESET_ID}>Custom</option>
-      </select>
-
-      {viewport.clamped && (
-        <span className="warn">
-          clamped to {viewport.width}×{viewport.height}
-        </span>
-      )}
-
-      <div className="view-control" role="group" aria-label="Target view">
-        {VIEWS.map(v => (
-          <button
-            key={v.id}
-            type="button"
-            className={v.id === 'fit' ? 'view-fit' : 'view-1x'}
-            title={v.title}
-            aria-pressed={viewMode === v.id}
-            onClick={() => setViewMode(v.id)}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="panes-control" role="group" aria-label="Panes">
-        {PANES.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            className={`panes-${p.id}`}
-            title={p.title}
-            aria-pressed={panes === p.id}
-            onClick={() => setPanes(p.id)}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      <select
-        className="profile-select"
-        value={profileId}
-        onChange={e => setProfile(e.target.value)}
-      >
-        {PANEL_PROFILES.map(p => (
-          <option key={p.id} value={p.id}>
-            {p.label}
-          </option>
-        ))}
-      </select>
-
-      <label className="pixel-exact">
-        <input
-          type="checkbox"
-          checked={pixelExact}
-          onChange={e => setPixelExact(e.target.checked)}
-        />
-        Pixel-exact
-      </label>
-
-      {update?.status === 'available' && update.latest !== undefined && (
         <button
-          className="update-button"
+          className="icon-button"
           type="button"
-          title={`Obsrv ${update.latest} is available — opens the download page`}
-          onClick={() => void window.obsrv.openRelease()}
+          title="Forward"
+          aria-label="Forward"
+          onClick={() => window.obsrv.forward()}
         >
-          v{update.latest} ↓
+          <Icon name="forward" />
         </button>
-      )}
+        <button
+          className="icon-button"
+          type="button"
+          title="Reload"
+          aria-label="Reload"
+          onClick={() => window.obsrv.reload()}
+        >
+          <Icon name="reload" />
+        </button>
 
-      <div className="surround-control" role="group" aria-label="Pane surround">
-        {SURROUNDS.map(s => (
-          <button
-            key={s.id}
-            type="button"
-            title={s.label}
-            aria-label={s.label}
-            aria-pressed={surround === s.id}
-            onClick={() => setSurround(s.id)}
-          >
-            <span className="surround-swatch" style={{ background: s.swatch }} />
-          </button>
-        ))}
+        <form className="url-form" onSubmit={submit}>
+          <input
+            ref={inputRef}
+            value={draft}
+            readOnly={readOnly}
+            spellCheck={false}
+            placeholder="Enter a URL, or drop a PNG"
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') setDraft(barText)
+            }}
+          />
+        </form>
+
+        {/* The only region that grows and shrinks, so appearing status
+            reflows nothing but itself — the old toolbar shoved every
+            control right when a load error arrived. */}
+        <div className="status-cluster">
+          {mode === 'image' && (
+            <button
+              className="icon-button close-image"
+              type="button"
+              title="Back to the live page"
+              aria-label="Back to the live page"
+              onClick={() => setMode('url')}
+            >
+              <Icon name="close" />
+            </button>
+          )}
+          {loading && <span className="muted">loading…</span>}
+          {error && (
+            <span className="badge-error" title={error.description}>
+              {error.code}
+            </span>
+          )}
+          {viewport.clamped && (
+            <span className="warn">
+              clamped to {viewport.width}×{viewport.height}
+            </span>
+          )}
+          {update?.status === 'available' && update.latest !== undefined && (
+            <button
+              className="update-button"
+              type="button"
+              title={`Obsrv ${update.latest} is available — opens the download page`}
+              onClick={() => void window.obsrv.openRelease()}
+            >
+              v{update.latest} ↓
+            </button>
+          )}
+        </div>
+
+        <OverflowMenu>
+          {close => (
+            <>
+              <label className="menu-row pixel-exact">
+                <input
+                  type="checkbox"
+                  checked={pixelExact}
+                  onChange={e => setPixelExact(e.target.checked)}
+                />
+                Pixel-exact
+              </label>
+              <button
+                className="menu-row toggle-panel"
+                type="button"
+                role="menuitem"
+                aria-pressed={drawer === 'panel'}
+                onClick={() => {
+                  onTogglePanel()
+                  close()
+                }}
+              >
+                <Icon name="sliders" />
+                Panel controls
+              </button>
+              <button
+                className="menu-row toggle-settings"
+                type="button"
+                role="menuitem"
+                aria-pressed={drawer === 'settings'}
+                onClick={() => {
+                  onToggleSettings()
+                  close()
+                }}
+              >
+                <Icon name="gear" />
+                Settings
+              </button>
+              <div className="menu-sep" />
+              <label className="menu-row agent-toggle">
+                <input type="checkbox" checked={agentControl} onChange={toggleAgent} />
+                Agent control
+              </label>
+            </>
+          )}
+        </OverflowMenu>
       </div>
 
-      {agentActive && <span className="agent-activity">AGENT</span>}
-      <button
-        className="agent-toggle"
-        type="button"
-        title="Agent control — let a local agent drive this window"
-        aria-label="Agent control"
-        aria-pressed={agentControl}
-        onClick={toggleAgent}
-      >
-        Agent
-      </button>
+      <div className="chrome-row chrome-screen">
+        <Select
+          className="preset-select"
+          value={presetId}
+          label={presetLabel}
+          ariaLabel="Target screen"
+          onChange={setPreset}
+        >
+          <optgroup label="Laptops">
+            {SCREEN_PRESETS.filter(p => p.group === 'laptop').map(p => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Desktops">
+            {SCREEN_PRESETS.filter(p => p.group === 'desktop').map(p => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Mobile">
+            {SCREEN_PRESETS.filter(p => p.group === 'mobile').map(p => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </optgroup>
+          <option value={CUSTOM_PRESET_ID}>Custom</option>
+        </Select>
 
-      <button
-        className="toggle-panel"
-        type="button"
-        title="Panel controls"
-        aria-label="Panel controls"
-        aria-pressed={drawer === 'panel'}
-        onClick={onTogglePanel}
-      >
-        ▦
-      </button>
-      <button
-        className="toggle-settings"
-        type="button"
-        title="Settings"
-        aria-label="Settings"
-        aria-pressed={drawer === 'settings'}
-        onClick={onToggleSettings}
-      >
-        ⚙
-      </button>
+        <Segmented
+          className="view-control"
+          ariaLabel="Target view"
+          value={viewMode}
+          options={VIEWS.map(v => ({ ...v, className: v.id === 'fit' ? 'view-fit' : 'view-1x' }))}
+          onChange={setViewMode}
+        />
+
+        <Segmented
+          className="panes-control"
+          ariaLabel="Panes"
+          value={panes}
+          options={PANES.map(p => ({ ...p, className: `panes-${p.id}` }))}
+          onChange={setPanes}
+        />
+
+        <Select
+          className="profile-select"
+          value={profileId}
+          label={profileLabel}
+          ariaLabel="Panel profile"
+          onChange={setProfile}
+        >
+          {PANEL_PROFILES.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+
+        <div className="surround-control" role="group" aria-label="Pane surround">
+          {SURROUNDS.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              title={s.label}
+              aria-label={s.label}
+              aria-pressed={surround === s.id}
+              onClick={() => setSurround(s.id)}
+            >
+              <span className="surround-swatch" style={{ background: s.swatch }} />
+            </button>
+          ))}
+        </div>
+
+        <div className="chrome-spacer" />
+
+        {/* Agent control opens a loopback server, so it is never silently on:
+            the chip persists while enabled and brightens for ~3s of activity. */}
+        {agentControl && (
+          <span className={`agent-activity${agentActive ? ' active' : ''}`}>AGENT</span>
+        )}
+      </div>
     </div>
   )
 }
