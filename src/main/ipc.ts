@@ -152,14 +152,36 @@ export function registerIpc(ctx: AppContext): void {
     }
   })
 
-  // --- mode -----------------------------------------------------------------
+  // --- native visibility ----------------------------------------------------
+  // Two independent inputs decide whether the native view is on screen: image
+  // mode (the left pane is drawn in the renderer instead) and the panes toggle
+  // (solo target). Each calling `native.setVisible` directly would clobber the
+  // other — leaving image mode would reveal a pane the toggle had hidden — so
+  // both write an input here and the visibility is derived in one place.
+  let modeIsLive = true
+  let panesShowNative = true
+  const applyNativeVisibility = (): void => {
+    native.setVisible(modeIsLive && panesShowNative)
+  }
+
   ipcMain.on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const mode = parseMode(raw)
     if (!mode) return
-    const live = mode === 'url'
-    native.setVisible(live)
-    bus.setEnabled(live)
+    modeIsLive = mode === 'url'
+    applyNativeVisibility()
+    // The sync bus follows the *mode* only. In solo target the native pane is
+    // still loaded and still the navigation master — disabling the bus there
+    // would break the URL bar, back/forward and link clicks in exactly the
+    // view where the target pane is the only thing on screen.
+    bus.setEnabled(modeIsLive)
+  })
+
+  ipcMain.on(IPC.setNativeVisible, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    if (typeof raw !== 'boolean') return
+    panesShowNative = raw
+    applyNativeVisibility()
   })
 
   // --- native pane layout ---------------------------------------------------

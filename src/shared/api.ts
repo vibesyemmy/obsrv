@@ -25,6 +25,12 @@ export interface ObsrvApi {
    */
   setViewport(width: number, height: number, deviceScaleFactor?: number): Promise<{ width: number; height: number }>
   setNativeBounds(rect: Rect): void
+  /**
+   * Whether the native pane is on screen. It is an OS-level overlay, so
+   * unmounting its slot is not enough to hide it. Main combines this with the
+   * mode; the renderer never speaks to the view directly.
+   */
+  setNativeVisible(visible: boolean): void
   setMode(mode: 'url' | 'image'): void
   sendInput(ev: TargetInputEvent): void
   getHostInfo(): Promise<HostInfo>

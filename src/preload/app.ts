@@ -41,6 +41,7 @@ const api: ObsrvApi = {
   setViewport: (width, height, deviceScaleFactor) =>
     ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
+  setNativeVisible: visible => ipcRenderer.send(IPC.setNativeVisible, visible),
   setMode: mode => ipcRenderer.send(IPC.setMode, mode),
   sendInput: ev => ipcRenderer.send(IPC.sendInput, ev),
   getHostInfo: () => ipcRenderer.invoke(IPC.getHostInfo),
