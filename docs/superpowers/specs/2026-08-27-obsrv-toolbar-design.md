@@ -148,9 +148,23 @@ A hidden `WebContentsView` may be background-throttled by Chromium, which would 
 the scroll mirror. Scroll sync is driven by explicit `scrollTo` from a preload rather
 than by rAF, so this is unlikely — but "unlikely" is not "tested".
 
-An e2e test scrolls in solo-target mode and asserts the native pane's offset followed.
-If it fails, the fallback is to keep the view visible but park it beneath the target
-pane's canvas rather than hiding it. The test decides; no guessing.
+**Settled: hiding the view is enough; the fallback was not needed.** The e2e test `a
+scroll in solo target still reaches the hidden native pane` (`tests/e2e/solo-target.spec.ts`)
+switches to solo target, confirms `native.isVisible()` is `false`, scrolls the target
+pane's page to y=1600 in the 5000px `tall.html` fixture, and reads the hidden native
+pane's `window.scrollY` back through its `webContents`. It arrives at exactly 1600 —
+the full offset, not a stale or partial one — and it arrives fast enough that the whole
+test runs in ~150ms, so the mirror is not merely eventually consistent under throttling.
+
+Nothing but `SyncBus` writes that offset: an agent's `scroll` drives both panes directly
+via `scrollBoth`, and it is not used here. The test was verified to have teeth by making
+`SyncBus`'s scroll mirror drop sends bound for the native pane: the native assertion then
+failed with `Received: 0` while the target still reached 1600, so a stalled mirror is
+caught and nothing else masks it.
+
+The fallback — keeping the view visible but parked beneath the target pane's canvas —
+therefore stays unbuilt. `applyNativeVisibility` remains a plain
+`native.setVisible(modeIsLive && panesShowNative)`.
 
 ### Agent surface
 
