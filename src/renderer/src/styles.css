@@ -455,6 +455,27 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    `left: 0` holds while a wide canvas is scrolled horizontally. The fill is a
    neutral grey: only the rule under it is red, so the one chromatic thing on
    screen is the error itself. */
+/* At 1:1 the render usually overflows and the pane is a scroll box, so it
+   starts at the top-left and you pan around it. When it is *smaller* than the
+   pane — a small preset, fit mode, or solo target on a wide window — hugging
+   the corner leaves it stranded against the chrome with dead field to the
+   right. Centre it instead.
+
+   `safe` is what lets one rule serve both cases: it falls back to start
+   alignment the moment the content overflows, so the top-left of an oversized
+   render stays reachable by scrolling. Plain `center` would push it out of
+   reach. The image pane already centres this way. */
+.target-pane .pane-body {
+  display: flex;
+  flex-direction: column;
+  align-items: safe center;
+  justify-content: safe center;
+}
+/* The stall notice spans the pane, not the canvas: it is sticky at `left: 0`
+   and must stay pane-width while a wide canvas scrolls under it, so it opts
+   out of the centring its sibling wants. */
+.target-pane .pane-body > .stall { align-self: stretch; }
+
 /* position: relative anchors the agent highlight to the canvas origin. */
 .target-wrap { min-width: min-content; position: relative; }
 

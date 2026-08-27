@@ -162,3 +162,38 @@ test('a scroll in solo target still reaches the hidden native pane', async () =>
   await page.click('.panes-both')
   await expect.poll(nativeVisible).toBe(true)
 })
+
+// A render smaller than the pane used to hug the top-left corner, stranded
+// against the chrome with dead field to the right. `safe center` must still
+// fall back to start alignment when the render overflows, or the top-left of
+// an oversized one becomes unreachable by scrolling — so both are asserted.
+test('a render smaller than the pane is centred, an oversized one is not', async () => {
+  await page.click('.panes-target')
+
+  const gaps = async () =>
+    page.evaluate(() => {
+      const body = document.querySelector('.target-pane .pane-body') as HTMLElement
+      const canvas = document.querySelector('.target-pane canvas') as HTMLElement
+      const b = body.getBoundingClientRect()
+      const c = canvas.getBoundingClientRect()
+      return {
+        left: Math.round(c.x - b.x),
+        right: Math.round(b.right - c.right),
+        top: Math.round(c.y - b.y),
+        bottom: Math.round(b.bottom - c.bottom),
+      }
+    })
+
+  await page.selectOption('.preset-select', 'android-65')
+  await expect.poll(async () => (await gaps()).left, { timeout: 5000 }).toBeGreaterThan(0)
+  const small = await gaps()
+  expect(Math.abs(small.left - small.right)).toBeLessThanOrEqual(1)
+  expect(Math.abs(small.top - small.bottom)).toBeLessThanOrEqual(1)
+
+  // Wider than the pane: start-aligned, so scrolling still reaches its origin.
+  await page.selectOption('.preset-select', 'laptop-768')
+  await expect.poll(async () => (await gaps()).right, { timeout: 5000 }).toBeLessThan(0)
+  expect((await gaps()).left).toBe(0)
+
+  await page.click('.panes-both')
+})
