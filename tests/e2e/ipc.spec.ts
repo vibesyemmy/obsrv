@@ -113,7 +113,10 @@ test('the renderer takes over native pane layout for good', async () => {
     })
   await expect.poll(slot).toMatchObject({ width: 600 })
   const expected = await slot()
-  expect(expected).not.toEqual({ x: 0, y: 44, width: 600, height: 756 })
+  // Main's real `TOOLBAR_H`, not a copy of it: a fallback rect written from a
+  // stale number would match nothing and this assertion would pass vacuously.
+  const toolbarH: number = await app.evaluate(() => (globalThis as any).__obsrv.toolbarH)
+  expect(expected).not.toEqual({ x: 0, y: toolbarH, width: 600, height: 800 - toolbarH })
   await expect
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds()))
     .toEqual(expected)

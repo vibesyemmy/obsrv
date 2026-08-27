@@ -4,7 +4,10 @@ import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
-const TOOLBAR_H = 44
+// The two `.chrome-row` heights in styles.css, and `TOOLBAR_H` in
+// src/main/ipc.ts. toolbar.spec.ts pins the rendered chrome to main's value;
+// this file only needs the number to bound the pane below it.
+const TOOLBAR_H = 82
 
 let app: ElectronApplication
 

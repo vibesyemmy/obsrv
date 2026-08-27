@@ -54,6 +54,35 @@ test('a click outside the menu closes it', async () => {
   await expect(page.locator('.overflow-menu')).toHaveCount(0)
 })
 
+// The native pane is an OS-level `WebContentsView`: a click on the live page
+// delivers no event to the renderer document at all, so the `mousedown`
+// dismissal never fires and the menu would hang over the target pane until
+// Escape. Focus leaving the renderer is the signal that survives that gap.
+test('a click on the native pane closes the menu', async () => {
+  await page.click('.overflow-button')
+  await expect(page.locator('.overflow-menu')).toHaveCount(1)
+  // What a click on the view does at the focus level, without depending on
+  // where the view happens to sit on screen.
+  await app.evaluate(() => (globalThis as any).__obsrv.native.webContents.focus())
+  await expect(page.locator('.overflow-menu')).toHaveCount(0)
+  // Hand the renderer its focus back so later tests type where they expect to.
+  await page.bringToFront()
+  await page.click('.url-form input')
+})
+
+// The rendered chrome and main's cold-start layout are one number in two
+// places. Main reserves `TOOLBAR_H` for the toolbar before NativeSlot's first
+// report; if `.chrome` renders any other height, the native pane is
+// mispositioned on every cold start and every existing assertion still passes,
+// because they are all inequalities. Read main's real value — a spec that
+// hard-codes 82 on both sides closes nothing.
+test('the chrome renders exactly as tall as main reserves', async () => {
+  const toolbarH: number = await app.evaluate(() => (globalThis as any).__obsrv.toolbarH)
+  expect(toolbarH).toBeGreaterThan(0)
+  const chrome = await page.locator('.chrome').boundingBox()
+  expect(chrome!.height).toBe(toolbarH)
+})
+
 // The native pane is an OS-level overlay that covers renderer paint, so a
 // menu reaching into the left half of the window would be invisible.
 test('the open menu stays over the target pane', async () => {
