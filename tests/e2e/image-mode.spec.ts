@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 
@@ -71,7 +71,10 @@ test('a dropped 2x export is shown at its 1x size', async () => {
   await page.fill('.url-form input', FIXTURE)
   await page.press('.url-form input', 'Enter')
   await expect(page.locator('.url-form input')).toHaveValue(FIXTURE)
-  await page.check('.pixel-exact input')
+  await openOverflow(page)
+  await page.check('.overflow-menu .pixel-exact input')
+  // The label leaves the menu open; the drop below needs the panes uncovered.
+  await page.keyboard.press('Escape')
 
   await drop(page, 400, 200, 'hero@2x.png')
   // The strip names the file and asks for the scale.

@@ -4,7 +4,7 @@ import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 /**
  * Drives the agent-control server over real loopback HTTP against the real
@@ -94,7 +94,10 @@ test('status answers with the app state, and the toolbar shows the AGENT badge',
   // Any authenticated command nudges the renderer's activity indicator.
   await expect(page.locator('.agent-activity')).toBeVisible()
   // The force-enabled server also reads back through settings: the toggle is on.
-  await expect(page.locator('.agent-toggle')).toHaveAttribute('aria-pressed', 'true')
+  await openOverflow(page)
+  await expect(page.locator('.overflow-menu .agent-toggle input')).toBeChecked()
+  // A label leaves the menu open; later tests need the panes uncovered.
+  await page.keyboard.press('Escape')
 })
 
 test('a wrong or missing token is a detail-free 403; unknown commands name the allowed list', async () => {
@@ -485,8 +488,10 @@ test('setPanes refuses an unknown value', async () => {
 test('toggling agent control off stops the server and removes the discovery file', async () => {
   // The real user flow: the toolbar toggle persists agentControl: false and
   // main stops the server.
-  await page.click('.agent-toggle')
-  await expect(page.locator('.agent-toggle')).toHaveAttribute('aria-pressed', 'false')
+  await openOverflow(page)
+  await page.click('.overflow-menu .agent-toggle')
+  await expect(page.locator('.overflow-menu .agent-toggle input')).not.toBeChecked()
+  await page.keyboard.press('Escape')
   await expect.poll(() => existsSync(controlFile)).toBe(false)
   await expect(call('status')).rejects.toThrow(/ECONNREFUSED/)
 })

@@ -1,5 +1,5 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 let app: ElectronApplication
 let page: Page
@@ -17,10 +17,20 @@ const enter = async (selector: string, value: string): Promise<void> => {
 
 /** Opens the named drawer whatever is open now; each test owns its drawer state. */
 const openDrawer = async (which: 'panel' | 'settings'): Promise<void> => {
-  const button = page.locator(`.toggle-${which}`)
-  if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click()
-  await expect(button).toHaveAttribute('aria-pressed', 'true')
+  await openOverflow(page)
+  const button = page.locator(`.overflow-menu .toggle-${which}`)
+  if ((await button.getAttribute('aria-pressed')) !== 'true') {
+    // The row opens the drawer and closes the menu behind itself.
+    await button.click()
+  } else {
+    // Already open: clicking would close it, so only the menu needs dismissing.
+    await page.keyboard.press('Escape')
+  }
   await expect(page.locator('.drawer')).toHaveCount(1)
+  // Both drawers are a bare `.drawer`, so name the one that must be showing —
+  // what the old `aria-pressed` assertion on the toolbar button stood for.
+  const marker = which === 'panel' ? '.nits-slider' : '.host-diagonal'
+  await expect(page.locator(`.drawer ${marker}`)).toHaveCount(1)
 }
 
 test.beforeAll(async () => {
@@ -119,7 +129,7 @@ test('an oversized custom screen clamps and says so in the toolbar', async () =>
   await enter('.custom-width', '6000')
 
   await expect(page.locator('.preset-select')).toHaveValue('custom')
-  await expect(page.locator('.toolbar .warn')).toContainText('clamped to 4096')
+  await expect(page.locator('.chrome .warn')).toContainText('clamped to 4096')
 })
 
 test('a drawer narrows the panes and the native view follows', async () => {
@@ -133,7 +143,8 @@ test('a drawer narrows the panes and the native view follows', async () => {
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds())).toEqual(withDrawer)
 
   // Closing the drawer gives the width back to the panes.
-  await page.click('.toggle-settings')
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-settings')
   await expect(page.locator('.drawer')).toHaveCount(0)
   await expect.poll(async () => (await slot()).width).toBeGreaterThan(withDrawer.width)
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds())).toEqual(await slot())

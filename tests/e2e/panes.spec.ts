@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 
@@ -110,7 +110,9 @@ test('main positions the native view exactly over the slot', async () => {
 test('the canvas is the target viewport magnified by S', async () => {
   // Pixel-exact pins S to the host scale factor, so the maths is checkable
   // without knowing the test machine's physical screen size.
-  await page.check('.pixel-exact input')
+  await openOverflow(page)
+  await page.check('.overflow-menu .pixel-exact input')
+  await page.keyboard.press('Escape')
   await page.selectOption('.preset-select', 'laptop-768')
 
   const dpr = (await canvasSize(page)).dpr
@@ -217,7 +219,7 @@ test('a later successful navigation clears the error badge', async () => {
   // And a history move, which does not go through the URL form at all.
   await app.evaluate(({}, u: string) => (globalThis as any).__obsrv.native.load('https://obsrv-no-such-host.invalid'), '')
   await expect(page.locator('.badge-error')).toBeVisible({ timeout: 15_000 })
-  await page.click('.toolbar button[title="Back"]')
+  await page.click('.chrome-browse .icon-button[title="Back"]')
   await expect(page.locator('.badge-error')).toHaveCount(0)
   await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
 })

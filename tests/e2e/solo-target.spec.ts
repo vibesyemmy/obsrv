@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 /** The 5000px-spacer fixture sync.spec.ts scrolls; its height is fixed so both
  *  panes reach the same offset whatever their widths. */
@@ -70,9 +70,11 @@ test('the native view is repositioned before it is shown again', async () => {
   // the fresh one are the same rectangle and the assertion below is vacuous.
   // The drawer narrows the row, so a view that was never repositioned keeps its
   // wider solo-era bounds and is caught.
-  // NOTE(task-7): `.toggle-panel` moves into an overflow menu. This click needs
-  // `openOverflow(page)` in front of it then — it is load-bearing, not clutter.
-  await page.click('.toggle-panel')
+  // NOTE(task-9): `.toggle-panel` now lives in the overflow menu, so the click
+  // is reached through `openOverflow` — it is load-bearing, not clutter, and it
+  // still narrows the row exactly as before.
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-panel')
 
   await page.click('.panes-both')
   await expect.poll(nativeVisible).toBe(true)
@@ -89,7 +91,8 @@ test('the native view is repositioned before it is shown again', async () => {
   expect(view.y).toBe(slot.y)
 
   // Leave the drawer as it was found, for whatever runs after this.
-  await page.click('.toggle-panel')
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-panel')
 })
 
 /**

@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 /**
  * The update path end to end against a loopback stand-in for the GitHub
@@ -95,9 +95,10 @@ test('the toolbar offers the update only when there is one', async () => {
   reply = { code: 200, body: release('v99.0.0') }
   await check()
   await expect(page.locator('.update-button')).toHaveText('v99.0.0 ↓')
-  // Rendered width, not just DOM text: `.toolbar button` pins every button to
-  // a 26px square, and a bare `.update-button` rule loses to it on specificity
-  // — the text is then correct in the DOM and reads "v99." on screen.
+  // Rendered width, not just DOM text: the 0.7.0 `.toolbar button` rule pinned
+  // every button to a 26px square, and a bare `.update-button` rule lost to it
+  // on specificity — the text was then correct in the DOM and read "v99." on
+  // screen. Measure it, don't read it.
   const box = await page.locator('.update-button').boundingBox()
   expect(box!.width).toBeGreaterThan(60)
 
@@ -112,7 +113,8 @@ test('the toolbar offers the update only when there is one', async () => {
 })
 
 test('the Settings block reports every state', async () => {
-  await page.click('.toggle-settings')
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-settings')
 
   reply = { code: 200, body: release('v99.0.0') }
   await check()
@@ -136,8 +138,11 @@ test('the automatic-check toggle round-trips through main', async () => {
     .toMatchObject({ updateCheck: false })
 
   await page.reload()
-  await expect(page.locator('.toggle-settings')).toBeVisible()
-  await page.click('.toggle-settings')
+  // The drawer rows only exist while the menu is open, so the reloaded shell
+  // announces itself with the button that opens it.
+  await expect(page.locator('.overflow-button')).toBeVisible()
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-settings')
   await expect(page.locator('.update-check-toggle input')).not.toBeChecked()
 
   await page.check('.update-check-toggle input')

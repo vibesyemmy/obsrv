@@ -79,3 +79,14 @@ export async function rendererWindow(app: ElectronApplication): Promise<Page> {
     for (const w of app.windows()) tryPage(w)
   })
 }
+
+/**
+ * Opens the toolbar's overflow menu if it is not already open. Pixel-exact,
+ * the two drawers and the agent toggle live there now, so a spec that clicks
+ * one has to reach it first.
+ */
+export async function openOverflow(page: Page): Promise<void> {
+  if (await page.locator('.overflow-menu').count()) return
+  await page.click('.overflow-button')
+  await page.waitForSelector('.overflow-menu')
+}
