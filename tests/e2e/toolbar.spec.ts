@@ -100,3 +100,21 @@ test('icon buttons are at least 30px', async () => {
   expect(back!.width).toBeGreaterThanOrEqual(30)
   expect(back!.height).toBeGreaterThanOrEqual(30)
 })
+
+// Both CSS defects this branch fixed were invisible to the suite until someone
+// looked at a screenshot. The leading element's right edge is where the label
+// starts, so pinning it catches a checkbox and an icon indenting differently.
+test('every menu row indents its label to the same x', async () => {
+  await page.click('.overflow-button')
+  await page.waitForSelector('.overflow-menu')
+
+  const edges = await page.evaluate(() =>
+    [...document.querySelectorAll('.overflow-menu .menu-row')].map(row =>
+      Math.round((row.firstElementChild as HTMLElement).getBoundingClientRect().right),
+    ),
+  )
+
+  expect(edges).toHaveLength(4)
+  expect(new Set(edges).size).toBe(1)
+  await page.keyboard.press('Escape')
+})

@@ -217,7 +217,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   box-shadow: inset 2px 0 0 var(--text-0);
 }
 .menu-sep { height: 1px; margin: 5px 0; background: var(--line); }
-.overflow-menu input[type='checkbox'] { accent-color: var(--text-0); }
+/* Sized to the 16px icons the other rows lead with, and stripped of the UA's
+   own margins, so every label in the menu starts at the same x — a checkbox
+   row and an icon row otherwise indent differently. */
+.overflow-menu input[type='checkbox'] {
+  accent-color: var(--text-0);
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
 
 /* Focus is a 1px inset neutral ring, never Chromium's accent outline. */
 .chrome :is(button, select, input):focus { outline: none; }
