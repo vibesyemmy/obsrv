@@ -46,6 +46,7 @@ export function App() {
   const presetId = useStore(s => s.presetId)
   const profileId = useStore(s => s.profileId)
   const viewMode = useStore(s => s.viewMode)
+  const panes = useStore(s => s.panes)
 
   // The store performs no IPC of its own; this is the one place that bridges.
   useEffect(() => {
@@ -81,6 +82,14 @@ export function App() {
   useEffect(() => {
     window.obsrv.setMode(mode)
   }, [mode])
+
+  // The native pane is an OS-level overlay: unmounting its slot below leaves
+  // the view on screen, so main is told explicitly. On the way back, React
+  // runs NativeSlot's mount effect (which pushes bounds) before this parent
+  // effect, so the view is positioned before it is revealed.
+  useEffect(() => {
+    window.obsrv.setNativeVisible(panes === 'both')
+  }, [panes])
 
   // The pane's bounds change with the window, the drawers and the panes'
   // 50/50 split, and every one of those also resizes the pane — so a
@@ -220,8 +229,8 @@ export function App() {
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
       <DropZone onImage={onImage} />
       <div className="body">
-        <div className="panes">
-          {mode === 'image' && image ? (
+        <div className="panes" data-panes={panes}>
+          {panes === 'both' && (mode === 'image' && image ? (
             <ImagePane
               src={image.objectUrl}
               width={image.natural.width}
@@ -229,7 +238,7 @@ export function App() {
             />
           ) : (
             <NativeSlot />
-          )}
+          ))}
           <div className="pane target-pane" ref={targetPaneRef}>
             <div className="pane-body">
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />

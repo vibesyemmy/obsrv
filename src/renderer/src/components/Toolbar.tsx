@@ -6,6 +6,7 @@ import {
   selectUrlBarText,
   selectViewport,
   useStore,
+  type Panes,
   type Surround,
   type ViewMode,
 } from '../state/store'
@@ -21,6 +22,12 @@ const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
 const VIEWS: { id: ViewMode; label: string; title: string }[] = [
   { id: '1:1', label: '1:1', title: 'Actual size' },
   { id: 'fit', label: 'Fit', title: 'Fit the pane — not pixel-exact' },
+]
+
+/** Native-only is not offered: that is a browser, and the user has one. */
+const PANES: { id: Panes; label: string; title: string }[] = [
+  { id: 'both', label: 'Both', title: 'Native and target side by side' },
+  { id: 'target', label: 'Target', title: 'The target render alone, full width' },
 ]
 
 export type Drawer = 'none' | 'panel' | 'settings'
@@ -53,6 +60,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setSurround = useStore(s => s.setSurround)
   const viewMode = useStore(s => s.viewMode)
   const setViewMode = useStore(s => s.setViewMode)
+  const panes = useStore(s => s.panes)
+  const setPanes = useStore(s => s.setPanes)
   const agentControl = useStore(s => s.settings.agentControl)
   const setSettings = useStore(s => s.setSettings)
 
@@ -209,6 +218,21 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
             onClick={() => setViewMode(v.id)}
           >
             {v.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="panes-control" role="group" aria-label="Panes">
+        {PANES.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            className={`panes-${p.id}`}
+            title={p.title}
+            aria-pressed={panes === p.id}
+            onClick={() => setPanes(p.id)}
+          >
+            {p.label}
           </button>
         ))}
       </div>
