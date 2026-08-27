@@ -24,6 +24,9 @@ export type ViewMode = '1:1' | 'fit'
 /** The neutral field the panes sit in. Graphite by default; see the UI spec. */
 export type Surround = 'black' | 'graphite' | 'grey50'
 
+/** Whether the native pane shares the window, or the target render has it alone. */
+export type Panes = 'both' | 'target'
+
 /** `presetId` when the screen comes from the custom fields instead. */
 export const CUSTOM_PRESET_ID = 'custom'
 
@@ -64,6 +67,11 @@ export interface AppState {
   surround: Surround
   viewMode: ViewMode
   /**
+   * Native-only is deliberately not offered: that is a browser, and the user
+   * has one. Not persisted to settings — a per-look toggle like `viewMode`.
+   */
+  panes: Panes
+  /**
    * The magnification fit mode is actually drawing at, published by
    * `TargetCanvas` (it owns the pane measurement) so the footer can read it;
    * null outside fit mode.
@@ -98,6 +106,7 @@ export interface AppState {
   setImage(i: ImageState | null): void
   setSurround(s: Surround): void
   setViewMode(v: ViewMode): void
+  setPanes(p: Panes): void
   setFitScale(v: number | null): void
   requestAgentPan(p: { x: number; y: number }): void
   clearAgentPan(): void
@@ -135,6 +144,7 @@ export const useStore = create<AppState>()(set => ({
   image: null,
   surround: 'graphite',
   viewMode: '1:1',
+  panes: 'both',
   fitScale: null,
   agentPan: null,
   agentHighlight: null,
@@ -163,6 +173,9 @@ export const useStore = create<AppState>()(set => ({
   setImage: image => set({ image }),
   setSurround: surround => set({ surround }),
   setViewMode: viewMode => set({ viewMode }),
+  // No `agentHighlight: null` here, unlike setPreset: hiding a pane does not
+  // re-raster the target, so the highlight still marks the pixels it marked.
+  setPanes: panes => set({ panes }),
   setFitScale: fitScale => set({ fitScale }),
   requestAgentPan: p => set(s => ({ agentPan: { ...p, seq: (s.agentPan?.seq ?? 0) + 1 } })),
   clearAgentPan: () => set({ agentPan: null }),

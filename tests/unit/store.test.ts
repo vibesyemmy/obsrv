@@ -266,3 +266,22 @@ describe('agent highlight lifecycle', () => {
     expect(useStore.getState().agentHighlight).toBeNull()
   })
 })
+
+describe('panes', () => {
+  it('starts showing both panes', () => {
+    expect(useStore.getState().panes).toBe('both')
+  })
+
+  it('switches to the target alone and back', () => {
+    useStore.getState().setPanes('target')
+    expect(useStore.getState().panes).toBe('target')
+    useStore.getState().setPanes('both')
+    expect(useStore.getState().panes).toBe('both')
+  })
+
+  it('does not disturb the agent highlight', () => {
+    useStore.getState().showAgentHighlight({ x: 0, y: 0, width: 4, height: 4, durationMs: 1000 })
+    useStore.getState().setPanes('target')
+    expect(useStore.getState().agentHighlight).not.toBeNull()
+  })
+})
