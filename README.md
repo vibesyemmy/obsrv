@@ -79,6 +79,12 @@ middle-button drag, Option+drag or Option+wheel, or switch the toolbar's
 pixel-exact — the footer says so) and click anywhere in it to jump back to 1:1
 at that spot.
 
+The `Both / Target` control beside it hides the native pane so the target render
+takes the whole window — useful for a small mobile preset that would otherwise
+sit in half a window, and for agent captures. The native pane stays loaded while
+hidden, so the URL bar, back/forward and link clicks keep working exactly as
+they do side by side.
+
 ## Agent & CI use
 
 The same rendering pipeline runs headless — no window, JSON on stdout, humans
@@ -116,7 +122,9 @@ raster density — the PNG comes back as an inline image up to 1.5 MiB),
 If the desktop app is open with the toolbar's **Agent control** toggle on,
 `obsrv_snap` drives the *visible* window instead: you watch the URL load and
 the preset flip, and the agent gets back a capture of the app exactly as you
-see it (plus `obsrv_drive` to flip URL/preset/profile directly). Agents can
+see it (plus `obsrv_drive` to flip URL/preset/profile/panes directly — `panes:
+'target'` gives the target render the whole window, which is usually what you
+want before a capture). Agents can
 also scroll, click, pan and highlight while you watch — a drive session works
 as a guided demo. A `scroll` reports the offset it actually reached
 (`scrolled` / `scroller`), finds the inner scroll container on pages whose
