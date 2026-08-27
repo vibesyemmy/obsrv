@@ -163,10 +163,32 @@ pane's canvas rather than hiding it. The test decides; no guessing.
 - **Hit targets** 30×30 minimum. Delete `.toolbar button { width: 26px }` — that
   blanket rule is specificity (0,1,1) and is what silently truncated the update
   button to "v0." in 0.7.0. Every control sizes itself; no blanket rule survives.
-- **Icons.** A local `src/renderer/src/components/Icon.tsx` with hand-written 16px
-  stroke paths: `back`, `forward`, `reload`, `overflow`, `close`, `sliders`, `gear`,
-  `chevron`. `currentColor`, 1.5px stroke, no dependency, no font, no network.
-  `sliders` and `gear` lead their overflow-menu rows; `chevron` is the selects'.
+- **Icons.** `lucide-react`, a new runtime dependency. Per-icon imports tree-shake, so
+  the eight used cost roughly 2KB; they are inline SVG components with no font file
+  and no network fetch, which matters in a signed Electron app. Its default 1.5px
+  stroke on a 24px grid already matches this spec.
+
+  | Use | Import |
+  |---|---|
+  | Back / forward | `ArrowLeft`, `ArrowRight` |
+  | Reload | `RotateCw` |
+  | Overflow menu | `EllipsisVertical` |
+  | Close image mode | `X` |
+  | Panel controls (menu row) | `SlidersHorizontal` |
+  | Settings (menu row) | `Settings` |
+  | Select chevron | `ChevronDown` |
+
+  It goes in **`devDependencies`**, not `dependencies`. `electron.vite.config.ts`
+  applies `externalizeDepsPlugin()` to main and preload only, so the renderer bundles
+  its imports — the built `out/` carries the eight icons inline and needs nothing
+  resolved at runtime. Listing it as a runtime dependency would put it in the
+  `getobsrv` npm tarball, which ships the CLI and MCP server and never loads a
+  renderer.
+
+  Rendered at `size={16}`, `strokeWidth={1.5}`, colour inherited via `currentColor`.
+  Icon-only buttons keep their existing `aria-label` and `title`; the SVG is
+  `aria-hidden`. The library is chosen over hand-drawn paths because the toolbar will
+  grow again and the next control should not need new paths drawn.
 - **Selects.** A styled shell — `--chrome-2`, 5px radius, our own chevron — with the
   native `<select>` kept for the popup and its keyboard behaviour, made transparent
   over the shell. Native semantics, our surface.
