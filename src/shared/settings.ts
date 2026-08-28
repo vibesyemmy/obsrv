@@ -22,6 +22,9 @@ export function loadSettings(file: string): Settings {
       // so a file from before this feature keeps it on.
       updateCheck: raw.updateCheck !== false,
       lastUpdateCheck: isStamp(raw.lastUpdateCheck) ? raw.lastUpdateCheck : 0,
+      // Same default as `updateCheck`, for the same reason: a file written
+      // before this feature existed has no key, and history is on by default.
+      recordHistory: raw.recordHistory !== false,
       // A ratio outside 0.1–0.9 is treated as absent, not rejected: unlike a
       // nits or diagonal figure it is a layout preference, and a file that
       // was hand-edited to 0.97 means "I want the target tiny", not "refuse
@@ -39,6 +42,7 @@ export function saveSettings(file: string, s: Settings): void {
   if (typeof s.agentControl !== 'boolean') throw new RangeError('agentControl must be a boolean')
   if (typeof s.updateCheck !== 'boolean') throw new RangeError('updateCheck must be a boolean')
   if (!isStamp(s.lastUpdateCheck)) throw new RangeError('lastUpdateCheck must be a finite epoch ms >= 0')
+  if (typeof s.recordHistory !== 'boolean') throw new RangeError('recordHistory must be a boolean')
   // Writing is the stricter side: `loadSettings` forgives a bad ratio because
   // it has to cope with whatever is on disk, but nothing inside the app has
   // any business asking for one — the renderer clamps before it saves.

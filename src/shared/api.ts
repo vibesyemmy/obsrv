@@ -1,4 +1,5 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
+import type { HistoryEntry } from './history'
 import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent, UpdateState } from './types'
 
 export interface FrameMessage {
@@ -92,6 +93,16 @@ export interface ObsrvApi {
    */
   openRelease(): Promise<boolean>
   onUpdateStatus(cb: (s: UpdateState) => void): () => void
+  /**
+   * Every stored address, ranked. The whole list rather than a query: it is
+   * capped at 500 small records, and matching is a pure function the renderer
+   * can run on a keystroke without an IPC round trip per character.
+   */
+  getHistory(): Promise<HistoryEntry[]>
+  /** Empty the file. Resolves once it has been written. */
+  clearHistory(): Promise<void>
+  /** A navigation was recorded, or the list was cleared. Carries the new list. */
+  onHistoryChanged(cb: (entries: HistoryEntry[]) => void): () => void
 }
 
 declare global {

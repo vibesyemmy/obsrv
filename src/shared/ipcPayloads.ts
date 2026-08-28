@@ -90,7 +90,7 @@ export function parseDeviceScaleFactor(raw: unknown): number | null {
 }
 
 /**
- * Copies exactly the five known keys; the numbers must be finite and
+ * Copies exactly the known keys; the numbers must be finite and
  * positive. A missing `agentControl` means false and a missing `updateCheck`
  * means true (the pre-feature wire shapes); any non-boolean value is refused,
  * never coerced.
@@ -106,13 +106,15 @@ export function parseSettings(raw: unknown): Settings | null {
   if (typeof updateCheck !== 'boolean') return null
   const lastUpdateCheck = raw.lastUpdateCheck ?? 0
   if (!isFiniteNumber(lastUpdateCheck) || lastUpdateCheck < 0) return null
+  const recordHistory = raw.recordHistory ?? true
+  if (typeof recordHistory !== 'boolean') return null
   // A missing `split` is the pre-feature wire shape and means the default.
   // Out of band it is refused rather than clamped: `loadSettings` forgives a
   // hand-edited file because it must, but the renderer clamps before it
   // sends, so a bad ratio arriving here is a bug worth surfacing.
   const split = raw.split ?? DEFAULT_SETTINGS.split
   if (!isFiniteNumber(split) || split < SPLIT_MIN || split > SPLIT_MAX) return null
-  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, split }
+  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {

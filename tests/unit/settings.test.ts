@@ -25,6 +25,7 @@ describe('settings', () => {
       agentControl: false,
       updateCheck: true,
       lastUpdateCheck: 0,
+      recordHistory: true,
       split: 0.5,
     })
   })
@@ -41,6 +42,9 @@ describe('settings', () => {
     expect(() =>
       saveSettings(join(dir(), 's.json'), { ...DEFAULT_SETTINGS, agentControl: 'yes' as unknown as boolean }),
     ).toThrow(RangeError)
+    expect(() =>
+      saveSettings(join(dir(), 's.json'), { ...DEFAULT_SETTINGS, recordHistory: 1 as unknown as boolean }),
+    ).toThrow(RangeError)
   })
   it('defaults the update fields when an older file has neither key', () => {
     const f = join(dir(), 'settings.json')
@@ -51,6 +55,7 @@ describe('settings', () => {
       agentControl: false,
       updateCheck: true,
       lastUpdateCheck: 0,
+      recordHistory: true,
       split: 0.5,
     })
   })
@@ -63,6 +68,15 @@ describe('settings', () => {
     // false turns it off; anything else falls back to the default.
     writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, updateCheck: 0 }))
     expect(loadSettings(f).updateCheck).toBe(true)
+  })
+
+  it('keeps an explicit recordHistory: false and refuses a non-boolean', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, recordHistory: false }))
+    expect(loadSettings(f).recordHistory).toBe(false)
+    // On by default like updateCheck, so only a literal false turns it off.
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, recordHistory: 0 }))
+    expect(loadSettings(f).recordHistory).toBe(true)
   })
 
   it('keeps a sane lastUpdateCheck and discards a bad one', () => {
@@ -81,6 +95,7 @@ describe('settings', () => {
       agentControl: true,
       updateCheck: false,
       lastUpdateCheck: 1700000000000,
+      recordHistory: false,
       split: 0.72,
     }
     saveSettings(f, full)

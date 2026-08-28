@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentControl: false,
   updateCheck: true,
   lastUpdateCheck: 0,
+  recordHistory: true,
   split: 0.5,
 }
 

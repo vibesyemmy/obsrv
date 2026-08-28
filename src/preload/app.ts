@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { FrameMessage, ObsrvApi } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
+import type { HistoryEntry } from '../shared/history'
 import type { HostInfo, LoadError, UpdateState } from '../shared/types'
 
 /** Wraps `ipcRenderer.on` so every subscriber gets an unsubscribe function. */
@@ -95,6 +96,9 @@ const api: ObsrvApi = {
   checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
   openRelease: () => ipcRenderer.invoke(IPC.openRelease),
   onUpdateStatus: cb => subscribe<UpdateState>(IPC.updateStatus, cb),
+  getHistory: () => ipcRenderer.invoke(IPC.getHistory),
+  clearHistory: () => ipcRenderer.invoke(IPC.clearHistory),
+  onHistoryChanged: cb => subscribe<HistoryEntry[]>(IPC.historyChanged, cb),
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

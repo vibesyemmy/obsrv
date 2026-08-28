@@ -58,6 +58,15 @@ export interface Settings {
   /** Epoch ms of the last completed check, success or failure. 0 = never. */
   lastUpdateCheck: number
   /**
+   * Whether committed navigations are written to `history.json` for the URL
+   * bar's type-ahead. On by default, like `updateCheck`: a history that is off
+   * by default is a feature nobody finds. Turning it off stops recording and
+   * keeps what is already stored — stopping and erasing are different
+   * intentions, and Settings has a separate Clear button for the second one.
+   * Nothing here leaves the machine.
+   */
+  recordHistory: boolean
+  /**
    * The native pane's share of the panes row, 0..1 — a ratio rather than a
    * width so it survives a window resize and a move to another monitor.
    * The remainder goes to the target pane. Ignored while `panes === 'target'`.

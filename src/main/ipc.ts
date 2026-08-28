@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
+import { loadHistory, recordVisit, saveHistory, type HistoryEntry } from '../shared/history'
 import { IPC } from '../shared/ipc'
 import {
   parseDeviceScaleFactor,
@@ -482,6 +483,62 @@ export function registerIpc(ctx: AppContext): void {
     if (releaseUrl === '') return false
     await shell.openExternal(releaseUrl)
     return true
+  })
+
+  // --- visited-URL history --------------------------------------------------
+  // Committed main-frame navigations in the native pane, which is already the
+  // navigation master and already emits `did-navigate` for `SyncBus`.
+  //
+  // Three exclusions come free from that choice of hook, and the third is the
+  // one worth spelling out:
+  //   * subframe navigations, which `did-navigate` never reports;
+  //   * in-page navigations, which arrive on `did-navigate-in-page` — SyncBus
+  //     listens to both, this listens to one;
+  //   * failed loads. Chromium commits its error page without emitting
+  //     `did-navigate` at all: a net-level failure (bad host, refused
+  //     connection, missing file, a reload or a Back onto an error page) fires
+  //     only `did-fail-load`, which is what feeds the toolbar's error badge.
+  //     So the URL bar and the history file agree by construction — anything
+  //     that badges is a navigation this listener never hears about. Recording
+  //     the requested URL instead, at `navigate` time, would store exactly the
+  //     addresses that did not load.
+  const historyFile = join(app.getPath('userData'), 'history.json')
+  let history = loadHistory(historyFile)
+
+  const publishHistory = (): void => {
+    if (!win.isDestroyed()) win.webContents.send(IPC.historyChanged, history)
+  }
+
+  // Persist first, then publish: the renderer must never be shown a list disk
+  // refused. A read-only userData directory costs the file, not the session.
+  const commitHistory = (next: HistoryEntry[]): void => {
+    try {
+      saveHistory(historyFile, next)
+    } catch (e) {
+      console.warn('obsrv: could not write history.json', e)
+      return
+    }
+    history = next
+    publishHistory()
+  }
+
+  native.webContents.on('did-navigate', (_e, url) => {
+    if (!settings.recordHistory) return
+    // `recordVisit` hands back the caller's own array for a URL it will not
+    // store — `about:blank` on every launch, most of all — so this is also
+    // the guard that keeps the write off the boot path.
+    const next = recordVisit(history, url, Date.now())
+    if (next === history) return
+    commitHistory(next)
+  })
+
+  ipcMain.handle(IPC.getHistory, e => {
+    assertRenderer(e)
+    return history
+  })
+  ipcMain.handle(IPC.clearHistory, e => {
+    assertRenderer(e)
+    commitHistory([])
   })
 
   // Fired after the window exists and never awaited, so a hung network cannot

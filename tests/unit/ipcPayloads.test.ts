@@ -99,6 +99,7 @@ describe('parseSettings', () => {
         agentControl: true,
         updateCheck: false,
         lastUpdateCheck: 1700000000000,
+        recordHistory: false,
         split: 0.7,
         extra: 1,
       }),
@@ -108,6 +109,7 @@ describe('parseSettings', () => {
       agentControl: true,
       updateCheck: false,
       lastUpdateCheck: 1700000000000,
+      recordHistory: false,
       split: 0.7,
     })
   })
@@ -120,6 +122,8 @@ describe('parseSettings', () => {
       // feature does not silently disable the check when it saves settings.
       updateCheck: true,
       lastUpdateCheck: 0,
+      // And likewise for history, which is on by default for the same reason.
+      recordHistory: true,
       // Likewise for the split: a renderer that has never heard of it must
       // not be read as asking for a degenerate one.
       split: 0.5,
@@ -136,6 +140,7 @@ describe('parseSettings', () => {
     ['string agentControl', { hostDiagonalInches: 27, hostNits: 400, agentControl: 'true' }],
     // Unlike `loadSettings`, which forgives whatever is on disk: the renderer
     // clamps before it sends, so an out-of-band ratio on the wire is a bug.
+    ['truthy non-boolean recordHistory', { hostDiagonalInches: 27, hostNits: 400, recordHistory: 1 }],
     ['split below the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.05 }],
     ['split above the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.97 }],
     ['string split', { hostDiagonalInches: 27, hostNits: 400, split: '0.5' }],

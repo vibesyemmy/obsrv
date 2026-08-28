@@ -33,4 +33,7 @@ export const IPC = {
   checkUpdate: 'obsrv:check-update',
   openRelease: 'obsrv:open-release',
   updateStatus: 'obsrv:update-status',
+  getHistory: 'obsrv:get-history',
+  clearHistory: 'obsrv:clear-history',
+  historyChanged: 'obsrv:history-changed',
 } as const
