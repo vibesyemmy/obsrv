@@ -100,6 +100,12 @@ test('the renderer takes over native pane layout for good', async () => {
   // From Task 14 the renderer's NativeSlot re-measures on resize too, so the
   // bounds must land on the slot's rectangle — never on the fallback's
   // `{ 0, TOOLBAR_H, width / 2, height - TOOLBAR_H }`.
+  //
+  // 599, not 600: the draggable seam is a flex item of its own, so an even
+  // split gives each pane half of `width - 1`. That the two numbers now
+  // differ is the point — the fallback's `width / 2` is a rectangle the
+  // renderer never reports, so this assertion no longer passes by
+  // coincidence.
   await app.evaluate(({}) => (globalThis as any).__obsrv.win.setContentSize(1200, 800))
   const slot = () =>
     page.evaluate(() => {
@@ -111,12 +117,13 @@ test('the renderer takes over native pane layout for good', async () => {
         height: Math.round(r.height),
       }
     })
-  await expect.poll(slot).toMatchObject({ width: 600 })
+  await expect.poll(slot).toMatchObject({ width: 599 })
   const expected = await slot()
   // Main's real `TOOLBAR_H`, not a copy of it: a fallback rect written from a
   // stale number would match nothing and this assertion would pass vacuously.
   const toolbarH: number = await app.evaluate(() => (globalThis as any).__obsrv.toolbarH)
   expect(expected).not.toEqual({ x: 0, y: toolbarH, width: 600, height: 800 - toolbarH })
+  expect(expected.width).toBe(599)
   await expect
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds()))
     .toEqual(expected)
@@ -176,7 +183,7 @@ test('ignores malformed payloads', async () => {
   expect(settings).toMatchObject({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
   // Exactly the known keys: nothing the renderer bolted on reaches disk.
   expect(Object.keys(settings).sort()).toEqual(
-    ['agentControl', 'hostDiagonalInches', 'hostNits', 'lastUpdateCheck', 'updateCheck'],
+    ['agentControl', 'hostDiagonalInches', 'hostNits', 'lastUpdateCheck', 'split', 'updateCheck'],
   )
 
   // Main is still alive and answering.
