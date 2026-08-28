@@ -1,5 +1,5 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -815,6 +815,49 @@ test.describe('tabs come back on relaunch', () => {
     await second.close()
   })
 
+  /**
+   * The failure that eats a session for good. `s.url` is written by a
+   * committed navigation, and a refused connection commits nothing — so a
+   * restore against a server that is not up leaves the tab on `about:blank`,
+   * and a writer that then persists what it sees replaces the address with a
+   * blank. Nothing recovers it: the next launch restores the blank. Opening
+   * Obsrv before `npm run dev` is exactly this sequence, which is why the
+   * round trip is asserted across three launches rather than two.
+   */
+  test('a restore that cannot load keeps the address, and the next launch loads it', async () => {
+    const home = dir()
+    const pageFile = join(home, 'served.html')
+    const served = pathToFileURL(pageFile).href
+    writeFileSync(pageFile, readFileSync(resolve(__dirname, '../fixtures/tall.html')))
+
+    const up = await launchApp([], {}, home)
+    const pUp = await rendererWindow(up)
+    await pUp.evaluate(u => window.obsrv.navigate(u), served)
+    await expect(strip(pUp).nth(0)).toHaveText('tall-fixture')
+    await up.close()
+
+    // The server goes down between launches.
+    rmSync(pageFile)
+    const down = await launchApp([], {}, home)
+    const pDown = await rendererWindow(down)
+    // The tab is blank — nothing loaded — but it still knows where it was.
+    await expect
+      .poll(() => down.evaluate(() => (globalThis as any).__obsrv.tabs.tabs[0].url as string), {
+        timeout: 10_000,
+      })
+      .toBe(served)
+    await down.close()
+    expect(JSON.parse(readFileSync(join(home, 'tabs.json'), 'utf8')).tabs[0].url).toBe(served)
+
+    // Back up, and the session is where it was left.
+    writeFileSync(pageFile, readFileSync(resolve(__dirname, '../fixtures/tall.html')))
+    const again = await launchApp([], {}, home)
+    const pAgain = await rendererWindow(again)
+    await expect(strip(pAgain)).toHaveCount(1)
+    await expect(strip(pAgain).nth(0)).toHaveText('tall-fixture')
+    await again.close()
+  })
+
   test('a hand-edited tabs.json cannot make the app unlaunchable', async () => {
     const home = dir()
     writeFileSync(
@@ -835,7 +878,10 @@ test.describe('tabs come back on relaunch', () => {
     // The index the file asked for is past the end, so the front falls to the
     // first tab rather than to whatever now sits at that position.
     await expect(strip(p).nth(0)).toHaveAttribute('aria-selected', 'true')
-    await expect(strip(p).nth(0)).toHaveText('New tab')
+    // It wears the address it failed on rather than calling itself new: that
+    // string is the only thing that makes the tab recoverable, by hand or by
+    // retry, and it is what survives to the next launch.
+    await expect(strip(p).nth(0)).toHaveText('not a url')
     await expect(strip(p).nth(1)).toHaveText('tall-fixture')
     await app2.close()
   })

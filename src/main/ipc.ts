@@ -744,20 +744,35 @@ export function registerIpc(ctx: AppContext): void {
     // front is known. `loadTabs` has already bounded the index.
     tabs.activate(sessions[Math.min(stored.activeIndex, sessions.length - 1)]!.id)
     await Promise.all(
-      sessions.map((s, i) =>
-        navigateBoth(stored.tabs[i]!.url, s).catch((e: unknown) =>
-          console.warn('obsrv: could not restore a tab', e),
-        ),
-      ),
+      sessions.map(async (s, i) => {
+        const wanted = stored.tabs[i]!.url
+        try {
+          await navigateBoth(wanted, s)
+        } catch (e) {
+          console.warn('obsrv: could not restore a tab', e)
+        }
+        // `s.url` is written by a *committed* navigation, and a refused
+        // connection commits nothing — so a tab whose page did not come up is
+        // still sitting on the `about:blank` its panes booted onto. Left that
+        // way, the writer arming below would put a blank on disk over the real
+        // address, and the launch after that would have nothing to restore:
+        // opening Obsrv before the dev server is up would wipe the tabs, once
+        // and for good. The tab keeps the address it was asked for instead,
+        // which is also what the user sees and can retry.
+        if (s.url === '' || s.url === 'about:blank') s.url = wanted
+      }),
     )
   }
 
   // Never awaited: a boot must not wait on a network, and the strip publishes
   // itself as each tab arrives. `finally`, not `then` — a restore that threw
-  // anyway must still leave the app able to remember the tabs it has now.
+  // anyway must still leave the app able to remember the tabs it has now. The
+  // strip is republished because the addresses of any tabs that failed to load
+  // were only settled at the end of the restore.
   void restoreTabs().finally(() => {
     persistReady = true
     persistTabs()
+    publishTabs()
   })
 
   ipcMain.handle(IPC.getHistory, e => {
