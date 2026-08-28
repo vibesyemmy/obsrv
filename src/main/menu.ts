@@ -15,8 +15,7 @@ import type { AppContext } from './context'
  * `IPC.reload` handler makes for the toolbar button), Cmd+L asks the renderer
  * to focus its URL bar, and DevTools sit behind a non-role item.
  */
-export function installMenu({ win, session }: AppContext): void {
-  const { native, target } = session
+export function installMenu({ win, tabs }: AppContext): void {
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
@@ -42,6 +41,10 @@ export function installMenu({ win, session }: AppContext): void {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
           click: () => {
+            // Resolved per click, never destructured at install time: a
+            // destructure captures whichever session booted first and keeps
+            // reloading it after the user has switched tabs.
+            const { native, target } = tabs.active()
             native.reload()
             // A reload commits the URL the target already shows, so the mirror
             // (rightly) does nothing; reload the target on its own.

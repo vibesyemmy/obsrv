@@ -1,15 +1,17 @@
 import type { AppContext } from './context'
 import type { NativePane } from './nativePane'
 import type { SyncBus } from './syncBus'
+import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 
 /**
- * What Playwright sees. Specs reach `__obsrv.native` / `.target` directly, so
- * those names stay on the handle as accessors onto the active session rather
- * than as fields — a spec must never capture a pane that a later tab switch
- * has replaced.
+ * What Playwright sees. Specs reach `__obsrv.native` / `.target` / `.session`
+ * directly, so those names stay on the handle as accessors onto the active
+ * session rather than as fields — a spec must never capture a pane that a
+ * later tab switch has replaced.
  */
 export interface TestHandle extends AppContext {
+  readonly session: TabSession
   readonly native: NativePane
   readonly target: TargetSource
   readonly sync: SyncBus
@@ -25,14 +27,17 @@ export function exposeForTests(ctx: AppContext): void {
   if (process.env.OBSRV_TEST !== '1') return
   globalThis.__obsrv = {
     ...ctx,
+    get session() {
+      return ctx.tabs.active()
+    },
     get native() {
-      return ctx.session.native
+      return ctx.tabs.active().native
     },
     get target() {
-      return ctx.session.target
+      return ctx.tabs.active().target
     },
     get sync() {
-      return ctx.session.sync
+      return ctx.tabs.active().sync
     },
   }
 }

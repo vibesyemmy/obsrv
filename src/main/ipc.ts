@@ -23,6 +23,8 @@ import { normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
+import type { TabSession } from './tabSession'
+import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
@@ -61,10 +63,15 @@ function hostInfo(win: BrowserWindow): HostInfo {
 }
 
 export function registerIpc(ctx: AppContext): void {
-  const { win, bus, session } = ctx
-  const { native, target, sync } = session
+  const { win, bus, tabs } = ctx
+  // The active session, resolved at the moment each handler runs. A
+  // destructure taken once here is exactly the defect the manager exists to
+  // prevent: it captures whichever session booted first and keeps driving it
+  // after the user has switched tabs, silently and without erroring.
+  const tab = (): TabSession => tabs.active()
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
+  tabs.maxTabs = settings.maxTabs
 
   // Only the app's own renderer may drive these channels. The native pane and
   // the target load third-party pages; neither has a preload that reaches
@@ -98,11 +105,11 @@ export function registerIpc(ctx: AppContext): void {
     let wanted = url
     try {
       wanted = normalizeUrl(url)
-      sync.expect(wanted)
+      tab().sync.expect(wanted)
     } catch {
       // Reported by `native.load` / `target.load` below.
     }
-    const [applied] = await Promise.all([native.load(wanted), target.load(wanted)])
+    const [applied] = await Promise.all([tab().native.load(wanted), tab().target.load(wanted)])
     return applied
   }
   ipcMain.handle(IPC.navigate, (e, url: string) => {
@@ -112,13 +119,13 @@ export function registerIpc(ctx: AppContext): void {
   // The toolbar's history/reload actions, shared verbatim with the
   // agent-control server's back/forward/reload commands.
   const reloadBoth = (): void => {
-    native.reload()
+    tab().native.reload()
     // A reload commits the URL the target already shows, so the mirror
     // (rightly) does nothing; reload the target on its own.
-    target.reload()
+    tab().target.reload()
   }
-  const goBack = (): void => native.back()
-  const goForward = (): void => native.forward()
+  const goBack = (): void => tab().native.back()
+  const goForward = (): void => tab().native.forward()
   ipcMain.on(IPC.reload, e => {
     if (!fromRenderer(e)) return
     reloadBoth()
@@ -137,13 +144,13 @@ export function registerIpc(ctx: AppContext): void {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
-    session.viewportArrived = true
+    tab().viewportArrived = true
     // Width and height survive any garbage (clampViewport sanitises), but a
     // bad scale factor would decide the offscreen window's raster density —
     // refuse it rather than guess.
     const dsf = parseDeviceScaleFactor(rawDsf)
     if (dsf === null) throw new Error('invalid deviceScaleFactor')
-    const v = target.setViewport(width, height, dsf)
+    const v = tab().target.setViewport(width, height, dsf)
     return { width: v.width, height: v.height }
   })
   ipcMain.on(IPC.sendInput, (e, raw: unknown) => {
@@ -151,7 +158,7 @@ export function registerIpc(ctx: AppContext): void {
     const ev = parseInputEvent(raw)
     if (!ev) return
     try {
-      target.sendInput(ev)
+      tab().target.sendInput(ev)
     } catch {
       // Electron rejected a well-formed event (e.g. a keyCode it cannot map);
       // the input is lost, the app is not.
@@ -168,21 +175,25 @@ export function registerIpc(ctx: AppContext): void {
   // `panesShowNative` is the window's (the Both/Target toggle is a window
   // view mode, shared by every tab).
   let panesShowNative = true
+  // The manager asks the same question on activation, so the incoming view
+  // lands in the right state without re-deriving it there and drifting.
+  tabs.nativeVisible = (s: TabSession): boolean => s.modeIsLive && panesShowNative
   const applyNativeVisibility = (): void => {
-    native.setVisible(session.modeIsLive && panesShowNative)
+    const s = tab()
+    s.native.setVisible(tabs.nativeVisible(s))
   }
 
   ipcMain.on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const mode = parseMode(raw)
     if (!mode) return
-    session.modeIsLive = mode === 'url'
+    tab().modeIsLive = mode === 'url'
     applyNativeVisibility()
     // The sync bus follows the *mode* only. In solo target the native pane is
     // still loaded and still the navigation master — disabling the bus there
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
-    bus.setEnabled(session.modeIsLive)
+    bus.setEnabled(tab().modeIsLive)
   })
 
   ipcMain.on(IPC.setNativeVisible, (e, raw: unknown) => {
@@ -196,11 +207,15 @@ export function registerIpc(ctx: AppContext): void {
   // Main positions the view until the renderer's pane layout exists. The first
   // `setNativeBounds` hands ownership over for the rest of the run, so the two
   // never fight over the same view.
+  //
+  // Either way the rect goes to the manager, not to one view: the slot is
+  // window-global and every session's view is moved to it, so a tab activated
+  // later is already positioned before it is shown.
   let rendererDrivesLayout = false
   const fallbackLayout = (): void => {
     if (rendererDrivesLayout) return
     const [w = 0, h = 0] = win.getContentSize()
-    native.setBounds({
+    tabs.setSlotRect({
       x: 0,
       y: TOOLBAR_H,
       width: Math.floor(w / 2),
@@ -213,7 +228,7 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) return
     const rect = parseRect(raw)
     if (!rect) return
-    native.setBounds(rect)
+    tabs.setSlotRect(rect)
     // Ownership passes only once a rect has actually been applied.
     rendererDrivesLayout = true
   })
@@ -231,7 +246,10 @@ export function registerIpc(ctx: AppContext): void {
   let scrollSeq = 0
   const scrollWaiters = new Map<number, (report: ScrollReport) => void>()
   ipcMain.on(IPC.scrollResult, (e, raw: unknown) => {
-    if (e.sender !== target.webContents && e.sender !== native.webContents) return
+    // Routed like `syncScroll`: any tab's panes may answer, because a waiter
+    // is keyed by a unique seq and only the tab that was asked holds one.
+    // A sender belonging to no session is dropped rather than guessed at.
+    if (!tabs.byWebContents(e.sender)) return
     const report = parseScrollReport(raw)
     if (!report) return
     const waiter = scrollWaiters.get(report.id)
@@ -253,11 +271,14 @@ export function registerIpc(ctx: AppContext): void {
     // A preset change reloads the page at a new viewport. Scrolling before
     // that lands finds the pre-reflow document — on an app shell that means
     // the root rather than the inner scroller, and the offset clamps to 0.
-    await awaitViewportStable()
+    // Bound once, before the first await: everything after it belongs to the
+    // tab the scroll was asked of, even if the user switches tabs mid-settle.
+    const s = tab()
+    await awaitViewportStable(s)
     const base: ScrollRequest = { x: req.x, y: req.y }
     if (req.selector !== undefined) base.selector = req.selector
-    if (!native.webContents.isDestroyed()) native.webContents.send(IPC.applyScroll, base)
-    const wc = target.webContents
+    if (!s.native.webContents.isDestroyed()) s.native.webContents.send(IPC.applyScroll, base)
+    const wc = s.target.webContents
     if (wc.isDestroyed()) return null
     const id = ++scrollSeq
     const answered = new Promise<ScrollReport | null>(resolve => {
@@ -312,6 +333,7 @@ export function registerIpc(ctx: AppContext): void {
     saveSettings(settingsFile, s)
     const wasEnabled = settings.agentControl
     settings = s
+    tabs.maxTabs = s.maxTabs
     if (s.agentControl !== wasEnabled) applyAgentControl(s.agentControl)
   })
 
@@ -333,28 +355,28 @@ export function registerIpc(ctx: AppContext): void {
   // control that decides whether the native view is on screen. See TabSession.
   const uiState: AgentUiState = {
     get presetId() {
-      return session.presetId
+      return tab().presetId
     },
     set presetId(v: string) {
-      session.presetId = v
+      tab().presetId = v
     },
     get profileId() {
-      return session.profileId
+      return tab().profileId
     },
     set profileId(v: string) {
-      session.profileId = v
+      tab().profileId = v
     },
     get viewMode() {
-      return session.viewMode
+      return tab().viewMode
     },
     set viewMode(v: AgentViewMode) {
-      session.viewMode = v
+      tab().viewMode = v
     },
     get mode() {
-      return session.reportedMode
+      return tab().reportedMode
     },
     set mode(v: 'url' | 'image') {
-      session.reportedMode = v
+      tab().reportedMode = v
     },
     panes: 'both',
   }
@@ -400,17 +422,17 @@ export function registerIpc(ctx: AppContext): void {
   /** How long to wait for an announced resize to actually reach setViewport. */
   const VIEWPORT_ARRIVAL_MS = 600
 
-  const awaitViewportStable = async (): Promise<void> => {
-    if (!session.viewportPending) return
-    session.viewportPending = false
+  const awaitViewportStable = async (s: TabSession = tab()): Promise<void> => {
+    if (!s.viewportPending) return
+    s.viewportPending = false
     const arrivalDeadline = Date.now() + VIEWPORT_ARRIVAL_MS
-    while (!session.viewportArrived && Date.now() < arrivalDeadline) {
+    while (!s.viewportArrived && Date.now() < arrivalDeadline) {
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
     // The preset may resolve to the size already applied, in which case no
     // setViewport ever arrives — the wait above simply expires and the poll
     // below confirms the viewport is steady.
-    await settleTarget()
+    await settleTarget(s.target)
   }
 
   // --- capture settling ------------------------------------------------------
@@ -426,28 +448,31 @@ export function registerIpc(ctx: AppContext): void {
   /** After the frame reaches the renderer it still has to draw it. */
   const SETTLE_DRAW_MS = 120
 
-  const nextFrame = (budgetMs: number): Promise<boolean> =>
+  // The target is an argument rather than a fresh `tab().target` at each use:
+  // a settle spans awaits, and unsubscribing from whatever is active on the
+  // way out would leave a listener on the tab that was actually being watched.
+  const nextFrame = (t: TargetSource, budgetMs: number): Promise<boolean> =>
     new Promise(resolve => {
       const timer = setTimeout(() => {
-        target.off('frame', onFrame)
+        t.off('frame', onFrame)
         resolve(false)
       }, budgetMs)
       const onFrame = (): void => {
         clearTimeout(timer)
-        target.off('frame', onFrame)
+        t.off('frame', onFrame)
         resolve(true)
       }
-      target.on('frame', onFrame)
-      target.invalidate()
+      t.on('frame', onFrame)
+      t.invalidate()
     })
 
   /** False when the budget ran out before things went quiet; never throws. */
-  const settleTarget = async (): Promise<boolean> => {
+  const settleTarget = async (t: TargetSource = tab().target): Promise<boolean> => {
     const deadline = Date.now() + SETTLE_BUDGET_MS
     let last = ''
     let stable = 0
     while (Date.now() < deadline) {
-      const v = target.getViewport()
+      const v = t.getViewport()
       const key = `${v.width}x${v.height}`
       stable = key === last ? stable + 1 : 0
       last = key
@@ -455,7 +480,7 @@ export function registerIpc(ctx: AppContext): void {
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
     if (stable < SETTLE_STABLE_READS) return false
-    const painted = await nextFrame(Math.max(0, deadline - Date.now()))
+    const painted = await nextFrame(t, Math.max(0, deadline - Date.now()))
     await new Promise(r => setTimeout(r, SETTLE_DRAW_MS))
     return painted
   }
@@ -560,7 +585,10 @@ export function registerIpc(ctx: AppContext): void {
     publishHistory()
   }
 
-  native.webContents.on('did-navigate', (_e, url) => {
+  // Every tab's native pane, not just the one that booted: history is
+  // window-global and a visit is a visit whichever tab made it. The manager
+  // wires the hook onto each session it creates.
+  tabs.onNativeNavigate = (url: string): void => {
     if (!settings.recordHistory) return
     // `recordVisit` hands back the caller's own array for a URL it will not
     // store — `about:blank` on every launch, most of all — so this is also
@@ -568,7 +596,7 @@ export function registerIpc(ctx: AppContext): void {
     const next = recordVisit(history, url, Date.now())
     if (next === history) return
     commitHistory(next)
-  })
+  }
 
   ipcMain.handle(IPC.getHistory, e => {
     assertRenderer(e)
@@ -595,7 +623,7 @@ export function registerIpc(ctx: AppContext): void {
     status: () => {
       let url = ''
       try {
-        url = target.webContents.getURL()
+        url = tab().target.webContents.getURL()
       } catch {
         // The target is mid-recreation or the app is closing; '' is honest.
       }
@@ -607,8 +635,8 @@ export function registerIpc(ctx: AppContext): void {
       // Only a preset resizes the target; view mode and pixel-exact change the
       // magnification, which reflows nothing in the page under test.
       if (patch.presetId !== undefined) {
-        session.viewportPending = true
-        session.viewportArrived = false
+        tab().viewportPending = true
+        tab().viewportArrived = false
       }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {
@@ -652,7 +680,7 @@ export function registerIpc(ctx: AppContext): void {
         warnings,
       }
     },
-    viewport: () => target.getViewport(),
+    viewport: () => tab().target.getViewport(),
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and
     // suppresses its own echo, so the two arrive together with no loop.
@@ -666,8 +694,8 @@ export function registerIpc(ctx: AppContext): void {
       const up = parseInputEvent({ type: 'mouseUp', x: c.x, y: c.y, button: c.button, clickCount: 1 })
       if (!down || !up) return
       try {
-        target.sendInput(down)
-        target.sendInput(up)
+        tab().target.sendInput(down)
+        tab().target.sendInput(up)
       } catch {
         // Electron rejected the event; the click is lost, the app is not.
       }
