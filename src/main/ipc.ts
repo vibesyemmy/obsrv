@@ -327,6 +327,10 @@ export function registerIpc(ctx: AppContext): void {
   // tab cannot inherit the first's. The `IPC.uiState` handler updates this
   // with `Object.assign`, which runs the setters — an assignment that replaced
   // the whole object would drop them silently.
+  //
+  // `mode` mirrors `session.reportedMode`, never `session.modeIsLive`: this
+  // object is a report about the renderer, and a report must not write to the
+  // control that decides whether the native view is on screen. See TabSession.
   const uiState: AgentUiState = {
     get presetId() {
       return session.presetId
@@ -347,10 +351,10 @@ export function registerIpc(ctx: AppContext): void {
       session.viewMode = v
     },
     get mode() {
-      return session.modeIsLive ? 'url' : 'image'
+      return session.reportedMode
     },
     set mode(v: 'url' | 'image') {
-      session.modeIsLive = v === 'url'
+      session.reportedMode = v
     },
     panes: 'both',
   }

@@ -23,8 +23,23 @@ export class TabSession {
   readonly target: TargetSource
   readonly sync: SyncBus
 
+  // `modeIsLive` and `reportedMode` describe the same idea from opposite
+  // directions and must not be collapsed into one field. `modeIsLive` is
+  // main's own authority over an OS-level view: `IPC.setMode` is the command
+  // that writes it and `applyNativeVisibility` is the only thing that reads
+  // it. `reportedMode` is a mirror of what the renderer says it is showing,
+  // written by the renderer's `IPC.uiState` report so the control server's
+  // `status` can answer without a round trip.
+  //
+  // Letting the report drive visibility would let an observation write to a
+  // control, and it reorders badly: a `uiState` arriving ahead of its matching
+  // `setMode` would make the next `setNativeVisible` apply the new mode early.
+  // Tab activation will start moving these messages around, so keep them apart.
+
   /** False in image mode: the left pane is drawn in the renderer instead. */
   modeIsLive = true
+  /** The renderer's last reported mode, for `status`. Never drives the view. */
+  reportedMode: 'url' | 'image' = 'url'
   /** A preset change is in flight; a capture or scroll must wait for it. */
   viewportPending = false
   viewportArrived = false
