@@ -13,7 +13,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
-import { canAddTab, closeTab as closeInList } from '../../../shared/tabList'
+import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../shared/tabList'
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
@@ -52,6 +52,13 @@ export interface ImageState {
 export interface TabState {
   mode: Mode
   url: string
+  /**
+   * Chromium's page title, as main reports it for this tab; '' when the page
+   * has none. The strip prefers it, then the host, then the URL — see
+   * `tabTitle`. Main clears it on every committed navigation, so a tab never
+   * wears the previous page's title.
+   */
+  title: string
   /** URL parked while image mode is showing, restored on the way back. */
   lastUrl: string
   presetId: string
@@ -114,6 +121,17 @@ export interface AppState {
 
   setMode(mode: Mode): void
   setUrl(url: string): void
+  /**
+   * The tab-named forms of the four reports main pushes. Main no longer gates
+   * those on the tab being in front — a background tab has to keep its own
+   * strip entry current — so the renderer writes the tab that was *named*,
+   * never the tab that happens to be showing. The unnamed forms above stay for
+   * the toolbar, which only ever acts on the tab in front.
+   */
+  setTabUrl(id: string, url: string): void
+  setTabTitle(id: string, title: string): void
+  setTabError(id: string, e: LoadError | null): void
+  setTabLoading(id: string, v: boolean): void
   setPreset(id: string): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
@@ -142,6 +160,14 @@ export interface AppState {
   clearAgentHighlight(seq?: number): void
 
   /**
+   * Adopts main's strip wholesale: main owns tab identity (a tab is the pair
+   * of Chromium renderers it built), so the list, the order and which tab is
+   * in front all come from there. Per-tab UI state is the renderer's own and
+   * survives — a tab that is still open keeps its preset, profile and view
+   * mode; a tab main has never mentioned opens blank.
+   */
+  syncTabs(s: TabSnapshot): void
+  /**
    * Opens a blank tab at the end of the strip and switches to it, returning
    * its id — or null when `settings.maxTabs` is already reached, mirroring
    * the main process's `TabManager.add`. `id` adopts an id minted elsewhere
@@ -168,6 +194,7 @@ function blankTab(): TabState {
   return {
     mode: 'url',
     url: '',
+    title: '',
     lastUrl: '',
     presetId: '1080p-24',
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
@@ -215,6 +242,20 @@ const patchActiveWith =
 const patchActive = (patch: Partial<TabState>): ((s: AppState) => Partial<AppState>) =>
   patchActiveWith(() => patch)
 
+/**
+ * The same write path, for a tab named by main rather than the one in front.
+ * A tab that is not open is not an error — a report can outlive the close that
+ * raced it — so it writes nothing.
+ */
+const patchTabWith =
+  (id: string, f: (t: TabState) => Partial<TabState> | null) =>
+  (s: AppState): Partial<AppState> => {
+    const t = s.tabs[id]
+    if (!t) return {}
+    const patch = f(t)
+    return patch === null ? {} : { tabs: { ...s.tabs, [id]: { ...t, ...patch } } }
+  }
+
 const FIRST_TAB = newTabId()
 
 export const useStore = create<AppState>()((set, get) => ({
@@ -234,7 +275,12 @@ export const useStore = create<AppState>()((set, get) => ({
   // so clearing here would wipe the toolbar badge the moment it appeared.
   // Does clear the agent highlight: it marked pixels of the page that was
   // showing, and a committed navigation (a reload included) replaces them.
-  setUrl: url => set(patchActive({ url, agentHighlight: null })),
+  setUrl: url => set(s => patchTabWith(s.activeId, () => ({ url, agentHighlight: null }))(s)),
+  setTabUrl: (id, url) => set(patchTabWith(id, () => ({ url, agentHighlight: null }))),
+  setTabTitle: (id, title) => set(patchTabWith(id, t => (t.title === title ? null : { title }))),
+  // Both panes report the same failure; see `setError`.
+  setTabError: (id, error) => set(patchTabWith(id, t => (sameError(t.error, error) ? null : { error }))),
+  setTabLoading: (id, targetLoading) => set(patchTabWith(id, () => ({ targetLoading }))),
   // A screen change re-rasters the target, so a highlight's target-pixel rect
   // no longer marks what it marked; the same for the custom fields below.
   setPreset: presetId => set(patchActive({ presetId, agentHighlight: null })),
@@ -280,6 +326,28 @@ export const useStore = create<AppState>()((set, get) => ({
             : { mode, url: t.lastUrl, image: null, agentHighlight: null },
       ),
     ),
+
+  syncTabs: snap =>
+    set(s => {
+      // Main always holds at least one session, so an empty list is a message
+      // that cannot be true; taking it would leave the renderer with no active
+      // tab and every selector reading through `undefined`.
+      if (snap.tabs.length === 0) return {}
+      const tabs: Record<string, TabState> = {}
+      for (const info of snap.tabs) {
+        const existing = s.tabs[info.id]
+        tabs[info.id] = existing
+          ? // url and title are main's to know — it is what every tab's panes
+            // report to — so the snapshot is authoritative for those two and
+            // for nothing else.
+            existing.url === info.url && existing.title === info.title
+            ? existing
+            : { ...existing, url: info.url, title: info.title }
+          : { ...blankTab(), url: info.url, title: info.title }
+      }
+      const tabOrder = snap.tabs.map(t => t.id)
+      return { tabs, tabOrder, activeId: tabs[snap.activeId] ? snap.activeId : tabOrder[0]! }
+    }),
 
   addTab: id => {
     const s = get()

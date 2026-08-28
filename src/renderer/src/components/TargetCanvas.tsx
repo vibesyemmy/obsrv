@@ -285,8 +285,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // reason.
   useEffect(
     () =>
-      window.obsrv.onTargetNavigating(() => {
-        if (selectTab(useStore.getState()).mode === 'url') arm()
+      window.obsrv.onTargetNavigating(({ tabId }) => {
+        // Every tab's target reports now, not just the one in front. The
+        // canvas draws one tab, so a background tab's navigation owes *it*
+        // nothing — arming on it would raise a stall notice over a tab that
+        // is painting perfectly well.
+        const s = useStore.getState()
+        if (tabId !== s.activeId) return
+        if (selectTab(s).mode === 'url') arm()
       }),
     [arm],
   )

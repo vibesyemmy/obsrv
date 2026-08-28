@@ -59,6 +59,14 @@ export interface AgentUiState {
  * capture then falls back to the full window with a warning, never errors.
  */
 export interface AgentUiReport extends AgentUiState {
+  /**
+   * Which tab the report describes. The renderer holds one store per tab and
+   * reports whichever is in front, so a report can be in flight while the user
+   * switches — and main, which mirrors it for `status`, would then attribute
+   * the outgoing tab's preset to the incoming one. Naming the tab lets main
+   * drop a report that no longer describes the tab it is about to write.
+   */
+  tabId: string
   targetBounds?: { x: number; y: number; width: number; height: number } | null
   /**
    * Where the rendered screen itself sits, in the same window-relative CSS

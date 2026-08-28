@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { profileToParams } from '../../src/shared/panelSim'
 import { DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
+import { tabTitle } from '../../src/shared/tabList'
 import {
   CUSTOM_PRESET_ID,
   FALLBACK_SCALE,
@@ -386,6 +387,98 @@ describe('tabs', () => {
     expect(s.activeId).not.toBe(only)
     expect(s.tabOrder).toEqual([s.activeId])
     expect(tab().presetId).toBe('1080p-24')
+  })
+
+  it('writes the tab that was named, not the tab that is showing', () => {
+    // The whole point of the id on main's forwards. A background tab's late
+    // redirect used to be suppressed entirely (so its strip entry went stale)
+    // or, unnamed, would have rewritten the address of the tab in front.
+    const first = useStore.getState().activeId
+    const second = useStore.getState().addTab()!
+    useStore.getState().setTabUrl(first, 'https://background.test/')
+    useStore.getState().setTabTitle(first, 'Background')
+    useStore.getState().setTabLoading(first, true)
+    useStore.getState().setTabError(first, { code: -105, description: 'NAME_NOT_RESOLVED', url: 'x' })
+
+    expect(useStore.getState().tabs[first]!.url).toBe('https://background.test/')
+    expect(useStore.getState().tabs[first]!.title).toBe('Background')
+    expect(useStore.getState().tabs[first]!.targetLoading).toBe(true)
+    expect(useStore.getState().tabs[first]!.error?.code).toBe(-105)
+
+    expect(useStore.getState().activeId).toBe(second)
+    expect(tab().url).toBe('')
+    expect(tab().title).toBe('')
+    expect(tab().targetLoading).toBe(false)
+    expect(tab().error).toBeNull()
+  })
+
+  it('drops a report for a tab that is no longer open', () => {
+    // A report can outlive the close that raced it; resurrecting the tab it
+    // names would put a ghost back in the strip.
+    const first = useStore.getState().activeId
+    const second = useStore.getState().addTab()!
+    useStore.getState().closeTab(first)
+    useStore.getState().setTabUrl(first, 'https://gone.test/')
+    expect(useStore.getState().tabs[first]).toBeUndefined()
+    expect(useStore.getState().tabOrder).toEqual([second])
+  })
+
+  it('titles a tab by its page title, then its host, then its URL', () => {
+    const id = useStore.getState().activeId
+    expect(tabTitle(tab().url, tab().title)).toBe('New tab')
+    useStore.getState().setTabUrl(id, 'https://example.test:8080/deep/path')
+    expect(tabTitle(tab().url, tab().title)).toBe('example.test:8080')
+    useStore.getState().setTabTitle(id, 'Example — Home')
+    expect(tabTitle(tab().url, tab().title)).toBe('Example — Home')
+  })
+
+  describe('syncTabs', () => {
+    it('adopts main\'s list, order and active tab, keeping each open tab\'s own screen', () => {
+      const first = useStore.getState().activeId
+      useStore.getState().setPreset('1440p-27')
+      const second = useStore.getState().addTab()!
+
+      useStore.getState().syncTabs({
+        tabs: [
+          { id: first, url: 'https://a.test/', title: 'A' },
+          { id: second, url: '', title: '' },
+          { id: 'tab-from-main', url: 'https://c.test/', title: 'C' },
+        ],
+        activeId: 'tab-from-main',
+      })
+
+      const s = useStore.getState()
+      expect(s.tabOrder).toEqual([first, second, 'tab-from-main'])
+      expect(s.activeId).toBe('tab-from-main')
+      // Kept: the preset is the renderer's own state, not main's.
+      expect(s.tabs[first]!.presetId).toBe('1440p-27')
+      // Taken: url and title are main's — it is what every tab's panes report to.
+      expect(s.tabs[first]!.url).toBe('https://a.test/')
+      expect(s.tabs[first]!.title).toBe('A')
+      // A tab main has never mentioned opens blank.
+      expect(s.tabs['tab-from-main']!.presetId).toBe('1080p-24')
+    })
+
+    it('drops the tabs main no longer holds', () => {
+      const first = useStore.getState().activeId
+      const second = useStore.getState().addTab()!
+      useStore.getState().syncTabs({ tabs: [{ id: second, url: '', title: '' }], activeId: second })
+      expect(useStore.getState().tabOrder).toEqual([second])
+      expect(useStore.getState().tabs[first]).toBeUndefined()
+    })
+
+    it('refuses an empty list rather than leaving no active tab', () => {
+      const before = useStore.getState()
+      useStore.getState().syncTabs({ tabs: [], activeId: '' })
+      expect(useStore.getState().tabs).toBe(before.tabs)
+      expect(useStore.getState().activeId).toBe(before.activeId)
+    })
+
+    it('falls back to the first tab when the named active one is not in the list', () => {
+      const first = useStore.getState().activeId
+      useStore.getState().syncTabs({ tabs: [{ id: first, url: '', title: '' }], activeId: 'tab-nowhere' })
+      expect(useStore.getState().activeId).toBe(first)
+    })
   })
 
   it('ignores a close or an activate naming a tab that is not open', () => {

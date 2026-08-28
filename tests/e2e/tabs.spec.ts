@@ -270,3 +270,178 @@ test.describe('bus enablement follows the tab', () => {
     expect(await frames()).toBe(0)
   })
 })
+
+/**
+ * The forwards main sends the renderer used to be gated on the reporting
+ * session being the one in front, because the renderer held one URL bar and
+ * one badge. A strip that shows every tab turns that gate into the defect: a
+ * background tab could never refresh its own entry, so it would wear whatever
+ * it said when it was last in front. The id is what replaced the gate, so both
+ * halves are asserted — the background tab reports, and the front tab does not
+ * inherit what it said.
+ */
+test.describe('reports name their tab', () => {
+  const LINK = pathToFileURL(resolve(__dirname, '../fixtures/link.html')).href
+
+  let front = ''
+  let back = ''
+
+  test.beforeAll(async () => {
+    front = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+    // Added and left in the background: the point is a tab nobody is looking at.
+    back = await app.evaluate(() => {
+      const session = (globalThis as any).__obsrv.tabs.add()
+      if (!session) throw new Error('the tab cap refused a second tab')
+      return session.id as string
+    })
+    await page.evaluate(() => {
+      const w = window as any
+      for (const off of w.__offReports ?? []) off()
+      w.__reports = []
+      w.__offReports = [
+        window.obsrv.onUrlChanged(e => w.__reports.push({ kind: 'url', tabId: e.tabId, value: e.url })),
+        window.obsrv.onTitleChanged(e => w.__reports.push({ kind: 'title', tabId: e.tabId, value: e.title })),
+      ]
+    })
+  })
+
+  test.afterAll(async () => {
+    await page.evaluate(() => {
+      const w = window as any
+      for (const off of w.__offReports ?? []) off()
+      w.__offReports = []
+    })
+    await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.close(id), back)
+  })
+
+  test('a background tab reports its own URL and title, and names itself doing it', async () => {
+    const before = await page.inputValue('.url-form input')
+
+    await app.evaluate((_electron, arg: { id: string; url: string }) => {
+      const session = (globalThis as any).__obsrv.tabs.tabs.find((t: any) => t.id === arg.id)
+      if (!session) throw new Error(`no tab ${arg.id}`)
+      return session.native.load(arg.url) as Promise<string>
+    }, { id: back, url: LINK })
+
+    // The title is the strip's first choice of label, so it is the one that
+    // must arrive — and it must arrive attributed to the tab that navigated.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as any).__reports
+                .filter((r: any) => r.kind === 'title' && r.value === 'link-fixture')
+                .map((r: any) => r.tabId) as string[],
+          ),
+        { timeout: 10_000 },
+      )
+      .toEqual([back])
+
+    // Nothing the background tab did was ever attributed to the tab in front.
+    const strays = await page.evaluate(
+      (id: string) => (window as any).__reports.filter((r: any) => r.tabId === id) as unknown[],
+      front,
+    )
+    expect(strays).toEqual([])
+    // And the URL bar, which shows the tab in front, never moved.
+    expect(await page.inputValue('.url-form input')).toBe(before)
+  })
+})
+
+/**
+ * Phase two wrote every `uiState` report onto whichever tab was active when it
+ * arrived. A report crossing a switch describes the tab being *left*, so the
+ * outgoing tab's preset, profile and mode landed on the incoming one and
+ * `status` then answered with a screen nobody was looking at. The report names
+ * its tab now, and main drops one that names any other.
+ */
+test.describe('the ui-state mirror belongs to the tab that reported it', () => {
+  const mirrored = (): Promise<{ presetId: string; profileId: string }> =>
+    app.evaluate(() => {
+      const s = (globalThis as any).__obsrv.session
+      return { presetId: s.presetId as string, profileId: s.profileId as string }
+    })
+
+  const report = (tabId: string, presetId: string): Promise<void> =>
+    page.evaluate(
+      (arg: { tabId: string; presetId: string }) =>
+        window.obsrv.reportUiState({
+          tabId: arg.tabId,
+          presetId: arg.presetId,
+          profileId: 'reference',
+          viewMode: 'fit',
+          panes: 'both',
+          mode: 'url',
+        }),
+      { tabId, presetId },
+    )
+
+  let other = ''
+
+  test.beforeAll(async () => {
+    other = await app.evaluate(() => {
+      const session = (globalThis as any).__obsrv.tabs.add()
+      if (!session) throw new Error('the tab cap refused a second tab')
+      return session.id as string
+    })
+  })
+
+  test.afterAll(async () => {
+    await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.close(id), other)
+  })
+
+  test('drops a report naming a tab that is not in front', async () => {
+    const active = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+    await report(active, 'laptop-768')
+    await expect.poll(() => mirrored().then(m => m.presetId)).toBe('laptop-768')
+
+    // The shape a switch produces: a report already in flight, describing the
+    // tab that has just been left.
+    await report(other, 'iphone-61')
+    await page.waitForTimeout(200)
+    expect((await mirrored()).presetId).toBe('laptop-768')
+
+    // Not merely inert: a report that does name the tab in front still lands.
+    await report(active, '1440p-27')
+    await expect.poll(() => mirrored().then(m => m.presetId)).toBe('1440p-27')
+  })
+})
+
+/** The commands behind the strip's three affordances, before the strip exists. */
+test.describe('the renderer drives the tab list through main', () => {
+  const ids = (): Promise<string[]> =>
+    app.evaluate(() => (globalThis as any).__obsrv.tabs.tabs.map((t: any) => t.id as string))
+
+  test('opens a tab in front, switches back, and closes it', async () => {
+    const before = await ids()
+    const snapshot = await page.evaluate(() => window.obsrv.getTabs())
+    expect(snapshot.tabs.map(t => t.id)).toEqual(before)
+
+    const opened = await page.evaluate(() => window.obsrv.addTab())
+    expect(opened).not.toBeNull()
+    expect(await ids()).toEqual([...before, opened!])
+    // "New tab" means the tab you asked for is the one in front.
+    expect(await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)).toBe(opened)
+
+    await page.evaluate((id: string) => window.obsrv.activateTab(id), before[0]!)
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string))
+      .toBe(before[0]!)
+
+    await page.evaluate((id: string) => window.obsrv.closeTab(id), opened!)
+    await expect.poll(ids).toEqual(before)
+  })
+
+  test('ignores a command naming a tab that is not open', async () => {
+    const before = await ids()
+    const active = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+    await page.evaluate(() => {
+      window.obsrv.closeTab('tab-nowhere')
+      window.obsrv.activateTab('tab-nowhere')
+    })
+    await page.waitForTimeout(200)
+    expect(await ids()).toEqual(before)
+    expect(await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)).toBe(active)
+  })
+})

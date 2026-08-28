@@ -42,3 +42,21 @@ export function tabTitle(url: string, pageTitle: string): string {
     return url
   }
 }
+
+/**
+ * One tab as main describes it to the renderer: identity plus the two strings
+ * the strip renders. Main owns tab identity — it owns the sessions — so the
+ * renderer mirrors this list rather than minting ids of its own.
+ */
+export interface TabInfo {
+  id: string
+  url: string
+  /** Chromium's page title, or '' when the page has none yet. */
+  title: string
+}
+
+/** The whole strip, as `getTabs` answers and `tabsChanged` publishes it. */
+export interface TabSnapshot {
+  tabs: TabInfo[]
+  activeId: string
+}

@@ -33,9 +33,11 @@ export function App() {
 
   const setHost = useStore(s => s.setHost)
   const setSettings = useStore(s => s.setSettings)
-  const setUrl = useStore(s => s.setUrl)
-  const setError = useStore(s => s.setError)
-  const setTargetLoading = useStore(s => s.setTargetLoading)
+  const setTabUrl = useStore(s => s.setTabUrl)
+  const setTabTitle = useStore(s => s.setTabTitle)
+  const setTabError = useStore(s => s.setTabError)
+  const setTabLoading = useStore(s => s.setTabLoading)
+  const syncTabs = useStore(s => s.syncTabs)
   const setUpdate = useStore(s => s.setUpdate)
   const setHistory = useStore(s => s.setHistory)
   const setImageMeta = useStore(s => s.setImage)
@@ -48,6 +50,7 @@ export function App() {
   const presetId = useStore(s => selectTab(s).presetId)
   const profileId = useStore(s => selectTab(s).profileId)
   const viewMode = useStore(s => selectTab(s).viewMode)
+  const activeId = useStore(s => s.activeId)
   const panes = useStore(s => s.panes)
   const split = useStore(s => s.settings.split)
 
@@ -63,28 +66,38 @@ export function App() {
     // Same reason: a renderer reload would otherwise show an empty URL bar
     // dropdown until the next navigation pushed the list.
     window.obsrv.getHistory().then(setHistory, e => console.warn('obsrv: getHistory failed', e))
+    // Main owns the tabs; this adopts the list it already holds, which after a
+    // renderer reload is more than the one blank tab the store opens with.
+    window.obsrv.getTabs().then(syncTabs, e => console.warn('obsrv: getTabs failed', e))
     const offs = [
       window.obsrv.onHostChanged(setHost),
+      // Every one of these names its tab, so a background tab keeps its own
+      // strip entry current without rewriting the address bar of the tab in
+      // front — which is what an unnamed report from a background tab did, and
+      // why main used to gate them on the tab being in front at all.
+      //
       // A committed navigation — back, forward, reload, a link — supersedes
-      // the last load failure, and only a committed one: Chromium commits its
-      // error page without emitting `did-navigate`, so a failed load reports
-      // no URL at all (measured on Electron 43; a bad host, a refused
-      // connection, a missing file and a Back onto an error page all fire
-      // `did-fail-load` alone). The badge therefore lands last by having
+      // that tab's last load failure, and only a committed one: Chromium
+      // commits its error page without emitting `did-navigate`, so a failed
+      // load reports no URL at all (measured on Electron 43; a bad host, a
+      // refused connection, a missing file and a Back onto an error page all
+      // fire `did-fail-load` alone). The badge therefore lands last by having
       // nothing race it.
-      window.obsrv.onUrlChanged(url => {
-        setError(null)
-        setUrl(url)
+      window.obsrv.onUrlChanged(({ tabId, url }) => {
+        setTabError(tabId, null)
+        setTabUrl(tabId, url)
       }),
-      window.obsrv.onLoadError(setError),
-      window.obsrv.onTargetLoading(setTargetLoading),
+      window.obsrv.onTitleChanged(({ tabId, title }) => setTabTitle(tabId, title)),
+      window.obsrv.onLoadError(({ tabId, error }) => setTabError(tabId, error)),
+      window.obsrv.onTargetLoading(({ tabId, loading }) => setTabLoading(tabId, loading)),
+      window.obsrv.onTabsChanged(syncTabs),
       window.obsrv.onUpdateStatus(setUpdate),
       window.obsrv.onHistoryChanged(setHistory),
     ]
     return () => {
       for (const off of offs) off()
     }
-  }, [setHost, setSettings, setUrl, setError, setTargetLoading, setUpdate, setHistory])
+  }, [setHost, setSettings, setTabUrl, setTabTitle, setTabError, setTabLoading, syncTabs, setUpdate, setHistory])
 
   useEffect(() => {
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)
@@ -145,9 +158,13 @@ export function App() {
 
   // Main mirrors this for the agent-control server's `status`; the first run
   // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
+  // `activeId` is a dependency as well as a field: a switch between two tabs
+  // whose presets happen to match changes nothing else here, and main would
+  // keep mirroring the tab that was left. It is also what lets main drop a
+  // report that a switch overtook rather than write it onto the wrong tab.
   useEffect(() => {
-    window.obsrv.reportUiState({ presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds })
-  }, [presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds })
+  }, [activeId, presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else

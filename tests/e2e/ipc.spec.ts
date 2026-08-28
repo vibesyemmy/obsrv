@@ -33,7 +33,7 @@ test('reports the URL the native pane navigated to', async () => {
     const got = new Promise<string>(res => {
       const off = window.obsrv.onUrlChanged(v => {
         off()
-        res(v)
+        res(v.url)
       })
     })
     await window.obsrv.navigate(u)

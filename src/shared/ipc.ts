@@ -14,6 +14,7 @@ export const IPC = {
   frame: 'obsrv:frame',
   frameSubscribe: 'obsrv:frame-subscribe',
   urlChanged: 'obsrv:url-changed',
+  titleChanged: 'obsrv:title-changed',
   loadError: 'obsrv:load-error',
   hostChanged: 'obsrv:host-changed',
   targetLoading: 'obsrv:target-loading',
@@ -36,4 +37,9 @@ export const IPC = {
   getHistory: 'obsrv:get-history',
   clearHistory: 'obsrv:clear-history',
   historyChanged: 'obsrv:history-changed',
+  getTabs: 'obsrv:get-tabs',
+  addTab: 'obsrv:add-tab',
+  closeTab: 'obsrv:close-tab',
+  activateTab: 'obsrv:activate-tab',
+  tabsChanged: 'obsrv:tabs-changed',
 } as const

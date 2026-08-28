@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow, type IpcMainEvent, type WebContents } from
 import type { Rect } from '../shared/api'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_SETTINGS } from '../shared/presets'
-import { canAddTab, closeTab } from '../shared/tabList'
+import { canAddTab, closeTab, type TabSnapshot } from '../shared/tabList'
 import { attachFrameBus, type FrameBus } from './frameBus'
 import { TabSession } from './tabSession'
 
@@ -64,6 +64,13 @@ export class TabManager {
   /** A committed main-frame navigation in any tab's native pane, for history. */
   onNativeNavigate: (url: string, s: TabSession) => void = () => {}
 
+  /**
+   * The strip changed shape: a tab opened, closed, or came to the front.
+   * `registerIpc` publishes the snapshot; per-tab url and title travel on their
+   * own channels, so this fires only for list identity.
+   */
+  onTabsChanged: () => void = () => {}
+
   private readonly route = (e: IpcMainEvent, raw: unknown): void => {
     const session = this.byWebContents(e.sender)
     if (!session) return
@@ -107,6 +114,7 @@ export class TabManager {
     session.native.setVisible(false)
     session.setPainting(false)
     if (this.slot) session.native.setBounds(this.slot)
+    this.onTabsChanged()
     return session
   }
 
@@ -136,6 +144,7 @@ export class TabManager {
     if (this.slot) next.native.setBounds(this.slot)
     next.native.setVisible(this.nativeVisible(next))
     if (prev && prev !== next) prev.setPainting(false)
+    this.onTabsChanged()
   }
 
   close(id: string): void {
@@ -163,6 +172,10 @@ export class TabManager {
       this.activate(result.activeId)
     }
     going.destroy()
+    // After the destroy, so the snapshot the renderer receives never names a
+    // session that is already gone. `activate` above may have published one
+    // too; the message is idempotent, and a stale extra costs a re-render.
+    this.onTabsChanged()
   }
 
   /** One slot on screen; every view is moved to it, only the active one shows. */
@@ -182,15 +195,25 @@ export class TabManager {
     this.list.length = 0
   }
 
+  /** What the strip renders: list identity plus each tab's two strings. */
+  snapshot(): TabSnapshot {
+    return {
+      tabs: this.list.map(t => ({ id: t.id, url: t.url, title: t.title })),
+      activeId: this.id,
+    }
+  }
+
   /**
    * Builds a session and wires its pane events to the window.
    *
-   * Every forward is gated on the session being the one in front. The renderer
-   * holds one URL bar, one load-error badge and one loading spinner today, so a
-   * background tab's late redirect reporting itself would rewrite the front
-   * tab's address — the same misattribution the sender router exists to stop,
-   * arriving from the other direction. Phase three's per-tab store is what
-   * replaces the gate with a tab id.
+   * **Every forward names its tab.** They used to be gated on the session being
+   * the one in front, because the renderer held one URL bar, one load-error
+   * badge and one spinner, and an unnamed report from a background tab would
+   * rewrite the front tab's address. With a strip that shows every tab, the
+   * gate is the defect instead: a background tab could never update its own
+   * entry, so the strip would show whatever it said when it was last in front.
+   * The id restores the isolation the gate was standing in for — the renderer
+   * writes the tab that is named, not the tab that is showing.
    */
   private create(): TabSession {
     // `s` is referenced inside its own initialiser: `TabSession` takes the URL
@@ -198,7 +221,23 @@ export class TabManager {
     // speaks for. The closure only ever runs after the constructor returns, so
     // the binding is always in place by the time it is read.
     const s: TabSession = new TabSession(this.win, url => {
-      this.toActive(s, IPC.urlChanged, url)
+      s.url = url
+      // A committed navigation replaces the page, so the title that described
+      // the old one must not linger over the new one in the strip. Chromium
+      // reports the new title after the commit, so clearing here means the
+      // entry falls back to the host for a moment rather than lying.
+      s.title = ''
+      this.toRenderer(IPC.urlChanged, { tabId: s.id, url })
+      this.toRenderer(IPC.titleChanged, { tabId: s.id, title: '' })
+    })
+
+    // The strip's first choice of label. Taken from the native pane rather than
+    // the target because the native pane is the navigation master — the target
+    // is mirrored into whatever it commits — and because a suspended offscreen
+    // window is a poor thing to depend on for a string.
+    s.native.webContents.on('page-title-updated', (_e, title) => {
+      s.title = title
+      this.toRenderer(IPC.titleChanged, { tabId: s.id, title })
     })
 
     s.native.webContents.on('focus', () => {
@@ -206,22 +245,21 @@ export class TabManager {
       // OS-level overlay, so no DOM event reaches the renderer's document and —
       // in an unfocused window — not even a `blur`. Main can see it, so main
       // says so. The renderer's overflow menu uses this to dismiss itself.
-      this.toActive(s, IPC.nativeFocused)
+      this.toRenderer(IPC.nativeFocused, { tabId: s.id })
     })
-    // Ungated: history is window-global, and a visit is a visit whichever tab
-    // made it. See `registerIpc`'s history section for why this hook and not
-    // `navigate` is the one that records.
+    // History is window-global, and a visit is a visit whichever tab made it.
+    // See `registerIpc`'s history section for why this hook and not `navigate`
+    // is the one that records.
     s.native.webContents.on('did-navigate', (_e, url) => this.onNativeNavigate(url, s))
 
-    s.target.on('load-error', err => this.toActive(s, IPC.loadError, err))
-    s.target.on('loading', loading => this.toActive(s, IPC.targetLoading, loading))
-    s.target.on('navigating', () => this.toActive(s, IPC.targetNavigating))
+    s.target.on('load-error', err => this.toRenderer(IPC.loadError, { tabId: s.id, error: err }))
+    s.target.on('loading', loading => this.toRenderer(IPC.targetLoading, { tabId: s.id, loading }))
+    s.target.on('navigating', () => this.toRenderer(IPC.targetNavigating, { tabId: s.id }))
     return s
   }
 
-  private toActive(s: TabSession, channel: string, ...args: unknown[]): void {
-    if (s.id !== this.id) return
+  private toRenderer(channel: string, payload: unknown): void {
     if (this.win.isDestroyed() || this.win.webContents.isDestroyed()) return
-    this.win.webContents.send(channel, ...args)
+    this.win.webContents.send(channel, payload)
   }
 }

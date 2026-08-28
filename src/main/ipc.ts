@@ -15,6 +15,7 @@ import {
   parseRect,
   parseScrollReport,
   parseSettings,
+  parseTabId,
   parseUiState,
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
@@ -411,16 +412,27 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
     if (!s) return
-    const { targetBounds: bounds, canvasBounds: canvas, ...state } = s
-    Object.assign(uiState, state)
-    targetBounds = bounds ?? null
-    canvasBounds = canvas ?? null
+    // The flush is about the renderer having mounted its listeners, which any
+    // report proves whichever tab it named — so it happens before the tab
+    // check below, and a first report that loses a race to a switch does not
+    // strand an early agent's patch in the queue.
     if (!rendererReported) {
       rendererReported = true
       for (const patch of pendingApplies.splice(0)) {
         if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
       }
     }
+    // A report describes one tab. One in flight while the user switches
+    // describes the tab being *left*, and writing it into a mirror keyed on
+    // "the active tab" attributes the outgoing tab's preset, profile and mode
+    // to the incoming one — `status` then answers with a screen nobody is
+    // looking at. The renderer re-reports on every switch, so the dropped
+    // report is replaced within a frame rather than lost.
+    if (s.tabId !== tabs.activeId) return
+    const { tabId: _tabId, targetBounds: bounds, canvasBounds: canvas, ...state } = s
+    Object.assign(uiState, state)
+    targetBounds = bounds ?? null
+    canvasBounds = canvas ?? null
   })
 
   // --- viewport settling -----------------------------------------------------
@@ -616,6 +628,44 @@ export function registerIpc(ctx: AppContext): void {
     if (next === history) return
     commitHistory(next)
   }
+
+  // --- the tab strip ---------------------------------------------------------
+  // Main owns tab identity, because a tab *is* the pair of Chromium renderers
+  // main built. The strip mirrors this list; every command below names a tab
+  // from it, and an id no session carries resolves to nothing in the manager
+  // and is dropped rather than guessed at.
+  const publishTabs = (): void => {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return
+    win.webContents.send(IPC.tabsChanged, tabs.snapshot())
+  }
+  tabs.onTabsChanged = publishTabs
+
+  ipcMain.handle(IPC.getTabs, e => {
+    assertRenderer(e)
+    return tabs.snapshot()
+  })
+  ipcMain.handle(IPC.addTab, e => {
+    assertRenderer(e)
+    // Add *and* activate: "new tab" means the tab you asked for is the one in
+    // front. `add` alone leaves it in the background on purpose — that is what
+    // a restore wants — so the front-bringing belongs to this command.
+    const session = tabs.add()
+    if (!session) return null
+    tabs.activate(session.id)
+    return session.id
+  })
+  ipcMain.on(IPC.closeTab, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const id = parseTabId(raw)
+    if (id === null) return
+    tabs.close(id)
+  })
+  ipcMain.on(IPC.activateTab, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const id = parseTabId(raw)
+    if (id === null) return
+    tabs.activate(id)
+  })
 
   ipcMain.handle(IPC.getHistory, e => {
     assertRenderer(e)

@@ -40,6 +40,16 @@ export class TabSession {
   modeIsLive = true
   /** The renderer's last reported mode, for `status`. Never drives the view. */
   reportedMode: 'url' | 'image' = 'url'
+  /**
+   * What the strip shows for this tab. Both are main's, because main is what
+   * every tab's panes report to: a background tab has no other way to keep its
+   * own strip entry current, and the renderer holds one URL bar for the tab in
+   * front. `title` is Chromium's page title, empty until the page has one —
+   * `tabTitle` falls back to the host, then the URL.
+   */
+  url = ''
+  title = ''
+
   /** A preset change is in flight; a capture or scroll must wait for it. */
   viewportPending = false
   viewportArrived = false
@@ -69,7 +79,10 @@ export class TabSession {
     // report a navigation or an error while the main window is closing.
     this.native = new NativePane(win, {
       onLoadError: err => {
-        if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
+        // Named, like every renderer-bound forward: the renderer keeps a load
+        // error per tab, and an unnamed one from a background tab would badge
+        // the tab in front.
+        if (!win.isDestroyed()) win.webContents.send(IPC.loadError, { tabId: this.id, error: err })
       },
       // The renderer reads the file back over `readImageFile`; no bytes here.
       onImageDrop: path => {
