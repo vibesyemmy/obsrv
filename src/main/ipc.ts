@@ -184,6 +184,10 @@ export function registerIpc(ctx: AppContext): void {
   // The manager asks the same question on activation, so the incoming view
   // lands in the right state without re-deriving it there and drifting.
   tabs.nativeVisible = (s: TabSession): boolean => s.modeIsLive && panesShowNative
+  // And the same for frame delivery, for the same reason: image mode is per
+  // tab, so a switch changes which mode is in force without any mode changing,
+  // and `setMode` below never fires. Derived here so "live" means one thing.
+  tabs.busEnabled = (s: TabSession): boolean => s.modeIsLive
   const applyNativeVisibility = (): void => {
     const s = tab()
     s.native.setVisible(tabs.nativeVisible(s))
@@ -459,6 +463,15 @@ export function registerIpc(ctx: AppContext): void {
   // way out would leave a listener on the tab that was actually being watched.
   const nextFrame = (t: TargetSource, budgetMs: number): Promise<boolean> =>
     new Promise(resolve => {
+      // A suspended source emits nothing, so `invalidate` produces no frame and
+      // the wait can only expire. That is a background tab — the user switched
+      // away mid-settle — and burning the whole budget on it would stall the
+      // scroll that was asked of it for four seconds to learn what is already
+      // known.
+      if (!t.painting) {
+        resolve(false)
+        return
+      }
       const timer = setTimeout(() => {
         t.off('frame', onFrame)
         resolve(false)

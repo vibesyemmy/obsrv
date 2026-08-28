@@ -206,3 +206,67 @@ test('the router resolves every pane to its own tab, and nothing else', async ()
   }
   expect(owners.renderer).toBeNull()
 })
+
+/**
+ * Image mode is per tab, so a switch changes which mode is in force without
+ * any mode changing — and `IPC.setMode`, the only thing that ever wrote
+ * `bus.setEnabled`, does not fire. Activation has to re-derive it, exactly as
+ * it re-derives native visibility. Left out, leaving an image-mode tab strands
+ * the bus disabled and the canvas never receives another frame.
+ */
+test.describe('bus enablement follows the tab', () => {
+  const frames = (): Promise<number> => page.evaluate(() => (window as any).__frames.length as number)
+  const reset = (): Promise<void> =>
+    page.evaluate(() => {
+      ;(window as any).__frames.length = 0
+    })
+  const activate = (id: string): Promise<void> =>
+    app.evaluate((_electron, tabId: string) => (globalThis as any).__obsrv.tabs.activate(tabId), id)
+
+  let live = ''
+  let drawn = ''
+
+  test.beforeAll(async () => {
+    live = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+    drawn = await app.evaluate(() => {
+      const ctx = (globalThis as any).__obsrv
+      const session = ctx.tabs.add()
+      if (!session) throw new Error('the tab cap refused a second tab')
+      ctx.tabs.activate(session.id)
+      return session.id as string
+    })
+    // `setMode` drives whichever tab is active, so this is the second one.
+    await page.evaluate(() => window.obsrv.setMode('image'))
+    await page.evaluate(() => {
+      const w = window as any
+      if (w.__off) w.__off()
+      w.__frames = []
+      w.__off = window.obsrv.onFrame(() => w.__frames.push(1))
+    })
+  })
+
+  test.afterAll(async () => {
+    await activate(drawn)
+    await page.evaluate(() => window.obsrv.setMode('url'))
+    await activate(live)
+    await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.close(id), drawn)
+  })
+
+  test('leaving an image-mode tab reopens delivery for the tab arrived at', async () => {
+    await reset()
+    await activate(live)
+    // The page is static and has no reason of its own to paint: anything the
+    // collector sees came from activation re-enabling the bus and invalidating.
+    await page.waitForFunction(() => (window as any).__frames.length > 0, undefined, { timeout: 5_000 })
+  })
+
+  test('entering an image-mode tab stops delivery, so target frames cannot overwrite the drawing', async () => {
+    await reset()
+    await activate(drawn)
+    // Activation invalidates the incoming target before the gate closes, so
+    // this is not merely "nothing happened": the frame that produces is
+    // deliberately dropped on delivery.
+    await page.waitForTimeout(600)
+    expect(await frames()).toBe(0)
+  })
+})

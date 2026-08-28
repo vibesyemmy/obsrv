@@ -51,6 +51,16 @@ export class TabManager {
    */
   nativeVisible: (s: TabSession) => boolean = () => true
 
+  /**
+   * Whether the bus should deliver the active session's frames. Image mode is
+   * per tab, so this cannot be left to the `setMode` handler alone: that
+   * handler only fires when the *mode* changes, and a tab switch changes which
+   * mode is in force without any mode changing. Leaving it out strands the bus
+   * in the outgoing tab's setting — switch off an image-mode tab and the
+   * canvas never receives another frame.
+   */
+  busEnabled: (s: TabSession) => boolean = () => true
+
   /** A committed main-frame navigation in any tab's native pane, for history. */
   onNativeNavigate: (url: string, s: TabSession) => void = () => {}
 
@@ -106,6 +116,10 @@ export class TabManager {
    *   * painting resumes on the incoming session *before* `setSource`, because
    *     `setSource`'s invalidate lands on a stopped webContents otherwise and
    *     the canvas keeps showing the outgoing tab's pixels;
+   *   * the bus is re-enabled *after* `setSource`, never before: enabling it
+   *     while the outgoing target is still bound invalidates that one, and the
+   *     frame it produces paints the tab being left over the tab being
+   *     entered;
    *   * the slot rect is applied before the view is shown, so it never appears
    *     at a stale position first;
    *   * the outgoing session is suspended last, so nothing is dark in between.
@@ -118,6 +132,7 @@ export class TabManager {
     if (prev && prev !== next) prev.native.setVisible(false)
     next.setPainting(true)
     this.bus.setSource(next.target)
+    this.bus.setEnabled(this.busEnabled(next))
     if (this.slot) next.native.setBounds(this.slot)
     next.native.setVisible(this.nativeVisible(next))
     if (prev && prev !== next) prev.setPainting(false)
@@ -126,6 +141,10 @@ export class TabManager {
   close(id: string): void {
     const going = this.list.find(t => t.id === id)
     if (!going) return
+    // Hidden before the list is rebuilt: `activate` hides the outgoing view by
+    // looking it up, and this one is about to stop being findable. Left up, it
+    // sits over the incoming tab until `webContents.close()` lands.
+    going.native.setVisible(false)
     const result = closeTab([...this.list], id, this.id)
     this.list.length = 0
     this.list.push(...result.tabs)
@@ -137,6 +156,7 @@ export class TabManager {
       this.list.push(fresh)
       this.id = fresh.id
       this.bus.setSource(fresh.target)
+      this.bus.setEnabled(this.busEnabled(fresh))
       if (this.slot) fresh.native.setBounds(this.slot)
       fresh.native.setVisible(this.nativeVisible(fresh))
     } else if (result.activeId !== this.id) {
