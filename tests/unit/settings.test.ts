@@ -158,17 +158,29 @@ describe('settings', () => {
     expect(loadSettings(f).maxTabs).toBe(12)
   })
 
-  it('treats a maxTabs below the band as absent', () => {
+  it('clamps a maxTabs below the band up to the floor, rather than to the default', () => {
+    // Unlike the split, a cap is ordered: someone who typed 1 wants fewer
+    // tabs, and answering with 12 reverts them to a number they rejected.
     const f = join(dir(), 'settings.json')
     for (const v of [1, 0, -4]) {
       writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
-      expect(loadSettings(f).maxTabs).toBe(12)
+      expect(loadSettings(f).maxTabs).toBe(2)
     }
   })
 
-  it('treats a maxTabs above the band, or one that is not a whole count, as absent', () => {
+  it('clamps a maxTabs above the band down to the ceiling, rather than to the default', () => {
     const f = join(dir(), 'settings.json')
-    for (const v of [33, 999, 12.5, 'lots', null, NaN]) {
+    for (const v of [33, 999]) {
+      writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
+      expect(loadSettings(f).maxTabs).toBe(32)
+    }
+  })
+
+  it('falls back for a maxTabs that carries no direction to honour', () => {
+    // A fraction or a string is not "more tabs" or "fewer tabs", it is
+    // nonsense, and there is nothing in it to clamp towards.
+    const f = join(dir(), 'settings.json')
+    for (const v of [4.5, 12.5, 'lots', null, true, NaN]) {
       writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
       expect(loadSettings(f).maxTabs).toBe(12)
     }
