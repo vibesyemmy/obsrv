@@ -91,6 +91,7 @@ export function SettingsPanel() {
   const host = useStore(useShallow(s => s.host))
   const settings = useStore(useShallow(s => s.settings))
   const update = useStore(s => s.update)
+  const history = useStore(s => s.history)
   const custom = useStore(useShallow(s => s.custom))
   const viewport = useStore(useShallow(selectViewport))
   const scale = useStore(selectScale)
@@ -285,6 +286,36 @@ export function SettingsPanel() {
 
       <p className="muted">
         One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
+      </p>
+
+      <h2>History</h2>
+
+      <label className="control inline record-history-toggle">
+        <input
+          type="checkbox"
+          checked={settings.recordHistory}
+          onChange={e => commit({ ...settings, recordHistory: e.target.checked })}
+        />
+        <span>Remember visited addresses</span>
+      </label>
+
+      <button
+        type="button"
+        className="clear-history"
+        disabled={history.length === 0}
+        onClick={() => void window.obsrv.clearHistory()}
+      >
+        Clear history
+      </button>
+
+      <p className="readout">
+        <span className="history-count num">{history.length}</span>
+        {history.length === 1 ? ' address remembered' : ' addresses remembered'}
+      </p>
+
+      <p className="muted">
+        Typed into the URL bar as suggestions and nowhere else. Turning this off stops
+        recording and keeps what is stored; Clear erases it.
       </p>
     </div>
   )
