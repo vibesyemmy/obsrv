@@ -1,7 +1,7 @@
 # Obsrv — multi-tab sessions
 
 **Date:** 2026-08-28
-**Status:** Draft — awaiting review
+**Status:** Approved 2026-08-28
 **Extends:** `2026-08-22-obsrv-design.md` (§4 architecture), and the chrome specs
 `2026-08-23-obsrv-ui-style.md`, `2026-08-27-obsrv-toolbar-design.md`.
 
@@ -46,8 +46,19 @@ every background tab would rasterise a full viewport thirty times a second forev
 all live, which is what "background tabs stay loaded" has to mean — it simply stops
 producing pixels nobody is looking at. This is mandatory, not an optimisation.
 
-The native views have no equivalent lever, so **tabs are capped at 12**. Past that the
-process count alone makes the app worse than the problem it solves.
+The native views have no equivalent lever — they stay live and composited whether or
+not anyone is looking — so the tab count is capped.
+
+**`maxTabs` on `Settings`, default 12, editable as a number input beside the monitor
+diagonal.** 12 is a judgement about process count, not a measurement, and the right
+ceiling depends on the machine; a user with 64GB should not be held to a number picked
+for a laptop. Validated like every other settings field, clamped to a sane band
+(2–32) on load.
+
+**The cap never fails silently.** At the limit the new-tab button is disabled and
+dimmed, and its tooltip says why and what to do — that the cap is reached, and where
+to change it. A button that simply does nothing when clicked is the worst of the three
+options; a hidden button is the second worst.
 
 ## Data model
 
@@ -83,6 +94,26 @@ would receive every message — a scroll in one tab moving another.
 `e.sender` to its tab.** `SyncBus` loses its own registration and gains a method the
 router calls. This is the change most likely to produce silent cross-tab corruption if
 done casually, and it is where the tests should push hardest.
+
+### Sequencing: the session extraction comes first
+
+`registerIpc` currently holds its session state as closure variables — `modeIsLive`,
+`panesShowNative`, `rendererDrivesLayout`, `viewportPending` / `viewportArrived`, the
+`uiState` mirror, and the capture-settle machinery around `settleTarget` and
+`awaitViewportStable`. Every one of those is per-tab under this design.
+
+**Moving that state onto `TabSession` is phase one — before any tab UI, before any
+switching logic, while there is still exactly one session.** It is a prerequisite, not
+cleanup afterwards.
+
+The reason is that closure state and multiple sessions fail in a specific, expensive
+way: nothing errors. A value that should have been per-tab silently serves whichever
+tab wrote it last, and the symptom appears somewhere unrelated — a capture cropped to
+another tab's geometry, a settle that waits on a resize that already landed elsewhere.
+Those are hard to attribute and easy to misdiagnose as timing. Extracting first means
+the single-session app must still pass its entire existing suite before a second
+session can exist, which turns the refactor into something provable rather than
+something hoped for.
 
 ### Renderer
 
@@ -154,20 +185,21 @@ two new `status` fields.
 
 1. **Cross-tab message leakage** through the global `ipcMain` channels. Mitigated by
    the single-listener router; tested by driving two tabs and asserting isolation.
-2. **Process count.** 12 tabs is 24 renderers. Capped, and background targets stop
-   painting.
-3. **`registerIpc` is already a long function** holding a great deal of closure state.
-   Turning each value into a per-tab field will grow it past what is comfortable to
-   reason about; the session state should move onto `TabSession` rather than into a
-   wider closure.
-4. **Test surface.** `globalThis.__obsrv` exposes `AppContext` wholesale and specs
+2. **Process count.** Every tab is two renderers. Capped and configurable, with
+   background targets not painting.
+3. **Test surface.** `globalThis.__obsrv` exposes `AppContext` wholesale and specs
    reach into `__obsrv.native` directly. Changing that shape touches many e2e files.
 
 ## Test plan
 
+**Phase one has no new tests of its own** — that is the point of it. The session
+extraction must leave the entire existing suite green with no assertion changed. A
+green suite after a refactor that touched every stateful value in `registerIpc` is the
+evidence; a passing new test would not be.
+
 **Unit** — the pure tab-list module: add, close, activate, close-the-active (which
-neighbour gets focus), the 12 cap, `tabs.json` round trip, a malformed file loading as
-empty, title derivation from URL.
+neighbour gets focus), the cap, `tabs.json` round trip, a malformed file loading as
+empty, title derivation from URL, and `maxTabs` clamping on load.
 
 **E2E** —
 - A new tab is independent: set a different preset in each, both survive switching.
@@ -179,3 +211,5 @@ empty, title derivation from URL.
 - Closing the last tab leaves one blank tab, not a dead window.
 - `status` reports the active tab's id, and it changes when the user switches.
 - The driven-tab marker appears on the right tab and only while agent control is on.
+- At the cap the new-tab button is disabled and carries the explanatory tooltip;
+  raising `maxTabs` in Settings re-enables it without a relaunch.
