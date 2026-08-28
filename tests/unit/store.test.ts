@@ -292,3 +292,107 @@ describe('panes', () => {
     expect(tab().agentHighlight).not.toBeNull()
   })
 })
+
+describe('tabs', () => {
+  it('opens one tab and every per-session field belongs to it', () => {
+    const s = useStore.getState()
+    expect(s.tabOrder).toEqual([s.activeId])
+    expect(Object.keys(s.tabs)).toEqual([s.activeId])
+  })
+
+  it('gives each tab its own screen, and switching back restores it', () => {
+    const first = useStore.getState().activeId
+    useStore.getState().setPreset('1440p-27')
+    useStore.getState().setUrl('https://first.test/')
+
+    const second = useStore.getState().addTab()!
+    expect(second).not.toBe(first)
+    expect(useStore.getState().activeId).toBe(second)
+    // A new tab opens blank, not on a copy of the tab it was opened from.
+    expect(tab().presetId).toBe('1080p-24')
+    expect(tab().url).toBe('')
+
+    useStore.getState().setPreset('iphone-61')
+    // The first tab kept its own screen while the second was being set up.
+    expect(useStore.getState().tabs[first]!.presetId).toBe('1440p-27')
+    expect(useStore.getState().tabs[first]!.url).toBe('https://first.test/')
+
+    useStore.getState().activateTab(first)
+    expect(tab().presetId).toBe('1440p-27')
+    expect(selectViewport(useStore.getState())).toEqual({ width: 2560, height: 1440, clamped: false })
+    expect(selectUrlBarText(useStore.getState())).toBe('https://first.test/')
+
+    useStore.getState().activateTab(second)
+    expect(tab().presetId).toBe('iphone-61')
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(3)
+  })
+
+  it('adds at the end of the strip and refuses past the cap', () => {
+    const first = useStore.getState().activeId
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, maxTabs: 2 } })
+    const second = useStore.getState().addTab()
+    expect(useStore.getState().tabOrder).toEqual([first, second])
+
+    expect(useStore.getState().addTab()).toBeNull()
+    expect(useStore.getState().tabOrder).toEqual([first, second])
+    expect(useStore.getState().activeId).toBe(second)
+  })
+
+  it('adopts an id minted elsewhere, and a second add of it switches rather than blanks it', () => {
+    const first = useStore.getState().activeId
+    expect(useStore.getState().addTab('tab-from-main')).toBe('tab-from-main')
+    useStore.getState().setPreset('1440p-27')
+
+    useStore.getState().activateTab(first)
+    expect(useStore.getState().addTab('tab-from-main')).toBe('tab-from-main')
+    expect(useStore.getState().tabOrder).toEqual([first, 'tab-from-main'])
+    expect(tab().presetId).toBe('1440p-27')
+  })
+
+  it('closing the active tab moves right, and at the end moves left', () => {
+    const first = useStore.getState().activeId
+    const second = useStore.getState().addTab()!
+    const third = useStore.getState().addTab()!
+
+    useStore.getState().activateTab(second)
+    useStore.getState().closeTab(second)
+    expect(useStore.getState().tabOrder).toEqual([first, third])
+    expect(useStore.getState().activeId).toBe(third)
+
+    useStore.getState().closeTab(third)
+    expect(useStore.getState().tabOrder).toEqual([first])
+    expect(useStore.getState().activeId).toBe(first)
+  })
+
+  it('closing a background tab leaves the active one alone', () => {
+    const first = useStore.getState().activeId
+    const second = useStore.getState().addTab()!
+    useStore.getState().setPreset('1440p-27')
+
+    useStore.getState().closeTab(first)
+    expect(useStore.getState().tabOrder).toEqual([second])
+    expect(useStore.getState().activeId).toBe(second)
+    expect(tab().presetId).toBe('1440p-27')
+    expect(useStore.getState().tabs[first]).toBeUndefined()
+  })
+
+  it('leaves a fresh blank tab when the last one closes', () => {
+    const only = useStore.getState().activeId
+    useStore.getState().setPreset('1440p-27')
+    useStore.getState().closeTab(only)
+
+    const s = useStore.getState()
+    expect(s.tabOrder).toHaveLength(1)
+    expect(s.activeId).not.toBe(only)
+    expect(s.tabOrder).toEqual([s.activeId])
+    expect(tab().presetId).toBe('1080p-24')
+  })
+
+  it('ignores a close or an activate naming a tab that is not open', () => {
+    const before = useStore.getState()
+    useStore.getState().closeTab('tab-gone')
+    useStore.getState().activateTab('tab-gone')
+    expect(useStore.getState().tabs).toBe(before.tabs)
+    expect(useStore.getState().activeId).toBe(before.activeId)
+  })
+})

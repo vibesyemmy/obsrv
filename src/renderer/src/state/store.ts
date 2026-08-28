@@ -13,6 +13,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
+import { canAddTab, closeTab as closeInList } from '../../../shared/tabList'
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
@@ -139,6 +140,21 @@ export interface AppState {
    * newer highlight. Without `seq`, clears unconditionally.
    */
   clearAgentHighlight(seq?: number): void
+
+  /**
+   * Opens a blank tab at the end of the strip and switches to it, returning
+   * its id — or null when `settings.maxTabs` is already reached, mirroring
+   * the main process's `TabManager.add`. `id` adopts an id minted elsewhere
+   * (main mints the session's), so the two sides can name the same tab.
+   */
+  addTab(id?: string): string | null
+  /**
+   * Closes a tab, moving focus the way `tabList.closeTab` says. Closing the
+   * last one leaves a fresh blank tab rather than no tab: the window is the
+   * app, and an empty app with no way back is a trap.
+   */
+  closeTab(id: string): void
+  activateTab(id: string): void
 }
 
 function sameError(a: LoadError | null, b: LoadError | null): boolean {
@@ -201,7 +217,7 @@ const patchActive = (patch: Partial<TabState>): ((s: AppState) => Partial<AppSta
 
 const FIRST_TAB = newTabId()
 
-export const useStore = create<AppState>()(set => ({
+export const useStore = create<AppState>()((set, get) => ({
   tabs: { [FIRST_TAB]: blankTab() },
   tabOrder: [FIRST_TAB],
   activeId: FIRST_TAB,
@@ -264,6 +280,39 @@ export const useStore = create<AppState>()(set => ({
             : { mode, url: t.lastUrl, image: null, agentHighlight: null },
       ),
     ),
+
+  addTab: id => {
+    const s = get()
+    if (!canAddTab(s.tabOrder.length, s.settings.maxTabs)) return null
+    const next = id ?? newTabId()
+    // An id already open is that tab, not a second one; switch to it instead
+    // of overwriting a live session with a blank.
+    if (s.tabs[next]) {
+      set({ activeId: next })
+      return next
+    }
+    set({ tabs: { ...s.tabs, [next]: blankTab() }, tabOrder: [...s.tabOrder, next], activeId: next })
+    return next
+  },
+
+  closeTab: id =>
+    set(s => {
+      if (!s.tabs[id]) return {}
+      const result = closeInList(
+        s.tabOrder.map(tabId => ({ id: tabId })),
+        id,
+        s.activeId,
+      )
+      if (result.activeId === null) {
+        const fresh = newTabId()
+        return { tabs: { [fresh]: blankTab() }, tabOrder: [fresh], activeId: fresh }
+      }
+      const tabs = { ...s.tabs }
+      delete tabs[id]
+      return { tabs, tabOrder: result.tabs.map(t => t.id), activeId: result.activeId }
+    }),
+
+  activateTab: id => set(s => (s.tabs[id] ? { activeId: id } : {})),
 
 }))
 
