@@ -268,3 +268,39 @@ test('a live obsrv_snap of the page already showing keeps its scroll position', 
   expect(moved.structuredContent).toMatchObject({ mode: 'live', url: FIXTURE, navigated: true })
   expect(await paneScrollY(app)).toBe(0)
 })
+
+test('a drive on a second tab is answered by that tab, and leaves the first alone', async () => {
+  // `scrollResult` is the other process-global channel a second session can
+  // speak on. Before the sender router its one listener was bound to the panes
+  // of whichever session booted, so a scroll driven on any later tab was
+  // answered by a webContents the listener refused — the reply was dropped and
+  // the agent was told the offset could not be confirmed. The reported
+  // `scrolled` here is that round trip, made on a tab that did not boot.
+  const scrollY = (id: string, pane: 'native' | 'target'): Promise<number> =>
+    app.evaluate((_e, arg: { id: string; pane: string }) => {
+      const ctx = (globalThis as any).__obsrv
+      const session = ctx.tabs.tabs.find((t: any) => t.id === arg.id)
+      return session[arg.pane].webContents.executeJavaScript('window.scrollY') as Promise<number>
+    }, { id, pane })
+
+  const first = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+  const before = await scrollY(first, 'target')
+  const second = await app.evaluate(() => {
+    const ctx = (globalThis as any).__obsrv
+    const session = ctx.tabs.add()
+    if (!session) throw new Error('the tab cap refused a second tab')
+    ctx.tabs.activate(session.id)
+    return session.id as string
+  })
+
+  const r = await call('obsrv_drive', { url: TALL, preset: 'laptop-768', scroll: { x: 0, y: 900 } })
+  expect(r.isError).toBeFalsy()
+  expect(r.structuredContent).toMatchObject({ url: TALL, scrolled: { x: 0, y: 900 }, scroller: 'root' })
+
+  await expect.poll(() => scrollY(second, 'target'), { timeout: 5_000 }).toBe(900)
+  await expect.poll(() => scrollY(second, 'native'), { timeout: 5_000 }).toBe(900)
+  // The tab that booted was not driven and was not scrolled by the drive.
+  expect(await scrollY(first, 'target')).toBe(before)
+
+  await app.evaluate((_e, id: string) => (globalThis as any).__obsrv.tabs.close(id), second)
+})

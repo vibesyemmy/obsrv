@@ -9,6 +9,7 @@ import {
   parseScrollReport,
   parseScrollRequest,
   parseSettings,
+  parseTabId,
   parseUiState,
 } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
@@ -80,7 +81,7 @@ describe('parseInputEvent', () => {
 
 describe('parseSettings', () => {
   it('carries canvasBounds, and nulls it when absent or malformed', () => {
-    const base = { presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url' }
+    const base = { tabId: 'tab-1', presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url' }
     expect(parseUiState({ ...base, canvasBounds: { x: 10, y: 20, width: 300, height: 400 } })?.canvasBounds).toEqual({
       x: 10,
       y: 20,
@@ -101,6 +102,7 @@ describe('parseSettings', () => {
         lastUpdateCheck: 1700000000000,
         recordHistory: false,
         split: 0.7,
+        maxTabs: 6,
         extra: 1,
       }),
     ).toEqual({
@@ -111,7 +113,15 @@ describe('parseSettings', () => {
       lastUpdateCheck: 1700000000000,
       recordHistory: false,
       split: 0.7,
+      maxTabs: 6,
     })
+  })
+
+  it('carries a non-default maxTabs across the wire', () => {
+    // A field the parser forgets to copy is dropped silently: every type still
+    // checks out, and the value the renderer sent simply never arrives.
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 4 })?.maxTabs).toBe(4)
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 32 })?.maxTabs).toBe(32)
   })
   it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
     expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500 })).toEqual({
@@ -127,6 +137,8 @@ describe('parseSettings', () => {
       // Likewise for the split: a renderer that has never heard of it must
       // not be read as asking for a degenerate one.
       split: 0.5,
+      // And for the tab cap, which a pre-tabs renderer never sends.
+      maxTabs: 12,
     })
   })
   it.each([
@@ -145,13 +157,40 @@ describe('parseSettings', () => {
     ['split above the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.97 }],
     ['string split', { hostDiagonalInches: 27, hostNits: 400, split: '0.5' }],
     ['NaN split', { hostDiagonalInches: 27, hostNits: 400, split: NaN }],
+    ['maxTabs below the band', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 1 }],
+    ['maxTabs above the band', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 33 }],
+    ['fractional maxTabs', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 12.5 }],
+    ['string maxTabs', { hostDiagonalInches: 27, hostNits: 400, maxTabs: '12' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseSettings(raw)).toBeNull()
   })
 })
 
+describe('parseTabId', () => {
+  it('takes a plausible id and refuses anything else', () => {
+    expect(parseTabId('tab-7')).toBe('tab-7')
+    expect(parseTabId('x'.repeat(64))).toBe('x'.repeat(64))
+  })
+  it.each([
+    ['empty', ''],
+    ['oversized', 'x'.repeat(65)],
+    ['numeric', 3],
+    ['absent', undefined],
+    ['an object', { id: 'tab-1' }],
+  ])('refuses %s', (_name, raw) => {
+    expect(parseTabId(raw)).toBeNull()
+  })
+})
+
 describe('parseUiState', () => {
-  const good = { presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url' }
+  const good = {
+    tabId: 'tab-1',
+    presetId: 'laptop-768',
+    profileId: 'reference',
+    viewMode: 'fit',
+    panes: 'both',
+    mode: 'url',
+  }
   /** Both rects default to null before the renderer has measured. */
   const unmeasured = { targetBounds: null, canvasBounds: null }
   it('copies exactly the known keys; missing targetBounds means null (pre-mount)', () => {
@@ -187,6 +226,12 @@ describe('parseUiState', () => {
     ['bad mode', { ...good, mode: 'video' }],
     ['bad panes', { ...good, panes: 'native' }],
     ['missing mode', { presetId: 'a', profileId: 'b', viewMode: '1:1' }],
+    // Unlike `panes`, an absent tabId is not defaulted: main drops the report
+    // rather than writing it onto whichever tab happens to be in front.
+    ['missing tabId', { ...good, tabId: undefined }],
+    ['empty tabId', { ...good, tabId: '' }],
+    ['oversized tabId', { ...good, tabId: 'x'.repeat(65) }],
+    ['numeric tabId', { ...good, tabId: 1 }],
   ])('rejects %s', (_name, raw) => {
     expect(parseUiState(raw)).toBeNull()
   })

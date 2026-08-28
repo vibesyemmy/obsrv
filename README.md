@@ -90,6 +90,24 @@ sit in half a window, and for agent captures. The native pane stays loaded while
 hidden, so the URL bar, back/forward and link clicks keep working exactly as
 they do side by side.
 
+### Tabs
+
+The strip above the URL bar holds several independent sessions at once. A tab is
+its own URL, its own screen preset and panel profile, its own view mode and pan,
+and its own page state — so the same page on a 1366×768 laptop and on a budget
+Android sit in two tabs and you flip between them without either one reloading.
+
+`Cmd+T` opens a tab, `Cmd+W` closes one, `Cmd+1`–`Cmd+8` select by position and
+`Cmd+9` selects the last. Closing the last tab leaves a fresh blank one rather
+than closing the window. Tabs come back on relaunch — their URLs, their screens
+and which one was in front.
+
+Every tab is two Chromium renderers (a native pane and an offscreen 1x surface),
+so the count is capped: 12 by default, settable from 2 to 32 in Settings. At the
+cap the new-tab button dims and says why. Background tabs stay loaded and keep
+their scroll position, but stop rasterising until you return to them — the cost
+of a background tab is memory, not GPU.
+
 ## Agent & CI use
 
 The same rendering pipeline runs headless — no window, JSON on stdout, humans
@@ -143,6 +161,15 @@ navigates unless you pass `url`, so the scroll survives the shutter. A live
 `obsrv_snap` only navigates when the app is showing a *different* URL — its
 `navigated` field says which happened — and navigating is a fresh load, which
 starts at the top of the page.
+
+**Tabs and the agent.** `obsrv_drive` and a live `obsrv_snap` act on the tab
+that is in front, resolved per command rather than fixed when the drive starts —
+a command that quietly succeeded on a tab you could not see would not surface
+until the drive ended. Both report `tabId` and `tabIndex`, so an agent that
+cares can compare them across calls and notice you switched tabs under it. While
+Agent control is on, the driven tab carries a neutral rule on its leading edge
+that brightens for ~3 s on each command, so it is visible which session is being
+driven. An agent cannot open, close or switch tabs; that stays yours.
 
 A headless `snap` returns `settled: true` when the page went paint-quiet and
 every pixel painted. `settled: false` is still a usable capture, not a
@@ -220,3 +247,10 @@ belongs to an unrelated package.
   hides its scroller in a shadow root has no escape hatch.
 - Frame delivery has no renderer-side backpressure mailbox (see plan header); at 30 fps
   with dirty rects it has not been needed.
+- Tabs are a first cut. They cannot be reordered, dragged out into another window, or
+  reopened after closing (no `Cmd+Shift+T`), and there is no tab overflow menu — a strip
+  longer than the window scrolls. An agent can only reach the tab in front: there is no
+  way to name another tab in `obsrv_drive`, and no way for an agent to open, close or
+  switch tabs at all. The URL bar's visited-URL suggestions are one window-wide list
+  rather than one per tab (back/forward *are* per tab), and a restored tab comes back at
+  the top of its page — the scroll position is not persisted.

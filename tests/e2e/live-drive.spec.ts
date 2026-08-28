@@ -103,6 +103,47 @@ test('status answers with the app state, and the toolbar shows the AGENT badge',
   await page.keyboard.press('Escape')
 })
 
+test('status names the tab it describes, and follows the user to another one', async () => {
+  const first = await call('status')
+  expect(first.status).toBe(200)
+  const firstId = await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+  expect(first.body).toMatchObject({ tabId: firstId, tabIndex: 0 })
+
+  // The marker is standing (agent control is on) and lit (a command just
+  // arrived) on the one tab open, and it goes back to standing on its own —
+  // the AGENT chip's ~3 s beat, read here off the tab it names.
+  await expect(page.locator('.tab.driven.busy')).toHaveCount(1)
+  await expect(page.locator('.tab.driven.busy')).toHaveCount(0, { timeout: 6_000 })
+  await expect(page.locator('.tab.driven')).toHaveCount(1)
+
+  // A second tab, activated the way the user would. The agent binds nothing at
+  // drive start: the next status must describe where its commands would now
+  // land, not where the last one did.
+  const second = await app.evaluate(() => {
+    const ctx = (globalThis as any).__obsrv
+    const session = ctx.tabs.add()
+    ctx.tabs.activate(session.id)
+    return session.id as string
+  })
+  expect(second).not.toBe(firstId)
+  await expect.poll(async () => (await call('status')).body.tabId).toBe(second)
+  expect((await call('status')).body).toMatchObject({ tabId: second, tabIndex: 1 })
+
+  // The marker follows it: agent control is on for this whole file, so the
+  // driven tab is whichever one is in front — and never more than one.
+  await expect(page.locator('.tab.driven')).toHaveCount(1)
+  const strip = await page.locator('.tab').all()
+  expect(await strip[1]!.getAttribute('class')).toContain('driven')
+  expect(await strip[0]!.getAttribute('class')).not.toContain('driven')
+
+  // Back to where the rest of the file expects to be, and the extra tab gone.
+  await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.activate(id), firstId)
+  await expect.poll(async () => (await call('status')).body.tabId).toBe(firstId)
+  await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.close(id), second)
+  await expect(page.locator('.tab')).toHaveCount(1)
+  await expect(page.locator('.tab.driven')).toHaveCount(1)
+})
+
 test('a wrong or missing token is a detail-free 403; unknown commands name the allowed list', async () => {
   const wrong = await call('status', undefined, 'ff'.repeat(32))
   expect(wrong.status).toBe(403)

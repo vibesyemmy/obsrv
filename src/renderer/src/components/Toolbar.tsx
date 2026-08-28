@@ -5,6 +5,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import {
   CUSTOM_PRESET_ID,
+  selectTab,
   selectUrlBarText,
   selectViewport,
   useStore,
@@ -12,9 +13,11 @@ import {
   type Surround,
   type ViewMode,
 } from '../state/store'
+import { useAgentActivity } from '../hooks/useAgentActivity'
 import { Icon } from './Icon'
 import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
+import { TabBar } from './TabBar'
 import { Select } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
@@ -46,12 +49,12 @@ export interface ToolbarProps {
 }
 
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
-  const mode = useStore(s => s.mode)
-  const presetId = useStore(s => s.presetId)
-  const profileId = useStore(s => s.profileId)
-  const pixelExact = useStore(s => s.pixelExact)
-  const error = useStore(s => s.error)
-  const loading = useStore(s => s.targetLoading)
+  const mode = useStore(s => selectTab(s).mode)
+  const presetId = useStore(s => selectTab(s).presetId)
+  const profileId = useStore(s => selectTab(s).profileId)
+  const pixelExact = useStore(s => selectTab(s).pixelExact)
+  const error = useStore(s => selectTab(s).error)
+  const loading = useStore(s => selectTab(s).targetLoading)
   const barText = useStore(selectUrlBarText)
   const viewport = useStore(useShallow(selectViewport))
 
@@ -64,7 +67,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const surround = useStore(s => s.surround)
   const update = useStore(s => s.update)
   const setSurround = useStore(s => s.setSurround)
-  const viewMode = useStore(s => s.viewMode)
+  const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const panes = useStore(s => s.panes)
   const setPanes = useStore(s => s.setPanes)
@@ -91,20 +94,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const picked = highlight >= 0 && highlight < matches.length ? matches[highlight]! : null
 
   // Lit while an authenticated agent-control command arrived in the last ~3 s,
-  // so the user can see the visible app is being driven.
-  const [agentActive, setAgentActive] = useState(false)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const off = window.obsrv.onAgentActivity(() => {
-      setAgentActive(true)
-      clearTimeout(timer)
-      timer = setTimeout(() => setAgentActive(false), 3000)
-    })
-    return () => {
-      clearTimeout(timer)
-      off()
-    }
-  }, [])
+  // so the user can see the visible app is being driven. Shared with the tab
+  // strip's driven-tab marker, which lights on the same beat.
+  const agentActive = useAgentActivity()
 
   // The toggle owns the whole flip: optimistic store update so the button
   // answers immediately, rolled back if main refuses the write (mirrors the
@@ -211,6 +203,10 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
 
   return (
     <div className="chrome">
+      {/* Inside `.chrome`, not beside it: main reserves `TOOLBAR_H` for this
+          whole block before NativeSlot's first report, and a row outside it
+          would put the native pane a row too high on every cold start. */}
+      <TabBar />
       <div className="chrome-row chrome-browse">
         <button
           className="icon-button"

@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { FrameMessage, ObsrvApi } from '../shared/api'
+import type { FrameMessage, ObsrvApi, TabReport } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { HistoryEntry } from '../shared/history'
+import type { TabSnapshot } from '../shared/tabList'
 import type { HostInfo, LoadError, UpdateState } from '../shared/types'
 
 /** Wraps `ipcRenderer.on` so every subscriber gets an unsubscribe function. */
@@ -49,24 +50,16 @@ const api: ObsrvApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: s => ipcRenderer.invoke(IPC.setSettings, s),
   onFrame: subscribeFrames,
-  onUrlChanged: cb => subscribe<string>(IPC.urlChanged, cb),
-  onLoadError: cb => subscribe<LoadError>(IPC.loadError, cb),
+  // Each of these names the tab it describes: main no longer gates them on the
+  // tab being in front, so a background tab keeps its own strip entry current
+  // without touching the address bar of the tab that is showing.
+  onUrlChanged: cb => subscribe<TabReport & { url: string }>(IPC.urlChanged, cb),
+  onTitleChanged: cb => subscribe<TabReport & { title: string }>(IPC.titleChanged, cb),
+  onLoadError: cb => subscribe<TabReport & { error: LoadError }>(IPC.loadError, cb),
   onHostChanged: cb => subscribe<HostInfo>(IPC.hostChanged, cb),
-  onTargetLoading: cb => subscribe<boolean>(IPC.targetLoading, cb),
-  onNativeFocused: cb => {
-    const listener = (): void => cb()
-    ipcRenderer.on(IPC.nativeFocused, listener)
-    return () => {
-      ipcRenderer.removeListener(IPC.nativeFocused, listener)
-    }
-  },
-  onTargetNavigating: cb => {
-    const listener = (): void => cb()
-    ipcRenderer.on(IPC.targetNavigating, listener)
-    return () => {
-      ipcRenderer.removeListener(IPC.targetNavigating, listener)
-    }
-  },
+  onTargetLoading: cb => subscribe<TabReport & { loading: boolean }>(IPC.targetLoading, cb),
+  onNativeFocused: cb => subscribe<TabReport>(IPC.nativeFocused, cb),
+  onTargetNavigating: cb => subscribe<TabReport>(IPC.targetNavigating, cb),
   onOpenImage: cb => {
     const listener = (): void => cb()
     ipcRenderer.on(IPC.openImage, listener)
@@ -99,6 +92,11 @@ const api: ObsrvApi = {
   getHistory: () => ipcRenderer.invoke(IPC.getHistory),
   clearHistory: () => ipcRenderer.invoke(IPC.clearHistory),
   onHistoryChanged: cb => subscribe<HistoryEntry[]>(IPC.historyChanged, cb),
+  getTabs: () => ipcRenderer.invoke(IPC.getTabs),
+  addTab: () => ipcRenderer.invoke(IPC.addTab),
+  closeTab: id => ipcRenderer.send(IPC.closeTab, id),
+  activateTab: id => ipcRenderer.send(IPC.activateTab, id),
+  onTabsChanged: cb => subscribe<TabSnapshot>(IPC.tabsChanged, cb),
 }
 
 contextBridge.exposeInMainWorld('obsrv', api)

@@ -14,23 +14,78 @@ import type { AppContext } from './context'
  * accelerators explicitly: Cmd+R reloads the two panes (the same calls the
  * `IPC.reload` handler makes for the toolbar button), Cmd+L asks the renderer
  * to focus its URL bar, and DevTools sit behind a non-role item.
+ *
+ * The tab shortcuts are here for that same reason, not in a renderer
+ * `keydown` listener: the native pane is an OS-level `WebContentsView` outside
+ * the renderer's document, so a listener there is dead exactly when the user
+ * is looking at the page under test. A menu accelerator is resolved by the OS
+ * before any renderer sees the key, whichever view holds focus.
+ *
+ * They drive the manager directly rather than asking the renderer to ask main
+ * back: `TabManager` publishes the strip itself on every change, so the
+ * renderer follows with no round trip — the same path `IPC.addTab` takes.
  */
-export function installMenu({ win, native, target }: AppContext): void {
+export function installMenu({ win, tabs }: AppContext): void {
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
+  /** Add *and* activate: "new tab" means the tab you asked for is in front. */
+  const openTab = (): void => {
+    // Null at the cap. Nothing to report from a menu — the strip's own
+    // new-tab button carries the explanation and the pointer at Settings.
+    const session = tabs.add()
+    if (session) tabs.activate(session.id)
+  }
+  /**
+   * Closing the last tab opens a fresh blank one rather than closing the
+   * window — the manager's own rule, so Cmd+W and the strip's × agree. Which
+   * is why Cmd+W is not `role: 'close'`: that would take the window down with
+   * every session in it, and the window is the app.
+   */
+  const closeTab = (): void => tabs.close(tabs.activeId)
+  /** `index` counts from zero; -1 is the last tab, which is what Cmd+9 means. */
+  const selectTab = (index: number): void => {
+    const list = tabs.tabs
+    // A number past the end of a short strip is a no-op, not the nearest tab:
+    // the user named a tab that is not there, and moving to a different one
+    // would be a guess.
+    const wanted = index < 0 ? list[list.length - 1] : list[index]
+    if (wanted) tabs.activate(wanted.id)
+  }
+  // Always enabled, like every browser's: the alternative is rebuilding the
+  // application menu on every tab change, which costs a native menu rebuild
+  // per keystroke in the URL bar's neighbouring tab and buys a grey label.
+  const selectItems: MenuItemConstructorOptions[] = [
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map(n => ({
+      id: `select-tab-${n}`,
+      label: `Select Tab ${n}`,
+      accelerator: `CmdOrCtrl+${n}`,
+      click: () => selectTab(n - 1),
+    })),
+    {
+      id: 'select-tab-last',
+      label: 'Select Last Tab',
+      accelerator: 'CmdOrCtrl+9',
+      click: () => selectTab(-1),
+    },
+  ]
   const template: MenuItemConstructorOptions[] = [
     { role: 'appMenu' },
     {
       label: 'File',
       submenu: [
+        { id: 'new-tab', label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: openTab },
+        { id: 'close-tab', label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: closeTab },
+        { type: 'separator' },
         {
           label: 'Open Image…',
           accelerator: 'CmdOrCtrl+O',
           click: () => send(IPC.openImage),
         },
         { type: 'separator' },
-        { role: 'close' },
+        // Displaced to Shift+Cmd+W, as in every browser, because Cmd+W now
+        // belongs to the tab. The role keeps the platform behaviour.
+        { role: 'close', accelerator: 'Shift+CmdOrCtrl+W' },
       ],
     },
     { role: 'editMenu' },
@@ -41,6 +96,10 @@ export function installMenu({ win, native, target }: AppContext): void {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
           click: () => {
+            // Resolved per click, never destructured at install time: a
+            // destructure captures whichever session booted first and keeps
+            // reloading it after the user has switched tabs.
+            const { native, target } = tabs.active()
             native.reload()
             // A reload commits the URL the target already shows, so the mirror
             // (rightly) does nothing; reload the target on its own.
@@ -64,6 +123,9 @@ export function installMenu({ win, native, target }: AppContext): void {
         { role: 'togglefullscreen' },
       ],
     },
+    // Chrome's Tab menu, with Chrome's items: the numbers are discoverable
+    // here rather than being folklore, and the labels say which is which.
+    { label: 'Tab', submenu: selectItems },
     { role: 'windowMenu' },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

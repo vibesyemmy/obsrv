@@ -12,7 +12,14 @@ import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
-import { selectDeviceScaleFactor, selectPanelParams, selectScale, selectViewport, useStore } from '../state/store'
+import {
+  selectDeviceScaleFactor,
+  selectPanelParams,
+  selectScale,
+  selectTab,
+  selectViewport,
+  useStore,
+} from '../state/store'
 import { centreScroll, computeFitScale, jumpScroll } from '../view/viewMath'
 
 export interface TargetCanvasProps {
@@ -32,10 +39,11 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const params = useStore(useShallow(selectPanelParams))
   const dsf = useStore(selectDeviceScaleFactor)
   const requestedScale = useStore(selectScale)
-  const mode = useStore(s => s.mode)
-  const viewMode = useStore(s => s.viewMode)
+  const mode = useStore(s => selectTab(s).mode)
+  const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const setFitScale = useStore(s => s.setFitScale)
+  const activeId = useStore(s => s.activeId)
   const [stalled, setStalled] = useState(false)
   const stallTimer = useRef(0)
   const armedOnce = useRef(false)
@@ -98,10 +106,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const smooth = fit || scale < 1
 
   // The footer reads fit's actual magnification from the store; null outside
-  // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps.
+  // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps — and
+  // the active tab, because the readout describes whichever tab this canvas is
+  // drawing. Two tabs on the same preset compute the same scale, so without
+  // that dep the arriving tab keeps a null readout and the footer drops the
+  // magnification it is actually showing.
   useEffect(() => {
     setFitScale(fit ? scale : null)
-  }, [fit, scale, setFitScale])
+  }, [fit, scale, activeId, setFitScale])
   // The setter is stable, so this cleanup runs on unmount only: a torn-down
   // canvas must not leave a stale fit readout in the store.
   useEffect(() => () => setFitScale(null), [setFitScale])
@@ -172,7 +184,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         if (!gl) return
         // Main stops frames on `setMode('image')`, but one already in flight
         // must not land on top of the dropped file's pixels.
-        if (useStore.getState().mode !== 'url') return
+        if (selectTab(useStore.getState()).mode !== 'url') return
         // Trust the message's dims: frames painted against the previous
         // viewport are still in flight for a moment after a resize.
         gl.resizeSource(m.frameWidth, m.frameHeight)
@@ -215,7 +227,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       // different gesture to the page than the one the user made.
       if (e.altKey) {
         e.preventDefault()
-        if (useStore.getState().viewMode !== '1:1') return
+        if (selectTab(useStore.getState()).viewMode !== '1:1') return
         const body = canvas.closest('.pane-body')
         if (body instanceof HTMLElement) {
           body.scrollLeft += e.deltaX
@@ -225,7 +237,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       }
       // A plain wheel forwards in fit mode too, so the page can be browsed
       // from the overview.
-      if (useStore.getState().mode !== 'url') return
+      if (selectTab(useStore.getState()).mode !== 'url') return
       e.preventDefault()
       const r = canvas.getBoundingClientRect()
       const cssPerTarget = (draw.current.scale * draw.current.dsf) / (window.devicePixelRatio || 1)
@@ -240,7 +252,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     // (a scrollbar drag, a selection that overshoots the edge), and the
     // target's own button state is what decides when the drag ends.
     const onWindowUp = (e: MouseEvent): void => {
-      if (useStore.getState().mode !== 'url') return
+      if (selectTab(useStore.getState()).mode !== 'url') return
       // Same forwarding rules as `send`: both views forward, the pan chords
       // never do, and Option only suppresses a release that is not completing
       // a forwarded drag.
@@ -278,8 +290,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // reason.
   useEffect(
     () =>
-      window.obsrv.onTargetNavigating(() => {
-        if (useStore.getState().mode === 'url') arm()
+      window.obsrv.onTargetNavigating(({ tabId }) => {
+        // Every tab's target reports now, not just the one in front. The
+        // canvas draws one tab, so a background tab's navigation owes *it*
+        // nothing — arming on it would raise a stall notice over a tab that
+        // is painting perfectly well.
+        const s = useStore.getState()
+        if (tabId !== s.activeId) return
+        if (selectTab(s).mode === 'url') arm()
       }),
     [arm],
   )
@@ -438,7 +456,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // there; already at 1:1 the pane scrolls directly. Applied here — not in
   // App — because the centring needs the pane measurement and 1:1 scale this
   // component owns.
-  const agentPan = useStore(s => s.agentPan)
+  const agentPan = useStore(s => selectTab(s).agentPan)
   const clearAgentPan = useStore(s => s.clearAgentPan)
   useEffect(() => {
     if (!agentPan) return
@@ -464,7 +482,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // The seq rides into the clear as a guard: a timeout that has already been
   // queued when a replacement lands (or when a navigation clears the store)
   // must remove only the highlight it was armed for, never a newer one.
-  const agentHighlight = useStore(s => s.agentHighlight)
+  const agentHighlight = useStore(s => selectTab(s).agentHighlight)
   const clearAgentHighlight = useStore(s => s.clearAgentHighlight)
   useEffect(() => {
     if (!agentHighlight) return

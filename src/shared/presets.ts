@@ -7,6 +7,11 @@ export const MAX_VIEWPORT = 4096
 export const SPLIT_MIN = 0.1
 export const SPLIT_MAX = 0.9
 
+/** The band `Settings.maxTabs` is held to. Below two there is nothing to tab
+ *  between; above thirty-two the process count is a problem on any machine. */
+export const MAX_TABS_MIN = 2
+export const MAX_TABS_MAX = 32
+
 export const DEFAULT_SETTINGS: Settings = {
   hostDiagonalInches: 27,
   hostNits: 500,
@@ -15,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lastUpdateCheck: 0,
   recordHistory: true,
   split: 0.5,
+  maxTabs: 12,
 }
 
 export const SCREEN_PRESETS: readonly ScreenPreset[] = [

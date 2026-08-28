@@ -2,7 +2,7 @@ import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, typ
 import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
+import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState, type AgentViewMode } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { recordVisit, type HistoryEntry } from '../shared/history'
@@ -15,21 +15,25 @@ import {
   parseRect,
   parseScrollReport,
   parseSettings,
+  parseTabId,
   parseUiState,
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
+import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
+import type { TabSession } from './tabSession'
+import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
-// 82px matches the two `.chrome-row` heights in styles.css (44 + 38, both
-// border-box). Main lays the native view out with this until NativeSlot's
+// 114px matches the three `.chrome-row` heights in styles.css (32 + 44 + 38,
+// all border-box). Main lays the native view out with this until NativeSlot's
 // first report takes ownership.
-export const TOOLBAR_H = 82
+export const TOOLBAR_H = 114
 
 /** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
 export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024
@@ -60,10 +64,32 @@ function hostInfo(win: BrowserWindow): HostInfo {
   }
 }
 
-export function registerIpc(ctx: AppContext): void {
-  const { win, native, target, bus, sync } = ctx
+/**
+ * Wires every channel the renderer speaks on, and returns the disposer that
+ * takes them back.
+ *
+ * **The disposer is not tidiness.** `ipcMain` is process-global while
+ * everything these handlers read — the window, the tab manager, the session in
+ * front — belongs to one window, and the window's `webContents` outlives its
+ * `close` event by tens of milliseconds. In that gap the renderer is still
+ * running and still reporting, and `boot()` has already run `tabs.destroy()`:
+ * `tabs.active()` then answers `undefined` and the first handler to touch it
+ * throws. A throw in an `ipcMain` listener is an uncaught exception in main,
+ * and Electron answers that with a modal error dialog — a nested run loop that
+ * `app.quit()` can never finish through, so the process hangs instead of
+ * exiting. Stopping the listeners is what closes the gap, and it has to happen
+ * before the state they read goes away.
+ */
+export function registerIpc(ctx: AppContext): () => void {
+  const { win, bus, tabs } = ctx
+  // The active session, resolved at the moment each handler runs. A
+  // destructure taken once here is exactly the defect the manager exists to
+  // prevent: it captures whichever session booted first and keeps driving it
+  // after the user has switched tabs, silently and without erroring.
+  const tab = (): TabSession => tabs.active()
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
+  tabs.maxTabs = settings.maxTabs
 
   // Only the app's own renderer may drive these channels. The native pane and
   // the target load third-party pages; neither has a preload that reaches
@@ -80,6 +106,20 @@ export function registerIpc(ctx: AppContext): void {
     if (!fromRenderer(e)) throw new Error('ipc: unexpected sender')
   }
 
+  // Registration goes through these two so that unregistration cannot be
+  // forgotten: a channel wired with `ipcMain` directly would survive the
+  // disposer and keep serving a torn-down window. They are otherwise exactly
+  // `ipcMain.on` / `ipcMain.handle`, listener types included.
+  const undo: Array<() => void> = []
+  const on = (channel: string, listener: Parameters<typeof ipcMain.on>[1]): void => {
+    ipcMain.on(channel, listener)
+    undo.push(() => ipcMain.off(channel, listener))
+  }
+  const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
+    ipcMain.handle(channel, listener)
+    undo.push(() => ipcMain.removeHandler(channel))
+  }
+
   // --- navigation -----------------------------------------------------------
   // An explicit `navigate` drives both panes. History moves (back, forward,
   // reload) drive the native pane only: SyncBus mirrors whatever it commits
@@ -89,68 +129,77 @@ export function registerIpc(ctx: AppContext): void {
   //
   // Shared with the agent-control server, which must navigate through exactly
   // this path — never a parallel one.
-  const navigateBoth = async (url: string): Promise<string> => {
+  const navigateBoth = async (url: string, session?: TabSession): Promise<string> => {
     // Both panes are being pointed at the same URL on purpose; tell SyncBus so
     // it does not mirror the pair back and trigger a second load. Input that
     // does not normalise never reaches Chromium, so there is nothing to
     // expect; the panes report it as a `LoadError` themselves.
+    // Bound once, and only after the session has settled on its initial
+    // `about:blank`: a tab opened and driven in the same breath would
+    // otherwise have that late internal commit clear the expectation set here
+    // and mirror a stray `about:blank` over the page just requested.
+    // Defaults to the tab in front — the only thing the toolbar and the agent
+    // control server ever mean. Restoration is the one caller that names a
+    // session, because it drives tabs that are deliberately in the background.
+    const s = session ?? tab()
+    await s.ready
     let wanted = url
     try {
       wanted = normalizeUrl(url)
-      sync.expect(wanted)
+      s.sync.expect(wanted)
     } catch {
       // Reported by `native.load` / `target.load` below.
     }
-    const [applied] = await Promise.all([native.load(wanted), target.load(wanted)])
+    const [applied] = await Promise.all([s.native.load(wanted), s.target.load(wanted)])
     return applied
   }
-  ipcMain.handle(IPC.navigate, (e, url: string) => {
+  handle(IPC.navigate, (e, url: string) => {
     assertRenderer(e)
     return navigateBoth(url)
   })
   // The toolbar's history/reload actions, shared verbatim with the
   // agent-control server's back/forward/reload commands.
   const reloadBoth = (): void => {
-    native.reload()
+    tab().native.reload()
     // A reload commits the URL the target already shows, so the mirror
     // (rightly) does nothing; reload the target on its own.
-    target.reload()
+    tab().target.reload()
   }
-  const goBack = (): void => native.back()
-  const goForward = (): void => native.forward()
-  ipcMain.on(IPC.reload, e => {
+  const goBack = (): void => tab().native.back()
+  const goForward = (): void => tab().native.forward()
+  on(IPC.reload, e => {
     if (!fromRenderer(e)) return
     reloadBoth()
   })
-  ipcMain.on(IPC.back, e => {
+  on(IPC.back, e => {
     if (!fromRenderer(e)) return
     goBack()
   })
-  ipcMain.on(IPC.forward, e => {
+  on(IPC.forward, e => {
     if (!fromRenderer(e)) return
     goForward()
   })
 
   // --- target ---------------------------------------------------------------
-  ipcMain.handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
+  handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
-    viewportArrived = true
+    tab().viewportArrived = true
     // Width and height survive any garbage (clampViewport sanitises), but a
     // bad scale factor would decide the offscreen window's raster density —
     // refuse it rather than guess.
     const dsf = parseDeviceScaleFactor(rawDsf)
     if (dsf === null) throw new Error('invalid deviceScaleFactor')
-    const v = target.setViewport(width, height, dsf)
+    const v = tab().target.setViewport(width, height, dsf)
     return { width: v.width, height: v.height }
   })
-  ipcMain.on(IPC.sendInput, (e, raw: unknown) => {
+  on(IPC.sendInput, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const ev = parseInputEvent(raw)
     if (!ev) return
     try {
-      target.sendInput(ev)
+      tab().target.sendInput(ev)
     } catch {
       // Electron rejected a well-formed event (e.g. a keyCode it cannot map);
       // the input is lost, the app is not.
@@ -163,26 +212,36 @@ export function registerIpc(ctx: AppContext): void {
   // (solo target). Each calling `native.setVisible` directly would clobber the
   // other — leaving image mode would reveal a pane the toggle had hidden — so
   // both write an input here and the visibility is derived in one place.
-  let modeIsLive = true
+  // `modeIsLive` is the tab's (image mode belongs to the page under test);
+  // `panesShowNative` is the window's (the Both/Target toggle is a window
+  // view mode, shared by every tab).
   let panesShowNative = true
+  // The manager asks the same question on activation, so the incoming view
+  // lands in the right state without re-deriving it there and drifting.
+  tabs.nativeVisible = (s: TabSession): boolean => s.modeIsLive && panesShowNative
+  // And the same for frame delivery, for the same reason: image mode is per
+  // tab, so a switch changes which mode is in force without any mode changing,
+  // and `setMode` below never fires. Derived here so "live" means one thing.
+  tabs.busEnabled = (s: TabSession): boolean => s.modeIsLive
   const applyNativeVisibility = (): void => {
-    native.setVisible(modeIsLive && panesShowNative)
+    const s = tab()
+    s.native.setVisible(tabs.nativeVisible(s))
   }
 
-  ipcMain.on(IPC.setMode, (e, raw: unknown) => {
+  on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const mode = parseMode(raw)
     if (!mode) return
-    modeIsLive = mode === 'url'
+    tab().modeIsLive = mode === 'url'
     applyNativeVisibility()
     // The sync bus follows the *mode* only. In solo target the native pane is
     // still loaded and still the navigation master — disabling the bus there
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
-    bus.setEnabled(modeIsLive)
+    bus.setEnabled(tab().modeIsLive)
   })
 
-  ipcMain.on(IPC.setNativeVisible, (e, raw: unknown) => {
+  on(IPC.setNativeVisible, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     if (typeof raw !== 'boolean') return
     panesShowNative = raw
@@ -193,11 +252,15 @@ export function registerIpc(ctx: AppContext): void {
   // Main positions the view until the renderer's pane layout exists. The first
   // `setNativeBounds` hands ownership over for the rest of the run, so the two
   // never fight over the same view.
+  //
+  // Either way the rect goes to the manager, not to one view: the slot is
+  // window-global and every session's view is moved to it, so a tab activated
+  // later is already positioned before it is shown.
   let rendererDrivesLayout = false
   const fallbackLayout = (): void => {
     if (rendererDrivesLayout) return
     const [w = 0, h = 0] = win.getContentSize()
-    native.setBounds({
+    tabs.setSlotRect({
       x: 0,
       y: TOOLBAR_H,
       width: Math.floor(w / 2),
@@ -206,11 +269,11 @@ export function registerIpc(ctx: AppContext): void {
   }
   fallbackLayout()
   win.on('resize', fallbackLayout)
-  ipcMain.on(IPC.setNativeBounds, (e, raw: unknown) => {
+  on(IPC.setNativeBounds, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const rect = parseRect(raw)
     if (!rect) return
-    native.setBounds(rect)
+    tabs.setSlotRect(rect)
     // Ownership passes only once a rect has actually been applied.
     rendererDrivesLayout = true
   })
@@ -227,8 +290,11 @@ export function registerIpc(ctx: AppContext): void {
   // `syncScroll` — and the payload is parsed like any other renderer message.
   let scrollSeq = 0
   const scrollWaiters = new Map<number, (report: ScrollReport) => void>()
-  ipcMain.on(IPC.scrollResult, (e, raw: unknown) => {
-    if (e.sender !== target.webContents && e.sender !== native.webContents) return
+  on(IPC.scrollResult, (e, raw: unknown) => {
+    // Routed like `syncScroll`: any tab's panes may answer, because a waiter
+    // is keyed by a unique seq and only the tab that was asked holds one.
+    // A sender belonging to no session is dropped rather than guessed at.
+    if (!tabs.byWebContents(e.sender)) return
     const report = parseScrollReport(raw)
     if (!report) return
     const waiter = scrollWaiters.get(report.id)
@@ -250,11 +316,14 @@ export function registerIpc(ctx: AppContext): void {
     // A preset change reloads the page at a new viewport. Scrolling before
     // that lands finds the pre-reflow document — on an app shell that means
     // the root rather than the inner scroller, and the offset clamps to 0.
-    await awaitViewportStable()
+    // Bound once, before the first await: everything after it belongs to the
+    // tab the scroll was asked of, even if the user switches tabs mid-settle.
+    const s = tab()
+    await awaitViewportStable(s)
     const base: ScrollRequest = { x: req.x, y: req.y }
     if (req.selector !== undefined) base.selector = req.selector
-    if (!native.webContents.isDestroyed()) native.webContents.send(IPC.applyScroll, base)
-    const wc = target.webContents
+    if (!s.native.webContents.isDestroyed()) s.native.webContents.send(IPC.applyScroll, base)
+    const wc = s.target.webContents
     if (wc.isDestroyed()) return null
     const id = ++scrollSeq
     const answered = new Promise<ScrollReport | null>(resolve => {
@@ -272,7 +341,7 @@ export function registerIpc(ctx: AppContext): void {
   }
 
   // --- host display ---------------------------------------------------------
-  ipcMain.handle(IPC.getHostInfo, e => {
+  handle(IPC.getHostInfo, e => {
     assertRenderer(e)
     return hostInfo(win)
   })
@@ -294,11 +363,11 @@ export function registerIpc(ctx: AppContext): void {
   screen.on('display-removed', pushHostIfChanged)
 
   // --- settings -------------------------------------------------------------
-  ipcMain.handle(IPC.getSettings, e => {
+  handle(IPC.getSettings, e => {
     assertRenderer(e)
     return settings
   })
-  ipcMain.handle(IPC.setSettings, (e, raw: unknown) => {
+  handle(IPC.setSettings, (e, raw: unknown) => {
     assertRenderer(e)
     // A non-positive diagonal makes `ppi()` throw; refuse rather than persist
     // it. `parseSettings` also copies only the known keys, so nothing the
@@ -309,6 +378,7 @@ export function registerIpc(ctx: AppContext): void {
     saveSettings(settingsFile, s)
     const wasEnabled = settings.agentControl
     settings = s
+    tabs.maxTabs = s.maxTabs
     if (s.agentControl !== wasEnabled) applyAgentControl(s.agentControl)
   })
 
@@ -318,7 +388,43 @@ export function registerIpc(ctx: AppContext): void {
   // the renderer's `uiState` reports — main never blocks a request on a
   // renderer round-trip. The mirror starts at the store's initial values and
   // the renderer reports on mount, so it is honest before the first change.
-  const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url' }
+  //
+  // `panes` is a window view mode and stays a plain field here; the rest
+  // describe the tab, so they read and write through the session and a second
+  // tab cannot inherit the first's. The `IPC.uiState` handler updates this
+  // with `Object.assign`, which runs the setters — an assignment that replaced
+  // the whole object would drop them silently.
+  //
+  // `mode` mirrors `session.reportedMode`, never `session.modeIsLive`: this
+  // object is a report about the renderer, and a report must not write to the
+  // control that decides whether the native view is on screen. See TabSession.
+  const uiState: AgentUiState = {
+    get presetId() {
+      return tab().presetId
+    },
+    set presetId(v: string) {
+      tab().presetId = v
+    },
+    get profileId() {
+      return tab().profileId
+    },
+    set profileId(v: string) {
+      tab().profileId = v
+    },
+    get viewMode() {
+      return tab().viewMode
+    },
+    set viewMode(v: AgentViewMode) {
+      tab().viewMode = v
+    },
+    get mode() {
+      return tab().reportedMode
+    },
+    set mode(v: 'url' | 'image') {
+      tab().reportedMode = v
+    },
+    panes: 'both',
+  }
   // The target pane's window-relative bounds (CSS px), for `captureTarget`.
   // Null until the renderer's first measured report; the capture then falls
   // back to the full window with a warning rather than failing.
@@ -336,20 +442,35 @@ export function registerIpc(ctx: AppContext): void {
   let rendererReported = false
   let warnedPendingOverflow = false
   const pendingApplies: AgentApplyPatch[] = []
-  ipcMain.on(IPC.uiState, (e, raw: unknown) => {
+  on(IPC.uiState, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
     if (!s) return
-    const { targetBounds: bounds, canvasBounds: canvas, ...state } = s
-    Object.assign(uiState, state)
-    targetBounds = bounds ?? null
-    canvasBounds = canvas ?? null
+    // The flush is about the renderer having mounted its listeners, which any
+    // report proves whichever tab it named — so it happens before the tab
+    // check below, and a first report that loses a race to a switch does not
+    // strand an early agent's patch in the queue.
     if (!rendererReported) {
       rendererReported = true
       for (const patch of pendingApplies.splice(0)) {
         if (!win.isDestroyed()) win.webContents.send(IPC.agentApply, patch)
       }
     }
+    // A report describes one tab. One in flight while the user switches
+    // describes the tab being *left*, and writing it into a mirror keyed on
+    // "the active tab" attributes the outgoing tab's preset, profile and mode
+    // to the incoming one — `status` then answers with a screen nobody is
+    // looking at. The renderer re-reports on every switch, so the dropped
+    // report is replaced within a frame rather than lost.
+    if (s.tabId !== tabs.activeId) return
+    const { tabId: _tabId, targetBounds: bounds, canvasBounds: canvas, ...state } = s
+    Object.assign(uiState, state)
+    targetBounds = bounds ?? null
+    canvasBounds = canvas ?? null
+    // The preset and profile this just wrote onto the session are two of the
+    // three things `tabs.json` holds. Most reports change neither; the writer
+    // compares against what it last wrote, so those cost nothing.
+    persistTabs()
   })
 
   // --- viewport settling -----------------------------------------------------
@@ -358,22 +479,20 @@ export function registerIpc(ctx: AppContext): void {
   // that reads layout in between — a scroll, a capture — must wait for it.
   // Nothing waits when no resize is pending, so an ordinary scroll keeps its
   // millisecond latency.
-  let viewportPending = false
-  let viewportArrived = false
   /** How long to wait for an announced resize to actually reach setViewport. */
   const VIEWPORT_ARRIVAL_MS = 600
 
-  const awaitViewportStable = async (): Promise<void> => {
-    if (!viewportPending) return
-    viewportPending = false
+  const awaitViewportStable = async (s: TabSession = tab()): Promise<void> => {
+    if (!s.viewportPending) return
+    s.viewportPending = false
     const arrivalDeadline = Date.now() + VIEWPORT_ARRIVAL_MS
-    while (!viewportArrived && Date.now() < arrivalDeadline) {
+    while (!s.viewportArrived && Date.now() < arrivalDeadline) {
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
     // The preset may resolve to the size already applied, in which case no
     // setViewport ever arrives — the wait above simply expires and the poll
     // below confirms the viewport is steady.
-    await settleTarget()
+    await settleTarget(s.target)
   }
 
   // --- capture settling ------------------------------------------------------
@@ -389,28 +508,40 @@ export function registerIpc(ctx: AppContext): void {
   /** After the frame reaches the renderer it still has to draw it. */
   const SETTLE_DRAW_MS = 120
 
-  const nextFrame = (budgetMs: number): Promise<boolean> =>
+  // The target is an argument rather than a fresh `tab().target` at each use:
+  // a settle spans awaits, and unsubscribing from whatever is active on the
+  // way out would leave a listener on the tab that was actually being watched.
+  const nextFrame = (t: TargetSource, budgetMs: number): Promise<boolean> =>
     new Promise(resolve => {
+      // A suspended source emits nothing, so `invalidate` produces no frame and
+      // the wait can only expire. That is a background tab — the user switched
+      // away mid-settle — and burning the whole budget on it would stall the
+      // scroll that was asked of it for four seconds to learn what is already
+      // known.
+      if (!t.painting) {
+        resolve(false)
+        return
+      }
       const timer = setTimeout(() => {
-        target.off('frame', onFrame)
+        t.off('frame', onFrame)
         resolve(false)
       }, budgetMs)
       const onFrame = (): void => {
         clearTimeout(timer)
-        target.off('frame', onFrame)
+        t.off('frame', onFrame)
         resolve(true)
       }
-      target.on('frame', onFrame)
-      target.invalidate()
+      t.on('frame', onFrame)
+      t.invalidate()
     })
 
   /** False when the budget ran out before things went quiet; never throws. */
-  const settleTarget = async (): Promise<boolean> => {
+  const settleTarget = async (t: TargetSource = tab().target): Promise<boolean> => {
     const deadline = Date.now() + SETTLE_BUDGET_MS
     let last = ''
     let stable = 0
     while (Date.now() < deadline) {
-      const v = target.getViewport()
+      const v = t.getViewport()
       const key = `${v.width}x${v.height}`
       stable = key === last ? stable + 1 : 0
       last = key
@@ -418,7 +549,7 @@ export function registerIpc(ctx: AppContext): void {
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
     if (stable < SETTLE_STABLE_READS) return false
-    const painted = await nextFrame(Math.max(0, deadline - Date.now()))
+    const painted = await nextFrame(t, Math.max(0, deadline - Date.now()))
     await new Promise(r => setTimeout(r, SETTLE_DRAW_MS))
     return painted
   }
@@ -471,15 +602,15 @@ export function registerIpc(ctx: AppContext): void {
     return state
   }
 
-  ipcMain.handle(IPC.getUpdate, e => {
+  handle(IPC.getUpdate, e => {
     assertRenderer(e)
     return update
   })
-  ipcMain.handle(IPC.checkUpdate, e => {
+  handle(IPC.checkUpdate, e => {
     assertRenderer(e)
     return runUpdateCheck()
   })
-  ipcMain.handle(IPC.openRelease, async e => {
+  handle(IPC.openRelease, async e => {
     assertRenderer(e)
     if (releaseUrl === '') return false
     await shell.openExternal(releaseUrl)
@@ -523,7 +654,10 @@ export function registerIpc(ctx: AppContext): void {
     publishHistory()
   }
 
-  native.webContents.on('did-navigate', (_e, url) => {
+  // Every tab's native pane, not just the one that booted: history is
+  // window-global and a visit is a visit whichever tab made it. The manager
+  // wires the hook onto each session it creates.
+  tabs.onNativeNavigate = (url: string): void => {
     if (!settings.recordHistory) return
     // `recordVisit` hands back the caller's own array for a URL it will not
     // store — `about:blank` on every launch, most of all — so this is also
@@ -531,13 +665,151 @@ export function registerIpc(ctx: AppContext): void {
     const next = recordVisit(history, url, Date.now())
     if (next === history) return
     commitHistory(next)
+  }
+
+  // --- the tab strip ---------------------------------------------------------
+  // Main owns tab identity, because a tab *is* the pair of Chromium renderers
+  // main built. The strip mirrors this list; every command below names a tab
+  // from it, and an id no session carries resolves to nothing in the manager
+  // and is dropped rather than guessed at.
+  const publishTabs = (): void => {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return
+    win.webContents.send(IPC.tabsChanged, tabs.snapshot())
+  }
+  tabs.onTabsChanged = (): void => {
+    publishTabs()
+    persistTabs()
+  }
+
+  handle(IPC.getTabs, e => {
+    assertRenderer(e)
+    return tabs.snapshot()
+  })
+  handle(IPC.addTab, e => {
+    assertRenderer(e)
+    // Add *and* activate: "new tab" means the tab you asked for is the one in
+    // front. `add` alone leaves it in the background on purpose — that is what
+    // a restore wants — so the front-bringing belongs to this command.
+    const session = tabs.add()
+    if (!session) return null
+    tabs.activate(session.id)
+    return session.id
+  })
+  on(IPC.closeTab, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const id = parseTabId(raw)
+    if (id === null) return
+    tabs.close(id)
+  })
+  on(IPC.activateTab, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const id = parseTabId(raw)
+    if (id === null) return
+    tabs.activate(id)
   })
 
-  ipcMain.handle(IPC.getHistory, e => {
+  // --- tabs on disk ----------------------------------------------------------
+  // Written whenever the list changes — a tab opened, closed, activated,
+  // navigated, or moved to another screen — rather than once on quit. A crash
+  // or a force-quit is exactly the moment a user most wants their tabs back,
+  // and the alternative trades that for nothing: the file is a few hundred
+  // bytes and the events are at human speed, not frame speed. Identical states
+  // never rewrite, so the callers can be as chatty as they are honest.
+  const tabsFile = join(app.getPath('userData'), 'tabs.json')
+  let lastWritten = ''
+  // Restoration navigates asynchronously, so until it finishes the list in
+  // memory is a half-truth: real tabs, still on `about:blank`. Writing that
+  // would overwrite the file being restored *from* with blanks, and a crash
+  // mid-restore would take the session with it. The restore enables the writer.
+  let persistReady = false
+  const persistTabs = (): void => {
+    if (!persistReady) return
+    const stored: StoredTabs = {
+      tabs: tabs.tabs.map(t => ({ url: t.url, presetId: t.presetId, profileId: t.profileId })),
+      activeIndex: tabs.activeIndex,
+    }
+    const json = JSON.stringify(stored)
+    if (json === lastWritten) return
+    lastWritten = json
+    try {
+      saveTabs(tabsFile, stored)
+    } catch (e) {
+      // A read-only home directory or a full disk costs the user their tab
+      // list at the next launch. It must not cost them this one.
+      console.warn('obsrv: could not save tabs', e)
+    }
+  }
+  tabs.onTabUrlChanged = persistTabs
+
+  /**
+   * Restoring is the one moment the app builds tabs from something it did not
+   * write, so everything here is defensive: `loadTabs` validates and holds the
+   * list to the cap (forty entries would otherwise stand up forty pairs of
+   * Chromium renderers behind a cap of twelve), and a URL off disk may be junk
+   * or a scheme Chromium refuses. Such a tab still opens — blank, wearing the
+   * load error its own pane reported — because a bad entry costing the user a
+   * tab is proportionate and costing them the app is not.
+   */
+  const restoreTabs = async (): Promise<void> => {
+    const stored = loadTabs(tabsFile, settings.maxTabs)
+    // An absent, empty or unreadable file is today's behaviour exactly: the
+    // manager's own first session, on `about:blank`.
+    if (stored.tabs.length === 0) return
+    const sessions: TabSession[] = []
+    for (const [i, entry] of stored.tabs.entries()) {
+      // The manager always holds one session, so the first entry lands on it
+      // rather than opening a second tab beside a blank one.
+      const s = i === 0 ? tabs.tabs[0]! : tabs.add()
+      if (!s) break
+      // Main's mirror of the screen, which is also what the strip snapshot
+      // carries to the renderer — the only way a restored tab can come back on
+      // the screen it was being viewed on, since no renderer was there to
+      // report it.
+      s.presetId = entry.presetId
+      s.profileId = entry.profileId
+      sessions.push(s)
+    }
+    // One activation, at the end: `add` leaves a tab in the background on
+    // purpose, so nothing is shown or painted until the tab that belongs in
+    // front is known. `loadTabs` has already bounded the index.
+    tabs.activate(sessions[Math.min(stored.activeIndex, sessions.length - 1)]!.id)
+    await Promise.all(
+      sessions.map(async (s, i) => {
+        const wanted = stored.tabs[i]!.url
+        try {
+          await navigateBoth(wanted, s)
+        } catch (e) {
+          console.warn('obsrv: could not restore a tab', e)
+        }
+        // `s.url` is written by a *committed* navigation, and a refused
+        // connection commits nothing — so a tab whose page did not come up is
+        // still sitting on the `about:blank` its panes booted onto. Left that
+        // way, the writer arming below would put a blank on disk over the real
+        // address, and the launch after that would have nothing to restore:
+        // opening Obsrv before the dev server is up would wipe the tabs, once
+        // and for good. The tab keeps the address it was asked for instead,
+        // which is also what the user sees and can retry.
+        if (s.url === '' || s.url === 'about:blank') s.url = wanted
+      }),
+    )
+  }
+
+  // Never awaited: a boot must not wait on a network, and the strip publishes
+  // itself as each tab arrives. `finally`, not `then` — a restore that threw
+  // anyway must still leave the app able to remember the tabs it has now. The
+  // strip is republished because the addresses of any tabs that failed to load
+  // were only settled at the end of the restore.
+  void restoreTabs().finally(() => {
+    persistReady = true
+    persistTabs()
+    publishTabs()
+  })
+
+  handle(IPC.getHistory, e => {
     assertRenderer(e)
     return history
   })
-  ipcMain.handle(IPC.clearHistory, e => {
+  handle(IPC.clearHistory, e => {
     assertRenderer(e)
     commitHistory([])
   })
@@ -558,11 +830,16 @@ export function registerIpc(ctx: AppContext): void {
     status: () => {
       let url = ''
       try {
-        url = target.webContents.getURL()
+        url = tab().target.webContents.getURL()
       } catch {
         // The target is mid-recreation or the app is closing; '' is honest.
       }
-      return { version: appVersion, url, ...uiState }
+      // Resolved on every call rather than captured once: an agent's command
+      // lands on whichever tab is in front when it arrives, so the status
+      // beside it has to name that same tab. Read from the manager, not from
+      // the `uiState` mirror — main owns tab identity, and the mirror
+      // deliberately drops reports from tabs that are not in front.
+      return { version: appVersion, url, tabId: tabs.activeId, tabIndex: tabs.activeIndex, ...uiState }
     },
     navigate: navigateBoth,
     apply: patch => {
@@ -570,8 +847,8 @@ export function registerIpc(ctx: AppContext): void {
       // Only a preset resizes the target; view mode and pixel-exact change the
       // magnification, which reflows nothing in the page under test.
       if (patch.presetId !== undefined) {
-        viewportPending = true
-        viewportArrived = false
+        tab().viewportPending = true
+        tab().viewportArrived = false
       }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {
@@ -615,7 +892,7 @@ export function registerIpc(ctx: AppContext): void {
         warnings,
       }
     },
-    viewport: () => target.getViewport(),
+    viewport: () => tab().target.getViewport(),
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and
     // suppresses its own echo, so the two arrive together with no loop.
@@ -629,8 +906,8 @@ export function registerIpc(ctx: AppContext): void {
       const up = parseInputEvent({ type: 'mouseUp', x: c.x, y: c.y, button: c.button, clickCount: 1 })
       if (!down || !up) return
       try {
-        target.sendInput(down)
-        target.sendInput(up)
+        tab().target.sendInput(down)
+        tab().target.sendInput(up)
       } catch {
         // Electron rejected the event; the click is lost, the app is not.
       }
@@ -671,7 +948,7 @@ export function registerIpc(ctx: AppContext): void {
   // the native pane (see NativePane's will-navigate). Extension and size are
   // checked here, so a page script steering the pane at `file:///…` can at
   // most make the app decode a local image, never read anything else.
-  ipcMain.handle(IPC.readImageFile, async (e, raw: unknown) => {
+  handle(IPC.readImageFile, async (e, raw: unknown) => {
     assertRenderer(e)
     if (typeof raw !== 'string' || !IMAGE_EXTENSIONS.test(raw)) throw new Error('Unsupported file type')
     const { size } = await stat(raw)
@@ -680,4 +957,18 @@ export function registerIpc(ctx: AppContext): void {
     }
     return readFile(raw)
   })
+
+  // --- teardown --------------------------------------------------------------
+  // Everything above that outlives the window: the `ipcMain` channels, the
+  // process-global `screen` watch, and the agent-control server, all of which
+  // read the tab manager `boot()` is about to destroy. `win`'s own listeners
+  // are not here — they die with the window. Idempotent, because `will-quit`
+  // may also stop the control server.
+  return (): void => {
+    for (const off of undo.splice(0)) off()
+    screen.off('display-metrics-changed', pushHostIfChanged)
+    screen.off('display-added', pushHostIfChanged)
+    screen.off('display-removed', pushHostIfChanged)
+    control.stop()
+  }
 }

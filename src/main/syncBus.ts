@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainEvent } from 'electron'
+import type { IpcMainEvent } from 'electron'
 import { IPC } from '../shared/ipc'
 import { parseScrollPos } from '../shared/ipcPayloads'
 import type { NativePane } from './nativePane'
@@ -11,6 +11,14 @@ export interface SyncBus {
    * navigation and mirrored a second time.
    */
   expect(url: string): void
+  /**
+   * Applies one `syncScroll` message to this pair. `ipcMain.on` is
+   * process-global, so a bus per tab that registered its own listener would
+   * receive every tab's scrolls — a scroll in one tab moving another. The
+   * `TabManager` owns the single listener, resolves `e.sender` to its session,
+   * and calls this. See the spec's global-channel section.
+   */
+  onScroll(e: IpcMainEvent, raw: unknown): void
   detach(): void
 }
 
@@ -94,32 +102,32 @@ export function attachSyncBus(
   native.webContents.on('did-navigate-in-page', onNativeNavInPage)
   target.on('url-changed', onTargetNav)
 
-  // This channel is driven by the sync preload inside the two *page*
-  // webContents, never by the app's own renderer, so the sender check here is
-  // the inverse of `registerIpc`'s: accept exactly the two panes and route to
-  // the other one. The payload comes from a preload running alongside a
-  // third-party page, so it is parsed like any renderer message.
-  const onScroll = (e: IpcMainEvent, raw: unknown): void => {
-    const other =
-      e.sender === native.webContents
-        ? target.webContents
-        : e.sender === target.webContents
-          ? native.webContents
-          : null
-    if (!other || other.isDestroyed()) return
-    const pos = parseScrollPos(raw)
-    if (!pos) return
-    other.send(IPC.applyScroll, pos)
-  }
-  ipcMain.on(IPC.syncScroll, onScroll)
-
   return {
     expect(url: string): void {
       pending.native = url
       pending.target = url
     },
+    // This channel is driven by the sync preload inside the two *page*
+    // webContents, never by the app's own renderer, so the sender check here
+    // is the inverse of `registerIpc`'s: accept exactly the two panes and
+    // route to the other one. The manager has already resolved the sender to
+    // this session, but the check stays — it is what picks the *other* pane,
+    // and a sender belonging to neither is still dropped rather than guessed.
+    // The payload comes from a preload running alongside a third-party page,
+    // so it is parsed like any renderer message.
+    onScroll(e: IpcMainEvent, raw: unknown): void {
+      const other =
+        e.sender === native.webContents
+          ? target.webContents
+          : e.sender === target.webContents
+            ? native.webContents
+            : null
+      if (!other || other.isDestroyed()) return
+      const pos = parseScrollPos(raw)
+      if (!pos) return
+      other.send(IPC.applyScroll, pos)
+    },
     detach(): void {
-      ipcMain.off(IPC.syncScroll, onScroll)
       target.off('url-changed', onTargetNav)
       if (!native.webContents.isDestroyed()) {
         native.webContents.off('did-navigate', onNativeNav)

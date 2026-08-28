@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
+import { MAX_TABS_MAX, MAX_TABS_MIN } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
 import {
   selectScale,
   selectScaleIsFallback,
+  selectTab,
   selectViewport,
   useStore,
 } from '../state/store'
@@ -92,7 +94,7 @@ export function SettingsPanel() {
   const settings = useStore(useShallow(s => s.settings))
   const update = useStore(s => s.update)
   const history = useStore(s => s.history)
-  const custom = useStore(useShallow(s => s.custom))
+  const custom = useStore(useShallow(s => selectTab(s).custom))
   const viewport = useStore(useShallow(selectViewport))
   const scale = useStore(selectScale)
   const fallback = useStore(selectScaleIsFallback)
@@ -286,6 +288,35 @@ export function SettingsPanel() {
 
       <p className="muted">
         One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
+      </p>
+
+      <h2>Tabs</h2>
+
+      <NumberField
+        className="max-tabs"
+        label="Maximum tabs"
+        unit="tabs"
+        value={settings.maxTabs}
+        min={MAX_TABS_MIN}
+        step={1}
+        // Rounded and clamped here rather than sent and refused: main's
+        // `parseSettings` rejects a fractional or out-of-band cap outright, and
+        // a field the user can type into is the wrong place to learn that.
+        onCommit={v =>
+          commit({
+            ...useStore.getState().settings,
+            maxTabs: Math.min(MAX_TABS_MAX, Math.max(MAX_TABS_MIN, Math.round(v))),
+          })
+        }
+        onInvalid={setHostError}
+      />
+
+      <p className="muted">
+        Each tab is two Chromium renderers — a live pane and an offscreen render — plus
+        the GPU and utility processes they pull in: twelve empty tabs measured 27 child
+        processes and about 2.5&nbsp;GB. A real page costs more. The cap is a memory
+        decision, not a preference. Lowering it never closes a tab that is already open;
+        it only stops new ones.
       </p>
 
       <h2>History</h2>

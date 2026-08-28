@@ -1,11 +1,22 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
 import type { HistoryEntry } from './history'
+import type { TabSnapshot } from './tabList'
 import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent, UpdateState } from './types'
 
 export interface FrameMessage {
   frame: FrameSlice
   frameWidth: number
   frameHeight: number
+}
+
+/**
+ * Every report main pushes about one tab names that tab. The renderer keeps a
+ * store per tab and one URL bar; without the id a background tab's late
+ * redirect would rewrite the address of the tab in front, and with the old
+ * active-only gate a background tab could never refresh its own strip entry.
+ */
+export interface TabReport {
+  tabId: string
 }
 
 export interface Rect {
@@ -38,16 +49,22 @@ export interface ObsrvApi {
   getSettings(): Promise<Settings>
   setSettings(s: Settings): Promise<void>
   onFrame(cb: (m: FrameMessage) => void): () => void
-  onUrlChanged(cb: (url: string) => void): () => void
-  onLoadError(cb: (e: LoadError) => void): () => void
+  onUrlChanged(cb: (e: TabReport & { url: string }) => void): () => void
+  /**
+   * Chromium's page title for one tab — the strip's first choice of label,
+   * ahead of the host and the URL. Cleared to `''` on every committed
+   * navigation, so a tab never wears the previous page's title.
+   */
+  onTitleChanged(cb: (e: TabReport & { title: string }) => void): () => void
+  onLoadError(cb: (e: TabReport & { error: LoadError }) => void): () => void
   onHostChanged(cb: (h: HostInfo) => void): () => void
-  onTargetLoading(cb: (loading: boolean) => void): () => void
+  onTargetLoading(cb: (e: TabReport & { loading: boolean }) => void): () => void
   /**
    * The target started a main-frame, cross-document navigation — a paint is
    * owed. `onTargetLoading` also fires for subframe loads, which owe nothing;
    * the stall watchdog keys off this, the toolbar spinner off that.
    */
-  onTargetNavigating(cb: () => void): () => void
+  onTargetNavigating(cb: (e: TabReport) => void): () => void
   /**
    * The native pane's `WebContentsView` took focus — which is what a click on
    * the live page looks like from the renderer's side, since an OS-level view
@@ -55,7 +72,7 @@ export interface ObsrvApi {
    * same click while the window holds OS focus; this covers it when it does
    * not, so a popover has a dismissal signal either way.
    */
-  onNativeFocused(cb: () => void): () => void
+  onNativeFocused(cb: (e: TabReport) => void): () => void
   /** File → Open Image… in the app menu; the renderer opens its own picker. */
   onOpenImage(cb: () => void): () => void
   /** View → Open Location (Cmd+L) in the app menu; the renderer focuses its URL bar. */
@@ -103,6 +120,27 @@ export interface ObsrvApi {
   clearHistory(): Promise<void>
   /** A navigation was recorded, or the list was cleared. Carries the new list. */
   onHistoryChanged(cb: (entries: HistoryEntry[]) => void): () => void
+
+  /**
+   * The strip as main holds it. Main owns tab identity — a tab is two
+   * Chromium renderers it built — so the renderer mirrors this list rather
+   * than minting ids of its own, and every command below names a tab from it.
+   */
+  getTabs(): Promise<TabSnapshot>
+  /**
+   * Opens a tab and brings it to the front, resolving with its id — or null
+   * when `settings.maxTabs` is already reached. The strip refuses first (the
+   * button is disabled at the cap); this is the authority behind it.
+   */
+  addTab(): Promise<string | null>
+  /**
+   * Closes a tab. Closing the last one opens a fresh blank one rather than
+   * emptying the window; an id no tab carries is ignored.
+   */
+  closeTab(id: string): void
+  activateTab(id: string): void
+  /** A tab opened, closed, or came to the front. Carries the whole strip. */
+  onTabsChanged(cb: (s: TabSnapshot) => void): () => void
 }
 
 declare global {

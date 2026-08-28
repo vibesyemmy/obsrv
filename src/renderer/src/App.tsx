@@ -14,12 +14,18 @@ import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
 import { probeMaxTextureSize } from './gl/renderer'
 import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadImage'
-import { selectDeviceScaleFactor, selectViewport, useStore } from './state/store'
+import { selectDeviceScaleFactor, selectTab, selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
-  const [image, setImage] = useState<LoadedImage | null>(null)
+  /**
+   * Decoded files, one per tab. Keyed the same way every other piece of tab
+   * state is, because image mode is per tab: a single slot here meant the tab
+   * in front rendered whichever file was dropped last, in any tab — its own
+   * name in the toolbar over another tab's pixels in both panes.
+   */
+  const [images, setImages] = useState<Record<string, LoadedImage>>({})
   // Latest drop wins: a slow decode must not land after a quicker later one.
   const dropToken = useRef(0)
   // The target pane's window-relative bounds (CSS px), reported to main so
@@ -28,26 +34,32 @@ export function App() {
   const targetPaneRef = useRef<HTMLDivElement>(null)
   const [targetBounds, setTargetBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
   const [canvasBounds, setCanvasBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null)
+  /** Whether main's tab list has arrived. See the `reportUiState` effect. */
+  const [tabsKnown, setTabsKnown] = useState(false)
   const toggle = (which: 'panel' | 'settings') => () =>
     setDrawer(d => (d === which ? 'none' : which))
 
   const setHost = useStore(s => s.setHost)
   const setSettings = useStore(s => s.setSettings)
-  const setUrl = useStore(s => s.setUrl)
-  const setError = useStore(s => s.setError)
-  const setTargetLoading = useStore(s => s.setTargetLoading)
+  const setTabUrl = useStore(s => s.setTabUrl)
+  const setTabTitle = useStore(s => s.setTabTitle)
+  const setTabError = useStore(s => s.setTabError)
+  const setTabLoading = useStore(s => s.setTabLoading)
+  const syncTabs = useStore(s => s.syncTabs)
   const setUpdate = useStore(s => s.setUpdate)
   const setHistory = useStore(s => s.setHistory)
   const setImageMeta = useStore(s => s.setImage)
   const setMode = useStore(s => s.setMode)
   const setToast = useStore(s => s.setToast)
-  const mode = useStore(s => s.mode)
+  const mode = useStore(s => selectTab(s).mode)
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
   const deviceScaleFactor = useStore(selectDeviceScaleFactor)
-  const presetId = useStore(s => s.presetId)
-  const profileId = useStore(s => s.profileId)
-  const viewMode = useStore(s => s.viewMode)
+  const presetId = useStore(s => selectTab(s).presetId)
+  const profileId = useStore(s => selectTab(s).profileId)
+  const viewMode = useStore(s => selectTab(s).viewMode)
+  const activeId = useStore(s => s.activeId)
+  const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
   const split = useStore(s => s.settings.split)
 
@@ -63,28 +75,44 @@ export function App() {
     // Same reason: a renderer reload would otherwise show an empty URL bar
     // dropdown until the next navigation pushed the list.
     window.obsrv.getHistory().then(setHistory, e => console.warn('obsrv: getHistory failed', e))
+    // Main owns the tabs; this adopts the list it already holds, which after a
+    // renderer reload is more than the one blank tab the store opens with.
+    // `finally`, not `then`: a rejected query must still release the report
+    // below, or a single failed invoke would leave main's agent mirror unseeded
+    // and any queued agent patch stranded in main's pending list.
+    window.obsrv
+      .getTabs()
+      .then(syncTabs, e => console.warn('obsrv: getTabs failed', e))
+      .finally(() => setTabsKnown(true))
     const offs = [
       window.obsrv.onHostChanged(setHost),
+      // Every one of these names its tab, so a background tab keeps its own
+      // strip entry current without rewriting the address bar of the tab in
+      // front — which is what an unnamed report from a background tab did, and
+      // why main used to gate them on the tab being in front at all.
+      //
       // A committed navigation — back, forward, reload, a link — supersedes
-      // the last load failure, and only a committed one: Chromium commits its
-      // error page without emitting `did-navigate`, so a failed load reports
-      // no URL at all (measured on Electron 43; a bad host, a refused
-      // connection, a missing file and a Back onto an error page all fire
-      // `did-fail-load` alone). The badge therefore lands last by having
+      // that tab's last load failure, and only a committed one: Chromium
+      // commits its error page without emitting `did-navigate`, so a failed
+      // load reports no URL at all (measured on Electron 43; a bad host, a
+      // refused connection, a missing file and a Back onto an error page all
+      // fire `did-fail-load` alone). The badge therefore lands last by having
       // nothing race it.
-      window.obsrv.onUrlChanged(url => {
-        setError(null)
-        setUrl(url)
+      window.obsrv.onUrlChanged(({ tabId, url }) => {
+        setTabError(tabId, null)
+        setTabUrl(tabId, url)
       }),
-      window.obsrv.onLoadError(setError),
-      window.obsrv.onTargetLoading(setTargetLoading),
+      window.obsrv.onTitleChanged(({ tabId, title }) => setTabTitle(tabId, title)),
+      window.obsrv.onLoadError(({ tabId, error }) => setTabError(tabId, error)),
+      window.obsrv.onTargetLoading(({ tabId, loading }) => setTabLoading(tabId, loading)),
+      window.obsrv.onTabsChanged(syncTabs),
       window.obsrv.onUpdateStatus(setUpdate),
       window.obsrv.onHistoryChanged(setHistory),
     ]
     return () => {
       for (const off of offs) off()
     }
-  }, [setHost, setSettings, setUrl, setError, setTargetLoading, setUpdate, setHistory])
+  }, [setHost, setSettings, setTabUrl, setTabTitle, setTabError, setTabLoading, syncTabs, setUpdate, setHistory])
 
   useEffect(() => {
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)
@@ -144,10 +172,21 @@ export function App() {
   }, [])
 
   // Main mirrors this for the agent-control server's `status`; the first run
-  // (on mount) seeds the mirror, later runs keep it in step with the toolbar.
+  // seeds the mirror, later runs keep it in step with the toolbar.
+  // `activeId` is a dependency as well as a field: a switch between two tabs
+  // whose presets happen to match changes nothing else here, and main would
+  // keep mirroring the tab that was left. It is also what lets main drop a
+  // report that a switch overtook rather than write it onto the wrong tab.
+  //
+  // Held until the tab list has arrived. Until then the store holds one tab of
+  // its own minting, described by defaults — and a report of those defaults
+  // would land on whichever of main's sessions shares that id and overwrite
+  // the screen main just restored from disk with a screen nobody chose. The
+  // renderer has nothing worth saying about a list it has not yet been told.
   useEffect(() => {
-    window.obsrv.reportUiState({ presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds })
-  }, [presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds])
+    if (!tabsKnown) return
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds })
+  }, [tabsKnown, activeId, presetId, profileId, viewMode, panes, mode, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -172,25 +211,36 @@ export function App() {
     document.documentElement.dataset.surround = surround
   }, [surround])
 
+  /** This tab's decoded file, if it is holding one. */
+  const image = images[activeId] ?? null
+
   // The decoded pixels stay component state (they never need a selector); the
-  // store carries only the metadata the toolbar and footer read. `setImage`
-  // lands before `setMode('image')` so the readouts never see a mode without
+  // store carries only the metadata the toolbar and footer read. The pixels
+  // land before `setMode('image')` so the readouts never see a mode without
   // a file.
   const onImage = async (file: File, exportScale: number): Promise<void> => {
     const token = ++dropToken.current
+    // The tab the file was dropped on. A decode takes long enough for a tab
+    // switch to happen underneath it, and the metadata and mode below are
+    // written to whichever tab is in front.
+    const tabId = activeId
     try {
       const limits = {
         ...DEFAULT_IMAGE_LIMITS,
         maxDimension: Math.min(DEFAULT_IMAGE_LIMITS.maxDimension, probeMaxTextureSize()),
       }
       const loaded = await loadImage(file, exportScale, limits)
-      if (token !== dropToken.current) {
+      // Outlived by a later drop, or by a switch away from the tab it was
+      // meant for: applying it now would describe one tab with another tab's
+      // file. The bytes are dropped rather than filed somewhere hopeful.
+      if (token !== dropToken.current || useStore.getState().activeId !== tabId) {
         URL.revokeObjectURL(loaded.objectUrl)
         return
       }
-      setImage(previous => {
-        if (previous) URL.revokeObjectURL(previous.objectUrl)
-        return loaded
+      setImages(previous => {
+        const stale = previous[tabId]
+        if (stale) URL.revokeObjectURL(stale.objectUrl)
+        return { ...previous, [tabId]: loaded }
       })
       setImageMeta({
         name: file.name,
@@ -210,14 +260,38 @@ export function App() {
     }
   }
 
-  // Leaving image mode (the ✕ button) drops the decoded file and its blob URL.
+  // Leaving image mode (the ✕ button) drops that tab's decoded file and its
+  // blob URL — that tab's, and no other. `mode` is the tab in front's, so a
+  // switch to a URL tab runs this too: dropping every decoded file here
+  // revoked the image of the tab being *left*, which then came back to an
+  // empty pane over a canvas still frozen on someone else's frame.
   useEffect(() => {
     if (mode === 'image') return
-    setImage(previous => {
-      if (previous) URL.revokeObjectURL(previous.objectUrl)
-      return null
+    setImages(previous => {
+      const going = previous[activeId]
+      if (!going) return previous
+      URL.revokeObjectURL(going.objectUrl)
+      const next = { ...previous }
+      delete next[activeId]
+      return next
     })
-  }, [mode])
+  }, [mode, activeId])
+
+  // A closed tab's file can never be shown again, and a blob URL that is never
+  // revoked holds the decoded bytes for the life of the window.
+  useEffect(() => {
+    setImages(previous => {
+      const open = new Set(tabOrder)
+      const gone = Object.keys(previous).filter(id => !open.has(id))
+      if (gone.length === 0) return previous
+      const next = { ...previous }
+      for (const id of gone) {
+        URL.revokeObjectURL(next[id]!.objectUrl)
+        delete next[id]
+      }
+      return next
+    })
+  }, [tabOrder])
 
   const imageFrame = useMemo<FrameMessage | null>(() => {
     if (mode !== 'image' || !image) return null

@@ -13,6 +13,7 @@ import {
   SCREEN_PRESETS,
   findProfile,
 } from '../../../shared/presets'
+import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../shared/tabList'
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
@@ -43,9 +44,21 @@ export interface ImageState {
   height: number
 }
 
-export interface AppState {
+/**
+ * One session: the page, the screen it is being shown on, and what the target
+ * pane is currently doing with it. Everything here is per tab — two tabs hold
+ * two of these and neither sees the other's.
+ */
+export interface TabState {
   mode: Mode
   url: string
+  /**
+   * Chromium's page title, as main reports it for this tab; '' when the page
+   * has none. The strip prefers it, then the host, then the URL — see
+   * `tabTitle`. Main clears it on every committed navigation, so a tab never
+   * wears the previous page's title.
+   */
+  title: string
   /** URL parked while image mode is showing, restored on the way back. */
   lastUrl: string
   presetId: string
@@ -57,27 +70,10 @@ export interface AppState {
    * human units as a preset profile; null means "follow `profileId`".
    */
   profileOverride: PanelProfile | null
-  settings: Settings
-  host: HostInfo
   targetLoading: boolean
   error: LoadError | null
-  toast: string | null
-  /** Null until the first `getUpdate` resolves; main seeds a real value. */
-  update: UpdateState | null
-  /**
-   * Every remembered address, ranked, as main last published it. The URL bar
-   * matches against this locally so a keystroke costs no IPC; main owns the
-   * file and pushes the whole list whenever it changes.
-   */
-  history: HistoryEntry[]
   image: ImageState | null
-  surround: Surround
   viewMode: ViewMode
-  /**
-   * Native-only is deliberately not offered: that is a browser, and the user
-   * has one. Not persisted to settings — a per-look toggle like `viewMode`.
-   */
-  panes: Panes
   /**
    * The magnification fit mode is actually drawing at, published by
    * `TargetCanvas` (it owns the pane measurement) so the footer can read it;
@@ -96,9 +92,46 @@ export interface AppState {
    * a new one replaces the previous (fresh `seq` restarts the lifetime).
    */
   agentHighlight: (AgentHighlight & { seq: number }) | null
+}
+
+export interface AppState {
+  /** Every open session by id. Always non-empty, and always holds `activeId`. */
+  tabs: Record<string, TabState>
+  /** Strip order — `tabs` is a record, so the order the user sees lives here. */
+  tabOrder: string[]
+  /** The tab every per-tab action writes and every selector reads. */
+  activeId: string
+  settings: Settings
+  host: HostInfo
+  toast: string | null
+  /** Null until the first `getUpdate` resolves; main seeds a real value. */
+  update: UpdateState | null
+  /**
+   * Every remembered address, ranked, as main last published it. The URL bar
+   * matches against this locally so a keystroke costs no IPC; main owns the
+   * file and pushes the whole list whenever it changes.
+   */
+  history: HistoryEntry[]
+  surround: Surround
+  /**
+   * Native-only is deliberately not offered: that is a browser, and the user
+   * has one. Not persisted to settings — a per-look toggle like `viewMode`.
+   */
+  panes: Panes
 
   setMode(mode: Mode): void
   setUrl(url: string): void
+  /**
+   * The tab-named forms of the four reports main pushes. Main no longer gates
+   * those on the tab being in front — a background tab has to keep its own
+   * strip entry current — so the renderer writes the tab that was *named*,
+   * never the tab that happens to be showing. The unnamed forms above stay for
+   * the toolbar, which only ever acts on the tab in front.
+   */
+  setTabUrl(id: string, url: string): void
+  setTabTitle(id: string, title: string): void
+  setTabError(id: string, e: LoadError | null): void
+  setTabLoading(id: string, v: boolean): void
   setPreset(id: string): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
@@ -125,6 +158,29 @@ export interface AppState {
    * newer highlight. Without `seq`, clears unconditionally.
    */
   clearAgentHighlight(seq?: number): void
+
+  /**
+   * Adopts main's strip wholesale: main owns tab identity (a tab is the pair
+   * of Chromium renderers it built), so the list, the order and which tab is
+   * in front all come from there. Per-tab UI state is the renderer's own and
+   * survives — a tab that is still open keeps its preset, profile and view
+   * mode; a tab main has never mentioned opens blank.
+   */
+  syncTabs(s: TabSnapshot): void
+  /**
+   * Opens a blank tab at the end of the strip and switches to it, returning
+   * its id — or null when `settings.maxTabs` is already reached, mirroring
+   * the main process's `TabManager.add`. `id` adopts an id minted elsewhere
+   * (main mints the session's), so the two sides can name the same tab.
+   */
+  addTab(id?: string): string | null
+  /**
+   * Closes a tab, moving focus the way `tabList.closeTab` says. Closing the
+   * last one leaves a fresh blank tab rather than no tab: the window is the
+   * app, and an empty app with no way back is a trap.
+   */
+  closeTab(id: string): void
+  activateTab(id: string): void
 }
 
 function sameError(a: LoadError | null, b: LoadError | null): boolean {
@@ -133,86 +189,226 @@ function sameError(a: LoadError | null, b: LoadError | null): boolean {
   return a.code === b.code && a.url === b.url && a.description === b.description
 }
 
-export const useStore = create<AppState>()(set => ({
-  mode: 'url',
-  url: '',
-  lastUrl: '',
-  presetId: '1080p-24',
-  custom: { width: 1920, height: 1080, diagonalInches: 24 },
-  pixelExact: false,
-  profileId: PANEL_PROFILES[0]!.id,
-  profileOverride: null,
+/** A session as it opens: no page, the first preset, the reference profile. */
+function blankTab(): TabState {
+  return {
+    mode: 'url',
+    url: '',
+    title: '',
+    lastUrl: '',
+    presetId: '1080p-24',
+    custom: { width: 1920, height: 1080, diagonalInches: 24 },
+    pixelExact: false,
+    profileId: PANEL_PROFILES[0]!.id,
+    profileOverride: null,
+    targetLoading: false,
+    error: null,
+    image: null,
+    // Fit, not 1:1: fit never enlarges past 1:1, so a render that already fits
+    // its pane opens at true magnification anyway, while one that does not is
+    // shown whole instead of as its top-left corner. Fit is interactive, so
+    // this costs nothing — and the footer names the actual magnification
+    // whenever fit is minifying.
+    viewMode: 'fit',
+    fitScale: null,
+    agentPan: null,
+    agentHighlight: null,
+  }
+}
+
+/**
+ * Ids the main process can never mint. The renderer makes one only for the tab
+ * it opens with, before main's list has arrived; `addTab(id)` takes main's id
+ * whenever there is one, and the first snapshot replaces this tab outright.
+ *
+ * Deliberately *not* main's `tab-N` shape. Sharing it made the boot tab's id
+ * collide with main's first session, and `syncTabs` then read that session as
+ * a tab it already knew — keeping its own blank screen instead of the one main
+ * had just restored from disk, silently and only after a relaunch.
+ */
+let nextTabId = 0
+function newTabId(): string {
+  nextTabId += 1
+  return `local-${nextTabId}`
+}
+
+/**
+ * The one write path for per-tab state: `f` sees the active tab and returns
+ * the fields to change, or null to write nothing at all (a duplicate that must
+ * not replace the object and re-render everything twice).
+ */
+const patchActiveWith =
+  (f: (t: TabState) => Partial<TabState> | null) =>
+  (s: AppState): Partial<AppState> => {
+    const active = s.tabs[s.activeId]!
+    const patch = f(active)
+    return patch === null ? {} : { tabs: { ...s.tabs, [s.activeId]: { ...active, ...patch } } }
+  }
+
+const patchActive = (patch: Partial<TabState>): ((s: AppState) => Partial<AppState>) =>
+  patchActiveWith(() => patch)
+
+/**
+ * The same write path, for a tab named by main rather than the one in front.
+ * A tab that is not open is not an error — a report can outlive the close that
+ * raced it — so it writes nothing.
+ */
+const patchTabWith =
+  (id: string, f: (t: TabState) => Partial<TabState> | null) =>
+  (s: AppState): Partial<AppState> => {
+    const t = s.tabs[id]
+    if (!t) return {}
+    const patch = f(t)
+    return patch === null ? {} : { tabs: { ...s.tabs, [id]: { ...t, ...patch } } }
+  }
+
+const FIRST_TAB = newTabId()
+
+export const useStore = create<AppState>()((set, get) => ({
+  tabs: { [FIRST_TAB]: blankTab() },
+  tabOrder: [FIRST_TAB],
+  activeId: FIRST_TAB,
   settings: { ...DEFAULT_SETTINGS },
   // Zeroes until the first `getHostInfo`; `selectScale` falls back meanwhile.
   host: { physicalWidth: 0, physicalHeight: 0, scaleFactor: 0 },
-  targetLoading: false,
-  error: null,
   toast: null,
   update: null,
   history: [],
-  image: null,
   surround: 'graphite',
-  // Fit, not 1:1: fit never enlarges past 1:1, so a render that already fits
-  // its pane opens at true magnification anyway, while one that does not is
-  // shown whole instead of as its top-left corner. Fit is interactive, so
-  // this costs nothing — and the footer names the actual magnification
-  // whenever fit is minifying.
-  viewMode: 'fit',
   panes: 'both',
-  fitScale: null,
-  agentPan: null,
-  agentHighlight: null,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
   // Does clear the agent highlight: it marked pixels of the page that was
   // showing, and a committed navigation (a reload included) replaces them.
-  setUrl: url => set({ url, agentHighlight: null }),
+  setUrl: url => set(s => patchTabWith(s.activeId, () => ({ url, agentHighlight: null }))(s)),
+  setTabUrl: (id, url) => set(patchTabWith(id, () => ({ url, agentHighlight: null }))),
+  setTabTitle: (id, title) => set(patchTabWith(id, t => (t.title === title ? null : { title }))),
+  // Both panes report the same failure; see `setError`.
+  setTabError: (id, error) => set(patchTabWith(id, t => (sameError(t.error, error) ? null : { error }))),
+  setTabLoading: (id, targetLoading) => set(patchTabWith(id, () => ({ targetLoading }))),
   // A screen change re-rasters the target, so a highlight's target-pixel rect
   // no longer marks what it marked; the same for the custom fields below.
-  setPreset: presetId => set({ presetId, agentHighlight: null }),
-  setCustom: c => set(s => ({ custom: { ...s.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null })),
-  setPixelExact: pixelExact => set({ pixelExact }),
+  setPreset: presetId => set(patchActive({ presetId, agentHighlight: null })),
+  setCustom: c =>
+    set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
+  setPixelExact: pixelExact => set(patchActive({ pixelExact })),
   // Picking a profile drops any hand-tuned slider values.
-  setProfile: profileId => set({ profileId, profileOverride: null }),
-  setProfileOverride: profileOverride => set({ profileOverride }),
+  setProfile: profileId => set(patchActive({ profileId, profileOverride: null })),
+  setProfileOverride: profileOverride => set(patchActive({ profileOverride })),
   setSettings: settings => set({ settings }),
   setHost: host => set({ host }),
-  setTargetLoading: targetLoading => set({ targetLoading }),
+  setTargetLoading: targetLoading => set(patchActive({ targetLoading })),
   // Both panes report the same `loadError` for one failed navigation; the
   // duplicate must not replace the object and re-render everything twice.
-  setError: error => set(s => (sameError(s.error, error) ? {} : { error })),
+  setError: error => set(patchActiveWith(t => (sameError(t.error, error) ? null : { error }))),
   setUpdate: update => set({ update }),
   setHistory: history => set({ history }),
   setToast: toast => set({ toast }),
-  setImage: image => set({ image }),
+  setImage: image => set(patchActive({ image })),
   setSurround: surround => set({ surround }),
-  setViewMode: viewMode => set({ viewMode }),
+  setViewMode: viewMode => set(patchActive({ viewMode })),
   // No `agentHighlight: null` here, unlike setPreset: hiding a pane does not
   // re-raster the target, so the highlight still marks the pixels it marked.
   setPanes: panes => set({ panes }),
-  setFitScale: fitScale => set({ fitScale }),
-  requestAgentPan: p => set(s => ({ agentPan: { ...p, seq: (s.agentPan?.seq ?? 0) + 1 } })),
-  clearAgentPan: () => set({ agentPan: null }),
-  showAgentHighlight: h => set(s => ({ agentHighlight: { ...h, seq: (s.agentHighlight?.seq ?? 0) + 1 } })),
+  setFitScale: fitScale => set(patchActive({ fitScale })),
+  requestAgentPan: p => set(patchActiveWith(t => ({ agentPan: { ...p, seq: (t.agentPan?.seq ?? 0) + 1 } }))),
+  clearAgentPan: () => set(patchActive({ agentPan: null })),
+  showAgentHighlight: h =>
+    set(patchActiveWith(t => ({ agentHighlight: { ...h, seq: (t.agentHighlight?.seq ?? 0) + 1 } }))),
   clearAgentHighlight: seq =>
-    set(s => (seq === undefined || s.agentHighlight?.seq === seq ? { agentHighlight: null } : {})),
+    set(patchActiveWith(t => (seq === undefined || t.agentHighlight?.seq === seq ? { agentHighlight: null } : null))),
 
   // Spec §7: leaving image mode restores the URL that was showing before.
   // Either direction swaps what the target pane shows, so a highlight over
   // the old content is dropped with it.
   setMode: mode =>
-    set(s =>
-      mode === s.mode
-        ? {}
-        : mode === 'image'
-          ? { mode, lastUrl: s.url, agentHighlight: null }
-          : { mode, url: s.lastUrl, image: null, agentHighlight: null },
+    set(
+      patchActiveWith(t =>
+        mode === t.mode
+          ? null
+          : mode === 'image'
+            ? { mode, lastUrl: t.url, agentHighlight: null }
+            : { mode, url: t.lastUrl, image: null, agentHighlight: null },
+      ),
     ),
+
+  syncTabs: snap =>
+    set(s => {
+      // Main always holds at least one session, so an empty list is a message
+      // that cannot be true; taking it would leave the renderer with no active
+      // tab and every selector reading through `undefined`.
+      if (snap.tabs.length === 0) return {}
+      const tabs: Record<string, TabState> = {}
+      for (const info of snap.tabs) {
+        const existing = s.tabs[info.id]
+        tabs[info.id] = existing
+          ? // url and title are main's to know — it is what every tab's panes
+            // report to — so the snapshot is authoritative for those two and
+            // for nothing else.
+            existing.url === info.url && existing.title === info.title
+            ? existing
+            : { ...existing, url: info.url, title: info.title }
+          : // A tab the renderer has never seen. Its screen comes from the
+            // snapshot rather than from `blankTab`'s defaults, because main
+            // may have restored it from disk with a preset chosen in a
+            // previous launch — and for a tab genuinely opened just now, the
+            // session's own defaults are those same defaults.
+            {
+              ...blankTab(),
+              url: info.url,
+              title: info.title,
+              presetId: info.presetId,
+              profileId: info.profileId,
+            }
+      }
+      const tabOrder = snap.tabs.map(t => t.id)
+      return { tabs, tabOrder, activeId: tabs[snap.activeId] ? snap.activeId : tabOrder[0]! }
+    }),
+
+  addTab: id => {
+    const s = get()
+    if (!canAddTab(s.tabOrder.length, s.settings.maxTabs)) return null
+    const next = id ?? newTabId()
+    // An id already open is that tab, not a second one; switch to it instead
+    // of overwriting a live session with a blank.
+    if (s.tabs[next]) {
+      set({ activeId: next })
+      return next
+    }
+    set({ tabs: { ...s.tabs, [next]: blankTab() }, tabOrder: [...s.tabOrder, next], activeId: next })
+    return next
+  },
+
+  closeTab: id =>
+    set(s => {
+      if (!s.tabs[id]) return {}
+      const result = closeInList(
+        s.tabOrder.map(tabId => ({ id: tabId })),
+        id,
+        s.activeId,
+      )
+      if (result.activeId === null) {
+        const fresh = newTabId()
+        return { tabs: { [fresh]: blankTab() }, tabOrder: [fresh], activeId: fresh }
+      }
+      const tabs = { ...s.tabs }
+      delete tabs[id]
+      return { tabs, tabOrder: result.tabs.map(t => t.id), activeId: result.activeId }
+    }),
+
+  activateTab: id => set(s => (s.tabs[id] ? { activeId: id } : {})),
+
 }))
 
+/** The session every per-tab selector reads through. Never undefined. */
+export function selectTab(s: AppState): TabState {
+  return s.tabs[s.activeId]!
+}
+
 export function selectScreen(s: AppState): TargetScreen {
-  const preset = SCREEN_PRESETS.find(p => p.id === s.presetId)
+  const tab = selectTab(s)
+  const preset = SCREEN_PRESETS.find(p => p.id === tab.presetId)
   return preset
     ? {
         width: preset.width,
@@ -220,7 +416,7 @@ export function selectScreen(s: AppState): TargetScreen {
         diagonalInches: preset.diagonalInches,
         deviceScaleFactor: preset.deviceScaleFactor,
       }
-    : s.custom
+    : tab.custom
 }
 
 /**
@@ -260,7 +456,7 @@ function calibratedScale(s: AppState): number | null {
     diagonalInches: s.settings.hostDiagonalInches,
     scaleFactor: s.host.scaleFactor,
   }
-  const scale = computeScale(host, screen, s.pixelExact)
+  const scale = computeScale(host, screen, selectTab(s).pixelExact)
   return Number.isFinite(scale) && scale > 0 ? scale : null
 }
 
@@ -288,7 +484,8 @@ export function selectHostNits(s: AppState): number {
 
 /** The profile the target pane is simulating: the sliders' custom one, else the chosen preset. */
 export function selectProfile(s: AppState): PanelProfile {
-  return s.profileOverride ?? findProfile(s.profileId)
+  const tab = selectTab(s)
+  return tab.profileOverride ?? findProfile(tab.profileId)
 }
 
 export function selectPanelParams(s: AppState): PanelParams {
@@ -297,5 +494,6 @@ export function selectPanelParams(s: AppState): PanelParams {
 
 /** Spec §7: the URL bar shows the filename, read-only, while in image mode. */
 export function selectUrlBarText(s: AppState): string {
-  return s.mode === 'image' ? (s.image?.name ?? '') : s.url
+  const tab = selectTab(s)
+  return tab.mode === 'image' ? (tab.image?.name ?? '') : tab.url
 }

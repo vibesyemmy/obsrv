@@ -1,6 +1,6 @@
 import type { Rect } from './api'
 import type { AgentUiReport } from './control'
-import { DEFAULT_SETTINGS, SPLIT_MAX, SPLIT_MIN } from './presets'
+import { DEFAULT_SETTINGS, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import { MAX_SCROLL_SELECTOR, type InputModifier, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
 
 /**
@@ -114,7 +114,13 @@ export function parseSettings(raw: unknown): Settings | null {
   // sends, so a bad ratio arriving here is a bug worth surfacing.
   const split = raw.split ?? DEFAULT_SETTINGS.split
   if (!isFiniteNumber(split) || split < SPLIT_MIN || split > SPLIT_MAX) return null
-  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split }
+  // Same shape for the tab cap: absent is the pre-tabs wire shape and means
+  // the default, and an out-of-band or fractional count is refused rather
+  // than clamped — the Settings input is a bounded integer field, so one
+  // arriving here is a bug rather than a hand-edited file.
+  const maxTabs = raw.maxTabs ?? DEFAULT_SETTINGS.maxTabs
+  if (!isFiniteNumber(maxTabs) || !Number.isInteger(maxTabs) || maxTabs < MAX_TABS_MIN || maxTabs > MAX_TABS_MAX) return null
+  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split, maxTabs }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {
@@ -123,6 +129,20 @@ export function parseMode(raw: unknown): 'url' | 'image' | null {
 
 /** Longest preset/profile id the UI-state mirror will store. */
 const MAX_UI_ID = 64
+
+/**
+ * Longest tab id main will act on. Ids are minted main-side (`tab-N`), so a
+ * renderer message naming one is only ever echoing what it was told; the bound
+ * is there because the renderer is still the one sending it. An id no session
+ * carries resolves to nothing in the manager and the command is dropped, so
+ * shape is all this has to check.
+ */
+const MAX_TAB_ID = 64
+
+export function parseTabId(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > MAX_TAB_ID) return null
+  return raw
+}
 
 /**
  * The renderer's UI-state report (`IPC.uiState`), mirrored main-side so the
@@ -140,6 +160,11 @@ const MAX_UI_ID = 64
 export function parseUiState(raw: unknown): AgentUiReport | null {
   if (!isRecord(raw)) return null
   const { presetId, profileId, viewMode, mode } = raw
+  // Required, unlike `panes` below: there is no sane default for "which tab
+  // this describes", and guessing would reintroduce exactly the misattribution
+  // the field exists to stop.
+  const tabId = parseTabId(raw.tabId)
+  if (tabId === null) return null
   if (typeof presetId !== 'string' || presetId.length === 0 || presetId.length > MAX_UI_ID) return null
   if (typeof profileId !== 'string' || profileId.length === 0 || profileId.length > MAX_UI_ID) return null
   if (viewMode !== '1:1' && viewMode !== 'fit') return null
@@ -150,6 +175,7 @@ export function parseUiState(raw: unknown): AgentUiReport | null {
   const panes = raw.panes ?? 'both'
   if (panes !== 'both' && panes !== 'target') return null
   return {
+    tabId,
     presetId,
     profileId,
     viewMode,

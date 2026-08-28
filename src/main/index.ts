@@ -1,78 +1,40 @@
 import { app } from 'electron'
-import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
-import { attachFrameBus } from './frameBus'
 import { registerIpc, TOOLBAR_H } from './ipc'
 import { installMenu } from './menu'
-import { NativePane } from './nativePane'
-import { attachSyncBus } from './syncBus'
-import { TargetSource } from './targetSource'
+import { TabManager } from './tabs'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
 
 function boot(): void {
   const win = createMainWindow()
 
-  // These forwards live here rather than in `registerIpc` because `NativePane`
-  // takes its callbacks at construction time. Each is guarded: a pane can still
-  // report a navigation or an error while the main window is closing.
-  const native = new NativePane(win, {
-    onLoadError: err => {
-      if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
-    },
-    // The renderer reads the file back over `readImageFile`; no bytes here.
-    onImageDrop: path => {
-      if (!win.isDestroyed()) win.webContents.send(IPC.openImagePath, path)
-    },
-  })
-
-  // A click on the native pane is invisible to the renderer: the view is an
-  // OS-level overlay, so no DOM event reaches the renderer's document and — in
-  // an unfocused window — not even a `blur`. Main can see it, so main says so.
-  // The renderer's overflow menu uses this to dismiss itself.
-  native.webContents.on('focus', () => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.nativeFocused)
-  })
-
-  const target = new TargetSource()
-  target.on('load-error', err => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.loadError, err)
-  })
-  target.on('loading', loading => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.targetLoading, loading)
-  })
-  target.on('navigating', () => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.targetNavigating)
-  })
-
-  const bus = attachFrameBus(target, win)
-  // SyncBus owns URL reporting for both panes, so the URL bar sees exactly one
-  // update per navigation whichever pane started it.
-  const sync = attachSyncBus(native, target, url => {
-    if (!win.isDestroyed()) win.webContents.send(IPC.urlChanged, url)
-  })
-  const ctx: AppContext = { win, native, target, bus, sync, toolbarH: TOOLBAR_H }
+  // The manager builds its first session, attaches the one frame bus to it and
+  // installs the single sender-routed `ipcMain` listener. Everything a pane
+  // reports back to the renderer is wired there too, gated on the reporting
+  // session being the one in front.
+  const tabs = new TabManager(win)
+  const ctx: AppContext = { win, tabs, bus: tabs.bus, toolbarH: TOOLBAR_H }
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
-  registerIpc(ctx)
+  const stopIpc = registerIpc(ctx)
   installMenu(ctx)
 
-  // The offscreen target is a real BrowserWindow, so it must go before the main
-  // window finishes closing — otherwise `window-all-closed` never fires and the
-  // app hangs after the last visible window is gone.
+  // The offscreen targets are real BrowserWindows, so they must go before the
+  // main window finishes closing — otherwise `window-all-closed` never fires
+  // and the app hangs after the last visible window is gone.
+  //
+  // The order is load-bearing. Chromium keeps the window's `webContents` alive
+  // for tens of milliseconds after this event, and the renderer goes on
+  // reporting its state throughout — into handlers that read the sessions
+  // `destroy()` is about to take away. Stopping the listeners first is what
+  // makes the destroy safe; the other way round the app quits by crashing
+  // (see `registerIpc`).
   win.on('close', () => {
-    sync.detach()
-    bus.detach()
-    target.destroy()
+    stopIpc()
+    tabs.destroy()
   })
-
-  // The target loads its own about:blank in its constructor (it must own its
-  // first navigation — see TargetSource.firstNavigation), so this is a
-  // deliberate double load like any `navigate`: announce it, or whichever
-  // pane commits first mirrors a pointless about:blank into the other.
-  sync.expect('about:blank')
-  void native.load('about:blank')
 
   exposeForTests(ctx)
 }
