@@ -7,6 +7,11 @@ import { join, resolve } from 'node:path'
  * Launches the built app with test hooks enabled, in a throwaway user-data
  * directory so specs that write settings cannot leak into later runs.
  *
+ * `userData` overrides that directory, for the one thing a throwaway dir
+ * cannot express: what the app remembers *across* launches. A caller that
+ * passes one owns it — it is neither created nor removed here, because the
+ * point is that a second launch reads what the first one left.
+ *
  * Resolves only once `boot()` has published `globalThis.__obsrv`. Playwright's
  * `launch()` returns as soon as it has *started* the app's `ready` sequence
  * (it fires `__playwright_run()` without awaiting it), and `boot()` runs in a
@@ -15,13 +20,17 @@ import { join, resolve } from 'node:path'
  * `boot()` registered its continuation at module load, before any evaluate
  * can register one, so awaiting `whenReady()` from here orders after it.
  */
-export async function launchApp(extraArgs: string[] = [], extraEnv: Record<string, string> = {}): Promise<ElectronApplication> {
-  const userData = mkdtempSync(join(tmpdir(), 'obsrv-e2e-'))
+export async function launchApp(
+  extraArgs: string[] = [],
+  extraEnv: Record<string, string> = {},
+  userData?: string,
+): Promise<ElectronApplication> {
+  const dir = userData ?? mkdtempSync(join(tmpdir(), 'obsrv-e2e-'))
   const app = await electron.launch({
-    args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${userData}`, ...extraArgs],
+    args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${dir}`, ...extraArgs],
     env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
   })
-  app.on('close', () => rmSync(userData, { recursive: true, force: true }))
+  if (userData === undefined) app.on('close', () => rmSync(dir, { recursive: true, force: true }))
   await app.evaluate(async ({ app: electronApp }) => {
     await electronApp.whenReady()
     if (!(globalThis as { __obsrv?: unknown }).__obsrv) {

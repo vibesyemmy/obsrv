@@ -34,8 +34,14 @@ const EMPTY = (): StoredTabs => ({ tabs: [], activeIndex: 0 })
  *
  * Nothing here throws: `loadTabs` runs during boot, and a hand-edited or
  * half-written file must cost the user their tabs, not their app.
+ *
+ * `max` is `Settings.maxTabs`. The cap belongs here rather than at the restore
+ * site because this is the one moment the app builds tabs from something it
+ * did not write — a hand-edited file, or one saved when the cap was higher —
+ * and a list of forty would otherwise stand up forty pairs of Chromium
+ * renderers behind a cap of twelve, which is the cap's whole point.
  */
-export function loadTabs(file: string): StoredTabs {
+export function loadTabs(file: string, max = Infinity): StoredTabs {
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as unknown
     if (!isRecord(raw) || !Array.isArray(raw.tabs)) return EMPTY()
@@ -51,12 +57,16 @@ export function loadTabs(file: string): StoredTabs {
         profileId: PANEL_PROFILES.some(p => p.id === entry.profileId) ? (entry.profileId as string) : DEFAULT_PROFILE,
       })
     }
-    // Bounded against the tabs that survived validation, not against what the
-    // file claimed: dropping an entry shifts every index after it.
+    // Truncated before the index is bounded, and both after validation:
+    // dropping an entry shifts every index after it, and the truncation can
+    // strand the index outright. A stranded one falls to the front rather than
+    // to the nearest surviving tab — that index now names a different page,
+    // and opening on it would be a guess wearing the shape of a memory.
+    const kept = tabs.slice(0, Math.max(0, max))
     const idx = raw.activeIndex
     const activeIndex =
-      typeof idx === 'number' && Number.isInteger(idx) && idx >= 0 && idx < tabs.length ? idx : 0
-    return { tabs, activeIndex }
+      typeof idx === 'number' && Number.isInteger(idx) && idx >= 0 && idx < kept.length ? idx : 0
+    return { tabs: kept, activeIndex }
   } catch {
     return EMPTY()
   }

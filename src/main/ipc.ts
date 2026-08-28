@@ -19,6 +19,7 @@ import {
   parseUiState,
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
+import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
@@ -98,7 +99,7 @@ export function registerIpc(ctx: AppContext): void {
   //
   // Shared with the agent-control server, which must navigate through exactly
   // this path — never a parallel one.
-  const navigateBoth = async (url: string): Promise<string> => {
+  const navigateBoth = async (url: string, session?: TabSession): Promise<string> => {
     // Both panes are being pointed at the same URL on purpose; tell SyncBus so
     // it does not mirror the pair back and trigger a second load. Input that
     // does not normalise never reaches Chromium, so there is nothing to
@@ -107,7 +108,10 @@ export function registerIpc(ctx: AppContext): void {
     // `about:blank`: a tab opened and driven in the same breath would
     // otherwise have that late internal commit clear the expectation set here
     // and mirror a stray `about:blank` over the page just requested.
-    const s = tab()
+    // Defaults to the tab in front — the only thing the toolbar and the agent
+    // control server ever mean. Restoration is the one caller that names a
+    // session, because it drives tabs that are deliberately in the background.
+    const s = session ?? tab()
     await s.ready
     let wanted = url
     try {
@@ -433,6 +437,10 @@ export function registerIpc(ctx: AppContext): void {
     Object.assign(uiState, state)
     targetBounds = bounds ?? null
     canvasBounds = canvas ?? null
+    // The preset and profile this just wrote onto the session are two of the
+    // three things `tabs.json` holds. Most reports change neither; the writer
+    // compares against what it last wrote, so those cost nothing.
+    persistTabs()
   })
 
   // --- viewport settling -----------------------------------------------------
@@ -638,7 +646,10 @@ export function registerIpc(ctx: AppContext): void {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
     win.webContents.send(IPC.tabsChanged, tabs.snapshot())
   }
-  tabs.onTabsChanged = publishTabs
+  tabs.onTabsChanged = (): void => {
+    publishTabs()
+    persistTabs()
+  }
 
   ipcMain.handle(IPC.getTabs, e => {
     assertRenderer(e)
@@ -665,6 +676,90 @@ export function registerIpc(ctx: AppContext): void {
     const id = parseTabId(raw)
     if (id === null) return
     tabs.activate(id)
+  })
+
+  // --- tabs on disk ----------------------------------------------------------
+  // Written whenever the list changes — a tab opened, closed, activated,
+  // navigated, or moved to another screen — rather than once on quit. A crash
+  // or a force-quit is exactly the moment a user most wants their tabs back,
+  // and the alternative trades that for nothing: the file is a few hundred
+  // bytes and the events are at human speed, not frame speed. Identical states
+  // never rewrite, so the callers can be as chatty as they are honest.
+  const tabsFile = join(app.getPath('userData'), 'tabs.json')
+  let lastWritten = ''
+  // Restoration navigates asynchronously, so until it finishes the list in
+  // memory is a half-truth: real tabs, still on `about:blank`. Writing that
+  // would overwrite the file being restored *from* with blanks, and a crash
+  // mid-restore would take the session with it. The restore enables the writer.
+  let persistReady = false
+  const persistTabs = (): void => {
+    if (!persistReady) return
+    const stored: StoredTabs = {
+      tabs: tabs.tabs.map(t => ({ url: t.url, presetId: t.presetId, profileId: t.profileId })),
+      // `findIndex` cannot miss — the manager always holds its active session —
+      // but a -1 written to disk would come back as a clamp to 0 anyway.
+      activeIndex: Math.max(0, tabs.tabs.findIndex(t => t.id === tabs.activeId)),
+    }
+    const json = JSON.stringify(stored)
+    if (json === lastWritten) return
+    lastWritten = json
+    try {
+      saveTabs(tabsFile, stored)
+    } catch (e) {
+      // A read-only home directory or a full disk costs the user their tab
+      // list at the next launch. It must not cost them this one.
+      console.warn('obsrv: could not save tabs', e)
+    }
+  }
+  tabs.onTabUrlChanged = persistTabs
+
+  /**
+   * Restoring is the one moment the app builds tabs from something it did not
+   * write, so everything here is defensive: `loadTabs` validates and holds the
+   * list to the cap (forty entries would otherwise stand up forty pairs of
+   * Chromium renderers behind a cap of twelve), and a URL off disk may be junk
+   * or a scheme Chromium refuses. Such a tab still opens — blank, wearing the
+   * load error its own pane reported — because a bad entry costing the user a
+   * tab is proportionate and costing them the app is not.
+   */
+  const restoreTabs = async (): Promise<void> => {
+    const stored = loadTabs(tabsFile, settings.maxTabs)
+    // An absent, empty or unreadable file is today's behaviour exactly: the
+    // manager's own first session, on `about:blank`.
+    if (stored.tabs.length === 0) return
+    const sessions: TabSession[] = []
+    for (const [i, entry] of stored.tabs.entries()) {
+      // The manager always holds one session, so the first entry lands on it
+      // rather than opening a second tab beside a blank one.
+      const s = i === 0 ? tabs.tabs[0]! : tabs.add()
+      if (!s) break
+      // Main's mirror of the screen, which is also what the strip snapshot
+      // carries to the renderer — the only way a restored tab can come back on
+      // the screen it was being viewed on, since no renderer was there to
+      // report it.
+      s.presetId = entry.presetId
+      s.profileId = entry.profileId
+      sessions.push(s)
+    }
+    // One activation, at the end: `add` leaves a tab in the background on
+    // purpose, so nothing is shown or painted until the tab that belongs in
+    // front is known. `loadTabs` has already bounded the index.
+    tabs.activate(sessions[Math.min(stored.activeIndex, sessions.length - 1)]!.id)
+    await Promise.all(
+      sessions.map((s, i) =>
+        navigateBoth(stored.tabs[i]!.url, s).catch((e: unknown) =>
+          console.warn('obsrv: could not restore a tab', e),
+        ),
+      ),
+    )
+  }
+
+  // Never awaited: a boot must not wait on a network, and the strip publishes
+  // itself as each tab arrives. `finally`, not `then` — a restore that threw
+  // anyway must still leave the app able to remember the tabs it has now.
+  void restoreTabs().finally(() => {
+    persistReady = true
+    persistTabs()
   })
 
   ipcMain.handle(IPC.getHistory, e => {

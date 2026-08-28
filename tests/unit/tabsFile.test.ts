@@ -53,6 +53,41 @@ describe('loadTabs', () => {
     expect(loadTabs(f).activeIndex).toBe(0)
   })
 
+  // The cap is the loader's business because restoring is the one moment the
+  // app builds tabs from something it did not write: a hand-edited file, or one
+  // from a launch when the cap was higher, would otherwise stand up forty pairs
+  // of Chromium renderers past a cap of twelve — the cap's whole point.
+  it('truncates a list longer than the cap, keeping the tabs from the front', () => {
+    const f = file()
+    const many = Array.from({ length: 40 }, (_v, i) => ({ url: `https://x/${i}` }))
+    writeFileSync(f, JSON.stringify({ tabs: many, activeIndex: 0 }))
+    const loaded = loadTabs(f, 12)
+    expect(loaded.tabs).toHaveLength(12)
+    expect(loaded.tabs.at(-1)!.url).toBe('https://x/11')
+  })
+
+  it('re-bounds an activeIndex the truncation stranded', () => {
+    const f = file()
+    const many = Array.from({ length: 40 }, (_v, i) => ({ url: `https://x/${i}` }))
+    writeFileSync(f, JSON.stringify({ tabs: many, activeIndex: 30 }))
+    // The tab that was in front is not among the survivors, so the front goes
+    // to the first — never to an index that now names a different page.
+    expect(loadTabs(f, 12).activeIndex).toBe(0)
+  })
+
+  it('keeps an activeIndex the truncation spared', () => {
+    const f = file()
+    const many = Array.from({ length: 40 }, (_v, i) => ({ url: `https://x/${i}` }))
+    writeFileSync(f, JSON.stringify({ tabs: many, activeIndex: 3 }))
+    expect(loadTabs(f, 12).activeIndex).toBe(3)
+  })
+
+  it('leaves the list alone with no cap given', () => {
+    const f = file()
+    writeFileSync(f, JSON.stringify({ tabs: [{ url: 'https://x/' }, { url: 'https://y/' }], activeIndex: 1 }))
+    expect(loadTabs(f).tabs).toHaveLength(2)
+  })
+
   it('falls back to defaults for an unknown preset or profile', () => {
     const f = file()
     writeFileSync(

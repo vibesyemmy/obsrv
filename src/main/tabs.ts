@@ -71,6 +71,13 @@ export class TabManager {
    */
   onTabsChanged: () => void = () => {}
 
+  /**
+   * A tab's URL changed. Separate from `onTabsChanged` because the strip
+   * already learns this on its own channel: the list did not change shape, and
+   * what is on disk did. Persistence is the only caller.
+   */
+  onTabUrlChanged: (s: TabSession) => void = () => {}
+
   private readonly route = (e: IpcMainEvent, raw: unknown): void => {
     const session = this.byWebContents(e.sender)
     if (!session) return
@@ -195,10 +202,16 @@ export class TabManager {
     this.list.length = 0
   }
 
-  /** What the strip renders: list identity plus each tab's two strings. */
+  /** What the strip renders: list identity plus each tab's own state. */
   snapshot(): TabSnapshot {
     return {
-      tabs: this.list.map(t => ({ id: t.id, url: t.url, title: t.title })),
+      tabs: this.list.map(t => ({
+        id: t.id,
+        url: t.url,
+        title: t.title,
+        presetId: t.presetId,
+        profileId: t.profileId,
+      })),
       activeId: this.id,
     }
   }
@@ -229,6 +242,10 @@ export class TabManager {
       s.title = ''
       this.toRenderer(IPC.urlChanged, { tabId: s.id, url })
       this.toRenderer(IPC.titleChanged, { tabId: s.id, title: '' })
+      // After the field, never before: the listener reads the list, and a
+      // notification that arrives ahead of the value it is about writes the
+      // previous URL back to disk.
+      this.onTabUrlChanged(s)
     })
 
     // The strip's first choice of label. Taken from the native pane rather than

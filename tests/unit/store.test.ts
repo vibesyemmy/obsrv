@@ -433,6 +433,9 @@ describe('tabs', () => {
   })
 
   describe('syncTabs', () => {
+    /** What a session main just built reports: the same defaults `blankTab` has. */
+    const SCREEN = { presetId: '1080p-24', profileId: 'reference' }
+
     it('adopts main\'s list, order and active tab, keeping each open tab\'s own screen', () => {
       const first = useStore.getState().activeId
       useStore.getState().setPreset('1440p-27')
@@ -440,9 +443,9 @@ describe('tabs', () => {
 
       useStore.getState().syncTabs({
         tabs: [
-          { id: first, url: 'https://a.test/', title: 'A' },
-          { id: second, url: '', title: '' },
-          { id: 'tab-from-main', url: 'https://c.test/', title: 'C' },
+          { id: first, url: 'https://a.test/', title: 'A', ...SCREEN },
+          { id: second, url: '', title: '', ...SCREEN },
+          { id: 'tab-from-main', url: 'https://c.test/', title: 'C', ...SCREEN },
         ],
         activeId: 'tab-from-main',
       })
@@ -459,10 +462,36 @@ describe('tabs', () => {
       expect(s.tabs['tab-from-main']!.presetId).toBe('1080p-24')
     })
 
+    it('seeds a tab it has never seen with the screen main restored, and leaves an open one alone', () => {
+      // The restore case: main built these tabs from `tabs.json` before any
+      // renderer existed to report a preset, so the snapshot is the only place
+      // the screen can come from. Seeded blank instead, a restored tab would
+      // come back on the wrong screen — a different observation of the page.
+      const first = useStore.getState().activeId
+      useStore.getState().setPreset('1440p-27')
+
+      useStore.getState().syncTabs({
+        tabs: [
+          { id: first, url: 'https://a.test/', title: 'A', presetId: 'iphone-61', profileId: 'budget-tn' },
+          { id: 'restored', url: 'https://b.test/', title: 'B', presetId: 'laptop-768', profileId: 'budget-tn' },
+        ],
+        activeId: first,
+      })
+
+      const s = useStore.getState()
+      expect(s.tabs.restored!.presetId).toBe('laptop-768')
+      expect(s.tabs.restored!.profileId).toBe('budget-tn')
+      // Seeding is for tabs the renderer does not know. For one it does, the
+      // renderer is the authority — main's mirror is only an echo of an older
+      // report of the very same value, and taking it back would fight the user.
+      expect(s.tabs[first]!.presetId).toBe('1440p-27')
+      expect(s.tabs[first]!.profileId).toBe('reference')
+    })
+
     it('drops the tabs main no longer holds', () => {
       const first = useStore.getState().activeId
       const second = useStore.getState().addTab()!
-      useStore.getState().syncTabs({ tabs: [{ id: second, url: '', title: '' }], activeId: second })
+      useStore.getState().syncTabs({ tabs: [{ id: second, url: '', title: '', ...SCREEN }], activeId: second })
       expect(useStore.getState().tabOrder).toEqual([second])
       expect(useStore.getState().tabs[first]).toBeUndefined()
     })
@@ -476,7 +505,7 @@ describe('tabs', () => {
 
     it('falls back to the first tab when the named active one is not in the list', () => {
       const first = useStore.getState().activeId
-      useStore.getState().syncTabs({ tabs: [{ id: first, url: '', title: '' }], activeId: 'tab-nowhere' })
+      useStore.getState().syncTabs({ tabs: [{ id: first, url: '', title: '', ...SCREEN }], activeId: 'tab-nowhere' })
       expect(useStore.getState().activeId).toBe(first)
     })
   })

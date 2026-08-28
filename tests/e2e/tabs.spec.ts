@@ -1,5 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
-import { resolve } from 'node:path'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openOverflow, rendererWindow } from './launch'
 
@@ -725,5 +727,141 @@ test.describe('the tab shortcuts are application-menu items', () => {
       .toBe(false)
     // A fresh tab, not the one that was closed still wearing its old screen.
     await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+  })
+})
+
+/**
+ * Persistence, which is the riskiest thing here: it runs at boot, so a bad
+ * `tabs.json` must cost the user their tabs and never their app. Each test
+ * owns a user-data directory and launches its own app — the shared one above
+ * is a single launch, and a single launch cannot prove what survives a quit.
+ */
+test.describe('tabs come back on relaunch', () => {
+  const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+  const LINK = pathToFileURL(resolve(__dirname, '../fixtures/link.html')).href
+
+  const dirs: string[] = []
+  const dir = (): string => {
+    const d = mkdtempSync(join(tmpdir(), 'obsrv-restore-'))
+    dirs.push(d)
+    return d
+  }
+  test.afterAll(() => {
+    while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true })
+  })
+
+  const strip = (p: Page) => p.locator('.chrome-tabs [role="tab"]')
+
+  test('restores the urls, the screen and which tab was in front — and not the scroll', async () => {
+    const home = dir()
+    const first = await launchApp([], {}, home)
+    const p1 = await rendererWindow(first)
+
+    await p1.evaluate(u => window.obsrv.navigate(u), TALL)
+    await expect(strip(p1).nth(0)).toHaveText('tall-fixture')
+    await p1.selectOption('.preset-select', 'laptop-768')
+    await expect.poll(() => p1.inputValue('.preset-select')).toBe('laptop-768')
+
+    await p1.locator('.tab-new').click()
+    await expect(strip(p1)).toHaveCount(2)
+    await p1.evaluate(u => window.obsrv.navigate(u), LINK)
+    await expect(strip(p1).nth(1)).toHaveText('link-fixture')
+
+    // Back to the first: the tab in front at quit is the tab in front at boot.
+    await strip(p1).nth(0).click()
+    await expect(strip(p1).nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    // Scrolled deliberately — this is the thing that must *not* come back.
+    await first.evaluate(() =>
+      (globalThis as any).__obsrv.native.webContents.executeJavaScript('window.scrollTo(0, 900)'),
+    )
+    await expect
+      .poll(
+        () =>
+          first.evaluate(() =>
+            (globalThis as any).__obsrv.native.webContents.executeJavaScript('window.scrollY'),
+          ),
+        { timeout: 5_000 },
+      )
+      .toBe(900)
+
+    // The write is on change, not on quit, so the file is already there.
+    await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
+    await first.close()
+
+    const second = await launchApp([], {}, home)
+    const p2 = await rendererWindow(second)
+    await expect(strip(p2)).toHaveCount(2)
+    // Titles come from the pages, so these prove the URLs actually loaded
+    // rather than merely being listed.
+    await expect(strip(p2).nth(0)).toHaveText('tall-fixture')
+    await expect(strip(p2).nth(1)).toHaveText('link-fixture')
+    await expect(strip(p2).nth(0)).toHaveAttribute('aria-selected', 'true')
+    // The screen the tab was being viewed on is part of the session, and a
+    // restored tab on the wrong screen is a different observation.
+    await expect.poll(() => p2.inputValue('.preset-select'), { timeout: 10_000 }).toBe('laptop-768')
+
+    // Restoring a scroll into a page that may have changed underneath is a
+    // guess presented as a memory.
+    await expect
+      .poll(
+        () =>
+          second.evaluate(() =>
+            (globalThis as any).__obsrv.native.webContents.executeJavaScript('window.scrollY'),
+          ),
+        { timeout: 5_000 },
+      )
+      .toBe(0)
+    await second.close()
+  })
+
+  test('a hand-edited tabs.json cannot make the app unlaunchable', async () => {
+    const home = dir()
+    writeFileSync(
+      join(home, 'tabs.json'),
+      JSON.stringify({
+        // An entry with no usable url, one that is not a URL at all, and a
+        // real one. The middle is the interesting case: it opens as a blank
+        // tab wearing its own load error, because a bad entry costing a tab is
+        // proportionate and costing the app is not.
+        tabs: [{ url: 5 }, { url: 'not a url' }, { url: TALL }],
+        activeIndex: 9,
+      }),
+    )
+
+    const app2 = await launchApp([], {}, home)
+    const p = await rendererWindow(app2)
+    await expect(strip(p)).toHaveCount(2)
+    // The index the file asked for is past the end, so the front falls to the
+    // first tab rather than to whatever now sits at that position.
+    await expect(strip(p).nth(0)).toHaveAttribute('aria-selected', 'true')
+    await expect(strip(p).nth(0)).toHaveText('New tab')
+    await expect(strip(p).nth(1)).toHaveText('tall-fixture')
+    await app2.close()
+  })
+
+  test('a list longer than the cap is held to the cap', async () => {
+    const home = dir()
+    writeFileSync(join(home, 'settings.json'), JSON.stringify({ maxTabs: 2 }))
+    writeFileSync(
+      join(home, 'tabs.json'),
+      JSON.stringify({ tabs: [TALL, LINK, TALL, LINK, TALL].map(url => ({ url })), activeIndex: 4 }),
+    )
+
+    const app2 = await launchApp([], {}, home)
+    const p = await rendererWindow(app2)
+    await expect(strip(p)).toHaveCount(2)
+    expect(await app2.evaluate(() => (globalThis as any).__obsrv.tabs.tabs.length as number)).toBe(2)
+    // Truncation stranded the front tab, so it falls to the first.
+    await expect(strip(p).nth(0)).toHaveAttribute('aria-selected', 'true')
+    await app2.close()
+  })
+
+  test('an absent file opens exactly one blank tab', async () => {
+    const app2 = await launchApp([], {}, dir())
+    const p = await rendererWindow(app2)
+    await expect(strip(p)).toHaveCount(1)
+    await expect(strip(p).nth(0)).toHaveText('New tab')
+    await app2.close()
   })
 })

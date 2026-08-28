@@ -217,13 +217,19 @@ function blankTab(): TabState {
 }
 
 /**
- * Ids in the main process's `tab-N` shape. The renderer mints one only for a
- * tab it opens on its own; `addTab(id)` takes main's id when there is one.
+ * Ids the main process can never mint. The renderer makes one only for the tab
+ * it opens with, before main's list has arrived; `addTab(id)` takes main's id
+ * whenever there is one, and the first snapshot replaces this tab outright.
+ *
+ * Deliberately *not* main's `tab-N` shape. Sharing it made the boot tab's id
+ * collide with main's first session, and `syncTabs` then read that session as
+ * a tab it already knew — keeping its own blank screen instead of the one main
+ * had just restored from disk, silently and only after a relaunch.
  */
 let nextTabId = 0
 function newTabId(): string {
   nextTabId += 1
-  return `tab-${nextTabId}`
+  return `local-${nextTabId}`
 }
 
 /**
@@ -343,7 +349,18 @@ export const useStore = create<AppState>()((set, get) => ({
             existing.url === info.url && existing.title === info.title
             ? existing
             : { ...existing, url: info.url, title: info.title }
-          : { ...blankTab(), url: info.url, title: info.title }
+          : // A tab the renderer has never seen. Its screen comes from the
+            // snapshot rather than from `blankTab`'s defaults, because main
+            // may have restored it from disk with a preset chosen in a
+            // previous launch — and for a tab genuinely opened just now, the
+            // session's own defaults are those same defaults.
+            {
+              ...blankTab(),
+              url: info.url,
+              title: info.title,
+              presetId: info.presetId,
+              profileId: info.profileId,
+            }
       }
       const tabOrder = snap.tabs.map(t => t.id)
       return { tabs, tabOrder, activeId: tabs[snap.activeId] ? snap.activeId : tabOrder[0]! }

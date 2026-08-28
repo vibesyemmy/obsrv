@@ -57,6 +57,17 @@ export interface TabInfo {
   url: string
   /** Chromium's page title, or '' when the page has none yet. */
   title: string
+  /**
+   * The screen this tab is being viewed on, and the panel simulated over it.
+   * Main mirrors both from the renderer's own `uiState` reports, so for a tab
+   * the renderer already knows about they say nothing new — they are here for
+   * the tab it does *not* know about yet: a restored one, whose screen came
+   * off disk before any renderer existed to report it. The store seeds a new
+   * entry from them and ignores them afterwards; main is not the authority on
+   * a preset, it is only the thing that outlived the last launch.
+   */
+  presetId: string
+  profileId: string
 }
 
 /** The whole strip, as `getTabs` answers and `tabsChanged` publishes it. */

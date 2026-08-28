@@ -43,6 +43,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const setFitScale = useStore(s => s.setFitScale)
+  const activeId = useStore(s => s.activeId)
   const [stalled, setStalled] = useState(false)
   const stallTimer = useRef(0)
   const armedOnce = useRef(false)
@@ -105,10 +106,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const smooth = fit || scale < 1
 
   // The footer reads fit's actual magnification from the store; null outside
-  // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps.
+  // fit mode. Tracks the pane, the viewport and the 1:1 scale by deps — and
+  // the active tab, because the readout describes whichever tab this canvas is
+  // drawing. Two tabs on the same preset compute the same scale, so without
+  // that dep the arriving tab keeps a null readout and the footer drops the
+  // magnification it is actually showing.
   useEffect(() => {
     setFitScale(fit ? scale : null)
-  }, [fit, scale, setFitScale])
+  }, [fit, scale, activeId, setFitScale])
   // The setter is stable, so this cleanup runs on unmount only: a torn-down
   // canvas must not leave a stale fit readout in the store.
   useEffect(() => () => setFitScale(null), [setFitScale])
