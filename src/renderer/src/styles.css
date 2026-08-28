@@ -237,15 +237,75 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* The real select is transparent, so its ring must land on the shell. */
 .select-shell:has(select:focus-visible) { outline: 1px solid var(--text-1); outline-offset: -1px; }
 
-.panes { flex: 1 1 auto; display: flex; min-height: 0; }
+/* `--split` (the native pane's share) and `--pane-min` are written inline by
+   `App`; the fallbacks keep the row sane if either is ever missing. */
+.panes { flex: 1 1 auto; display: flex; min-height: 0; --split: 0.5; --pane-min: 240px; --seam: 1px; }
 .pane {
-  flex: 1 1 50%;
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   background: var(--surround);
 }
-.target-pane { border-left: 1px solid var(--line); }
+/* The native (or image) pane takes its share of everything the seam leaves;
+   the target pane grows into the rest, so the 1px divider comes out of the
+   row rather than out of one pane's half and skewing the ratio.
+
+   The `clamp()` is the *stored* ratio's floor, and the reason it lives in CSS
+   rather than in the drag: a ratio saved on a wide monitor and restored on a
+   narrow window is applied as close as 240px a side allows, without being
+   written back — grow the window and the preference returns on its own, with
+   no resize plumbing to keep in step. The drag enforces the same floor in JS,
+   where it also decides what to persist. */
+.panes[data-panes='both'] > .pane:first-child {
+  flex-grow: 0;
+  flex-shrink: 0;
+  /* Rounded to whole pixels, and this is load-bearing. `TargetCanvas`
+     measures its pane with `clientWidth`, which *rounds*: a 1129.5px pane
+     reads as 1130, fit sizes the canvas to 1130, and the render then
+     overflows its own pane by half a pixel — which quietly turns off the
+     `safe center` centring and leaves the pane scrollable. Whole-pixel panes
+     keep the measurement honest. (The old `flex: 1 1 50%` hit the same thing
+     on an odd-width window; taking the seam out of the row would have made
+     it every window.) */
+  flex-basis: round(
+    down,
+    clamp(
+      var(--pane-min),
+      calc((100% - var(--seam)) * var(--split)),
+      calc(100% - var(--seam) - var(--pane-min))
+    ),
+    1px
+  );
+}
+
+/* The seam. A flex item exactly one pixel wide — the hairline the target pane
+   used to draw as its own `border-left` — with the grab area straddling it as
+   an overflowing pseudo-element, so the handle is 6px to the pointer and 1px
+   to the eye. The style spec forbids decorating anything that touches a pane,
+   and a resize handle drawn as furniture would be decoration. */
+.pane-divider {
+  flex: 0 0 var(--seam);
+  /* Positioned *and* raised: `.target-wrap` next door is positioned too and
+     comes later in the DOM, so without a `z-index` the target pane's canvas
+     paints over the half of the grab area that overhangs it and swallows the
+     press. */
+  position: relative;
+  z-index: 1;
+  background: var(--line);
+  cursor: col-resize;
+  /* Or the drag scrolls the pane instead of moving the seam. */
+  touch-action: none;
+}
+.pane-divider::before {
+  content: '';
+  position: absolute;
+  inset: 0 -2.5px;
+}
+.pane-divider:hover, .pane-divider:focus-visible { background: var(--text-1); }
+/* The hairline is the affordance; a ring around a 1px element would be a box
+   floating on the seam. Same reasoning as `.target-canvas:focus`. */
+.pane-divider:focus-visible { outline: none; }
 /* Square corners, no shadow, no blur: a rounded or blurred pane edge would
    destroy the very corner pixels the user opened this app to inspect. */
 .pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
@@ -257,7 +317,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    on the very pixels under inspection. Keyboard focus in the target pane is
    shown on the pane's own hairlines instead, which touch no page pixel. */
 .target-canvas:focus { outline: none; }
-.target-pane:has(.target-canvas:focus-visible) { border-left-color: var(--text-1); }
+/* The seam moved out of `.target-pane`'s border and into its own element, so
+   the focus signal reaches it from the row both panes share — `:has` on the
+   ancestor, since the divider is the canvas's *earlier* sibling's sibling and
+   no combinator walks backwards. The footer rule is unchanged, and carries
+   the whole signal on its own in solo target, where there is no seam. */
+.panes:has(.target-canvas:focus-visible) .pane-divider { background: var(--text-1); }
 .target-pane:has(.target-canvas:focus-visible) .pane-footer { border-top-color: var(--text-1); }
 
 /* Signature: each pane always states what it is showing, so a screenshot of
@@ -309,9 +374,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .surround-control button:last-child { border-right: 0; }
 .surround-control button[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--text-0); }
 .surround-swatch { display: block; width: 12px; height: 12px; margin: 0 auto; }
-
-/* Nothing sits to the target pane's left in solo view, so the divider goes. */
-.panes[data-panes='target'] .target-pane { border-left: 0; }
 
 /* Numbers never jitter as a slider moves. */
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../shared/api'
 import { DropZone } from './components/DropZone'
 import { Fatal } from './components/Fatal'
 import { ImagePane } from './components/ImagePane'
 import { NativeSlot } from './components/NativeSlot'
+import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls } from './components/PanelControls'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -47,6 +48,7 @@ export function App() {
   const profileId = useStore(s => s.profileId)
   const viewMode = useStore(s => s.viewMode)
   const panes = useStore(s => s.panes)
+  const split = useStore(s => s.settings.split)
 
   // The store performs no IPC of its own; this is the one place that bridges.
   useEffect(() => {
@@ -92,7 +94,7 @@ export function App() {
   }, [panes])
 
   // The pane's bounds change with the window, the drawers and the panes'
-  // 50/50 split, and every one of those also resizes the pane — so a
+  // split, and every one of those also resizes the pane — so a
   // ResizeObserver is the one signal needed to keep the measurement fresh.
   useEffect(() => {
     const el = targetPaneRef.current
@@ -230,16 +232,29 @@ export function App() {
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
       <DropZone onImage={onImage} />
       <div className="body">
-        <div className="panes" data-panes={panes}>
-          {panes === 'both' && (mode === 'image' && image ? (
-            <ImagePane
-              src={image.objectUrl}
-              width={image.natural.width}
-              height={image.natural.height}
-            />
-          ) : (
-            <NativeSlot />
-          ))}
+        {/* The split reaches the layout as a custom property rather than a
+            width: the stylesheet owns how the ratio and the 240px floor
+            combine, and the divider owns the drag. */}
+        <div
+          className="panes"
+          data-panes={panes}
+          style={{ '--split': split, '--pane-min': `${MIN_PANE_PX}px` } as CSSProperties}
+        >
+          {panes === 'both' && (
+            <>
+              {mode === 'image' && image ? (
+                <ImagePane
+                  src={image.objectUrl}
+                  width={image.natural.width}
+                  height={image.natural.height}
+                />
+              ) : (
+                <NativeSlot />
+              )}
+              {/* A separator with one side would be a lie. */}
+              <PaneDivider />
+            </>
+          )}
           <div className="pane target-pane" ref={targetPaneRef}>
             <div className="pane-body">
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
