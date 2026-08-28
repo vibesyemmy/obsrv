@@ -102,14 +102,20 @@ export function registerIpc(ctx: AppContext): void {
     // it does not mirror the pair back and trigger a second load. Input that
     // does not normalise never reaches Chromium, so there is nothing to
     // expect; the panes report it as a `LoadError` themselves.
+    // Bound once, and only after the session has settled on its initial
+    // `about:blank`: a tab opened and driven in the same breath would
+    // otherwise have that late internal commit clear the expectation set here
+    // and mirror a stray `about:blank` over the page just requested.
+    const s = tab()
+    await s.ready
     let wanted = url
     try {
       wanted = normalizeUrl(url)
-      tab().sync.expect(wanted)
+      s.sync.expect(wanted)
     } catch {
       // Reported by `native.load` / `target.load` below.
     }
-    const [applied] = await Promise.all([tab().native.load(wanted), tab().target.load(wanted)])
+    const [applied] = await Promise.all([s.native.load(wanted), s.target.load(wanted)])
     return applied
   }
   ipcMain.handle(IPC.navigate, (e, url: string) => {

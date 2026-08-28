@@ -285,6 +285,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   }
 
   /**
+   * Resolves once this window's own initial `about:blank` has committed.
+   * A navigation issued before that lands is undone by it — the commit
+   * arrives late and `SyncBus` mirrors it into the native pane — so a caller
+   * that builds a source and immediately drives it waits here first. Follows
+   * the current window: a dsf change swaps in a fresh one with a fresh gate.
+   */
+  get ready(): Promise<void> {
+    return this.firstNavigation
+  }
+
+  /**
    * Mobile viewport semantics for dsf > 1 (see class doc). Post-commit only:
    * enabling emulation before a window's first navigation commits segfaults
    * the OSR renderer, so callers are either the `did-navigate` handler (by

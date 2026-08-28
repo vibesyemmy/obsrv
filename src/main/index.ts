@@ -26,14 +26,6 @@ function boot(): void {
   // and the app hangs after the last visible window is gone.
   win.on('close', () => tabs.destroy())
 
-  // The target loads its own about:blank in its constructor (it must own its
-  // first navigation — see TargetSource.firstNavigation), so this is a
-  // deliberate double load like any `navigate`: announce it, or whichever
-  // pane commits first mirrors a pointless about:blank into the other.
-  const first = tabs.active()
-  first.sync.expect('about:blank')
-  void first.native.load('about:blank')
-
   exposeForTests(ctx)
 }
 

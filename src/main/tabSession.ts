@@ -48,6 +48,20 @@ export class TabSession {
   profileId = 'reference'
   viewMode: AgentViewMode = 'fit'
 
+  /**
+   * Resolves once both panes have settled on their initial `about:blank`.
+   *
+   * `TargetSource` owns its first navigation, so the pair does not exist in a
+   * usable state the instant the constructor returns: a `navigate` issued
+   * before that internal commit lands is undone by it, because the commit
+   * clears the expectation the navigate had just set and `SyncBus` rightly
+   * mirrors a stray `about:blank` into the other pane. With one session that
+   * only ever happened at boot, which is why `boot()` announced the pair by
+   * hand; with tabs it happens every time one is opened and driven, so the
+   * announcement and the settle belong to the session itself.
+   */
+  readonly ready: Promise<void>
+
   constructor(win: BrowserWindow, onUrlChanged: (url: string) => void) {
     this.id = `tab-${nextId++}`
     // `NativePane` takes its callbacks at construction, so these forwards live
@@ -66,6 +80,13 @@ export class TabSession {
     // SyncBus owns URL reporting for both panes, so the URL bar sees exactly
     // one update per navigation whichever pane started it.
     this.sync = attachSyncBus(this.native, this.target, onUrlChanged)
+
+    // Both panes are being pointed at the same place on purpose, so announce
+    // it: otherwise whichever commits first mirrors a pointless `about:blank`
+    // into the other. The target is already loading its own, so only the
+    // native pane is driven here.
+    this.sync.expect('about:blank')
+    this.ready = Promise.all([this.native.load('about:blank'), this.target.ready]).then(() => undefined)
   }
 
   /**
