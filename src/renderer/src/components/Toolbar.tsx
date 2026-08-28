@@ -16,6 +16,7 @@ import {
 import { Icon } from './Icon'
 import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
+import { TabBar } from './TabBar'
 import { Select } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
@@ -212,6 +213,10 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
 
   return (
     <div className="chrome">
+      {/* Inside `.chrome`, not beside it: main reserves `TOOLBAR_H` for this
+          whole block before NativeSlot's first report, and a row outside it
+          would put the native pane a row too high on every cold start. */}
+      <TabBar />
       <div className="chrome-row chrome-browse">
         <button
           className="icon-button"

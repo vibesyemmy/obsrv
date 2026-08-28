@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ChevronDown,
   EllipsisVertical,
+  Plus,
   RotateCw,
   Settings,
   SlidersHorizontal,
@@ -26,6 +27,7 @@ const ICONS = {
   sliders: SlidersHorizontal,
   gear: Settings,
   chevron: ChevronDown,
+  plus: Plus,
 } as const
 
 export type IconName = keyof typeof ICONS

@@ -12,8 +12,9 @@ test.afterAll(async () => {
   await app.close()
 })
 
-test('the chrome is two rows and the screen row holds the screen controls', async () => {
-  await expect(page.locator('.chrome-row')).toHaveCount(2)
+test('the chrome is three rows and the screen row holds the screen controls', async () => {
+  // Tabs, browsing, screen — the strip furthest from the panes.
+  await expect(page.locator('.chrome-row')).toHaveCount(3)
   for (const sel of [
     '.preset-select',
     '.view-control',

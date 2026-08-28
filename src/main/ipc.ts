@@ -29,10 +29,10 @@ import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
-// 82px matches the two `.chrome-row` heights in styles.css (44 + 38, both
-// border-box). Main lays the native view out with this until NativeSlot's
+// 114px matches the three `.chrome-row` heights in styles.css (32 + 44 + 38,
+// all border-box). Main lays the native view out with this until NativeSlot's
 // first report takes ownership.
-export const TOOLBAR_H = 82
+export const TOOLBAR_H = 114
 
 /** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
 export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024

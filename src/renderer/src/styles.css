@@ -74,10 +74,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .warn { color: var(--warn); }
 .chrome .warn { white-space: nowrap; }
 
-/* Two strips. Browsing above; the controls that describe the simulated
-   screen below, on a darker ground so the rows read as separate registers.
-   44 + 38 = 82 must equal TOOLBAR_H in src/main/ipc.ts. Pinned heights also
-   keep a late reflow from resizing the panes under NativeSlot's observer. */
+/* Three strips. The tab strip on top — furthest from the panes, as every
+   browser puts it; browsing below it; the controls that describe the simulated
+   screen last, on a darker ground so the rows read as separate registers.
+   32 + 44 + 38 = 114 must equal TOOLBAR_H in src/main/ipc.ts. Pinned heights
+   also keep a late reflow from resizing the panes under NativeSlot's
+   observer. */
 .chrome { flex: 0 0 auto; }
 .chrome-row {
   box-sizing: border-box;
@@ -94,6 +96,93 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .chrome-browse { position: relative; }
 .chrome-screen { height: 38px; background: var(--chrome-0); }
 .chrome-spacer { flex: 1 1 auto; }
+
+/* The tab strip. Ground is the darkest chrome step so an inactive tab (one
+   step up) already reads as a raised object, and the active one has somewhere
+   further to go. Neutral throughout: a coloured tab beside the panes would
+   shift the perceived hue of the render under test, which is the one thing
+   this chrome may never do. */
+.chrome-tabs { height: 32px; gap: 4px; padding: 0 6px; background: var(--chrome-0); }
+/* The tabs scroll rather than shrink past legibility; the new-tab button is
+   outside this box so it never scrolls away from the pointer. */
+.tabs { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+
+.tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  background: var(--chrome-1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.tab-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 2px 0 8px;
+  background: none;
+  border: 0;
+  color: var(--text-1);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.tab:hover { background: var(--chrome-2); }
+/* The chrome's one selected idiom: the `--chrome-3` fill step plus weight,
+   exactly as `.segmented button[aria-pressed]` and `.menu-row[aria-pressed]`
+   mark theirs. Selection is carried by the label button's `aria-selected`, so
+   the fill is derived from it rather than duplicated onto the wrapper. */
+.tab:has(> .tab-label[aria-selected='true']) { background: var(--chrome-3); border-color: var(--chrome-3); }
+.tab > .tab-label[aria-selected='true'] { color: var(--text-0); font-weight: 600; }
+
+.tab-close {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-right: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  color: var(--text-1);
+  cursor: pointer;
+}
+/* Only on hover of the tab: sixteen ✕ glyphs at rest is a busier strip than
+   the titles they sit beside, and the titles are the content here. */
+.tab-close { opacity: 0; }
+.tab:hover .tab-close,
+.tab:has(> .tab-label[aria-selected='true']) .tab-close,
+.tab-close:focus-visible { opacity: 1; }
+.tab-close:hover { background: var(--chrome-2); color: var(--text-0); }
+
+.tab-new {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-0);
+  cursor: pointer;
+}
+.tab-new:hover:not(:disabled) { background: var(--chrome-3); }
+/* At the cap. Dimmed rather than hidden, and the `title` says why and where to
+   raise it — a control that vanishes teaches nothing. */
+.tab-new:disabled { color: var(--text-1); background: var(--chrome-1); cursor: default; }
 
 /* No blanket `button` rule here, ever. The old `.toolbar button { width:
    26px }` was specificity (0,1,1) and silently clipped the update button to

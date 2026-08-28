@@ -47,6 +47,17 @@ describe('tabTitle', () => {
     expect(tabTitle('http://localhost:4173/', '')).toBe('localhost:4173')
   })
 
+  it('calls an unused tab a new tab, however its blankness is spelled', () => {
+    expect(tabTitle('', '')).toBe('New tab')
+    // Every session starts here and an unused tab never leaves; `about:blank`
+    // has no host, so without this it would be labelled with its own scheme.
+    expect(tabTitle('about:blank', '')).toBe('New tab')
+  })
+
+  it('still prefers a page title over the blank fallback', () => {
+    expect(tabTitle('about:blank', 'Untitled')).toBe('Untitled')
+  })
+
   it('falls back to the raw string when it is not a URL', () => {
     expect(tabTitle('not a url', '')).toBe('not a url')
   })

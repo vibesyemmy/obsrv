@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, rendererWindow } from './launch'
+import { launchApp, openOverflow, rendererWindow } from './launch'
 
 // Each test leaves the session painting again, but they share one app and the
 // frame collector is global to the renderer, so order still matters.
@@ -443,5 +443,157 @@ test.describe('the renderer drives the tab list through main', () => {
     await page.waitForTimeout(200)
     expect(await ids()).toEqual(before)
     expect(await app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)).toBe(active)
+  })
+})
+
+/**
+ * The strip itself. Everything here goes through the DOM the user actually
+ * clicks: a strip driven by `tabs.activate` from main would pass while the
+ * buttons were wired to nothing.
+ */
+test.describe('the tab strip', () => {
+  const tabs = () => page.locator('.chrome-tabs [role="tab"]')
+  const activeTab = () => page.locator('.chrome-tabs [role="tab"][aria-selected="true"]')
+  const newTab = () => page.locator('.tab-new')
+
+  /**
+   * The cap, moved through the Settings drawer's own number field so both the
+   * strip's `disabled` and main's `tabs.maxTabs` follow the way they do for a
+   * user. Reading it back from main is what proves the commit landed.
+   */
+  const setMaxTabs = async (maxTabs: number): Promise<void> => {
+    await openOverflow(page)
+    await page.click('.overflow-menu .toggle-settings')
+    await expect(page.locator('.drawer .max-tabs')).toHaveCount(1)
+    await page.fill('.max-tabs', String(maxTabs))
+    await page.press('.max-tabs', 'Enter')
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.maxTabs as number))
+      .toBe(maxTabs)
+    await openOverflow(page)
+    await page.click('.overflow-menu .toggle-settings')
+    await expect(page.locator('.drawer')).toHaveCount(0)
+  }
+
+  /** Back to one tab, whatever the test before left behind. */
+  const resetToOne = async (): Promise<void> => {
+    await app.evaluate(() => {
+      const ctx = (globalThis as any).__obsrv
+      for (const t of [...ctx.tabs.tabs]) if (t.id !== ctx.tabs.activeId) ctx.tabs.close(t.id)
+    })
+    await expect(tabs()).toHaveCount(1)
+  }
+
+  test.beforeEach(resetToOne)
+  test.afterAll(resetToOne)
+
+  test('shows one tab at boot, above the browse row', async () => {
+    await expect(tabs()).toHaveCount(1)
+    await expect(activeTab()).toHaveCount(1)
+    // A tab that has been nowhere says so, rather than wearing the
+    // `about:blank` every session starts on.
+    await expect(newTab()).toBeEnabled()
+
+    const [strip, browse] = await Promise.all([
+      page.locator('.chrome-tabs').boundingBox(),
+      page.locator('.chrome-browse').boundingBox(),
+    ])
+    expect(strip!.y + strip!.height).toBeLessThanOrEqual(browse!.y)
+  })
+
+  test('a new tab is added at the end and takes the front, and the first tab keeps its screen', async () => {
+    await page.selectOption('.preset-select', '1440p-27')
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+
+    await newTab().click()
+    await expect(tabs()).toHaveCount(2)
+    // The new one is last in the strip and is the one selected — and it is
+    // labelled as new, not as the `about:blank` its panes actually hold.
+    await expect(tabs().nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(tabs().nth(1)).toHaveText('New tab')
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+
+    // Back to the first: its own screen is still there, untouched by the tab
+    // that was opened over it.
+    await tabs().nth(0).click()
+    await expect(tabs().nth(0)).toHaveAttribute('aria-selected', 'true')
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+    // And main followed the click, not just the strip.
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.session.presetId as string))
+      .toBe('1440p-27')
+  })
+
+  test('closing the active tab activates its right neighbour', async () => {
+    await newTab().click()
+    await newTab().click()
+    await expect(tabs()).toHaveCount(3)
+
+    const ids = await app.evaluate(() =>
+      (globalThis as any).__obsrv.tabs.tabs.map((t: any) => t.id as string),
+    )
+    await tabs().nth(1).click()
+    await expect(tabs().nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    await page.locator('.chrome-tabs .tab').nth(1).locator('.tab-close').click()
+    await expect(tabs()).toHaveCount(2)
+    // The tab that took its screen position, which is the one the eye is on.
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string))
+      .toBe(ids[2])
+    await expect(tabs().nth(1)).toHaveAttribute('aria-selected', 'true')
+  })
+
+  test('closing the last tab leaves one blank tab, not none', async () => {
+    await page.selectOption('.preset-select', '1440p-27')
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+
+    await page.locator('.chrome-tabs .tab').nth(0).locator('.tab-close').click()
+
+    // The window is the app; an empty app with no way back is a trap.
+    await expect(tabs()).toHaveCount(1)
+    await expect(activeTab()).toHaveCount(1)
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.tabs.length as number))
+      .toBe(1)
+    // A fresh tab, not the one that was closed wearing its old screen.
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+  })
+
+  test('the new-tab button is disabled at the cap and says where to raise it', async () => {
+    await setMaxTabs(3)
+    await newTab().click()
+    await newTab().click()
+    await expect(tabs()).toHaveCount(3)
+
+    await expect(newTab()).toBeDisabled()
+    const title = await newTab().getAttribute('title')
+    expect(title).toContain('3')
+    expect(title).toContain('Settings')
+
+    // Lowering the cap below the count closes nothing — the tabs are already
+    // open, and taking one away to satisfy a preference would lose a session.
+    await setMaxTabs(2)
+    await expect(tabs()).toHaveCount(3)
+    await expect(newTab()).toBeDisabled()
+
+    // And raising it re-enables the button in place; no relaunch.
+    await setMaxTabs(12)
+    await expect(newTab()).toBeEnabled()
+  })
+
+  test('a tab is titled by its page title, and a background tab keeps its own', async () => {
+    const LINK = pathToFileURL(resolve(__dirname, '../fixtures/link.html')).href
+    const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+
+    await page.evaluate(u => window.obsrv.navigate(u), TALL)
+    await expect(tabs().nth(0)).toHaveText('tall-fixture')
+
+    await newTab().click()
+    await expect(tabs()).toHaveCount(2)
+    await page.evaluate(u => window.obsrv.navigate(u), LINK)
+    await expect(tabs().nth(1)).toHaveText('link-fixture')
+    // The tab behind kept its own title while the one in front took another.
+    await expect(tabs().nth(0)).toHaveText('tall-fixture')
   })
 })

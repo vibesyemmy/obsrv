@@ -35,7 +35,11 @@ export function canAddTab(count: number, max: number): boolean {
  */
 export function tabTitle(url: string, pageTitle: string): string {
   if (pageTitle.trim() !== '') return pageTitle
-  if (url.trim() === '') return 'New tab'
+  // `about:blank` is where every session starts and what an unused tab still
+  // holds, so it is the empty tab spelled in Chromium's words rather than an
+  // address anyone typed. It has no host, and falling through to the raw
+  // string labels a fresh tab `about:blank` — which the screenshot caught.
+  if (url.trim() === '' || url.trim() === 'about:blank') return 'New tab'
   try {
     return new URL(url).host || url
   } catch {

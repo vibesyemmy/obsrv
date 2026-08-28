@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
+import { MAX_TABS_MAX, MAX_TABS_MIN } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
 import {
@@ -287,6 +288,33 @@ export function SettingsPanel() {
 
       <p className="muted">
         One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
+      </p>
+
+      <h2>Tabs</h2>
+
+      <NumberField
+        className="max-tabs"
+        label="Maximum tabs"
+        unit="tabs"
+        value={settings.maxTabs}
+        min={MAX_TABS_MIN}
+        step={1}
+        // Rounded and clamped here rather than sent and refused: main's
+        // `parseSettings` rejects a fractional or out-of-band cap outright, and
+        // a field the user can type into is the wrong place to learn that.
+        onCommit={v =>
+          commit({
+            ...useStore.getState().settings,
+            maxTabs: Math.min(MAX_TABS_MAX, Math.max(MAX_TABS_MIN, Math.round(v))),
+          })
+        }
+        onInvalid={setHostError}
+      />
+
+      <p className="muted">
+        Each tab is two Chromium processes — a live pane and an offscreen render — so
+        the cap is a memory decision, not a preference. Lowering it never closes a tab
+        that is already open; it only stops new ones.
       </p>
 
       <h2>History</h2>
