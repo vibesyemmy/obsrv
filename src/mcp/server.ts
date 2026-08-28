@@ -209,6 +209,8 @@ const snapOutputShape = {
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
   panes: z.string().optional().describe("Live only: 'both' (native pane beside the target) or 'target' (the target render has the whole window)."),
+  tabId: z.string().optional().describe('Live only: which of the app\'s tabs was captured (the active one). Empty from an app older than tabs.'),
+  tabIndex: z.number().optional().describe("Live only: that tab's 0-based position in the strip."),
   width: z
     .number()
     .optional()
@@ -385,6 +387,14 @@ const driveOutputShape = {
   viewMode: z.string(),
   panes: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
+  tabId: z
+    .string()
+    .describe(
+      'Which of the app\'s tabs this acted on. Every command resolves the active tab as it arrives, so a tabId ' +
+        'that changed between two calls means the user switched tabs under you. Empty string from an app older ' +
+        'than tabs, which has only one.',
+    ),
+  tabIndex: z.number().describe('That tab\'s 0-based position in the strip.'),
   scrolled: z
     .object({ x: z.number(), y: z.number() })
     .nullable()
@@ -568,6 +578,8 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     profileId: status.profileId,
     viewMode: status.viewMode,
     panes: status.panes,
+    tabId: status.tabId,
+    tabIndex: status.tabIndex,
     width,
     height,
     settled,

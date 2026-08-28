@@ -865,3 +865,84 @@ test.describe('tabs come back on relaunch', () => {
     await app2.close()
   })
 })
+
+/**
+ * The driven-tab marker. Agent control is off in this app — the whole point,
+ * since the marker's first claim is that it says nothing until the loopback
+ * server is open — so the toggle is flipped through the overflow menu the way
+ * a user flips it, and back off again before the file ends.
+ */
+test.describe('the driven tab is marked while agent control is on', () => {
+  const tabs = () => page.locator('.chrome-tabs [role="tab"]')
+  const driven = () => page.locator('.chrome-tabs .tab.driven')
+  /** A driven tab that is also the selected one — the only shape allowed. */
+  const drivenActive = () => page.locator('.chrome-tabs .tab.driven:has(> [role="tab"][aria-selected="true"])')
+
+  const setAgentControl = async (on: boolean): Promise<void> => {
+    await openOverflow(page)
+    const box = page.locator('.overflow-menu .agent-toggle input')
+    if ((await box.isChecked()) !== on) await box.click()
+    await expect(box).toBeChecked({ checked: on })
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.overflow-menu')).toHaveCount(0)
+  }
+
+  let extra: string
+
+  test.beforeAll(async () => {
+    extra = await app.evaluate(() => {
+      const ctx = (globalThis as any).__obsrv
+      const session = ctx.tabs.add()
+      ctx.tabs.activate(session.id)
+      return session.id as string
+    })
+    await expect(tabs()).toHaveCount(2)
+  })
+
+  test.afterAll(async () => {
+    await setAgentControl(false)
+    await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.close(id), extra)
+    await expect(tabs()).toHaveCount(1)
+  })
+
+  test('no tab is marked while agent control is off', async () => {
+    await expect(driven()).toHaveCount(0)
+  })
+
+  test('turning it on marks the active tab, and only that one', async () => {
+    await setAgentControl(true)
+    await expect(driven()).toHaveCount(1)
+    await expect(drivenActive()).toHaveCount(1)
+    // The class is only half of it — a class with no rule behind it marks
+    // nothing. This reads the pixels the rule actually asks for: a 2px inset
+    // rule on the leading edge, in a grey, and no blur radius at all. The
+    // colour is asserted as achromatic rather than as a literal, so a token
+    // change stays green and a hue never can.
+    const shadow = await driven().evaluate(el => getComputedStyle(el).boxShadow)
+    expect(shadow).toContain('inset')
+    expect(shadow).toContain('2px 0px 0px 0px')
+    const [r, g, b] = /rgba?\((\d+), (\d+), (\d+)/.exec(shadow)!.slice(1).map(Number)
+    expect(r).toBe(g)
+    expect(g).toBe(b)
+  })
+
+  test('the marker follows the user to another tab', async () => {
+    const first = await app.evaluate(
+      (_electron, id: string) =>
+        ((globalThis as any).__obsrv.tabs.tabs.find((t: any) => t.id !== id).id as string),
+      extra,
+    )
+    await app.evaluate((_electron, id: string) => (globalThis as any).__obsrv.tabs.activate(id), first)
+    await expect(tabs().nth(0)).toHaveAttribute('aria-selected', 'true')
+    // Still exactly one, still the selected one — the marker moved rather
+    // than accumulating on every tab the agent has ever been pointed at.
+    await expect(driven()).toHaveCount(1)
+    await expect(drivenActive()).toHaveCount(1)
+    await expect(page.locator('.chrome-tabs .tab').nth(0)).toHaveClass(/driven/)
+  })
+
+  test('turning it off clears the marker', async () => {
+    await setAgentControl(false)
+    await expect(driven()).toHaveCount(0)
+  })
+})

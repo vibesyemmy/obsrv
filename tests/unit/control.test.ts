@@ -230,18 +230,45 @@ describe('parseHighlight', () => {
 })
 
 describe('parseControlStatus', () => {
-  const good = { version: '0.3.2', url: 'https://a.test/', presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url', panes: 'both' }
+  const good = {
+    version: '0.3.2',
+    url: 'https://a.test/',
+    presetId: 'laptop-768',
+    profileId: 'reference',
+    viewMode: '1:1',
+    mode: 'url',
+    panes: 'both',
+    tabId: 'tab-3',
+    tabIndex: 2,
+  }
   it('accepts a full status', () => {
     expect(parseControlStatus(good)).toEqual(good)
   })
   it('reads panes when present', () => {
     expect(parseControlStatus({ ...good, panes: 'target' })?.panes).toBe('target')
   })
+  it('reads the tab when present', () => {
+    const s = parseControlStatus({ ...good, tabId: 'tab-7', tabIndex: 5 })
+    expect(s).toMatchObject({ tabId: 'tab-7', tabIndex: 5 })
+  })
   // Version skew is real: the MCP server is npm-installed and the app is a
   // DMG, so a new server routinely talks to an older app. An absent field
   // must default, never fail the whole status.
   it('defaults panes to both when an older app omits it', () => {
     expect(parseControlStatus({ ...good, panes: undefined })?.panes).toBe('both')
+  })
+  // The same skew, one release later. An app that predates tabs has exactly
+  // one session: it is the tab at index 0 and has no id to name. A status
+  // without the fields must parse to that, not to null — a null here would
+  // take out `obsrv_drive` and live `obsrv_snap` wholesale against every
+  // installed app older than this feature.
+  it('defaults the tab when an older app omits both fields', () => {
+    const { tabId: _id, tabIndex: _i, ...older } = good
+    expect(parseControlStatus(older)).toEqual({ ...older, tabId: '', tabIndex: 0 })
+  })
+  it('defaults each tab field independently', () => {
+    expect(parseControlStatus({ ...good, tabId: undefined })).toMatchObject({ tabId: '', tabIndex: 2 })
+    expect(parseControlStatus({ ...good, tabIndex: undefined })).toMatchObject({ tabId: 'tab-3', tabIndex: 0 })
   })
   it.each([
     ['null', null],
@@ -250,6 +277,14 @@ describe('parseControlStatus', () => {
     ['bad mode', { ...good, mode: 'video' }],
     ['numeric version', { ...good, version: 3 }],
     ['malformed panes', { ...good, panes: 'native' }],
+    // Absent defaults; present-but-wrong is a malformed status, exactly as
+    // for `panes`. A server that guessed past a garbled field would report a
+    // tab the app never named.
+    ['numeric tabId', { ...good, tabId: 3 }],
+    ['string tabIndex', { ...good, tabIndex: '2' }],
+    ['fractional tabIndex', { ...good, tabIndex: 1.5 }],
+    ['negative tabIndex', { ...good, tabIndex: -1 }],
+    ['NaN tabIndex', { ...good, tabIndex: Number.NaN }],
   ])('rejects %s', (_name, raw) => {
     expect(parseControlStatus(raw)).toBeNull()
   })

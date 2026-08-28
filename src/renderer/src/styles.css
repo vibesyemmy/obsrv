@@ -142,6 +142,20 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .tab:has(> .tab-label[aria-selected='true']) { background: var(--chrome-3); border-color: var(--chrome-3); }
 .tab > .tab-label[aria-selected='true'] { color: var(--text-0); font-weight: 600; }
 
+/* The driven tab, while agent control is on. The 2px inset rule `.menu-row`
+   and `.surround-control` already use to mark a choice — the same idiom, in
+   the same direction, so it reads as "this one" and not as a new language.
+   It sits on the leading edge rather than surrounding the tab, so it never
+   competes with the selected fill underneath it (the driven tab is always the
+   selected one, and two full outlines on one control would be noise).
+
+   Neutral, and only neutral: --text-1 standing, --text-0 for ~3s after each
+   command, exactly the step the AGENT chip makes. No hue and no glow — a blur
+   here would be the first shadow in the app, and the rule against it is what
+   stops the chrome biasing the render below. */
+.tab.driven { box-shadow: inset 2px 0 0 var(--text-1); }
+.tab.driven.busy { box-shadow: inset 2px 0 0 var(--text-0); }
+
 .tab-close {
   flex: 0 0 auto;
   width: 18px;

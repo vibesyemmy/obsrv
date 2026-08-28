@@ -13,6 +13,7 @@ import {
   type Surround,
   type ViewMode,
 } from '../state/store'
+import { useAgentActivity } from '../hooks/useAgentActivity'
 import { Icon } from './Icon'
 import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
@@ -93,20 +94,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const picked = highlight >= 0 && highlight < matches.length ? matches[highlight]! : null
 
   // Lit while an authenticated agent-control command arrived in the last ~3 s,
-  // so the user can see the visible app is being driven.
-  const [agentActive, setAgentActive] = useState(false)
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const off = window.obsrv.onAgentActivity(() => {
-      setAgentActive(true)
-      clearTimeout(timer)
-      timer = setTimeout(() => setAgentActive(false), 3000)
-    })
-    return () => {
-      clearTimeout(timer)
-      off()
-    }
-  }, [])
+  // so the user can see the visible app is being driven. Shared with the tab
+  // strip's driven-tab marker, which lights on the same beat.
+  const agentActive = useAgentActivity()
 
   // The toggle owns the whole flip: optimistic store update so the button
   // answers immediately, rolled back if main refuses the write (mirrors the

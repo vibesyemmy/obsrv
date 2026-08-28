@@ -1,5 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { canAddTab, tabTitle } from '../../../shared/tabList'
+import { useAgentActivity } from '../hooks/useAgentActivity'
 import { useStore } from '../state/store'
 import { Icon } from './Icon'
 
@@ -19,6 +20,12 @@ export function TabBar() {
   const tabOrder = useStore(useShallow(s => s.tabOrder))
   const activeId = useStore(s => s.activeId)
   const maxTabs = useStore(s => s.settings.maxTabs)
+  // While agent control is on, the agent acts on whichever tab is in front —
+  // resolved per command, never bound at drive start — so the marker belongs
+  // on the active tab and moves with it. `driving` is the standing fact (the
+  // loopback server is open); `agentActive` is the last ~3 s of commands.
+  const driving = useStore(s => s.settings.agentControl)
+  const agentActive = useAgentActivity()
 
   const canAdd = canAddTab(tabOrder.length, maxTabs)
 
@@ -26,7 +33,13 @@ export function TabBar() {
     <div className="chrome-row chrome-tabs">
       <div className="tabs" role="tablist" aria-label="Open tabs">
         {tabOrder.map(id => (
-          <Tab key={id} id={id} active={id === activeId} />
+          <Tab
+            key={id}
+            id={id}
+            active={id === activeId}
+            driven={driving && id === activeId}
+            busy={agentActive}
+          />
         ))}
       </div>
       <button
@@ -52,7 +65,19 @@ export function TabBar() {
   )
 }
 
-function Tab({ id, active }: { id: string; active: boolean }) {
+function Tab({
+  id,
+  active,
+  driven,
+  busy,
+}: {
+  id: string
+  active: boolean
+  /** Agent control is on and this is the tab its commands land on. */
+  driven: boolean
+  /** A command arrived in the last ~3 s; only ever shown on a driven tab. */
+  busy: boolean
+}) {
   // Subscribed per tab, so a background tab's title landing re-renders that
   // one entry rather than the whole strip.
   const label = useStore(s => {
@@ -61,14 +86,16 @@ function Tab({ id, active }: { id: string; active: boolean }) {
   })
 
   return (
-    <div className="tab">
+    <div className={`tab${driven ? ' driven' : ''}${driven && busy ? ' busy' : ''}`}>
       <button
         className="tab-label"
         type="button"
         role="tab"
         aria-selected={active}
-        // The strip truncates; the full label belongs somewhere readable.
-        title={label}
+        // Two facts, one tooltip. The driven line is the only place the strip
+        // explains its marker — an unlabelled rule on one tab reads as a
+        // rendering artefact, and a screen reader would not see it at all.
+        title={driven ? `${label}\nAgent control is driving this tab` : label}
         onClick={() => window.obsrv.activateTab(id)}
       >
         {label}

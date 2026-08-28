@@ -696,9 +696,7 @@ export function registerIpc(ctx: AppContext): void {
     if (!persistReady) return
     const stored: StoredTabs = {
       tabs: tabs.tabs.map(t => ({ url: t.url, presetId: t.presetId, profileId: t.profileId })),
-      // `findIndex` cannot miss — the manager always holds its active session —
-      // but a -1 written to disk would come back as a clamp to 0 anyway.
-      activeIndex: Math.max(0, tabs.tabs.findIndex(t => t.id === tabs.activeId)),
+      activeIndex: tabs.activeIndex,
     }
     const json = JSON.stringify(stored)
     if (json === lastWritten) return
@@ -791,7 +789,12 @@ export function registerIpc(ctx: AppContext): void {
       } catch {
         // The target is mid-recreation or the app is closing; '' is honest.
       }
-      return { version: appVersion, url, ...uiState }
+      // Resolved on every call rather than captured once: an agent's command
+      // lands on whichever tab is in front when it arrives, so the status
+      // beside it has to name that same tab. Read from the manager, not from
+      // the `uiState` mirror — main owns tab identity, and the mirror
+      // deliberately drops reports from tabs that are not in front.
+      return { version: appVersion, url, tabId: tabs.activeId, tabIndex: tabs.activeIndex, ...uiState }
     },
     navigate: navigateBoth,
     apply: patch => {

@@ -102,6 +102,15 @@ export class TabManager {
     return this.id
   }
 
+  /**
+   * The active tab's position in the strip, 0-based. `findIndex` cannot miss —
+   * the manager always holds its active session — but a -1 escaping into
+   * `tabs.json` or an agent's `status` would be a lie, so it clamps.
+   */
+  get activeIndex(): number {
+    return Math.max(0, this.list.findIndex(t => t.id === this.id))
+  }
+
   active(): TabSession {
     return this.list.find(t => t.id === this.id) ?? this.list[0]!
   }

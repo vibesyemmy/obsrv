@@ -77,10 +77,27 @@ export interface AgentUiReport extends AgentUiState {
   canvasBounds?: { x: number; y: number; width: number; height: number } | null
 }
 
-/** What `status` returns: the UI mirror plus app version and the target's URL. */
+/**
+ * What `status` returns: the UI mirror plus app version, the target's URL, and
+ * the tab all of it describes.
+ */
 export interface ControlStatus extends AgentUiState {
   version: string
   url: string
+  /**
+   * Which tab the agent is acting on. Every command resolves the active tab
+   * when it arrives rather than binding one at drive start, so this is the
+   * answer to "where did that land" — an agent that cares whether the user
+   * moved compares it across calls.
+   *
+   * Main owns tab identity (a tab *is* the pair of Chromium renderers it
+   * built), so these two come from the tab manager, never from the renderer
+   * mirror the fields above come from. `''` and `0` when the app predates
+   * tabs — see `parseControlStatus`.
+   */
+  tabId: string
+  /** The tab's position in the strip, 0-based. */
+  tabIndex: number
 }
 
 /** A validated `highlight` payload: a target-pixel rect plus its lifetime. */
@@ -310,5 +327,15 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // present-but-wrong is still a malformed status.
   const panes = raw.panes ?? 'both'
   if (panes !== 'both' && panes !== 'target') return null
-  return { version, url, presetId, profileId, viewMode, panes, mode }
+  // The same skew, one release later. An app that predates tabs has exactly
+  // one session — it is the tab at index 0, and it has no id to name — so the
+  // defaults describe that app truthfully rather than papering over it. An
+  // agent polling one sees an unchanging `tabId`, which is correct: there is
+  // no other tab for the user to switch to. Returning null instead would take
+  // out drive and live snap wholesale against every app older than tabs.
+  const tabId = raw.tabId ?? ''
+  if (typeof tabId !== 'string') return null
+  const tabIndex = raw.tabIndex ?? 0
+  if (typeof tabIndex !== 'number' || !Number.isInteger(tabIndex) || tabIndex < 0) return null
+  return { version, url, presetId, profileId, viewMode, panes, mode, tabId, tabIndex }
 }
