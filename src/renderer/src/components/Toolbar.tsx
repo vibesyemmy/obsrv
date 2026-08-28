@@ -280,7 +280,12 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
                   }}
                   onMouseEnter={() => setHighlight(i)}
                 >
-                  <span className="url-history-url">{m.url}</span>
+                  <span className="url-history-url">
+                    {/* `bdi` isolates the URL as one left-to-right run inside
+                        the right-to-left box that moves the ellipsis; without
+                        it a trailing `/` would be reordered to the front. */}
+                    <bdi>{m.url}</bdi>
+                  </span>
                   <span className="url-history-age">{formatAge(m.lastVisit, Date.now())}</span>
                 </li>
               ))}
