@@ -312,9 +312,11 @@ export function SettingsPanel() {
       />
 
       <p className="muted">
-        Each tab is two Chromium processes — a live pane and an offscreen render — so
-        the cap is a memory decision, not a preference. Lowering it never closes a tab
-        that is already open; it only stops new ones.
+        Each tab is two Chromium renderers — a live pane and an offscreen render — plus
+        the GPU and utility processes they pull in: twelve empty tabs measured 27 child
+        processes and about 2.5&nbsp;GB. A real page costs more. The cap is a memory
+        decision, not a preference. Lowering it never closes a tab that is already open;
+        it only stops new ones.
       </p>
 
       <h2>History</h2>

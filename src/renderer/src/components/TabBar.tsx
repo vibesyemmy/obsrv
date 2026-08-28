@@ -47,13 +47,15 @@ export function TabBar() {
         type="button"
         aria-label="New tab"
         disabled={!canAdd}
-        // The cap exists because each tab is two Chromium processes, so the
-        // refusal says that and says where to change it. A disabled button
-        // with no explanation reads as a bug.
+        // The cap exists because each tab is two Chromium renderers and the
+        // processes behind them — twelve empty tabs measured 27 child
+        // processes and about 2.5 GB — so the refusal says what it costs and
+        // where to change it. A disabled button with no explanation reads as
+        // a bug.
         title={
           canAdd
             ? 'New tab'
-            : `${maxTabs} tabs is the limit — each one is two Chromium processes. Raise it in Settings.`
+            : `${maxTabs} tabs is the limit — each one is two Chromium renderers, and twelve tabs cost about 2.5 GB. Raise it in Settings.`
         }
         onClick={() => {
           void window.obsrv.addTab()
