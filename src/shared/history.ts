@@ -1,18 +1,17 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { ALLOWED_URL_SCHEMES } from './url'
 
 /**
- * Everything about visited-URL history that can be decided without Electron:
- * what may be stored, how a visit updates the list, the cap, the ranking and
- * the substring match the URL bar types against. `history.json` is read and
- * written here in the same shape `shared/settings.ts` reads `settings.json` —
- * every field checked with a fallback on the way in, nothing invalid allowed
- * out — so it is unit-tested directly in tests/unit/history.test.ts.
+ * Everything about visited-URL history that can be decided without Electron
+ * — and, unlike `shared/settings.ts`, without touching the disk either: what
+ * may be stored, how a visit updates the list, the cap, the ranking and the
+ * substring match the URL bar types against. The renderer imports
+ * `matchHistory` on every keystroke, so a `node:fs` import here would put
+ * `node:fs` in the renderer bundle; the file half lives in
+ * `shared/historyFile.ts` next door.
  *
  * Main owns the one hook that calls `recordVisit` (`src/main/ipc.ts`, off the
  * native pane's `did-navigate`); the renderer owns the dropdown and calls
- * `matchHistory` only. See the history spec.
+ * `matchHistory` only. Unit-tested directly in tests/unit/history.test.ts.
  */
 
 export interface HistoryEntry {
@@ -40,9 +39,9 @@ export const HISTORY_SUGGESTIONS = 6
  */
 export const MAX_URL_LENGTH = 2048
 
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
-const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1
-const isStamp = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
+export const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+export const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1
+export const isStamp = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0
 
 /**
  * Is this an address worth remembering? Only the schemes the app can load
@@ -65,7 +64,7 @@ export function isStorableUrl(v: unknown): v is string {
  * on screen ten minutes ago. URL breaks the remaining tie only to keep the
  * order stable across reloads of the same file.
  */
-function byRank(a: HistoryEntry, b: HistoryEntry): number {
+export function byRank(a: HistoryEntry, b: HistoryEntry): number {
   if (a.lastVisit !== b.lastVisit) return b.lastVisit - a.lastVisit
   if (a.visits !== b.visits) return b.visits - a.visits
   return a.url < b.url ? -1 : a.url > b.url ? 1 : 0
@@ -107,54 +106,4 @@ export function matchHistory(
     .filter(e => e.url.toLowerCase().includes(needle))
     .sort(byRank)
     .slice(0, Math.max(0, limit))
-}
-
-/**
- * The stored list, or an empty one. A malformed file is treated as no history
- * rather than as a fatal error, exactly as `loadSettings` treats a malformed
- * `settings.json`: losing a convenience beats refusing to start.
- */
-export function loadHistory(file: string): HistoryEntry[] {
-  try {
-    const raw: unknown = JSON.parse(readFileSync(file, 'utf8'))
-    if (!Array.isArray(raw)) return []
-    const seen = new Set<string>()
-    const out: HistoryEntry[] = []
-    for (const item of raw) {
-      if (!isRecord(item)) continue
-      // Unlike a settings field, a bad URL has no sensible fallback — the
-      // entry *is* the URL — so the row is dropped rather than the file. A
-      // duplicate is dropped for the same reason: two rows for one address
-      // would both match and waste a slot in a list of six.
-      if (!isStorableUrl(item.url) || seen.has(item.url)) continue
-      seen.add(item.url)
-      out.push({
-        url: item.url,
-        // These two do fall back: a row whose counter got mangled is still a
-        // page that was visited, and losing its rank beats losing the row.
-        visits: isCount(item.visits) ? item.visits : 1,
-        lastVisit: isStamp(item.lastVisit) ? item.lastVisit : 0,
-      })
-    }
-    return out.sort(byRank).slice(0, HISTORY_MAX)
-  } catch {
-    return []
-  }
-}
-
-/**
- * Writing is the stricter side, as it is for settings: `loadHistory` forgives
- * whatever is on disk because it has to, but nothing inside the app has any
- * business asking to store a malformed entry.
- */
-export function saveHistory(file: string, entries: readonly HistoryEntry[]): void {
-  if (!Array.isArray(entries)) throw new RangeError('history must be an array')
-  if (entries.length > HISTORY_MAX) throw new RangeError(`history must hold at most ${HISTORY_MAX} entries`)
-  for (const e of entries) {
-    if (!isRecord(e) || !isStorableUrl(e.url)) throw new RangeError('history entries need a loadable url')
-    if (!isCount(e.visits)) throw new RangeError('visits must be an integer >= 1')
-    if (!isStamp(e.lastVisit)) throw new RangeError('lastVisit must be a finite epoch ms >= 0')
-  }
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, JSON.stringify(entries, null, 2))
 }

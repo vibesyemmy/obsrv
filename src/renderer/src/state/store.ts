@@ -14,6 +14,7 @@ import {
   findProfile,
 } from '../../../shared/presets'
 import type { AgentHighlight } from '../../../shared/control'
+import type { HistoryEntry } from '../../../shared/history'
 import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
@@ -63,6 +64,12 @@ export interface AppState {
   toast: string | null
   /** Null until the first `getUpdate` resolves; main seeds a real value. */
   update: UpdateState | null
+  /**
+   * Every remembered address, ranked, as main last published it. The URL bar
+   * matches against this locally so a keystroke costs no IPC; main owns the
+   * file and pushes the whole list whenever it changes.
+   */
+  history: HistoryEntry[]
   image: ImageState | null
   surround: Surround
   viewMode: ViewMode
@@ -102,6 +109,7 @@ export interface AppState {
   setTargetLoading(v: boolean): void
   setError(e: LoadError | null): void
   setUpdate(u: UpdateState | null): void
+  setHistory(h: HistoryEntry[]): void
   setToast(t: string | null): void
   setImage(i: ImageState | null): void
   setSurround(s: Surround): void
@@ -141,6 +149,7 @@ export const useStore = create<AppState>()(set => ({
   error: null,
   toast: null,
   update: null,
+  history: [],
   image: null,
   surround: 'graphite',
   // Fit, not 1:1: fit never enlarges past 1:1, so a render that already fits
@@ -174,6 +183,7 @@ export const useStore = create<AppState>()(set => ({
   // duplicate must not replace the object and re-render everything twice.
   setError: error => set(s => (sameError(s.error, error) ? {} : { error })),
   setUpdate: update => set({ update }),
+  setHistory: history => set({ history }),
   setToast: toast => set({ toast }),
   setImage: image => set({ image }),
   setSurround: surround => set({ surround }),

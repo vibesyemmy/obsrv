@@ -37,6 +37,7 @@ export function App() {
   const setError = useStore(s => s.setError)
   const setTargetLoading = useStore(s => s.setTargetLoading)
   const setUpdate = useStore(s => s.setUpdate)
+  const setHistory = useStore(s => s.setHistory)
   const setImageMeta = useStore(s => s.setImage)
   const setMode = useStore(s => s.setMode)
   const setToast = useStore(s => s.setToast)
@@ -59,11 +60,18 @@ export function App() {
     // Re-read on every mount: a renderer reload would otherwise show nothing
     // until the next daily check.
     window.obsrv.getUpdate().then(setUpdate, e => console.warn('obsrv: getUpdate failed', e))
+    // Same reason: a renderer reload would otherwise show an empty URL bar
+    // dropdown until the next navigation pushed the list.
+    window.obsrv.getHistory().then(setHistory, e => console.warn('obsrv: getHistory failed', e))
     const offs = [
       window.obsrv.onHostChanged(setHost),
       // A committed navigation — back, forward, reload, a link — supersedes
-      // the last load failure. A *failed* load commits Chromium's error page
-      // first and reports its error after, so the badge still lands last.
+      // the last load failure, and only a committed one: Chromium commits its
+      // error page without emitting `did-navigate`, so a failed load reports
+      // no URL at all (measured on Electron 43; a bad host, a refused
+      // connection, a missing file and a Back onto an error page all fire
+      // `did-fail-load` alone). The badge therefore lands last by having
+      // nothing race it.
       window.obsrv.onUrlChanged(url => {
         setError(null)
         setUrl(url)
@@ -71,11 +79,12 @@ export function App() {
       window.obsrv.onLoadError(setError),
       window.obsrv.onTargetLoading(setTargetLoading),
       window.obsrv.onUpdateStatus(setUpdate),
+      window.obsrv.onHistoryChanged(setHistory),
     ]
     return () => {
       for (const off of offs) off()
     }
-  }, [setHost, setSettings, setUrl, setError, setTargetLoading, setUpdate])
+  }, [setHost, setSettings, setUrl, setError, setTargetLoading, setUpdate, setHistory])
 
   useEffect(() => {
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)
@@ -228,18 +237,22 @@ export function App() {
   if (fatal) return <Fatal message={fatal} />
 
   return (
-    <div className="app">
+    // The split and the panes mode are published here rather than on `.panes`
+    // because the chrome needs them too: the URL bar's history dropdown is
+    // clamped to the native pane's right edge, and a custom property set on
+    // `.panes` reaches nothing above it. Everything below still inherits them.
+    <div
+      className="app"
+      data-panes={panes}
+      style={{ '--split': split, '--pane-min': `${MIN_PANE_PX}px` } as CSSProperties}
+    >
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
       <DropZone onImage={onImage} />
       <div className="body">
         {/* The split reaches the layout as a custom property rather than a
             width: the stylesheet owns how the ratio and the 240px floor
             combine, and the divider owns the drag. */}
-        <div
-          className="panes"
-          data-panes={panes}
-          style={{ '--split': split, '--pane-min': `${MIN_PANE_PX}px` } as CSSProperties}
-        >
+        <div className="panes">
           {panes === 'both' && (
             <>
               {mode === 'image' && image ? (

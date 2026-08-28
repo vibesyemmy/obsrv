@@ -33,7 +33,43 @@
 :root[data-surround='grey50'] { --surround: #808080; }
 
 html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color: var(--text-0); }
-.app { height: 100%; display: flex; flex-direction: column; }
+/* `--split` (the native pane's share), `--pane-min` and `--seam` live here
+   rather than on `.panes` because the chrome needs them too — see
+   `--native-right` below. `App` writes the first two inline; the fallbacks
+   keep the layout sane if either is ever missing. */
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  --split: 0.5;
+  --pane-min: 240px;
+  --seam: 1px;
+  --drawer-w: 0px;
+}
+
+/* The drawer's whole box. Declared here so the panes row's width can be
+   derived from the window's without measuring either; `.drawer` sizes itself
+   from the same value, so the two cannot drift. */
+.app:has(.drawer) { --drawer-w: 309px; }
+
+/* Where the native pane's right edge falls, in window coordinates: the very
+   clamp `.panes > .pane:first-child` is laid out with, applied to the width
+   the row gets (the window, less whatever a drawer takes). A style rule, not
+   a measurement — the split is already a custom property, so nothing here
+   observes the layout it is describing.
+   Solo target has no native view, so the clamp collapses to zero. */
+.app[data-panes='both'] {
+  --native-right: round(
+    down,
+    clamp(
+      var(--pane-min),
+      calc((100vw - var(--drawer-w) - var(--seam)) * var(--split)),
+      calc(100vw - var(--drawer-w) - var(--seam) - var(--pane-min))
+    ),
+    1px
+  );
+}
+.app[data-panes='target'] { --native-right: 0px; }
 .muted { color: var(--text-1); }
 .warn { color: var(--warn); }
 .chrome .warn { white-space: nowrap; }
@@ -52,6 +88,10 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   border-bottom: 1px solid var(--line);
 }
 .chrome-browse { height: 44px; background: var(--chrome-1); }
+/* The containing block the URL-history list falls back to. Its padding box
+   starts at the window's left edge (the row's only border is at the bottom),
+   which is the frame `--native-right` is expressed in. */
+.chrome-browse { position: relative; }
 .chrome-screen { height: 38px; background: var(--chrome-0); }
 .chrome-spacer { flex: 1 1 auto; }
 
@@ -72,7 +112,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   cursor: pointer;
 }
 
-.url-form { flex: 1 1 auto; min-width: 160px; }
+/* Static in Both, so the history list below resolves against `.chrome-browse`
+   and can be placed in window coordinates. In solo target there is no native
+   view to dodge and the list belongs under the field, so the form becomes the
+   containing block instead. */
+.url-form { position: static; flex: 1 1 auto; min-width: 160px; }
+.app[data-panes='target'] .url-form { position: relative; }
 .url-form input {
   width: 100%;
   height: 30px;
@@ -85,6 +130,51 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   border-radius: 5px;
 }
 .url-form input[readonly] { color: var(--text-1); }
+
+/* Visited-URL type-ahead. Its left edge is clamped to the native pane's right
+   edge because that pane is an OS-level WebContentsView painting over
+   anything the renderer draws beneath it: a list anchored to the field, which
+   starts near x=120, would be entirely invisible. The cost is cosmetic — with
+   a wide native pane the list sits offset from the field it belongs to — and
+   it is the same constraint that pushed the overflow menu rightward.
+   `right` bounds it against the window so a very wide split cannot push it
+   off the edge; `max-width` keeps it from spanning a whole empty pane. */
+.url-history {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: var(--native-right, 0px);
+  right: 10px;
+  max-width: 560px;
+  z-index: 10;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  font-size: 11.5px;
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+/* Solo target: the list is the field's own dropdown, so it tracks its width. */
+.app[data-panes='target'] .url-history { left: 0; right: 0; max-width: none; }
+.url-history-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  height: 26px;
+  padding: 0 11px;
+  cursor: pointer;
+}
+/* The chrome's one selected idiom, shared with `.menu-row[aria-pressed]`. */
+.url-history-row.active { background: var(--chrome-3); box-shadow: inset 2px 0 0 var(--text-0); }
+.url-history-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+.url-history-age { flex: 0 0 auto; color: var(--text-1); font-size: 10px; }
 
 .status-cluster { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; font-size: 10px; }
 .badge-error {
@@ -237,9 +327,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* The real select is transparent, so its ring must land on the shell. */
 .select-shell:has(select:focus-visible) { outline: 1px solid var(--text-1); outline-offset: -1px; }
 
-/* `--split` (the native pane's share) and `--pane-min` are written inline by
-   `App`; the fallbacks keep the row sane if either is ever missing. */
-.panes { flex: 1 1 auto; display: flex; min-height: 0; --split: 0.5; --pane-min: 240px; --seam: 1px; }
+.panes { flex: 1 1 auto; display: flex; min-height: 0; }
 .pane {
   flex: 1 1 0;
   min-width: 0;
@@ -257,7 +345,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    written back — grow the window and the preference returns on its own, with
    no resize plumbing to keep in step. The drag enforces the same floor in JS,
    where it also decides what to persist. */
-.panes[data-panes='both'] > .pane:first-child {
+.app[data-panes='both'] .panes > .pane:first-child {
   flex-grow: 0;
   flex-shrink: 0;
   /* Rounded to whole pixels, and this is load-bearing. `TargetCanvas`
@@ -397,7 +485,11 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .body { flex: 1 1 auto; display: flex; min-height: 0; }
 .panes { min-width: 0; }
 .drawer {
-  flex: 0 0 280px;
+  /* Border-box against `--drawer-w`: 309 - 28 padding - 1 border = the 280px
+     of content this has always had, now stated once for both this and the
+     URL-history clamp. */
+  box-sizing: border-box;
+  flex: 0 0 var(--drawer-w);
   overflow: auto;
   padding: 12px 14px;
   background: var(--chrome-1);
@@ -630,7 +722,8 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   cursor: pointer;
   font: inherit;
 }
-.check-now {
+.check-now,
+.clear-history {
   width: 100%;
   height: 24px;
   margin-top: 8px;
@@ -640,3 +733,5 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   border-radius: 4px;
   cursor: pointer;
 }
+/* Nothing to erase: the button says so rather than pretending to act. */
+.clear-history:disabled { color: var(--text-1); cursor: default; }

@@ -183,7 +183,7 @@ test('ignores malformed payloads', async () => {
   expect(settings).toMatchObject({ hostDiagonalInches: 27, hostNits: 500, agentControl: false })
   // Exactly the known keys: nothing the renderer bolted on reaches disk.
   expect(Object.keys(settings).sort()).toEqual(
-    ['agentControl', 'hostDiagonalInches', 'hostNits', 'lastUpdateCheck', 'split', 'updateCheck'],
+    ['agentControl', 'hostDiagonalInches', 'hostNits', 'lastUpdateCheck', 'recordHistory', 'split', 'updateCheck'],
   )
 
   // Main is still alive and answering.

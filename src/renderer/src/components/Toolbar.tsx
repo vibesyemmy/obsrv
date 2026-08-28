@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { matchHistory } from '../../../shared/history'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
+import { formatAge } from '../../../shared/update'
 import {
   CUSTOM_PRESET_ID,
   selectUrlBarText,
@@ -68,9 +70,25 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setPanes = useStore(s => s.setPanes)
   const agentControl = useStore(s => s.settings.agentControl)
   const setSettings = useStore(s => s.setSettings)
+  const history = useStore(s => s.history)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState(barText)
+
+  // The type-ahead list. `open` is what the user asked for (typed, or pressed
+  // Down); `highlight` is -1 when nothing is picked, which is what makes Enter
+  // navigate to the typed text rather than to a row.
+  const [open, setOpen] = useState(false)
+  const [highlight, setHighlight] = useState(-1)
+  const matches = useMemo(() => (open ? matchHistory(history, draft) : []), [open, history, draft])
+  const listOpen = open && matches.length > 0
+  const closeList = (): void => {
+    setOpen(false)
+    setHighlight(-1)
+  }
+  // A row that scrolled out of the list, or vanished as the query narrowed,
+  // must not stay selected — Enter would then navigate somewhere unseen.
+  const picked = highlight >= 0 && highlight < matches.length ? matches[highlight]! : null
 
   // Lit while an authenticated agent-control command arrived in the last ~3 s,
   // so the user can see the visible app is being driven.
@@ -122,14 +140,69 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   // Spec §7: the URL bar shows the filename, read-only, while in image mode.
   const readOnly = mode === 'image'
 
-  const submit = async (e: FormEvent): Promise<void> => {
-    e.preventDefault()
-    if (readOnly || draft.trim() === '') return
+  // Image mode empties the list rather than leaving it hanging over a pane
+  // the URL bar no longer describes.
+  useEffect(() => {
+    if (readOnly) closeList()
+  }, [readOnly])
+
+  const go = async (url: string): Promise<void> => {
+    closeList()
     setError(null)
-    const applied = await window.obsrv.navigate(draft)
+    const applied = await window.obsrv.navigate(url)
     setUrl(applied)
     // The input keeps focus through Enter, so the sync above would skip it.
     setDraft(applied)
+  }
+
+  const submit = (e: FormEvent): void => {
+    e.preventDefault()
+    if (readOnly || draft.trim() === '') return
+    void go(draft)
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
+    if (readOnly) return
+    if (e.key === 'ArrowDown') {
+      // Down opens the list and moves through it; the caret would otherwise
+      // jump to the end of the field.
+      e.preventDefault()
+      if (!open) {
+        setOpen(true)
+        setHighlight(0)
+        return
+      }
+      // Past the last row the highlight returns to the typed text, so a user
+      // who overshoots can keep pressing Down instead of reaching for Up.
+      setHighlight(h => (h + 1 >= matches.length ? -1 : h + 1))
+      return
+    }
+    if (e.key === 'ArrowUp' && listOpen) {
+      e.preventDefault()
+      setHighlight(h => (h <= -1 ? matches.length - 1 : h - 1))
+      return
+    }
+    if (e.key === 'Enter' && picked) {
+      // The form's submit would navigate to the draft instead.
+      e.preventDefault()
+      void go(picked.url)
+      return
+    }
+    if (e.key === 'Escape') {
+      // The list first, the draft second. Escape has always reverted the
+      // edit here, and closing a popover must not spend the press that does
+      // it — one Escape to dismiss, another to undo.
+      //
+      // `listOpen`, not `open`: a query that matches nothing leaves the list
+      // wanting to be open with nothing on screen, and an Escape that appears
+      // to do nothing is worse than no dismissal at all. The state is cleared
+      // either way, so the revert below cannot re-open the list against the
+      // restored text.
+      const dismissed = listOpen
+      closeList()
+      if (dismissed) return
+      setDraft(barText)
+    }
   }
 
   // The shell paints the label itself, so it needs the chosen option's text.
@@ -174,11 +247,45 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
             readOnly={readOnly}
             spellCheck={false}
             placeholder="Enter a URL, or drop a PNG"
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Escape') setDraft(barText)
+            role="combobox"
+            aria-expanded={listOpen}
+            aria-controls="url-history"
+            aria-autocomplete="list"
+            aria-activedescendant={picked ? `url-history-${highlight}` : undefined}
+            onChange={e => {
+              setDraft(e.target.value)
+              setOpen(true)
+              // Typing re-queries, so whatever was picked is about to be a
+              // different row; start from the typed text again.
+              setHighlight(-1)
             }}
+            onKeyDown={onKeyDown}
+            onBlur={closeList}
           />
+          {listOpen && (
+            <ul className="url-history" id="url-history" role="listbox" aria-label="Visited addresses">
+              {matches.map((m, i) => (
+                <li
+                  key={m.url}
+                  id={`url-history-${i}`}
+                  className={`url-history-row${i === highlight ? ' active' : ''}`}
+                  role="option"
+                  aria-selected={i === highlight}
+                  // Not onClick: a click blurs the field first, which closes
+                  // the list out from under the press. Suppressing the blur
+                  // keeps the row alive long enough to act on.
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    void go(m.url)
+                  }}
+                  onMouseEnter={() => setHighlight(i)}
+                >
+                  <span className="url-history-url">{m.url}</span>
+                  <span className="url-history-age">{formatAge(m.lastVisit, Date.now())}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </form>
 
         {/* The only region that grows and shrinks, so appearing status

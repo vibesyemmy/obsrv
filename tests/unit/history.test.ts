@@ -6,12 +6,11 @@ import {
   HISTORY_MAX,
   HISTORY_SUGGESTIONS,
   MAX_URL_LENGTH,
-  loadHistory,
   matchHistory,
   recordVisit,
-  saveHistory,
   type HistoryEntry,
 } from '../../src/shared/history'
+import { loadHistory, saveHistory } from '../../src/shared/historyFile'
 
 const dir = () => mkdtempSync(join(tmpdir(), 'obsrv-history-'))
 const entry = (url: string, visits: number, lastVisit: number): HistoryEntry => ({ url, visits, lastVisit })

@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
-import { loadHistory, recordVisit, saveHistory, type HistoryEntry } from '../shared/history'
+import { recordVisit, type HistoryEntry } from '../shared/history'
+import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
 import {
   parseDeviceScaleFactor,
