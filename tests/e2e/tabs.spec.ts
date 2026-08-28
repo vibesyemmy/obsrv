@@ -597,3 +597,133 @@ test.describe('the tab strip', () => {
     await expect(tabs().nth(0)).toHaveText('tall-fixture')
   })
 })
+
+/**
+ * The shortcuts. They are menu items rather than a renderer `keydown` listener
+ * because the native pane is an OS-level view outside the renderer's document:
+ * a listener there is dead the moment the user clicks the page under test,
+ * which is most of the time. That is why `Cmd+L` already goes through the menu.
+ *
+ * Playwright injects key events straight into a renderer over CDP, and the OS
+ * resolves a menu key equivalent long before that — so a `page.keyboard.press`
+ * here would prove the opposite of what it looks like it proves. The item's
+ * own `click`, which is exactly what the OS invokes when the accelerator
+ * fires, is driven instead, with the native pane focused so that nothing in
+ * the path can be relying on the renderer holding focus. Moving any of this
+ * into the renderer removes the item, and `invoke` throws.
+ */
+test.describe('the tab shortcuts are application-menu items', () => {
+  const tabs = () => page.locator('.chrome-tabs [role="tab"]')
+
+  const item = (id: string): Promise<{ label: string; accelerator: string | null } | null> =>
+    app.evaluate(({ Menu }, itemId: string) => {
+      const found = Menu.getApplicationMenu()?.getMenuItemById(itemId)
+      return found ? { label: found.label, accelerator: found.accelerator ?? null } : null
+    }, id)
+
+  const invoke = async (id: string): Promise<void> => {
+    // Focused first, every time: an earlier assertion may have clicked the
+    // strip, and a shortcut that only works from the strip is the defect.
+    await app.evaluate(() => (globalThis as any).__obsrv.native.webContents.focus())
+    await app.evaluate(({ Menu }, itemId: string) => {
+      const found = Menu.getApplicationMenu()?.getMenuItemById(itemId)
+      if (!found) throw new Error(`no menu item "${itemId}" — is the shortcut in the renderer?`)
+      found.click()
+    }, id)
+  }
+
+  const ids = (): Promise<string[]> =>
+    app.evaluate(() => (globalThis as any).__obsrv.tabs.tabs.map((t: any) => t.id as string))
+  const activeId = (): Promise<string> =>
+    app.evaluate(() => (globalThis as any).__obsrv.tabs.activeId as string)
+
+  const resetToOne = async (): Promise<void> => {
+    await app.evaluate(() => {
+      const ctx = (globalThis as any).__obsrv
+      for (const t of [...ctx.tabs.tabs]) if (t.id !== ctx.tabs.activeId) ctx.tabs.close(t.id)
+    })
+    await expect(tabs()).toHaveCount(1)
+  }
+
+  test.beforeEach(resetToOne)
+  test.afterAll(resetToOne)
+
+  test('carries the browser accelerators, and leaves Cmd+W to the tab', async () => {
+    expect(await item('new-tab')).toEqual({ label: 'New Tab', accelerator: 'CmdOrCtrl+T' })
+    expect(await item('close-tab')).toEqual({ label: 'Close Tab', accelerator: 'CmdOrCtrl+W' })
+    expect((await item('select-tab-1'))?.accelerator).toBe('CmdOrCtrl+1')
+    expect((await item('select-tab-8'))?.accelerator).toBe('CmdOrCtrl+8')
+    // Nine is the last tab, not the ninth — the browser convention.
+    expect((await item('select-tab-last'))?.accelerator).toBe('CmdOrCtrl+9')
+    expect((await item('select-tab-9'))).toBeNull()
+
+    // Closing the window keeps a way out, but not the one that belongs to tabs.
+    const closeWindow = await app.evaluate(({ Menu }) => {
+      const flat: { role?: string; accelerator?: string }[] = []
+      const walk = (list: Electron.MenuItem[]): void => {
+        for (const it of list) {
+          flat.push({ role: it.role, accelerator: it.accelerator })
+          if (it.submenu) walk(it.submenu.items)
+        }
+      }
+      walk(Menu.getApplicationMenu()?.items ?? [])
+      return flat.find(i => (i.role ?? '').toLowerCase() === 'close') ?? null
+    })
+    expect(closeWindow?.accelerator).toBe('Shift+CmdOrCtrl+W')
+  })
+
+  test('Cmd+T opens a tab in front and Cmd+W closes it, with the native pane focused', async () => {
+    const before = await ids()
+
+    await invoke('new-tab')
+    await expect(tabs()).toHaveCount(2)
+    const opened = (await ids()).at(-1)!
+    expect(opened).not.toBe(before[0])
+    // "New tab" means the tab you asked for is the one in front, and the strip
+    // followed main without being told twice.
+    expect(await activeId()).toBe(opened)
+    await expect(tabs().nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    await invoke('close-tab')
+    await expect(tabs()).toHaveCount(1)
+    expect(await ids()).toEqual(before)
+  })
+
+  test('Cmd+1 selects the first tab and Cmd+9 the last, whatever the count', async () => {
+    await invoke('new-tab')
+    await invoke('new-tab')
+    const list = await ids()
+    expect(list).toHaveLength(3)
+
+    await invoke('select-tab-1')
+    await expect.poll(activeId).toBe(list[0])
+    await expect(tabs().nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    await invoke('select-tab-last')
+    await expect.poll(activeId).toBe(list[2])
+    await expect(tabs().nth(2)).toHaveAttribute('aria-selected', 'true')
+
+    await invoke('select-tab-2')
+    await expect.poll(activeId).toBe(list[1])
+
+    // A number past the end of a short strip is a no-op, not a crash and not
+    // the nearest tab: the user asked for a tab that is not there.
+    await invoke('select-tab-8')
+    await page.waitForTimeout(100)
+    expect(await activeId()).toBe(list[1])
+  })
+
+  test('Cmd+W on the last tab leaves a fresh blank one, not an empty window', async () => {
+    await page.selectOption('.preset-select', '1440p-27')
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+
+    await invoke('close-tab')
+
+    await expect(tabs()).toHaveCount(1)
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).__obsrv.win.isDestroyed() as boolean))
+      .toBe(false)
+    // A fresh tab, not the one that was closed still wearing its old screen.
+    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+  })
+})
