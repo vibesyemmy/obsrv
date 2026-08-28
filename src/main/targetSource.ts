@@ -143,6 +143,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    */
   private internal = false
   private disposed = false
+  /**
+   * What the owner asked for, not what the current window happens to be doing.
+   * See `setPainting` — `recreate()` swaps in a fresh webContents that starts
+   * painting, so the wish has to outlive the window that was serving it.
+   */
+  private paintingWanted = true
 
   constructor(fps: number = DEFAULT_FPS, options: TargetSourceOptions = {}) {
     super()
@@ -173,6 +179,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
     const wc = win.webContents
     wc.setFrameRate(this.fps)
+    // Re-applied per window for the same reason as the frame rate: a fresh
+    // webContents starts at Chromium's defaults, and a source that was
+    // backgrounded before a dsf change would otherwise come back painting.
+    if (!this.paintingWanted) wc.stopPainting()
     wc.setAudioMuted(true)
     this.defaultUserAgent ??= wc.getUserAgent()
     wc.setUserAgent(this.dsf > 1 && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
@@ -398,6 +408,28 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
   getDeviceScaleFactor(): number {
     return this.dsf
+  }
+
+  /**
+   * Stops or resumes rasterisation without touching the page. Offscreen
+   * rendering runs at a fixed frame rate with `backgroundThrottling: false`,
+   * so a source nobody is looking at would otherwise paint a full viewport
+   * forever for nobody. The page keeps its DOM, timers, network and scroll —
+   * only pixel production stops.
+   */
+  setPainting(painting: boolean): void {
+    if (this.paintingWanted === painting) return
+    this.paintingWanted = painting
+    if (this.win.isDestroyed()) return
+    const wc = this.win.webContents
+    if (wc.isDestroyed()) return
+    if (painting) wc.startPainting()
+    else wc.stopPainting()
+  }
+
+  /** What was last asked of `setPainting`, not what the window is doing. */
+  get painting(): boolean {
+    return this.paintingWanted
   }
 
   /** Forces a full-frame repaint, e.g. after the renderer loses its texture. */

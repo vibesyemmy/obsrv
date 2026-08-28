@@ -68,6 +68,30 @@ export class TabSession {
     this.sync = attachSyncBus(this.native, this.target, onUrlChanged)
   }
 
+  /**
+   * Background tabs stay loaded but stop rasterising. Offscreen rendering runs
+   * at a fixed frame rate with `backgroundThrottling: false`, so without this
+   * every hidden tab would paint a full viewport forever for nobody. The page
+   * keeps its DOM, timers, network and scroll — only pixel production stops.
+   *
+   * Only the target is suspended. The native pane is an OS-level view that the
+   * window has already hidden, and it is Chromium's own compositor deciding
+   * whether an occluded view costs anything — main has no `stopPainting` for
+   * it and does not need one.
+   *
+   * The wish is kept by `TargetSource`, not here: a dsf change recreates the
+   * offscreen window, and a flag held at this level would go stale the moment
+   * a backgrounded tab changed preset.
+   */
+  setPainting(painting: boolean): void {
+    this.target.setPainting(painting)
+  }
+
+  /** Whether this session is producing pixels. */
+  get painting(): boolean {
+    return this.target.painting
+  }
+
   destroy(): void {
     this.sync.detach()
     this.target.destroy()
