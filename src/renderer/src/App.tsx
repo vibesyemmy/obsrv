@@ -19,7 +19,13 @@ import { selectDeviceScaleFactor, selectTab, selectViewport, useStore } from './
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
-  const [image, setImage] = useState<LoadedImage | null>(null)
+  /**
+   * Decoded files, one per tab. Keyed the same way every other piece of tab
+   * state is, because image mode is per tab: a single slot here meant the tab
+   * in front rendered whichever file was dropped last, in any tab — its own
+   * name in the toolbar over another tab's pixels in both panes.
+   */
+  const [images, setImages] = useState<Record<string, LoadedImage>>({})
   // Latest drop wins: a slow decode must not land after a quicker later one.
   const dropToken = useRef(0)
   // The target pane's window-relative bounds (CSS px), reported to main so
@@ -53,6 +59,7 @@ export function App() {
   const profileId = useStore(s => selectTab(s).profileId)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const activeId = useStore(s => s.activeId)
+  const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
   const split = useStore(s => s.settings.split)
 
@@ -204,25 +211,36 @@ export function App() {
     document.documentElement.dataset.surround = surround
   }, [surround])
 
+  /** This tab's decoded file, if it is holding one. */
+  const image = images[activeId] ?? null
+
   // The decoded pixels stay component state (they never need a selector); the
-  // store carries only the metadata the toolbar and footer read. `setImage`
-  // lands before `setMode('image')` so the readouts never see a mode without
+  // store carries only the metadata the toolbar and footer read. The pixels
+  // land before `setMode('image')` so the readouts never see a mode without
   // a file.
   const onImage = async (file: File, exportScale: number): Promise<void> => {
     const token = ++dropToken.current
+    // The tab the file was dropped on. A decode takes long enough for a tab
+    // switch to happen underneath it, and the metadata and mode below are
+    // written to whichever tab is in front.
+    const tabId = activeId
     try {
       const limits = {
         ...DEFAULT_IMAGE_LIMITS,
         maxDimension: Math.min(DEFAULT_IMAGE_LIMITS.maxDimension, probeMaxTextureSize()),
       }
       const loaded = await loadImage(file, exportScale, limits)
-      if (token !== dropToken.current) {
+      // Outlived by a later drop, or by a switch away from the tab it was
+      // meant for: applying it now would describe one tab with another tab's
+      // file. The bytes are dropped rather than filed somewhere hopeful.
+      if (token !== dropToken.current || useStore.getState().activeId !== tabId) {
         URL.revokeObjectURL(loaded.objectUrl)
         return
       }
-      setImage(previous => {
-        if (previous) URL.revokeObjectURL(previous.objectUrl)
-        return loaded
+      setImages(previous => {
+        const stale = previous[tabId]
+        if (stale) URL.revokeObjectURL(stale.objectUrl)
+        return { ...previous, [tabId]: loaded }
       })
       setImageMeta({
         name: file.name,
@@ -242,14 +260,38 @@ export function App() {
     }
   }
 
-  // Leaving image mode (the ✕ button) drops the decoded file and its blob URL.
+  // Leaving image mode (the ✕ button) drops that tab's decoded file and its
+  // blob URL — that tab's, and no other. `mode` is the tab in front's, so a
+  // switch to a URL tab runs this too: dropping every decoded file here
+  // revoked the image of the tab being *left*, which then came back to an
+  // empty pane over a canvas still frozen on someone else's frame.
   useEffect(() => {
     if (mode === 'image') return
-    setImage(previous => {
-      if (previous) URL.revokeObjectURL(previous.objectUrl)
-      return null
+    setImages(previous => {
+      const going = previous[activeId]
+      if (!going) return previous
+      URL.revokeObjectURL(going.objectUrl)
+      const next = { ...previous }
+      delete next[activeId]
+      return next
     })
-  }, [mode])
+  }, [mode, activeId])
+
+  // A closed tab's file can never be shown again, and a blob URL that is never
+  // revoked holds the decoded bytes for the life of the window.
+  useEffect(() => {
+    setImages(previous => {
+      const open = new Set(tabOrder)
+      const gone = Object.keys(previous).filter(id => !open.has(id))
+      if (gone.length === 0) return previous
+      const next = { ...previous }
+      for (const id of gone) {
+        URL.revokeObjectURL(next[id]!.objectUrl)
+        delete next[id]
+      }
+      return next
+    })
+  }, [tabOrder])
 
   const imageFrame = useMemo<FrameMessage | null>(() => {
     if (mode !== 'image' || !image) return null
