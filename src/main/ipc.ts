@@ -2,7 +2,7 @@ import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, typ
 import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState } from '../shared/control'
+import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState, type AgentViewMode } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { recordVisit, type HistoryEntry } from '../shared/history'
@@ -61,7 +61,8 @@ function hostInfo(win: BrowserWindow): HostInfo {
 }
 
 export function registerIpc(ctx: AppContext): void {
-  const { win, native, target, bus, sync } = ctx
+  const { win, bus, session } = ctx
+  const { native, target, sync } = session
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
 
@@ -136,7 +137,7 @@ export function registerIpc(ctx: AppContext): void {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
-    viewportArrived = true
+    session.viewportArrived = true
     // Width and height survive any garbage (clampViewport sanitises), but a
     // bad scale factor would decide the offscreen window's raster density —
     // refuse it rather than guess.
@@ -163,23 +164,25 @@ export function registerIpc(ctx: AppContext): void {
   // (solo target). Each calling `native.setVisible` directly would clobber the
   // other — leaving image mode would reveal a pane the toggle had hidden — so
   // both write an input here and the visibility is derived in one place.
-  let modeIsLive = true
+  // `modeIsLive` is the tab's (image mode belongs to the page under test);
+  // `panesShowNative` is the window's (the Both/Target toggle is a window
+  // view mode, shared by every tab).
   let panesShowNative = true
   const applyNativeVisibility = (): void => {
-    native.setVisible(modeIsLive && panesShowNative)
+    native.setVisible(session.modeIsLive && panesShowNative)
   }
 
   ipcMain.on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const mode = parseMode(raw)
     if (!mode) return
-    modeIsLive = mode === 'url'
+    session.modeIsLive = mode === 'url'
     applyNativeVisibility()
     // The sync bus follows the *mode* only. In solo target the native pane is
     // still loaded and still the navigation master — disabling the bus there
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
-    bus.setEnabled(modeIsLive)
+    bus.setEnabled(session.modeIsLive)
   })
 
   ipcMain.on(IPC.setNativeVisible, (e, raw: unknown) => {
@@ -318,7 +321,39 @@ export function registerIpc(ctx: AppContext): void {
   // the renderer's `uiState` reports — main never blocks a request on a
   // renderer round-trip. The mirror starts at the store's initial values and
   // the renderer reports on mount, so it is honest before the first change.
-  const uiState: AgentUiState = { presetId: '1080p-24', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url' }
+  //
+  // `panes` is a window view mode and stays a plain field here; the rest
+  // describe the tab, so they read and write through the session and a second
+  // tab cannot inherit the first's. The `IPC.uiState` handler updates this
+  // with `Object.assign`, which runs the setters — an assignment that replaced
+  // the whole object would drop them silently.
+  const uiState: AgentUiState = {
+    get presetId() {
+      return session.presetId
+    },
+    set presetId(v: string) {
+      session.presetId = v
+    },
+    get profileId() {
+      return session.profileId
+    },
+    set profileId(v: string) {
+      session.profileId = v
+    },
+    get viewMode() {
+      return session.viewMode
+    },
+    set viewMode(v: AgentViewMode) {
+      session.viewMode = v
+    },
+    get mode() {
+      return session.modeIsLive ? 'url' : 'image'
+    },
+    set mode(v: 'url' | 'image') {
+      session.modeIsLive = v === 'url'
+    },
+    panes: 'both',
+  }
   // The target pane's window-relative bounds (CSS px), for `captureTarget`.
   // Null until the renderer's first measured report; the capture then falls
   // back to the full window with a warning rather than failing.
@@ -358,16 +393,14 @@ export function registerIpc(ctx: AppContext): void {
   // that reads layout in between — a scroll, a capture — must wait for it.
   // Nothing waits when no resize is pending, so an ordinary scroll keeps its
   // millisecond latency.
-  let viewportPending = false
-  let viewportArrived = false
   /** How long to wait for an announced resize to actually reach setViewport. */
   const VIEWPORT_ARRIVAL_MS = 600
 
   const awaitViewportStable = async (): Promise<void> => {
-    if (!viewportPending) return
-    viewportPending = false
+    if (!session.viewportPending) return
+    session.viewportPending = false
     const arrivalDeadline = Date.now() + VIEWPORT_ARRIVAL_MS
-    while (!viewportArrived && Date.now() < arrivalDeadline) {
+    while (!session.viewportArrived && Date.now() < arrivalDeadline) {
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
     // The preset may resolve to the size already applied, in which case no
@@ -570,8 +603,8 @@ export function registerIpc(ctx: AppContext): void {
       // Only a preset resizes the target; view mode and pixel-exact change the
       // magnification, which reflows nothing in the page under test.
       if (patch.presetId !== undefined) {
-        viewportPending = true
-        viewportArrived = false
+        session.viewportPending = true
+        session.viewportArrived = false
       }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {

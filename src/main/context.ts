@@ -1,16 +1,13 @@
 import type { BrowserWindow } from 'electron'
 import type { FrameBus } from './frameBus'
-import type { NativePane } from './nativePane'
-import type { SyncBus } from './syncBus'
-import type { TargetSource } from './targetSource'
+import type { TabSession } from './tabSession'
 
 /** Everything the IPC layer and the test hooks need. Extended as units land. */
 export interface AppContext {
   win: BrowserWindow
-  native: NativePane
-  target: TargetSource
+  /** The one session, until a later unit introduces the manager. */
+  session: TabSession
   bus: FrameBus
-  sync: SyncBus
   /**
    * Main's `TOOLBAR_H`, carried on the context so a test can read the real
    * value instead of restating it. `.chrome` must render exactly this tall or

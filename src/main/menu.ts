@@ -15,7 +15,8 @@ import type { AppContext } from './context'
  * `IPC.reload` handler makes for the toolbar button), Cmd+L asks the renderer
  * to focus its URL bar, and DevTools sit behind a non-role item.
  */
-export function installMenu({ win, native, target }: AppContext): void {
+export function installMenu({ win, session }: AppContext): void {
+  const { native, target } = session
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
