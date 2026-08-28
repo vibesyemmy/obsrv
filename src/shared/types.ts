@@ -72,6 +72,13 @@ export interface Settings {
    * The remainder goes to the target pane. Ignored while `panes === 'target'`.
    */
   split: number
+  /**
+   * How many tabs may be open. Every tab is two Chromium renderer processes,
+   * so the ceiling depends on the machine rather than on a number anyone can
+   * pick for everyone — 12 is a judgement about process count, not a
+   * measurement, and a user with 64GB should not be held to a laptop's figure.
+   */
+  maxTabs: number
 }
 
 /** A dirty-rect slice of the 1x target frame. `data` is BGRA, row-major, no padding. */

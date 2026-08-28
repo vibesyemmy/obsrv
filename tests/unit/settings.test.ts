@@ -27,6 +27,7 @@ describe('settings', () => {
       lastUpdateCheck: 0,
       recordHistory: true,
       split: 0.5,
+      maxTabs: 12,
     })
   })
   it('reads agentControl only as a literal true — anything else stays off', () => {
@@ -57,6 +58,7 @@ describe('settings', () => {
       lastUpdateCheck: 0,
       recordHistory: true,
       split: 0.5,
+      maxTabs: 12,
     })
   })
 
@@ -97,6 +99,7 @@ describe('settings', () => {
       lastUpdateCheck: 1700000000000,
       recordHistory: false,
       split: 0.72,
+      maxTabs: 6,
     }
     saveSettings(f, full)
     expect(JSON.parse(readFileSync(f, 'utf8'))).toEqual(full)
@@ -137,5 +140,54 @@ describe('settings', () => {
     expect(loadSettings(f).split).toBe(0.68)
     // And the file really carries it, rather than the reader inventing it.
     expect(JSON.parse(readFileSync(f, 'utf8')).split).toBe(0.68)
+  })
+
+  it('keeps a maxTabs inside the band, including its edges', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 4 }))
+    expect(loadSettings(f).maxTabs).toBe(4)
+    for (const v of [2, 32]) {
+      writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
+      expect(loadSettings(f).maxTabs).toBe(v)
+    }
+  })
+
+  it('defaults maxTabs when an older file has no key', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500 }))
+    expect(loadSettings(f).maxTabs).toBe(12)
+  })
+
+  it('treats a maxTabs below the band as absent', () => {
+    const f = join(dir(), 'settings.json')
+    for (const v of [1, 0, -4]) {
+      writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
+      expect(loadSettings(f).maxTabs).toBe(12)
+    }
+  })
+
+  it('treats a maxTabs above the band, or one that is not a whole count, as absent', () => {
+    const f = join(dir(), 'settings.json')
+    for (const v of [33, 999, 12.5, 'lots', null, NaN]) {
+      writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, maxTabs: v }))
+      expect(loadSettings(f).maxTabs).toBe(12)
+    }
+  })
+
+  it('refuses to save a maxTabs outside the band', () => {
+    for (const v of [1, 33, 12.5, NaN, Infinity]) {
+      expect(() => saveSettings(join(dir(), 's.json'), { ...DEFAULT_SETTINGS, maxTabs: v })).toThrow(RangeError)
+    }
+    expect(() =>
+      saveSettings(join(dir(), 's.json'), { ...DEFAULT_SETTINGS, maxTabs: '8' as unknown as number }),
+    ).toThrow(RangeError)
+  })
+
+  it('round-trips a maxTabs through disk', () => {
+    const f = join(dir(), 'settings.json')
+    saveSettings(f, { ...DEFAULT_SETTINGS, maxTabs: 6 })
+    expect(loadSettings(f).maxTabs).toBe(6)
+    // And the file really carries it, rather than the reader inventing it.
+    expect(JSON.parse(readFileSync(f, 'utf8')).maxTabs).toBe(6)
   })
 })

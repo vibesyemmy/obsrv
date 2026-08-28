@@ -101,6 +101,7 @@ describe('parseSettings', () => {
         lastUpdateCheck: 1700000000000,
         recordHistory: false,
         split: 0.7,
+        maxTabs: 6,
         extra: 1,
       }),
     ).toEqual({
@@ -111,7 +112,15 @@ describe('parseSettings', () => {
       lastUpdateCheck: 1700000000000,
       recordHistory: false,
       split: 0.7,
+      maxTabs: 6,
     })
+  })
+
+  it('carries a non-default maxTabs across the wire', () => {
+    // A field the parser forgets to copy is dropped silently: every type still
+    // checks out, and the value the renderer sent simply never arrives.
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 4 })?.maxTabs).toBe(4)
+    expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 32 })?.maxTabs).toBe(32)
   })
   it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
     expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500 })).toEqual({
@@ -127,6 +136,8 @@ describe('parseSettings', () => {
       // Likewise for the split: a renderer that has never heard of it must
       // not be read as asking for a degenerate one.
       split: 0.5,
+      // And for the tab cap, which a pre-tabs renderer never sends.
+      maxTabs: 12,
     })
   })
   it.each([
@@ -145,6 +156,10 @@ describe('parseSettings', () => {
     ['split above the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.97 }],
     ['string split', { hostDiagonalInches: 27, hostNits: 400, split: '0.5' }],
     ['NaN split', { hostDiagonalInches: 27, hostNits: 400, split: NaN }],
+    ['maxTabs below the band', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 1 }],
+    ['maxTabs above the band', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 33 }],
+    ['fractional maxTabs', { hostDiagonalInches: 27, hostNits: 400, maxTabs: 12.5 }],
+    ['string maxTabs', { hostDiagonalInches: 27, hostNits: 400, maxTabs: '12' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseSettings(raw)).toBeNull()
   })

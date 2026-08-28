@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DEFAULT_SETTINGS, SPLIT_MAX, SPLIT_MIN } from './presets'
+import { DEFAULT_SETTINGS, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import type { Settings } from './types'
 
 const isPositive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
@@ -8,6 +8,9 @@ const isStamp = (v: unknown): v is number => typeof v === 'number' && Number.isF
 
 const isRatio = (v: unknown): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= SPLIT_MIN && v <= SPLIT_MAX
+
+const isTabCap = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= MAX_TABS_MIN && v <= MAX_TABS_MAX
 
 export function loadSettings(file: string): Settings {
   try {
@@ -31,6 +34,13 @@ export function loadSettings(file: string): Settings {
       // to start". Falling back to an even split loses one preference; the
       // panes stay usable, which is the point of the band.
       split: isRatio(raw.split) ? raw.split : DEFAULT_SETTINGS.split,
+      // Like `split`, and for the same reason: a cap outside 2–32 in a
+      // hand-edited file is someone wanting a different number, not grounds
+      // for refusing to start. The default costs them the preference and
+      // leaves the app usable, which is what the band is for. Not a clamp to
+      // the nearest edge either — a file claiming 999 tabs is not evidence of
+      // an intent worth honouring at 32.
+      maxTabs: isTabCap(raw.maxTabs) ? raw.maxTabs : DEFAULT_SETTINGS.maxTabs,
     }
   } catch {
     return { ...DEFAULT_SETTINGS }
@@ -47,6 +57,7 @@ export function saveSettings(file: string, s: Settings): void {
   // it has to cope with whatever is on disk, but nothing inside the app has
   // any business asking for one — the renderer clamps before it saves.
   if (!isRatio(s.split)) throw new RangeError(`split must be a finite ratio in ${SPLIT_MIN}..${SPLIT_MAX}`)
+  if (!isTabCap(s.maxTabs)) throw new RangeError(`maxTabs must be a whole count in ${MAX_TABS_MIN}..${MAX_TABS_MAX}`)
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, JSON.stringify(s, null, 2))
 }

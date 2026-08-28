@@ -1,6 +1,6 @@
 import type { Rect } from './api'
 import type { AgentUiReport } from './control'
-import { DEFAULT_SETTINGS, SPLIT_MAX, SPLIT_MIN } from './presets'
+import { DEFAULT_SETTINGS, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import { MAX_SCROLL_SELECTOR, type InputModifier, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
 
 /**
@@ -114,7 +114,13 @@ export function parseSettings(raw: unknown): Settings | null {
   // sends, so a bad ratio arriving here is a bug worth surfacing.
   const split = raw.split ?? DEFAULT_SETTINGS.split
   if (!isFiniteNumber(split) || split < SPLIT_MIN || split > SPLIT_MAX) return null
-  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split }
+  // Same shape for the tab cap: absent is the pre-tabs wire shape and means
+  // the default, and an out-of-band or fractional count is refused rather
+  // than clamped — the Settings input is a bounded integer field, so one
+  // arriving here is a bug rather than a hand-edited file.
+  const maxTabs = raw.maxTabs ?? DEFAULT_SETTINGS.maxTabs
+  if (!isFiniteNumber(maxTabs) || !Number.isInteger(maxTabs) || maxTabs < MAX_TABS_MIN || maxTabs > MAX_TABS_MAX) return null
+  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split, maxTabs }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {

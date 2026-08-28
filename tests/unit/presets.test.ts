@@ -65,6 +65,7 @@ describe('presets', () => {
       lastUpdateCheck: 0,
       recordHistory: true,
       split: 0.5,
+      maxTabs: 12,
     })
   })
 })
