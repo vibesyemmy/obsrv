@@ -624,7 +624,11 @@ server.registerTool(
       `capture; that visible steering is the point of live mode.\n\n` +
       `A live snap only navigates when the app is showing a different URL; the result's \`navigated\` says which ` +
       `happened. Navigating is a fresh load, so it starts at the top of the page — to photograph a scrolled or ` +
-      `panned state, use obsrv_drive with \`capture\` instead, which never navigates unless you ask it to.`,
+      `panned state, use obsrv_drive with \`capture\` instead, which never navigates unless you ask it to.\n\n` +
+      `Tabs: the app can hold several sessions open as tabs, and a live snap acts on the one in front — which the ` +
+      `user can change at any moment. The result names it (\`tabId\`, \`tabIndex\`); compare across calls if you ` +
+      `need to know it did not move. There is no way to name a different tab, and no way to open, close or ` +
+      `switch tabs — those are the user's.`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -753,6 +757,12 @@ server.registerTool(
       `pass \`url\`, so this is how you photograph a scrolled or panned state: scroll, then capture, in one call. ` +
       `obsrv_snap is the other way round — it points the app at a URL first, and pointing it somewhere new is a ` +
       `fresh load that starts at the top.\n\n` +
+      `Tabs: the app can hold several sessions open as tabs, each with its own URL, screen preset and page state. ` +
+      `Every command here acts on whichever tab is in front *when that command arrives* — nothing is bound to a ` +
+      `tab for the length of the call — and the returned status names it (\`tabId\`, \`tabIndex\`). A \`tabId\` ` +
+      `that changed between two calls means the user switched tabs under you; re-read the state before trusting ` +
+      `what you knew. You cannot name a different tab, nor open, close or switch tabs — those are the user's. An ` +
+      `empty \`tabId\` means an app older than tabs, which has only the one.\n\n` +
       `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
       `mutates visible app state (it changes what the user's window shows, and a click can act on the live page).`,
     inputSchema: driveInputShape,

@@ -61,6 +61,13 @@ when the PNG is taken. Reaching for `obsrv_snap` after a scroll works only
 when the app is already on that exact URL (it answers `navigated: false`);
 snapping a different URL is a fresh load and lands back at the top.
 
+The app can hold several sessions open as tabs, and both tools act on the one
+in **front** — resolved per command, so the user can move it under you. Each
+result names the tab (`tabId`, `tabIndex`); if you drive over several calls and
+the state has to hold, check that `tabId` did not change rather than assuming
+it. You cannot name another tab, and you cannot open, close or switch tabs —
+ask the user. An empty `tabId` is an app older than tabs, which has only one.
+
 ## The loop that catches real regressions
 
 1. Snap the dev URL across `--matrix laptop-768,android-65,1080p-24`, plus a

@@ -213,3 +213,67 @@ empty, title derivation from URL, and `maxTabs` clamping on load.
 - The driven-tab marker appears on the right tab and only while agent control is on.
 - At the cap the new-tab button is disabled and carries the explanatory tooltip;
   raising `maxTabs` in Settings re-enables it without a relaunch.
+
+---
+
+## What the build actually found
+
+Written after the eleven implementation tasks landed. Where this section and the
+text above disagree, this section is the one that matches the code.
+
+**The per-tab list above over-listed, and the plan caught it before a line was
+written.** Mapping `registerIpc` line by line gives a smaller division than
+"the state to extract" implies. What moved onto `TabSession` is `native`,
+`target`, `sync`, `modeIsLive`, `reportedMode`, the
+`viewportPending`/`viewportArrived` pair, `url`/`title`, and
+`presetId`/`profileId`/`viewMode`. What deliberately did not: `panesShowNative`
+(the Both/Target toggle is a window view mode), the renderer-layout flag and
+slot rect, the target and canvas bounds, the pending-apply queue, the scroll
+sequence map, `settings`, `lastHost`, the update state, the visited-URL
+history, and the control server. Six copies of any of those would go stale
+against each other, and six history arrays would fight over one file.
+
+`pixelExact` is on the list above but not on `TabSession`: it *is* per tab, and
+it lives in the renderer store alone, because nothing in main reads it — main
+mirrors only what `status` has to answer with. `painting` is not a stored field
+either; `TabSession.painting` delegates to the target's own record of what was
+last asked of `setPainting`. The e2e that matters reads
+`webContents.isPainting()` back off Chromium rather than either of them, since
+the point of the test is that the wish reached the webContents.
+
+**`AppContext` is `{ win, tabs, bus, toolbarH }`, with no `activeId`.** Holding
+the active id beside the manager gives two places to be wrong; every consumer
+reads `tabs.active()` at the moment it needs it instead. A destructure taken
+once captures whichever session booted first and keeps driving it after the
+user has switched.
+
+**`TabInfo` carries `presetId` and `profileId`,** which the tab bar section did
+not anticipate. Not because main is the authority on a preset — it is not — but
+for the tab it restored from disk before any renderer existed to report one.
+The store seeds a new entry from them and ignores them afterwards.
+
+**Every cross-boundary report names its tab.** The original design gated
+forwards on the session being in front; with a strip that shows every tab, a
+background tab's URL and title have to reach the renderer, so they carry a
+`tabId` and the renderer routes on it. The `IPC.uiState` mirror runs the other
+way: a report naming a tab that is no longer in front is *dropped*, because
+writing it into a mirror keyed on "the active tab" would attribute the outgoing
+tab's preset to the incoming one.
+
+**`tabId`/`tabIndex` went on `ControlStatus` only, not on `AgentUiState`.**
+`AgentUiState` is main's mirror of the *renderer's* reports, and that mirror
+deliberately drops reports from tabs that are not in front — so a tab id
+arriving through it would be the one field guaranteed to be stale exactly when
+it matters. Main owns tab identity, so `status` reads both straight off the tab
+manager on every call. `parseControlStatus` defaults them to `''` and `0`: an
+app older than tabs has one session, which is the tab at index 0 with no id to
+name.
+
+**Nothing in `src/cli/` was touched by any of the eleven tasks,** which was the
+assertion the "MCP and headless are untouched" section made. It held.
+
+**Still not supported**, and stated here so it is not mistaken for an oversight:
+reordering tabs, dragging one out into another window, reopening a closed tab,
+a tab-overflow menu, agent targeting of any tab but the front one (and no agent
+open/close/switch at all), per-tab URL-suggestion history, and restoring a
+tab's scroll position on relaunch.

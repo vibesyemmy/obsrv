@@ -592,3 +592,49 @@ which reflows nothing in the page under test.
 so asserting the outcome proves nothing; the e2e asserts the *mechanism*
 instead, timing the call to show the wait actually happened. Verified in both
 directions — 33 ms with the settle stubbed out, over 200 ms with it in place.
+
+---
+
+## 15. Multi-tab sessions
+
+Full spec: `docs/superpowers/specs/2026-08-28-obsrv-tabs.md`. Recorded here
+because §4 no longer describes the app: the one `NativePane` + `TargetSource`
+pair in that diagram is now *one tab of several*.
+
+**A tab is the pair.** `TabSession` (`src/main/tabSession.ts`) owns one
+`NativePane`, one `TargetSource` and one `SyncBus`, plus the state that is
+genuinely per-session: the preset, the profile, the view mode, image-vs-URL
+mode, and the viewport handshake. `TabManager` (`src/main/tabs.ts`) owns the
+list, the active id, the cap, and — this is the load-bearing part — the single
+`ipcMain` listener per channel that resolves `e.sender` to its tab. Two
+listeners on one global channel would deliver a background tab's scroll to the
+tab in front.
+
+**What did *not* become per-tab** matters as much. The Both/Target toggle is a
+window view mode; the native pane's slot rect is one rectangle on one canvas;
+`settings`, the visited-URL history, the update check and the agent-control
+server are one each for the window. Six copies of any of those would go stale
+against each other, and six history arrays would fight over one file.
+
+**The FrameBus is re-pointed, not duplicated.** `setSource(target)` moves the
+one bus to the incoming tab on activation; background targets stop rasterising
+(`setPainting(false)`) but stay loaded, so switching back costs no reload. The
+slot rect is global and every tab's native view is set to it, so activation
+needs no fresh measurement — the incoming view is already positioned.
+
+**Identity is main's.** A tab *is* the two Chromium renderers main built for
+it, so main mints the ids and the renderer mirrors the list rather than
+inventing its own. `tabs.json` is keyed by index, not by id, because ids do not
+survive a relaunch and indices do.
+
+**Agents see one tab.** `obsrv_drive` and a live `obsrv_snap` act on the active
+tab, resolved per command; `status` reports `tabId` and `tabIndex` so an agent
+can notice the user moved. `parseControlStatus` defaults both when absent — the
+MCP server ships on npm and the app ships as a DMG, so a newer server routinely
+talks to an older app. Nothing in `src/cli/` changed: it constructs its own
+`TargetSource`, never sees a window, and has no tab layer.
+
+**Not in this cut:** reordering, dragging a tab out to a new window, reopening a
+closed tab, a tab-overflow menu, per-tab agent targeting (an agent reaches the
+front tab and cannot open, close or switch tabs), per-tab URL-suggestion
+history, and restoring a tab's scroll position.
