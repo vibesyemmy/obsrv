@@ -29,6 +29,27 @@ test.afterAll(async () => {
   await app.close()
 })
 
+// Every test here drags the seam, and the split is persisted — so without a
+// reset each one starts from wherever the last left it, and assertions
+// computed from the row's edges land somewhere else entirely. Two tests in
+// this file failed on different runs for exactly that reason before this
+// existed, which is the signature of order dependence rather than a bug in
+// what they assert.
+// Reset through the divider's own double-click rather than `setSettings`:
+// main never pushes settings back to the renderer, so writing the file leaves
+// the store — and therefore the layout — untouched. The renderer is normally
+// the only writer, so that is not a product bug, but it makes an IPC write a
+// useless reset here.
+test.beforeEach(async () => {
+  await page.dblclick('.pane-divider')
+  await expect
+    .poll(async () => {
+      const g = await geometry()
+      return Math.abs(g.nativeW - g.targetW) <= 2
+    })
+    .toBe(true)
+})
+
 /** Everything a drag assertion needs, measured from the live layout. */
 const geometry = () =>
   page.evaluate(() => {
@@ -57,6 +78,20 @@ async function dragSeamTo(x: number): Promise<void> {
     await page.mouse.move(g.seamX + ((x - g.seamX) * i) / steps, g.seamY)
   }
   await page.mouse.up()
+  // The drag's last frame and the persist-on-release are both async, so
+  // returning here would let the caller measure a seam still in motion. Wait
+  // for two identical reads — the same settle-until-stable shape main uses
+  // before a capture — rather than a fixed sleep, which would be slower and
+  // still occasionally wrong.
+  let previous = Number.NaN
+  await expect
+    .poll(async () => {
+      const now = Math.round((await geometry()).seamX)
+      const settled = now === previous
+      previous = now
+      return settled
+    })
+    .toBe(true)
 }
 
 /**
