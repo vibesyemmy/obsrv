@@ -14,7 +14,7 @@ import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
 import { probeMaxTextureSize } from './gl/renderer'
 import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadImage'
-import { selectDeviceScaleFactor, selectViewport, useStore } from './state/store'
+import { selectDeviceScaleFactor, selectTab, selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
@@ -41,13 +41,13 @@ export function App() {
   const setImageMeta = useStore(s => s.setImage)
   const setMode = useStore(s => s.setMode)
   const setToast = useStore(s => s.setToast)
-  const mode = useStore(s => s.mode)
+  const mode = useStore(s => selectTab(s).mode)
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
   const deviceScaleFactor = useStore(selectDeviceScaleFactor)
-  const presetId = useStore(s => s.presetId)
-  const profileId = useStore(s => s.profileId)
-  const viewMode = useStore(s => s.viewMode)
+  const presetId = useStore(s => selectTab(s).presetId)
+  const profileId = useStore(s => selectTab(s).profileId)
+  const viewMode = useStore(s => selectTab(s).viewMode)
   const panes = useStore(s => s.panes)
   const split = useStore(s => s.settings.split)
 

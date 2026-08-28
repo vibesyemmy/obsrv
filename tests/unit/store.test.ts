@@ -9,9 +9,11 @@ import {
   selectPanelParams,
   selectScale,
   selectScaleIsFallback,
+  selectTab,
   selectUrlBarText,
   selectViewport,
   useStore,
+  type TabState,
 } from '../../src/renderer/src/state/store'
 
 const HOST_4K = { physicalWidth: 3840, physicalHeight: 2160, scaleFactor: 2 }
@@ -19,14 +21,22 @@ const initial = useStore.getState()
 
 beforeEach(() => useStore.setState(initial, true))
 
+/** The active tab, where every per-session field now lives. */
+const tab = (): TabState => selectTab(useStore.getState())
+
+/** Seeds per-session fields; plain `setState` still seeds the window globals. */
+const setTab = (patch: Partial<TabState>): void =>
+  useStore.setState(s => ({ tabs: { ...s.tabs, [s.activeId]: { ...selectTab(s), ...patch } } }))
+
 describe('defaults', () => {
   it('starts on the first preset, the reference profile and default settings', () => {
     const s = useStore.getState()
-    expect(s.mode).toBe('url')
-    expect(s.presetId).toBe('1080p-24')
-    expect(s.profileId).toBe('reference')
+    const t = tab()
+    expect(t.mode).toBe('url')
+    expect(t.presetId).toBe('1080p-24')
+    expect(t.profileId).toBe('reference')
     expect(s.settings).toEqual(DEFAULT_SETTINGS)
-    expect(s.profileOverride).toBeNull()
+    expect(t.profileOverride).toBeNull()
     expect(s.surround).toBe('graphite')
   })
 })
@@ -36,15 +46,13 @@ describe('selectScale', () => {
     expect(selectScale(useStore.getState())).toBe(FALLBACK_SCALE)
   })
   it('is exactly 2 for 1080p 27" on a 4K 27" host', () => {
-    useStore.setState({
-      host: HOST_4K,
-      presetId: '1080p-27',
-      settings: { hostDiagonalInches: 27, hostNits: 500 },
-    })
+    useStore.setState({ host: HOST_4K, settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    setTab({ presetId: '1080p-27' })
     expect(selectScale(useStore.getState())).toBeCloseTo(2, 10)
   })
   it('pixel-exact ignores physical size and uses the host scale factor', () => {
-    useStore.setState({ host: HOST_4K, presetId: 'laptop-768', pixelExact: true })
+    useStore.setState({ host: HOST_4K })
+    setTab({ presetId: 'laptop-768', pixelExact: true })
     expect(selectScale(useStore.getState())).toBe(2)
   })
   it('never yields a non-positive or non-finite scale', () => {
@@ -62,13 +70,15 @@ describe('selectScale', () => {
   it('says when the scale is the fallback rather than calibrated', () => {
     expect(selectScaleIsFallback(useStore.getState())).toBe(true)
 
-    useStore.setState({ host: HOST_4K, presetId: '1080p-27' })
+    useStore.setState({ host: HOST_4K })
+    setTab({ presetId: '1080p-27' })
     expect(selectScaleIsFallback(useStore.getState())).toBe(false)
 
     useStore.getState().setCustom({ width: 1920, height: 1080, diagonalInches: 0 })
     expect(selectScaleIsFallback(useStore.getState())).toBe(true)
 
-    useStore.setState({ presetId: '1080p-27', settings: { hostDiagonalInches: 0, hostNits: 500 } })
+    useStore.setState({ settings: { hostDiagonalInches: 0, hostNits: 500 } })
+    setTab({ presetId: '1080p-27' })
     expect(selectScaleIsFallback(useStore.getState())).toBe(true)
   })
 })
@@ -80,9 +90,9 @@ describe('selectDeviceScaleFactor', () => {
     expect(selectDeviceScaleFactor(useStore.getState())).toBe(1)
   })
   it('is the device factor for mobile presets', () => {
-    useStore.setState({ presetId: 'iphone-61' })
+    setTab({ presetId: 'iphone-61' })
     expect(selectDeviceScaleFactor(useStore.getState())).toBe(3)
-    useStore.setState({ presetId: 'ipad-109' })
+    setTab({ presetId: 'ipad-109' })
     expect(selectDeviceScaleFactor(useStore.getState())).toBe(2)
   })
 })
@@ -97,7 +107,7 @@ describe('selectHostScaleFactor', () => {
 
 describe('selectViewport', () => {
   it('follows the chosen preset', () => {
-    useStore.setState({ presetId: '1440p-27' })
+    setTab({ presetId: '1440p-27' })
     expect(selectViewport(useStore.getState())).toEqual({
       width: 2560,
       height: 1440,
@@ -105,7 +115,7 @@ describe('selectViewport', () => {
     })
   })
   it('keeps mobile presets in CSS pixels: 393x852 at 3x fits the device clamp', () => {
-    useStore.setState({ presetId: 'iphone-61' })
+    setTab({ presetId: 'iphone-61' })
     expect(selectViewport(useStore.getState())).toEqual({
       width: 393,
       height: 852,
@@ -114,7 +124,7 @@ describe('selectViewport', () => {
   })
   it('clamps an oversized custom screen and says so', () => {
     useStore.getState().setCustom({ width: 6000, height: 900, diagonalInches: 40 })
-    expect(useStore.getState().presetId).toBe(CUSTOM_PRESET_ID)
+    expect(tab().presetId).toBe(CUSTOM_PRESET_ID)
     expect(selectViewport(useStore.getState())).toEqual({
       width: 4096,
       height: 900,
@@ -127,9 +137,9 @@ describe('selectScale on a mobile preset', () => {
   it('is per device pixel: iPhone 6.1" on a 4K 27" host is ~0.35', () => {
     useStore.setState({
       host: HOST_4K,
-      presetId: 'iphone-61',
       settings: { hostDiagonalInches: 27, hostNits: 500 },
     })
+    setTab({ presetId: 'iphone-61' })
     // hostPPI 163.18 / devicePPI 461.4
     expect(selectScale(useStore.getState())).toBeCloseTo(0.3537, 3)
   })
@@ -137,10 +147,8 @@ describe('selectScale on a mobile preset', () => {
 
 describe('selectPanelParams', () => {
   it('follows the profile and the host nits', () => {
-    useStore.setState({
-      profileId: 'budget-tn',
-      settings: { hostDiagonalInches: 27, hostNits: 500 },
-    })
+    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    setTab({ profileId: 'budget-tn' })
     expect(selectPanelParams(useStore.getState())).toEqual(
       profileToParams(findProfile('budget-tn'), 500),
     )
@@ -160,16 +168,14 @@ describe('selectPanelParams', () => {
     expect(selectPanelParams(useStore.getState())).toEqual(profileToParams(custom, 500))
 
     useStore.getState().setProfile('office-ips')
-    expect(useStore.getState().profileOverride).toBeNull()
+    expect(tab().profileOverride).toBeNull()
     expect(selectPanelParams(useStore.getState())).toEqual(
       profileToParams(findProfile('office-ips'), 500),
     )
   })
   it('falls back to the default nits instead of throwing on bad settings', () => {
-    useStore.setState({
-      profileId: 'budget-tn',
-      settings: { hostDiagonalInches: 27, hostNits: 0 },
-    })
+    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 0 } })
+    setTab({ profileId: 'budget-tn' })
     expect(selectPanelParams(useStore.getState())).toEqual(
       profileToParams(findProfile('budget-tn'), DEFAULT_SETTINGS.hostNits),
     )
@@ -180,14 +186,14 @@ describe('errors', () => {
   it('keeps one error state when both panes report the same failure', () => {
     const err = { code: -105, description: 'ERR_NAME_NOT_RESOLVED', url: 'https://nope.invalid/' }
     useStore.getState().setError(err)
-    const first = useStore.getState().error
+    const first = tab().error
     useStore.getState().setError({ ...err })
-    expect(useStore.getState().error).toBe(first)
+    expect(tab().error).toBe(first)
 
     useStore.getState().setError({ ...err, code: -106 })
-    expect(useStore.getState().error).not.toBe(first)
+    expect(tab().error).not.toBe(first)
     useStore.getState().setError(null)
-    expect(useStore.getState().error).toBeNull()
+    expect(tab().error).toBeNull()
   })
 })
 
@@ -201,31 +207,30 @@ describe('image mode', () => {
     expect(selectUrlBarText(useStore.getState())).toBe('hero@2x.png')
 
     useStore.getState().setMode('url')
-    expect(useStore.getState().url).toBe('https://example.com')
-    expect(useStore.getState().image).toBeNull()
+    expect(tab().url).toBe('https://example.com')
+    expect(tab().image).toBeNull()
     expect(selectUrlBarText(useStore.getState())).toBe('https://example.com')
   })
 })
 
 describe('view mode', () => {
   it('starts in fit with no fit scale published yet', () => {
-    const s = useStore.getState()
     // Fit is the opening view; `fitScale` stays null until `TargetCanvas`
     // measures the pane and publishes the magnification it actually drew at.
-    expect(s.viewMode).toBe('fit')
-    expect(s.fitScale).toBeNull()
+    expect(tab().viewMode).toBe('fit')
+    expect(tab().fitScale).toBeNull()
   })
 
   it('switches modes and carries the published fit scale', () => {
     useStore.getState().setViewMode('fit')
     useStore.getState().setFitScale(0.42)
-    expect(useStore.getState().viewMode).toBe('fit')
-    expect(useStore.getState().fitScale).toBe(0.42)
+    expect(tab().viewMode).toBe('fit')
+    expect(tab().fitScale).toBe(0.42)
 
     useStore.getState().setViewMode('1:1')
     useStore.getState().setFitScale(null)
-    expect(useStore.getState().viewMode).toBe('1:1')
-    expect(useStore.getState().fitScale).toBeNull()
+    expect(tab().viewMode).toBe('1:1')
+    expect(tab().fitScale).toBeNull()
   })
 })
 
@@ -241,31 +246,31 @@ describe('agent highlight lifecycle', () => {
       () => useStore.getState().setMode('image'),
     ]) {
       show()
-      expect(useStore.getState().agentHighlight).toMatchObject(HIGHLIGHT)
+      expect(tab().agentHighlight).toMatchObject(HIGHLIGHT)
       change()
-      expect(useStore.getState().agentHighlight).toBeNull()
+      expect(tab().agentHighlight).toBeNull()
     }
     // Leaving image mode swaps the content back; that clears too.
     useStore.getState().setMode('image')
     show()
     useStore.getState().setMode('url')
-    expect(useStore.getState().agentHighlight).toBeNull()
+    expect(tab().agentHighlight).toBeNull()
   })
 
   it('a seq-guarded clear removes only the highlight it was armed for', () => {
     show()
-    const first = useStore.getState().agentHighlight!
+    const first = tab().agentHighlight!
     show() // the replacement bumps seq
-    const second = useStore.getState().agentHighlight!
+    const second = tab().agentHighlight!
     expect(second.seq).toBe(first.seq + 1)
 
     // The first highlight's expiry timer fires late: a no-op.
     useStore.getState().clearAgentHighlight(first.seq)
-    expect(useStore.getState().agentHighlight).toBe(second)
+    expect(tab().agentHighlight).toBe(second)
 
     // Its own timer (or an unconditional clear) removes it.
     useStore.getState().clearAgentHighlight(second.seq)
-    expect(useStore.getState().agentHighlight).toBeNull()
+    expect(tab().agentHighlight).toBeNull()
   })
 })
 
@@ -284,6 +289,6 @@ describe('panes', () => {
   it('does not disturb the agent highlight', () => {
     useStore.getState().showAgentHighlight({ x: 0, y: 0, width: 4, height: 4, durationMs: 1000 })
     useStore.getState().setPanes('target')
-    expect(useStore.getState().agentHighlight).not.toBeNull()
+    expect(tab().agentHighlight).not.toBeNull()
   })
 })

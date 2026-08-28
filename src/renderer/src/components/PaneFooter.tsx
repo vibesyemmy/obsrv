@@ -1,5 +1,13 @@
 import { useShallow } from 'zustand/react/shallow'
-import { selectDeviceScaleFactor, selectPanelParams, selectProfile, selectScale, selectViewport, useStore } from '../state/store'
+import {
+  selectDeviceScaleFactor,
+  selectPanelParams,
+  selectProfile,
+  selectScale,
+  selectTab,
+  selectViewport,
+  useStore,
+} from '../state/store'
 
 export interface PaneFooterProps {
   role: string
@@ -31,10 +39,10 @@ export function TargetFooter() {
   const scale = useStore(selectScale)
   // The sliders' custom profile is labelled "Custom panel"; a preset, by its name.
   const profile = useStore(selectProfile)
-  const image = useStore(s => s.image)
-  const mode = useStore(s => s.mode)
-  const viewMode = useStore(s => s.viewMode)
-  const fitScale = useStore(s => s.fitScale)
+  const image = useStore(s => selectTab(s).image)
+  const mode = useStore(s => selectTab(s).mode)
+  const viewMode = useStore(s => selectTab(s).viewMode)
+  const fitScale = useStore(s => selectTab(s).fitScale)
   const dsf = useStore(selectDeviceScaleFactor)
 
   // Mobile presets say their raster density; the magnification readout is

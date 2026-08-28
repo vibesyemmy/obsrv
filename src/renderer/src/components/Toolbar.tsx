@@ -5,6 +5,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import {
   CUSTOM_PRESET_ID,
+  selectTab,
   selectUrlBarText,
   selectViewport,
   useStore,
@@ -46,12 +47,12 @@ export interface ToolbarProps {
 }
 
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
-  const mode = useStore(s => s.mode)
-  const presetId = useStore(s => s.presetId)
-  const profileId = useStore(s => s.profileId)
-  const pixelExact = useStore(s => s.pixelExact)
-  const error = useStore(s => s.error)
-  const loading = useStore(s => s.targetLoading)
+  const mode = useStore(s => selectTab(s).mode)
+  const presetId = useStore(s => selectTab(s).presetId)
+  const profileId = useStore(s => selectTab(s).profileId)
+  const pixelExact = useStore(s => selectTab(s).pixelExact)
+  const error = useStore(s => selectTab(s).error)
+  const loading = useStore(s => selectTab(s).targetLoading)
   const barText = useStore(selectUrlBarText)
   const viewport = useStore(useShallow(selectViewport))
 
@@ -64,7 +65,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const surround = useStore(s => s.surround)
   const update = useStore(s => s.update)
   const setSurround = useStore(s => s.setSurround)
-  const viewMode = useStore(s => s.viewMode)
+  const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const panes = useStore(s => s.panes)
   const setPanes = useStore(s => s.setPanes)

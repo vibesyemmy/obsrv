@@ -6,6 +6,7 @@ import type { Settings } from '../../../shared/types'
 import {
   selectScale,
   selectScaleIsFallback,
+  selectTab,
   selectViewport,
   useStore,
 } from '../state/store'
@@ -92,7 +93,7 @@ export function SettingsPanel() {
   const settings = useStore(useShallow(s => s.settings))
   const update = useStore(s => s.update)
   const history = useStore(s => s.history)
-  const custom = useStore(useShallow(s => s.custom))
+  const custom = useStore(useShallow(s => selectTab(s).custom))
   const viewport = useStore(useShallow(selectViewport))
   const scale = useStore(selectScale)
   const fallback = useStore(selectScaleIsFallback)
