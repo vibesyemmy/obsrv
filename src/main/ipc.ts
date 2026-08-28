@@ -64,7 +64,23 @@ function hostInfo(win: BrowserWindow): HostInfo {
   }
 }
 
-export function registerIpc(ctx: AppContext): void {
+/**
+ * Wires every channel the renderer speaks on, and returns the disposer that
+ * takes them back.
+ *
+ * **The disposer is not tidiness.** `ipcMain` is process-global while
+ * everything these handlers read — the window, the tab manager, the session in
+ * front — belongs to one window, and the window's `webContents` outlives its
+ * `close` event by tens of milliseconds. In that gap the renderer is still
+ * running and still reporting, and `boot()` has already run `tabs.destroy()`:
+ * `tabs.active()` then answers `undefined` and the first handler to touch it
+ * throws. A throw in an `ipcMain` listener is an uncaught exception in main,
+ * and Electron answers that with a modal error dialog — a nested run loop that
+ * `app.quit()` can never finish through, so the process hangs instead of
+ * exiting. Stopping the listeners is what closes the gap, and it has to happen
+ * before the state they read goes away.
+ */
+export function registerIpc(ctx: AppContext): () => void {
   const { win, bus, tabs } = ctx
   // The active session, resolved at the moment each handler runs. A
   // destructure taken once here is exactly the defect the manager exists to
@@ -88,6 +104,20 @@ export function registerIpc(ctx: AppContext): void {
   const fromRenderer = (e: IpcMainEvent | IpcMainInvokeEvent): boolean => e.sender === win.webContents
   const assertRenderer = (e: IpcMainInvokeEvent): void => {
     if (!fromRenderer(e)) throw new Error('ipc: unexpected sender')
+  }
+
+  // Registration goes through these two so that unregistration cannot be
+  // forgotten: a channel wired with `ipcMain` directly would survive the
+  // disposer and keep serving a torn-down window. They are otherwise exactly
+  // `ipcMain.on` / `ipcMain.handle`, listener types included.
+  const undo: Array<() => void> = []
+  const on = (channel: string, listener: Parameters<typeof ipcMain.on>[1]): void => {
+    ipcMain.on(channel, listener)
+    undo.push(() => ipcMain.off(channel, listener))
+  }
+  const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
+    ipcMain.handle(channel, listener)
+    undo.push(() => ipcMain.removeHandler(channel))
   }
 
   // --- navigation -----------------------------------------------------------
@@ -123,7 +153,7 @@ export function registerIpc(ctx: AppContext): void {
     const [applied] = await Promise.all([s.native.load(wanted), s.target.load(wanted)])
     return applied
   }
-  ipcMain.handle(IPC.navigate, (e, url: string) => {
+  handle(IPC.navigate, (e, url: string) => {
     assertRenderer(e)
     return navigateBoth(url)
   })
@@ -137,21 +167,21 @@ export function registerIpc(ctx: AppContext): void {
   }
   const goBack = (): void => tab().native.back()
   const goForward = (): void => tab().native.forward()
-  ipcMain.on(IPC.reload, e => {
+  on(IPC.reload, e => {
     if (!fromRenderer(e)) return
     reloadBoth()
   })
-  ipcMain.on(IPC.back, e => {
+  on(IPC.back, e => {
     if (!fromRenderer(e)) return
     goBack()
   })
-  ipcMain.on(IPC.forward, e => {
+  on(IPC.forward, e => {
     if (!fromRenderer(e)) return
     goForward()
   })
 
   // --- target ---------------------------------------------------------------
-  ipcMain.handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
+  handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
@@ -164,7 +194,7 @@ export function registerIpc(ctx: AppContext): void {
     const v = tab().target.setViewport(width, height, dsf)
     return { width: v.width, height: v.height }
   })
-  ipcMain.on(IPC.sendInput, (e, raw: unknown) => {
+  on(IPC.sendInput, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const ev = parseInputEvent(raw)
     if (!ev) return
@@ -198,7 +228,7 @@ export function registerIpc(ctx: AppContext): void {
     s.native.setVisible(tabs.nativeVisible(s))
   }
 
-  ipcMain.on(IPC.setMode, (e, raw: unknown) => {
+  on(IPC.setMode, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const mode = parseMode(raw)
     if (!mode) return
@@ -211,7 +241,7 @@ export function registerIpc(ctx: AppContext): void {
     bus.setEnabled(tab().modeIsLive)
   })
 
-  ipcMain.on(IPC.setNativeVisible, (e, raw: unknown) => {
+  on(IPC.setNativeVisible, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     if (typeof raw !== 'boolean') return
     panesShowNative = raw
@@ -239,7 +269,7 @@ export function registerIpc(ctx: AppContext): void {
   }
   fallbackLayout()
   win.on('resize', fallbackLayout)
-  ipcMain.on(IPC.setNativeBounds, (e, raw: unknown) => {
+  on(IPC.setNativeBounds, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const rect = parseRect(raw)
     if (!rect) return
@@ -260,7 +290,7 @@ export function registerIpc(ctx: AppContext): void {
   // `syncScroll` — and the payload is parsed like any other renderer message.
   let scrollSeq = 0
   const scrollWaiters = new Map<number, (report: ScrollReport) => void>()
-  ipcMain.on(IPC.scrollResult, (e, raw: unknown) => {
+  on(IPC.scrollResult, (e, raw: unknown) => {
     // Routed like `syncScroll`: any tab's panes may answer, because a waiter
     // is keyed by a unique seq and only the tab that was asked holds one.
     // A sender belonging to no session is dropped rather than guessed at.
@@ -311,7 +341,7 @@ export function registerIpc(ctx: AppContext): void {
   }
 
   // --- host display ---------------------------------------------------------
-  ipcMain.handle(IPC.getHostInfo, e => {
+  handle(IPC.getHostInfo, e => {
     assertRenderer(e)
     return hostInfo(win)
   })
@@ -333,11 +363,11 @@ export function registerIpc(ctx: AppContext): void {
   screen.on('display-removed', pushHostIfChanged)
 
   // --- settings -------------------------------------------------------------
-  ipcMain.handle(IPC.getSettings, e => {
+  handle(IPC.getSettings, e => {
     assertRenderer(e)
     return settings
   })
-  ipcMain.handle(IPC.setSettings, (e, raw: unknown) => {
+  handle(IPC.setSettings, (e, raw: unknown) => {
     assertRenderer(e)
     // A non-positive diagonal makes `ppi()` throw; refuse rather than persist
     // it. `parseSettings` also copies only the known keys, so nothing the
@@ -412,7 +442,7 @@ export function registerIpc(ctx: AppContext): void {
   let rendererReported = false
   let warnedPendingOverflow = false
   const pendingApplies: AgentApplyPatch[] = []
-  ipcMain.on(IPC.uiState, (e, raw: unknown) => {
+  on(IPC.uiState, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const s = parseUiState(raw)
     if (!s) return
@@ -572,15 +602,15 @@ export function registerIpc(ctx: AppContext): void {
     return state
   }
 
-  ipcMain.handle(IPC.getUpdate, e => {
+  handle(IPC.getUpdate, e => {
     assertRenderer(e)
     return update
   })
-  ipcMain.handle(IPC.checkUpdate, e => {
+  handle(IPC.checkUpdate, e => {
     assertRenderer(e)
     return runUpdateCheck()
   })
-  ipcMain.handle(IPC.openRelease, async e => {
+  handle(IPC.openRelease, async e => {
     assertRenderer(e)
     if (releaseUrl === '') return false
     await shell.openExternal(releaseUrl)
@@ -651,11 +681,11 @@ export function registerIpc(ctx: AppContext): void {
     persistTabs()
   }
 
-  ipcMain.handle(IPC.getTabs, e => {
+  handle(IPC.getTabs, e => {
     assertRenderer(e)
     return tabs.snapshot()
   })
-  ipcMain.handle(IPC.addTab, e => {
+  handle(IPC.addTab, e => {
     assertRenderer(e)
     // Add *and* activate: "new tab" means the tab you asked for is the one in
     // front. `add` alone leaves it in the background on purpose — that is what
@@ -665,13 +695,13 @@ export function registerIpc(ctx: AppContext): void {
     tabs.activate(session.id)
     return session.id
   })
-  ipcMain.on(IPC.closeTab, (e, raw: unknown) => {
+  on(IPC.closeTab, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const id = parseTabId(raw)
     if (id === null) return
     tabs.close(id)
   })
-  ipcMain.on(IPC.activateTab, (e, raw: unknown) => {
+  on(IPC.activateTab, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
     const id = parseTabId(raw)
     if (id === null) return
@@ -775,11 +805,11 @@ export function registerIpc(ctx: AppContext): void {
     publishTabs()
   })
 
-  ipcMain.handle(IPC.getHistory, e => {
+  handle(IPC.getHistory, e => {
     assertRenderer(e)
     return history
   })
-  ipcMain.handle(IPC.clearHistory, e => {
+  handle(IPC.clearHistory, e => {
     assertRenderer(e)
     commitHistory([])
   })
@@ -918,7 +948,7 @@ export function registerIpc(ctx: AppContext): void {
   // the native pane (see NativePane's will-navigate). Extension and size are
   // checked here, so a page script steering the pane at `file:///…` can at
   // most make the app decode a local image, never read anything else.
-  ipcMain.handle(IPC.readImageFile, async (e, raw: unknown) => {
+  handle(IPC.readImageFile, async (e, raw: unknown) => {
     assertRenderer(e)
     if (typeof raw !== 'string' || !IMAGE_EXTENSIONS.test(raw)) throw new Error('Unsupported file type')
     const { size } = await stat(raw)
@@ -927,4 +957,18 @@ export function registerIpc(ctx: AppContext): void {
     }
     return readFile(raw)
   })
+
+  // --- teardown --------------------------------------------------------------
+  // Everything above that outlives the window: the `ipcMain` channels, the
+  // process-global `screen` watch, and the agent-control server, all of which
+  // read the tab manager `boot()` is about to destroy. `win`'s own listeners
+  // are not here — they die with the window. Idempotent, because `will-quit`
+  // may also stop the control server.
+  return (): void => {
+    for (const off of undo.splice(0)) off()
+    screen.off('display-metrics-changed', pushHostIfChanged)
+    screen.off('display-added', pushHostIfChanged)
+    screen.off('display-removed', pushHostIfChanged)
+    control.stop()
+  }
 }

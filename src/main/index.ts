@@ -18,13 +18,23 @@ function boot(): void {
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
-  registerIpc(ctx)
+  const stopIpc = registerIpc(ctx)
   installMenu(ctx)
 
   // The offscreen targets are real BrowserWindows, so they must go before the
   // main window finishes closing — otherwise `window-all-closed` never fires
   // and the app hangs after the last visible window is gone.
-  win.on('close', () => tabs.destroy())
+  //
+  // The order is load-bearing. Chromium keeps the window's `webContents` alive
+  // for tens of milliseconds after this event, and the renderer goes on
+  // reporting its state throughout — into handlers that read the sessions
+  // `destroy()` is about to take away. Stopping the listeners first is what
+  // makes the destroy safe; the other way round the app quits by crashing
+  // (see `registerIpc`).
+  win.on('close', () => {
+    stopIpc()
+    tabs.destroy()
+  })
 
   exposeForTests(ctx)
 }
