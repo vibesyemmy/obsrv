@@ -68,7 +68,7 @@ The spec lists the state to extract, and it over-lists. Mapping `registerIpc` li
 
 **Files:**
 - Create: `src/main/tabSession.ts`
-- Modify: `src/main/context.ts`, `src/main/index.ts`
+- Modify: `src/main/context.ts`, `src/main/index.ts`, `src/main/menu.ts`
 
 - [ ] **Step 1: Write the session class**
 
@@ -178,14 +178,21 @@ Note `NativePane`'s `onLoadError` now lives inside `TabSession`, so the old inli
 npm run typecheck
 ```
 
-Expected: errors in `src/main/ipc.ts` and `src/main/testHooks.ts`, which still destructure `native`/`target`/`sync` from the context. Task 2 fixes them. Do not commit yet.
+Expected: errors in `src/main/ipc.ts`, `src/main/testHooks.ts` and `src/main/menu.ts`, which still destructure `native`/`target`/`sync` from the context. Task 2 fixes them. Do not commit yet.
+
+`installMenu` takes the whole `AppContext` and destructures `{ win, native, target }` in its signature, so it breaks with the other two. Give it the same one-line re-point:
+
+```ts
+export function installMenu({ win, session }: AppContext): void {
+  const { native, target } = session
+```
 
 ---
 
 ### Task 2: `registerIpc` reads the session
 
 **Files:**
-- Modify: `src/main/ipc.ts`, `src/main/testHooks.ts`
+- Modify: `src/main/ipc.ts`, `src/main/testHooks.ts`, `src/main/menu.ts`
 
 - [ ] **Step 1: Re-point the destructure**
 
@@ -266,7 +273,7 @@ Expected: **418 unit and 179 e2e passing, with no test file modified.** If any a
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/main/tabSession.ts src/main/context.ts src/main/index.ts src/main/ipc.ts src/main/testHooks.ts
+git add src/main/tabSession.ts src/main/context.ts src/main/index.ts src/main/ipc.ts src/main/menu.ts src/main/testHooks.ts
 git commit -m "refactor(main): move per-session state onto TabSession"
 ```
 
@@ -808,7 +815,7 @@ git commit -m "feat(tabs): retarget the frame bus and suspend background paintin
 
 **Files:**
 - Create: `src/main/tabs.ts`
-- Modify: `src/main/context.ts`, `src/main/index.ts`, `src/main/syncBus.ts`, `src/main/ipc.ts`
+- Modify: `src/main/context.ts`, `src/main/index.ts`, `src/main/syncBus.ts`, `src/main/ipc.ts`, `src/main/menu.ts`
 - Test: `tests/e2e/tabs.spec.ts`
 
 This is the task the spec calls out as most likely to produce silent cross-tab corruption.
@@ -847,6 +854,8 @@ Create `src/main/tabs.ts` with a `TabManager` exposing:
 `activate` sets `painting` false on the outgoing session and true on the incoming, calls `bus.setSource(next.target)`, calls `setVisible` on both native views, and applies the stored slot rect to the incoming view so it is positioned before it is shown — the same ordering hazard the Both/Target toggle already documents.
 
 The manager owns **one** `ipcMain.on(IPC.syncScroll, …)` that resolves `e.sender` through `byWebContents` and forwards to that tab's `sync.onScroll`. A message from a webContents that belongs to no tab is dropped, not guessed at.
+
+`installMenu` also takes the context, and its Cmd+R reloads both panes of *a* session. It needs the active-session lookup like everything else: replace phase one's `const { native, target } = session` destructure with a `tabs.active()` call inside each menu item's `click`, so Cmd+R reloads the tab in front rather than whichever one booted first. A destructure at `installMenu` time captures the first session forever.
 
 - [ ] **Step 3: Write the isolation test**
 
