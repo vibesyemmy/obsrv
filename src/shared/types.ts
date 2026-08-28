@@ -57,6 +57,12 @@ export interface Settings {
   updateCheck: boolean
   /** Epoch ms of the last completed check, success or failure. 0 = never. */
   lastUpdateCheck: number
+  /**
+   * The native pane's share of the panes row, 0..1 — a ratio rather than a
+   * width so it survives a window resize and a move to another monitor.
+   * The remainder goes to the target pane. Ignored while `panes === 'target'`.
+   */
+  split: number
 }
 
 /** A dirty-rect slice of the 1x target frame. `data` is BGRA, row-major, no padding. */

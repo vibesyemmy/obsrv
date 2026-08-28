@@ -63,6 +63,7 @@ describe('presets', () => {
       agentControl: false,
       updateCheck: true,
       lastUpdateCheck: 0,
+      split: 0.5,
     })
   })
 })

@@ -91,7 +91,7 @@ describe('parseSettings', () => {
     expect(parseUiState({ ...base, canvasBounds: { x: 'a' } })?.canvasBounds).toBeNull()
   })
 
-  it('copies exactly the five known keys', () => {
+  it('copies exactly the known keys', () => {
     expect(
       parseSettings({
         hostDiagonalInches: 27,
@@ -99,6 +99,7 @@ describe('parseSettings', () => {
         agentControl: true,
         updateCheck: false,
         lastUpdateCheck: 1700000000000,
+        split: 0.7,
         extra: 1,
       }),
     ).toEqual({
@@ -107,6 +108,7 @@ describe('parseSettings', () => {
       agentControl: true,
       updateCheck: false,
       lastUpdateCheck: 1700000000000,
+      split: 0.7,
     })
   })
   it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
@@ -118,6 +120,9 @@ describe('parseSettings', () => {
       // feature does not silently disable the check when it saves settings.
       updateCheck: true,
       lastUpdateCheck: 0,
+      // Likewise for the split: a renderer that has never heard of it must
+      // not be read as asking for a degenerate one.
+      split: 0.5,
     })
   })
   it.each([
@@ -129,6 +134,12 @@ describe('parseSettings', () => {
     ['missing key', { hostDiagonalInches: 27 }],
     ['truthy non-boolean agentControl', { hostDiagonalInches: 27, hostNits: 400, agentControl: 1 }],
     ['string agentControl', { hostDiagonalInches: 27, hostNits: 400, agentControl: 'true' }],
+    // Unlike `loadSettings`, which forgives whatever is on disk: the renderer
+    // clamps before it sends, so an out-of-band ratio on the wire is a bug.
+    ['split below the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.05 }],
+    ['split above the band', { hostDiagonalInches: 27, hostNits: 400, split: 0.97 }],
+    ['string split', { hostDiagonalInches: 27, hostNits: 400, split: '0.5' }],
+    ['NaN split', { hostDiagonalInches: 27, hostNits: 400, split: NaN }],
   ])('rejects %s', (_name, raw) => {
     expect(parseSettings(raw)).toBeNull()
   })

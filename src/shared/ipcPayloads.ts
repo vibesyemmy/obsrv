@@ -1,5 +1,6 @@
 import type { Rect } from './api'
 import type { AgentUiReport } from './control'
+import { DEFAULT_SETTINGS, SPLIT_MAX, SPLIT_MIN } from './presets'
 import { MAX_SCROLL_SELECTOR, type InputModifier, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
 
 /**
@@ -105,7 +106,13 @@ export function parseSettings(raw: unknown): Settings | null {
   if (typeof updateCheck !== 'boolean') return null
   const lastUpdateCheck = raw.lastUpdateCheck ?? 0
   if (!isFiniteNumber(lastUpdateCheck) || lastUpdateCheck < 0) return null
-  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck }
+  // A missing `split` is the pre-feature wire shape and means the default.
+  // Out of band it is refused rather than clamped: `loadSettings` forgives a
+  // hand-edited file because it must, but the renderer clamps before it
+  // sends, so a bad ratio arriving here is a bug worth surfacing.
+  const split = raw.split ?? DEFAULT_SETTINGS.split
+  if (!isFiniteNumber(split) || split < SPLIT_MIN || split > SPLIT_MAX) return null
+  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, split }
 }
 
 export function parseMode(raw: unknown): 'url' | 'image' | null {

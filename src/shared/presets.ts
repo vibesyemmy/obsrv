@@ -2,12 +2,18 @@ import type { PanelProfile, ScreenPreset, Settings } from './types'
 
 export const MAX_VIEWPORT = 4096
 
+/** The loose sanity band for `Settings.split`; the clamp that matters is the
+ *  drag's 240px-a-side floor, which only the renderer knows the pixels for. */
+export const SPLIT_MIN = 0.1
+export const SPLIT_MAX = 0.9
+
 export const DEFAULT_SETTINGS: Settings = {
   hostDiagonalInches: 27,
   hostNits: 500,
   agentControl: false,
   updateCheck: true,
   lastUpdateCheck: 0,
+  split: 0.5,
 }
 
 export const SCREEN_PRESETS: readonly ScreenPreset[] = [
