@@ -136,12 +136,24 @@ const profileField = z
   .optional()
   .describe('Panel simulation (contrast floor, gamut, bit depth, brightness). Default: reference (off).')
 
+const orientationField = z
+  .enum(['portrait', 'landscape'])
+  .optional()
+  .describe(
+    'Rotate the screen a quarter turn (default portrait). Presets store their natural orientation — ' +
+      'portrait for every mobile preset, landscape for the monitors and laptops — and this swaps the CSS ' +
+      "viewport's two axes on top of that. Nothing else changes: the diagonal, raster density and physical " +
+      'size are orientation-independent, so it is the same panel turned sideways. Use it to check a ' +
+      'landscape phone layout, or a monitor stood on end.',
+  )
+
 const snapInputShape = {
   url: urlField,
   preset: z
     .enum(PRESET_IDS)
     .optional()
     .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
+  orientation: orientationField,
   width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
   deviceScaleFactor: z
@@ -277,6 +289,9 @@ const diffOutputShape = {
 }
 
 const presetsOutputShape = {
+  orientation: z
+    .string()
+    .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation.'),
   presets: z.array(
     z.object({
       id: z.string(),
@@ -310,6 +325,7 @@ const driveInputShape = {
     .optional()
     .describe('Navigate the app (both panes) to this http://, https:// or file:// URL (bare hosts also work).'),
   preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
+  orientation: orientationField,
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
   panes: z
@@ -384,6 +400,13 @@ const driveOutputShape = {
   url: z.string().describe('The URL the target pane reports showing.'),
   presetId: z.string(),
   profileId: z.string(),
+  orientation: z
+    .string()
+    .describe(
+      "Which way round the tab's screen is held: 'portrait' (the preset as its table stores it) or " +
+        "'landscape' (rotated a quarter turn). Reported as 'portrait' by an app older than rotation, which " +
+        'is what such an app shows.',
+    ),
   viewMode: z.string(),
   panes: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
@@ -533,6 +556,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
       applied = typeof nav['url'] === 'string' ? nav['url'] : ''
     }
     if (input.preset !== undefined) await controlCall(info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+    if (input.orientation !== undefined) {
+      await controlCall(info, 'setOrientation', { orientation: input.orientation }, LIVE_APPLY_TIMEOUT_MS)
+    }
     if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
   } catch (e) {
     return toolError(liveFailure(e))
@@ -576,6 +602,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     url: status.url,
     presetId: status.presetId,
     profileId: status.profileId,
+    orientation: status.orientation,
     viewMode: status.viewMode,
     panes: status.panes,
     tabId: status.tabId,
@@ -609,7 +636,8 @@ server.registerTool(
       `presets, the device's 2x/3x DPR plus mobile UA and viewport semantics for phone presets — optionally ` +
       `through a cheap-panel simulation, and return the PNG. Use it to judge how a page actually looks on the ` +
       `screens users own (1366×768 laptops, 1080p desktops, budget Androids) before declaring frontend work done.\n\n` +
-      `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both. ` +
+      `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both; either can be ` +
+      `rotated with \`orientation: "landscape"\`, which is how you check a phone's landscape layout. ` +
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap; larger ` +
       `captures (typically fullPage) stay on disk with a note.\n\n` +
@@ -737,15 +765,16 @@ server.registerTool(
   {
     title: 'Drive the visible Obsrv app',
     description:
-      `Drive the Obsrv desktop app the user is looking at: navigate it to a URL, apply a screen preset, a panel ` +
-      `profile, the target pane's 1:1/fit view or pixel-exact toggle — each exactly as clicking the toolbar would ` +
+      `Drive the Obsrv desktop app the user is looking at: navigate it to a URL, apply a screen preset, rotate that ` +
+      `screen to landscape or portrait, apply a panel profile, the target pane's 1:1/fit view or pixel-exact ` +
+      `toggle — each exactly as clicking the toolbar would ` +
       `— and steer the session like a guided demo: focus the window, step history (back/forward/reload), scroll ` +
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → profile → viewMode → panes → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → orientation → profile → viewMode → panes → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture. ` +
-      `The result is the final status: app version, the URL showing, and the selected preset/profile/view. A ` +
+      `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
       `\`scrolled\` with what you asked for rather than trusting the call's success, and use \`scroll.scrollSelector\` ` +
@@ -773,6 +802,7 @@ server.registerTool(
   async (input: {
     url?: string
     preset?: string
+    orientation?: 'portrait' | 'landscape'
     profile?: string
     viewMode?: '1:1' | 'fit'
     panes?: 'both' | 'target'
@@ -801,6 +831,12 @@ server.registerTool(
         await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
       }
       if (input.preset !== undefined) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+      // After the preset, before everything else: rotation is applied on top of
+      // whichever screen is in force, so a call carrying both has to land in
+      // that order or the rotation would be spent on the outgoing preset.
+      if (input.orientation !== undefined) {
+        await controlCall(live.info, 'setOrientation', { orientation: input.orientation }, LIVE_APPLY_TIMEOUT_MS)
+      }
       if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
       if (input.viewMode !== undefined) {
         await controlCall(live.info, 'setViewMode', { mode: input.viewMode }, LIVE_APPLY_TIMEOUT_MS)
@@ -885,7 +921,9 @@ server.registerTool(
     description:
       `List every screen preset (id, label, group, CSS dims, deviceScaleFactor, panel diagonal, derived physical ` +
       `ppi) and panel profile (id, label, simulation params) accepted by obsrv_snap and obsrv_diff. Read straight ` +
-      `from the app's preset table — nothing is rendered.`,
+      `from the app's preset table — nothing is rendered. The dimensions are each preset's natural orientation ` +
+      `(portrait for the mobile ones, landscape for the monitors); every preset also rotates — see the ` +
+      `\`orientation\` note in the result.`,
     inputSchema: {},
     outputSchema: presetsOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

@@ -1,4 +1,5 @@
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
+import type { Orientation } from '../shared/types'
 
 /**
  * Pure helpers for the MCP server (`src/mcp/server.ts`): tool-input → CLI
@@ -19,6 +20,8 @@ export const STDERR_TAIL_CHARS = 2000
 export interface SnapToolInput {
   url: string
   preset?: string | undefined
+  /** Rotates whatever screen the run resolves — preset or custom dims alike. */
+  orientation?: Orientation | undefined
   width?: number | undefined
   height?: number | undefined
   deviceScaleFactor?: number | undefined
@@ -66,6 +69,7 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
 
   const args = ['snap', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
+  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
@@ -209,6 +213,18 @@ export interface PresetEntry {
   ppi: number
 }
 
+/**
+ * What `obsrv_presets` says about rotation. Stated once here rather than
+ * repeated per entry: it is true of every preset in the table, and a field
+ * saying "rotatable: true" fourteen times would carry less than one sentence.
+ */
+export const ORIENTATION_NOTE =
+  'cssWidth/cssHeight are each preset\'s natural orientation — portrait for every mobile preset, ' +
+  'landscape for the monitor and laptop ones. Every preset rotates: pass orientation: "landscape" ' +
+  'to obsrv_snap or obsrv_drive to swap the two axes a quarter turn. Rotation changes nothing else — ' +
+  'the diagonal, deviceScaleFactor, ppi and physical size are all orientation-independent, so a ' +
+  'rotated screen is the same panel turned sideways rather than a different one.'
+
 export interface ProfileEntry {
   id: string
   label: string
@@ -224,11 +240,14 @@ export interface ProfileEntry {
 export interface Catalog {
   presets: PresetEntry[]
   profiles: ProfileEntry[]
+  /** See ORIENTATION_NOTE — how the dimensions above relate to rotation. */
+  orientation: string
 }
 
 /** The `obsrv_presets` payload, straight from src/shared/presets.ts — no spawn. */
 export function listCatalog(): Catalog {
   return {
+    orientation: ORIENTATION_NOTE,
     presets: SCREEN_PRESETS.map(p => ({
       id: p.id,
       label: p.label,

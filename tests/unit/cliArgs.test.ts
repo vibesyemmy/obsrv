@@ -112,6 +112,63 @@ describe('parseArgs: snap', () => {
   })
 })
 
+describe('parseArgs: --orientation', () => {
+  it('defaults to portrait, which is the preset exactly as stored', () => {
+    expect(snap('x.test', '--preset', 'iphone-61').specs[0]).toMatchObject({ cssWidth: 393, cssHeight: 852 })
+    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'portrait').specs[0]).toMatchObject({
+      cssWidth: 393,
+      cssHeight: 852,
+    })
+  })
+
+  it('swaps the CSS axes in landscape, leaving dsf and diagonal alone', () => {
+    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'landscape').specs[0]).toEqual({
+      presetId: 'iphone-61',
+      cssWidth: 852,
+      cssHeight: 393,
+      deviceScaleFactor: 3,
+      diagonalInches: 6.1,
+    })
+  })
+
+  it('rotates every entry of a matrix', () => {
+    const cmd = snap('x.test', '--matrix', 'iphone-61,android-65', '--orientation', 'landscape')
+    expect(cmd.specs.map(sp => [sp.cssWidth, sp.cssHeight])).toEqual([
+      [852, 393],
+      [800, 360],
+    ])
+  })
+
+  it('rotates custom dims too', () => {
+    expect(snap('x.test', '--width', '900', '--height', '600', '--orientation', 'landscape').specs[0]).toMatchObject({
+      cssWidth: 600,
+      cssHeight: 900,
+    })
+  })
+
+  it('applies to diff as well, and the 1x/2x bounds are checked after rotating', () => {
+    expect(diff('x.test', '--preset', 'laptop-768', '--orientation', 'landscape').spec).toMatchObject({
+      cssWidth: 768,
+      cssHeight: 1366,
+    })
+    // 1600x900 fits a 2x reference either way round; 2560x1440 fits neither.
+    expect(() => diff('x.test', '--preset', '1440p-27', '--orientation', 'landscape')).toThrow(/2x reference/)
+  })
+
+  it('rejects anything that is not one of the two words', () => {
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/--orientation/)
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/portrait/)
+    expect(() => snap('x.test', '--orientation')).toThrow(/--orientation requires a value/)
+  })
+
+  it('is listed in --help', () => {
+    const help = parseArgs(['--help'])
+    expect(help.command).toBe('help')
+    expect(help.command === 'help' && help.text).toContain('--orientation')
+    expect(help.command === 'help' && help.text).toContain('landscape')
+  })
+})
+
 describe('parseArgs: diff', () => {
   it('defaults mirror snap, without an out file', () => {
     const cmd = diff('x.test')

@@ -40,6 +40,17 @@ describe('buildSnapArgs', () => {
       'snap', URL, '--preset', 'android-65', '--profile', 'budget-tn', '--full-page', '--wait', '500', '--timeout', '60000', '--out', OUT,
     ])
   })
+  it('orientation maps to --orientation, for a preset and for custom dims alike', () => {
+    expect(buildSnapArgs({ url: URL, preset: 'iphone-61', orientation: 'landscape' }, OUT)).toEqual([
+      'snap', URL, '--preset', 'iphone-61', '--orientation', 'landscape', '--out', OUT,
+    ])
+    expect(buildSnapArgs({ url: URL, width: 900, height: 600, orientation: 'portrait' }, OUT)).toEqual([
+      'snap', URL, '--orientation', 'portrait', '--width', '900', '--height', '600', '--out', OUT,
+    ])
+  })
+  it('omits --orientation entirely when the caller did not ask, so the CLI default stands', () => {
+    expect(buildSnapArgs({ url: URL, preset: 'iphone-61' }, OUT)).not.toContain('--orientation')
+  })
   it('waitMs 0 is passed through, not dropped as falsy', () => {
     expect(buildSnapArgs({ url: URL, waitMs: 0 }, OUT)).toEqual(['snap', URL, '--wait', '0', '--out', OUT])
   })
@@ -217,6 +228,13 @@ describe('listCatalog', () => {
     })
     // ppi derives from *device* pixels: 393×852 @3x on 6.1" is a 461-ppi panel.
     expect(catalog.presets.find(p => p.id === 'iphone-61')?.ppi).toBe(461)
+  })
+  it('documents that the dimensions are natural and every preset rotates', () => {
+    expect(catalog.orientation).toContain('natural orientation')
+    expect(catalog.orientation).toContain('landscape')
+    // The invariant an agent most needs stated, since it is what makes a
+    // rotated render comparable to its unrotated self.
+    expect(catalog.orientation).toContain('orientation-independent')
   })
   it('lists every panel profile with raw params and a human summary', () => {
     expect(catalog.profiles).toHaveLength(4)

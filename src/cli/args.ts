@@ -1,5 +1,6 @@
 import { maxCssViewport } from '../shared/calibration'
-import { PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
+import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
+import type { Orientation } from '../shared/types'
 
 /**
  * Pure argv parsing for the headless CLI (`bin/obsrv.js` → `out/main/cli.js`).
@@ -67,6 +68,10 @@ Shared flags:
 ${presets}
   --width <px> --height <px> [--dsf <factor>] [--diagonal <inches>]
                        Custom CSS viewport instead of --preset (dsf defaults to 1).
+  --orientation <o>    portrait | landscape (default ${DEFAULT_ORIENTATION}). Rotates the screen a
+                       quarter turn: the CSS viewport's axes swap, the panel diagonal,
+                       raster density and physical size are unchanged. Applies to any
+                       preset and to custom --width/--height dims.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
   --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
@@ -93,7 +98,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal'])
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal'])
 const SNAP_ONLY = new Set(['out', 'full-page', 'matrix'])
 const DIFF_ONLY = new Set(['out-dir', 'json'])
 
@@ -168,7 +173,26 @@ function presetSpec(id: string): RenderSpec {
   }
 }
 
+function resolveOrientation(flags: Map<string, string | true>): Orientation {
+  const raw = flags.get('orientation')
+  if (raw === undefined) return DEFAULT_ORIENTATION
+  if (!isOrientation(raw)) throw new ArgError(`--orientation: expected portrait or landscape, got "${String(raw)}"`)
+  return raw
+}
+
+/**
+ * Rotation swaps the CSS axes and nothing else — the diagonal and the raster
+ * density are orientation-independent, so the render is the same screen turned
+ * sideways rather than a different one. Applied here, before the diff bounds
+ * are checked, so those check the viewport that will actually be rendered.
+ */
+function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
+  if (orientation !== 'landscape') return spec
+  return { ...spec, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+}
+
 function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
+  const orientation = resolveOrientation(flags)
   const custom = ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
   if (custom && flags.has('preset')) throw new ArgError('--preset and --width/--height are mutually exclusive')
   if (custom && flags.has('matrix')) throw new ArgError('--matrix lists presets; it cannot be combined with custom --width/--height dims')
@@ -186,18 +210,19 @@ function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[];
       throw new ArgError(`viewport exceeds the 4096-device-pixel budget: at dsf ${deviceScaleFactor} the CSS limit is ${max}`)
     }
     const diagonal = flags.has('diagonal') ? float(flags, 'diagonal', 0, 0.1) : null
-    return { specs: [{ presetId: 'custom', cssWidth, cssHeight, deviceScaleFactor, diagonalInches: diagonal }], matrix: false }
+    const spec = { presetId: 'custom', cssWidth, cssHeight, deviceScaleFactor, diagonalInches: diagonal }
+    return { specs: [orientSpec(spec, orientation)], matrix: false }
   }
 
   const matrixRaw = flags.get('matrix')
   if (typeof matrixRaw === 'string') {
     const ids = matrixRaw.split(',').map(s => s.trim()).filter(s => s.length > 0)
     if (ids.length === 0) throw new ArgError('--matrix: expected a comma-separated list of preset ids')
-    return { specs: ids.map(presetSpec), matrix: true }
+    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation)), matrix: true }
   }
 
   const id = typeof flags.get('preset') === 'string' ? (flags.get('preset') as string) : DEFAULT_PRESET
-  return { specs: [presetSpec(id)], matrix: false }
+  return { specs: [orientSpec(presetSpec(id), orientation)], matrix: false }
 }
 
 function resolveProfile(flags: Map<string, string | true>): string {
