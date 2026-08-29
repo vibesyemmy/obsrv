@@ -101,8 +101,10 @@ test('the renderer takes over native pane layout for good', async () => {
   // bounds must land on the slot's rectangle — never on the fallback's
   // `{ 0, TOOLBAR_H, width / 2, height - TOOLBAR_H }`.
   //
-  // 599, not 600: the draggable seam is a flex item of its own, so an even
-  // split gives each pane half of `width - 1`. That the two numbers now
+  // 598, not 600: the draggable seam is a flex item of its own, so an even
+  // split gives each pane half of `width - 1`, and `.native-slot` is a further
+  // 1px narrower than its pane so the seam's hover band is visible on the
+  // native side as well as the target side (styles.css). That the two numbers now
   // differ is the point — the fallback's `width / 2` is a rectangle the
   // renderer never reports, so this assertion no longer passes by
   // coincidence.
@@ -117,13 +119,13 @@ test('the renderer takes over native pane layout for good', async () => {
         height: Math.round(r.height),
       }
     })
-  await expect.poll(slot).toMatchObject({ width: 599 })
+  await expect.poll(slot).toMatchObject({ width: 598 })
   const expected = await slot()
   // Main's real `TOOLBAR_H`, not a copy of it: a fallback rect written from a
   // stale number would match nothing and this assertion would pass vacuously.
   const toolbarH: number = await app.evaluate(() => (globalThis as any).__obsrv.toolbarH)
   expect(expected).not.toEqual({ x: 0, y: toolbarH, width: 600, height: 800 - toolbarH })
-  expect(expected.width).toBe(599)
+  expect(expected.width).toBe(598)
   await expect
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds()))
     .toEqual(expected)

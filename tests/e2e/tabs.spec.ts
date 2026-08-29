@@ -961,15 +961,23 @@ test.describe('the driven tab is marked while agent control is on', () => {
     await expect(drivenActive()).toHaveCount(1)
     // The class is only half of it — a class with no rule behind it marks
     // nothing. This reads the pixels the rule actually asks for: a 2px inset
-    // rule on the leading edge, in a grey, and no blur radius at all. The
-    // colour is asserted as achromatic rather than as a literal, so a token
-    // change stays green and a hue never can.
+    // rule on the leading edge, no blur radius at all, and `--warn`.
+    //
+    // Agent control is the one thing in this chrome that is allowed a hue: the
+    // marker says an agent is moving the page under the user's hands, which is
+    // precisely the "colour means attention" case the style spec carves out.
+    // Asserting the token rather than a literal keeps a palette change green;
+    // asserting it rather than "achromatic" is what stops it being quietly
+    // reverted to grey.
     const shadow = await driven().evaluate(el => getComputedStyle(el).boxShadow)
     expect(shadow).toContain('inset')
     expect(shadow).toContain('2px 0px 0px 0px')
+    const warn = await driven().evaluate(el =>
+      getComputedStyle(el.ownerDocument.documentElement).getPropertyValue('--warn').trim(),
+    )
     const [r, g, b] = /rgba?\((\d+), (\d+), (\d+)/.exec(shadow)!.slice(1).map(Number)
-    expect(r).toBe(g)
-    expect(g).toBe(b)
+    const hex = `#${[r, g, b].map(n => n.toString(16).padStart(2, '0')).join('')}`
+    expect(hex).toBe(warn.toLowerCase())
   })
 
   test('the marker follows the user to another tab', async () => {

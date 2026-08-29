@@ -45,3 +45,18 @@ export function urlSchemeError(url: string): string | null {
     `(bare hosts like example.com also work; they normalise to http(s)).`
   )
 }
+
+/**
+ * True when a tab has never been navigated. Both the renderer's empty state and
+ * main's native-view visibility ask this question, and they must agree — a
+ * disagreement shows as a white OS overlay sitting on top of the empty state,
+ * or an empty state over a live page.
+ *
+ * `about:blank` is deliberately *not* blank here. It is a real destination a
+ * user can type and history can hold, and a tab showing it has a page — an
+ * empty one. Counting it would put the empty state over a page the user asked
+ * for, and take the native pane off screen underneath it.
+ */
+export function isBlankUrl(url: string): boolean {
+  return url === ''
+}

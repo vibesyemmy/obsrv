@@ -22,7 +22,7 @@ import {
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
-import { normalizeUrl } from '../shared/url'
+import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
@@ -219,7 +219,11 @@ export function registerIpc(ctx: AppContext): () => void {
   let panesShowNative = true
   // The manager asks the same question on activation, so the incoming view
   // lands in the right state without re-deriving it there and drifting.
-  tabs.nativeVisible = (s: TabSession): boolean => s.modeIsLive && panesShowNative
+  // A third input, for the same reason: a tab with no page renders an empty
+  // state in the renderer, and the native view is an OS overlay that would
+  // otherwise sit on top of it as a white rectangle.
+  tabs.nativeVisible = (s: TabSession): boolean =>
+    s.modeIsLive && panesShowNative && !isBlankUrl(s.url)
   // And the same for frame delivery, for the same reason: image mode is per
   // tab, so a switch changes which mode is in force without any mode changing,
   // and `setMode` below never fires. Derived here so "live" means one thing.
@@ -752,7 +756,14 @@ export function registerIpc(ctx: AppContext): () => void {
       console.warn('obsrv: could not save tabs', e)
     }
   }
-  tabs.onTabUrlChanged = persistTabs
+  tabs.onTabUrlChanged = (): void => {
+    persistTabs()
+    // The URL is now an input to native visibility, so the first navigation of
+    // a blank tab is the moment the view has to come back. Deriving it here
+    // rather than in `navigateBoth` also covers the ways a URL changes without
+    // one: link clicks, history moves, and restore.
+    applyNativeVisibility()
+  }
 
   /**
    * Restoring is the one moment the app builds tabs from something it did not

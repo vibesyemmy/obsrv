@@ -243,7 +243,20 @@ export class TabManager {
     // forward at construction, and the forward has to know which session it
     // speaks for. The closure only ever runs after the constructor returns, so
     // the binding is always in place by the time it is read.
+    // A new pane commits `about:blank` on its own before anyone has asked for a
+    // page, and that commit must not count as one: a tab's URL is what tells
+    // the rest of the app whether it is still empty (see `isBlankUrl`), and
+    // taking the boot document for an address would put a page-less tab into
+    // the same state as a page-ful one. Only the *first* such commit is
+    // swallowed, so a user who deliberately navigates to `about:blank` still
+    // gets a tab that has a page. `TargetSource` suppresses its own internal
+    // blank load for the same reason.
+    let booted = false
     const s: TabSession = new TabSession(this.win, url => {
+      if (!booted) {
+        booted = true
+        if (url === 'about:blank') return
+      }
       s.url = url
       // A committed navigation replaces the page, so the title that described
       // the old one must not linger over the new one in the strip. Chromium

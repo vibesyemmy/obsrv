@@ -94,7 +94,14 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    starts at the window's left edge (the row's only border is at the bottom),
    which is the frame `--native-right` is expressed in. */
 .chrome-browse { position: relative; }
-.chrome-screen { height: 38px; background: var(--chrome-0); }
+/* The screen controls sit centred: they describe the render, and the render is
+   what the two panes flank, so the middle is the shortest reach from either
+   side. The AGENT chip is taken out of flow rather than balanced against a
+   spacer — otherwise the group would shift sideways the moment agent control
+   was switched on, and a control that moves when an unrelated setting changes
+   is worse than one slightly off-centre. */
+.chrome-screen { height: 38px; background: var(--chrome-0); justify-content: center; position: relative; }
+.chrome-screen .agent-activity { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .chrome-spacer { flex: 1 1 auto; }
 
 /* The tab strip. Ground is the darkest chrome step so an inactive tab (one
@@ -143,18 +150,19 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .tab > .tab-label[aria-selected='true'] { color: var(--text-0); font-weight: 600; }
 
 /* The driven tab, while agent control is on. The 2px inset rule `.menu-row`
-   and `.surround-control` already use to mark a choice — the same idiom, in
-   the same direction, so it reads as "this one" and not as a new language.
-   It sits on the leading edge rather than surrounding the tab, so it never
-   competes with the selected fill underneath it (the driven tab is always the
-   selected one, and two full outlines on one control would be noise).
+   and `.surround-control` already use to mark a choice, on the leading edge so
+   it never competes with the selected fill underneath it.
 
-   Neutral, and only neutral: --text-1 standing, --text-0 for ~3s after each
-   command, exactly the step the AGENT chip makes. No hue and no glow — a blur
-   here would be the first shadow in the app, and the rule against it is what
-   stops the chrome biasing the render below. */
-.tab.driven { box-shadow: inset 2px 0 0 var(--text-1); }
-.tab.driven.busy { box-shadow: inset 2px 0 0 var(--text-0); }
+   It wears the warn hue for as long as an agent holds the tab, selected or
+   not, so a background tab being worked on is visible without switching to it.
+   Hue is tolerable here because the tab strip is the row furthest from the
+   panes — and nowhere nearer them. No blur: a glow beside a render would spill
+   light onto the pixels being measured. */
+.tab.driven { box-shadow: inset 2px 0 0 var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--chrome-1)); }
+.tab.driven:has(> .tab-label[aria-selected='true']) { background: color-mix(in srgb, var(--warn) 22%, var(--chrome-3)); }
+.tab.driven > .tab-label { color: var(--text-0); }
+/* An arriving command: the rule brightens to the full hue for ~3s. */
+.tab.driven.busy { box-shadow: inset 3px 0 0 var(--warn); }
 
 .tab-close {
   flex: 0 0 auto;
@@ -504,13 +512,32 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   inset: 0 -2.5px;
 }
 .pane-divider:hover, .pane-divider:focus-visible { background: var(--text-1); }
+/* Under the pointer the seam lights up its full height rather than growing a
+   handle. Every split-pane tool worth copying does it this way — VS Code,
+   Framer, Retool, Rive all leave the divider a hairline and let the cursor and
+   the widened hit area carry the affordance. Nothing floats over the pane
+   pixels this app exists to show. Painted as an overlay, so no layout moves
+   and the target pane is never re-rendered for a mouse-over. */
+.pane-divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 -1px;
+  background: var(--text-1);
+  opacity: 0;
+}
+.pane-divider:hover::after, .pane-divider:focus-visible::after { opacity: 1; }
 /* The hairline is the affordance; a ring around a 1px element would be a box
    floating on the seam. Same reasoning as `.target-canvas:focus`. */
 .pane-divider:focus-visible { outline: none; }
 /* Square corners, no shadow, no blur: a rounded or blurred pane edge would
    destroy the very corner pixels the user opened this app to inspect. */
 .pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.native-slot { width: 100%; height: 100%; }
+/* One pixel short of the seam. The native view is an OS-composited layer sized
+   to exactly this rect, so anything the renderer paints inside it is hidden
+   underneath — without the inset, the divider's hover band would appear on the
+   target side only, since that side is the renderer's own canvas. The view
+   still sits exactly over the slot; the slot is simply 1px narrower. */
+.native-slot { width: calc(100% - 1px); height: 100%; }
 /* The backing store is already at device resolution; this only guards against
    a fractional CSS size introducing a resample. */
 .target-canvas { display: block; image-rendering: pixelated; }
@@ -615,18 +642,23 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* Agent control opens a loopback server, so the chip persists while it is
-   enabled; recent activity is a brighter text weight, not a colour. */
+   enabled. Something else driving the app is exactly the "attention, never
+   decoration" case the palette reserves --warn for: the user must be able to
+   tell at a glance that the window is not only theirs. Standing state is the
+   warn hue outlined; an arriving command fills it. No blur — a glow beside the
+   panes would spill light onto the pixels being measured, which is the one
+   thing this chrome may never do. */
 .agent-activity {
   flex: 0 0 auto;
-  color: var(--text-1);
-  border: 1px solid var(--line);
+  color: var(--warn);
+  border: 1px solid var(--warn);
   border-radius: 4px;
   padding: 2px 7px;
   font-size: 10px;
   letter-spacing: 0.08em;
   white-space: nowrap;
 }
-.agent-activity.active { color: var(--text-0); border-color: var(--text-0); }
+.agent-activity.active { color: var(--chrome-0); background: var(--warn); border-color: var(--warn); }
 
 /* Drawers sit beside the panes, never over them: the native WebContentsView is
    an OS-level overlay and would cover anything painted on top of it. */
@@ -883,3 +915,66 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 /* Nothing to erase: the button says so rather than pretending to act. */
 .clear-history:disabled { color: var(--text-1); cursor: default; }
+
+/* --- empty state ---------------------------------------------------------- */
+/* Shown when a tab has no page. It covers the target canvas rather than
+   replacing it: the canvas keeps its GL context and frame subscription, so the
+   first navigation does not pay for a context restore, and the native slot
+   keeps reporting its bounds. `--surround` is the pane field, so the state sits
+   on the same ground the render will. */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  background: var(--surround);
+  /* Above `.pane-divider`, which is itself raised to 1: the seam would
+     otherwise draw its hairline straight through the illustration. Covering it
+     must not disarm it, though — the split is still adjustable on a blank tab —
+     so everything here is transparent to the pointer except the form. */
+  z-index: 2;
+  pointer-events: none;
+}
+.empty-form { pointer-events: auto; }
+.panes { position: relative; }
+.empty-state svg { width: 244px; max-width: 100%; height: auto; }
+.empty-lede {
+  margin: 0;
+  color: var(--text-1);
+  text-align: center;
+  max-width: 34ch;
+}
+.empty-form { display: flex; gap: 8px; width: 100%; max-width: 420px; }
+.empty-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--text-0);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  font-family: var(--mono);
+}
+.empty-input:focus-visible { outline: none; border-color: var(--text-1); }
+.empty-go {
+  height: 30px;
+  padding: 0 14px;
+  color: var(--text-0);
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+.empty-go:hover:not(:disabled) { background: var(--chrome-3); }
+.empty-go:disabled { color: var(--text-1); opacity: 0.6; }
+.empty-error { margin: 0; color: var(--error); }
+/* The readouts stay legible through the empty state: they still name the screen
+   being simulated, which is the one fact that survives having no page. Stacking
+   rather than insetting the overlay, so nothing depends on the footer's height. */
+.pane-footer { position: relative; z-index: 3; }
