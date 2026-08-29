@@ -12,6 +12,7 @@ import {
   presetApplyError,
   profileApplyError,
   tokenEqual,
+  orientationApplyError,
   panesApplyError,
   viewModeApplyError,
   type AgentApplyPatch,
@@ -19,7 +20,7 @@ import {
   type ControlStatus,
 } from '../shared/control'
 import { parseScrollPos, parseScrollRequest } from '../shared/ipcPayloads'
-import type { ScrollReport, ScrollRequest } from '../shared/types'
+import type { Orientation, ScrollReport, ScrollRequest } from '../shared/types'
 import { urlSchemeError } from '../shared/url'
 
 /**
@@ -226,6 +227,13 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const panes = payload.panes as 'both' | 'target'
         return this.applyAndConfirm({ panes }, s => s.panes === panes)
+      }
+
+      case 'setOrientation': {
+        const err = orientationApplyError(payload.orientation)
+        if (err) return reply(400, { error: err })
+        const orientation = payload.orientation as Orientation
+        return this.applyAndConfirm({ orientation }, s => s.orientation === orientation)
       }
 
       case 'captureVisible': {

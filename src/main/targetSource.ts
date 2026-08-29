@@ -99,6 +99,38 @@ export interface TargetSourceOptions {
  *   never changes paint sizes under OSR — the raster density comes from the
  *   recreated window alone; emulation only shapes layout.
  *
+ * **Rotation** needs nothing here. The renderer swaps the CSS axes before it
+ * sends them (`applyOrientation`), so the rotated viewport arrives through the
+ * ordinary `setViewport` path and `applyEmulation`'s `screenSize`/`viewSize`
+ * carry it — which is what makes a page with no `<meta viewport>` lay out
+ * correctly in landscape rather than at a portrait virtual viewport.
+ *
+ * What rotation does *not* reach is JavaScript's idea of the device angle:
+ * `screen.orientation.type` and `.angle` keep reporting the host's, and no
+ * `orientationchange` fires. `enableDeviceEmulation` has no `screenOrientation`
+ * field; raw CDP `Emulation.setDeviceMetricsOverride` does, and it was measured
+ * against this class rather than assumed. It is deliberately not used:
+ *
+ *   - issued before a window's first navigation commits it segfaults the OSR
+ *     renderer (SIGSEGV), exactly as `enableDeviceEmulation` does — so it can
+ *     only run post-commit, in the same `did-navigate` window as the call
+ *     below;
+ *   - the two share one override slot, and Electron's call wins: whichever
+ *     order they are issued in, `enableDeviceEmulation` resets the angle to 0,
+ *     so the very re-apply that keeps mobile layout alive across a navigation
+ *     is also what undoes the angle;
+ *   - once live, the override pins the page's layout viewport, so a
+ *     `setContentSize` no longer reaches the document unless the CDP command is
+ *     re-issued with it — a preset change would otherwise leave the page
+ *     laying out at the previous screen's size;
+ *   - it needs a permanent `webContents.debugger` session on every offscreen
+ *     target, and detaching it wipes Electron's own emulation with it.
+ *
+ * CSS `@media (orientation)`, `screen.width`/`height`, `innerWidth`/`innerHeight`
+ * and the raster are all correct from the swap alone. The three JS device-angle
+ * readings are the documented gap, in the same spirit as the sync preload's
+ * shadow-DOM reach.
+ *
  * Every method that touches the window is a no-op once it is destroyed: the
  * renderer's IPC can still arrive after the main window has started closing.
  */

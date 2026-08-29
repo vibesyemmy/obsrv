@@ -1,7 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
-import { PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import type { Orientation } from './types'
 
 /**
  * The agent-control protocol shared by the main-process control server
@@ -49,6 +50,8 @@ export interface AgentUiState {
   profileId: string
   viewMode: AgentViewMode
   panes: AgentPanes
+  /** Which way round the tab's screen is held — mirrors the store's `orientation`. */
+  orientation: Orientation
   mode: 'url' | 'image'
 }
 
@@ -127,6 +130,7 @@ export interface AgentApplyPatch {
   profileId?: string
   viewMode?: AgentViewMode
   panes?: AgentPanes
+  orientation?: Orientation
   pixelExact?: boolean
   /** Centre this target pixel in the pane's 1:1 view (fit jumps to 1:1 there). */
   panTo?: { x: number; y: number }
@@ -141,6 +145,7 @@ export const CONTROL_COMMANDS = [
   'setProfile',
   'setViewMode',
   'setPanes',
+  'setOrientation',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
   'scroll',
@@ -254,6 +259,14 @@ export function viewModeApplyError(v: unknown): string | null {
   return v === '1:1' || v === 'fit' ? null : `setViewMode payload must be { mode: '1:1' | 'fit' }`
 }
 
+/**
+ * Validates a `setOrientation` payload. Unlike a preset id there is no table to
+ * miss, so the message just names the two words rather than listing anything.
+ */
+export function orientationApplyError(v: unknown): string | null {
+  return isOrientation(v) ? null : `setOrientation payload must be { orientation: 'portrait' | 'landscape' }`
+}
+
 export function panesApplyError(v: unknown): string | null {
   return v === 'both' || v === 'target' ? null : `setPanes payload must be { panes: 'both' | 'target' }`
 }
@@ -337,5 +350,13 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (typeof tabId !== 'string') return null
   const tabIndex = raw.tabIndex ?? 0
   if (typeof tabIndex !== 'number' || !Number.isInteger(tabIndex) || tabIndex < 0) return null
-  return { version, url, presetId, profileId, viewMode, panes, mode, tabId, tabIndex }
+  // And the same skew again, one release later still. The npm MCP server
+  // routinely talks to a DMG app older than itself, and an app that predates
+  // rotation shows every screen unrotated — which is exactly what the default
+  // says. Returning null instead would take out drive and live snap wholesale
+  // against every app older than this feature, which is the bug this repo has
+  // already been bitten by twice.
+  const orientation = raw.orientation ?? DEFAULT_ORIENTATION
+  if (!isOrientation(orientation)) return null
+  return { version, url, presetId, profileId, viewMode, panes, orientation, mode, tabId, tabIndex }
 }

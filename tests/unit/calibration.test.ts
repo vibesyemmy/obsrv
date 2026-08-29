@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ppi, computeScale, clampViewport, maxCssViewport } from '../../src/shared/calibration'
+import { ppi, computeScale, clampViewport, maxCssViewport, applyOrientation, screenShape } from '../../src/shared/calibration'
 
 const host4k27 = { physicalWidth: 3840, physicalHeight: 2160, diagonalInches: 27, scaleFactor: 2 }
 
@@ -71,5 +71,74 @@ describe('maxCssViewport', () => {
   it('treats a bad factor as 1', () => {
     expect(maxCssViewport(0)).toBe(4096)
     expect(maxCssViewport(NaN)).toBe(4096)
+  })
+})
+
+describe('applyOrientation', () => {
+  const iphone = { width: 393, height: 852, diagonalInches: 6.1, deviceScaleFactor: 3 }
+
+  it('leaves the preset alone in portrait', () => {
+    expect(applyOrientation(iphone, 'portrait')).toEqual(iphone)
+  })
+
+  it('swaps the CSS axes in landscape and touches nothing else', () => {
+    expect(applyOrientation(iphone, 'landscape')).toEqual({
+      width: 852,
+      height: 393,
+      diagonalInches: 6.1,
+      deviceScaleFactor: 3,
+    })
+  })
+
+  it('is its own inverse', () => {
+    expect(applyOrientation(applyOrientation(iphone, 'landscape'), 'landscape')).toEqual(iphone)
+  })
+
+  it('does not mutate its argument', () => {
+    const before = { ...iphone }
+    applyOrientation(iphone, 'landscape')
+    expect(iphone).toEqual(before)
+  })
+
+  it('preserves extra fields a caller carries', () => {
+    const withExtra = { ...iphone, label: 'iPhone 6.1" @3x' }
+    expect(applyOrientation(withExtra, 'landscape').label).toBe('iPhone 6.1" @3x')
+  })
+
+  // The invariant the whole feature rests on: a phone does not become
+  // physically bigger or denser by being turned sideways. `ppi` is
+  // hypot(w, h) / diagonal and hypot is symmetric, so the diagonal, the pixel
+  // count and therefore the magnification are all orientation-independent.
+  it('leaves physical scale, pixel count and ppi unchanged in magnitude', () => {
+    const host = { physicalWidth: 3024, physicalHeight: 1964, diagonalInches: 26.1, scaleFactor: 2 }
+    for (const screen of [
+      iphone,
+      { width: 360, height: 800, diagonalInches: 6.5, deviceScaleFactor: 2 },
+      { width: 1920, height: 1080, diagonalInches: 24, deviceScaleFactor: 1 },
+      { width: 1366, height: 768, diagonalInches: 15.6, deviceScaleFactor: 1 },
+    ]) {
+      const rotated = applyOrientation(screen, 'landscape')
+      const dsf = screen.deviceScaleFactor
+      expect(ppi(rotated.width * dsf, rotated.height * dsf, rotated.diagonalInches)).toBeCloseTo(
+        ppi(screen.width * dsf, screen.height * dsf, screen.diagonalInches),
+        10,
+      )
+      expect(rotated.width * rotated.height).toBe(screen.width * screen.height)
+      expect(rotated.diagonalInches).toBe(screen.diagonalInches)
+      expect(rotated.deviceScaleFactor).toBe(screen.deviceScaleFactor)
+      expect(computeScale(host, rotated, false)).toBeCloseTo(computeScale(host, screen, false), 10)
+      expect(computeScale(host, rotated, true)).toBe(computeScale(host, screen, true))
+    }
+  })
+})
+
+describe('screenShape', () => {
+  it('names the shape the dimensions actually have', () => {
+    expect(screenShape(852, 393)).toBe('landscape')
+    expect(screenShape(393, 852)).toBe('portrait')
+    expect(screenShape(1920, 1080)).toBe('landscape')
+  })
+  it('counts a square screen as portrait', () => {
+    expect(screenShape(800, 800)).toBe('portrait')
   })
 })

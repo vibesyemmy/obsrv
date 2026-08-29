@@ -20,7 +20,7 @@ import {
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
-import type { HostInfo, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
+import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
@@ -417,6 +417,12 @@ export function registerIpc(ctx: AppContext): () => void {
     set viewMode(v: AgentViewMode) {
       tab().viewMode = v
     },
+    get orientation() {
+      return tab().orientation
+    },
+    set orientation(v: Orientation) {
+      tab().orientation = v
+    },
     get mode() {
       return tab().reportedMode
     },
@@ -467,9 +473,10 @@ export function registerIpc(ctx: AppContext): () => void {
     Object.assign(uiState, state)
     targetBounds = bounds ?? null
     canvasBounds = canvas ?? null
-    // The preset and profile this just wrote onto the session are two of the
-    // three things `tabs.json` holds. Most reports change neither; the writer
-    // compares against what it last wrote, so those cost nothing.
+    // The preset, profile and orientation this just wrote onto the session are
+    // three of the four things `tabs.json` holds. Most reports change none of
+    // them; the writer compares against what it last wrote, so those cost
+    // nothing.
     persistTabs()
   })
 
@@ -725,7 +732,12 @@ export function registerIpc(ctx: AppContext): () => void {
   const persistTabs = (): void => {
     if (!persistReady) return
     const stored: StoredTabs = {
-      tabs: tabs.tabs.map(t => ({ url: t.url, presetId: t.presetId, profileId: t.profileId })),
+      tabs: tabs.tabs.map(t => ({
+        url: t.url,
+        presetId: t.presetId,
+        profileId: t.profileId,
+        orientation: t.orientation,
+      })),
       activeIndex: tabs.activeIndex,
     }
     const json = JSON.stringify(stored)
@@ -767,6 +779,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // report it.
       s.presetId = entry.presetId
       s.profileId = entry.profileId
+      s.orientation = entry.orientation
       sessions.push(s)
     }
     // One activation, at the end: `add` leaves a tab in the background on
@@ -844,9 +857,12 @@ export function registerIpc(ctx: AppContext): () => void {
     navigate: navigateBoth,
     apply: patch => {
       if (win.isDestroyed()) return
-      // Only a preset resizes the target; view mode and pixel-exact change the
-      // magnification, which reflows nothing in the page under test.
-      if (patch.presetId !== undefined) {
+      // A preset *or* a rotation resizes the target; view mode and pixel-exact
+      // change the magnification, which reflows nothing in the page under test.
+      // Rotation belongs here for the same reason a preset does — it swaps the
+      // CSS viewport's axes, so anything that reads layout in between (a
+      // scroll, a capture) has to wait for the reflow to land.
+      if (patch.presetId !== undefined || patch.orientation !== undefined) {
         tab().viewportPending = true
         tab().viewportArrived = false
       }

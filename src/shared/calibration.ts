@@ -1,4 +1,5 @@
 import { MAX_VIEWPORT } from './presets'
+import type { Orientation } from './types'
 
 export interface HostDisplay {
   physicalWidth: number
@@ -14,6 +15,40 @@ export interface TargetScreen {
   diagonalInches: number
   /** Device pixels per CSS pixel; omitted means 1 (every 1x monitor preset). */
   deviceScaleFactor?: number
+}
+
+/**
+ * The screen as it is actually being held. The **one** place the axes are
+ * swapped: everything downstream — the viewport handed to `TargetSource`, the
+ * clamp, the magnification, the footer — reads the rotated screen and needs no
+ * orientation of its own.
+ *
+ * Rotation must not change the *magnitude* of the physical scale, and does not:
+ * `ppi` is `hypot(w, h) / diagonalInches` and `hypot` is symmetric, so the
+ * diagonal, the pixel count and the density are all orientation-independent.
+ * A phone does not get physically larger by being turned sideways. The unit
+ * test asserts it, because it is exactly the kind of thing that drifts.
+ *
+ * `'portrait'` is the preset as the table stores it; `'landscape'` is that
+ * rotated a quarter turn. Every mobile preset — the case this feature exists
+ * for — is stored portrait, so for those the names are literal. A monitor
+ * preset is stored landscape-natural, so there the pair reads as
+ * unrotated/rotated instead; the UI never repeats the flag back at the user,
+ * it names the shape the dimensions actually have (`screenShape`), so nothing
+ * on screen can contradict the pixels beside it.
+ */
+export function applyOrientation<T extends TargetScreen>(screen: T, orientation: Orientation): T {
+  if (orientation !== 'landscape') return screen
+  return { ...screen, width: screen.height, height: screen.width }
+}
+
+/**
+ * The shape a pair of dimensions actually has, for anything the user reads. A
+ * square screen counts as portrait — it has no landscape reading, and one of
+ * the two words has to win.
+ */
+export function screenShape(width: number, height: number): Orientation {
+  return width > height ? 'landscape' : 'portrait'
 }
 
 export function ppi(width: number, height: number, diagonalInches: number): number {

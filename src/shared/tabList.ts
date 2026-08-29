@@ -1,3 +1,5 @@
+import type { Orientation } from './types'
+
 /** The minimum a list operation needs; the manager's sessions carry more. */
 export interface TabRef {
   id: string
@@ -68,6 +70,8 @@ export interface TabInfo {
    */
   presetId: string
   profileId: string
+  /** Which way round that screen is held; here for the same restore reason. */
+  orientation: Orientation
 }
 
 /** The whole strip, as `getTabs` answers and `tabsChanged` publishes it. */

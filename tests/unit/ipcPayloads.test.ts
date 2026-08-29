@@ -10,6 +10,7 @@ import {
   parseScrollRequest,
   parseSettings,
   parseTabId,
+  parseOrientation,
   parseUiState,
 } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
@@ -79,6 +80,16 @@ describe('parseInputEvent', () => {
   })
 })
 
+describe('parseOrientation', () => {
+  it('accepts both words', () => {
+    expect(parseOrientation('portrait')).toBe('portrait')
+    expect(parseOrientation('landscape')).toBe('landscape')
+  })
+  it.each([['sideways'], [''], [90], [null], [undefined], [{}], [['landscape']]])('rejects %s', raw => {
+    expect(parseOrientation(raw)).toBeNull()
+  })
+})
+
 describe('parseSettings', () => {
   it('carries canvasBounds, and nulls it when absent or malformed', () => {
     const base = { tabId: 'tab-1', presetId: 'laptop-768', profileId: 'reference', viewMode: '1:1', mode: 'url' }
@@ -90,6 +101,20 @@ describe('parseSettings', () => {
     })
     expect(parseUiState(base)?.canvasBounds).toBeNull()
     expect(parseUiState({ ...base, canvasBounds: { x: 'a' } })?.canvasBounds).toBeNull()
+  })
+
+  it('carries the orientation, defaulting an absent one and refusing a bad one', () => {
+    const base = { tabId: 'tab-1', presetId: 'iphone-61', profileId: 'reference', viewMode: 'fit', mode: 'url' }
+    expect(parseUiState({ ...base, orientation: 'landscape' })?.orientation).toBe('landscape')
+    expect(parseUiState({ ...base, orientation: 'portrait' })?.orientation).toBe('portrait')
+    // Absent is the pre-feature wire shape; present-but-wrong drops the whole
+    // report, exactly as `panes` does. An explicit null is nullish and so
+    // defaults too — the same `??` the whole file uses.
+    expect(parseUiState(base)?.orientation).toBe('portrait')
+    expect(parseUiState({ ...base, orientation: null })?.orientation).toBe('portrait')
+    for (const bad of ['sideways', '', 90, {}, ['landscape']]) {
+      expect(parseUiState({ ...base, orientation: bad })).toBeNull()
+    }
   })
 
   it('copies exactly the known keys', () => {
@@ -189,6 +214,7 @@ describe('parseUiState', () => {
     profileId: 'reference',
     viewMode: 'fit',
     panes: 'both',
+    orientation: 'portrait',
     mode: 'url',
   }
   /** Both rects default to null before the renderer has measured. */

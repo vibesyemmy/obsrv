@@ -1,5 +1,13 @@
 export type PresetGroup = 'laptop' | 'desktop' | 'mobile'
 
+/**
+ * Which way round the target screen is being held. `'portrait'` is the preset
+ * exactly as `SCREEN_PRESETS` stores it and `'landscape'` is that rotated a
+ * quarter turn — see `applyOrientation` in shared/calibration.ts, which is the
+ * one place the axes are swapped.
+ */
+export type Orientation = 'portrait' | 'landscape'
+
 export interface ScreenPreset {
   id: string
   label: string

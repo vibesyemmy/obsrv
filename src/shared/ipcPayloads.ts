@@ -1,7 +1,7 @@
 import type { Rect } from './api'
 import type { AgentUiReport } from './control'
-import { DEFAULT_SETTINGS, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
-import { MAX_SCROLL_SELECTOR, type InputModifier, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
+import { DEFAULT_ORIENTATION, DEFAULT_SETTINGS, isOrientation, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
+import { MAX_SCROLL_SELECTOR, type InputModifier, type Orientation, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
 
 /**
  * Parsers for everything the renderer sends main over IPC. Each returns a
@@ -123,6 +123,16 @@ export function parseSettings(raw: unknown): Settings | null {
   return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split, maxTabs }
 }
 
+/**
+ * An orientation off the wire. Refused rather than defaulted, unlike the
+ * absent-field handling inside `parseUiState`: a caller that names an
+ * orientation and gets a different one back is worse served than one told its
+ * value was not a word this app knows.
+ */
+export function parseOrientation(raw: unknown): Orientation | null {
+  return isOrientation(raw) ? raw : null
+}
+
 export function parseMode(raw: unknown): 'url' | 'image' | null {
   return raw === 'url' || raw === 'image' ? raw : null
 }
@@ -174,12 +184,16 @@ export function parseUiState(raw: unknown): AgentUiReport | null {
   // present-but-wrong drops the whole report.
   const panes = raw.panes ?? 'both'
   if (panes !== 'both' && panes !== 'target') return null
+  // Same shape again for the orientation, and for the same reason.
+  const orientation = raw.orientation ?? DEFAULT_ORIENTATION
+  if (!isOrientation(orientation)) return null
   return {
     tabId,
     presetId,
     profileId,
     viewMode,
     panes,
+    orientation,
     mode,
     targetBounds: parseRect(raw.targetBounds),
     canvasBounds: parseRect(raw.canvasBounds),
