@@ -94,7 +94,14 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    starts at the window's left edge (the row's only border is at the bottom),
    which is the frame `--native-right` is expressed in. */
 .chrome-browse { position: relative; }
-.chrome-screen { height: 38px; background: var(--chrome-0); }
+/* The screen controls sit centred: they describe the render, and the render is
+   what the two panes flank, so the middle is the shortest reach from either
+   side. The AGENT chip is taken out of flow rather than balanced against a
+   spacer — otherwise the group would shift sideways the moment agent control
+   was switched on, and a control that moves when an unrelated setting changes
+   is worse than one slightly off-centre. */
+.chrome-screen { height: 38px; background: var(--chrome-0); justify-content: center; position: relative; }
+.chrome-screen .agent-activity { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .chrome-spacer { flex: 1 1 auto; }
 
 /* The tab strip. Ground is the darkest chrome step so an inactive tab (one

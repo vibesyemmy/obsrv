@@ -484,7 +484,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           ))}
         </div>
 
-        <div className="chrome-spacer" />
+        {/* No spacer: this row centres its controls, and the chip below is out
+            of flow so its presence cannot shift them off centre. */}
 
         {/* Agent control opens a loopback server, so it is never silently on:
             the chip persists while enabled and brightens for ~3s of activity. */}
