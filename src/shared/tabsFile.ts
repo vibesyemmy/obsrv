@@ -1,11 +1,19 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import type { Orientation } from './types'
 
 export interface StoredTab {
   url: string
   presetId: string
   profileId: string
+  /**
+   * Which way round the tab's screen was being held. Unlike the two ids above,
+   * a value that is not one of the two words carries no direction to honour and
+   * no id to miss — it simply falls to `DEFAULT_ORIENTATION`, which is also what
+   * a file written before this field existed gets.
+   */
+  orientation: Orientation
 }
 
 export interface StoredTabs {
@@ -55,6 +63,7 @@ export function loadTabs(file: string, max = Infinity): StoredTabs {
         url: entry.url,
         presetId: SCREEN_PRESETS.some(p => p.id === entry.presetId) ? (entry.presetId as string) : DEFAULT_PRESET,
         profileId: PANEL_PROFILES.some(p => p.id === entry.profileId) ? (entry.profileId as string) : DEFAULT_PROFILE,
+        orientation: isOrientation(entry.orientation) ? entry.orientation : DEFAULT_ORIENTATION,
       })
     }
     // Truncated before the index is bounded, and both after validation:

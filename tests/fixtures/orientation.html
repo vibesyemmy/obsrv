@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>orientation-fixture</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #fff; }
+      /* The whole point of the fixture: a page whose layout keys off the
+         viewport aspect, so a rotation that only changed the raster and not
+         the CSS viewport would be visible as a failure rather than passing
+         quietly. `#shape` is read by the spec; the fill is for the eye. */
+      #shape::after { content: 'portrait'; }
+      body { background: #202020; }
+      @media (orientation: landscape) {
+        #shape::after { content: 'landscape'; }
+        body { background: #f0f0f0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="shape"></div>
+  </body>
+</html>

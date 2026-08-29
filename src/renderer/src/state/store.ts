@@ -1,13 +1,16 @@
 import { create } from 'zustand'
 import {
+  applyOrientation,
   clampViewport,
   computeScale,
   maxCssViewport,
+  screenShape,
   type HostDisplay,
   type TargetScreen,
 } from '../../../shared/calibration'
 import { profileToParams } from '../../../shared/panelSim'
 import {
+  DEFAULT_ORIENTATION,
   DEFAULT_SETTINGS,
   PANEL_PROFILES,
   SCREEN_PRESETS,
@@ -16,7 +19,7 @@ import {
 import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../shared/tabList'
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
-import type { HostInfo, LoadError, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
+import type { HostInfo, LoadError, Orientation, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
 
 export type Mode = 'url' | 'image'
 
@@ -62,6 +65,12 @@ export interface TabState {
   /** URL parked while image mode is showing, restored on the way back. */
   lastUrl: string
   presetId: string
+  /**
+   * Which way round the chosen screen is held. Applied on top of the preset
+   * rather than baked into it — `SCREEN_PRESETS` keeps its natural dimensions
+   * and `selectScreen` is the one place the axes swap.
+   */
+  orientation: Orientation
   custom: TargetScreen
   pixelExact: boolean
   profileId: string
@@ -133,6 +142,7 @@ export interface AppState {
   setTabError(id: string, e: LoadError | null): void
   setTabLoading(id: string, v: boolean): void
   setPreset(id: string): void
+  setOrientation(o: Orientation): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setProfile(id: string): void
@@ -197,6 +207,7 @@ function blankTab(): TabState {
     title: '',
     lastUrl: '',
     presetId: '1080p-24',
+    orientation: DEFAULT_ORIENTATION,
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
     pixelExact: false,
     profileId: PANEL_PROFILES[0]!.id,
@@ -290,6 +301,12 @@ export const useStore = create<AppState>()((set, get) => ({
   // A screen change re-rasters the target, so a highlight's target-pixel rect
   // no longer marks what it marked; the same for the custom fields below.
   setPreset: presetId => set(patchActive({ presetId, agentHighlight: null })),
+  // A rotation re-rasters the target exactly as a preset change does, so a
+  // highlight's target-pixel rect no longer marks what it marked. Setting the
+  // orientation already in force writes nothing, so a re-report from an agent
+  // (or a click on the pressed half of the control) costs no re-render.
+  setOrientation: orientation =>
+    set(patchActiveWith(t => (t.orientation === orientation ? null : { orientation, agentHighlight: null }))),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),
@@ -360,6 +377,7 @@ export const useStore = create<AppState>()((set, get) => ({
               title: info.title,
               presetId: info.presetId,
               profileId: info.profileId,
+              orientation: info.orientation,
             }
       }
       const tabOrder = snap.tabs.map(t => t.id)
@@ -406,7 +424,12 @@ export function selectTab(s: AppState): TabState {
   return s.tabs[s.activeId]!
 }
 
-export function selectScreen(s: AppState): TargetScreen {
+/**
+ * The screen the target pane is simulating, as it is actually being held.
+ * Orientation is applied here and nowhere else, so every selector below —
+ * viewport, clamp, magnification — sees one already-rotated screen.
+ */
+function naturalScreen(s: AppState): TargetScreen {
   const tab = selectTab(s)
   const preset = SCREEN_PRESETS.find(p => p.id === tab.presetId)
   return preset
@@ -417,6 +440,44 @@ export function selectScreen(s: AppState): TargetScreen {
         deviceScaleFactor: preset.deviceScaleFactor,
       }
     : tab.custom
+}
+
+export function selectScreen(s: AppState): TargetScreen {
+  return applyOrientation(naturalScreen(s), selectTab(s).orientation)
+}
+
+/**
+ * The shape the target screen actually has, for anything the user reads. Not
+ * the stored `orientation` flag: that means "the preset as stored" vs "rotated
+ * a quarter turn", which for a landscape-natural monitor preset would put the
+ * word "landscape" next to a portrait pair of numbers. What is on screen has
+ * to agree with the pixels beside it.
+ */
+export function selectScreenShape(s: AppState): Orientation {
+  const screen = selectScreen(s)
+  return screenShape(screen.width, screen.height)
+}
+
+/** The two orientation flags, in the order the rotate control shows them. */
+export const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape']
+
+/**
+ * The shape each of `ORIENTATIONS` actually produces for the screen in force,
+ * by the same index. The rotate control labels its buttons from this rather
+ * than from the flag they write, so it can never put the word "landscape" on a
+ * button that yields a portrait pair of numbers — which is exactly what a
+ * rotated monitor preset does.
+ *
+ * Two plain strings, not two objects: this is read through `useShallow`, which
+ * compares elements by identity, and a selector returning freshly-minted
+ * objects would never compare equal and would re-render forever.
+ */
+export function selectOrientationShapes(s: AppState): Orientation[] {
+  const natural = naturalScreen(s)
+  return ORIENTATIONS.map(value => {
+    const r = applyOrientation(natural, value)
+    return screenShape(r.width, r.height)
+  })
 }
 
 /**

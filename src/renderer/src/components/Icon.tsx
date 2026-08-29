@@ -4,6 +4,8 @@ import {
   ChevronDown,
   EllipsisVertical,
   Plus,
+  RectangleHorizontal,
+  RectangleVertical,
   RotateCw,
   Settings,
   SlidersHorizontal,
@@ -28,6 +30,11 @@ const ICONS = {
   gear: Settings,
   chevron: ChevronDown,
   plus: Plus,
+  // The rotate control's two shapes. A plain outline of the screen you get is
+  // the whole affordance — no arrow, no device silhouette: the target may be a
+  // monitor as readily as a phone.
+  portrait: RectangleVertical,
+  landscape: RectangleHorizontal,
 } as const
 
 export type IconName = keyof typeof ICONS

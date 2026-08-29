@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { ppi } from '../../../shared/calibration'
+import { applyOrientation, ppi } from '../../../shared/calibration'
 import { MAX_TABS_MAX, MAX_TABS_MIN } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
@@ -95,6 +95,7 @@ export function SettingsPanel() {
   const update = useStore(s => s.update)
   const history = useStore(s => s.history)
   const custom = useStore(useShallow(s => selectTab(s).custom))
+  const orientation = useStore(s => selectTab(s).orientation)
   const viewport = useStore(useShallow(selectViewport))
   const scale = useStore(selectScale)
   const fallback = useStore(selectScaleIsFallback)
@@ -194,6 +195,22 @@ export function SettingsPanel() {
 
       <h2>Custom screen</h2>
       <p className="muted">Editing these selects the Custom preset.</p>
+      {/* These fields hold the screen's natural dimensions, like a preset's
+          row in the table — the rotation is applied on top. Without this line
+          a rotated tab would take 1920 and 1080 and render 1080×1920 with
+          nothing on screen accounting for the swap. Named, not silently
+          transposed in the fields themselves: the number the user typed must
+          stay the number they see. */}
+      {orientation === 'landscape' && (
+        <p className="muted custom-rotated">
+          Rotated, so these render transposed:{' '}
+          {(() => {
+            const r = applyOrientation({ ...custom }, orientation)
+            return `${r.width}×${r.height}`
+          })()}
+          .
+        </p>
+      )}
 
       <NumberField
         className="custom-width"

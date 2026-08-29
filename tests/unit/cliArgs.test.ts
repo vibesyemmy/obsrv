@@ -30,7 +30,7 @@ describe('parseArgs: snap', () => {
     const cmd = snap('https://x.test')
     expect(cmd.url).toBe('https://x.test')
     expect(cmd.specs).toEqual([
-      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24 },
+      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait' },
     ])
     expect(cmd.profileId).toBe('reference')
     expect(cmd.out).toBe('obsrv-1080p-24.png')
@@ -41,7 +41,7 @@ describe('parseArgs: snap', () => {
   })
   it('resolves a preset, including mobile dsf', () => {
     const cmd = snap('x.test', '--preset', 'iphone-61')
-    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1 })
+    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait' })
     expect(cmd.out).toBe('obsrv-iphone-61.png')
   })
   it('rejects an unknown preset, listing the valid ids', () => {
@@ -50,12 +50,12 @@ describe('parseArgs: snap', () => {
   })
   it('accepts custom --width/--height with optional --dsf and --diagonal', () => {
     const cmd = snap('x.test', '--width', '800', '--height', '600', '--dsf', '2', '--diagonal', '13.3')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3 })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait' })
     expect(cmd.out).toBe('obsrv-custom.png')
   })
   it('custom dims default dsf 1 and no diagonal', () => {
     const cmd = snap('x.test', '--width', '640', '--height', '480')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait' })
   })
   it('rejects --preset combined with custom dims', () => {
     expect(() => snap('x.test', '--preset', 'laptop-768', '--width', '800', '--height', '600')).toThrow(/mutually exclusive/)
@@ -109,6 +109,92 @@ describe('parseArgs: snap', () => {
   it('rejects unknown flags and flags missing their value', () => {
     expect(() => snap('x.test', '--bogus')).toThrow(/unknown flag: --bogus/)
     expect(() => snap('x.test', '--preset')).toThrow(/--preset requires a value/)
+  })
+})
+
+describe('parseArgs: --orientation', () => {
+  it('defaults to portrait, which is the preset exactly as stored', () => {
+    expect(snap('x.test', '--preset', 'iphone-61').specs[0]).toMatchObject({ cssWidth: 393, cssHeight: 852 })
+    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'portrait').specs[0]).toMatchObject({
+      cssWidth: 393,
+      cssHeight: 852,
+    })
+  })
+
+  it('swaps the CSS axes in landscape, leaving dsf and diagonal alone', () => {
+    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'landscape').specs[0]).toEqual({
+      presetId: 'iphone-61',
+      cssWidth: 852,
+      cssHeight: 393,
+      deviceScaleFactor: 3,
+      diagonalInches: 6.1,
+      orientation: 'landscape',
+    })
+  })
+
+  it('rotates every entry of a matrix', () => {
+    const cmd = snap('x.test', '--matrix', 'iphone-61,android-65', '--orientation', 'landscape')
+    expect(cmd.specs.map(sp => [sp.cssWidth, sp.cssHeight])).toEqual([
+      [852, 393],
+      [800, 360],
+    ])
+  })
+
+  it('rotates custom dims too', () => {
+    expect(snap('x.test', '--width', '900', '--height', '600', '--orientation', 'landscape').specs[0]).toMatchObject({
+      cssWidth: 600,
+      cssHeight: 900,
+    })
+  })
+
+  it('applies to diff as well, and the 1x/2x bounds are checked after rotating', () => {
+    expect(diff('x.test', '--preset', 'laptop-768', '--orientation', 'landscape').spec).toMatchObject({
+      cssWidth: 768,
+      cssHeight: 1366,
+    })
+    // 1600x900 fits a 2x reference either way round; 2560x1440 fits neither.
+    expect(() => diff('x.test', '--preset', '1440p-27', '--orientation', 'landscape')).toThrow(/2x reference/)
+  })
+
+  it('rejects anything that is not one of the two words', () => {
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/--orientation/)
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/portrait/)
+    expect(() => snap('x.test', '--orientation')).toThrow(/--orientation requires a value/)
+  })
+
+  it('carries the flag on every spec, so a matrix run can report per render', () => {
+    const cmd = snap('x.test', '--matrix', 'iphone-61,1080p-24', '--orientation', 'landscape')
+    expect(cmd.specs.map(sp => sp.orientation)).toEqual(['landscape', 'landscape'])
+    // The measured surprise the help text now has to explain: one flag, two
+    // different resulting shapes, because the two presets are stored
+    // differently.
+    expect(cmd.specs.map(sp => [sp.cssWidth, sp.cssHeight])).toEqual([
+      [852, 393],
+      [1080, 1920],
+    ])
+  })
+
+  it('--help explains that the flag names the stored orientation, not the shape', () => {
+    const help = parseArgs(['--help'])
+    expect(help.command).toBe('help')
+    const text = help.command === 'help' ? help.text : ''
+    expect(text).toContain('--orientation')
+    expect(text).toContain('landscape')
+    // The three things a reader cannot work out from "portrait | landscape".
+    expect(text).toContain('not the shape you get')
+    expect(text).toContain('landscape-natural')
+    expect(text).toContain('1080x1920')
+  })
+
+  it('the diff bound message names the rotation rather than blaming the preset id', () => {
+    // "1440p-27 is 1440×2560" would describe a shape that id never has.
+    const err = (): void => {
+      diff('x.test', '--preset', '1440p-27', '--orientation', 'landscape')
+    }
+    expect(err).toThrow(/rotated a quarter turn/)
+    expect(err).toThrow(/1440×2560/)
+    // Unrotated, there is no rotation to mention.
+    expect(() => diff('x.test', '--preset', '1440p-27')).toThrow(/"1440p-27" is 2560×1440/)
   })
 })
 

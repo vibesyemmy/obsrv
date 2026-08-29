@@ -543,6 +543,41 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .pane-footer .role { color: var(--text-0); letter-spacing: 0.08em; }
 
+/* The rotate control. Same 30px border-box and the same `--chrome-3` pressed
+   fill as `.segmented`, so the screen row keeps one hit-target rhythm and one
+   way of marking a choice. Two outlines of the screen you get, rather than the
+   words: "Portrait"/"Landscape" would take 150px in a row that already holds
+   two selects and three groups, and the shape reads faster than either word.
+   The buttons are 28px like `.surround-control`'s, for the same reason — the
+   glyph is the affordance and the button is only the target.
+
+   No hue anywhere, pressed included: this control sits a few pixels from the
+   pane whose greys the user came to judge. */
+.orientation-control {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: inline-flex;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.orientation-control button {
+  width: 28px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--chrome-2);
+  color: var(--text-1);
+  cursor: pointer;
+}
+.orientation-control button:last-child { border-right: 0; }
+.orientation-control button[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
+
 /* Segmented surround control: the same 30px border-box as `.segmented` and
    `.select-shell`, so the screen row has one hit-target rhythm. `box-sizing`
    for the same reason `.segmented` needs it — a `div` gets no border-box from

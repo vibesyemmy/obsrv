@@ -1,7 +1,9 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
-import { PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import { screenShape } from './calibration'
+import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import type { Orientation } from './types'
 
 /**
  * The agent-control protocol shared by the main-process control server
@@ -49,6 +51,8 @@ export interface AgentUiState {
   profileId: string
   viewMode: AgentViewMode
   panes: AgentPanes
+  /** Which way round the tab's screen is held — mirrors the store's `orientation`. */
+  orientation: Orientation
   mode: 'url' | 'image'
 }
 
@@ -98,6 +102,24 @@ export interface ControlStatus extends AgentUiState {
   tabId: string
   /** The tab's position in the strip, 0-based. */
   tabIndex: number
+  /**
+   * The CSS viewport the target is actually rendering at — already rotated,
+   * because it is read from the offscreen surface rather than from the preset
+   * table. `0` from an app that predates these fields.
+   */
+  cssWidth: number
+  cssHeight: number
+  /**
+   * The shape those dimensions actually have. `orientation` above is the
+   * rotation *flag* — "the preset as its table stores it" vs "turned a quarter
+   * turn" — and for a landscape-natural monitor preset the two diverge: a
+   * fresh 1080p-24 tab is `orientation: 'portrait'` on a 1920x1080 landscape
+   * screen. The app's own UI has always labelled from the derived shape rather
+   * than the flag (see `selectScreenShape` and the pane footer); an agent gets
+   * the same courtesy here instead of being handed a word it cannot correct
+   * without the preset table.
+   */
+  screenShape: Orientation
 }
 
 /** A validated `highlight` payload: a target-pixel rect plus its lifetime. */
@@ -127,6 +149,7 @@ export interface AgentApplyPatch {
   profileId?: string
   viewMode?: AgentViewMode
   panes?: AgentPanes
+  orientation?: Orientation
   pixelExact?: boolean
   /** Centre this target pixel in the pane's 1:1 view (fit jumps to 1:1 there). */
   panTo?: { x: number; y: number }
@@ -141,6 +164,7 @@ export const CONTROL_COMMANDS = [
   'setProfile',
   'setViewMode',
   'setPanes',
+  'setOrientation',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
   'scroll',
@@ -254,6 +278,14 @@ export function viewModeApplyError(v: unknown): string | null {
   return v === '1:1' || v === 'fit' ? null : `setViewMode payload must be { mode: '1:1' | 'fit' }`
 }
 
+/**
+ * Validates a `setOrientation` payload. Unlike a preset id there is no table to
+ * miss, so the message just names the two words rather than listing anything.
+ */
+export function orientationApplyError(v: unknown): string | null {
+  return isOrientation(v) ? null : `setOrientation payload must be { orientation: 'portrait' | 'landscape' }`
+}
+
 export function panesApplyError(v: unknown): string | null {
   return v === 'both' || v === 'target' ? null : `setPanes payload must be { panes: 'both' | 'target' }`
 }
@@ -314,6 +346,24 @@ export function parseHighlight(raw: unknown): AgentHighlight | string {
   }
 }
 
+/**
+ * The shape to report when the app did not name one. Dimensions settle it
+ * outright when they are there. Without them the app predates rotation, which
+ * means it is showing the preset unrotated — so the preset's own natural shape
+ * is exact rather than a guess. Only a custom screen on such an app falls all
+ * the way through to the flag.
+ */
+function inferScreenShape(
+  cssWidth: number,
+  cssHeight: number,
+  presetId: string,
+  orientation: Orientation,
+): Orientation {
+  if (cssWidth > 0 && cssHeight > 0) return screenShape(cssWidth, cssHeight)
+  const preset = SCREEN_PRESETS.find(p => p.id === presetId)
+  return preset ? screenShape(preset.width, preset.height) : orientation
+}
+
 /** Validates a control server `status` response on the client side. */
 export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (!isRecord(raw)) return null
@@ -337,5 +387,36 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (typeof tabId !== 'string') return null
   const tabIndex = raw.tabIndex ?? 0
   if (typeof tabIndex !== 'number' || !Number.isInteger(tabIndex) || tabIndex < 0) return null
-  return { version, url, presetId, profileId, viewMode, panes, mode, tabId, tabIndex }
+  // And the same skew again, one release later still. The npm MCP server
+  // routinely talks to a DMG app older than itself, and an app that predates
+  // rotation shows every screen unrotated — which is exactly what the default
+  // says. Returning null instead would take out drive and live snap wholesale
+  // against every app older than this feature, which is the bug this repo has
+  // already been bitten by twice.
+  const orientation = raw.orientation ?? DEFAULT_ORIENTATION
+  if (!isOrientation(orientation)) return null
+  // And once more for the dimensions and the derived shape. `0` means "the app
+  // did not say", which is the truthful answer for one that predates them —
+  // inventing a size would be worse than admitting the gap.
+  const cssWidth = raw.cssWidth ?? 0
+  if (typeof cssWidth !== 'number' || !Number.isFinite(cssWidth) || cssWidth < 0) return null
+  const cssHeight = raw.cssHeight ?? 0
+  if (typeof cssHeight !== 'number' || !Number.isFinite(cssHeight) || cssHeight < 0) return null
+  const reported = raw.screenShape
+  if (reported !== undefined && !isOrientation(reported)) return null
+  return {
+    version,
+    url,
+    presetId,
+    profileId,
+    viewMode,
+    panes,
+    orientation,
+    mode,
+    tabId,
+    tabIndex,
+    cssWidth,
+    cssHeight,
+    screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),
+  }
 }

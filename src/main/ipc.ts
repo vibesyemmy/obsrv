@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState, type AgentViewMode } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
+import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
@@ -20,7 +21,7 @@ import {
 } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
-import type { HostInfo, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
+import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
@@ -417,6 +418,12 @@ export function registerIpc(ctx: AppContext): () => void {
     set viewMode(v: AgentViewMode) {
       tab().viewMode = v
     },
+    get orientation() {
+      return tab().orientation
+    },
+    set orientation(v: Orientation) {
+      tab().orientation = v
+    },
     get mode() {
       return tab().reportedMode
     },
@@ -467,9 +474,10 @@ export function registerIpc(ctx: AppContext): () => void {
     Object.assign(uiState, state)
     targetBounds = bounds ?? null
     canvasBounds = canvas ?? null
-    // The preset and profile this just wrote onto the session are two of the
-    // three things `tabs.json` holds. Most reports change neither; the writer
-    // compares against what it last wrote, so those cost nothing.
+    // The preset, profile and orientation this just wrote onto the session are
+    // three of the four things `tabs.json` holds. Most reports change none of
+    // them; the writer compares against what it last wrote, so those cost
+    // nothing.
     persistTabs()
   })
 
@@ -725,7 +733,12 @@ export function registerIpc(ctx: AppContext): () => void {
   const persistTabs = (): void => {
     if (!persistReady) return
     const stored: StoredTabs = {
-      tabs: tabs.tabs.map(t => ({ url: t.url, presetId: t.presetId, profileId: t.profileId })),
+      tabs: tabs.tabs.map(t => ({
+        url: t.url,
+        presetId: t.presetId,
+        profileId: t.profileId,
+        orientation: t.orientation,
+      })),
       activeIndex: tabs.activeIndex,
     }
     const json = JSON.stringify(stored)
@@ -767,6 +780,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // report it.
       s.presetId = entry.presetId
       s.profileId = entry.profileId
+      s.orientation = entry.orientation
       sessions.push(s)
     }
     // One activation, at the end: `add` leaves a tab in the background on
@@ -839,16 +853,51 @@ export function registerIpc(ctx: AppContext): () => void {
       // beside it has to name that same tab. Read from the manager, not from
       // the `uiState` mirror — main owns tab identity, and the mirror
       // deliberately drops reports from tabs that are not in front.
-      return { version: appVersion, url, tabId: tabs.activeId, tabIndex: tabs.activeIndex, ...uiState }
+      // Read from the offscreen surface, not from the preset table: this is
+      // the viewport actually rendering, already rotated, so `screenShape` can
+      // never disagree with the pixels an agent is about to capture. All-zero
+      // while the target is mid-recreation, which `parseControlStatus` treats
+      // as "did not say" rather than as a shape.
+      let css = { width: 0, height: 0 }
+      try {
+        css = tab().target.getViewport()
+      } catch {
+        // Mid-recreation or closing; zeroes are honest.
+      }
+      return {
+        version: appVersion,
+        url,
+        tabId: tabs.activeId,
+        tabIndex: tabs.activeIndex,
+        cssWidth: css.width,
+        cssHeight: css.height,
+        screenShape: screenShape(css.width, css.height),
+        ...uiState,
+      }
     },
     navigate: navigateBoth,
     apply: patch => {
       if (win.isDestroyed()) return
-      // Only a preset resizes the target; view mode and pixel-exact change the
-      // magnification, which reflows nothing in the page under test.
-      if (patch.presetId !== undefined) {
-        tab().viewportPending = true
-        tab().viewportArrived = false
+      // A preset *or* a rotation resizes the target; view mode and pixel-exact
+      // change the magnification, which reflows nothing in the page under test.
+      // Rotation belongs here for the same reason a preset does — it swaps the
+      // CSS viewport's axes, so anything that reads layout in between (a
+      // scroll, a capture) has to wait for the reflow to land.
+      //
+      // Compared against the mirror, not merely present: the renderer's store
+      // actions no-op on a value already in force, so no `setViewport` ever
+      // arrives for a redundant patch and the arrival poll can only expire —
+      // spending the whole `VIEWPORT_ARRIVAL_MS` budget to learn nothing. An
+      // agent re-asserting the preset it already set is a normal thing to do.
+      // `settleTarget` still runs either way, so the frame is confirmed
+      // regardless; this only skips a wait for a resize that is not coming.
+      const s = tab()
+      const resizes =
+        (patch.presetId !== undefined && patch.presetId !== s.presetId) ||
+        (patch.orientation !== undefined && patch.orientation !== s.orientation)
+      if (resizes) {
+        s.viewportPending = true
+        s.viewportArrived = false
       }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {

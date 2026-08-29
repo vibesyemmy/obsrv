@@ -11,6 +11,7 @@ import {
   parseClick,
   parseControlFile,
   parseControlStatus,
+  orientationApplyError,
   panesApplyError,
   parseHighlight,
   pixelExactApplyError,
@@ -86,7 +87,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the seventeen commands', () => {
+  it('knows exactly the eighteen commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -99,6 +100,7 @@ describe('command validation', () => {
       'panTo',
       'reload',
       'scroll',
+      'setOrientation',
       'setPanes',
       'setPixelExact',
       'setPreset',
@@ -229,6 +231,18 @@ describe('parseHighlight', () => {
   })
 })
 
+describe('orientationApplyError', () => {
+  it('accepts both words', () => {
+    expect(orientationApplyError('portrait')).toBeNull()
+    expect(orientationApplyError('landscape')).toBeNull()
+  })
+  it.each([['sideways'], [90], [null], [undefined], [{}], ['']])('rejects %s and names both words', raw => {
+    const err = orientationApplyError(raw)
+    expect(err).toContain('portrait')
+    expect(err).toContain('landscape')
+  })
+})
+
 describe('parseControlStatus', () => {
   const good = {
     version: '0.3.2',
@@ -238,6 +252,10 @@ describe('parseControlStatus', () => {
     viewMode: '1:1',
     mode: 'url',
     panes: 'both',
+    orientation: 'portrait',
+    screenShape: 'landscape',
+    cssWidth: 1366,
+    cssHeight: 768,
     tabId: 'tab-3',
     tabIndex: 2,
   }
@@ -270,10 +288,65 @@ describe('parseControlStatus', () => {
     expect(parseControlStatus({ ...good, tabId: undefined })).toMatchObject({ tabId: '', tabIndex: 2 })
     expect(parseControlStatus({ ...good, tabIndex: undefined })).toMatchObject({ tabId: 'tab-3', tabIndex: 0 })
   })
+  it('reads the orientation when present', () => {
+    expect(parseControlStatus({ ...good, orientation: 'landscape' })?.orientation).toBe('landscape')
+  })
+  // The same skew a third time. An app older than rotation shows every screen
+  // unrotated, which is what portrait means, so the default describes it
+  // truthfully rather than papering over it.
+  it('defaults the orientation to portrait when an older app omits it', () => {
+    const { orientation: _o, ...older } = good
+    expect(parseControlStatus(older)).toEqual({ ...older, orientation: 'portrait' })
+    expect(parseControlStatus({ ...good, orientation: undefined })?.orientation).toBe('portrait')
+  })
+  // The divergence the field exists for: `orientation` is the rotation flag
+  // and `screenShape` is what that flag produced. They agree for every mobile
+  // preset and part company for a landscape-natural monitor one.
+  it('carries a screenShape that disagrees with the flag, and does not "fix" it', () => {
+    const fresh = { ...good, presetId: '1080p-24', orientation: 'portrait', screenShape: 'landscape', cssWidth: 1920, cssHeight: 1080 }
+    expect(parseControlStatus(fresh)).toMatchObject({ orientation: 'portrait', screenShape: 'landscape' })
+    const rotated = { ...good, presetId: '1080p-24', orientation: 'landscape', screenShape: 'portrait', cssWidth: 1080, cssHeight: 1920 }
+    expect(parseControlStatus(rotated)).toMatchObject({ orientation: 'landscape', screenShape: 'portrait' })
+  })
+
+  it('derives the shape from the dimensions when the app sent none', () => {
+    const { screenShape: _s, ...noShape } = good
+    expect(parseControlStatus({ ...noShape, cssWidth: 852, cssHeight: 393 })?.screenShape).toBe('landscape')
+    expect(parseControlStatus({ ...noShape, cssWidth: 393, cssHeight: 852 })?.screenShape).toBe('portrait')
+  })
+
+  // An app older than rotation sends neither the shape nor the dimensions —
+  // but it is showing the preset unrotated, so the preset's own natural shape
+  // is exact rather than a guess. This is the case that would otherwise hand
+  // an agent "portrait" for a 1920x1080 landscape monitor.
+  it('falls back to the preset table for an app that sends neither', () => {
+    const { screenShape: _s, cssWidth: _w, cssHeight: _h, orientation: _o, ...older } = good
+    expect(parseControlStatus({ ...older, presetId: '1080p-24' })).toMatchObject({
+      orientation: 'portrait',
+      screenShape: 'landscape',
+      cssWidth: 0,
+      cssHeight: 0,
+    })
+    expect(parseControlStatus({ ...older, presetId: 'iphone-61' })?.screenShape).toBe('portrait')
+    // A custom screen on such an app has no table row; the flag is all there is.
+    expect(parseControlStatus({ ...older, presetId: 'custom' })?.screenShape).toBe('portrait')
+  })
+
+  it('defaults the dimensions to 0 — "did not say", never an invented size', () => {
+    const { cssWidth: _w, cssHeight: _h, ...older } = good
+    expect(parseControlStatus(older)).toMatchObject({ cssWidth: 0, cssHeight: 0 })
+  })
+
   it.each([
     ['null', null],
     ['missing url', { ...good, url: undefined }],
+    ['malformed screenShape', { ...good, screenShape: 'sideways' }],
+    ['string cssWidth', { ...good, cssWidth: '852' }],
+    ['negative cssHeight', { ...good, cssHeight: -1 }],
+    ['NaN cssWidth', { ...good, cssWidth: Number.NaN }],
     ['bad viewMode', { ...good, viewMode: 'fill' }],
+    ['malformed orientation', { ...good, orientation: 'sideways' }],
+    ['numeric orientation', { ...good, orientation: 90 }],
     ['bad mode', { ...good, mode: 'video' }],
     ['numeric version', { ...good, version: 3 }],
     ['malformed panes', { ...good, panes: 'native' }],

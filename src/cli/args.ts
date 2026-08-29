@@ -1,5 +1,6 @@
 import { maxCssViewport } from '../shared/calibration'
-import { PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
+import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
+import type { Orientation } from '../shared/types'
 
 /**
  * Pure argv parsing for the headless CLI (`bin/obsrv.js` → `out/main/cli.js`).
@@ -15,6 +16,13 @@ export interface RenderSpec {
   cssHeight: number
   deviceScaleFactor: number
   diagonalInches: number | null
+  /**
+   * The rotation flag this spec was resolved with. Carried per spec rather
+   * than per command because `--matrix` renders several presets in one run and
+   * each reports its own shape — and for landscape-natural presets the flag
+   * and the shape differ, so the reader needs both.
+   */
+  orientation: Orientation
 }
 
 export interface SnapCommand {
@@ -67,6 +75,18 @@ Shared flags:
 ${presets}
   --width <px> --height <px> [--dsf <factor>] [--diagonal <inches>]
                        Custom CSS viewport instead of --preset (dsf defaults to 1).
+  --orientation <o>    portrait | landscape (default ${DEFAULT_ORIENTATION}). This names the
+                       preset's *stored* orientation, not the shape you get:
+                         portrait  = the preset exactly as the table above lists it
+                         landscape = that rotated a quarter turn (width and height swap)
+                       Every mobile preset is stored portrait, so for those the two
+                       readings agree. The laptop and desktop presets are stored
+                       landscape-natural, so --orientation landscape turns them into a
+                       portrait screen — which is how you render a 1080p monitor stood on
+                       end (1080p-24 becomes 1080x1920). Applies to custom --width/--height
+                       dims too. The diagonal, raster density and physical size never
+                       change: it is the same panel turned sideways. Each render's JSON
+                       and log line name the resulting shape.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
   --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
@@ -93,7 +113,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal'])
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal'])
 const SNAP_ONLY = new Set(['out', 'full-page', 'matrix'])
 const DIFF_ONLY = new Set(['out-dir', 'json'])
 
@@ -165,10 +185,30 @@ function presetSpec(id: string): RenderSpec {
     cssHeight: preset.height,
     deviceScaleFactor: preset.deviceScaleFactor,
     diagonalInches: preset.diagonalInches,
+    orientation: DEFAULT_ORIENTATION,
   }
 }
 
+function resolveOrientation(flags: Map<string, string | true>): Orientation {
+  const raw = flags.get('orientation')
+  if (raw === undefined) return DEFAULT_ORIENTATION
+  if (!isOrientation(raw)) throw new ArgError(`--orientation: expected portrait or landscape, got "${String(raw)}"`)
+  return raw
+}
+
+/**
+ * Rotation swaps the CSS axes and nothing else — the diagonal and the raster
+ * density are orientation-independent, so the render is the same screen turned
+ * sideways rather than a different one. Applied here, before the diff bounds
+ * are checked, so those check the viewport that will actually be rendered.
+ */
+function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
+  if (orientation !== 'landscape') return { ...spec, orientation }
+  return { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+}
+
 function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
+  const orientation = resolveOrientation(flags)
   const custom = ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
   if (custom && flags.has('preset')) throw new ArgError('--preset and --width/--height are mutually exclusive')
   if (custom && flags.has('matrix')) throw new ArgError('--matrix lists presets; it cannot be combined with custom --width/--height dims')
@@ -186,18 +226,26 @@ function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[];
       throw new ArgError(`viewport exceeds the 4096-device-pixel budget: at dsf ${deviceScaleFactor} the CSS limit is ${max}`)
     }
     const diagonal = flags.has('diagonal') ? float(flags, 'diagonal', 0, 0.1) : null
-    return { specs: [{ presetId: 'custom', cssWidth, cssHeight, deviceScaleFactor, diagonalInches: diagonal }], matrix: false }
+    const spec = {
+      presetId: 'custom',
+      cssWidth,
+      cssHeight,
+      deviceScaleFactor,
+      diagonalInches: diagonal,
+      orientation: DEFAULT_ORIENTATION,
+    }
+    return { specs: [orientSpec(spec, orientation)], matrix: false }
   }
 
   const matrixRaw = flags.get('matrix')
   if (typeof matrixRaw === 'string') {
     const ids = matrixRaw.split(',').map(s => s.trim()).filter(s => s.length > 0)
     if (ids.length === 0) throw new ArgError('--matrix: expected a comma-separated list of preset ids')
-    return { specs: ids.map(presetSpec), matrix: true }
+    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation)), matrix: true }
   }
 
   const id = typeof flags.get('preset') === 'string' ? (flags.get('preset') as string) : DEFAULT_PRESET
-  return { specs: [presetSpec(id)], matrix: false }
+  return { specs: [orientSpec(presetSpec(id), orientation)], matrix: false }
 }
 
 function resolveProfile(flags: Map<string, string | true>): string {
@@ -240,9 +288,15 @@ export function parseArgs(argv: string[]): CliCommand {
   }
   const referenceMax = maxCssViewport(2)
   if (spec.cssWidth > referenceMax || spec.cssHeight > referenceMax) {
+    // Named as rendered, not as stored: the dims here are post-rotation, and
+    // attributing them to the bare preset id would print "1440p-27 is
+    // 1440×2560" — a shape that id never has. The bound itself is per-axis
+    // symmetric, so rotation can never sneak a too-large viewport past it;
+    // this is the message telling the truth about which one it measured.
+    const as = spec.orientation === 'landscape' ? ' rotated a quarter turn' : ''
     throw new ArgError(
       `diff renders a 2x reference, so the CSS viewport must fit ${referenceMax}px per axis ` +
-        `(4096 device px at 2x) — "${spec.presetId}" is ${spec.cssWidth}×${spec.cssHeight}. ` +
+        `(4096 device px at 2x) — "${spec.presetId}"${as} is ${spec.cssWidth}×${spec.cssHeight}. ` +
         `Use \`obsrv snap\` for this preset instead.`,
     )
   }

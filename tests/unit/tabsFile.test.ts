@@ -22,11 +22,11 @@ describe('loadTabs', () => {
   it('round-trips a saved list', () => {
     const f = file()
     saveTabs(f, {
-      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn' }],
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait' }],
       activeIndex: 0,
     })
     expect(loadTabs(f)).toEqual({
-      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn' }],
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait' }],
       activeIndex: 0,
     })
   })
@@ -120,5 +120,56 @@ describe('saveTabs', () => {
         activeIndex: 0,
       } as unknown as StoredTabs),
     ).toThrow('each tab needs a url string')
+  })
+})
+
+describe('loadTabs orientation', () => {
+  it('round-trips a rotated tab', () => {
+    const f = file()
+    saveTabs(f, {
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'iphone-61', profileId: 'reference', orientation: 'landscape' }],
+      activeIndex: 0,
+    })
+    expect(loadTabs(f).tabs[0]!.orientation).toBe('landscape')
+  })
+
+  it('falls back to portrait for a tab written before the field existed', () => {
+    const f = file()
+    writeFileSync(
+      f,
+      JSON.stringify({ tabs: [{ url: 'http://a/', presetId: 'iphone-61', profileId: 'reference' }], activeIndex: 0 }),
+    )
+    expect(loadTabs(f).tabs[0]!.orientation).toBe('portrait')
+  })
+
+  it('falls back to portrait for a malformed orientation rather than throwing', () => {
+    const f = file()
+    for (const bad of ['sideways', '', 0, null, {}, ['landscape']]) {
+      writeFileSync(
+        f,
+        JSON.stringify({
+          tabs: [{ url: 'http://a/', presetId: 'iphone-61', profileId: 'reference', orientation: bad }],
+          activeIndex: 0,
+        }),
+      )
+      expect(loadTabs(f).tabs[0]!.orientation).toBe('portrait')
+    }
+  })
+
+  it('keeps the rest of a tab when only the orientation is junk', () => {
+    const f = file()
+    writeFileSync(
+      f,
+      JSON.stringify({
+        tabs: [{ url: 'http://a/', presetId: 'iphone-61', profileId: 'budget-tn', orientation: 42 }],
+        activeIndex: 0,
+      }),
+    )
+    expect(loadTabs(f).tabs[0]).toEqual({
+      url: 'http://a/',
+      presetId: 'iphone-61',
+      profileId: 'budget-tn',
+      orientation: 'portrait',
+    })
   })
 })

@@ -220,6 +220,7 @@ export class TabManager {
         title: t.title,
         presetId: t.presetId,
         profileId: t.profileId,
+        orientation: t.orientation,
       })),
       activeId: this.id,
     }

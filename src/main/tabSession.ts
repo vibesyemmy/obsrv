@@ -1,6 +1,8 @@
 import type { BrowserWindow } from 'electron'
 import type { AgentViewMode } from '../shared/control'
 import { IPC } from '../shared/ipc'
+import { DEFAULT_ORIENTATION } from '../shared/presets'
+import type { Orientation } from '../shared/types'
 import { NativePane } from './nativePane'
 import { attachSyncBus, type SyncBus } from './syncBus'
 import { TargetSource } from './targetSource'
@@ -56,6 +58,13 @@ export class TabSession {
 
   presetId = '1080p-24'
   profileId = 'reference'
+  /**
+   * Which way round this tab's screen is held. Per tab like the preset it
+   * rotates, and mirrored here from the renderer's `uiState` for the same
+   * reason: a restored tab has to come back the way it was left, and no
+   * renderer existed to report that when the list came off disk.
+   */
+  orientation: Orientation = DEFAULT_ORIENTATION
   viewMode: AgentViewMode = 'fit'
 
   /**

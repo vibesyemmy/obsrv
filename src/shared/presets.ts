@@ -1,4 +1,4 @@
-import type { PanelProfile, ScreenPreset, Settings } from './types'
+import type { Orientation, PanelProfile, ScreenPreset, Settings } from './types'
 
 export const MAX_VIEWPORT = 4096
 
@@ -21,6 +21,17 @@ export const DEFAULT_SETTINGS: Settings = {
   recordHistory: true,
   split: 0.5,
   maxTabs: 12,
+}
+
+/**
+ * Every tab opens unrotated. `'portrait'` means "the preset as stored", so this
+ * is a no-op against the table below rather than a shape anyone has to honour.
+ */
+export const DEFAULT_ORIENTATION: Orientation = 'portrait'
+
+/** Type guard for anything off the wire, off disk, or off an agent's payload. */
+export function isOrientation(v: unknown): v is Orientation {
+  return v === 'portrait' || v === 'landscape'
 }
 
 export const SCREEN_PRESETS: readonly ScreenPreset[] = [

@@ -4,6 +4,7 @@ import {
   selectPanelParams,
   selectProfile,
   selectScale,
+  selectScreenShape,
   selectTab,
   selectViewport,
   useStore,
@@ -44,13 +45,18 @@ export function TargetFooter() {
   const viewMode = useStore(s => selectTab(s).viewMode)
   const fitScale = useStore(s => selectTab(s).fitScale)
   const dsf = useStore(selectDeviceScaleFactor)
+  const shape = useStore(selectScreenShape)
 
   // Mobile presets say their raster density; the magnification readout is
   // already per device pixel (`computeScale` divides by device-pixel PPI).
+  // The orientation is named, not left to be inferred: 393×852 and 852×393
+  // differ by one transposition and nobody should have to compare digits to
+  // tell which way round a screen is. The word comes from the dimensions
+  // themselves (`selectScreenShape`), so it can never disagree with them.
   const size =
     mode === 'image' && image
       ? `${image.width}×${image.height}`
-      : `${viewport.width}×${viewport.height}${dsf > 1 ? ` @${dsf}x` : ''}`
+      : `${viewport.width}×${viewport.height}${dsf > 1 ? ` @${dsf}x` : ''} ${shape}`
   const depth = params.levels <= 63 ? '6-bit' : '8-bit'
   // Fit mode's readout states the drawn magnification and disclaims it: a
   // minified overview is a map, never the 1x truth the pane exists for.
