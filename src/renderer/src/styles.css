@@ -504,13 +504,32 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   inset: 0 -2.5px;
 }
 .pane-divider:hover, .pane-divider:focus-visible { background: var(--text-1); }
+/* Under the pointer the seam lights up its full height rather than growing a
+   handle. Every split-pane tool worth copying does it this way — VS Code,
+   Framer, Retool, Rive all leave the divider a hairline and let the cursor and
+   the widened hit area carry the affordance. Nothing floats over the pane
+   pixels this app exists to show. Painted as an overlay, so no layout moves
+   and the target pane is never re-rendered for a mouse-over. */
+.pane-divider::after {
+  content: '';
+  position: absolute;
+  inset: 0 -1px;
+  background: var(--text-1);
+  opacity: 0;
+}
+.pane-divider:hover::after, .pane-divider:focus-visible::after { opacity: 1; }
 /* The hairline is the affordance; a ring around a 1px element would be a box
    floating on the seam. Same reasoning as `.target-canvas:focus`. */
 .pane-divider:focus-visible { outline: none; }
 /* Square corners, no shadow, no blur: a rounded or blurred pane edge would
    destroy the very corner pixels the user opened this app to inspect. */
 .pane-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
-.native-slot { width: 100%; height: 100%; }
+/* One pixel short of the seam. The native view is an OS-composited layer sized
+   to exactly this rect, so anything the renderer paints inside it is hidden
+   underneath — without the inset, the divider's hover band would appear on the
+   target side only, since that side is the renderer's own canvas. The view
+   still sits exactly over the slot; the slot is simply 1px narrower. */
+.native-slot { width: calc(100% - 1px); height: 100%; }
 /* The backing store is already at device resolution; this only guards against
    a fractional CSS size introducing a resample. */
 .target-canvas { display: block; image-rendering: pixelated; }

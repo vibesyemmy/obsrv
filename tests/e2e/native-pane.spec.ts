@@ -47,7 +47,14 @@ test('native pane fills the left half below the toolbar', async () => {
   })
   expect(seen.bounds.x).toBe(0)
   expect(seen.bounds.y).toBeGreaterThanOrEqual(TOOLBAR_H)
-  expect(Math.abs(seen.bounds.width - seen.content.width / 2)).toBeLessThanOrEqual(1)
+  // Two known single pixels stand between the view and an exact half, and both
+  // are deliberate: the draggable seam is a flex item, so the two panes divide
+  // `width - 1` rather than `width`; and `.native-slot` is a further 1px
+  // narrower than its pane so the seam's hover band is visible on the native
+  // side too (styles.css). The exact slot-equals-bounds check lives in
+  // panes.spec.ts — this one only asserts "the left half, give or take the
+  // chrome between them".
+  expect(Math.abs(seen.bounds.width - seen.content.width / 2)).toBeLessThanOrEqual(2)
   expect(seen.bounds.height).toBeLessThanOrEqual(seen.content.height - TOOLBAR_H)
   expect(seen.bounds.height).toBeGreaterThan((seen.content.height - TOOLBAR_H) * 0.8)
 })
