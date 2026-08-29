@@ -47,6 +47,13 @@ Everything below follows from that.
 5. **Every number is monospace with tabular figures**, so values do not jitter as a
    slider moves. Numbers are this chrome's real content.
 
+   **Agent control is a warning, not decoration.** While an agent is driving a
+   tab, its indicator and the tab itself carry `--warn`. The page is moving
+   under the user's hands without their input, which is exactly the "something
+   needs your attention" case this rule exists to reserve colour for — so the
+   amber is the rule being applied, not an exception to it. It is asserted in
+   `tests/e2e/tabs.spec.ts`; do not neutralise it back to grey.
+
 ## Tokens
 
 ```
@@ -58,7 +65,7 @@ Everything below follows from that.
 --line        #333333   hairlines
 --text-0      #ededed   primary
 --text-1      #8a8a8a   labels, units
---warn        #d8a33a   clamped viewport, stalled target
+--warn        #d8a33a   clamped viewport, stalled target, agent control
 --error       #e5484d   load-failure code
 ```
 
