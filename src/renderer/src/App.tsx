@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../shared/api'
+import { isBlankUrl } from '../../shared/url'
 import { DropZone } from './components/DropZone'
 import { Fatal } from './components/Fatal'
 import { ImagePane } from './components/ImagePane'
@@ -9,6 +10,7 @@ import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls } from './components/PanelControls'
 import { SettingsPanel } from './components/SettingsPanel'
+import { EmptyState } from './components/EmptyState'
 import { TargetCanvas } from './components/TargetCanvas'
 import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
@@ -59,6 +61,7 @@ export function App() {
   const profileId = useStore(s => selectTab(s).profileId)
   const orientation = useStore(s => selectTab(s).orientation)
   const viewMode = useStore(s => selectTab(s).viewMode)
+  const tabUrl = useStore(s => selectTab(s).url)
   const activeId = useStore(s => s.activeId)
   const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
@@ -215,6 +218,8 @@ export function App() {
 
   /** This tab's decoded file, if it is holding one. */
   const image = images[activeId] ?? null
+  // Nothing has been loaded yet: no address in URL mode, no file in image mode.
+  const blank = mode === 'image' ? image === null : isBlankUrl(tabUrl)
 
   // The decoded pixels stay component state (they never need a selector); the
   // store carries only the metadata the toolbar and footer read. The pixels
@@ -340,16 +345,27 @@ export function App() {
               ) : (
                 <NativeSlot />
               )}
-              {/* A separator with one side would be a lie. */}
+              {/* A separator with one side would be a lie. It stays mounted on a
+                  blank tab — removing it would change the split geometry, since
+                  the seam is a flex item the panes are sized around — and the
+                  empty state simply stacks above it. */}
               <PaneDivider />
             </>
           )}
           <div className="pane target-pane" ref={targetPaneRef}>
             <div className="pane-body">
+              {/* The canvas stays mounted underneath: it owns the GL context and
+                  the frame subscription, and tearing those down for an empty tab
+                  would cost a context restore on every first navigation. */}
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
             </div>
             <TargetFooter />
           </div>
+          {/* Spans both panes rather than sitting in the target half. That is
+              only possible because a blank tab has the native view hidden (see
+              `nativeVisible` in main): the view is an OS-composited layer, and
+              while it is up nothing the renderer paints can appear over it. */}
+          {blank && <EmptyState />}
         </div>
         {drawer === 'panel' && (
           <aside className="drawer">

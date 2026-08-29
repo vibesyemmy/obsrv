@@ -915,3 +915,66 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 /* Nothing to erase: the button says so rather than pretending to act. */
 .clear-history:disabled { color: var(--text-1); cursor: default; }
+
+/* --- empty state ---------------------------------------------------------- */
+/* Shown when a tab has no page. It covers the target canvas rather than
+   replacing it: the canvas keeps its GL context and frame subscription, so the
+   first navigation does not pay for a context restore, and the native slot
+   keeps reporting its bounds. `--surround` is the pane field, so the state sits
+   on the same ground the render will. */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+  background: var(--surround);
+  /* Above `.pane-divider`, which is itself raised to 1: the seam would
+     otherwise draw its hairline straight through the illustration. Covering it
+     must not disarm it, though — the split is still adjustable on a blank tab —
+     so everything here is transparent to the pointer except the form. */
+  z-index: 2;
+  pointer-events: none;
+}
+.empty-form { pointer-events: auto; }
+.panes { position: relative; }
+.empty-state svg { width: 244px; max-width: 100%; height: auto; }
+.empty-lede {
+  margin: 0;
+  color: var(--text-1);
+  text-align: center;
+  max-width: 34ch;
+}
+.empty-form { display: flex; gap: 8px; width: 100%; max-width: 420px; }
+.empty-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  color: var(--text-0);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  font-family: var(--mono);
+}
+.empty-input:focus-visible { outline: none; border-color: var(--text-1); }
+.empty-go {
+  height: 30px;
+  padding: 0 14px;
+  color: var(--text-0);
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+.empty-go:hover:not(:disabled) { background: var(--chrome-3); }
+.empty-go:disabled { color: var(--text-1); opacity: 0.6; }
+.empty-error { margin: 0; color: var(--error); }
+/* The readouts stay legible through the empty state: they still name the screen
+   being simulated, which is the one fact that survives having no page. Stacking
+   rather than insetting the overlay, so nothing depends on the footer's height. */
+.pane-footer { position: relative; z-index: 3; }

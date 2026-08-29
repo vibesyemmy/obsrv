@@ -17,6 +17,11 @@ const nativeVisible = () =>
 test.beforeAll(async () => {
   app = await launchApp()
   page = await rendererWindow(app)
+  // Every assertion here is about the native view being on screen, and a tab
+  // with no page has no native view to show — it is the empty state's window
+  // (see empty-state.spec.ts). Load a page first, so what follows is testing
+  // the panes toggle rather than the blank state.
+  await page.evaluate(u => window.obsrv.navigate(u), TALL)
 })
 test.afterAll(async () => {
   await app.close()
