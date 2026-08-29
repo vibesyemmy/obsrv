@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
-import { maxCssViewport } from '../shared/calibration'
+import { maxCssViewport, screenShape } from '../shared/calibration'
 import { boxDownsample, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { findProfile } from '../shared/presets'
 import type { LoadError } from '../shared/types'
@@ -161,9 +161,19 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
     const img = applyPanelProfile(bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height), profile)
     mkdirSync(dirname(out), { recursive: true })
     writeFileSync(out, encodePng(img))
+    // The shape is named for the reader, never left to be inferred from the
+    // digits: under `--matrix` one run prints several lines, and a single
+    // `--orientation landscape` flips a landscape-natural preset into a
+    // portrait screen, so the lines legitimately disagree with each other.
+    //
+    // Human output only. The JSON already carries `cssWidth`/`cssHeight`, from
+    // which any consumer derives the shape exactly, and that object is a
+    // published contract — adding a field to it is a breaking change for
+    // everything parsing it, for something nothing has to parse.
+    const shape = screenShape(r.cssWidth, r.cssHeight)
     human(
       `snap ${cmd.url} → ${out} (${r.frame.width}×${r.frame.height} device px, ` +
-        `preset ${spec.presetId}, profile ${profile.id})`,
+        `${r.cssWidth}×${r.cssHeight} CSS ${shape}, preset ${spec.presetId}, profile ${profile.id})`,
     )
     results.push({
       out,
@@ -224,7 +234,9 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
 
   const pct = (v: number): string => `${(v * 100).toFixed(2)}%`
   human(
-    `diff ${cmd.url} @ ${cmd.spec.presetId} (profile ${profile.id}): ` +
+    `diff ${cmd.url} @ ${cmd.spec.presetId} ` +
+      `(${cmd.spec.cssWidth}×${cmd.spec.cssHeight} CSS ${screenShape(cmd.spec.cssWidth, cmd.spec.cssHeight)}, ` +
+      `profile ${profile.id}): ` +
       `ink ${pct(metrics.inkCoverage.target)} vs ${pct(metrics.inkCoverage.reference)} reference, ` +
       `rows ${metrics.rows.target}/${metrics.rows.reference} (ratio ${metrics.rows.ratio?.toFixed(2) ?? 'n/a'}), ` +
       `${metrics.findings.length} finding(s)${settled ? '' : ' — UNSETTLED, deltas are not rendering evidence'}`,

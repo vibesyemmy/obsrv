@@ -206,10 +206,11 @@ const snapOutputShape = {
     .string()
     .optional()
     .describe(
-      "The rotation flag the render used: 'portrait' (the preset as its table stores it) or 'landscape' " +
-        '(rotated a quarter turn). See `screenShape` for the shape that produced.',
+      "Live only: the app's rotation flag — 'portrait' (the preset as its table stores it) or 'landscape' " +
+        '(rotated a quarter turn). See `screenShape` for the shape that produced. Headless runs report the ' +
+        'applied `cssWidth`/`cssHeight` instead, which say the same thing exactly.',
     ),
-  screenShape: z.string().optional().describe("The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
+  screenShape: z.string().optional().describe('Live only. ' + "The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
         "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
         "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
         "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),

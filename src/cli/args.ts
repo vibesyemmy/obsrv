@@ -16,6 +16,13 @@ export interface RenderSpec {
   cssHeight: number
   deviceScaleFactor: number
   diagonalInches: number | null
+  /**
+   * The rotation flag this spec was resolved with. Carried per spec rather
+   * than per command because `--matrix` renders several presets in one run and
+   * each reports its own shape — and for landscape-natural presets the flag
+   * and the shape differ, so the reader needs both.
+   */
+  orientation: Orientation
 }
 
 export interface SnapCommand {
@@ -68,10 +75,18 @@ Shared flags:
 ${presets}
   --width <px> --height <px> [--dsf <factor>] [--diagonal <inches>]
                        Custom CSS viewport instead of --preset (dsf defaults to 1).
-  --orientation <o>    portrait | landscape (default ${DEFAULT_ORIENTATION}). Rotates the screen a
-                       quarter turn: the CSS viewport's axes swap, the panel diagonal,
-                       raster density and physical size are unchanged. Applies to any
-                       preset and to custom --width/--height dims.
+  --orientation <o>    portrait | landscape (default ${DEFAULT_ORIENTATION}). This names the
+                       preset's *stored* orientation, not the shape you get:
+                         portrait  = the preset exactly as the table above lists it
+                         landscape = that rotated a quarter turn (width and height swap)
+                       Every mobile preset is stored portrait, so for those the two
+                       readings agree. The laptop and desktop presets are stored
+                       landscape-natural, so --orientation landscape turns them into a
+                       portrait screen — which is how you render a 1080p monitor stood on
+                       end (1080p-24 becomes 1080x1920). Applies to custom --width/--height
+                       dims too. The diagonal, raster density and physical size never
+                       change: it is the same panel turned sideways. Each render's JSON
+                       and log line name the resulting shape.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
   --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
@@ -170,6 +185,7 @@ function presetSpec(id: string): RenderSpec {
     cssHeight: preset.height,
     deviceScaleFactor: preset.deviceScaleFactor,
     diagonalInches: preset.diagonalInches,
+    orientation: DEFAULT_ORIENTATION,
   }
 }
 
@@ -187,8 +203,8 @@ function resolveOrientation(flags: Map<string, string | true>): Orientation {
  * are checked, so those check the viewport that will actually be rendered.
  */
 function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
-  if (orientation !== 'landscape') return spec
-  return { ...spec, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+  if (orientation !== 'landscape') return { ...spec, orientation }
+  return { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
 }
 
 function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
@@ -210,7 +226,14 @@ function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[];
       throw new ArgError(`viewport exceeds the 4096-device-pixel budget: at dsf ${deviceScaleFactor} the CSS limit is ${max}`)
     }
     const diagonal = flags.has('diagonal') ? float(flags, 'diagonal', 0, 0.1) : null
-    const spec = { presetId: 'custom', cssWidth, cssHeight, deviceScaleFactor, diagonalInches: diagonal }
+    const spec = {
+      presetId: 'custom',
+      cssWidth,
+      cssHeight,
+      deviceScaleFactor,
+      diagonalInches: diagonal,
+      orientation: DEFAULT_ORIENTATION,
+    }
     return { specs: [orientSpec(spec, orientation)], matrix: false }
   }
 
@@ -265,9 +288,15 @@ export function parseArgs(argv: string[]): CliCommand {
   }
   const referenceMax = maxCssViewport(2)
   if (spec.cssWidth > referenceMax || spec.cssHeight > referenceMax) {
+    // Named as rendered, not as stored: the dims here are post-rotation, and
+    // attributing them to the bare preset id would print "1440p-27 is
+    // 1440×2560" — a shape that id never has. The bound itself is per-axis
+    // symmetric, so rotation can never sneak a too-large viewport past it;
+    // this is the message telling the truth about which one it measured.
+    const as = spec.orientation === 'landscape' ? ' rotated a quarter turn' : ''
     throw new ArgError(
       `diff renders a 2x reference, so the CSS viewport must fit ${referenceMax}px per axis ` +
-        `(4096 device px at 2x) — "${spec.presetId}" is ${spec.cssWidth}×${spec.cssHeight}. ` +
+        `(4096 device px at 2x) — "${spec.presetId}"${as} is ${spec.cssWidth}×${spec.cssHeight}. ` +
         `Use \`obsrv snap\` for this preset instead.`,
     )
   }
