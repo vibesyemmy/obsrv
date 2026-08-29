@@ -194,8 +194,25 @@ const snapOutputShape = {
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
   out: z.string().optional().describe('Headless only: PNG path the CLI wrote (same file as pngPath).'),
   preset: z.string().optional().describe('Headless only: preset id, or "custom" for width/height runs.'),
-  cssWidth: z.number().optional().describe('Headless only: applied CSS viewport width.'),
-  cssHeight: z.number().optional().describe('Headless only: applied CSS viewport height (grown under fullPage).'),
+  cssWidth: z
+    .number()
+    .optional()
+    .describe('Applied CSS viewport width, already rotated. Headless: grown under fullPage. Live: what the app is rendering.'),
+  cssHeight: z
+    .number()
+    .optional()
+    .describe('Applied CSS viewport height, already rotated. Headless: grown under fullPage. Live: what the app is rendering.'),
+  orientation: z
+    .string()
+    .optional()
+    .describe(
+      "The rotation flag the render used: 'portrait' (the preset as its table stores it) or 'landscape' " +
+        '(rotated a quarter turn). See `screenShape` for the shape that produced.',
+    ),
+  screenShape: z.string().optional().describe("The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
+        "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
+        "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
+        "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
   deviceScaleFactor: z.number().optional().describe('Headless only.'),
   profile: z.string().optional().describe('Headless only: applied panel profile id.'),
   settled: z
@@ -403,10 +420,18 @@ const driveOutputShape = {
   orientation: z
     .string()
     .describe(
-      "Which way round the tab's screen is held: 'portrait' (the preset as its table stores it) or " +
-        "'landscape' (rotated a quarter turn). Reported as 'portrait' by an app older than rotation, which " +
-        'is what such an app shows.',
+      "The rotation flag: 'portrait' (the preset as its table stores it) or 'landscape' (rotated a quarter " +
+        "turn). This is what to pass back to change it — for the shape the screen actually has, read " +
+        '`screenShape`. Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
     ),
+  screenShape: z.string().describe("The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
+        "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
+        "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
+        "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
+  cssWidth: z
+    .number()
+    .describe('The CSS viewport the target is rendering at, already rotated. 0 from an app that predates the field.'),
+  cssHeight: z.number().describe('The CSS viewport height, already rotated. 0 from an app that predates the field.'),
   viewMode: z.string(),
   panes: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
@@ -603,6 +628,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     presetId: status.presetId,
     profileId: status.profileId,
     orientation: status.orientation,
+    screenShape: status.screenShape,
+    cssWidth: status.cssWidth,
+    cssHeight: status.cssHeight,
     viewMode: status.viewMode,
     panes: status.panes,
     tabId: status.tabId,

@@ -232,6 +232,50 @@ test('setOrientation rotates the driven app, and status reports it', async () =>
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
     .toEqual({ width: 852, height: 393 })
 
+  // The review's case, measured: a landscape-natural preset makes the flag and
+  // the shape part company, and the flag alone would have an agent relay
+  // "portrait" for a 1920x1080 landscape monitor.
+  await call('setPreset', { id: '1080p-24' })
+  await call('setOrientation', { orientation: 'portrait' })
+  await expect
+    .poll(async () => {
+      const s = (await call('status')).body as Record<string, unknown>
+      return { orientation: s['orientation'], screenShape: s['screenShape'], w: s['cssWidth'], h: s['cssHeight'] }
+    })
+    .toEqual({ orientation: 'portrait', screenShape: 'landscape', w: 1920, h: 1080 })
+
+  // And rotated, the pair inverts rather than both flipping together.
+  await call('setOrientation', { orientation: 'landscape' })
+  await expect
+    .poll(async () => {
+      const s = (await call('status')).body as Record<string, unknown>
+      return { orientation: s['orientation'], screenShape: s['screenShape'], w: s['cssWidth'], h: s['cssHeight'] }
+    })
+    .toEqual({ orientation: 'landscape', screenShape: 'portrait', w: 1080, h: 1920 })
+
+  // A redundant apply must not arm the resize wait. The renderer's store
+  // no-ops on a value already in force, so no setViewport ever arrives and the
+  // arrival poll could only expire — spending the whole VIEWPORT_ARRIVAL_MS
+  // budget to learn nothing. Asserted as state rather than as elapsed time, so
+  // it cannot flake under load.
+  const pending = (): Promise<boolean> =>
+    app.evaluate(() => (globalThis as any).__obsrv.session.viewportPending)
+  // Drained first: the flag is armed by the rotation above and only a command
+  // that reads layout consumes it, so asserting straight away would be reading
+  // the previous change rather than the next one. A scroll is the cheap drain.
+  await call('scroll', { x: 0, y: 0 })
+  expect(await pending()).toBe(false)
+
+  // Both values are already in force, so neither arms anything.
+  await call('setOrientation', { orientation: 'landscape' })
+  expect(await pending()).toBe(false)
+  await call('setPreset', { id: '1080p-24' })
+  expect(await pending()).toBe(false)
+
+  // A real change still arms it, or a capture would photograph the old texture.
+  await call('setOrientation', { orientation: 'portrait' })
+  expect(await pending()).toBe(true)
+
   // Restored to exactly what this test found: the specs below share one app
   // and read pane geometry, so a preset or a rotation left behind here would
   // surface as an unrelated failure three tests later.

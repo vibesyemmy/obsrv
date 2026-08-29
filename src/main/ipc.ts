@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState, type AgentViewMode } from '../shared/control'
 import type { Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
+import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
@@ -852,7 +853,27 @@ export function registerIpc(ctx: AppContext): () => void {
       // beside it has to name that same tab. Read from the manager, not from
       // the `uiState` mirror — main owns tab identity, and the mirror
       // deliberately drops reports from tabs that are not in front.
-      return { version: appVersion, url, tabId: tabs.activeId, tabIndex: tabs.activeIndex, ...uiState }
+      // Read from the offscreen surface, not from the preset table: this is
+      // the viewport actually rendering, already rotated, so `screenShape` can
+      // never disagree with the pixels an agent is about to capture. All-zero
+      // while the target is mid-recreation, which `parseControlStatus` treats
+      // as "did not say" rather than as a shape.
+      let css = { width: 0, height: 0 }
+      try {
+        css = tab().target.getViewport()
+      } catch {
+        // Mid-recreation or closing; zeroes are honest.
+      }
+      return {
+        version: appVersion,
+        url,
+        tabId: tabs.activeId,
+        tabIndex: tabs.activeIndex,
+        cssWidth: css.width,
+        cssHeight: css.height,
+        screenShape: screenShape(css.width, css.height),
+        ...uiState,
+      }
     },
     navigate: navigateBoth,
     apply: patch => {
@@ -862,9 +883,21 @@ export function registerIpc(ctx: AppContext): () => void {
       // Rotation belongs here for the same reason a preset does — it swaps the
       // CSS viewport's axes, so anything that reads layout in between (a
       // scroll, a capture) has to wait for the reflow to land.
-      if (patch.presetId !== undefined || patch.orientation !== undefined) {
-        tab().viewportPending = true
-        tab().viewportArrived = false
+      //
+      // Compared against the mirror, not merely present: the renderer's store
+      // actions no-op on a value already in force, so no `setViewport` ever
+      // arrives for a redundant patch and the arrival poll can only expire —
+      // spending the whole `VIEWPORT_ARRIVAL_MS` budget to learn nothing. An
+      // agent re-asserting the preset it already set is a normal thing to do.
+      // `settleTarget` still runs either way, so the frame is confirmed
+      // regardless; this only skips a wait for a resize that is not coming.
+      const s = tab()
+      const resizes =
+        (patch.presetId !== undefined && patch.presetId !== s.presetId) ||
+        (patch.orientation !== undefined && patch.orientation !== s.orientation)
+      if (resizes) {
+        s.viewportPending = true
+        s.viewportArrived = false
       }
       if (!rendererReported) {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {
