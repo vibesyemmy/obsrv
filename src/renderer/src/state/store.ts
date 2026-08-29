@@ -458,24 +458,25 @@ export function selectScreenShape(s: AppState): Orientation {
   return screenShape(screen.width, screen.height)
 }
 
-/** One rotate button: the flag it writes, and the shape that flag produces. */
-export interface OrientationChoice {
-  value: Orientation
-  shape: Orientation
-}
+/** The two orientation flags, in the order the rotate control shows them. */
+export const ORIENTATIONS: readonly Orientation[] = ['portrait', 'landscape']
 
 /**
- * The rotate control's two buttons, in portrait-then-landscape reading order.
- * Each button is *labelled* by the shape it produces rather than by the flag
- * it writes, so the control can never put the word "landscape" on a button
- * that yields a portrait pair of numbers — which is exactly what a rotated
- * monitor preset does.
+ * The shape each of `ORIENTATIONS` actually produces for the screen in force,
+ * by the same index. The rotate control labels its buttons from this rather
+ * than from the flag they write, so it can never put the word "landscape" on a
+ * button that yields a portrait pair of numbers — which is exactly what a
+ * rotated monitor preset does.
+ *
+ * Two plain strings, not two objects: this is read through `useShallow`, which
+ * compares elements by identity, and a selector returning freshly-minted
+ * objects would never compare equal and would re-render forever.
  */
-export function selectOrientationChoices(s: AppState): OrientationChoice[] {
+export function selectOrientationShapes(s: AppState): Orientation[] {
   const natural = naturalScreen(s)
-  return (['portrait', 'landscape'] as const).map(value => {
+  return ORIENTATIONS.map(value => {
     const r = applyOrientation(natural, value)
-    return { value, shape: screenShape(r.width, r.height) }
+    return screenShape(r.width, r.height)
   })
 }
 

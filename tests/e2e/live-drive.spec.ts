@@ -200,6 +200,48 @@ test('navigate + setPreset over HTTP actually drive the app', async () => {
   expect(String(custom.body.error)).toContain('custom')
 })
 
+test('setOrientation rotates the driven app, and status reports it', async () => {
+  await call('setPreset', { id: 'iphone-61' })
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 393, height: 852 })
+
+  const rotated = await call('setOrientation', { orientation: 'landscape' })
+  expect(rotated.status).toBe(200)
+  expect(rotated.body).toMatchObject({ ok: true, applied: true, orientation: 'landscape' })
+  // Applied by the renderer store exactly as a toolbar click would, so its
+  // viewport effect resized the offscreen target for real.
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 852, height: 393 })
+  // And the visible control moved with it: this is the user's window.
+  await expect(page.locator('.orientation-control button.orient-landscape')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  const status = await call('status')
+  expect(status.body).toMatchObject({ orientation: 'landscape', presetId: 'iphone-61' })
+
+  const bad = await call('setOrientation', { orientation: 'sideways' })
+  expect(bad.status).toBe(400)
+  expect(String(bad.body.error)).toContain('portrait')
+  expect(String(bad.body.error)).toContain('landscape')
+  // A refused payload changes nothing.
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 852, height: 393 })
+
+  // Restored to exactly what this test found: the specs below share one app
+  // and read pane geometry, so a preset or a rotation left behind here would
+  // surface as an unrelated failure three tests later.
+  await call('setOrientation', { orientation: 'portrait' })
+  await call('setPreset', { id: 'laptop-768' })
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 1366, height: 768 })
+})
+
 test('captureVisible returns a real PNG of the window', async () => {
   const r = await call('captureVisible')
   expect(r.status).toBe(200)

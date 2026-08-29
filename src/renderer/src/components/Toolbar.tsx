@@ -5,7 +5,8 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import {
   CUSTOM_PRESET_ID,
-  selectOrientationChoices,
+  ORIENTATIONS,
+  selectOrientationShapes,
   selectTab,
   selectUrlBarText,
   selectViewport,
@@ -63,7 +64,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setMode = useStore(s => s.setMode)
   const setPreset = useStore(s => s.setPreset)
   const orientation = useStore(s => selectTab(s).orientation)
-  const orientationChoices = useStore(useShallow(selectOrientationChoices))
+  const orientationShapes = useStore(useShallow(selectOrientationShapes))
   const setOrientation = useStore(s => s.setOrientation)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
@@ -419,21 +420,23 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
             portrait screen — and a button reading "landscape" above a
             1080×1920 footer would be a lie the user has to unpick. */}
         <div className="orientation-control" role="group" aria-label="Screen orientation">
-          {orientationChoices.map(c => (
-            <button
-              key={c.value}
-              type="button"
-              className={`orient-${c.shape}`}
-              title={`${c.shape === 'landscape' ? 'Landscape' : 'Portrait'} — ${
-                c.value === orientation ? 'showing' : 'rotate the screen'
-              }`}
-              aria-label={c.shape === 'landscape' ? 'Landscape' : 'Portrait'}
-              aria-pressed={orientation === c.value}
-              onClick={() => setOrientation(c.value)}
-            >
-              <Icon name={c.shape} />
-            </button>
-          ))}
+          {ORIENTATIONS.map((value, i) => {
+            const shape = orientationShapes[i] ?? value
+            const name = shape === 'landscape' ? 'Landscape' : 'Portrait'
+            return (
+              <button
+                key={value}
+                type="button"
+                className={`orient-${shape}`}
+                title={`${name} — ${value === orientation ? 'showing' : 'rotate the screen'}`}
+                aria-label={name}
+                aria-pressed={orientation === value}
+                onClick={() => setOrientation(value)}
+              >
+                <Icon name={shape} />
+              </button>
+            )
+          })}
         </div>
 
         <Segmented

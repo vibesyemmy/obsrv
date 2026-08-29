@@ -9,6 +9,7 @@ import {
   selectHostScaleFactor,
   selectPanelParams,
   selectScale,
+  selectOrientationShapes,
   selectScaleIsFallback,
   selectScreen,
   selectScreenShape,
@@ -221,6 +222,24 @@ describe('selectScreenShape', () => {
     expect(selectScreenShape(useStore.getState())).toBe('landscape')
     useStore.getState().setOrientation('landscape')
     expect(selectScreenShape(useStore.getState())).toBe('portrait')
+  })
+})
+
+describe('selectOrientationShapes', () => {
+  it('names the shape each flag produces, in portrait-then-landscape order', () => {
+    setTab({ presetId: 'iphone-61' })
+    expect(selectOrientationShapes(useStore.getState())).toEqual(['portrait', 'landscape'])
+  })
+  it('inverts for a landscape-natural monitor preset, so no button can lie', () => {
+    setTab({ presetId: '1080p-24' })
+    expect(selectOrientationShapes(useStore.getState())).toEqual(['landscape', 'portrait'])
+  })
+  it('returns primitives, so `useShallow` can compare them across renders', () => {
+    setTab({ presetId: 'iphone-61' })
+    const a = selectOrientationShapes(useStore.getState())
+    const b = selectOrientationShapes(useStore.getState())
+    expect(a).not.toBe(b)
+    expect(a.every((v, i) => Object.is(v, b[i]))).toBe(true)
   })
 })
 
