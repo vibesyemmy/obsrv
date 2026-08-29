@@ -5,6 +5,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import {
   CUSTOM_PRESET_ID,
+  selectOrientationChoices,
   selectTab,
   selectUrlBarText,
   selectViewport,
@@ -61,6 +62,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setUrl = useStore(s => s.setUrl)
   const setMode = useStore(s => s.setMode)
   const setPreset = useStore(s => s.setPreset)
+  const orientation = useStore(s => selectTab(s).orientation)
+  const orientationChoices = useStore(useShallow(selectOrientationChoices))
+  const setOrientation = useStore(s => s.setOrientation)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
@@ -403,6 +407,34 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           </optgroup>
           <option value={CUSTOM_PRESET_ID}>Custom</option>
         </Select>
+
+        {/* The `.surround-control` idiom rather than `Segmented`: the choice is
+            a shape, and two outlines of the screen you get say it in 56px
+            where two words would take 150. Pressed is the same `--chrome-3`
+            fill step every other group in this row uses — never hue.
+
+            Each button is named by the shape it *produces*, not by the flag it
+            writes. For a phone the two agree; for a monitor preset, whose
+            stored dimensions are landscape-natural, the rotated value yields a
+            portrait screen — and a button reading "landscape" above a
+            1080×1920 footer would be a lie the user has to unpick. */}
+        <div className="orientation-control" role="group" aria-label="Screen orientation">
+          {orientationChoices.map(c => (
+            <button
+              key={c.value}
+              type="button"
+              className={`orient-${c.shape}`}
+              title={`${c.shape === 'landscape' ? 'Landscape' : 'Portrait'} — ${
+                c.value === orientation ? 'showing' : 'rotate the screen'
+              }`}
+              aria-label={c.shape === 'landscape' ? 'Landscape' : 'Portrait'}
+              aria-pressed={orientation === c.value}
+              onClick={() => setOrientation(c.value)}
+            >
+              <Icon name={c.shape} />
+            </button>
+          ))}
+        </div>
 
         <Segmented
           className="view-control"

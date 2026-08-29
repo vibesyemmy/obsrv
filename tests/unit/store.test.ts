@@ -10,6 +10,8 @@ import {
   selectPanelParams,
   selectScale,
   selectScaleIsFallback,
+  selectScreen,
+  selectScreenShape,
   selectTab,
   selectUrlBarText,
   selectViewport,
@@ -131,6 +133,94 @@ describe('selectViewport', () => {
       height: 900,
       clamped: true,
     })
+  })
+})
+
+describe('orientation', () => {
+  it('opens portrait, which is the preset exactly as stored', () => {
+    expect(tab().orientation).toBe('portrait')
+    setTab({ presetId: 'iphone-61' })
+    expect(selectViewport(useStore.getState())).toMatchObject({ width: 393, height: 852 })
+  })
+
+  it('swaps the CSS axes in landscape', () => {
+    setTab({ presetId: 'iphone-61' })
+    useStore.getState().setOrientation('landscape')
+    expect(tab().orientation).toBe('landscape')
+    expect(selectViewport(useStore.getState())).toEqual({ width: 852, height: 393, clamped: false })
+    expect(selectScreen(useStore.getState())).toEqual({
+      width: 852,
+      height: 393,
+      diagonalInches: 6.1,
+      deviceScaleFactor: 3,
+    })
+  })
+
+  it('rotates any preset, not only mobile ones', () => {
+    setTab({ presetId: '1080p-24' })
+    useStore.getState().setOrientation('landscape')
+    expect(selectViewport(useStore.getState())).toMatchObject({ width: 1080, height: 1920 })
+  })
+
+  it('rotates the custom screen too', () => {
+    useStore.getState().setCustom({ width: 1000, height: 600, diagonalInches: 20 })
+    useStore.getState().setOrientation('landscape')
+    expect(selectViewport(useStore.getState())).toMatchObject({ width: 600, height: 1000 })
+  })
+
+  it('leaves the physical magnification unchanged in magnitude', () => {
+    useStore.setState({ host: HOST_4K, settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27 } })
+    setTab({ presetId: 'iphone-61' })
+    const portrait = selectScale(useStore.getState())
+    useStore.getState().setOrientation('landscape')
+    expect(selectScale(useStore.getState())).toBeCloseTo(portrait, 10)
+    expect(selectDeviceScaleFactor(useStore.getState())).toBe(3)
+  })
+
+  it('re-clamps against the device-pixel budget on the rotated axis', () => {
+    // 820x1180 at 2x: the long axis is 2360 device px either way round, so
+    // neither orientation clamps — but the clamp must be recomputed, not
+    // carried over from the unrotated shape.
+    setTab({ presetId: 'ipad-109' })
+    useStore.getState().setOrientation('landscape')
+    expect(selectViewport(useStore.getState())).toEqual({ width: 1180, height: 820, clamped: false })
+  })
+
+  it('is per tab, like the preset it rotates', () => {
+    const s = useStore.getState()
+    setTab({ presetId: 'iphone-61' })
+    s.setOrientation('landscape')
+    const second = s.addTab()!
+    expect(selectTab(useStore.getState()).orientation).toBe('portrait')
+    useStore.getState().activateTab(s.activeId === second ? Object.keys(s.tabs)[0]! : second)
+  })
+
+  it('drops a highlight, because rotation re-rasters the screen it marked', () => {
+    useStore.getState().showAgentHighlight({ x: 1, y: 2, width: 3, height: 4, durationMs: 500 })
+    expect(tab().agentHighlight).not.toBeNull()
+    useStore.getState().setOrientation('landscape')
+    expect(tab().agentHighlight).toBeNull()
+  })
+
+  it('writes nothing when the orientation is already the one asked for', () => {
+    const before = tab()
+    useStore.getState().setOrientation('portrait')
+    expect(tab()).toBe(before)
+  })
+})
+
+describe('selectScreenShape', () => {
+  it('names the shape the dimensions have, never the stored flag', () => {
+    setTab({ presetId: 'iphone-61' })
+    expect(selectScreenShape(useStore.getState())).toBe('portrait')
+    useStore.getState().setOrientation('landscape')
+    expect(selectScreenShape(useStore.getState())).toBe('landscape')
+  })
+  it('reports a rotated monitor preset as the portrait it actually is', () => {
+    setTab({ presetId: '1080p-24' })
+    expect(selectScreenShape(useStore.getState())).toBe('landscape')
+    useStore.getState().setOrientation('landscape')
+    expect(selectScreenShape(useStore.getState())).toBe('portrait')
   })
 })
 
