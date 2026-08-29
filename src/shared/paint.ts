@@ -54,3 +54,15 @@ export function fitsFrame(dirty: Rect, frameWidth: number, frameHeight: number):
     dirty.y + dirty.height <= frameHeight
   )
 }
+
+/**
+ * How long a surface must go without a paint before it counts as settled.
+ *
+ * Both capture paths cite this one number so they cannot drift: the headless
+ * CLI (`captureQuiescent`) and the live in-app capture behind agent control.
+ * They used to disagree — the CLI waited for paint silence while the live path
+ * waited only for the viewport to stop resizing, so a capture taken straight
+ * after a reload photographed the page mid-hydration. Hydration does not change
+ * the viewport, so nothing the live path watched had moved.
+ */
+export const SETTLE_QUIET_MS = 400

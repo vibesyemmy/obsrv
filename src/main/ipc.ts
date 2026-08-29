@@ -22,6 +22,7 @@ import {
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
+import { SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
@@ -519,6 +520,14 @@ export function registerIpc(ctx: AppContext): () => void {
   const SETTLE_BUDGET_MS = 4_000
   /** After the frame reaches the renderer it still has to draw it. */
   const SETTLE_DRAW_MS = 120
+  /**
+   * The resize budget above cannot also cover the page going quiet: a reload
+   * that hydrates for three seconds would eat it and every capture after a
+   * reload would report a transitional frame. Quiescence gets its own bound, so
+   * a page that never stops painting (video, a spinner) still returns rather
+   * than hanging the drive call that asked for the shutter.
+   */
+  const SETTLE_QUIET_BUDGET_MS = 3_000
 
   // The target is an argument rather than a fresh `tab().target` at each use:
   // a settle spans awaits, and unsubscribing from whatever is active on the
@@ -547,8 +556,48 @@ export function registerIpc(ctx: AppContext): () => void {
       t.invalidate()
     })
 
-  /** False when the budget ran out before things went quiet; never throws. */
-  const settleTarget = async (t: TargetSource = tab().target): Promise<boolean> => {
+  /**
+   * Resolves once no frame has arrived for `SETTLE_QUIET_MS`. This is the same
+   * rule the headless CLI settles on, and it is what catches the case a resize
+   * poll cannot see: hydration repaints the page without ever changing the
+   * viewport, so the size reads identically either side of it.
+   */
+  const quiesce = (t: TargetSource, budgetMs: number): Promise<boolean> =>
+    new Promise(resolve => {
+      // Same reasoning as `nextFrame`: a suspended source emits nothing, so
+      // waiting for silence from it would always spend the whole budget.
+      if (!t.painting) {
+        resolve(false)
+        return
+      }
+      let quiet: ReturnType<typeof setTimeout>
+      const done = (ok: boolean): void => {
+        clearTimeout(quiet)
+        clearTimeout(cap)
+        t.off('frame', onFrame)
+        resolve(ok)
+      }
+      // Every frame restarts the clock; the budget is the only thing that can
+      // cut a genuinely busy page short.
+      const onFrame = (): void => {
+        clearTimeout(quiet)
+        quiet = setTimeout(() => done(true), SETTLE_QUIET_MS)
+      }
+      const cap = setTimeout(() => done(false), budgetMs)
+      t.on('frame', onFrame)
+      quiet = setTimeout(() => done(true), SETTLE_QUIET_MS)
+    })
+
+  /**
+   * Names what was still moving when the budget ran out, rather than answering
+   * a bare yes/no: the two ways a capture can be premature want different
+   * warnings, and "still resizing" was being reported for a page that had
+   * finished resizing long ago and was simply still painting.
+   */
+  type Settle = 'settled' | 'resizing' | 'painting'
+
+  /** Never throws; the worst it does is report what it could not wait out. */
+  const settleTarget = async (t: TargetSource = tab().target): Promise<Settle> => {
     const deadline = Date.now() + SETTLE_BUDGET_MS
     let last = ''
     let stable = 0
@@ -560,10 +609,14 @@ export function registerIpc(ctx: AppContext): () => void {
       if (stable >= SETTLE_STABLE_READS) break
       await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
     }
-    if (stable < SETTLE_STABLE_READS) return false
+    if (stable < SETTLE_STABLE_READS) return 'resizing'
     const painted = await nextFrame(t, Math.max(0, deadline - Date.now()))
+    // Then wait for the page itself to stop. The size stopping only means the
+    // *frame* stopped changing shape — a reloaded page hydrates at a fixed
+    // viewport, and the shutter used to fire straight through it.
+    const quiet = painted && (await quiesce(t, SETTLE_QUIET_BUDGET_MS))
     await new Promise(r => setTimeout(r, SETTLE_DRAW_MS))
-    return painted
+    return quiet ? 'settled' : 'painting'
   }
 
   /** capturePage wants integer CSS pixels; a fractional rect crops short. */
@@ -944,7 +997,8 @@ export function registerIpc(ctx: AppContext): () => void {
       const warnings: string[] = []
       if (!known) warnings.push('the renderer has not reported the pane bounds yet; captured the full window instead')
       else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
-      if (!settled) warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
+      if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
+      else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
       return {
         data: image.toPNG().toString('base64'),
         width: size.width,

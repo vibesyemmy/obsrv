@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>hydrate-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* Fills the viewport so every repaint is a large, unmissable damage rect. */
+      #app { width: 100%; height: 100vh; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // Stands in for a framework hydrating after load: the page keeps
+      // repainting for a fixed stretch and then stops, and the viewport never
+      // changes size while it does. A settle that watches only for the resize
+      // to finish sees nothing move and fires the shutter straight through
+      // this, which is the artifact this fixture exists to catch.
+      const HYDRATE_MS = 900
+      const app = document.getElementById('app')
+      const started = Date.now()
+      let n = 0
+      const tick = () => {
+        if (Date.now() - started >= HYDRATE_MS) {
+          app.style.background = '#000'
+          document.title = 'hydrate-settled'
+          return
+        }
+        app.style.background = n++ % 2 ? '#e0e0e0' : '#ffffff'
+        setTimeout(tick, 100)
+      }
+      setTimeout(tick, 100)
+    </script>
+  </body>
+</html>

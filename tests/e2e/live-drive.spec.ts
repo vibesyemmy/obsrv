@@ -15,6 +15,8 @@ import { launchApp, openOverflow, rendererWindow } from './launch'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
+const HYDRATE = pathToFileURL(resolve(__dirname, '../fixtures/hydrate.html')).href
+const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).href
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
 
@@ -76,6 +78,10 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await app.close()
 })
+
+/** The native pane's title, which the hydrate fixture sets only once it stops. */
+const settledTitle = (): Promise<string> =>
+  app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getTitle() as string)
 
 test('writes a 0600 discovery file with a port and a 64-hex token', async () => {
   await expect.poll(() => existsSync(controlFile)).toBe(true)
@@ -616,6 +622,43 @@ test('setPanes refuses an unknown value', async () => {
   expect(String(bad.body.error)).toContain('setPanes payload')
   // Refused, not half-applied: both panes are still up.
   await expect(page.locator('.native-slot')).toHaveCount(1)
+})
+
+test('a capture waits for the page to stop painting, not just for it to stop resizing', async () => {
+  const nav = await call('navigate', { url: HYDRATE })
+  expect(nav.status).toBe(200)
+
+  // The fixture keeps repainting for 900ms after load at a fixed viewport.
+  // Nothing the resize poll watches moves while it does, so before this the
+  // shutter fired within its draw delay and returned a mid-hydration frame —
+  // reported from the field, and the reason this test exists.
+  const started = Date.now()
+  const r = await call('captureTarget')
+  const elapsed = Date.now() - started
+
+  expect(r.status).toBe(200)
+  expect(r.body).toMatchObject({ ok: true, warnings: [] })
+  // Bounded well below the fixture's 900ms: the assertion is "it waited for the
+  // page", not "it waited a precise duration". The old behaviour returned in
+  // roughly the 120ms draw delay, so there is no overlap to be flaky about.
+  expect(elapsed).toBeGreaterThanOrEqual(500)
+  expect(await settledTitle()).toBe('hydrate-settled')
+})
+
+test('a page that never goes quiet is captured anyway, and says so', async () => {
+  const nav = await call('navigate', { url: ANIMATED })
+  expect(nav.status).toBe(200)
+
+  // The spinner never stops, so quiescence can only expire. The capture must
+  // still come back — an unsettled picture beats no picture — carrying a
+  // warning that names painting rather than resizing, which is what it used to
+  // blame for every premature frame.
+  const r = await call('captureTarget')
+  expect(r.status).toBe(200)
+  const body = r.body as { ok: boolean; warnings: string[] }
+  expect(body.ok).toBe(true)
+  expect(body.warnings.some(w => w.includes('still painting'))).toBe(true)
+  expect(body.warnings.some(w => w.includes('still resizing'))).toBe(false)
 })
 
 test('toggling agent control off stops the server and removes the discovery file', async () => {

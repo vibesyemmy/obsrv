@@ -1,4 +1,5 @@
 import type { FrameMessage } from '../shared/api'
+import { SETTLE_QUIET_MS } from '../shared/paint'
 import type { RGBAImage } from '../shared/downsample'
 
 /**
@@ -43,7 +44,7 @@ export interface CaptureOptions {
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
-export const DEFAULT_SETTLE_MS = 400
+export const DEFAULT_SETTLE_MS = SETTLE_QUIET_MS
 
 /**
  * The uncovered region's bounding box, for the rescue warning: "which part of
