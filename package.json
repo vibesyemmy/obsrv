@@ -1,6 +1,6 @@
 {
   "name": "getobsrv",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "See your site the way 1x screens see it",
   "main": "./out/main/index.js",
   "bin": {
@@ -39,14 +39,14 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/browser": "^3.2.7",
-    "electron": "^43.4.1",
     "electron-builder": "^26.15.3",
     "electron-vite": "^3.1.0",
     "lucide-react": "^1.34.0",
     "playwright": "^1.62.1",
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
-    "vitest": "^3.2.7"
+    "vitest": "^3.2.7",
+    "electron": "^43.4.1"
   },
   "productName": "Obsrv",
   "repository": {
