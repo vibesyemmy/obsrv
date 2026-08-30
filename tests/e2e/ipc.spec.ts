@@ -135,8 +135,17 @@ test('image mode hides the native pane and stops target frames', async () => {
   // Enter image mode *before* subscribing: the subscription handshake would
   // otherwise open the gate and deliver its own full frame before the mode
   // switch lands, and "no frames in image mode" would depend on ordering.
+  //
+  // `setMode` is fire-and-forget, so "before" has to be observed rather than
+  // assumed — waiting on main to have applied it, not on a sleep long enough
+  // to usually win. This raced on CI under load, where the extra IPC of a
+  // later feature was enough to reorder it.
+  await page.evaluate(() => window.obsrv.setMode('image'))
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.session.modeIsLive as boolean))
+    .toBe(false)
+
   await page.evaluate(() => {
-    window.obsrv.setMode('image')
     const w = window as any
     w.__frames = []
     w.__off = window.obsrv.onFrame(() => w.__frames.push(1))
