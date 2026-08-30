@@ -44,6 +44,7 @@ const api: ObsrvApi = {
     ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
   setNativeVisible: visible => ipcRenderer.send(IPC.setNativeVisible, visible),
+  setNativeObscured: obscured => ipcRenderer.send(IPC.setNativeObscured, obscured),
   openMenu: request => ipcRenderer.invoke(IPC.menuOpen, request),
   onMenuShow: fn => {
     const h = (_e: unknown, request: MenuRequest): void => fn(request)

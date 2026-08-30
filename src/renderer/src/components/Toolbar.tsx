@@ -15,7 +15,6 @@ import {
 } from '../state/store'
 import { useAgentActivity } from '../hooks/useAgentActivity'
 import { Icon } from './Icon'
-import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
 import { TabBar } from './TabBar'
 import { Select, type SelectGroup, type SelectOption } from './Select'
@@ -164,12 +163,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   // The toggle owns the whole flip: optimistic store update so the button
   // answers immediately, rolled back if main refuses the write (mirrors the
   // SettingsPanel commit path, minus its queue — a boolean cannot interleave).
-  const toggleAgent = (): void => {
-    const current = useStore.getState().settings
-    const next = { ...current, agentControl: !current.agentControl }
-    setSettings(next)
-    window.obsrv.setSettings(next).catch(() => setSettings(current))
-  }
 
   // The bar follows the panes — a click in the native pane, a redirect, a
   // back — except while the user is typing in it: an `onUrlChanged` landing
@@ -390,41 +383,31 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           )}
         </div>
 
-        <OverflowMenu>
-          {close => (
-            <>
-              <button
-                className="menu-row toggle-panel"
-                type="button"
-                aria-pressed={drawer === 'panel'}
-                onClick={() => {
-                  onTogglePanel()
-                  close()
-                }}
-              >
-                <Icon name="sliders" />
-                Panel controls
-              </button>
-              <button
-                className="menu-row toggle-settings"
-                type="button"
-                aria-pressed={drawer === 'settings'}
-                onClick={() => {
-                  onToggleSettings()
-                  close()
-                }}
-              >
-                <Icon name="gear" />
-                Settings
-              </button>
-              <div className="menu-sep" />
-              <label className="menu-row agent-toggle">
-                <input type="checkbox" checked={agentControl} onChange={toggleAgent} />
-                Agent control
-              </label>
-            </>
-          )}
-        </OverflowMenu>
+        {/* Two buttons rather than a menu of two items plus a checkbox. The
+            menu was a click that only ever led somewhere else; settings is a
+            modal now, and the panel drawer is a drawer, so each gets the one
+            control that opens it. Agent control moved into the modal, where
+            there is room to say what it turns on. */}
+        <button
+          type="button"
+          className="icon-button toggle-panel"
+          title="Panel controls"
+          aria-label="Panel controls"
+          aria-pressed={drawer === 'panel'}
+          onClick={onTogglePanel}
+        >
+          <Icon name="sliders" />
+        </button>
+        <button
+          type="button"
+          className="icon-button toggle-settings"
+          title="Settings"
+          aria-label="Settings"
+          aria-expanded={drawer === 'settings'}
+          onClick={onToggleSettings}
+        >
+          <Icon name="gear" />
+        </button>
       </div>
 
       <div className="chrome-row chrome-screen">

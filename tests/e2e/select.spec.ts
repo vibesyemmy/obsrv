@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { launchApp, openSettings, rendererWindow } from './launch'
 import {
   choose,
   menuActive,
@@ -201,9 +201,8 @@ test('the surround control moved to settings and still works', async () => {
   // drawer rather than taking permanent room in the toolbar.
   await expect(page.locator('.chrome-screen .surround-control')).toHaveCount(0)
 
-  await openOverflow(page)
-  await page.click('.overflow-menu .toggle-settings')
-  const control = page.locator('.drawer .surround-control')
+  await openSettings(page, 'display')
+  const control = page.locator('.settings-modal .surround-control')
   await expect(control).toHaveCount(1)
 
   await control.locator('button').first().click()

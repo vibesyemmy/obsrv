@@ -9,7 +9,7 @@ import { NativeSlot } from './components/NativeSlot'
 import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls } from './components/PanelControls'
-import { SettingsPanel } from './components/SettingsPanel'
+import { SettingsModal } from './components/SettingsModal'
 import { EmptyState } from './components/EmptyState'
 import { TargetCanvas } from './components/TargetCanvas'
 import { Toast } from './components/Toast'
@@ -65,6 +65,7 @@ export function App() {
   const activeId = useStore(s => s.activeId)
   const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
+  const nativeObscured = useStore(s => s.nativeObscured)
   const split = useStore(s => s.settings.split)
 
   // The store performs no IPC of its own; this is the one place that bridges.
@@ -133,6 +134,13 @@ export function App() {
   useEffect(() => {
     window.obsrv.setNativeVisible(panes === 'both')
   }, [panes])
+
+  // Same shape, different reason: the modal covers the panes and the chrome
+  // cannot paint over an OS-composited layer. Main derives the visibility from
+  // both inputs, so neither can clobber the other.
+  useEffect(() => {
+    window.obsrv.setNativeObscured(nativeObscured)
+  }, [nativeObscured])
 
 
   // The pane's bounds change with the window, the drawers and the panes'
@@ -373,12 +381,11 @@ export function App() {
             <PanelControls />
           </aside>
         )}
-        {drawer === 'settings' && (
-          <aside className="drawer">
-            <SettingsPanel />
-          </aside>
-        )}
       </div>
+      {/* Not a drawer: a drawer narrows the panes so you can watch a render
+          while you adjust it, which is what the panel sliders need and nothing
+          in settings does. */}
+      {drawer === 'settings' && <SettingsModal onClose={() => setDrawer('none')} />}
       <Toast />
     </div>
   )

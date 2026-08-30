@@ -2,7 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { closeSettings, launchApp, openSettings, rendererWindow } from './launch'
 
 /**
  * Visited-URL history in the URL bar (spec `2026-08-28-obsrv-history.md`).
@@ -300,8 +300,7 @@ test('a failed load is not recorded', async () => {
 })
 
 test('turning the setting off stops recording, and keeps what is stored', async () => {
-  await openOverflow(page)
-  await page.click('.toggle-settings')
+  await openSettings(page, 'session')
   await page.uncheck('.record-history-toggle input')
   const before = storedUrls()
   expect(before.length).toBeGreaterThan(0)
@@ -318,12 +317,17 @@ test('turning the setting off stops recording, and keeps what is stored', async 
 })
 
 test('Clear empties the file, the count and the list', async () => {
+  await openSettings(page, 'session')
   expect(storedUrls().length).toBeGreaterThan(0)
   await page.click('.clear-history')
 
   await expect.poll(storedUrls).toEqual([])
   await expect(page.locator('.history-count')).toHaveText('0')
   await expect(page.locator('.clear-history')).toBeDisabled()
+
+  // The modal covers the toolbar, as a modal should, so it goes before the
+  // URL bar can be asked what it still suggests.
+  await closeSettings(page)
 
   // Nothing left to offer, for any query.
   await page.click('.url-form input')

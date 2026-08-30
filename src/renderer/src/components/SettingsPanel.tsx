@@ -63,7 +63,14 @@ function NumberField({ className, label, unit, value, min, step, onCommit, onInv
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
     // Enter keeps focus and, if the draft was bad, keeps it too so it can be fixed.
     if (e.key === 'Enter') commit()
-    else if (e.key === 'Escape') revert()
+    else if (e.key === 'Escape') {
+      revert()
+      // The modal around this also closes on Escape. Discarding an edit and
+      // dismissing the dialog are two different intentions, and the nearer one
+      // wins: the first Escape abandons the edit, a second one closes the
+      // modal — which is what a native dialog does.
+      e.stopPropagation()
+    }
   }
 
   return (
@@ -96,7 +103,65 @@ const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
   { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
 ]
 
-export function SettingsPanel() {
+/**
+ * The settings sections, in the order the modal lists them.
+ *
+ * "This display" is first because it is the highest-stakes setting in the app
+ * and was previously the hardest to find: actual size is computed from the
+ * diagonal, so a wrong number draws every render at the wrong size. Pane
+ * surround sits with it — both concern how a render is presented on *this*
+ * screen, and alone it was a section of one control.
+ */
+export const SETTINGS_SECTIONS = [
+  { id: 'display', label: 'This display' },
+  { id: 'screens', label: 'Screens' },
+  { id: 'session', label: 'Session' },
+  { id: 'agent', label: 'Agent control' },
+  { id: 'updates', label: 'Updates' },
+] as const
+
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]['id']
+
+/**
+ * The loopback control server's switch. It lived in the overflow menu, where a
+ * checkbox gave no room to say what it opens. Rare to set and consequential
+ * when set, which is what a section is for — the toolbar keeps the AGENT chip,
+ * because seeing that it is on is a different job from setting it.
+ */
+function AgentSection() {
+  const agentControl = useStore(s => s.settings.agentControl)
+  const setSettings = useStore(s => s.setSettings)
+
+  const toggle = (): void => {
+    const current = useStore.getState().settings
+    const next = { ...current, agentControl: !current.agentControl }
+    setSettings(next)
+    void window.obsrv.setSettings(next)
+  }
+
+  return (
+    <>
+      <h2>Agent control</h2>
+      <p className="hint">
+        Lets an agent drive this window — navigate it, change the screen, scroll
+        and capture what it sees — so you can watch the test happen rather than
+        read about it afterwards.
+      </p>
+      <label className="control inline agent-toggle">
+        <input type="checkbox" checked={agentControl} onChange={toggle} />
+        <span>Allow agent control</span>
+      </label>
+      <p className="muted">
+        While this is on, Obsrv listens on a loopback port that only this machine
+        can reach, and writes a token file that only your account can read. The
+        toolbar shows an AGENT chip the whole time it is on, and marks the tab an
+        agent is driving.
+      </p>
+    </>
+  )
+}
+
+export function SettingsPanel({ section }: { section: SettingsSection }) {
   const host = useStore(useShallow(s => s.host))
   const settings = useStore(useShallow(s => s.settings))
   const update = useStore(s => s.update)
@@ -161,6 +226,12 @@ export function SettingsPanel() {
 
   return (
     <div className="controls">
+      {/* One component rather than five, because the commit queue, the rollback
+          and the shared error state above are per-panel, not per-section. The
+          modal picks which section is on screen; everything else is unchanged
+          from when this was a drawer. */}
+      {section === 'display' && (
+        <>
       <h2>This display</h2>
 
       {fallback && (
@@ -202,6 +273,32 @@ export function SettingsPanel() {
         magnification ×{scale.toFixed(3)}
       </p>
 
+      <h2>Pane surround</h2>
+      <p className="hint">
+        What the panes are filled with around a render. It changes nothing in the
+        render itself, but the same pixels read lighter or darker against a
+        different ground — which is why it is a choice and not a constant. Black
+        for judging a dark UI, 50% grey for a neutral reference.
+      </p>
+      <div className="surround-control" role="group" aria-label="Pane surround">
+        {SURROUNDS.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            title={s.label}
+            aria-label={s.label}
+            aria-pressed={surround === s.id}
+            onClick={() => setSurround(s.id)}
+          >
+            <span className="surround-swatch" style={{ background: s.swatch }} />
+          </button>
+        ))}
+      </div>
+        </>
+      )}
+
+      {section === 'screens' && (
+        <>
       <h2>Custom screen</h2>
       <p className="muted">Editing these selects the Custom preset.</p>
       {/* These fields hold the screen's natural dimensions, like a preset's
@@ -265,79 +362,11 @@ export function SettingsPanel() {
           ? `${ppi(custom.width, custom.height, custom.diagonalInches).toFixed(0)} PPI`
           : 'Enter a diagonal to compute PPI'}
       </p>
+        </>
+      )}
 
-      <h2>Pane surround</h2>
-      <p className="hint">
-        What the panes are filled with around a render. It changes nothing in the
-        render itself, but the same pixels read lighter or darker against a
-        different ground — which is why it is a choice and not a constant. Black
-        for judging a dark UI, 50% grey for a neutral reference.
-      </p>
-      <div className="surround-control" role="group" aria-label="Pane surround">
-        {SURROUNDS.map(s => (
-          <button
-            key={s.id}
-            type="button"
-            title={s.label}
-            aria-label={s.label}
-            aria-pressed={surround === s.id}
-            onClick={() => setSurround(s.id)}
-          >
-            <span className="surround-swatch" style={{ background: s.swatch }} />
-          </button>
-        ))}
-      </div>
-
-      <h2>Updates</h2>
-
-      <div className="version-block">
-        <div className="version-row">
-          <span>Version</span>
-          <span className="version-current num">{update?.current ?? '—'}</span>
-        </div>
-        <div className="version-row">
-          <span>Latest</span>
-          <span className="version-latest">
-            {update === null && 'Not checked yet'}
-            {update?.status === 'current' && update.checkedAt === 0 && 'Not checked yet'}
-            {update?.status === 'current' && update.checkedAt > 0 && 'Up to date'}
-            {update?.status === 'error' && 'Couldn’t check'}
-            {update?.status === 'available' && update.latest !== undefined && (
-              <>
-                <span className="num">{update.latest}</span>
-                {' · '}
-                <button type="button" className="link" onClick={() => void window.obsrv.openRelease()}>
-                  Download
-                </button>
-              </>
-            )}
-          </span>
-        </div>
-        <div className="version-row">
-          <span>Last checked</span>
-          <span className="version-checked num">
-            {update === null ? 'never' : formatAge(update.checkedAt, Date.now())}
-          </span>
-        </div>
-      </div>
-
-      <label className="control inline update-check-toggle">
-        <input
-          type="checkbox"
-          checked={settings.updateCheck}
-          onChange={e => commit({ ...settings, updateCheck: e.target.checked })}
-        />
-        <span>Check for updates automatically</span>
-      </label>
-
-      <button type="button" className="check-now" onClick={() => void window.obsrv.checkUpdate()}>
-        Check now
-      </button>
-
-      <p className="muted">
-        One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
-      </p>
-
+      {section === 'session' && (
+        <>
       <h2>Tabs</h2>
 
       <NumberField
@@ -396,6 +425,64 @@ export function SettingsPanel() {
         Typed into the URL bar as suggestions and nowhere else. Turning this off stops
         recording and keeps what is stored; Clear erases it.
       </p>
+        </>
+      )}
+
+      {section === 'agent' && <AgentSection />}
+
+      {section === 'updates' && (
+        <>
+      <h2>Updates</h2>
+
+      <div className="version-block">
+        <div className="version-row">
+          <span>Version</span>
+          <span className="version-current num">{update?.current ?? '—'}</span>
+        </div>
+        <div className="version-row">
+          <span>Latest</span>
+          <span className="version-latest">
+            {update === null && 'Not checked yet'}
+            {update?.status === 'current' && update.checkedAt === 0 && 'Not checked yet'}
+            {update?.status === 'current' && update.checkedAt > 0 && 'Up to date'}
+            {update?.status === 'error' && 'Couldn’t check'}
+            {update?.status === 'available' && update.latest !== undefined && (
+              <>
+                <span className="num">{update.latest}</span>
+                {' · '}
+                <button type="button" className="link" onClick={() => void window.obsrv.openRelease()}>
+                  Download
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+        <div className="version-row">
+          <span>Last checked</span>
+          <span className="version-checked num">
+            {update === null ? 'never' : formatAge(update.checkedAt, Date.now())}
+          </span>
+        </div>
+      </div>
+
+      <label className="control inline update-check-toggle">
+        <input
+          type="checkbox"
+          checked={settings.updateCheck}
+          onChange={e => commit({ ...settings, updateCheck: e.target.checked })}
+        />
+        <span>Check for updates automatically</span>
+      </label>
+
+      <button type="button" className="check-now" onClick={() => void window.obsrv.checkUpdate()}>
+        Check now
+      </button>
+
+      <p className="muted">
+        One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
+      </p>
+        </>
+      )}
     </div>
   )
 }

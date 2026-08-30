@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { closeSettings, launchApp, openSettings, rendererWindow } from './launch'
 import { choose } from './helpers/select'
 
 // Each test leaves the session painting again, but they share one app and the
@@ -465,17 +465,16 @@ test.describe('the tab strip', () => {
    * user. Reading it back from main is what proves the commit landed.
    */
   const setMaxTabs = async (maxTabs: number): Promise<void> => {
-    await openOverflow(page)
-    await page.click('.overflow-menu .toggle-settings')
-    await expect(page.locator('.drawer .max-tabs')).toHaveCount(1)
+    await openSettings(page, 'session')
+    await expect(page.locator('.settings-modal .max-tabs')).toHaveCount(1)
     await page.fill('.max-tabs', String(maxTabs))
     await page.press('.max-tabs', 'Enter')
     await expect
       .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.maxTabs as number))
       .toBe(maxTabs)
-    await openOverflow(page)
-    await page.click('.overflow-menu .toggle-settings')
-    await expect(page.locator('.drawer')).toHaveCount(0)
+    // The modal blocks the tab strip while it is up, so it has to go before
+    // the caller can click New tab.
+    await closeSettings(page)
   }
 
   /** Back to one tab, whatever the test before left behind. */
@@ -926,12 +925,11 @@ test.describe('the driven tab is marked while agent control is on', () => {
   const drivenActive = () => page.locator('.chrome-tabs .tab.driven:has(> [role="tab"][aria-selected="true"])')
 
   const setAgentControl = async (on: boolean): Promise<void> => {
-    await openOverflow(page)
-    const box = page.locator('.overflow-menu .agent-toggle input')
+    await openSettings(page, 'agent')
+    const box = page.locator('.settings-modal .agent-toggle input')
     if ((await box.isChecked()) !== on) await box.click()
     await expect(box).toBeChecked({ checked: on })
-    await page.keyboard.press('Escape')
-    await expect(page.locator('.overflow-menu')).toHaveCount(0)
+    await closeSettings(page)
   }
 
   let extra: string

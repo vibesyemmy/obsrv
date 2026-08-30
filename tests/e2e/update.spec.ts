@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { launchApp, openSettings, rendererWindow } from './launch'
 
 /**
  * The update path end to end against a loopback stand-in for the GitHub
@@ -113,8 +113,7 @@ test('the toolbar offers the update only when there is one', async () => {
 })
 
 test('the Settings block reports every state', async () => {
-  await openOverflow(page)
-  await page.click('.overflow-menu .toggle-settings')
+  await openSettings(page, 'updates')
 
   reply = { code: 200, body: release('v99.0.0') }
   await check()
@@ -138,11 +137,10 @@ test('the automatic-check toggle round-trips through main', async () => {
     .toMatchObject({ updateCheck: false })
 
   await page.reload()
-  // The drawer rows only exist while the menu is open, so the reloaded shell
-  // announces itself with the button that opens it.
-  await expect(page.locator('.overflow-button')).toBeVisible()
-  await openOverflow(page)
-  await page.click('.overflow-menu .toggle-settings')
+  // The settings fields only exist while the modal is open, so the reloaded
+  // shell announces itself with the button that opens it.
+  await expect(page.locator('.toggle-settings')).toBeVisible()
+  await openSettings(page, 'updates')
   await expect(page.locator('.update-check-toggle input')).not.toBeChecked()
 
   await page.check('.update-check-toggle input')

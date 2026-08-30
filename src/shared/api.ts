@@ -44,6 +44,17 @@ export interface ObsrvApi {
    */
   setNativeVisible(visible: boolean): void
   /**
+   * Take the native view off screen because the chrome is covering it — the
+   * settings modal. Separate from `setNativeVisible`, which is the panes
+   * toggle: main derives the view's visibility from every input at once, and
+   * two callers driving one setter would clobber each other.
+   *
+   * Menus do not use this. They are drawn in the overlay view, which composites
+   * *above* the pane; hiding it for something transient made the render appear
+   * to vanish. A modal is the opposite case — it is meant to cover everything.
+   */
+  setNativeObscured(obscured: boolean): void
+  /**
    * Open a menu in the overlay view and resolve with the chosen value, or
    * `null` if it was dismissed. The menu cannot be drawn by the chrome itself:
    * the native pane is composited above the window's DOM, so a dropdown
