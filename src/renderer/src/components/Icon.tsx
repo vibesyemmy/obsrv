@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Check,
   ArrowRight,
   ChevronDown,
   EllipsisVertical,
@@ -29,6 +30,8 @@ const ICONS = {
   sliders: SlidersHorizontal,
   gear: Settings,
   chevron: ChevronDown,
+  // The listbox's tick. Marks the chosen row the way the native menu did.
+  check: Check,
   plus: Plus,
   // The rotate control's two shapes. A plain outline of the screen you get is
   // the whole affordance — no arrow, no device silhouette: the target may be a

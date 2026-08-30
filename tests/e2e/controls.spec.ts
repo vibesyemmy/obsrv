@@ -1,5 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { launchApp, openOverflow, rendererWindow } from './launch'
+import { choose } from './helpers/select'
 
 let app: ElectronApplication
 let page: Page
@@ -51,7 +52,7 @@ test.afterAll(async () => {
 
 test('the sliders override the profile, and picking a profile resets them', async () => {
   await openDrawer('panel')
-  await page.selectOption('.profile-select', 'budget-tn')
+  await choose(app, page, '.profile-select', 'budget-tn')
   await expect(page.locator('.bits-select')).toHaveValue('6')
 
   await page.selectOption('.bits-select', '8')
@@ -61,7 +62,7 @@ test('the sliders override the profile, and picking a profile resets them', asyn
   // And the readout says so.
   await expect(page.locator('.target-pane .pane-footer')).toContainText('Custom panel')
 
-  await page.selectOption('.profile-select', 'old-laptop')
+  await choose(app, page, '.profile-select', 'old-laptop')
   await expect(page.locator('.bits-select')).toHaveValue('6')
   await expect(page.locator('.frc-check')).not.toBeChecked()
   await expect(page.locator('.target-pane .pane-footer')).toContainText('Old laptop')
@@ -133,7 +134,7 @@ test('an oversized custom screen clamps and says so in the toolbar', async () =>
   await openDrawer('settings')
   await enter('.custom-width', '6000')
 
-  await expect(page.locator('.preset-select')).toHaveValue('custom')
+  await expect(page.locator('.preset-select')).toHaveAttribute('data-value', 'custom')
   await expect(page.locator('.chrome .warn')).toContainText('clamped to 4096')
 })
 

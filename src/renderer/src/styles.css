@@ -325,7 +325,10 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* Our surface, the platform's popup: the real select sits transparent on
    top, keeping the native menu, keyboard handling and Playwright's
    `selectOption` working unchanged. */
-.select-shell {
+.select-shell { position: relative; flex: 0 0 auto; display: inline-flex; }
+/* The trigger carries the surface the shell used to: it is a real button now,
+   not a transparent native select sitting on top of a painted div. */
+.select-trigger {
   position: relative;
   flex: 0 0 auto;
   display: inline-flex;
@@ -333,22 +336,23 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   height: 30px;
   box-sizing: border-box;
   padding: 0 26px 0 9px;
+  font: inherit;
   font-size: 11.5px;
   white-space: nowrap;
   background: var(--chrome-2);
   color: var(--text-0);
   border: 1px solid var(--line);
   border-radius: 5px;
-}
-.select-shell select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  appearance: none;
   cursor: pointer;
 }
+.select-trigger:hover { background: var(--chrome-3); }
+/* The stack that fixes the width: one cell, every label in it, only the chosen
+   one visible. `visibility` rather than `display: none` because a hidden box
+   still has to take its width for this to work at all. */
+.select-label { display: grid; align-items: center; }
+.select-label > * { grid-area: 1 / 1; white-space: nowrap; text-align: left; }
+.select-label-sizer { visibility: hidden; }
+.select-trigger:focus-visible { outline: none; border-color: var(--text-1); }
 .select-shell .select-chevron {
   position: absolute;
   right: 7px;
@@ -356,6 +360,56 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   color: var(--text-1);
   pointer-events: none;
 }
+
+/* The menu. Fixed, so it is positioned against the window rather than against
+   whatever the toolbar's overflow happens to be, and clamped in JS to the
+   window's box — the whole point of replacing the native popup, which drew
+   outside the app entirely. */
+.select-menu {
+  position: fixed;
+  z-index: 60;
+  /* Or `max-height` would bound the *content* box and the padding and border
+     would sit outside it — the menu overflowed the window's bottom edge by
+     exactly those 10px, which is the one thing this control exists to prevent. */
+  box-sizing: border-box;
+  min-width: 220px;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 11.5px;
+  background: var(--chrome-1);
+  color: var(--text-0);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  /* The one shadow in the chrome. A menu is the only surface that genuinely
+     floats above the rest, and without it the panel reads as part of the page
+     under test rather than as app chrome. */
+  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+}
+.select-group + .select-group { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.select-group-label {
+  padding: 5px 9px 3px;
+  color: var(--text-1);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+/* Hover and keyboard share one highlight: two different treatments for "the
+   row you are about to choose" is one too many. */
+.select-option.active { background: var(--chrome-3); }
+/* The tick's column is always reserved, so labels do not shift by 12px when
+   the selection moves. */
+.select-tick { display: flex; width: 14px; justify-content: center; color: var(--text-0); }
+
 
 /* Segmented groups. Pressed is a fill step and weight, never hue. */
 .segmented {
@@ -978,3 +1032,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    being simulated, which is the one fact that survives having no page. Stacking
    rather than insetting the overlay, so nothing depends on the footer's height. */
 .pane-footer { position: relative; z-index: 3; }
+
+/* --- overlay view --------------------------------------------------------- */
+/* The menu view is a transparent sheet over the whole window, so its page must
+   paint nothing of its own — a background here would hide both panes. */
+:root[data-overlay] html,
+:root[data-overlay],
+:root[data-overlay] body,
+:root[data-overlay] #root {
+  background: transparent;
+}
+/* Spans the overlay so a press anywhere outside the menu dismisses it, which is
+   what a native menu's invisible tracking window does. */
+.menu-backdrop { position: fixed; inset: 0; }

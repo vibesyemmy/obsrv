@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
+import { choose } from './helpers/select'
 
 const RESPONSIVE = pathToFileURL(resolve(__dirname, '../fixtures/responsive.html')).href
 const NO_VIEWPORT = pathToFileURL(resolve(__dirname, '../fixtures/no-viewport.html')).href
@@ -57,7 +58,7 @@ async function inTarget(expr: string, fallback: unknown = null): Promise<unknown
 
 /** Picks a preset in the toolbar and waits for its density to be live. */
 async function selectPreset(id: string, dpr: number): Promise<void> {
-  await page.selectOption('.preset-select', id)
+  await choose(app, page, '.preset-select', id)
   await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(dpr)
 }
 
@@ -205,8 +206,8 @@ test('rapid density switches land on the final preset with the page intact', asy
   // before the first one's restore has committed. The intended URL must
   // survive the pile-up — reading it off the dying (mid-recreation) window
   // would see about:blank and silently blank the target.
-  await page.selectOption('.preset-select', 'iphone-61')
-  await page.selectOption('.preset-select', 'android-65')
+  await choose(app, page, '.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'android-65')
 
   await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(2)
   const f = await app.evaluate(async () => {
@@ -236,7 +237,7 @@ test('a navigation issued mid-recreation lands on the new window', async () => {
   // Change density and navigate immediately — the load()'s window can be
   // destroyed under it, so the recorded intent, not the old window's URL,
   // must decide what the fresh window shows.
-  await page.selectOption('.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'iphone-61')
   await page.evaluate(u => window.obsrv.navigate(u), RESPONSIVE)
 
   await expect.poll(targetUrl).toBe(RESPONSIVE)

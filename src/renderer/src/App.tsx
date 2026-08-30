@@ -134,6 +134,7 @@ export function App() {
     window.obsrv.setNativeVisible(panes === 'both')
   }, [panes])
 
+
   // The pane's bounds change with the window, the drawers and the panes'
   // split, and every one of those also resizes the pane — so a
   // ResizeObserver is the one signal needed to keep the measurement fresh.

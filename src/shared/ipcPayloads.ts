@@ -1,4 +1,4 @@
-import type { Rect } from './api'
+import type { MenuGroup, MenuOption, MenuRequest, Rect } from './api'
 import type { AgentUiReport } from './control'
 import { DEFAULT_ORIENTATION, DEFAULT_SETTINGS, isOrientation, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import { MAX_SCROLL_SELECTOR, type InputModifier, type Orientation, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
@@ -248,4 +248,43 @@ export function parseScrollReport(raw: unknown): ScrollReport | null {
     ? raw.warnings.filter((w): w is string => typeof w === 'string').slice(0, MAX_SCROLL_WARNINGS)
     : []
   return { id, x, y, scroller, warnings }
+}
+
+/** Rows in one menu, and characters in a label. A renderer bug should not be
+ *  able to ask main to hold an unbounded payload. */
+const MAX_MENU_OPTIONS = 200
+const MAX_MENU_LABEL = 120
+
+/**
+ * The menu the chrome is asking the overlay to draw. Validated like anything
+ * else crossing into main: the two sides are separate web contents, and main is
+ * the only thing standing between them.
+ */
+export function parseMenuRequest(raw: unknown): MenuRequest | null {
+  if (!isRecord(raw)) return null
+  const { groups, value, ariaLabel, anchor } = raw
+  if (typeof value !== 'string' || value.length > MAX_MENU_LABEL) return null
+  if (typeof ariaLabel !== 'string' || ariaLabel.length > MAX_MENU_LABEL) return null
+  const rect = parseRect(anchor)
+  if (!rect) return null
+  if (!Array.isArray(groups)) return null
+
+  const out: MenuGroup[] = []
+  let rows = 0
+  for (const g of groups) {
+    if (!isRecord(g)) return null
+    if (g.label !== undefined && (typeof g.label !== 'string' || g.label.length > MAX_MENU_LABEL)) return null
+    if (!Array.isArray(g.options)) return null
+    const options: MenuOption[] = []
+    for (const o of g.options) {
+      if (!isRecord(o)) return null
+      if (typeof o.value !== 'string' || o.value.length > MAX_MENU_LABEL) return null
+      if (typeof o.label !== 'string' || o.label.length > MAX_MENU_LABEL) return null
+      if (++rows > MAX_MENU_OPTIONS) return null
+      options.push({ value: o.value, label: o.label })
+    }
+    out.push(g.label === undefined ? { options } : { label: g.label, options })
+  }
+  if (rows === 0) return null
+  return { groups: out, value, ariaLabel, anchor: rect }
 }

@@ -20,7 +20,6 @@ test('the chrome is three rows and the screen row holds the screen controls', as
     '.view-control',
     '.panes-control',
     '.profile-select',
-    '.surround-control',
   ]) {
     await expect(page.locator(`.chrome-screen ${sel}`)).toHaveCount(1)
   }

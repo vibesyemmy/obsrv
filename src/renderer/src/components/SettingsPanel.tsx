@@ -5,6 +5,7 @@ import { MAX_TABS_MAX, MAX_TABS_MIN } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
 import {
+  type Surround,
   selectScale,
   selectScaleIsFallback,
   selectTab,
@@ -89,6 +90,12 @@ function NumberField({ className, label, unit, value, min, step, onCommit, onInv
   )
 }
 
+const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
+  { id: 'black', label: 'Black surround', swatch: '#000000' },
+  { id: 'graphite', label: 'Graphite surround', swatch: '#2a2a2a' },
+  { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
+]
+
 export function SettingsPanel() {
   const host = useStore(useShallow(s => s.host))
   const settings = useStore(useShallow(s => s.settings))
@@ -101,6 +108,8 @@ export function SettingsPanel() {
   const fallback = useStore(selectScaleIsFallback)
   const setSettings = useStore(s => s.setSettings)
   const setCustom = useStore(s => s.setCustom)
+  const surround = useStore(s => s.surround)
+  const setSurround = useStore(s => s.setSurround)
 
   const [hostError, setHostError] = useState<string | null>(null)
   const [customError, setCustomError] = useState<string | null>(null)
@@ -256,6 +265,28 @@ export function SettingsPanel() {
           ? `${ppi(custom.width, custom.height, custom.diagonalInches).toFixed(0)} PPI`
           : 'Enter a diagonal to compute PPI'}
       </p>
+
+      <h2>Pane surround</h2>
+      <p className="hint">
+        What the panes are filled with around a render. It changes nothing in the
+        render itself, but the same pixels read lighter or darker against a
+        different ground — which is why it is a choice and not a constant. Black
+        for judging a dark UI, 50% grey for a neutral reference.
+      </p>
+      <div className="surround-control" role="group" aria-label="Pane surround">
+        {SURROUNDS.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            title={s.label}
+            aria-label={s.label}
+            aria-pressed={surround === s.id}
+            onClick={() => setSurround(s.id)}
+          >
+            <span className="surround-swatch" style={{ background: s.swatch }} />
+          </button>
+        ))}
+      </div>
 
       <h2>Updates</h2>
 

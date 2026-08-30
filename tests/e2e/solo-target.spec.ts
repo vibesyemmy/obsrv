@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openOverflow, rendererWindow } from './launch'
+import { choose } from './helpers/select'
 
 /** The 5000px-spacer fixture sync.spec.ts scrolls; its height is fixed so both
  *  panes reach the same offset whatever their widths. */
@@ -205,7 +206,7 @@ test('a render smaller than the pane is centred, an oversized one is not', async
 
   // Roomy window, smallest preset: fits on both axes, so it centres.
   await setWindow(1900, 1100)
-  await page.selectOption('.preset-select', 'android-65')
+  await choose(app, page, '.preset-select', 'android-65')
   await expect.poll(async () => (await gaps()).left, { timeout: 5000 }).toBeGreaterThan(0)
   const small = await gaps()
   expect(small.right).toBeGreaterThan(0)
@@ -215,7 +216,7 @@ test('a render smaller than the pane is centred, an oversized one is not', async
   // Smallest window the app allows, largest preset: overflows whatever the
   // calibration, so it must start-align and leave its origin reachable.
   await setWindow(900, 600)
-  await page.selectOption('.preset-select', '1080p-24')
+  await choose(app, page, '.preset-select', '1080p-24')
   await expect.poll(async () => (await gaps()).right, { timeout: 5000 }).toBeLessThan(0)
   expect((await gaps()).left).toBe(0)
 

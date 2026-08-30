@@ -2,6 +2,7 @@ import { app } from 'electron'
 import type { AppContext } from './context'
 import { registerIpc, TOOLBAR_H } from './ipc'
 import { installMenu } from './menu'
+import { Overlay } from './overlay'
 import { TabManager } from './tabs'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
@@ -14,7 +15,11 @@ function boot(): void {
   // reports back to the renderer is wired there too, gated on the reporting
   // session being the one in front.
   const tabs = new TabManager(win)
-  const ctx: AppContext = { win, tabs, bus: tabs.bus, toolbarH: TOOLBAR_H }
+  // Created after the manager, so its view is added after the first tab's
+  // native pane and therefore starts on top. `show` re-raises it anyway, for
+  // the panes added by later tabs.
+  const overlay = new Overlay(win)
+  const ctx: AppContext = { win, tabs, bus: tabs.bus, toolbarH: TOOLBAR_H, overlay }
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
@@ -34,6 +39,10 @@ function boot(): void {
   win.on('close', () => {
     stopIpc()
     tabs.destroy()
+    // Last, and after the sessions: this is the teardown the app's exit depends
+    // on least, so it must not stand between the listeners going quiet and the
+    // offscreen windows going away.
+    overlay.destroy()
   })
 
   exposeForTests(ctx)

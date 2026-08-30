@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
+import { choose } from './helpers/select'
 
 const ORIENTATION = pathToFileURL(resolve(__dirname, '../fixtures/orientation.html')).href
 const NO_VIEWPORT = pathToFileURL(resolve(__dirname, '../fixtures/no-viewport.html')).href
@@ -106,7 +107,7 @@ test('the pressed button is the one whose glyph matches the screen, without hue'
 })
 
 test('rotating a phone preset swaps the real raster, not just the store', async () => {
-  await page.selectOption('.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'iphone-61')
   await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(3)
   await expect.poll(viewport).toEqual({ width: 393, height: 852 })
 
@@ -137,7 +138,7 @@ test('rotating a phone preset swaps the real raster, not just the store', async 
 })
 
 test('the page itself sees landscape: CSS media query and screen dimensions', async () => {
-  await page.selectOption('.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'iphone-61')
   await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(3)
   await shape('portrait').click()
   await page.evaluate(u => window.obsrv.navigate(u), ORIENTATION)
@@ -168,7 +169,7 @@ test('a page with no viewport meta lays out against the rotated virtual viewport
   // The case `applyEmulation` exists for. Without the rotated screenSize the
   // page would lay out at a portrait virtual viewport inside a landscape
   // raster — the exact failure that makes a landscape check worthless.
-  await page.selectOption('.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'iphone-61')
   await expect.poll(() => inTarget('devicePixelRatio', 0)).toBe(3)
   await shape('landscape').click()
   await page.evaluate(u => window.obsrv.navigate(u), NO_VIEWPORT)
@@ -190,7 +191,7 @@ test('a page with no viewport meta lays out against the rotated virtual viewport
 })
 
 test('rotation applies to a monitor preset, and the footer names the shape it produces', async () => {
-  await page.selectOption('.preset-select', '1080p-24')
+  await choose(app, page, '.preset-select', '1080p-24')
   await expect.poll(viewport).toEqual({ width: 1920, height: 1080 })
   const footer = page.locator('.target-pane .pane-footer')
   await expect(footer).toContainText('1920×1080 landscape')
@@ -207,7 +208,7 @@ test('rotation applies to a monitor preset, and the footer names the shape it pr
 })
 
 test('orientation is per tab, like the preset it rotates', async () => {
-  await page.selectOption('.preset-select', 'iphone-61')
+  await choose(app, page, '.preset-select', 'iphone-61')
   await shape('landscape').click()
   await expect.poll(viewport).toEqual({ width: 852, height: 393 })
 
@@ -258,7 +259,7 @@ test.describe('rotation survives a relaunch', () => {
 
     await p1.evaluate(u => window.obsrv.navigate(u), ORIENTATION)
     await expect(p1.locator('.chrome-tabs [role="tab"]').nth(0)).toHaveText('orientation-fixture')
-    await p1.selectOption('.preset-select', 'iphone-61')
+    await choose(first, p1, '.preset-select', 'iphone-61')
     await p1.locator('.orientation-control button.orient-landscape').click()
     await expect(p1.locator('.orientation-control button.orient-landscape')).toHaveAttribute(
       'aria-pressed',

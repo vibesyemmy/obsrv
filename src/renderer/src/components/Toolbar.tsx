@@ -12,7 +12,6 @@ import {
   selectViewport,
   useStore,
   type Panes,
-  type Surround,
   type ViewMode,
 } from '../state/store'
 import { useAgentActivity } from '../hooks/useAgentActivity'
@@ -20,14 +19,9 @@ import { Icon } from './Icon'
 import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
 import { TabBar } from './TabBar'
-import { Select } from './Select'
+import { Select, type SelectGroup, type SelectOption } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
-const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
-  { id: 'black', label: 'Black surround', swatch: '#000000' },
-  { id: 'graphite', label: 'Graphite surround', swatch: '#2a2a2a' },
-  { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
-]
 
 /** The target-pane view control. Fit is an overview, so its label says so. */
 const VIEWS: { id: ViewMode; label: string; title: string }[] = [
@@ -50,6 +44,26 @@ export interface ToolbarProps {
   onToggleSettings: () => void
 }
 
+/**
+ * The screen menu, grouped as the presets themselves are. Built once: the list
+ * never changes at runtime, and a fresh array each render would re-run the
+ * menu's positioning effect.
+ */
+const inGroup = (group: string): SelectOption[] =>
+  SCREEN_PRESETS.filter(p => p.group === group).map(p => ({ value: p.id, label: p.label }))
+
+const PRESET_GROUPS: SelectGroup[] = [
+  { label: 'Laptops', options: inGroup('laptop') },
+  { label: 'Desktops', options: inGroup('desktop') },
+  { label: 'Mobile', options: inGroup('mobile') },
+  // Ungrouped, as it was: "Custom" is not one more screen among the presets.
+  { options: [{ value: CUSTOM_PRESET_ID, label: 'Custom' }] },
+]
+
+const PROFILE_GROUPS: SelectGroup[] = [
+  { options: PANEL_PROFILES.map(p => ({ value: p.id, label: p.label })) },
+]
+
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
   const mode = useStore(s => selectTab(s).mode)
   const presetId = useStore(s => selectTab(s).presetId)
@@ -69,9 +83,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
-  const surround = useStore(s => s.surround)
   const update = useStore(s => s.update)
-  const setSurround = useStore(s => s.setSurround)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const panes = useStore(s => s.panes)
@@ -383,31 +395,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           value={presetId}
           label={presetLabel}
           ariaLabel="Target screen"
+          groups={PRESET_GROUPS}
           onChange={setPreset}
-        >
-          <optgroup label="Laptops">
-            {SCREEN_PRESETS.filter(p => p.group === 'laptop').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Desktops">
-            {SCREEN_PRESETS.filter(p => p.group === 'desktop').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Mobile">
-            {SCREEN_PRESETS.filter(p => p.group === 'mobile').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <option value={CUSTOM_PRESET_ID}>Custom</option>
-        </Select>
+        />
 
         {/* The `.surround-control` idiom rather than `Segmented`: the choice is
             a shape, and two outlines of the screen you get say it in 56px
@@ -460,29 +450,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           value={profileId}
           label={profileLabel}
           ariaLabel="Panel profile"
+          groups={PROFILE_GROUPS}
           onChange={setProfile}
-        >
-          {PANEL_PROFILES.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
-
-        <div className="surround-control" role="group" aria-label="Pane surround">
-          {SURROUNDS.map(s => (
-            <button
-              key={s.id}
-              type="button"
-              title={s.label}
-              aria-label={s.label}
-              aria-pressed={surround === s.id}
-              onClick={() => setSurround(s.id)}
-            >
-              <span className="surround-swatch" style={{ background: s.swatch }} />
-            </button>
-          ))}
-        </div>
+        />
 
         {/* No spacer: this row centres its controls, and the chip below is out
             of flow so its presence cannot shift them off centre. */}

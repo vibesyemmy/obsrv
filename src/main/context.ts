@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { FrameBus } from './frameBus'
+import type { Overlay } from './overlay'
 import type { TabManager } from './tabs'
 
 /** Everything the IPC layer and the test hooks need. Extended as units land. */
@@ -20,4 +21,10 @@ export interface AppContext {
    * main's cold-start layout puts the native pane in the wrong place.
    */
   toolbarH: number
+  /**
+   * The transparent view menus are drawn in. It has to be a sibling of the
+   * panes rather than markup in the chrome: the native pane is composited above
+   * the window's DOM, so a menu rendered there opens underneath it.
+   */
+  overlay: Overlay
 }

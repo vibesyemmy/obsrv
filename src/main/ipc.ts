@@ -9,16 +9,7 @@ import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
-import {
-  parseDeviceScaleFactor,
-  parseInputEvent,
-  parseMode,
-  parseRect,
-  parseScrollReport,
-  parseSettings,
-  parseTabId,
-  parseUiState,
-} from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseMenuRequest, parseMode, parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
@@ -83,7 +74,7 @@ function hostInfo(win: BrowserWindow): HostInfo {
  * before the state they read goes away.
  */
 export function registerIpc(ctx: AppContext): () => void {
-  const { win, bus, tabs } = ctx
+  const { win, bus, tabs, overlay } = ctx
   // The active session, resolved at the moment each handler runs. A
   // destructure taken once here is exactly the defect the manager exists to
   // prevent: it captures whichever session booted first and keeps driving it
@@ -245,6 +236,39 @@ export function registerIpc(ctx: AppContext): () => void {
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
     bus.setEnabled(tab().modeIsLive)
+  })
+
+  // --- menus ----------------------------------------------------------------
+  // The chrome asks, the overlay answers. Main holds the pending request so the
+  // two sides never talk directly: they are separate web contents, and the
+  // overlay must not be able to resolve a menu nobody opened.
+  let pendingMenu: ((value: string | null) => void) | null = null
+
+  const settleMenu = (value: string | null): void => {
+    const resolve = pendingMenu
+    pendingMenu = null
+    overlay.hide()
+    resolve?.(value)
+  }
+
+  handle(IPC.menuOpen, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return null
+    const request = parseMenuRequest(raw)
+    if (!request) return null
+    // A second open with one already up would strand the first caller's promise
+    // for the life of the app; dismiss it rather than leaking it.
+    settleMenu(null)
+    overlay.show(request)
+    return new Promise<string | null>(resolve => {
+      pendingMenu = resolve
+    })
+  })
+
+  on(IPC.menuPick, (e, raw: unknown) => {
+    // Only the overlay may answer, and only a string or an explicit dismissal.
+    if (e.sender !== overlay.webContents) return
+    if (raw !== null && typeof raw !== 'string') return
+    settleMenu(raw)
   })
 
   on(IPC.setNativeVisible, (e, raw: unknown) => {

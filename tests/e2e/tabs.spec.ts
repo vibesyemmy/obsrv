@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openOverflow, rendererWindow } from './launch'
+import { choose } from './helpers/select'
 
 // Each test leaves the session painting again, but they share one app and the
 // frame collector is global to the renderer, so order still matters.
@@ -504,8 +505,8 @@ test.describe('the tab strip', () => {
   })
 
   test('a new tab is added at the end and takes the front, and the first tab keeps its screen', async () => {
-    await page.selectOption('.preset-select', '1440p-27')
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await newTab().click()
     await expect(tabs()).toHaveCount(2)
@@ -513,13 +514,13 @@ test.describe('the tab strip', () => {
     // labelled as new, not as the `about:blank` its panes actually hold.
     await expect(tabs().nth(1)).toHaveAttribute('aria-selected', 'true')
     await expect(tabs().nth(1)).toHaveText('New tab')
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1080p-24')
 
     // Back to the first: its own screen is still there, untouched by the tab
     // that was opened over it.
     await tabs().nth(0).click()
     await expect(tabs().nth(0)).toHaveAttribute('aria-selected', 'true')
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
     // And main followed the click, not just the strip.
     await expect
       .poll(() => app.evaluate(() => (globalThis as any).__obsrv.session.presetId as string))
@@ -547,8 +548,8 @@ test.describe('the tab strip', () => {
   })
 
   test('closing the last tab leaves one blank tab, not none', async () => {
-    await page.selectOption('.preset-select', '1440p-27')
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await page.locator('.chrome-tabs .tab').nth(0).locator('.tab-close').click()
 
@@ -559,7 +560,7 @@ test.describe('the tab strip', () => {
       .poll(() => app.evaluate(() => (globalThis as any).__obsrv.tabs.tabs.length as number))
       .toBe(1)
     // A fresh tab, not the one that was closed wearing its old screen.
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1080p-24')
   })
 
   test('the new-tab button is disabled at the cap and says where to raise it', async () => {
@@ -716,8 +717,8 @@ test.describe('the tab shortcuts are application-menu items', () => {
   })
 
   test('Cmd+W on the last tab leaves a fresh blank one, not an empty window', async () => {
-    await page.selectOption('.preset-select', '1440p-27')
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await invoke('close-tab')
 
@@ -726,7 +727,7 @@ test.describe('the tab shortcuts are application-menu items', () => {
       .poll(() => app.evaluate(() => (globalThis as any).__obsrv.win.isDestroyed() as boolean))
       .toBe(false)
     // A fresh tab, not the one that was closed still wearing its old screen.
-    await expect.poll(() => page.inputValue('.preset-select')).toBe('1080p-24')
+    await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1080p-24')
   })
 })
 
@@ -759,8 +760,8 @@ test.describe('tabs come back on relaunch', () => {
 
     await p1.evaluate(u => window.obsrv.navigate(u), TALL)
     await expect(strip(p1).nth(0)).toHaveText('tall-fixture')
-    await p1.selectOption('.preset-select', 'laptop-768')
-    await expect.poll(() => p1.inputValue('.preset-select')).toBe('laptop-768')
+    await choose(first, p1, '.preset-select', 'laptop-768')
+    await expect.poll(() => p1.getAttribute('.preset-select', 'data-value')).toBe('laptop-768')
 
     await p1.locator('.tab-new').click()
     await expect(strip(p1)).toHaveCount(2)
@@ -799,7 +800,7 @@ test.describe('tabs come back on relaunch', () => {
     await expect(strip(p2).nth(0)).toHaveAttribute('aria-selected', 'true')
     // The screen the tab was being viewed on is part of the session, and a
     // restored tab on the wrong screen is a different observation.
-    await expect.poll(() => p2.inputValue('.preset-select'), { timeout: 10_000 }).toBe('laptop-768')
+    await expect.poll(() => p2.getAttribute('.preset-select', 'data-value'), { timeout: 10_000 }).toBe('laptop-768')
 
     // Restoring a scroll into a page that may have changed underneath is a
     // guess presented as a memory.

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import type { FrameMessage, ObsrvApi, TabReport } from '../shared/api'
+import type { FrameMessage, MenuRequest, ObsrvApi, TabReport } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { HistoryEntry } from '../shared/history'
@@ -44,6 +44,13 @@ const api: ObsrvApi = {
     ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
   setNativeVisible: visible => ipcRenderer.send(IPC.setNativeVisible, visible),
+  openMenu: request => ipcRenderer.invoke(IPC.menuOpen, request),
+  onMenuShow: fn => {
+    const h = (_e: unknown, request: MenuRequest): void => fn(request)
+    ipcRenderer.on(IPC.menuShow, h)
+    return () => ipcRenderer.off(IPC.menuShow, h)
+  },
+  pickMenu: value => ipcRenderer.send(IPC.menuPick, value),
   setMode: mode => ipcRenderer.send(IPC.setMode, mode),
   sendInput: ev => ipcRenderer.send(IPC.sendInput, ev),
   getHostInfo: () => ipcRenderer.invoke(IPC.getHostInfo),
