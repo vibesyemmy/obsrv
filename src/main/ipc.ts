@@ -214,8 +214,11 @@ export function registerIpc(ctx: AppContext): () => void {
   // A third input, for the same reason: a tab with no page renders an empty
   // state in the renderer, and the native view is an OS overlay that would
   // otherwise sit on top of it as a white rectangle.
+  // And a fourth: the settings modal covers the panes, and the chrome cannot
+  // paint over an OS-composited layer, so the view steps aside while it is up.
+  let chromeObscures = false
   tabs.nativeVisible = (s: TabSession): boolean =>
-    s.modeIsLive && panesShowNative && !isBlankUrl(s.url)
+    s.modeIsLive && panesShowNative && !isBlankUrl(s.url) && !chromeObscures
   // And the same for frame delivery, for the same reason: image mode is per
   // tab, so a switch changes which mode is in force without any mode changing,
   // and `setMode` below never fires. Derived here so "live" means one thing.
@@ -269,6 +272,13 @@ export function registerIpc(ctx: AppContext): () => void {
     if (e.sender !== overlay.webContents) return
     if (raw !== null && typeof raw !== 'string') return
     settleMenu(raw)
+  })
+
+  on(IPC.setNativeObscured, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    if (typeof raw !== 'boolean') return
+    chromeObscures = raw
+    applyNativeVisibility()
   })
 
   on(IPC.setNativeVisible, (e, raw: unknown) => {
@@ -458,6 +468,18 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     set mode(v: 'url' | 'image') {
       tab().reportedMode = v
+    },
+    get visionType() {
+      return tab().visionType
+    },
+    set visionType(v) {
+      tab().visionType = v
+    },
+    get visionSeverity() {
+      return tab().visionSeverity
+    },
+    set visionSeverity(v: number) {
+      tab().visionSeverity = v
     },
     panes: 'both',
   }

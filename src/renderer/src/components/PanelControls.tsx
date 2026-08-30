@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import type { PanelProfile } from '../../../shared/types'
-import { selectHostNits, selectProfile, useStore } from '../state/store'
+import { VISION_TYPES } from '../../../shared/vision'
+import { selectHostNits, selectProfile, selectTab, useStore } from '../state/store'
 
 /**
  * The top of the contrast slider means "no black lift": it commits
@@ -168,6 +169,71 @@ export function PanelControls() {
       </label>
 
       <p className="muted">Choosing a profile in the toolbar resets these.</p>
+
+      <VisionControls />
     </div>
+  )
+}
+
+/**
+ * The viewer, kept apart from the panel above it.
+ *
+ * A panel profile is a *screen*; this is a *person*. Putting "Deutan" in the
+ * profile list beside "Budget TN" would say they are the same kind of thing,
+ * and they are not — you can have both at once, and the order matters: the
+ * screen emits light, then the eye receives it.
+ */
+function VisionControls() {
+  const type = useStore(s => selectTab(s).visionType)
+  const severity = useStore(s => selectTab(s).visionSeverity)
+  const setVision = useStore(s => s.setVision)
+  const active = VISION_TYPES.find(t => t.id === type) ?? VISION_TYPES[0]!
+
+  return (
+    <>
+      <h2>Vision</h2>
+      <p className="muted">
+        Simulated on the render, after the panel — the screen emits light, then
+        the eye receives it.
+      </p>
+
+      <div className="vision-control" role="group" aria-label="Colour vision">
+        {VISION_TYPES.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            className={`vision-${t.id}`}
+            title={t.note}
+            aria-pressed={type === t.id}
+            onClick={() => setVision(t.id, severity)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="muted vision-note">{active.note}</p>
+
+      {/* Severity is the point, not a refinement: full dichromacy is the rare
+          end. Deuteranomaly — partial, not absent — is what most people with a
+          colour deficiency actually have, so a tool offering only the extreme
+          would simulate the uncommon case and call it the common one. */}
+      <Slider
+        label="Severity"
+        value={`${Math.round(severity * 100)}%`}
+        className="vision-severity"
+        min={10}
+        max={100}
+        step={10}
+        current={Math.round(severity * 100)}
+        onChange={pct => setVision(type, pct / 100)}
+      />
+
+      <p className="muted">
+        Matrices from Machado et al. (2009) at full severity; the steps between
+        are interpolated, so treat the middle as indicative rather than
+        measured. A simulation answers “does this survive without that hue”. It
+        does not replace a contrast check for text.
+      </p>
+    </>
   )
 }

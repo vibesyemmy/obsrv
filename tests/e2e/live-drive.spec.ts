@@ -4,7 +4,7 @@ import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 
 /**
  * Drives the agent-control server over real loopback HTTP against the real
@@ -103,10 +103,9 @@ test('status answers with the app state, and the toolbar shows the AGENT badge',
   // Any authenticated command nudges the renderer's activity indicator.
   await expect(page.locator('.agent-activity')).toBeVisible()
   // The force-enabled server also reads back through settings: the toggle is on.
-  await openOverflow(page)
-  await expect(page.locator('.overflow-menu .agent-toggle input')).toBeChecked()
-  // A label leaves the menu open; later tests need the panes uncovered.
-  await page.keyboard.press('Escape')
+  await openSettings(page, 'agent')
+  await expect(page.locator('.settings-modal .agent-toggle input')).toBeChecked()
+  await closeSettings(page)
 })
 
 test('status names the tab it describes, and follows the user to another one', async () => {
@@ -664,10 +663,10 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
 test('toggling agent control off stops the server and removes the discovery file', async () => {
   // The real user flow: the toolbar toggle persists agentControl: false and
   // main stops the server.
-  await openOverflow(page)
-  await page.click('.overflow-menu .agent-toggle')
-  await expect(page.locator('.overflow-menu .agent-toggle input')).not.toBeChecked()
-  await page.keyboard.press('Escape')
+  await openSettings(page, 'agent')
+  await page.click('.settings-modal .agent-toggle')
+  await expect(page.locator('.settings-modal .agent-toggle input')).not.toBeChecked()
+  await closeSettings(page)
   await expect.poll(() => existsSync(controlFile)).toBe(false)
   await expect(call('status')).rejects.toThrow(/ECONNREFUSED/)
 })

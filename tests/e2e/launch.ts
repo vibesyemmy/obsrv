@@ -94,8 +94,29 @@ export async function rendererWindow(app: ElectronApplication): Promise<Page> {
  * the two drawers and the agent toggle live there now, so a spec that clicks
  * one has to reach it first.
  */
-export async function openOverflow(page: Page): Promise<void> {
-  if (await page.locator('.overflow-menu').count()) return
-  await page.click('.overflow-button')
-  await page.waitForSelector('.overflow-menu')
+/**
+ * Opens the settings modal, optionally on a named section.
+ *
+ * This replaced `openOverflow`: the overflow menu is gone, and the two things
+ * it led to are now a modal and a drawer with a button each.
+ */
+export async function openSettings(
+  page: Page,
+  section?: 'display' | 'screens' | 'session' | 'agent' | 'updates',
+): Promise<void> {
+  if (!(await page.locator('.settings-modal').count())) {
+    await page.click('.toggle-settings')
+    await page.waitForSelector('.settings-modal')
+  }
+  if (section) {
+    await page.click(`.settings-nav .nav-${section}`)
+    await page.waitForSelector(`.settings-nav .nav-${section}.on`)
+  }
+}
+
+/** Closes it again, for specs that go on to touch the panes. */
+export async function closeSettings(page: Page): Promise<void> {
+  if (!(await page.locator('.settings-modal').count())) return
+  await page.click('.settings-done')
+  await page.waitForSelector('.settings-modal', { state: 'detached' })
 }

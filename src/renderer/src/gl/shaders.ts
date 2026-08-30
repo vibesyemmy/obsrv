@@ -32,6 +32,7 @@ uniform float uGamut;
 uniform float uLevels;
 uniform float uDither;     // 0.0 or 1.0
 uniform float uSmooth;     // 0.0 = texelFetch (bit-exact), 1.0 = mipmapped texture()
+uniform mat3 uVision;      // colour-vision matrix, identity when off
 
 out vec4 fragColor;
 
@@ -80,6 +81,14 @@ void main() {
 
   float d = uDither * (bayer4(t) - 0.5);
   c = floor(c * uLevels + d + 0.5) / uLevels;       // bit depth (+ FRC)
+
+  // The viewer, after the display: everything above is what the panel emits,
+  // and this is the eye receiving it. Back to linear, because the matrix models
+  // cone response and acts on light, not on encoded values. Identity when the
+  // simulation is off, so there is one path rather than a branch.
+  c = pow(clamp(c, 0.0, 1.0), vec3(GAMMA));
+  c = uVision * c;
+  c = pow(clamp(c, 0.0, 1.0), vec3(1.0 / GAMMA));
 
   fragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }

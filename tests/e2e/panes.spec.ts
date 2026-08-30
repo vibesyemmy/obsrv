@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, openOverflow, rendererWindow } from './launch'
+import { launchApp, openSettings, rendererWindow } from './launch'
 import { choose } from './helpers/select'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
@@ -109,15 +109,13 @@ test('main positions the native view exactly over the slot', async () => {
 })
 
 test('the canvas is the target viewport magnified by S', async () => {
-  // 1:1 explicitly: the app opens in fit, which clamps the drawn scale to the
-  // pane, and the backing store below is asserted at true magnification.
-  await page.click('.view-1x')
-  await expect(page.locator('.view-1x')).toHaveAttribute('aria-pressed', 'true')
-  // Pixel-exact pins S to the host scale factor, so the maths is checkable
-  // without knowing the test machine's physical screen size.
-  await openOverflow(page)
-  await page.check('.overflow-menu .pixel-exact input')
-  await page.keyboard.press('Escape')
+  // "Pixels" explicitly: the app opens in fit, which clamps the drawn scale to
+  // the pane, and the backing store below is asserted at true magnification.
+  // That button also pins S to the host scale factor, so the maths is checkable
+  // without knowing the test machine's physical screen size — the two used to
+  // be a view button plus a checkbox in the overflow menu.
+  await page.click('.view-pixels')
+  await expect(page.locator('.view-pixels')).toHaveAttribute('aria-pressed', 'true')
   await choose(app, page, '.preset-select', 'laptop-768')
 
   const dpr = (await canvasSize(page)).dpr

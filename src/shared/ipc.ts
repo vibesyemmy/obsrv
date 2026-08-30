@@ -6,6 +6,7 @@ export const IPC = {
   setViewport: 'obsrv:set-viewport',
   setNativeBounds: 'obsrv:set-native-bounds',
   setNativeVisible: 'obsrv:set-native-visible',
+  setNativeObscured: 'obsrv:set-native-obscured',
   /** Chrome -> main: open a menu in the overlay view. */
   menuOpen: 'obsrv:menu-open',
   /** Main -> overlay: draw this menu. */

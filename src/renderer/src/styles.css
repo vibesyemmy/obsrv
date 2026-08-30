@@ -143,13 +143,13 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .tab:hover { background: var(--chrome-2); }
 /* The chrome's one selected idiom: the `--chrome-3` fill step plus weight,
-   exactly as `.segmented button[aria-pressed]` and `.menu-row[aria-pressed]`
+   exactly as `.segmented button[aria-pressed]` and `.settings-nav button.on`
    mark theirs. Selection is carried by the label button's `aria-selected`, so
    the fill is derived from it rather than duplicated onto the wrapper. */
 .tab:has(> .tab-label[aria-selected='true']) { background: var(--chrome-3); border-color: var(--chrome-3); }
 .tab > .tab-label[aria-selected='true'] { color: var(--text-0); font-weight: 600; }
 
-/* The driven tab, while agent control is on. The 2px inset rule `.menu-row`
+/* The driven tab, while agent control is on. The 2px inset rule the nav
    and `.surround-control` already use to mark a choice, on the leading edge so
    it never competes with the selected fill underneath it.
 
@@ -275,7 +275,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   padding: 0 11px;
   cursor: pointer;
 }
-/* The chrome's one selected idiom, shared with `.menu-row[aria-pressed]`. */
+/* The chrome's one selected idiom, shared with `.settings-nav button.on`. */
 .url-history-row.active { background: var(--chrome-3); box-shadow: inset 2px 0 0 var(--text-0); }
 /* Truncated at the *start*, not the end. What distinguishes one of these
    addresses from another is the tail — the port, the path, the filename —
@@ -438,60 +438,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .segmented button:last-child { border-right: 0; }
 .segmented button[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
 
-/* Right-aligned deliberately: the native pane is an OS-level WebContentsView
-   that covers renderer paint, so a menu reaching the left half of the window
-   would be invisible. 200px against a 900px minWidth always fits the target
-   pane. */
-.overflow { position: relative; flex: 0 0 auto; }
-.overflow-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 10;
-  width: 200px;
-  padding: 5px 0;
-  font-size: 11.5px;
-  background: var(--chrome-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
-.menu-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
-  height: 30px;
-  padding: 0 11px;
-  text-align: left;
-  background: none;
-  color: var(--text-0);
-  border: 0;
-  border-radius: 0;
-  cursor: pointer;
-}
-.menu-row:hover { background: var(--chrome-3); }
-/* Which drawer is open. The fill step is the chrome's one pressed idiom,
-   shared with `.segmented`; `:hover` is the same fill, so the pressed row also
-   carries a 2px inset rule down its leading edge. That marker is the part that
-   survives hover — hovering any row fills it, but only the open drawer's row
-   keeps the rule — and it is the same neutral weight the surround control uses
-   to mark its selection. No hue, here or anywhere else in the chrome. */
-.menu-row[aria-pressed='true'] {
-  background: var(--chrome-3);
-  box-shadow: inset 2px 0 0 var(--text-0);
-}
-.menu-sep { height: 1px; margin: 5px 0; background: var(--line); }
-/* Sized to the 16px icons the other rows lead with, and stripped of the UA's
-   own margins, so every label in the menu starts at the same x — a checkbox
-   row and an icon row otherwise indent differently. */
-.overflow-menu input[type='checkbox'] {
-  accent-color: var(--text-0);
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-}
 
 /* Focus is a 1px inset neutral ring, never Chromium's accent outline. */
 .chrome :is(button, select, input):focus { outline: none; }
@@ -1045,3 +991,122 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 /* Spans the overlay so a press anywhere outside the menu dismisses it, which is
    what a native menu's invisible tracking window does. */
 .menu-backdrop { position: fixed; inset: 0; }
+
+/* --- settings modal ------------------------------------------------------- */
+/* Covers the panes deliberately: the native view is taken off screen while this
+   is up (see `setNativeObscured`), which is correct here and was not for the
+   transient menus that used to do the same thing. */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+}
+.settings-modal {
+  display: grid;
+  grid-template-columns: 196px 1fr;
+  width: min(760px, calc(100% - 48px));
+  height: min(520px, calc(100% - 48px));
+  background: var(--chrome-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 60%);
+  overflow: hidden;
+}
+.settings-modal:focus { outline: none; }
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 10px 8px;
+  overflow: auto;
+  background: var(--chrome-0);
+  border-right: 1px solid var(--line);
+}
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text-1);
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.settings-nav button:hover { background: var(--chrome-1); }
+/* The same fill step every other pressed control in this app uses — never hue. */
+.settings-nav button.on { background: var(--chrome-3); color: var(--text-0); }
+/* Agent control is the exception the style spec already carves out: an open
+   control server is attention, not decoration. */
+.nav-chip {
+  padding: 2px 4px;
+  font: 400 10px/1 var(--mono);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+}
+
+.settings-body { display: flex; flex-direction: column; min-width: 0; }
+.settings-body .controls { flex: 1 1 auto; overflow: auto; padding: 16px 20px; }
+.settings-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+}
+/* No Cancel beside it: settings commit as they change (main can refuse one, and
+   the panel rolls that field back), so a Cancel would promise an undo that does
+   not exist. */
+.settings-done {
+  height: 28px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-0);
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.settings-done:hover { background: var(--chrome-3); }
+.settings-modal :is(button, input, select):focus { outline: none; }
+.settings-modal :is(button, input, select):focus-visible {
+  outline: 1px solid var(--text-1);
+  outline-offset: 1px;
+}
+
+/* The viewer control, below the panel's own. Buttons rather than a select: five
+   short labels fit, and the choice is worth seeing all of at once. */
+.vision-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 4px;
+}
+.vision-control button {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-1);
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.vision-control button:hover { background: var(--chrome-3); }
+/* The same pressed idiom as every other group in this app: a fill step and
+   weight, never hue — which matters more here than anywhere, since the control
+   next to it is busy changing the colours. */
+.vision-control button[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
+.vision-note { min-height: 2.4em; }

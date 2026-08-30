@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import type { VisionType } from '../shared/vision'
 import type { AgentViewMode } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_ORIENTATION } from '../shared/presets'
@@ -65,6 +66,9 @@ export class TabSession {
    * renderer existed to report that when the list came off disk.
    */
   orientation: Orientation = DEFAULT_ORIENTATION
+  /** The viewer simulation the renderer reports, mirrored per tab like the rest. */
+  visionType: VisionType = 'none'
+  visionSeverity = 1
   viewMode: AgentViewMode = 'fit'
 
   /**

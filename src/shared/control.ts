@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { isVisionType, VISION_TYPES, type VisionType } from './vision'
 import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
 import { screenShape } from './calibration'
@@ -54,6 +55,10 @@ export interface AgentUiState {
   /** Which way round the tab's screen is held — mirrors the store's `orientation`. */
   orientation: Orientation
   mode: 'url' | 'image'
+  /** The viewer simulation, so a capture is never silently colour-shifted. */
+  visionType: VisionType
+  /** 0..1. Meaningless when the type is `none`, and reported anyway. */
+  visionSeverity: number
 }
 
 /**
@@ -151,6 +156,8 @@ export interface AgentApplyPatch {
   panes?: AgentPanes
   orientation?: Orientation
   pixelExact?: boolean
+  visionType?: VisionType
+  visionSeverity?: number
   /** Centre this target pixel in the pane's 1:1 view (fit jumps to 1:1 there). */
   panTo?: { x: number; y: number }
   /** Draw a temporary neutral overlay over this target-pixel rect. */
@@ -164,6 +171,7 @@ export const CONTROL_COMMANDS = [
   'setProfile',
   'setViewMode',
   'setPanes',
+  'setVision',
   'setOrientation',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
@@ -290,6 +298,22 @@ export function panesApplyError(v: unknown): string | null {
   return v === 'both' || v === 'target' ? null : `setPanes payload must be { panes: 'both' | 'target' }`
 }
 
+/**
+ * Validates a `setVision` payload. Severity is accepted alongside the type
+ * because they are one decision — "deutan" without a severity is ambiguous
+ * between the common partial case and the rare complete one.
+ */
+export function visionApplyError(type: unknown, severity: unknown): string | null {
+  if (!isVisionType(type)) {
+    return `setVision payload must be { type: ${VISION_TYPES.map(t => `'${t.id}'`).join(' | ')}, severity?: 0..1 }`
+  }
+  if (severity === undefined) return null
+  if (typeof severity !== 'number' || !(severity >= 0 && severity <= 1)) {
+    return 'setVision severity must be a number from 0 to 1'
+  }
+  return null
+}
+
 export function pixelExactApplyError(v: unknown): string | null {
   return typeof v === 'boolean' ? null : 'setPixelExact payload must be { on: boolean }'
 }
@@ -404,6 +428,12 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (typeof cssHeight !== 'number' || !Number.isFinite(cssHeight) || cssHeight < 0) return null
   const reported = raw.screenShape
   if (reported !== undefined && !isOrientation(reported)) return null
+  // And the same version skew once more. An app that predates the vision
+  // simulation is not simulating anything, so `none` describes it exactly.
+  const visionType = raw.visionType ?? 'none'
+  if (!isVisionType(visionType)) return null
+  const visionSeverity = raw.visionSeverity ?? 1
+  if (typeof visionSeverity !== 'number' || !(visionSeverity >= 0 && visionSeverity <= 1)) return null
   return {
     version,
     url,
@@ -413,6 +443,8 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     panes,
     orientation,
     mode,
+    visionType,
+    visionSeverity,
     tabId,
     tabIndex,
     cssWidth,

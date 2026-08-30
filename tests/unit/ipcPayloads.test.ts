@@ -216,11 +216,23 @@ describe('parseUiState', () => {
     panes: 'both',
     orientation: 'portrait',
     mode: 'url',
+    visionType: 'none',
+    visionSeverity: 1,
   }
   /** Both rects default to null before the renderer has measured. */
   const unmeasured = { targetBounds: null, canvasBounds: null }
   it('copies exactly the known keys; missing targetBounds means null (pre-mount)', () => {
     expect(parseUiState({ ...good, extra: 1 })).toEqual({ ...good, ...unmeasured })
+  })
+  it('carries the vision simulation, defaulting an absent one and refusing a bad one', () => {
+    expect(parseUiState({ ...good, visionType: 'deutan', visionSeverity: 0.6 })).toMatchObject({
+      visionType: 'deutan',
+      visionSeverity: 0.6,
+    })
+    const { visionType: _t, visionSeverity: _s, ...older } = good
+    expect(parseUiState(older)).toMatchObject({ visionType: 'none', visionSeverity: 1 })
+    expect(parseUiState({ ...good, visionType: 'protanopia' })).toBeNull()
+    expect(parseUiState({ ...good, visionSeverity: -0.1 })).toBeNull()
   })
   it('carries a solo-target report, and defaults panes when the field is absent', () => {
     expect(parseUiState({ ...good, panes: 'target' })?.panes).toBe('target')

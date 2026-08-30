@@ -9,7 +9,7 @@ import { NativeSlot } from './components/NativeSlot'
 import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls } from './components/PanelControls'
-import { SettingsPanel } from './components/SettingsPanel'
+import { SettingsModal } from './components/SettingsModal'
 import { EmptyState } from './components/EmptyState'
 import { TargetCanvas } from './components/TargetCanvas'
 import { Toast } from './components/Toast'
@@ -61,10 +61,13 @@ export function App() {
   const profileId = useStore(s => selectTab(s).profileId)
   const orientation = useStore(s => selectTab(s).orientation)
   const viewMode = useStore(s => selectTab(s).viewMode)
+  const visionType = useStore(s => selectTab(s).visionType)
+  const visionSeverity = useStore(s => selectTab(s).visionSeverity)
   const tabUrl = useStore(s => selectTab(s).url)
   const activeId = useStore(s => s.activeId)
   const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
+  const nativeObscured = useStore(s => s.nativeObscured)
   const split = useStore(s => s.settings.split)
 
   // The store performs no IPC of its own; this is the one place that bridges.
@@ -134,6 +137,13 @@ export function App() {
     window.obsrv.setNativeVisible(panes === 'both')
   }, [panes])
 
+  // Same shape, different reason: the modal covers the panes and the chrome
+  // cannot paint over an OS-composited layer. Main derives the visibility from
+  // both inputs, so neither can clobber the other.
+  useEffect(() => {
+    window.obsrv.setNativeObscured(nativeObscured)
+  }, [nativeObscured])
+
 
   // The pane's bounds change with the window, the drawers and the panes'
   // split, and every one of those also resizes the pane — so a
@@ -190,8 +200,8 @@ export function App() {
   // renderer has nothing worth saying about a list it has not yet been told.
   useEffect(() => {
     if (!tabsKnown) return
-    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, viewMode, panes, mode, targetBounds, canvasBounds })
-  }, [tabsKnown, activeId, presetId, profileId, orientation, viewMode, panes, mode, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
+  }, [tabsKnown, activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -207,6 +217,11 @@ export function App() {
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
       if (patch.panes !== undefined) s.setPanes(patch.panes)
       if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)
+      // Type and severity are one decision, so they are applied together: a
+      // patch naming only the type takes the severity already in force.
+      if (patch.visionType !== undefined) {
+        s.setVision(patch.visionType, patch.visionSeverity ?? selectTab(useStore.getState()).visionSeverity)
+      }
       if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
       if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)
     })
@@ -373,12 +388,11 @@ export function App() {
             <PanelControls />
           </aside>
         )}
-        {drawer === 'settings' && (
-          <aside className="drawer">
-            <SettingsPanel />
-          </aside>
-        )}
       </div>
+      {/* Not a drawer: a drawer narrows the panes so you can watch a render
+          while you adjust it, which is what the panel sliders need and nothing
+          in settings does. */}
+      {drawer === 'settings' && <SettingsModal onClose={() => setDrawer('none')} />}
       <Toast />
     </div>
   )

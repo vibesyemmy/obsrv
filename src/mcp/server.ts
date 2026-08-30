@@ -353,6 +353,26 @@ const driveInputShape = {
       "Show both panes, or give the target render the whole window ('target'). Solo target is usually what you want before a capture.",
     ),
   pixelExact: z.boolean().optional().describe("Toggle the toolbar's pixel-exact checkbox (pins the magnification to the host scale)."),
+  vision: z
+    .enum(['none', 'protan', 'deutan', 'tritan', 'achromat'])
+    .optional()
+    .describe(
+      "Simulate a colour-vision deficiency on the target render: 'deutan' (green-weak, the most common), " +
+        "'protan' (red-weak), 'tritan' (blue-yellow, rare), 'achromat' (no hue at all — the strongest test of " +
+        "whether a UI relies on colour alone), or 'none' to turn it off. Applied after the panel simulation, " +
+        'because the screen emits light and then the eye receives it. The target pane\'s footer names it while ' +
+        'it is on, so a capture is never silently colour-shifted.',
+    ),
+  visionSeverity: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      'How complete the deficiency is, 0..1 (default 1). This matters: full dichromacy is the rare end, and ' +
+        'partial anomalous trichromacy — roughly 0.4-0.6 — is what most people with a colour deficiency have. ' +
+        'Intermediate values are interpolated, so treat them as indicative rather than measured.',
+    ),
   focus: z.boolean().optional().describe('true: bring the Obsrv window to the front first, so the user sees what follows.'),
   reload: z.boolean().optional().describe('true: reload both panes (the same action as the toolbar reload).'),
   back: z.boolean().optional().describe('true: history back (native pane history; the target mirrors the committed page).'),
@@ -801,7 +821,7 @@ server.registerTool(
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → orientation → profile → viewMode → panes → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → orientation → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
@@ -836,6 +856,8 @@ server.registerTool(
     viewMode?: '1:1' | 'fit'
     panes?: 'both' | 'target'
     pixelExact?: boolean
+    vision?: 'none' | 'protan' | 'deutan' | 'tritan' | 'achromat'
+    visionSeverity?: number
     focus?: boolean
     reload?: boolean
     back?: boolean
@@ -872,6 +894,14 @@ server.registerTool(
       }
       if (input.panes !== undefined) {
         await controlCall(live.info, 'setPanes', { panes: input.panes }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.vision !== undefined || input.visionSeverity !== undefined) {
+        await controlCall(
+          live.info,
+          'setVision',
+          { type: input.vision ?? 'none', severity: input.visionSeverity },
+          LIVE_APPLY_TIMEOUT_MS,
+        )
       }
       if (input.pixelExact !== undefined) {
         await controlCall(live.info, 'setPixelExact', { on: input.pixelExact }, LIVE_APPLY_TIMEOUT_MS)
