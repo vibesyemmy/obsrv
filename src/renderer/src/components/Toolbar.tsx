@@ -12,7 +12,6 @@ import {
   selectViewport,
   useStore,
   type Panes,
-  type ViewMode,
 } from '../state/store'
 import { useAgentActivity } from '../hooks/useAgentActivity'
 import { Icon } from './Icon'
@@ -23,10 +22,42 @@ import { Select, type SelectGroup, type SelectOption } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
 
-/** The target-pane view control. Fit is an overview, so its label says so. */
-const VIEWS: { id: ViewMode; label: string; title: string }[] = [
-  { id: '1:1', label: '1:1', title: 'Actual size' },
-  { id: 'fit', label: 'Fit', title: 'Fit the pane — not pixel-exact' },
+/**
+ * The three states the user picks between. Deliberately *not* the shape the
+ * store or the agent API uses: those keep `viewMode` and `pixelExact` as
+ * separate fields, because `obsrv_drive` and the control server speak them that
+ * way and an npm MCP server talks to whatever DMG the user has installed. This
+ * is a view over them, mapped in one place, rather than a wire change.
+ */
+type ViewChoice = 'fit' | 'actual' | 'pixels'
+
+/** Class hooks. `view-1x` predates the third state and is left alone: five
+ *  spec files reach for it, and it still names the same button. */
+const VIEW_CLASS: Record<ViewChoice, string> = {
+  fit: 'view-fit',
+  actual: 'view-1x',
+  pixels: 'view-pixels',
+}
+
+/**
+ * How big the render is drawn. Three states rather than a pair plus a hidden
+ * checkbox, because there are three: an overview, and the two different truths.
+ *
+ * "Actual" matches physical size — a 6.1" phone at 3x is drawn smaller than any
+ * 1x screen's pixel, because that is how big it really is. "Pixels" gives each
+ * target pixel one pixel of this display, which is the view for judging whether
+ * a hairline survives. Pixel-exact used to be a checkbox in the overflow menu,
+ * where it was both hard to find and inert half the time: it does nothing under
+ * Fit, whose own scale overrides it.
+ *
+ * The labels avoid "1:1" deliberately. In most design tools 1:1 means one pixel
+ * per pixel, which here is the *other* option — so the term would point at the
+ * wrong button for exactly the people this app is for.
+ */
+const VIEWS: { id: ViewChoice; label: string; title: string }[] = [
+  { id: 'fit', label: 'Fit', title: 'Fit the render in the pane — an overview, not a measurement' },
+  { id: 'actual', label: 'Actual', title: 'Actual size — as physically large as it would be on that screen' },
+  { id: 'pixels', label: 'Pixels', title: 'Pixel-exact — one target pixel per pixel of this display' },
 ]
 
 /** Native-only is not offered: that is a browser, and the user has one. */
@@ -86,6 +117,21 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const update = useStore(s => s.update)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
+
+  // Fit wins when it is on: pixel-exact is inert underneath it, so reporting it
+  // as the pressed button would claim a state the render is not in.
+  const viewChoice: ViewChoice = viewMode === 'fit' ? 'fit' : pixelExact ? 'pixels' : 'actual'
+
+  const setViewChoice = (choice: ViewChoice): void => {
+    if (choice === 'fit') {
+      setViewMode('fit')
+      return
+    }
+    // Both, always: arriving at "Actual" from "Pixels" has to clear the flag,
+    // and arriving at either from Fit has to leave Fit.
+    setViewMode('1:1')
+    setPixelExact(choice === 'pixels')
+  }
   const panes = useStore(s => s.panes)
   const setPanes = useStore(s => s.setPanes)
   const agentControl = useStore(s => s.settings.agentControl)
@@ -347,14 +393,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         <OverflowMenu>
           {close => (
             <>
-              <label className="menu-row pixel-exact">
-                <input
-                  type="checkbox"
-                  checked={pixelExact}
-                  onChange={e => setPixelExact(e.target.checked)}
-                />
-                Pixel-exact
-              </label>
               <button
                 className="menu-row toggle-panel"
                 type="button"
@@ -432,9 +470,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         <Segmented
           className="view-control"
           ariaLabel="Target view"
-          value={viewMode}
-          options={VIEWS.map(v => ({ ...v, className: v.id === 'fit' ? 'view-fit' : 'view-1x' }))}
-          onChange={setViewMode}
+          value={viewChoice}
+          options={VIEWS.map(v => ({ ...v, className: VIEW_CLASS[v.id] }))}
+          onChange={setViewChoice}
         />
 
         <Segmented

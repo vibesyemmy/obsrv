@@ -78,9 +78,19 @@ than one 82px slab.
 
 ### Overflow menu (`⋮`)
 
-Pixel-exact · Panel controls · Settings · Agent control. (Checking for updates is
-not a menu item — Settings already carries a check-now button, and the toolbar
-surfaces an available update on its own.)
+Panel controls · Settings · Agent control. (Checking for updates is not a menu
+item — Settings already carries a check-now button, and the toolbar surfaces an
+available update on its own.)
+
+**Pixel-exact left this menu (2026-08-30).** It was listed here as a rare
+control, and it is not one: it is the second of the two truthful ways to look at
+a render — actual physical size, or one target pixel per host pixel — while its
+sibling, the view pair, sat in the row as a first-class control. Worse, as a
+checkbox it was inert under Fit, whose own scale overrides it, so half the time
+it did nothing. It is now the third state of the view control (Fit · Actual ·
+Pixels), which is one control for one question. `viewMode` and `pixelExact`
+remain separate fields in the store and on the agent API; only the chrome
+collapses them.
 
 Rare controls only. Panel controls and Settings still open the existing drawers; the
 menu item shows their open state.

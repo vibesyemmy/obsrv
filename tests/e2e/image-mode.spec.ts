@@ -71,10 +71,7 @@ test('a dropped 2x export is shown at its 1x size', async () => {
   await page.fill('.url-form input', FIXTURE)
   await page.press('.url-form input', 'Enter')
   await expect(page.locator('.url-form input')).toHaveValue(FIXTURE)
-  await openOverflow(page)
-  await page.check('.overflow-menu .pixel-exact input')
-  // The label leaves the menu open; the drop below needs the panes uncovered.
-  await page.keyboard.press('Escape')
+  await page.click('.view-pixels')
 
   await drop(page, 400, 200, 'hero@2x.png')
   // The strip names the file and asks for the scale.

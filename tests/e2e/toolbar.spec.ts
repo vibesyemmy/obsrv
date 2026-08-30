@@ -29,7 +29,7 @@ test('the overflow menu opens, closes on Escape, and holds the rare controls', a
   await expect(page.locator('.overflow-menu')).toHaveCount(0)
   await page.click('.overflow-button')
   await expect(page.locator('.overflow-menu')).toHaveCount(1)
-  for (const sel of ['.pixel-exact', '.toggle-panel', '.toggle-settings', '.agent-toggle']) {
+  for (const sel of ['.toggle-panel', '.toggle-settings', '.agent-toggle']) {
     await expect(page.locator(`.overflow-menu ${sel}`)).toHaveCount(1)
   }
   await page.keyboard.press('Escape')
@@ -104,6 +104,9 @@ test('icon buttons are at least 30px', async () => {
 // Both CSS defects this branch fixed were invisible to the suite until someone
 // looked at a screenshot. The leading element's right edge is where the label
 // starts, so pinning it catches a checkbox and an icon indenting differently.
+// Three rows since pixel-exact moved into the view control; the mix that makes
+// this worth asserting survives, because the agent toggle is still a checkbox
+// among icons.
 test('every menu row indents its label to the same x', async () => {
   await page.click('.overflow-button')
   await page.waitForSelector('.overflow-menu')
@@ -114,7 +117,7 @@ test('every menu row indents its label to the same x', async () => {
     ),
   )
 
-  expect(edges).toHaveLength(4)
+  expect(edges).toHaveLength(3)
   expect(new Set(edges).size).toBe(1)
   await page.keyboard.press('Escape')
 })

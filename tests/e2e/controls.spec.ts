@@ -155,3 +155,46 @@ test('a drawer narrows the panes and the native view follows', async () => {
   await expect.poll(async () => (await slot()).width).toBeGreaterThan(withDrawer.width)
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds())).toEqual(await slot())
 })
+
+test('the view control is three-way, and Fit outranks pixel-exact', async () => {
+  const pressed = async (): Promise<string[]> =>
+    page.locator('.view-control button[aria-pressed="true"]').evaluateAll(els =>
+      els.map(e => e.className),
+    )
+  // Exactly one at a time, or the row would be claiming two magnifications.
+  await page.click('.view-pixels')
+  expect(await pressed()).toEqual(['view-pixels'])
+  await page.click('.view-1x')
+  expect(await pressed()).toEqual(['view-1x'])
+  await page.click('.view-fit')
+  expect(await pressed()).toEqual(['view-fit'])
+
+  // Pixel-exact is inert under Fit: its scale overrides. Coming back from Fit
+  // to "Pixels" must therefore re-assert it rather than assume it survived.
+  await page.click('.view-pixels')
+  await expect(page.locator('.view-pixels')).toHaveAttribute('aria-pressed', 'true')
+  await page.click('.view-fit')
+  await expect(page.locator('.view-pixels')).toHaveAttribute('aria-pressed', 'false')
+  await page.click('.view-pixels')
+  await expect(page.locator('.view-pixels')).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('"Actual" and "Pixels" are different magnifications, and the footer says so', async () => {
+  const magnification = async (): Promise<string> =>
+    (await page.locator('.pane.target-pane .pane-footer').textContent()) ?? ''
+
+  await choose(app, page, '.preset-select', 'iphone-61')
+  await page.click('.view-1x')
+  const actual = await magnification()
+  await page.click('.view-pixels')
+  const pixels = await magnification()
+
+  // A 6.1" phone at 3x is physically smaller than a host pixel, so actual size
+  // and pixel-exact cannot agree — if they did, one of the two would be a lie.
+  expect(actual).not.toBe(pixels)
+  // Fit disclaims itself, and only Fit does.
+  await page.click('.view-fit')
+  expect(await magnification()).toContain('not pixel-exact')
+  await page.click('.view-pixels')
+  expect(await magnification()).not.toContain('not pixel-exact')
+})
