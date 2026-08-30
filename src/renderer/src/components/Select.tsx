@@ -67,7 +67,20 @@ export function Select({ className, value, label, ariaLabel, groups, onChange }:
           }
         }}
       >
-        <span className="select-label">{label}</span>
+        {/* Every label is laid in the same grid cell, so the widest one sets the
+            trigger's width and the chosen one is simply the visible layer. The
+            control therefore never changes size as the selection changes —
+            which, in a row of centred controls, would nudge everything beside
+            it sideways. Derived from the options rather than a measured pixel
+            value, so adding a preset cannot quietly bring the shifting back. */}
+        <span className="select-label">
+          <span className="select-label-text">{label}</span>
+          {groups.flatMap(g => g.options).map(o => (
+            <span className="select-label-sizer" aria-hidden="true" key={o.value}>
+              {o.label}
+            </span>
+          ))}
+        </span>
         <span className="select-chevron">
           <Icon name="chevron" size={14} />
         </span>

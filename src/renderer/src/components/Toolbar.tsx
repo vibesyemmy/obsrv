@@ -12,7 +12,6 @@ import {
   selectViewport,
   useStore,
   type Panes,
-  type Surround,
   type ViewMode,
 } from '../state/store'
 import { useAgentActivity } from '../hooks/useAgentActivity'
@@ -23,11 +22,6 @@ import { TabBar } from './TabBar'
 import { Select, type SelectGroup, type SelectOption } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
-const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
-  { id: 'black', label: 'Black surround', swatch: '#000000' },
-  { id: 'graphite', label: 'Graphite surround', swatch: '#2a2a2a' },
-  { id: 'grey50', label: 'Neutral 50% surround', swatch: '#808080' },
-]
 
 /** The target-pane view control. Fit is an overview, so its label says so. */
 const VIEWS: { id: ViewMode; label: string; title: string }[] = [
@@ -89,9 +83,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
-  const surround = useStore(s => s.surround)
   const update = useStore(s => s.update)
-  const setSurround = useStore(s => s.setSurround)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
   const panes = useStore(s => s.panes)
@@ -461,21 +453,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           groups={PROFILE_GROUPS}
           onChange={setProfile}
         />
-
-        <div className="surround-control" role="group" aria-label="Pane surround">
-          {SURROUNDS.map(s => (
-            <button
-              key={s.id}
-              type="button"
-              title={s.label}
-              aria-label={s.label}
-              aria-pressed={surround === s.id}
-              onClick={() => setSurround(s.id)}
-            >
-              <span className="surround-swatch" style={{ background: s.swatch }} />
-            </button>
-          ))}
-        </div>
 
         {/* No spacer: this row centres its controls, and the chip below is out
             of flow so its presence cannot shift them off centre. */}

@@ -154,3 +154,58 @@ test('the groups and the tick survive the trip through main', async () => {
   // And the control still does its job, not merely its animation.
   await expect(page.locator('.pane.target-pane')).toContainText('1920×1080')
 })
+
+test('a second menu replaces the first rather than stranding it', async () => {
+  await openPresets()
+  // Opening the profile menu while the screen menu is up must settle the first
+  // request — a promise left pending would hang that control for the whole run.
+  await page.locator('.profile-select').click()
+  await expect.poll(() => menuRows(app).then(r => r.includes('budget-tn'))).toBe(true)
+  expect(await menuRows(app)).not.toContain('laptop-768')
+
+  await pickMenu(app, 'budget-tn')
+  await expect(page.locator('.profile-select')).toHaveAttribute('data-value', 'budget-tn')
+  // The screen control is still usable, which it would not be had its promise
+  // been left unresolved.
+  await choose(app, page, '.preset-select', '1080p-24')
+})
+
+test('the trigger keeps its width whatever is chosen', async () => {
+  // In a centred row, a control that resizes with its label drags every
+  // control beside it sideways on each change. The trigger is sized to its
+  // widest option instead, so the row is still.
+  const width = async (sel: string): Promise<number> =>
+    (await page.locator(sel).boundingBox())!.width
+
+  await choose(app, page, '.preset-select', '1080p-24')
+  const short = await width('.preset-select')
+  const rowBefore = (await page.locator('.chrome-screen').boundingBox())!
+
+  // The longest label in the list, by some margin.
+  await choose(app, page, '.preset-select', 'laptop-768-11')
+  await expect(page.locator('.preset-select .select-label-text')).toHaveText(/Chromebook/)
+  expect(await width('.preset-select')).toBe(short)
+
+  // And the neighbours have not moved.
+  const viewControl = await page.locator('.view-control').boundingBox()
+  const rowAfter = (await page.locator('.chrome-screen').boundingBox())!
+  expect(rowAfter.x).toBe(rowBefore.x)
+  expect(viewControl).not.toBeNull()
+
+  await choose(app, page, '.preset-select', '1080p-24')
+  expect(await width('.preset-select')).toBe(short)
+})
+
+test('the surround control moved to settings and still works', async () => {
+  // It is a set-once preference, not a per-render control, so it lives in the
+  // drawer rather than taking permanent room in the toolbar.
+  await expect(page.locator('.chrome-screen .surround-control')).toHaveCount(0)
+
+  await openOverflow(page)
+  await page.click('.overflow-menu .toggle-settings')
+  const control = page.locator('.drawer .surround-control')
+  await expect(control).toHaveCount(1)
+
+  await control.locator('button').first().click()
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.surround)).toBe('black')
+})

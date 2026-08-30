@@ -346,6 +346,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   cursor: pointer;
 }
 .select-trigger:hover { background: var(--chrome-3); }
+/* The stack that fixes the width: one cell, every label in it, only the chosen
+   one visible. `visibility` rather than `display: none` because a hidden box
+   still has to take its width for this to work at all. */
+.select-label { display: grid; align-items: center; }
+.select-label > * { grid-area: 1 / 1; white-space: nowrap; text-align: left; }
+.select-label-sizer { visibility: hidden; }
 .select-trigger:focus-visible { outline: none; border-color: var(--text-1); }
 .select-shell .select-chevron {
   position: absolute;
