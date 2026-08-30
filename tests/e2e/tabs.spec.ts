@@ -505,7 +505,7 @@ test.describe('the tab strip', () => {
   })
 
   test('a new tab is added at the end and takes the front, and the first tab keeps its screen', async () => {
-    await choose(page, '.preset-select', '1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
     await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await newTab().click()
@@ -548,7 +548,7 @@ test.describe('the tab strip', () => {
   })
 
   test('closing the last tab leaves one blank tab, not none', async () => {
-    await choose(page, '.preset-select', '1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
     await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await page.locator('.chrome-tabs .tab').nth(0).locator('.tab-close').click()
@@ -717,7 +717,7 @@ test.describe('the tab shortcuts are application-menu items', () => {
   })
 
   test('Cmd+W on the last tab leaves a fresh blank one, not an empty window', async () => {
-    await choose(page, '.preset-select', '1440p-27')
+    await choose(app, page, '.preset-select', '1440p-27')
     await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1440p-27')
 
     await invoke('close-tab')
@@ -760,7 +760,7 @@ test.describe('tabs come back on relaunch', () => {
 
     await p1.evaluate(u => window.obsrv.navigate(u), TALL)
     await expect(strip(p1).nth(0)).toHaveText('tall-fixture')
-    await choose(p1, '.preset-select', 'laptop-768')
+    await choose(first, p1, '.preset-select', 'laptop-768')
     await expect.poll(() => p1.getAttribute('.preset-select', 'data-value')).toBe('laptop-768')
 
     await p1.locator('.tab-new').click()

@@ -52,7 +52,7 @@ test.afterAll(async () => {
 
 test('the sliders override the profile, and picking a profile resets them', async () => {
   await openDrawer('panel')
-  await choose(page, '.profile-select', 'budget-tn')
+  await choose(app, page, '.profile-select', 'budget-tn')
   await expect(page.locator('.bits-select')).toHaveValue('6')
 
   await page.selectOption('.bits-select', '8')
@@ -62,7 +62,7 @@ test('the sliders override the profile, and picking a profile resets them', asyn
   // And the readout says so.
   await expect(page.locator('.target-pane .pane-footer')).toContainText('Custom panel')
 
-  await choose(page, '.profile-select', 'old-laptop')
+  await choose(app, page, '.profile-select', 'old-laptop')
   await expect(page.locator('.bits-select')).toHaveValue('6')
   await expect(page.locator('.frc-check')).not.toBeChecked()
   await expect(page.locator('.target-pane .pane-footer')).toContainText('Old laptop')

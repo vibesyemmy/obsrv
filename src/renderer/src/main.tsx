@@ -2,6 +2,7 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/600.css'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { MenuLayer } from './components/MenuLayer'
 import './styles.css'
 
 /**
@@ -26,4 +27,15 @@ function BrowserNotice() {
   )
 }
 
-createRoot(document.getElementById('root')!).render('obsrv' in window ? <App /> : <BrowserNotice />)
+/**
+ * One bundle serves two views. The overlay (`src/main/overlay.ts`) loads this
+ * same page with `?overlay=1` and draws only menus: it exists to paint over the
+ * native pane, which the OS composites above this window's DOM. Its page must
+ * be transparent, or it would cover the panes with a sheet of chrome.
+ */
+const overlay = new URLSearchParams(location.search).has('overlay')
+if (overlay) document.documentElement.dataset.overlay = ''
+
+createRoot(document.getElementById('root')!).render(
+  !('obsrv' in window) ? <BrowserNotice /> : overlay ? <MenuLayer /> : <App />,
+)

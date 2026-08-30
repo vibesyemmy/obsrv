@@ -6,7 +6,14 @@ export const IPC = {
   setViewport: 'obsrv:set-viewport',
   setNativeBounds: 'obsrv:set-native-bounds',
   setNativeVisible: 'obsrv:set-native-visible',
-  setNativeObscured: 'obsrv:set-native-obscured',
+  /** Chrome -> main: open a menu in the overlay view. */
+  menuOpen: 'obsrv:menu-open',
+  /** Main -> overlay: draw this menu. */
+  menuShow: 'obsrv:menu-show',
+  /** Overlay -> main: a row was chosen, or the menu was dismissed. */
+  menuPick: 'obsrv:menu-pick',
+  /** Main -> chrome: the outcome, for the control that asked. */
+  menuResult: 'obsrv:menu-result',
   setMode: 'obsrv:set-mode',
   sendInput: 'obsrv:send-input',
   getHostInfo: 'obsrv:get-host-info',

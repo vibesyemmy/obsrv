@@ -44,12 +44,16 @@ export interface ObsrvApi {
    */
   setNativeVisible(visible: boolean): void
   /**
-   * Take the native view off screen because the renderer needs to draw over
-   * that rectangle — an open menu. Separate from `setNativeVisible`, which is
-   * the panes toggle: main derives the view's visibility from every input at
-   * once, and two callers driving one setter would clobber each other.
+   * Open a menu in the overlay view and resolve with the chosen value, or
+   * `null` if it was dismissed. The menu cannot be drawn by the chrome itself:
+   * the native pane is composited above the window's DOM, so a dropdown
+   * anchored in the toolbar would open underneath it.
    */
-  setNativeObscured(obscured: boolean): void
+  openMenu(request: MenuRequest): Promise<string | null>
+  /** Overlay side: the menu to draw. */
+  onMenuShow(fn: (request: MenuRequest) => void): () => void
+  /** Overlay side: report the outcome and let main put the view away. */
+  pickMenu(value: string | null): void
   setMode(mode: 'url' | 'image'): void
   sendInput(ev: TargetInputEvent): void
   getHostInfo(): Promise<HostInfo>
@@ -154,4 +158,29 @@ declare global {
   interface Window {
     obsrv: ObsrvApi
   }
+}
+
+/** One option row. `value` is what the caller gets back. */
+export interface MenuOption {
+  value: string
+  label: string
+}
+
+/** A titled run of rows; the title is omitted for ungrouped ones. */
+export interface MenuGroup {
+  label?: string
+  options: MenuOption[]
+}
+
+export interface MenuRequest {
+  groups: MenuGroup[]
+  /** The row that carries the tick, and where the keyboard starts. */
+  value: string
+  ariaLabel: string
+  /**
+   * The trigger's rectangle in the window's own coordinates. The overlay spans
+   * the whole content area, so these need no conversion — and the menu is
+   * clamped to that area, which is what keeps it inside the app.
+   */
+  anchor: { x: number; y: number; width: number; height: number }
 }

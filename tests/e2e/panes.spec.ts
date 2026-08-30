@@ -118,7 +118,7 @@ test('the canvas is the target viewport magnified by S', async () => {
   await openOverflow(page)
   await page.check('.overflow-menu .pixel-exact input')
   await page.keyboard.press('Escape')
-  await choose(page, '.preset-select', 'laptop-768')
+  await choose(app, page, '.preset-select', 'laptop-768')
 
   const dpr = (await canvasSize(page)).dpr
   await expect
@@ -133,7 +133,7 @@ test('the canvas is the target viewport magnified by S', async () => {
 })
 
 test('switching preset resizes the target', async () => {
-  await choose(page, '.preset-select', '1080p-27')
+  await choose(app, page, '.preset-select', '1080p-27')
 
   const dpr = (await canvasSize(page)).dpr
   await expect

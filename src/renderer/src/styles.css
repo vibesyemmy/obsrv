@@ -404,17 +404,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    the selection moves. */
 .select-tick { display: flex; width: 14px; justify-content: center; color: var(--text-0); }
 
-/* Stands in for the native view while a menu covers it. The view is an
-   OS-composited layer the renderer cannot paint over, so it is taken off
-   screen for as long as the menu is open (see `setNativeObscured`); this is
-   what fills the hole, and it reads as "there is a menu over this" rather than
-   as a pane that went blank. */
-.native-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--surround);
-  opacity: 0.92;
-}
 
 /* Segmented groups. Pressed is a fill step and weight, never hue. */
 .segmented {
@@ -1037,3 +1026,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    being simulated, which is the one fact that survives having no page. Stacking
    rather than insetting the overlay, so nothing depends on the footer's height. */
 .pane-footer { position: relative; z-index: 3; }
+
+/* --- overlay view --------------------------------------------------------- */
+/* The menu view is a transparent sheet over the whole window, so its page must
+   paint nothing of its own — a background here would hide both panes. */
+:root[data-overlay] html,
+:root[data-overlay],
+:root[data-overlay] body,
+:root[data-overlay] #root {
+  background: transparent;
+}
+/* Spans the overlay so a press anywhere outside the menu dismisses it, which is
+   what a native menu's invisible tracking window does. */
+.menu-backdrop { position: fixed; inset: 0; }
