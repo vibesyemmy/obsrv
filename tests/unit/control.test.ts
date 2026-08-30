@@ -87,7 +87,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the eighteen commands', () => {
+  it('knows exactly the nineteen commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -106,6 +106,7 @@ describe('command validation', () => {
       'setPreset',
       'setProfile',
       'setViewMode',
+      'setVision',
       'status',
     ])
     expect(isControlCommand('status')).toBe(true)
@@ -258,6 +259,8 @@ describe('parseControlStatus', () => {
     cssHeight: 768,
     tabId: 'tab-3',
     tabIndex: 2,
+    visionType: 'none',
+    visionSeverity: 1,
   }
   it('accepts a full status', () => {
     expect(parseControlStatus(good)).toEqual(good)
@@ -294,6 +297,24 @@ describe('parseControlStatus', () => {
   // The same skew a third time. An app older than rotation shows every screen
   // unrotated, which is what portrait means, so the default describes it
   // truthfully rather than papering over it.
+  // The skew rule again: an app that predates the viewer simulation is not
+  // simulating anything, and `none` says so exactly. Returning null instead
+  // would take drive and live snap out against every older DMG.
+  it('defaults the vision simulation to none when an older app omits it', () => {
+    const { visionType: _t, visionSeverity: _s, ...older } = good
+    expect(parseControlStatus(older)).toEqual({ ...older, visionType: 'none', visionSeverity: 1 })
+  })
+
+  it('reads the vision simulation when present, and refuses a bad one', () => {
+    expect(parseControlStatus({ ...good, visionType: 'deutan', visionSeverity: 0.4 })).toMatchObject({
+      visionType: 'deutan',
+      visionSeverity: 0.4,
+    })
+    expect(parseControlStatus({ ...good, visionType: 'quadran' })).toBeNull()
+    expect(parseControlStatus({ ...good, visionSeverity: 1.5 })).toBeNull()
+    expect(parseControlStatus({ ...good, visionSeverity: 'lots' })).toBeNull()
+  })
+
   it('defaults the orientation to portrait when an older app omits it', () => {
     const { orientation: _o, ...older } = good
     expect(parseControlStatus(older)).toEqual({ ...older, orientation: 'portrait' })

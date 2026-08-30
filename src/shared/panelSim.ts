@@ -1,4 +1,5 @@
 import type { PanelParams, PanelProfile } from './types'
+import { applyMatrix, type Matrix3 } from './vision'
 
 export function profileToParams(p: PanelProfile, hostNits: number): PanelParams {
   if (!(hostNits > 0)) throw new RangeError('hostNits must be > 0')
@@ -28,8 +29,13 @@ export type RGB = [number, number, number]
 /**
  * Reference implementation of the panel shader. Input/output are 0..255 sRGB-encoded.
  * (x, y) are the target-pixel coordinates, used only for dithering.
+ *
+ * `vision` is the viewer, not the panel, so it runs last — after the bit-depth
+ * quantisation, on the light the display has actually emitted. Running it
+ * earlier would quantise the eye's output instead of the screen's. Pass the
+ * identity (or omit it) for normal vision.
  */
-export function simulatePixel(rgb: RGB, params: PanelParams, x = 0, y = 0): RGB {
+export function simulatePixel(rgb: RGB, params: PanelParams, x = 0, y = 0, vision?: Matrix3): RGB {
   let c = rgb.map(v => toLinear(v / 255)) as RGB
   // Black floor is leakage through the panel's own backlight, so it scales with brightness.
   c = c.map(v => params.brightness * (params.blackFloor + (1 - params.blackFloor) * v)) as RGB
@@ -38,5 +44,12 @@ export function simulatePixel(rgb: RGB, params: PanelParams, x = 0, y = 0): RGB 
   c = c.map(v => toEncoded(clamp01(v))) as RGB
   const d = params.dither ? bayer(x, y) - 0.5 : 0
   c = c.map(v => Math.floor(v * params.levels + d + 0.5) / params.levels) as RGB
+  if (vision) {
+    // Back to linear for the eye: the matrix models cone response, which acts
+    // on light, and applying it to gamma-encoded values is the mistake that
+    // makes most online simulators produce plausible-but-wrong colours.
+    const [r, g, b] = applyMatrix(vision, ...(c.map(v => toLinear(clamp01(v))) as RGB))
+    c = [r, g, b].map(v => toEncoded(clamp01(v))) as RGB
+  }
   return c.map(v => Math.round(clamp01(v) * 255)) as RGB
 }

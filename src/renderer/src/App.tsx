@@ -61,6 +61,8 @@ export function App() {
   const profileId = useStore(s => selectTab(s).profileId)
   const orientation = useStore(s => selectTab(s).orientation)
   const viewMode = useStore(s => selectTab(s).viewMode)
+  const visionType = useStore(s => selectTab(s).visionType)
+  const visionSeverity = useStore(s => selectTab(s).visionSeverity)
   const tabUrl = useStore(s => selectTab(s).url)
   const activeId = useStore(s => s.activeId)
   const tabOrder = useStore(s => s.tabOrder)
@@ -198,8 +200,8 @@ export function App() {
   // renderer has nothing worth saying about a list it has not yet been told.
   useEffect(() => {
     if (!tabsKnown) return
-    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, viewMode, panes, mode, targetBounds, canvasBounds })
-  }, [tabsKnown, activeId, presetId, profileId, orientation, viewMode, panes, mode, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
+  }, [tabsKnown, activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -215,6 +217,11 @@ export function App() {
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
       if (patch.panes !== undefined) s.setPanes(patch.panes)
       if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)
+      // Type and severity are one decision, so they are applied together: a
+      // patch naming only the type takes the severity already in force.
+      if (patch.visionType !== undefined) {
+        s.setVision(patch.visionType, patch.visionSeverity ?? selectTab(useStore.getState()).visionSeverity)
+      }
       if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
       if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)
     })

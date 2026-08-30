@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -10,6 +11,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
+import { visionMatrix } from '../../../shared/vision'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
 import {
@@ -37,6 +39,11 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
   const viewport = useStore(useShallow(selectViewport))
   const params = useStore(useShallow(selectPanelParams))
+  // The viewer stage. Memoised on the two inputs, because a fresh matrix each
+  // render would make `draw.current` a new object and defeat the ref above.
+  const visionType = useStore(s => selectTab(s).visionType)
+  const visionSeverity = useStore(s => selectTab(s).visionSeverity)
+  const vision = useMemo(() => visionMatrix(visionType, visionSeverity), [visionType, visionSeverity])
   const dsf = useStore(selectDeviceScaleFactor)
   const requestedScale = useStore(selectScale)
   const mode = useStore(s => selectTab(s).mode)
@@ -121,7 +128,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // Read by the frame callback, which is installed once and must not go
   // stale. `dsf` rides along for the input bridge: the canvas shows device
   // pixels, `sendInputEvent` wants CSS ones.
-  const draw = useRef({ scale, params, smooth, dsf })
+  const draw = useRef({ scale, params, smooth, dsf, vision })
   // Read by `start` after a context restore, so the image is re-uploaded
   // without waiting for a frame that image mode will never send.
   const imageRef = useRef(imageFrame)
@@ -320,12 +327,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
   useEffect(() => () => window.clearTimeout(stallTimer.current), [])
 
-  // Scale, panel params and the view mode can change without a new frame.
+  // Scale, panel params, the view mode and the viewer simulation can all change
+  // without a new frame — a static page sends none, so without the redraw here
+  // the setting would appear to do nothing until something else moved.
   useEffect(() => {
-    draw.current = { scale, params, smooth, dsf }
+    draw.current = { scale, params, smooth, dsf, vision }
     const gl = glRef.current
     if (gl && gl.sourceWidth > 0) gl.draw(draw.current)
-  }, [scale, params, smooth, dsf])
+  }, [scale, params, smooth, dsf, vision])
 
   // Live frames are already stopped by main's `setMode`, so there is no race.
   // On the way back to URL mode the next live frame (main resends a full one)

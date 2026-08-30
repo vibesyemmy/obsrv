@@ -1,5 +1,9 @@
 import type { FrameSlice, PanelParams } from '../../../shared/types'
+import { type Matrix3, visionMatrix } from '../../../shared/vision'
 import { FRAG_SRC, VERT_SRC } from './shaders'
+
+/** No simulation: the shader always multiplies, so "off" is this. */
+const IDENTITY_VISION = visionMatrix('none', 0)
 
 export interface DrawOptions {
   /** Host pixels per target pixel. */
@@ -11,6 +15,12 @@ export interface DrawOptions {
    * not moiré. Off (the default) is bit-identical to the v1 exact path.
    */
   smooth?: boolean
+  /**
+   * The viewer's colour-vision matrix, applied after everything the panel does.
+   * Defaults to the identity, which costs one multiply and keeps the shader on
+   * a single path.
+   */
+  vision?: Matrix3
 }
 
 /**
@@ -77,6 +87,7 @@ interface Uniforms {
   levels: WebGLUniformLocation | null
   dither: WebGLUniformLocation | null
   smooth: WebGLUniformLocation | null
+  vision: WebGLUniformLocation | null
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -175,6 +186,7 @@ export class GlRenderer {
       levels: gl.getUniformLocation(this.program, 'uLevels'),
       dither: gl.getUniformLocation(this.program, 'uDither'),
       smooth: gl.getUniformLocation(this.program, 'uSmooth'),
+      vision: gl.getUniformLocation(this.program, 'uVision'),
     }
   }
 
@@ -266,7 +278,7 @@ export class GlRenderer {
    * not a positive finite number (a zero-sized pane mid-layout, say). A scale
    * the backing store cannot hold is reduced with `fitScale`, never refused.
    */
-  draw({ scale: requested, params, smooth = false }: DrawOptions): boolean {
+  draw({ scale: requested, params, smooth = false, vision = IDENTITY_VISION }: DrawOptions): boolean {
     if (!(requested > 0 && Number.isFinite(requested))) return false
     const gl = this.gl
     const scale = fitScale(this.width, this.height, requested, this.maxOutput)
@@ -307,6 +319,13 @@ export class GlRenderer {
     gl.uniform1f(this.u.levels, params.levels)
     gl.uniform1f(this.u.dither, params.dither ? 1 : 0)
     gl.uniform1f(this.u.smooth, smooth ? 1 : 0)
+    // Column-major for GL, row-major in `vision.ts`: `transpose` is false in
+    // WebGL2's uniformMatrix3fv, so the array is handed over transposed.
+    gl.uniformMatrix3fv(this.u.vision, false, [
+      vision[0], vision[3], vision[6],
+      vision[1], vision[4], vision[7],
+      vision[2], vision[5], vision[8],
+    ])
 
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     return true

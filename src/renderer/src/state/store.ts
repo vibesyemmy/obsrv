@@ -20,6 +20,7 @@ import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../s
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
 import type { HostInfo, LoadError, Orientation, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
+import type { VisionType } from '../../../shared/vision'
 
 export type Mode = 'url' | 'image'
 
@@ -73,6 +74,9 @@ export interface TabState {
   orientation: Orientation
   custom: TargetScreen
   pixelExact: boolean
+  visionType: VisionType
+  /** 0..1; 1 is the dichromat end. */
+  visionSeverity: number
   profileId: string
   /**
    * The advanced sliders' hand-tuned profile (`id: 'custom'`), in the same
@@ -147,6 +151,7 @@ export interface AppState {
   setOrientation(o: Orientation): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
+  setVision(type: VisionType, severity: number): void
   setProfile(id: string): void
   setProfileOverride(p: PanelProfile | null): void
   setSettings(s: Settings): void
@@ -213,6 +218,8 @@ function blankTab(): TabState {
     orientation: DEFAULT_ORIENTATION,
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
     pixelExact: false,
+    visionType: 'none',
+    visionSeverity: 1,
     profileId: PANEL_PROFILES[0]!.id,
     profileOverride: null,
     targetLoading: false,
@@ -314,6 +321,7 @@ export const useStore = create<AppState>()((set, get) => ({
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),
+  setVision: (visionType, visionSeverity) => set(patchActive({ visionType, visionSeverity })),
   // Picking a profile drops any hand-tuned slider values.
   setProfile: profileId => set(patchActive({ profileId, profileOverride: null })),
   setProfileOverride: profileOverride => set(patchActive({ profileOverride })),

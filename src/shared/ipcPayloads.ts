@@ -1,4 +1,5 @@
 import type { MenuGroup, MenuOption, MenuRequest, Rect } from './api'
+import { isVisionType } from './vision'
 import type { AgentUiReport } from './control'
 import { DEFAULT_ORIENTATION, DEFAULT_SETTINGS, isOrientation, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import { MAX_SCROLL_SELECTOR, type InputModifier, type Orientation, type ScrollPos, type ScrollReport, type ScrollRequest, type Settings, type TargetInputEvent } from './types'
@@ -187,12 +188,19 @@ export function parseUiState(raw: unknown): AgentUiReport | null {
   // Same shape again for the orientation, and for the same reason.
   const orientation = raw.orientation ?? DEFAULT_ORIENTATION
   if (!isOrientation(orientation)) return null
+  // And for the viewer simulation.
+  const visionType = raw.visionType ?? 'none'
+  if (!isVisionType(visionType)) return null
+  const visionSeverity = raw.visionSeverity ?? 1
+  if (typeof visionSeverity !== 'number' || !(visionSeverity >= 0 && visionSeverity <= 1)) return null
   return {
     tabId,
     presetId,
     profileId,
     viewMode,
     panes,
+    visionType,
+    visionSeverity,
     orientation,
     mode,
     targetBounds: parseRect(raw.targetBounds),

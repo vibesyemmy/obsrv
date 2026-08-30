@@ -469,6 +469,18 @@ export function registerIpc(ctx: AppContext): () => void {
     set mode(v: 'url' | 'image') {
       tab().reportedMode = v
     },
+    get visionType() {
+      return tab().visionType
+    },
+    set visionType(v) {
+      tab().visionType = v
+    },
+    get visionSeverity() {
+      return tab().visionSeverity
+    },
+    set visionSeverity(v: number) {
+      tab().visionSeverity = v
+    },
     panes: 'both',
   }
   // The target pane's window-relative bounds (CSS px), for `captureTarget`.

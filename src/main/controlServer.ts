@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { VisionType } from '../shared/vision'
 import { rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -14,6 +15,7 @@ import {
   tokenEqual,
   orientationApplyError,
   panesApplyError,
+  visionApplyError,
   viewModeApplyError,
   type AgentApplyPatch,
   type AgentClick,
@@ -304,6 +306,18 @@ export class ControlServer {
         const err = pixelExactApplyError(payload.on)
         if (err) return reply(400, { error: err })
         this.deps.apply({ pixelExact: payload.on as boolean })
+        return reply(200, { ok: true })
+      }
+
+      case 'setVision': {
+        const err = visionApplyError(payload.type, payload.severity)
+        if (err) return reply(400, { error: err })
+        this.deps.apply({
+          visionType: payload.type as VisionType,
+          // Omitted means "the strong form", which is what a caller naming a
+          // type and nothing else is asking to see.
+          visionSeverity: typeof payload.severity === 'number' ? payload.severity : 1,
+        })
         return reply(200, { ok: true })
       }
 

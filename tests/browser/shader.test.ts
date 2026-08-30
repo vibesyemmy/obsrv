@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../../src/renderer/src/gl/renderer'
 import { profileToParams, simulatePixel } from '../../src/shared/panelSim'
 import { PANEL_PROFILES } from '../../src/shared/presets'
+import { visionMatrix, type VisionType } from '../../src/shared/vision'
 import type { FrameSlice } from '../../src/shared/types'
 
 const W = 64
@@ -78,6 +79,52 @@ describe('panel shader matches the TS reference', () => {
       expect(worst).toBeLessThanOrEqual(Math.ceil(255 / params.levels))
       expect(mismatches / (W * H * 3)).toBeLessThan(0.01)
     })
+
+  // The viewer stage runs in the shader and in the reference, and the two have
+  // to agree for the same reason the panel stages do: `obsrv diff` compares
+  // captures against numbers this reference produces, so a shader that drifted
+  // would report differences that are not on anyone's screen.
+  for (const type of ['protan', 'deutan', 'tritan', 'achromat'] as VisionType[]) {
+    for (const severity of [0.5, 1]) {
+      it(`matches simulatePixel for ${type} at severity ${severity}`, () => {
+        const vision = visionMatrix(type, severity)
+        renderer.draw({ scale: 1, params: REFERENCE, vision })
+        const out = renderer.readPixels()
+
+        let worst = 0
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const i = y * W + x
+            const want = simulatePixel(
+              [rgb[i * 3]!, rgb[i * 3 + 1]!, rgb[i * 3 + 2]!],
+              REFERENCE,
+              x,
+              y,
+              vision,
+            )
+            for (let c = 0; c < 3; c++) {
+              worst = Math.max(worst, Math.abs(out[i * 4 + c]! - want[c]!))
+            }
+          }
+        }
+        // Two extra pow() round trips in 32-bit float against the reference's
+        // 64-bit; a couple of levels of slack, not a whole quantisation step.
+        expect(worst).toBeLessThanOrEqual(2)
+      })
+    }
+  }
+
+  it('leaves the image alone when the simulation is off', () => {
+    renderer.draw({ scale: 1, params: REFERENCE })
+    const plain = Uint8Array.from(renderer.readPixels())
+    renderer.draw({ scale: 1, params: REFERENCE, vision: visionMatrix('none', 1) })
+    const off = renderer.readPixels()
+    // Identity is still a matrix multiply plus two pow()s, so this is about
+    // that round trip costing nothing visible — not about it being skipped.
+    for (let i = 0; i < plain.length; i++) {
+      expect(Math.abs(off[i]! - plain[i]!)).toBeLessThanOrEqual(1)
+    }
+  })
   }
 })
 
