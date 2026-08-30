@@ -65,6 +65,7 @@ export function App() {
   const activeId = useStore(s => s.activeId)
   const tabOrder = useStore(s => s.tabOrder)
   const panes = useStore(s => s.panes)
+  const nativeObscured = useStore(s => s.nativeObscured)
   const split = useStore(s => s.settings.split)
 
   // The store performs no IPC of its own; this is the one place that bridges.
@@ -133,6 +134,13 @@ export function App() {
   useEffect(() => {
     window.obsrv.setNativeVisible(panes === 'both')
   }, [panes])
+
+  // Same shape, different reason: a menu that overlaps the view needs it off
+  // screen to be able to draw over that rectangle at all. Main derives the
+  // visibility from both inputs, so neither can clobber the other.
+  useEffect(() => {
+    window.obsrv.setNativeObscured(nativeObscured)
+  }, [nativeObscured])
 
   // The pane's bounds change with the window, the drawers and the panes'
   // split, and every one of those also resizes the pane — so a

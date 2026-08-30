@@ -127,6 +127,8 @@ export interface AppState {
    * has one. Not persisted to settings — a per-look toggle like `viewMode`.
    */
   panes: Panes
+  /** An open menu is covering the native view, which is therefore off screen. */
+  nativeObscured: boolean
 
   setMode(mode: Mode): void
   setUrl(url: string): void
@@ -158,6 +160,7 @@ export interface AppState {
   setSurround(s: Surround): void
   setViewMode(v: ViewMode): void
   setPanes(p: Panes): void
+  setNativeObscured(v: boolean): void
   setFitScale(v: number | null): void
   requestAgentPan(p: { x: number; y: number }): void
   clearAgentPan(): void
@@ -287,6 +290,7 @@ export const useStore = create<AppState>()((set, get) => ({
   history: [],
   surround: 'graphite',
   panes: 'both',
+  nativeObscured: false,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
@@ -328,6 +332,7 @@ export const useStore = create<AppState>()((set, get) => ({
   // No `agentHighlight: null` here, unlike setPreset: hiding a pane does not
   // re-raster the target, so the highlight still marks the pixels it marked.
   setPanes: panes => set({ panes }),
+  setNativeObscured: nativeObscured => set({ nativeObscured }),
   setFitScale: fitScale => set(patchActive({ fitScale })),
   requestAgentPan: p => set(patchActiveWith(t => ({ agentPan: { ...p, seq: (t.agentPan?.seq ?? 0) + 1 } }))),
   clearAgentPan: () => set(patchActive({ agentPan: null })),

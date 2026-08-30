@@ -20,7 +20,7 @@ import { Icon } from './Icon'
 import { OverflowMenu } from './OverflowMenu'
 import { Segmented } from './Segmented'
 import { TabBar } from './TabBar'
-import { Select } from './Select'
+import { Select, type SelectGroup, type SelectOption } from './Select'
 
 /** The neutral field the panes sit in — see the UI style spec. */
 const SURROUNDS: { id: Surround; label: string; swatch: string }[] = [
@@ -49,6 +49,26 @@ export interface ToolbarProps {
   onTogglePanel: () => void
   onToggleSettings: () => void
 }
+
+/**
+ * The screen menu, grouped as the presets themselves are. Built once: the list
+ * never changes at runtime, and a fresh array each render would re-run the
+ * menu's positioning effect.
+ */
+const inGroup = (group: string): SelectOption[] =>
+  SCREEN_PRESETS.filter(p => p.group === group).map(p => ({ value: p.id, label: p.label }))
+
+const PRESET_GROUPS: SelectGroup[] = [
+  { label: 'Laptops', options: inGroup('laptop') },
+  { label: 'Desktops', options: inGroup('desktop') },
+  { label: 'Mobile', options: inGroup('mobile') },
+  // Ungrouped, as it was: "Custom" is not one more screen among the presets.
+  { options: [{ value: CUSTOM_PRESET_ID, label: 'Custom' }] },
+]
+
+const PROFILE_GROUPS: SelectGroup[] = [
+  { options: PANEL_PROFILES.map(p => ({ value: p.id, label: p.label })) },
+]
 
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
   const mode = useStore(s => selectTab(s).mode)
@@ -383,31 +403,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           value={presetId}
           label={presetLabel}
           ariaLabel="Target screen"
+          groups={PRESET_GROUPS}
           onChange={setPreset}
-        >
-          <optgroup label="Laptops">
-            {SCREEN_PRESETS.filter(p => p.group === 'laptop').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Desktops">
-            {SCREEN_PRESETS.filter(p => p.group === 'desktop').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Mobile">
-            {SCREEN_PRESETS.filter(p => p.group === 'mobile').map(p => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </optgroup>
-          <option value={CUSTOM_PRESET_ID}>Custom</option>
-        </Select>
+        />
 
         {/* The `.surround-control` idiom rather than `Segmented`: the choice is
             a shape, and two outlines of the screen you get say it in 56px
@@ -460,14 +458,9 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           value={profileId}
           label={profileLabel}
           ariaLabel="Panel profile"
+          groups={PROFILE_GROUPS}
           onChange={setProfile}
-        >
-          {PANEL_PROFILES.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
+        />
 
         <div className="surround-control" role="group" aria-label="Pane surround">
           {SURROUNDS.map(s => (

@@ -6,6 +6,7 @@ export const IPC = {
   setViewport: 'obsrv:set-viewport',
   setNativeBounds: 'obsrv:set-native-bounds',
   setNativeVisible: 'obsrv:set-native-visible',
+  setNativeObscured: 'obsrv:set-native-obscured',
   setMode: 'obsrv:set-mode',
   sendInput: 'obsrv:send-input',
   getHostInfo: 'obsrv:get-host-info',

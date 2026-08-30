@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useStore } from '../state/store'
 import { NativeFooter } from './PaneFooter'
 
 /**
@@ -9,6 +10,7 @@ import { NativeFooter } from './PaneFooter'
  */
 export function NativeSlot() {
   const ref = useRef<HTMLDivElement>(null)
+  const obscured = useStore(s => s.nativeObscured)
   const [size, setSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
@@ -41,7 +43,11 @@ export function NativeSlot() {
   return (
     <div className="pane">
       <div className="pane-body">
-        <div className="native-slot" ref={ref} />
+        <div className="native-slot" ref={ref}>
+          {/* The view is off screen while a menu covers it; this is what the
+              renderer draws in the space it vacated. */}
+          {obscured && <div className="native-scrim" />}
+        </div>
       </div>
       <NativeFooter width={size.width} height={size.height} />
     </div>

@@ -223,8 +223,11 @@ export function registerIpc(ctx: AppContext): () => void {
   // A third input, for the same reason: a tab with no page renders an empty
   // state in the renderer, and the native view is an OS overlay that would
   // otherwise sit on top of it as a white rectangle.
+  // And a fourth: an open menu needs to paint over the view's rectangle, which
+  // it cannot do while an OS-composited layer is sitting on top of it.
+  let menuObscures = false
   tabs.nativeVisible = (s: TabSession): boolean =>
-    s.modeIsLive && panesShowNative && !isBlankUrl(s.url)
+    s.modeIsLive && panesShowNative && !isBlankUrl(s.url) && !menuObscures
   // And the same for frame delivery, for the same reason: image mode is per
   // tab, so a switch changes which mode is in force without any mode changing,
   // and `setMode` below never fires. Derived here so "live" means one thing.
@@ -245,6 +248,13 @@ export function registerIpc(ctx: AppContext): () => void {
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
     bus.setEnabled(tab().modeIsLive)
+  })
+
+  on(IPC.setNativeObscured, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    if (typeof raw !== 'boolean') return
+    menuObscures = raw
+    applyNativeVisibility()
   })
 
   on(IPC.setNativeVisible, (e, raw: unknown) => {

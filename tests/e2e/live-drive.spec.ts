@@ -195,7 +195,7 @@ test('navigate + setPreset over HTTP actually drive the app', async () => {
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
     .toEqual({ width: 1366, height: 768 })
   // And the toolbar select shows it — this is the visible app being driven.
-  await expect(page.locator('.preset-select')).toHaveValue('laptop-768')
+  await expect(page.locator('.preset-select')).toHaveAttribute('data-value', 'laptop-768')
 
   // A javascript: URL never reaches the panes; the custom preset is refused.
   const bad = await call('navigate', { url: 'javascript:alert(1)' })

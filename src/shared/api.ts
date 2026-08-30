@@ -43,6 +43,13 @@ export interface ObsrvApi {
    * mode; the renderer never speaks to the view directly.
    */
   setNativeVisible(visible: boolean): void
+  /**
+   * Take the native view off screen because the renderer needs to draw over
+   * that rectangle — an open menu. Separate from `setNativeVisible`, which is
+   * the panes toggle: main derives the view's visibility from every input at
+   * once, and two callers driving one setter would clobber each other.
+   */
+  setNativeObscured(obscured: boolean): void
   setMode(mode: 'url' | 'image'): void
   sendInput(ev: TargetInputEvent): void
   getHostInfo(): Promise<HostInfo>
