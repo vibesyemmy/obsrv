@@ -35,7 +35,17 @@ export interface ObsrvApi {
    * `width`/`height` are CSS pixels; `deviceScaleFactor` (default 1) is the
    * raster density — the target paints `width x height` x the factor.
    */
-  setViewport(width: number, height: number, deviceScaleFactor?: number): Promise<{ width: number; height: number }>
+  /**
+   * `mobile` decides phone fidelity (mobile UA and viewport semantics). It is
+   * passed rather than derived from `deviceScaleFactor`, because density and
+   * being-a-phone are different facts: a Retina laptop is dense and a desktop.
+   */
+  setViewport(
+    width: number,
+    height: number,
+    deviceScaleFactor?: number,
+    mobile?: boolean,
+  ): Promise<{ width: number; height: number }>
   setNativeBounds(rect: Rect): void
   /**
    * Whether the native pane is on screen. It is an OS-level overlay, so
