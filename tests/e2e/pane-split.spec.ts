@@ -41,6 +41,9 @@ test.afterAll(async () => {
 // the only writer, so that is not a product bug, but it makes an IPC write a
 // useless reset here.
 test.beforeEach(async () => {
+  // Belt and braces against the same hazard: whatever the previous test did,
+  // this one starts with the button up.
+  await page.mouse.up()
   await page.dblclick('.pane-divider')
   await expect
     .poll(async () => {
@@ -73,11 +76,19 @@ async function dragSeamTo(x: number): Promise<void> {
   const g = await geometry()
   await page.mouse.move(g.seamX, g.seamY)
   await page.mouse.down()
-  const steps = 12
-  for (let i = 1; i <= steps; i++) {
-    await page.mouse.move(g.seamX + ((x - g.seamX) * i) / steps, g.seamY)
+  try {
+    const steps = 12
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(g.seamX + ((x - g.seamX) * i) / steps, g.seamY)
+    }
+  } finally {
+    // Unconditionally: a move that throws — or a test that times out partway
+    // through the drag — would otherwise leave the button held down for the
+    // rest of the file, since every test here shares one app. Everything after
+    // it then drags when it meant to click, including the retry, which is why
+    // such a failure used to survive being retried.
+    await page.mouse.up()
   }
-  await page.mouse.up()
   // The drag's last frame and the persist-on-release are both async, so
   // returning here would let the caller measure a seam still in motion. Wait
   // for two identical reads — the same settle-until-stable shape main uses
