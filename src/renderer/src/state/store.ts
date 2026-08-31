@@ -497,6 +497,20 @@ export function selectOrientationShapes(s: AppState): Orientation[] {
  * Device pixels per CSS pixel of the target screen: 1 for every monitor
  * preset and the custom entry, the real 2x/3x factor for mobile presets.
  */
+/**
+ * Whether the tab's screen is a phone or a tablet, and so should be given
+ * mobile browser fidelity — a mobile user agent and mobile viewport semantics.
+ *
+ * Read from the preset's group rather than inferred from its scale factor. The
+ * two used to be conflated, which was harmless only while every laptop and
+ * desktop preset happened to be 1x: a Retina laptop is dense *and* a desktop
+ * browser, and a Windows panel at 150% scaling is 1.5x and not a phone at all.
+ * A custom screen is whatever the user typed, so it is not a phone.
+ */
+export function selectIsMobileScreen(s: AppState): boolean {
+  return SCREEN_PRESETS.find(p => p.id === selectTab(s).presetId)?.group === 'mobile'
+}
+
 export function selectDeviceScaleFactor(s: AppState): number {
   return selectScreen(s).deviceScaleFactor ?? 1
 }

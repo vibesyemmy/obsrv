@@ -16,7 +16,8 @@ import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
 import { probeMaxTextureSize } from './gl/renderer'
 import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadImage'
-import { selectDeviceScaleFactor, selectTab, selectViewport, useStore } from './state/store'
+import { selectDeviceScaleFactor,
+  selectIsMobileScreen, selectTab, selectViewport, useStore } from './state/store'
 
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
@@ -57,6 +58,7 @@ export function App() {
   const surround = useStore(s => s.surround)
   const viewport = useStore(useShallow(selectViewport))
   const deviceScaleFactor = useStore(selectDeviceScaleFactor)
+  const isMobileScreen = useStore(selectIsMobileScreen)
   const presetId = useStore(s => selectTab(s).presetId)
   const profileId = useStore(s => selectTab(s).profileId)
   const orientation = useStore(s => selectTab(s).orientation)
@@ -121,9 +123,13 @@ export function App() {
     }
   }, [setHost, setSettings, setTabUrl, setTabTitle, setTabError, setTabLoading, syncTabs, setUpdate, setHistory])
 
+  // `isMobileScreen` is a dependency, not just an argument: switching between
+  // two screens of the same size and density but different kind — a custom
+  // 1512x982 and the MacBook Pro preset, say — changes nothing else here, and
+  // without it main would keep the previous browser identity.
   useEffect(() => {
-    void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor)
-  }, [viewport.width, viewport.height, deviceScaleFactor])
+    void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor, isMobileScreen)
+  }, [viewport.width, viewport.height, deviceScaleFactor, isMobileScreen])
 
   useEffect(() => {
     window.obsrv.setMode(mode)

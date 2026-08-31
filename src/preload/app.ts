@@ -40,8 +40,8 @@ const api: ObsrvApi = {
   reload: () => ipcRenderer.send(IPC.reload),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),
-  setViewport: (width, height, deviceScaleFactor) =>
-    ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor),
+  setViewport: (width, height, deviceScaleFactor, mobile) =>
+    ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor, mobile),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
   setNativeVisible: visible => ipcRenderer.send(IPC.setNativeVisible, visible),
   setNativeObscured: obscured => ipcRenderer.send(IPC.setNativeObscured, obscured),

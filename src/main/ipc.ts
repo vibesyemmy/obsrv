@@ -174,7 +174,7 @@ export function registerIpc(ctx: AppContext): () => void {
   })
 
   // --- target ---------------------------------------------------------------
-  handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown) => {
+  handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown, rawMobile: unknown) => {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
@@ -184,7 +184,14 @@ export function registerIpc(ctx: AppContext): () => void {
     // refuse it rather than guess.
     const dsf = parseDeviceScaleFactor(rawDsf)
     if (dsf === null) throw new Error('invalid deviceScaleFactor')
-    const v = tab().target.setViewport(width, height, dsf)
+    // Whether this screen is a phone. Sent rather than inferred from the
+    // density: a Retina laptop is dense and still a desktop browser. Absent
+    // means desktop — the renderer always says, and a payload that forgot
+    // should not silently hand a laptop a phone's user agent.
+    if (rawMobile !== undefined && typeof rawMobile !== 'boolean') {
+      throw new Error('invalid mobile flag')
+    }
+    const v = tab().target.setViewport(width, height, dsf, rawMobile === true)
     return { width: v.width, height: v.height }
   })
   on(IPC.sendInput, (e, raw: unknown) => {

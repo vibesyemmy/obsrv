@@ -138,6 +138,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private win!: BrowserWindow
   private viewport = { ...DEFAULT_VIEWPORT }
   private dsf = 1
+  /**
+   * Whether this screen is a phone or tablet. Told, not inferred: it used to
+   * be read off `dsf > 1`, which held only while every laptop and desktop
+   * preset was 1x. A Retina laptop is dense *and* a desktop browser, and a
+   * Windows panel at 150% is 1.5x and not a phone at all.
+   */
+  private mobile = false
   private readonly fps: number
   /** See TargetSourceOptions.mobileEmulation. */
   private readonly mobileEmulation: boolean
@@ -217,7 +224,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     if (!this.paintingWanted) wc.stopPainting()
     wc.setAudioMuted(true)
     this.defaultUserAgent ??= wc.getUserAgent()
-    wc.setUserAgent(this.dsf > 1 && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
+    wc.setUserAgent(this.mobile && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
     wc.on('paint', (_event, dirty, image) => {
       if (dirty.width <= 0 || dirty.height <= 0) return
@@ -334,7 +341,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * definition post-commit) or gated on `firstNavDone`.
    */
   private applyEmulation(): void {
-    if (this.dsf <= 1 || !this.mobileEmulation || this.win.isDestroyed()) return
+    if (!this.mobile || !this.mobileEmulation || this.win.isDestroyed()) return
     this.win.webContents.enableDeviceEmulation({
       screenPosition: 'mobile',
       screenSize: { width: this.viewport.width, height: this.viewport.height },
@@ -417,11 +424,15 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * creation); a same-dsf resize is the cheap `setContentSize` path. Returns
    * the applied (possibly clamped) CSS size.
    */
-  setViewport(width: number, height: number, deviceScaleFactor = 1): AppliedViewport {
+  setViewport(width: number, height: number, deviceScaleFactor = 1, mobile = false): AppliedViewport {
     const dsf = Number.isFinite(deviceScaleFactor) && deviceScaleFactor >= 1 ? deviceScaleFactor : 1
     const v = clampViewport(width, height, maxCssViewport(dsf))
     this.viewport = { width: v.width, height: v.height }
-    if (dsf !== this.dsf) {
+    // The user agent is set at window creation, so a change of phone-ness
+    // recreates the window exactly as a change of density does.
+    const wasMobile = this.mobile
+    this.mobile = mobile
+    if (dsf !== this.dsf || mobile !== wasMobile) {
       this.dsf = dsf
       if (!this.disposed) this.recreate()
     } else if (!this.win.isDestroyed()) {
@@ -442,7 +453,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * `setViewport` with a new factor.
    */
   setDeviceScaleFactor(deviceScaleFactor: number): AppliedViewport {
-    return this.setViewport(this.viewport.width, this.viewport.height, deviceScaleFactor)
+    return this.setViewport(this.viewport.width, this.viewport.height, deviceScaleFactor, this.mobile)
   }
 
   getViewport(): { width: number; height: number } {
