@@ -215,7 +215,7 @@ describe('planSnapPath', () => {
 describe('listCatalog', () => {
   const catalog = listCatalog()
   it('lists every screen preset with css dims, dsf, diagonal and derived ppi', () => {
-    expect(catalog.presets).toHaveLength(15)
+    expect(catalog.presets).toHaveLength(22)
     expect(catalog.presets.find(p => p.id === 'laptop-768')).toEqual({
       id: 'laptop-768',
       label: '1366×768 15.6"',

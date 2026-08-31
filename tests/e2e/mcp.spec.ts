@@ -79,13 +79,13 @@ test('obsrv_presets: the full catalog, straight from presets.ts', async () => {
     presets: { id: string; cssWidth: number; deviceScaleFactor: number; ppi: number }[]
     profiles: { id: string; contrastRatio: number | null; summary: string }[]
   }
-  expect(catalog.presets).toHaveLength(15)
+  expect(catalog.presets).toHaveLength(22)
   expect(catalog.profiles).toHaveLength(4)
   expect(catalog.presets.find(p => p.id === 'laptop-768')).toMatchObject({ cssWidth: 1366, deviceScaleFactor: 1, ppi: 100 })
   expect(catalog.profiles.find(p => p.id === 'budget-tn')?.contrastRatio).toBe(700)
   // The text block carries the same payload for structured-content-blind clients.
   const text = r.content.find(c => c.type === 'text')
-  expect(JSON.parse((text as { text: string }).text).presets).toHaveLength(15)
+  expect(JSON.parse((text as { text: string }).text).presets).toHaveLength(22)
 })
 
 test('obsrv_snap: laptop-768 render returns metadata and an inline PNG', async () => {
