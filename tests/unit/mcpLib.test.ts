@@ -5,6 +5,7 @@ import {
   UsageError,
   buildAuditArgs,
   buildDiffArgs,
+  buildReportArgs,
   buildSnapArgs,
   extractTrailingJson,
   killBudgetMs,
@@ -263,5 +264,20 @@ describe('buildAuditArgs', () => {
   it('refuses preset with custom dims, and custom dims without both sides', () => {
     expect(() => buildAuditArgs({ url: URL, preset: 'laptop-768', width: 100 })).toThrow(UsageError)
     expect(() => buildAuditArgs({ url: URL, width: 100 })).toThrow(UsageError)
+  })
+})
+
+describe('buildReportArgs', () => {
+  it('always writes the HTML via --out, and lists presets as --matrix', () => {
+    expect(buildReportArgs({ url: URL }, '/tmp/r/report.html')).toEqual(['report', URL, '--out', '/tmp/r/report.html'])
+    expect(
+      buildReportArgs({ url: URL, presets: ['laptop-768', 'android-65'], orientation: 'landscape', profile: 'budget-tn', tapMm: 6, textMm: 1.5, waitMs: 100, timeoutMs: 9000 }, '/tmp/r/report.html'),
+    ).toEqual([
+      'report', URL, '--matrix', 'laptop-768,android-65', '--orientation', 'landscape', '--profile', 'budget-tn',
+      '--tap-mm', '6', '--text-mm', '1.5', '--wait', '100', '--timeout', '9000', '--out', '/tmp/r/report.html',
+    ])
+  })
+  it('refuses an empty preset list', () => {
+    expect(() => buildReportArgs({ url: URL, presets: [] }, '/tmp/r/report.html')).toThrow(UsageError)
   })
 })

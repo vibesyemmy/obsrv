@@ -131,6 +131,11 @@ npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
 # control is 6.6 mm on a 24" 1080p and 4.5 mm on a 6.5" phone, and only one of
 # those is a thumb's worth. Findings under 7 mm / 2 mm (provisional, tunable):
 npx -y getobsrv audit http://localhost:5173 --preset android-65
+
+# All of the above on one self-contained HTML page — two laptops/desktops and two
+# phones by default: each render, the audit in millimetres, the 1x-vs-2x diff.
+# The thing to attach to a PR.
+npx -y getobsrv report http://localhost:5173 --out obsrv-report.html
 ```
 
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings

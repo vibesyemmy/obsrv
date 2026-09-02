@@ -43,6 +43,20 @@ export interface AuditCommand {
   timeoutMs: number
 }
 
+export interface ReportCommand {
+  command: 'report'
+  url: string
+  /** One per screen; the default matrix when none was named. */
+  specs: RenderSpec[]
+  profileId: string
+  /** The HTML file. */
+  out: string
+  tapMm: number
+  textMm: number
+  waitMs: number
+  timeoutMs: number
+}
+
 export interface SnapCommand {
   command: 'snap'
   url: string
@@ -72,7 +86,11 @@ export interface HelpCommand {
   text: string
 }
 
-export type CliCommand = SnapCommand | DiffCommand | AuditCommand | HelpCommand
+export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | HelpCommand
+
+/** The screens a report covers when none are named: two laptops-and-desktops, two phones. */
+export const DEFAULT_REPORT_MATRIX = ['laptop-768', '1080p-24', 'android-65', 'iphone-61'] as const
+export const DEFAULT_REPORT_OUT = 'obsrv-report.html'
 
 export const DEFAULT_PRESET = '1080p-24'
 export const DEFAULT_TIMEOUT_MS = 30_000
@@ -89,6 +107,7 @@ Usage:
   obsrv snap <url> [flags]   Render <url> on a target screen; write a PNG, print JSON.
   obsrv diff <url> [flags]   Render <url> at 1x and against a 2x reference; print JSON metrics.
   obsrv audit <url> [flags]  Measure tap targets and text on a target screen, in millimetres; print JSON findings.
+  obsrv report <url> [flags] Render, audit and (for 1x screens) diff a matrix of screens into one HTML page.
   obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
   obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
 
@@ -130,6 +149,12 @@ audit flags:
                        screen's diagonal, so custom dimensions need --diagonal to get any.
                        Measures layout, not pixels: --profile does not apply, and one preset per run.
 
+report flags:
+  --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
+  --out <file>         The HTML file (default ${DEFAULT_REPORT_OUT}). Self-contained: PNGs inline, no script.
+  --tap-mm / --text-mm As for audit. --profile applies to the renders and the diff, as for snap.
+                       Each screen costs one render plus, for 1x screens, a 2x reference render.
+
 Repeated flags: the last occurrence wins.
 Machine output (JSON) goes to stdout; everything human goes to stderr.
 Exit code 0 on success — diff findings are informational, never a failure.
@@ -143,12 +168,20 @@ warning naming what was missing. Only a render that painted nothing errors.`
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm'])
-const SNAP_ONLY = new Set(['out', 'full-page', 'matrix'])
-const DIFF_ONLY = new Set(['out-dir', 'json'])
-const AUDIT_ONLY = new Set(['tap-mm', 'text-mm'])
-type Command = 'snap' | 'diff' | 'audit'
-/** Flags each command refuses, with the command they belong to, for the message. */
-const OWNED_BY: Record<Command, Set<string>> = { snap: SNAP_ONLY, diff: DIFF_ONLY, audit: AUDIT_ONLY }
+type Command = 'snap' | 'diff' | 'audit' | 'report'
+/** Flags every command takes. */
+const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal'])
+/**
+ * The rest, per command. A flag outside a command's set is refused, and the
+ * message names the first command (in this order) that takes it — so
+ * `--out` given to diff is "a snap flag" even though report takes it too.
+ */
+const EXTRA_FLAGS: Record<Command, Set<string>> = {
+  snap: new Set(['out', 'full-page', 'matrix']),
+  diff: new Set(['out-dir', 'json']),
+  audit: new Set(['tap-mm', 'text-mm']),
+  report: new Set(['out', 'matrix', 'tap-mm', 'text-mm']),
+}
 
 interface Parsed {
   url: string
@@ -178,12 +211,11 @@ function collect(command: Command, argv: string[]): Parsed {
     }
   }
   if (url === null) throw new ArgError(`usage: obsrv ${command} <url> [flags] — run \`obsrv --help\` for the flag list`)
+  const allowed = EXTRA_FLAGS[command]
   for (const name of flags.keys()) {
-    for (const [owner, owned] of Object.entries(OWNED_BY) as [Command, Set<string>][]) {
-      if (owner !== command && owned.has(name)) {
-        throw new ArgError(`--${name} is a${owner === 'audit' ? 'n' : ''} ${owner} flag; \`obsrv ${command}\` does not take it`)
-      }
-    }
+    if (SHARED_FLAGS.has(name) || allowed.has(name)) continue
+    const owner = (Object.keys(EXTRA_FLAGS) as Command[]).find(c => EXTRA_FLAGS[c].has(name)) ?? command
+    throw new ArgError(`--${name} is a${owner === 'audit' ? 'n' : ''} ${owner} flag; \`obsrv ${command}\` does not take it`)
   }
   // The audit measures layout, not pixels, so a panel profile would be a
   // flag that changed nothing — refused rather than silently ignored.
@@ -304,7 +336,7 @@ export function parseArgs(argv: string[]): CliCommand {
   if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     return { command: 'help', text: usage() }
   }
-  if (command !== 'snap' && command !== 'diff' && command !== 'audit') {
+  if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report') {
     throw new ArgError(`unknown command: ${command}\n\n${usage()}`)
   }
 
@@ -324,6 +356,25 @@ export function parseArgs(argv: string[]): CliCommand {
     const tapMm = float(flags, 'tap-mm', DEFAULT_TAP_MM, 0)
     const textMm = float(flags, 'text-mm', DEFAULT_TEXT_MM, 0)
     return { command, url, spec: specs[0]!, tapMm, textMm, waitMs, timeoutMs }
+  }
+
+  if (command === 'report') {
+    // Nothing named means the default matrix, not the default preset.
+    const named = flags.has('preset') || flags.has('matrix') || ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
+    const orientation = resolveOrientation(flags)
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => orientSpec(presetSpec(id), orientation))
+    const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
+    return {
+      command,
+      url,
+      specs: reportSpecs,
+      profileId,
+      out,
+      tapMm: float(flags, 'tap-mm', DEFAULT_TAP_MM, 0),
+      textMm: float(flags, 'text-mm', DEFAULT_TEXT_MM, 0),
+      waitMs,
+      timeoutMs,
+    }
   }
 
   const spec = specs[0]!

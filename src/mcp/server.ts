@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
-import { DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
+import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus } from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
@@ -20,6 +20,7 @@ import {
   UsageError,
   buildAuditArgs,
   buildDiffArgs,
+  buildReportArgs,
   buildSnapArgs,
   extractTrailingJson,
   killBudgetMs,
@@ -30,6 +31,7 @@ import {
   urlSchemeError,
   type AuditToolInput,
   type DiffToolInput,
+  type ReportToolInput,
   type SnapMode,
   type SnapToolInput,
 } from './lib'
@@ -99,7 +101,7 @@ function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
-function cliFailure(command: 'snap' | 'diff' | 'audit', run: CliRun, killAfterMs: number): CallToolResult {
+function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) {
     return toolError(
       `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated. ` +
@@ -913,6 +915,94 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }
+  },
+)
+
+const reportInputShape = {
+  url: urlField,
+  presets: z
+    .array(z.enum(PRESET_IDS))
+    .min(1)
+    .optional()
+    .describe(`Screens to cover, by preset id (obsrv_presets lists them). Default: ${DEFAULT_REPORT_MATRIX.join(', ')}.`),
+  orientation: orientationField,
+  profile: profileField,
+  tapMm: z.number().min(0).optional().describe(`Audit threshold for tap targets, mm. Default ${DEFAULT_TAP_MM} (provisional).`),
+  textMm: z.number().min(0).optional().describe(`Audit threshold for text, mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
+  waitMs: z.number().int().min(0).optional().describe('Extra settle time after each load, in ms. Default 0.'),
+  timeoutMs: z.number().int().min(1).optional().describe(`Per-render budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+}
+
+const reportOutputShape = {
+  url: z.string(),
+  out: z.string().describe('The HTML file, self-contained, in a per-call temp dir. Attach it or open it; do not inline it.'),
+  htmlBytes: z.number(),
+  generatedAt: z.string(),
+  profile: z.string(),
+  thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
+  screens: z.array(
+    z.object({
+      preset: z.string(),
+      cssWidth: z.number(),
+      cssHeight: z.number(),
+      deviceScaleFactor: z.number(),
+      ppi: z.number().nullable(),
+      settled: z.boolean(),
+      audit: z
+        .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
+        .nullable(),
+      diff: z
+        .object({
+          settled: z.boolean(),
+          inkCoverage: z.object({ target: z.number(), reference: z.number(), delta: z.number() }),
+          rows: z.object({ target: z.number(), reference: z.number(), ratio: z.number().nullable() }),
+          findings: z.array(z.string()),
+        })
+        .nullable()
+        .describe('1x screens only; null with diffSkipped saying why.'),
+      diffSkipped: z.string().nullable(),
+      warnings: z.array(z.string()),
+    }),
+  ),
+}
+
+server.registerTool(
+  'obsrv_report',
+  {
+    title: 'One HTML page: a URL on a matrix of screens, rendered, audited and diffed',
+    description:
+      `Render a URL on several screens and write one self-contained HTML report: each screen's render at its true ` +
+      `density (through the panel profile, if any), the physical-units audit (tap targets and text in millimetres ` +
+      `on that screen, findings under the thresholds), and for 1x screens the 1x-vs-2x comparison against the ` +
+      `display the page was probably designed on. The page is what to attach to a PR or hand to a designer: same ` +
+      `page, same CSS, a different answer per screen.\n\n` +
+      `Returns the file path plus a per-screen summary (audit counts, diff metrics, warnings) — the HTML is not ` +
+      `inlined. Each screen costs one render, plus a 2x reference render for 1x screens; budget time accordingly ` +
+      `(the default matrix is four screens, six renders). Headless-only: never drives the visible app.`,
+    inputSchema: reportInputShape,
+    outputSchema: reportOutputShape,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  },
+  async (input: ReportToolInput): Promise<CallToolResult> => {
+    const badScheme = urlSchemeError(input.url)
+    if (badScheme) return toolError(badScheme)
+    const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
+    let args: string[]
+    try {
+      args = buildReportArgs({ ...input, url: input.url.trim() }, join(dir, 'report.html'))
+    } catch (e) {
+      await rm(dir, { recursive: true, force: true })
+      if (e instanceof UsageError) return toolError(e.message)
+      throw e
+    }
+    // Up to two renders per screen: the screen and its 2x reference.
+    const renders = 2 * (input.presets?.length ?? DEFAULT_REPORT_MATRIX.length)
+    const killAfterMs = killBudgetMs(renders, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
+    const run = await runCli(args, killAfterMs)
+    if (run.killed || run.code !== 0) return cliFailure('report', run, killAfterMs)
+    const result = extractTrailingJson(run.stdout)
+    if (!result) return toolError(`obsrv report exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }
   },
 )

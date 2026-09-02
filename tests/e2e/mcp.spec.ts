@@ -46,11 +46,11 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: five tools with schemas, honestly annotated', async () => {
+test('initialize + tools/list: six tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
-  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_snap'])
+  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_report', 'obsrv_snap'])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
     // obsrv_drive mutates visible app state and says so; the rest are reads.
@@ -182,4 +182,20 @@ test('live drive without a running app: snap mode:"live" and obsrv_drive error a
   const drive = await call('obsrv_drive', { preset: 'laptop-768' })
   expect(drive.isError).toBe(true)
   expect((drive.content[0] as { text: string }).text).toMatch(/Agent control/)
+})
+
+test('obsrv_report: one screen, rendered, audited and diffed, as a file plus a summary', async () => {
+  const r = await call('obsrv_report', { url: fixture('audit.html'), presets: ['laptop-768'] })
+  expect(r.isError).toBeFalsy()
+  const result = r.structuredContent as {
+    out: string
+    htmlBytes: number
+    screens: { preset: string; audit: { findings: number } | null; diff: { settled: boolean } | null; diffSkipped: string | null }[]
+  }
+  expect(result.out).toMatch(/obsrv-mcp-.*\/report\.html$/)
+  expect(result.htmlBytes).toBeGreaterThan(10_000)
+  expect(result.screens).toHaveLength(1)
+  expect(result.screens[0]).toMatchObject({ preset: 'laptop-768', diffSkipped: null })
+  expect(result.screens[0]!.audit?.findings).toBeGreaterThanOrEqual(1)
+  expect(result.screens[0]!.diff).not.toBeNull()
 })
