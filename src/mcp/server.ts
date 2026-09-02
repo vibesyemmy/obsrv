@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
-import { DEFAULT_TIMEOUT_MS } from '../cli/args'
+import { DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus } from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
@@ -18,6 +18,7 @@ import {
   MAX_INLINE_IMAGE_BYTES,
   PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
+  buildAuditArgs,
   buildDiffArgs,
   buildSnapArgs,
   extractTrailingJson,
@@ -27,14 +28,15 @@ import {
   shouldInlineImage,
   stderrTail,
   urlSchemeError,
+  type AuditToolInput,
   type DiffToolInput,
   type SnapMode,
   type SnapToolInput,
 } from './lib'
 
 /**
- * Obsrv MCP server (stdio, stateless): three read-only tools wrapping the
- * headless CLI. Rendering stays in `bin/obsrv.js` — it already owns signals,
+ * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
+ * CLI (snap, diff, audit, presets), plus `obsrv_drive` for the visible app. Rendering stays in `bin/obsrv.js` — it already owns signals,
  * per-run user-data isolation, temp-dir cleanup and crash fast-fail — the
  * server only maps tool input to argv, spawns, and shapes the result.
  * Launched by `bin/obsrv-mcp.js` from the build at `out/mcp/server.js`.
@@ -97,7 +99,7 @@ function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
-function cliFailure(command: 'snap' | 'diff', run: CliRun, killAfterMs: number): CallToolResult {
+function cliFailure(command: 'snap' | 'diff' | 'audit', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) {
     return toolError(
       `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated. ` +
@@ -806,6 +808,112 @@ server.registerTool(
       content.push(await imageOrNote(files.reference, 'reference.png', ''))
     }
     return { content, structuredContent: metrics }
+  },
+)
+
+const auditInputShape = {
+  url: urlField,
+  preset: z
+    .enum(PRESET_IDS)
+    .optional()
+    .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
+  orientation: orientationField,
+  width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
+  height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
+  deviceScaleFactor: z.number().min(1).optional().describe('Raster density for custom dims (default 1).'),
+  diagonalInches: z
+    .number()
+    .min(0.1)
+    .optional()
+    .describe('Panel diagonal in inches, for custom dims. Without it there are no millimetres and no findings.'),
+  tapMm: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(`Flag interactive elements whose shorter side is under this many mm. Default ${DEFAULT_TAP_MM} (provisional).`),
+  textMm: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(`Flag text whose font size is under this many mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
+  waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late layout. Default 0.'),
+  timeoutMs: z.number().int().min(1).optional().describe(`Load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+}
+
+const auditGroupShape = z.object({
+  count: z.number(),
+  under: z.number().nullable().describe('Below the threshold; null when there was no diagonal to measure with.'),
+  smallestPx: z.number().nullable(),
+  smallestMm: z.number().nullable(),
+})
+
+const auditOutputShape = {
+  url: z.string(),
+  preset: z.string(),
+  cssWidth: z.number(),
+  cssHeight: z.number(),
+  deviceScaleFactor: z.number(),
+  pageHeight: z.number().describe('The page\'s full height in CSS px; rects are page coordinates, so the audit covers all of it.'),
+  ppi: z.number().nullable().describe('Device pixels per inch of the screen; null for custom dims without a diagonal.'),
+  thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
+  summary: z.object({ targets: auditGroupShape, text: auditGroupShape }),
+  findings: z
+    .array(
+      z.object({
+        kind: z.enum(['small-target', 'small-text']),
+        element: z.string().describe('tag#id.first-class'),
+        text: z.string(),
+        rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
+        mm: z.number().describe('The shorter side of a target, or the font size of text, in mm on this screen.'),
+        cssWidth: z.number().optional(),
+        cssHeight: z.number().optional(),
+        fontSizePx: z.number().optional(),
+      }),
+    )
+    .describe('Smallest first; at most 200 listed, the rest counted in truncated.findings.'),
+  truncated: z.object({ findings: z.number(), targets: z.number(), text: z.number() }),
+  warnings: z.array(z.string()),
+}
+
+server.registerTool(
+  'obsrv_audit',
+  {
+    title: 'Measure tap targets and text in millimetres on a target screen',
+    description:
+      `Load a URL on a target screen and measure, in millimetres on that screen, every interactive element ` +
+      `(links styled as controls, buttons, form controls, interactive ARIA roles, focusable elements) and every ` +
+      `element with text of its own. A 24 CSS px control is 6.6 mm on a 24" 1080p and 4.5 mm on a 6.5" phone; ` +
+      `a CSS-pixel rule cannot say which of those a thumb can hit, and this can.\n\n` +
+      `Returns per-group counts and smallest sizes, plus findings under the thresholds (\`tapMm\`, default 7 — ` +
+      `between Apple's 44pt and WCAG 2.5.8's 24 CSS px — and \`textMm\`, default 2 — roughly 11px on a phone, 7px ` +
+      `on a 1080p monitor; both provisional and stated in the output), smallest first. Inline links in running ` +
+      `text are exempt from the target rule, as in WCAG 2.5.8. Layout is measured, not pixels: no panel profile ` +
+      `applies, hidden and zero-size elements are skipped, and text over images is measured like any other. ` +
+      `Findings are informational — apply your own thresholds.\n\n` +
+      `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
+      `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all. Headless-only: never drives ` +
+      `the visible app.`,
+    inputSchema: auditInputShape,
+    outputSchema: auditOutputShape,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  },
+  async (input: AuditToolInput): Promise<CallToolResult> => {
+    const badScheme = urlSchemeError(input.url)
+    if (badScheme) return toolError(badScheme)
+    let args: string[]
+    try {
+      args = buildAuditArgs({ ...input, url: input.url.trim() })
+    } catch (e) {
+      if (e instanceof UsageError) return toolError(e.message)
+      throw e
+    }
+    // One load per audit, no capture.
+    const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
+    const run = await runCli(args, killAfterMs)
+    if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
+    const result = extractTrailingJson(run.stdout)
+    if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }
   },
 )
 

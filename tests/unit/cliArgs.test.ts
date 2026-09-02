@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ArgError, parseArgs, type DiffCommand, type SnapCommand } from '../../src/cli/args'
+import { ArgError, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, parseArgs, type AuditCommand, type DiffCommand, type SnapCommand } from '../../src/cli/args'
 
 const snap = (...args: string[]): SnapCommand => parseArgs(['snap', ...args]) as SnapCommand
 const diff = (...args: string[]): DiffCommand => parseArgs(['diff', ...args]) as DiffCommand
@@ -30,7 +30,7 @@ describe('parseArgs: snap', () => {
     const cmd = snap('https://x.test')
     expect(cmd.url).toBe('https://x.test')
     expect(cmd.specs).toEqual([
-      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait' },
+      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait', mobile: false },
     ])
     expect(cmd.profileId).toBe('reference')
     expect(cmd.out).toBe('obsrv-1080p-24.png')
@@ -41,7 +41,7 @@ describe('parseArgs: snap', () => {
   })
   it('resolves a preset, including mobile dsf', () => {
     const cmd = snap('x.test', '--preset', 'iphone-61')
-    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait' })
+    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait', mobile: true })
     expect(cmd.out).toBe('obsrv-iphone-61.png')
   })
   it('rejects an unknown preset, listing the valid ids', () => {
@@ -50,12 +50,12 @@ describe('parseArgs: snap', () => {
   })
   it('accepts custom --width/--height with optional --dsf and --diagonal', () => {
     const cmd = snap('x.test', '--width', '800', '--height', '600', '--dsf', '2', '--diagonal', '13.3')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait' })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait', mobile: false })
     expect(cmd.out).toBe('obsrv-custom.png')
   })
   it('custom dims default dsf 1 and no diagonal', () => {
     const cmd = snap('x.test', '--width', '640', '--height', '480')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait' })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait', mobile: false })
   })
   it('rejects --preset combined with custom dims', () => {
     expect(() => snap('x.test', '--preset', 'laptop-768', '--width', '800', '--height', '600')).toThrow(/mutually exclusive/)
@@ -129,6 +129,7 @@ describe('parseArgs: --orientation', () => {
       deviceScaleFactor: 3,
       diagonalInches: 6.1,
       orientation: 'landscape',
+      mobile: true,
     })
   })
 
@@ -224,5 +225,47 @@ describe('parseArgs: diff', () => {
     expect(() => diff('x.test', '--matrix', 'laptop-768')).toThrow(/snap/)
     expect(() => diff('x.test', '--full-page')).toThrow(/snap/)
     expect(() => diff('x.test', '--out', 'a.png')).toThrow(/snap/)
+  })
+})
+
+describe('parseArgs: audit', () => {
+  const audit = (...args: string[]): AuditCommand => parseArgs(['audit', ...args]) as AuditCommand
+
+  it('defaults: 1080p-24, provisional thresholds, no profile', () => {
+    const cmd = audit('https://x.test')
+    expect(cmd.command).toBe('audit')
+    expect(cmd.spec.presetId).toBe('1080p-24')
+    expect(cmd.spec.mobile).toBe(false)
+    expect(cmd.tapMm).toBe(DEFAULT_TAP_MM)
+    expect(cmd.textMm).toBe(DEFAULT_TEXT_MM)
+    expect(cmd.waitMs).toBe(0)
+  })
+  it('a phone preset is mobile; thresholds are floats', () => {
+    const cmd = audit('x.test', '--preset', 'android-65', '--tap-mm', '9', '--text-mm', '1.5')
+    expect(cmd.spec.mobile).toBe(true)
+    expect(cmd.tapMm).toBe(9)
+    expect(cmd.textMm).toBe(1.5)
+  })
+  it('custom dimensions carry a null diagonal (no millimetres) unless --diagonal is given', () => {
+    expect(audit('x.test', '--width', '1280', '--height', '720').spec.diagonalInches).toBeNull()
+    expect(audit('x.test', '--width', '1280', '--height', '720', '--diagonal', '14').spec.diagonalInches).toBe(14)
+  })
+  it('refuses --profile, --matrix and the other commands\' flags', () => {
+    expect(() => audit('x.test', '--profile', 'budget-tn')).toThrow(/does not apply/)
+    expect(() => audit('x.test', '--matrix', 'laptop-768,1080p-24')).toThrow(/snap flag/)
+    expect(() => audit('x.test', '--out', 'x.png')).toThrow(/snap flag/)
+    expect(() => audit('x.test', '--out-dir', 'd')).toThrow(/diff flag/)
+    expect(() => parseArgs(['snap', 'x.test', '--tap-mm', '5'])).toThrow(/an audit flag/)
+  })
+  it('rejects a negative or non-numeric threshold', () => {
+    expect(() => audit('x.test', '--tap-mm', '-1')).toThrow(/tap-mm/)
+    expect(() => audit('x.test', '--text-mm', 'big')).toThrow(/text-mm/)
+  })
+  it('the usage text names the command and its flags', () => {
+    const cmd = parseArgs([])
+    if (cmd.command === 'help') {
+      expect(cmd.text).toContain('obsrv audit <url>')
+      expect(cmd.text).toContain('--tap-mm')
+    }
   })
 })

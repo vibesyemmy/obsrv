@@ -6,8 +6,9 @@ import { clampViewport, maxCssViewport } from '../shared/calibration'
 import { classifyFileNavigation } from '../shared/fileNav'
 import { fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
+import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
-import { parseInspectReport } from '../shared/ipcPayloads'
+import { parseAuditReport, parseInspectReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
 import { log } from './log'
 
@@ -512,6 +513,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       return parseInspectReport(raw)
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
+      return null
+    }
+  }
+
+  /**
+   * Every interactive element and every element with text of its own, with
+   * boxes and font sizes as the page lays them out — the raw material of the
+   * physical-units audit (`cli/audit.ts` decides what is small on a given
+   * screen). Same isolated world and the same untrusted-payload parsing as
+   * `inspectAt`.
+   */
+  async auditPage(): Promise<AuditReport | null> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return null
+    try {
+      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
+        { code: `${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})` },
+      ])
+      return parseAuditReport(raw)
+    } catch {
       return null
     }
   }
