@@ -28,6 +28,8 @@ beforeEach(() => {
       #zero span { font-size: 16px; }
       #ghost { opacity: 0; width: 10px; height: 10px; }
       #skip { position: absolute; left: -9999px; }
+      /* The visually-hidden pattern: present for screen readers, 1×1 and clipped for everyone else. */
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     </style>
     <button id="big" type="button">A generous button</button>
     <button id="tiny" type="button" aria-label="Close">×</button>
@@ -41,6 +43,9 @@ beforeEach(() => {
     <div role="button" id="aria" tabindex="0">An ARIA button</div>
     <input id="field" type="text" value="typed" />
     <input id="hid" type="hidden" value="secret" />
+    <a id="skip" href="#main">Skip to content</a>
+    <label id="sr" class="sr-only" for="field">Screen-reader label</label>
+    <input id="sr-check" class="sr-only" type="checkbox" />
   `
   document.body.append(host)
 })
@@ -54,6 +59,9 @@ describe('auditPage', () => {
     expect(ids).not.toContain('a#link')
     expect(ids).not.toContain('button#ghost')
     expect(ids).not.toContain('input#hid')
+    // Off the page, and the 1×1 clipped checkbox of the visually-hidden pattern.
+    expect(ids).not.toContain('a#skip')
+    expect(ids).not.toContain('input#sr-check')
     const tiny = r.targets.find(t => t.element === 'button#tiny')!
     expect(tiny.rect.width).toBe(24)
     expect(tiny.rect.height).toBe(24)
@@ -71,6 +79,8 @@ describe('auditPage', () => {
     expect(by['p#hidden']).toBeUndefined()
     expect(by['p#none']).toBeUndefined()
     expect(by['button#ghost']).toBeUndefined()
+    expect(by['label#sr']).toBeUndefined()
+    expect(by['a#skip']).toBeUndefined()
     expect(by['button#tiny']!.text).toBe('×')
   })
   it('rects are page coordinates', () => {

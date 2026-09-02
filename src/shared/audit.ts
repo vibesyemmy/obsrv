@@ -66,8 +66,20 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ''}`
   }
   const snippet = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 40)
+  // Rendered, and somewhere a finger or an eye could reach: not a zero box,
+  // not hidden, not the 1×1 clipped box of the "visually hidden" pattern
+  // (screen-reader text, and controls made accessible that way — measured
+  // on real pages, those were the 0.2 mm "targets"), and not parked off the
+  // page at a negative offset.
   const shown = (cs: CSSStyleDeclaration, r: DOMRect): boolean =>
-    r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0'
+    r.width > 0 &&
+    r.height > 0 &&
+    !(r.width <= 1 && r.height <= 1) &&
+    r.right + scrollX > 0 &&
+    r.bottom + scrollY > 0 &&
+    cs.visibility !== 'hidden' &&
+    cs.display !== 'none' &&
+    cs.opacity !== '0'
   const pageRect = (r: DOMRect): AuditRect => ({ x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height })
 
   const TARGETS =

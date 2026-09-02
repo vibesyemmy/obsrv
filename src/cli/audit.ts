@@ -13,8 +13,9 @@ import { cssPxToMm } from '../shared/contrast'
  * floor; 7 mm sits between them. Text: no standard states a floor in
  * millimetres; 2 mm is roughly 11px on a phone and 7px on a 1080p monitor,
  * below which body text is unreadable and captions are guesswork at arm's
- * length. Both were set by measuring real pages and will move when better
- * evidence turns up — which is why the output states the values used.
+ * length. Both were checked against real pages (docs/audit.md has the
+ * table) and may move when better evidence turns up — which is why the
+ * output states the values used.
  */
 
 export const DEFAULT_TAP_MM = 7
