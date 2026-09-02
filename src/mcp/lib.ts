@@ -56,6 +56,35 @@ export interface AuditToolInput {
   timeoutMs?: number | undefined
 }
 
+export interface ReportToolInput {
+  url: string
+  /** Preset ids; the CLI's default matrix when omitted. */
+  presets?: string[] | undefined
+  orientation?: Orientation | undefined
+  profile?: string | undefined
+  tapMm?: number | undefined
+  textMm?: number | undefined
+  waitMs?: number | undefined
+  timeoutMs?: number | undefined
+}
+
+/** Maps `obsrv_report` input to CLI argv; the HTML always lands at `outPath`. */
+export function buildReportArgs(input: ReportToolInput, outPath: string): string[] {
+  const args = ['report', input.url]
+  if (input.presets !== undefined) {
+    if (input.presets.length === 0) throw new UsageError('`presets` must name at least one preset id, or be omitted for the default matrix.')
+    args.push('--matrix', input.presets.join(','))
+  }
+  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
+  if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
+  if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
+  if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
+  args.push('--out', outPath)
+  return args
+}
+
 /** Maps `obsrv_audit` input to CLI argv; the preset-XOR-custom rule is snap's. */
 export function buildAuditArgs(input: AuditToolInput): string[] {
   const custom =

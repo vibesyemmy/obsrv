@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ArgError, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, parseArgs, type AuditCommand, type DiffCommand, type SnapCommand } from '../../src/cli/args'
+import { ArgError, DEFAULT_REPORT_MATRIX, DEFAULT_REPORT_OUT, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, parseArgs, type AuditCommand, type DiffCommand, type ReportCommand, type SnapCommand } from '../../src/cli/args'
 
 const snap = (...args: string[]): SnapCommand => parseArgs(['snap', ...args]) as SnapCommand
 const diff = (...args: string[]): DiffCommand => parseArgs(['diff', ...args]) as DiffCommand
@@ -267,5 +267,39 @@ describe('parseArgs: audit', () => {
       expect(cmd.text).toContain('obsrv audit <url>')
       expect(cmd.text).toContain('--tap-mm')
     }
+  })
+})
+
+describe('parseArgs: report', () => {
+  const report = (...args: string[]): ReportCommand => parseArgs(['report', ...args]) as ReportCommand
+
+  it('defaults to the four-screen matrix, the reference profile and obsrv-report.html', () => {
+    const cmd = report('https://x.test')
+    expect(cmd.specs.map(s => s.presetId)).toEqual([...DEFAULT_REPORT_MATRIX])
+    expect(cmd.specs.map(s => s.mobile)).toEqual([false, false, true, true])
+    expect(cmd.profileId).toBe('reference')
+    expect(cmd.out).toBe(DEFAULT_REPORT_OUT)
+    expect(cmd.tapMm).toBe(DEFAULT_TAP_MM)
+    expect(cmd.textMm).toBe(DEFAULT_TEXT_MM)
+  })
+  it('takes --matrix, --preset or custom dims, with --out, --profile and the audit thresholds', () => {
+    expect(report('x.test', '--matrix', 'laptop-768,android-65').specs.map(s => s.presetId)).toEqual(['laptop-768', 'android-65'])
+    expect(report('x.test', '--preset', 'iphone-61').specs.map(s => s.presetId)).toEqual(['iphone-61'])
+    expect(report('x.test', '--width', '1280', '--height', '720', '--diagonal', '14').specs[0]).toMatchObject({ presetId: 'custom', diagonalInches: 14 })
+    const cmd = report('x.test', '--out', 'r/page.html', '--profile', 'budget-tn', '--tap-mm', '6', '--text-mm', '1.5')
+    expect(cmd.out).toBe('r/page.html')
+    expect(cmd.profileId).toBe('budget-tn')
+    expect(cmd.tapMm).toBe(6)
+    expect(cmd.textMm).toBe(1.5)
+  })
+  it('rotates the default matrix too', () => {
+    expect(report('x.test', '--orientation', 'landscape').specs.map(s => [s.cssWidth, s.cssHeight])).toEqual([
+      [768, 1366], [1080, 1920], [800, 360], [852, 393],
+    ])
+  })
+  it('refuses the other commands\' flags, naming their owner', () => {
+    expect(() => report('x.test', '--full-page')).toThrow(/snap flag/)
+    expect(() => report('x.test', '--out-dir', 'd')).toThrow(/diff flag/)
+    expect(() => parseArgs(['diff', 'x.test', '--out', 'r.html'])).toThrow(/snap flag/)
   })
 })

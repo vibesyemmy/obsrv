@@ -1,17 +1,19 @@
 import { app, nativeImage } from 'electron'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
 import { boxDownsample, rgbaToBgra, type RGBAImage } from '../shared/downsample'
-import { findProfile } from '../shared/presets'
+import { SCREEN_PRESETS, findProfile } from '../shared/presets'
 import type { LoadError } from '../shared/types'
-import { ArgError, parseArgs, type AuditCommand, type DiffCommand, type RenderSpec, type SnapCommand } from './args'
+import type { AuditReport } from '../shared/audit'
+import { ArgError, parseArgs, type AuditCommand, type DiffCommand, type RenderSpec, type ReportCommand, type SnapCommand } from './args'
 import { auditFindings } from './audit'
 import { bgraToRgba, captureQuiescent, type CapturedFrame } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
+import { reportHtml, type ReportImage, type ReportScreen } from './reportHtml'
 
 /**
  * Headless CLI entry (`bin/obsrv.js` spawns `electron out/main/cli.js -- …`).
@@ -57,6 +59,8 @@ interface RenderResult {
   cssHeight: number
   /** Everything warned to stderr during this render, for the machine output. */
   warnings: string[]
+  /** The audit walk, when asked for; null when the page did not answer. */
+  auditReport?: AuditReport | null
 }
 
 interface RenderOptions {
@@ -65,6 +69,8 @@ interface RenderOptions {
   timeoutMs: number
   /** False only for the diff reference: dense raster, desktop semantics. */
   mobileEmulation?: boolean
+  /** Also run the audit walk on the loaded page, so a report costs one load per screen. */
+  audit?: boolean
 }
 
 /**
@@ -164,7 +170,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
 
     const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed })
-    return { frame, cssWidth: applied.width, cssHeight, warnings }
+    const auditReport = options.audit ? await target.auditPage() : undefined
+    return { frame, cssWidth: applied.width, cssHeight, warnings, ...(auditReport !== undefined ? { auditReport } : {}) }
   } finally {
     target.destroy()
   }
@@ -218,10 +225,15 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
 async function runDiff(cmd: DiffCommand): Promise<void> {
   const profile = findProfile(cmd.profileId)
 
-  // The target: the preset as configured, panel profile applied — the point
-  // of the comparison is "this screen" vs "the screen you develop on".
+  // The target: the preset as configured, *without* the panel profile. The
+  // comparison is about rasterisation — "this screen" vs "the screen you
+  // develop on" — and a profile's brightness and black floor darken every
+  // pixel past the ink threshold (white through budget-tn at the default
+  // host lands at luminance 186, under INK_LUMINANCE's 200), which reported
+  // 100% ink coverage and a "+90pp" band finding for every band. The
+  // reference is unprofiled too, so like is compared with like.
   const t = await render(cmd.url, cmd.spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
-  const target = applyPanelProfile(bgraToRgba(t.frame.bgra, t.frame.width, t.frame.height), profile)
+  const target = bgraToRgba(t.frame.bgra, t.frame.width, t.frame.height)
 
   // The reference: the same CSS viewport at dsf 2 (what a HiDPI dev sees) —
   // desktop UA and viewport semantics, only the raster density differs — then
@@ -244,6 +256,9 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
   const warnings = [
     ...t.warnings.map(w => `target: ${w}`),
     ...r.warnings.map(w => `reference: ${w}`),
+    ...(profile.id === 'reference'
+      ? []
+      : [`the panel profile (${profile.id}) is not applied to a diff: the comparison is about rasterisation and is measured without it`]),
   ]
   const metrics = diffMetrics(target, reference, referenceDeviceRows, settled)
 
@@ -330,6 +345,136 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
   }
 }
 
+/** The package version: two levels above out/main, the same file inside app.asar. */
+function cliVersion(): string {
+  try {
+    return (JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version?: string }).version ?? app.getVersion()
+  } catch {
+    return app.getVersion()
+  }
+}
+
+const toImage = (png: Buffer, width: number, height: number): ReportImage => ({ base64: png.toString('base64'), width, height })
+
+/**
+ * The report: one self-contained HTML page for a matrix of screens. Each
+ * screen is one render with the audit walk on the same loaded page; 1x
+ * screens that fit a 2x reference also get the diff, so the page shows this
+ * screen next to the one the page was designed on. The same pieces `snap`,
+ * `audit` and `diff` are made of, on one page.
+ */
+async function runReport(cmd: ReportCommand): Promise<void> {
+  const profile = findProfile(cmd.profileId)
+  const thresholds = { tapMm: cmd.tapMm, textMm: cmd.textMm }
+  const screens: ReportScreen[] = []
+  const referenceMax = maxCssViewport(2)
+
+  for (const spec of cmd.specs) {
+    const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true })
+    const raw = bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height)
+    const profiled = profile.id !== 'reference'
+    const img = profiled ? applyPanelProfile(raw, profile) : raw
+    const warnings = [...r.warnings]
+    const audit =
+      r.auditReport === null || r.auditReport === undefined
+        ? null
+        : auditFindings(
+            r.auditReport,
+            { cssWidth: r.cssWidth, cssHeight: r.cssHeight, deviceScaleFactor: spec.deviceScaleFactor, diagonalInches: spec.diagonalInches },
+            thresholds,
+          )
+
+    let diff: ReportScreen['diff'] = null
+    let diffSkipped: string | null = null
+    if (spec.deviceScaleFactor !== 1) {
+      diffSkipped = 'a dense screen has no 1x-vs-2x comparison; the render itself is the evidence'
+    } else if (r.cssWidth > referenceMax || r.cssHeight > referenceMax) {
+      diffSkipped = `the CSS viewport exceeds ${referenceMax}px per axis, so a 2x reference would exceed the 4096-device-pixel cap`
+    } else {
+      const ref = await render(
+        cmd.url,
+        { ...spec, deviceScaleFactor: 2 },
+        { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, mobileEmulation: false },
+      )
+      const referenceFull = bgraToRgba(ref.frame.bgra, ref.frame.width, ref.frame.height)
+      const referenceDeviceRows = inkRows(referenceFull)
+      const reference = boxDownsample(referenceFull, 2)
+      // Measured on the unprofiled render: the comparison is about
+      // rasterisation, and a panel profile's brightness and black floor
+      // would darken every pixel past the ink threshold (measured: 100%
+      // coverage under budget-tn, every band "+90pp"). The reference is
+      // unprofiled too, so like is compared with like.
+      const metrics = diffMetrics(raw, reference, referenceDeviceRows, r.frame.settled && ref.frame.settled)
+      diff = {
+        metrics,
+        target: profiled ? toImage(encodePng(raw), raw.width, raw.height) : null,
+        reference: toImage(encodePng(reference), reference.width, reference.height),
+      }
+      warnings.push(...ref.warnings.map(w => `reference: ${w}`))
+    }
+
+    const ppi = audit?.ppi ?? null
+    const preset = SCREEN_PRESETS.find(p => p.id === spec.presetId)
+    const label = preset ? preset.label : `Custom ${spec.cssWidth}×${spec.cssHeight}${spec.deviceScaleFactor !== 1 ? ` @${spec.deviceScaleFactor}x` : ''}`
+    screens.push({
+      presetId: spec.presetId,
+      label,
+      cssWidth: r.cssWidth,
+      cssHeight: r.cssHeight,
+      deviceScaleFactor: spec.deviceScaleFactor,
+      diagonalInches: spec.diagonalInches,
+      ppi,
+      physicalMm:
+        ppi === null
+          ? null
+          : { width: (r.cssWidth * spec.deviceScaleFactor * 25.4) / ppi, height: (r.cssHeight * spec.deviceScaleFactor * 25.4) / ppi },
+      orientation: screenShape(r.cssWidth, r.cssHeight),
+      png: toImage(encodePng(img), img.width, img.height),
+      settled: r.frame.settled,
+      audit,
+      diff,
+      diffSkipped,
+      warnings,
+    })
+    human(
+      `report ${spec.presetId}: ${r.cssWidth}×${r.cssHeight} CSS, ` +
+        `${audit ? `${audit.findings.length} audit finding(s)` : 'no audit answer'}, ` +
+        `${diff ? `${diff.metrics.findings.length} diff finding(s)` : 'no diff'}`,
+    )
+  }
+
+  const generatedAt = new Date().toISOString()
+  const version = cliVersion()
+  const out = resolve(cmd.out)
+  mkdirSync(dirname(out), { recursive: true })
+  const html = reportHtml({ url: cmd.url, generatedAt, version, profile: { id: profile.id, label: profile.label }, thresholds, screens })
+  writeFileSync(out, html)
+  human(`report ${cmd.url} → ${out} (${screens.length} screen(s), ${Math.round(html.length / 1024)} KiB)`)
+
+  await machine({
+    url: cmd.url,
+    out,
+    htmlBytes: Buffer.byteLength(html),
+    generatedAt,
+    profile: profile.id,
+    thresholds,
+    screens: screens.map(s => ({
+      preset: s.presetId,
+      cssWidth: s.cssWidth,
+      cssHeight: s.cssHeight,
+      deviceScaleFactor: s.deviceScaleFactor,
+      ppi: s.ppi,
+      settled: s.settled,
+      audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,
+      diff: s.diff
+        ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }
+        : null,
+      diffSkipped: s.diffSkipped,
+      warnings: s.warnings,
+    })),
+  })
+}
+
 // --- boot --------------------------------------------------------------------
 
 // A throwaway user-data dir: the CLI must never share (or pollute) the GUI
@@ -381,6 +526,8 @@ void app.whenReady().then(async () => {
       await runSnap(cmd)
     } else if (cmd.command === 'audit') {
       await runAudit(cmd)
+    } else if (cmd.command === 'report') {
+      await runReport(cmd)
     } else {
       await runDiff(cmd)
     }
