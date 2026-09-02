@@ -1,4 +1,5 @@
 import type { AuditResult, AuditThresholds } from './audit'
+import { formatTextScale } from '../shared/textScale'
 import type { DiffMetrics } from './metrics'
 
 /**
@@ -22,6 +23,8 @@ export interface ReportScreen {
   cssWidth: number
   cssHeight: number
   deviceScaleFactor: number
+  /** Browser zoom as reflow, 1 = none; the render is still the screen's size. */
+  textScale: number
   diagonalInches: number | null
   /** Device pixels per inch; null for a custom screen with no diagonal. */
   ppi: number | null
@@ -153,6 +156,7 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `<h2>${escapeHtml(s.label)}</h2>` +
     `<p class="facts"><b>${s.cssWidth}×${s.cssHeight}</b> CSS px${s.deviceScaleFactor !== 1 ? ` at <b>${s.deviceScaleFactor}x</b>` : ''} · ` +
     `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.orientation)}` +
+    `${s.textScale !== 1 ? ` · text <b>${escapeHtml(formatTextScale(s.textScale))}</b>` : ''}` +
     `${s.settled ? '' : ' · <span class="bad">not settled</span>'}</p>` +
     // The screen's own figure: always for a screen with no comparison, and
     // for a compared screen only when the profile made it a different image

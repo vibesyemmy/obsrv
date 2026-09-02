@@ -8,6 +8,7 @@ export const IPC = {
   back: 'obsrv:back',
   forward: 'obsrv:forward',
   setViewport: 'obsrv:set-viewport',
+  setTextScale: 'obsrv:set-text-scale',
   setNativeBounds: 'obsrv:set-native-bounds',
   setNativeVisible: 'obsrv:set-native-visible',
   setNativeObscured: 'obsrv:set-native-obscured',

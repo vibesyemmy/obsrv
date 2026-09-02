@@ -1,4 +1,5 @@
 import { app, nativeImage } from 'electron'
+import { formatTextScale } from '../shared/textScale'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -141,6 +142,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // mobile UA and viewport semantics the app gives it, a Retina laptop does
     // not. (Dropped by mistake at 0.18.1, when the fourth argument arrived.)
     const applied = target.setViewport(spec.cssWidth, spec.cssHeight, spec.deviceScaleFactor, spec.mobile)
+    // Before the load: `did-navigate` re-applies it, so the page lays out at
+    // its scale from the first paint rather than reflowing after.
+    target.setTextScale(spec.textScale)
     await loadWithin(target, url, options, watch)
 
     let cssHeight = applied.height
@@ -155,12 +159,15 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
         )) as number,
       )
-      if (scrollHeight > cssHeight) {
+      // The page measures itself in its own CSS px; under a text scale the
+      // surface needs `textScale` times as many to hold it.
+      const surfaceHeight = Math.ceil(scrollHeight * spec.textScale)
+      if (surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
-        const wanted = Math.min(scrollHeight, limit)
-        if (scrollHeight > limit) {
+        const wanted = Math.min(surfaceHeight, limit)
+        if (surfaceHeight > limit) {
           warn(
-            `warning: full page is ${scrollHeight} CSS px tall; clamped to ${wanted} ` +
+            `warning: full page is ${surfaceHeight} CSS px tall; clamped to ${wanted} ` +
               `(device pixels are capped at 4096 per axis)`,
           )
         }
@@ -204,7 +211,8 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
     const shape = screenShape(r.cssWidth, r.cssHeight)
     human(
       `snap ${cmd.url} → ${out} (${r.frame.width}×${r.frame.height} device px, ` +
-        `${r.cssWidth}×${r.cssHeight} CSS ${shape}, preset ${spec.presetId}, profile ${profile.id})`,
+        `${r.cssWidth}×${r.cssHeight} CSS ${shape}, preset ${spec.presetId}, profile ${profile.id}` +
+        `${spec.textScale !== 1 ? `, text ${formatTextScale(spec.textScale)}` : ''})`,
     )
     results.push({
       out,
@@ -212,6 +220,9 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
+      // Only when one was applied: at ×1 this object is the contract every
+      // consumer already parses, and a run that asked for a scale is new code.
+      ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),
       profile: profile.id,
       // False means a best-effort capture of a page that never went
       // paint-quiet (animation); machine consumers can gate on it.
@@ -302,6 +313,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
   try {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
+    target.setTextScale(cmd.spec.textScale)
     await loadWithin(target, cmd.url, cmd, watch)
     const report = await target.auditPage()
     if (!report) {
@@ -316,6 +328,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
         cssHeight: applied.height,
         deviceScaleFactor: cmd.spec.deviceScaleFactor,
         diagonalInches: cmd.spec.diagonalInches,
+        textScale: cmd.spec.textScale,
       },
       { tapMm: cmd.tapMm, textMm: cmd.textMm },
     )
@@ -337,6 +350,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       cssWidth: applied.width,
       cssHeight: applied.height,
       deviceScaleFactor: cmd.spec.deviceScaleFactor,
+      // Present only when a scale other than 1 was applied, as in `snap`.
+      ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
       pageHeight: report.pageHeight,
       ...result,
     })
@@ -380,7 +395,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
         ? null
         : auditFindings(
             r.auditReport,
-            { cssWidth: r.cssWidth, cssHeight: r.cssHeight, deviceScaleFactor: spec.deviceScaleFactor, diagonalInches: spec.diagonalInches },
+            { cssWidth: r.cssWidth, cssHeight: r.cssHeight, deviceScaleFactor: spec.deviceScaleFactor, diagonalInches: spec.diagonalInches, textScale: spec.textScale },
             thresholds,
           )
 
@@ -422,6 +437,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
+      textScale: spec.textScale,
       diagonalInches: spec.diagonalInches,
       ppi,
       physicalMm:
@@ -463,6 +479,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       cssWidth: s.cssWidth,
       cssHeight: s.cssHeight,
       deviceScaleFactor: s.deviceScaleFactor,
+      ...(s.textScale !== 1 ? { textScale: s.textScale } : {}),
       ppi: s.ppi,
       settled: s.settled,
       audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,

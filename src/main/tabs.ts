@@ -282,6 +282,7 @@ export class TabManager {
         presetId: t.presetId,
         profileId: t.profileId,
         orientation: t.orientation,
+        textScale: t.textScale,
       })),
       activeId: this.id,
     }

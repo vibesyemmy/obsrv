@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_TEXT_SCALE } from '../../../shared/textScale'
 import {
   applyOrientation,
   clampViewport,
@@ -73,6 +74,12 @@ export interface TabState {
    * and `selectScreen` is the one place the axes swap.
    */
   orientation: Orientation
+  /**
+   * Browser zoom as reflow on the target — what a user at 150 % sees. Per tab
+   * like the orientation; the screen's own dimensions and density are
+   * untouched, the page simply lays out in `1/textScale` of them.
+   */
+  textScale: number
   custom: TargetScreen
   pixelExact: boolean
   visionType: VisionType
@@ -159,6 +166,7 @@ export interface AppState {
   setTabLoading(id: string, v: boolean): void
   setPreset(id: string): void
   setOrientation(o: Orientation): void
+  setTextScale(scale: number): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setVision(type: VisionType, severity: number): void
@@ -230,6 +238,7 @@ function blankTab(): TabState {
     lastUrl: '',
     presetId: '1080p-24',
     orientation: DEFAULT_ORIENTATION,
+    textScale: DEFAULT_TEXT_SCALE,
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
     pixelExact: false,
     visionType: 'none',
@@ -335,6 +344,9 @@ export const useStore = create<AppState>()((set, get) => ({
   // (or a click on the pressed half of the control) costs no re-render.
   setOrientation: orientation =>
     set(patchActiveWith(t => (t.orientation === orientation ? null : { orientation, agentHighlight: null }))),
+  // Same shape as a rotation: the page reflows, so a highlight's rect is stale.
+  setTextScale: textScale =>
+    set(patchActiveWith(t => (t.textScale === textScale ? null : { textScale, agentHighlight: null }))),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),
@@ -411,6 +423,7 @@ export const useStore = create<AppState>()((set, get) => ({
               presetId: info.presetId,
               profileId: info.profileId,
               orientation: info.orientation,
+              textScale: info.textScale,
             }
       }
       const tabOrder = snap.tabs.map(t => t.id)

@@ -34,6 +34,12 @@ export interface AuditScreen {
   deviceScaleFactor: number
   /** Null for a custom screen with no `--diagonal`: no density, no millimetres. */
   diagonalInches: number | null
+  /**
+   * Browser zoom as reflow, 1 (or absent) = none. The page's CSS px are this
+   * many times the screen's, so a 24 px target at ×1.5 covers 36 device px
+   * on a 1x screen and is measured as such; the density is the screen's.
+   */
+  textScale?: number
 }
 
 export type AuditFinding =
@@ -81,7 +87,7 @@ export function auditFindings(report: AuditReport, screen: AuditScreen, threshol
   if (ppi === null) {
     warnings.push('no screen diagonal, so no millimetres: pass --diagonal <inches> with custom dimensions, or use a preset')
   }
-  const mm = (px: number): number | null => (ppi === null ? null : cssPxToMm(px, screen.deviceScaleFactor, ppi))
+  const mm = (px: number): number | null => (ppi === null ? null : cssPxToMm(px, screen.deviceScaleFactor * (screen.textScale ?? 1), ppi))
 
   const findings: AuditFinding[] = []
   let smallestTargetPx: number | null = null

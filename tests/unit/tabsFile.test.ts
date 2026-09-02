@@ -22,11 +22,11 @@ describe('loadTabs', () => {
   it('round-trips a saved list', () => {
     const f = file()
     saveTabs(f, {
-      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait' }],
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait', textScale: 1 }],
       activeIndex: 0,
     })
     expect(loadTabs(f)).toEqual({
-      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait' }],
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'laptop-768', profileId: 'budget-tn', orientation: 'portrait', textScale: 1 }],
       activeIndex: 0,
     })
   })
@@ -127,7 +127,7 @@ describe('loadTabs orientation', () => {
   it('round-trips a rotated tab', () => {
     const f = file()
     saveTabs(f, {
-      tabs: [{ url: 'http://localhost:4173/', presetId: 'iphone-61', profileId: 'reference', orientation: 'landscape' }],
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'iphone-61', profileId: 'reference', orientation: 'landscape', textScale: 1 }],
       activeIndex: 0,
     })
     expect(loadTabs(f).tabs[0]!.orientation).toBe('landscape')
@@ -170,6 +170,32 @@ describe('loadTabs orientation', () => {
       presetId: 'iphone-61',
       profileId: 'budget-tn',
       orientation: 'portrait',
+      textScale: 1,
     })
+  })
+})
+
+describe('loadTabs textScale', () => {
+  const file = (): string => join(mkdtempSync(join(tmpdir(), 'obsrv-tabs-scale-')), 'tabs.json')
+  it('round-trips a scale', () => {
+    const f = file()
+    saveTabs(f, {
+      tabs: [{ url: 'http://localhost:4173/', presetId: 'iphone-61', profileId: 'reference', orientation: 'portrait', textScale: 1.5 }],
+      activeIndex: 0,
+    })
+    expect(loadTabs(f).tabs[0]!.textScale).toBe(1.5)
+  })
+  it('a file from before the field, or one with junk in it, reads as ×1 and keeps the tab', () => {
+    const f = file()
+    for (const bad of [undefined, 'big', 0, 0.1, 10, null, {}, [1.5], Number.NaN]) {
+      writeFileSync(
+        f,
+        JSON.stringify({
+          tabs: [{ url: 'http://a/', presetId: 'iphone-61', profileId: 'budget-tn', orientation: 'landscape', textScale: bad }],
+          activeIndex: 0,
+        }),
+      )
+      expect(loadTabs(f).tabs[0]).toEqual({ url: 'http://a/', presetId: 'iphone-61', profileId: 'budget-tn', orientation: 'landscape', textScale: 1 })
+    }
   })
 })

@@ -60,7 +60,7 @@ test('initialize + tools/list: six tools with schemas, honestly annotated', asyn
   }
   const snap = tools.find(t => t.name === 'obsrv_snap')!
   expect(Object.keys(snap.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs', 'mode']),
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs', 'mode', 'textScale']),
   )
   const diff = tools.find(t => t.name === 'obsrv_diff')!
   expect(Object.keys(diff.inputSchema.properties ?? {})).toEqual(
@@ -68,11 +68,11 @@ test('initialize + tools/list: six tools with schemas, honestly annotated', asyn
   )
   const drive = tools.find(t => t.name === 'obsrv_drive')!
   expect(Object.keys(drive.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'profile', 'viewMode']),
+    expect.arrayContaining(['url', 'preset', 'profile', 'viewMode', 'textScale']),
   )
   const audit = tools.find(t => t.name === 'obsrv_audit')!
   expect(Object.keys(audit.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'diagonalInches', 'tapMm', 'textMm']),
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'diagonalInches', 'tapMm', 'textMm', 'textScale']),
   )
   // Layout, not pixels: no panel profile.
   expect(Object.keys(audit.inputSchema.properties ?? {})).not.toContain('profile')

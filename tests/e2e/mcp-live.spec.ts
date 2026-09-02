@@ -86,6 +86,18 @@ test('obsrv_drive flips the preset and returns the confirming status', async () 
     .toEqual({ width: 1920, height: 1080 })
 })
 
+test('obsrv_drive sets the text scale; the page reflows and the status confirms it', async () => {
+  const innerWidth = (): Promise<number> =>
+    app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('innerWidth'))
+  const r = await call('obsrv_drive', { textScale: 1.5 })
+  expect(r.isError).toBeFalsy()
+  expect(r.structuredContent).toMatchObject({ textScale: 1.5 })
+  await expect.poll(innerWidth).toBe(1280)
+  const back = await call('obsrv_drive', { textScale: 1 })
+  expect(back.structuredContent).toMatchObject({ textScale: 1 })
+  await expect.poll(innerWidth).toBe(1920)
+})
+
 test('obsrv_snap mode:"headless" ignores the running app', async () => {
   const r = await call('obsrv_snap', { url: FIXTURE, preset: 'laptop-768', mode: 'headless' })
   expect(r.isError).toBeFalsy()

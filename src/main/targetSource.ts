@@ -8,6 +8,7 @@ import { fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
 import { log } from './log'
@@ -149,6 +150,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * Windows panel at 150% is 1.5x and not a phone at all.
    */
   private mobile = false
+  /**
+   * Browser zoom, as reflow: the page lays out in a CSS viewport `1/scale`
+   * the size of the surface and rasters at `scale` times the density, which
+   * is what Chromium's own zoom does to a page — except that Chromium's is
+   * per host across the session, and would take the native pane and every
+   * other tab on the origin with it. Device emulation is this window's alone.
+   * See `applyEmulation`; `shared/textScale.ts` has the range.
+   */
+  private textScale = DEFAULT_TEXT_SCALE
+  /** Whether the current window has emulation on, so leaving it can turn it off. */
+  private emulating = false
   private readonly fps: number
   /** See TargetSourceOptions.mobileEmulation. */
   private readonly mobileEmulation: boolean
@@ -219,6 +231,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     })
     this.win = win
     this.firstNavDone = false
+    this.emulating = false
 
     const wc = win.webContents
     wc.setFrameRate(this.fps)
@@ -340,21 +353,62 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   }
 
   /**
-   * Mobile viewport semantics for dsf > 1 (see class doc). Post-commit only:
-   * enabling emulation before a window's first navigation commits segfaults
-   * the OSR renderer, so callers are either the `did-navigate` handler (by
-   * definition post-commit) or gated on `firstNavDone`.
+   * Mobile viewport semantics for phone screens, and the text scale for any
+   * screen (see class doc and `textScale`). Post-commit only: enabling
+   * emulation before a window's first navigation commits segfaults the OSR
+   * renderer, so callers are either the `did-navigate` handler (by definition
+   * post-commit) or gated on `firstNavDone`.
+   *
+   * The emulated view is the surface divided by the scale, at the surface's
+   * density multiplied by it, so the two cancel and the emulated page fills
+   * the surface's device pixels exactly — the same arithmetic as the phone
+   * case at scale 1, which has always been this call. A desktop screen at
+   * scale 1 needs no emulation at all, and turning it off matters: Chromium
+   * keeps the last parameters until told otherwise.
    */
   private applyEmulation(): void {
-    if (!this.mobile || !this.mobileEmulation || this.win.isDestroyed()) return
-    this.win.webContents.enableDeviceEmulation({
-      screenPosition: 'mobile',
-      screenSize: { width: this.viewport.width, height: this.viewport.height },
+    if (this.win.isDestroyed()) return
+    const wc = this.win.webContents
+    const mobile = this.mobile && this.mobileEmulation
+    const scale = this.textScale
+    if (!mobile && scale === 1) {
+      if (this.emulating) wc.disableDeviceEmulation()
+      this.emulating = false
+      return
+    }
+    // Rounded, not floored: 1366 / 1.5 is 910.67 CSS px, and 911 of them
+    // overrun the surface by half a device pixel that is clipped, where 910
+    // would leave a device-pixel sliver of nothing down the right edge.
+    const size = { width: Math.round(this.viewport.width / scale), height: Math.round(this.viewport.height / scale) }
+    wc.enableDeviceEmulation({
+      screenPosition: mobile ? 'mobile' : 'desktop',
+      screenSize: size,
       viewPosition: { x: 0, y: 0 },
-      viewSize: { width: this.viewport.width, height: this.viewport.height },
-      deviceScaleFactor: this.dsf,
+      viewSize: size,
+      deviceScaleFactor: this.dsf * scale,
       scale: 1,
     })
+    this.emulating = true
+  }
+
+  /**
+   * Sets the text scale (browser zoom as reflow; see the field). Out-of-range
+   * values fall to 1 rather than throwing: this is reached from validated
+   * payloads and from restore, neither of which has anyone to throw at.
+   * Applied at once when the page is up, and by `did-navigate` for every
+   * page after — including the fresh window a density change swaps in.
+   */
+  setTextScale(scale: number): void {
+    const next = isTextScale(scale) ? scale : DEFAULT_TEXT_SCALE
+    if (next === this.textScale) return
+    this.textScale = next
+    if (this.disposed || this.win.isDestroyed() || !this.firstNavDone) return
+    this.applyEmulation()
+    this.win.webContents.invalidate()
+  }
+
+  getTextScale(): number {
+    return this.textScale
   }
 
   /**
@@ -507,10 +561,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     const wc = this.win.webContents
     try {
+      // The caller speaks surface CSS px (the viewport as set); under a text
+      // scale the page's own CSS px are larger by the scale, so the point
+      // goes in divided and the box comes back multiplied. Font size stays
+      // the page's — it is what the stylesheet says — and the footer scales
+      // its millimetres by the same factor.
+      const k = this.textScale
       const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${INSPECT_SCRIPT}(${Number(x)}, ${Number(y)})` },
+        { code: `${INSPECT_SCRIPT}(${Number(x) / k}, ${Number(y) / k})` },
       ])
-      return parseInspectReport(raw)
+      const report = parseInspectReport(raw)
+      if (report === null || k === 1) return report
+      const r = report.rect
+      return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
       return null

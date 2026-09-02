@@ -220,6 +220,7 @@ describe('parseUiState', () => {
     viewMode: 'fit',
     panes: 'both',
     orientation: 'portrait',
+    textScale: 1,
     mode: 'url',
     visionType: 'none',
     visionSeverity: 1,
@@ -238,6 +239,13 @@ describe('parseUiState', () => {
     expect(parseUiState(older)).toMatchObject({ visionType: 'none', visionSeverity: 1 })
     expect(parseUiState({ ...good, visionType: 'protanopia' })).toBeNull()
     expect(parseUiState({ ...good, visionSeverity: -0.1 })).toBeNull()
+  })
+  it('carries the text scale, defaulting an absent or null one and refusing a bad one', () => {
+    expect(parseUiState({ ...good, textScale: 1.5 })?.textScale).toBe(1.5)
+    const { textScale: _k, ...older } = good
+    expect(parseUiState(older)?.textScale).toBe(1)
+    expect(parseUiState({ ...good, textScale: null })?.textScale).toBe(1)
+    for (const bad of ['1.5', 0, 0.25, 5, Number.NaN]) expect(parseUiState({ ...good, textScale: bad })).toBeNull()
   })
   it('carries a solo-target report, and defaults panes when the field is absent', () => {
     expect(parseUiState({ ...good, panes: 'target' })?.panes).toBe('target')

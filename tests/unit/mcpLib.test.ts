@@ -281,3 +281,21 @@ describe('buildReportArgs', () => {
     expect(() => buildReportArgs({ url: URL, presets: [] }, '/tmp/r/report.html')).toThrow(UsageError)
   })
 })
+
+describe('textScale maps to --text-scale', () => {
+  it('on snap, after the screen and before the profile', () => {
+    expect(buildSnapArgs({ url: URL, preset: 'laptop-768', textScale: 1.5, profile: 'budget-tn' }, OUT)).toEqual([
+      'snap', URL, '--preset', 'laptop-768', '--text-scale', '1.5', '--profile', 'budget-tn', '--out', OUT,
+    ])
+  })
+  it('on audit', () => {
+    expect(buildAuditArgs({ url: URL, preset: 'android-65', textScale: 2 })).toEqual([
+      'audit', URL, '--preset', 'android-65', '--text-scale', '2',
+    ])
+  })
+  it('on report', () => {
+    expect(buildReportArgs({ url: URL, presets: ['laptop-768'], textScale: 1.25 }, '/tmp/r.html')).toEqual([
+      'report', URL, '--matrix', 'laptop-768', '--text-scale', '1.25', '--out', '/tmp/r.html',
+    ])
+  })
+})

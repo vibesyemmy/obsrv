@@ -9,6 +9,7 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
   cssWidth: 1366,
   cssHeight: 768,
   deviceScaleFactor: 1,
+  textScale: 1,
   diagonalInches: 15.6,
   ppi: 100.4,
   physicalMm: { width: 345.5, height: 194.2 },
@@ -123,6 +124,10 @@ describe('reportHtml', () => {
     expect(html).toContain('data:image/png;base64,RAW1')
     expect(html).toContain('through the panel profile')
     expect(html).toContain('without the panel profile')
+  })
+  it('states a text scale in the facts, and only when one is in force', () => {
+    expect(reportHtml(data([screen()]))).not.toContain('text <b>')
+    expect(reportHtml(data([screen({ textScale: 1.5 })]))).toContain('· text <b>150%</b>')
   })
   it('says when the page did not answer the audit', () => {
     const html = reportHtml(data([screen({ audit: null })]))

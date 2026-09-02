@@ -58,3 +58,12 @@ field by field on the main side like any other untrusted payload
 (`parseInspectReport`), and the renderer's point is parsed on the way in
 (`parseInspectPoint`). Hovers are throttled to one ask every 80 ms with a
 trailing ask, and answers that arrive out of order are dropped.
+
+## Under a text scale
+
+With the tab at `Text 150%` (see `docs/text-scale.md`) the cursor's point is
+mapped into the scaled page and the element's box mapped back out, so the
+highlight lands where the element is drawn. The readout's `px` stays the
+page's own font size — what the stylesheet says — and its millimetres are
+that many CSS px at `density × scale`: `16px = 4.4 mm` at ×1 reads
+`16px = 6.6 mm` at ×1.5, which is the size on the glass.

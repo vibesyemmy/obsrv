@@ -26,6 +26,8 @@ export interface SnapToolInput {
   height?: number | undefined
   deviceScaleFactor?: number | undefined
   diagonalInches?: number | undefined
+  /** Browser zoom as reflow, 1 = none (`--text-scale`). */
+  textScale?: number | undefined
   profile?: string | undefined
   fullPage?: boolean | undefined
   waitMs?: number | undefined
@@ -50,6 +52,7 @@ export interface AuditToolInput {
   height?: number | undefined
   deviceScaleFactor?: number | undefined
   diagonalInches?: number | undefined
+  textScale?: number | undefined
   tapMm?: number | undefined
   textMm?: number | undefined
   waitMs?: number | undefined
@@ -61,6 +64,7 @@ export interface ReportToolInput {
   /** Preset ids; the CLI's default matrix when omitted. */
   presets?: string[] | undefined
   orientation?: Orientation | undefined
+  textScale?: number | undefined
   profile?: string | undefined
   tapMm?: number | undefined
   textMm?: number | undefined
@@ -76,6 +80,7 @@ export function buildReportArgs(input: ReportToolInput, outPath: string): string
     args.push('--matrix', input.presets.join(','))
   }
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
@@ -110,6 +115,7 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
     if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
   }
+  if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
@@ -150,6 +156,7 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
     if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
   }
+  if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.fullPage) args.push('--full-page')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))

@@ -13,6 +13,7 @@ import {
   parseControlStatus,
   orientationApplyError,
   panesApplyError,
+  textScaleApplyError,
   parseHighlight,
   pixelExactApplyError,
   presetApplyError,
@@ -87,7 +88,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the nineteen commands', () => {
+  it('knows exactly the twenty commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -105,6 +106,7 @@ describe('command validation', () => {
       'setPixelExact',
       'setPreset',
       'setProfile',
+      'setTextScale',
       'setViewMode',
       'setVision',
       'status',
@@ -254,6 +256,7 @@ describe('parseControlStatus', () => {
     mode: 'url',
     panes: 'both',
     orientation: 'portrait',
+    textScale: 1,
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -381,5 +384,47 @@ describe('parseControlStatus', () => {
     ['NaN tabIndex', { ...good, tabIndex: Number.NaN }],
   ])('rejects %s', (_name, raw) => {
     expect(parseControlStatus(raw)).toBeNull()
+  })
+})
+
+describe('parseControlStatus textScale', () => {
+  const base = {
+    version: '0.21.0',
+    url: 'https://a.test/',
+    presetId: 'laptop-768',
+    profileId: 'reference',
+    viewMode: '1:1',
+    mode: 'url',
+    panes: 'both',
+    orientation: 'portrait',
+    cssWidth: 1366,
+    cssHeight: 768,
+    tabId: 'tab-1',
+    tabIndex: 0,
+    visionType: 'none',
+    visionSeverity: 1,
+  }
+  it('an app older than text scale reports ×1, which is what it renders', () => {
+    expect(parseControlStatus(base)?.textScale).toBe(1)
+  })
+  it('carries a scale the app reports', () => {
+    expect(parseControlStatus({ ...base, textScale: 1.5 })?.textScale).toBe(1.5)
+  })
+  it('a present-but-wrong scale is a malformed status', () => {
+    // `null` reads as absent, like every other defaulted field of a status.
+    for (const bad of ['1.5', 0, 0.25, 5, Number.NaN]) {
+      expect(parseControlStatus({ ...base, textScale: bad })).toBeNull()
+    }
+  })
+})
+
+describe('textScaleApplyError', () => {
+  it('accepts the range the app renders', () => {
+    for (const ok of [0.5, 1, 1.25, 1.5, 2, 4]) expect(textScaleApplyError(ok)).toBeNull()
+  })
+  it('names the range for anything else', () => {
+    for (const bad of [undefined, '1.5', 0.4, 4.5, Number.NaN, Number.POSITIVE_INFINITY, null]) {
+      expect(textScaleApplyError(bad)).toMatch(/setTextScale payload must be \{ textScale: number \} with 0.5 <= textScale <= 4/)
+    }
   })
 })

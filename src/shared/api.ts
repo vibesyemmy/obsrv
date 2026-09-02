@@ -72,6 +72,12 @@ export interface ObsrvApi {
     deviceScaleFactor?: number,
     mobile?: boolean,
   ): Promise<{ width: number; height: number }>
+  /**
+   * Browser zoom as reflow, on the target alone: the page lays out in a CSS
+   * viewport `1/scale` the size of the screen at `scale` times its density.
+   * See `shared/textScale.ts` for the range; main refuses anything outside it.
+   */
+  setTextScale(scale: number): Promise<void>
   setNativeBounds(rect: Rect): void
   /**
    * Whether the native pane is on screen. It is an OS-level overlay, so
