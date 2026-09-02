@@ -4,6 +4,16 @@ export const IPC = {
   relaunch: 'obsrv:relaunch',
   log: 'obsrv:log',
   targetPaused: 'obsrv:target-paused',
+  /** Main -> chrome: the target page's cursor, as CSS, for the canvas. */
+  targetCursor: 'obsrv:target-cursor',
+  /** Target preload -> main: a <select> wants its popup drawn (see shared/selectPopup.ts). */
+  selectOpen: 'obsrv:select-open',
+  /** Main -> chrome: draw that popup over the canvas. */
+  selectPopup: 'obsrv:select-popup',
+  /** Chrome -> main: the row chosen, or a dismissal. */
+  selectResult: 'obsrv:select-result',
+  /** Main -> target preload: write the pick into the element. */
+  selectPick: 'obsrv:select-pick',
   inspect: 'obsrv:inspect',
   back: 'obsrv:back',
   forward: 'obsrv:forward',

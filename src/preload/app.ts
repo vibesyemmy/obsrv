@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import type { SelectPopup } from '../shared/selectPopup'
 import type { FrameMessage, MenuRequest, ObsrvApi, TabReport } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
@@ -41,6 +42,9 @@ const api: ObsrvApi = {
   relaunch: () => ipcRenderer.send(IPC.relaunch),
   log: message => ipcRenderer.send(IPC.log, message),
   onTargetPaused: cb => subscribe<boolean>(IPC.targetPaused, cb),
+  onTargetCursor: cb => subscribe<{ tabId: string; cursor: string }>(IPC.targetCursor, cb),
+  onSelectPopup: cb => subscribe<SelectPopup>(IPC.selectPopup, cb),
+  pickSelect: result => ipcRenderer.send(IPC.selectResult, result),
   inspect: point => ipcRenderer.invoke(IPC.inspect, point),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),

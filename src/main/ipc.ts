@@ -10,7 +10,7 @@ import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
 import { log } from './log'
-import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseSelectOpen, parseSelectResult, parseTabId, parseUiState } from '../shared/ipcPayloads'
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
@@ -329,6 +329,36 @@ export function registerIpc(ctx: AppContext): () => void {
     if (e.sender !== overlay.webContents) return
     if (raw !== null && typeof raw !== 'string') return
     settleMenu(raw)
+  })
+
+  // --- <select> popups on the target -----------------------------------------
+  // The target preload asks; the chrome draws (through the overlay menu);
+  // the answer goes back to the preload. See shared/selectPopup.ts. Only a
+  // tab's own target may ask, and only the tab in front has a canvas to
+  // anchor a menu to — a request that arrives after a switch is dismissed
+  // rather than drawn over the wrong page.
+  on(IPC.selectOpen, (e, raw: unknown) => {
+    const session = tabs.byWebContents(e.sender)
+    if (!session || session.target.webContents !== e.sender) return
+    const req = parseSelectOpen(raw)
+    if (!req) return
+    if (session.id !== tabs.activeId) {
+      e.sender.send(IPC.selectPick, { id: req.id, index: null })
+      return
+    }
+    // The page's own CSS px, into surface CSS px: under a text scale each is
+    // `textScale` of the surface's (the same mapping `inspectAt` makes).
+    const k = session.target.getTextScale()
+    const rect = { x: req.rect.x * k, y: req.rect.y * k, width: req.rect.width * k, height: req.rect.height * k }
+    if (!win.isDestroyed()) win.webContents.send(IPC.selectPopup, { ...req, rect, tabId: session.id })
+  })
+  on(IPC.selectResult, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const result = parseSelectResult(raw)
+    if (!result) return
+    const session = tabs.tabs.find(t => t.id === result.tabId)
+    if (!session || session.target.webContents.isDestroyed()) return
+    session.target.webContents.send(IPC.selectPick, { id: result.id, index: result.index })
   })
 
   on(IPC.setNativeObscured, (e, raw: unknown) => {

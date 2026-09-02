@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>native-widgets</title>
+<meta name="viewport" content="width=device-width">
+<style>
+  body { margin: 0; font: 16px/1.4 sans-serif; padding: 40px; }
+  #link { display: inline-block; padding: 8px; }
+  select, input { font: inherit; display: block; margin: 24px 0; }
+  #custom { width: 200px; height: 40px; cursor: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==") 0 0, auto; background: #eee; }
+</style>
+<a id="link" href="#x">A link with a hand cursor</a>
+<div id="custom">A custom cursor</div>
+<select id="sel" aria-label="Greek letter">
+  <option>Alpha</option>
+  <option>Beta</option>
+  <option disabled>Gamma (disabled)</option>
+  <optgroup label="More">
+    <option>Delta</option>
+    <option>Epsilon</option>
+  </optgroup>
+</select>
+<select id="multi" multiple size="3">
+  <option>One</option>
+  <option>Two</option>
+  <option>Three</option>
+</select>
+<input id="date" type="date" value="2026-09-02">
+<input id="text" type="text" value="typed">
+<script>
+  window.__log = []
+  for (const ev of ['focus', 'change', 'mousedown', 'click', 'input']) {
+    document.addEventListener(ev, e => window.__log.push(ev + ':' + (e.target.id || e.target.tagName)), true)
+  }
+</script>

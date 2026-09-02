@@ -106,3 +106,17 @@ expensive failure.
 
 If the flaky count starts climbing, that is the signal to come back to this,
 because it means something changed in the app rather than in the weather.
+
+## `capturePage` on the offscreen target answers at the host display's scale
+
+`webContents.capturePage()` on the offscreen target returns a bitmap at the
+*host display's* scale factor — 3840×2160 for a 1920×1080 target on a
+Retina Mac, 1920×1080 on a 1x monitor — whatever the target's own density
+or text scale. The `paint` frames the app actually draws are unaffected
+(`browser-identity.spec.ts` and `rendering.spec.ts` pin those). A spec
+that asserts an absolute `capturePage` size therefore passes on one display
+and fails on another; compare captures to each other, or read the frame
+bus. Found 2026-09-03 when `text-scale.spec.ts` went red on the built-in
+Retina display after passing on an external 1x monitor — the "second"
+failure that followed was Playwright restarting the worker after the
+first, so the next test met a fresh app without the scale it assumed.

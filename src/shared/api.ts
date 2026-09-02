@@ -1,4 +1,5 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
+import type { SelectPopup, SelectResult } from './selectPopup'
 import type { HistoryEntry } from './history'
 import type { InspectReport } from './inspect'
 import type { TabSnapshot } from './tabList'
@@ -48,6 +49,19 @@ export interface ObsrvApi {
    * visibility stays `visible` through all three.
    */
   onTargetPaused(cb: (paused: boolean) => void): () => void
+  /**
+   * The target page's cursor as CSS, for the canvas to wear: an offscreen
+   * window has nothing of its own to show it on. Sent for every tab's
+   * target; the canvas keeps the one in front.
+   */
+  onTargetCursor(cb: (m: { tabId: string; cursor: string }) => void): () => void
+  /**
+   * A `<select>` on the target page asked for its popup, which Chromium
+   * cannot show offscreen; the canvas draws it with `openMenu` over the
+   * element's box (surface CSS px) and answers with `pickSelect`.
+   */
+  onSelectPopup(cb: (popup: SelectPopup) => void): () => void
+  pickSelect(result: SelectResult): void
   /**
    * What is under a point of the target page, in CSS pixels of its
    * viewport: element, font, text colour and the background it sits on.

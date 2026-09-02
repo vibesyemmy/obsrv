@@ -1,4 +1,5 @@
 import { BrowserWindow, type WebContents } from 'electron'
+import { cursorCss, DEFAULT_CURSOR } from '../shared/cursor'
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
@@ -21,6 +22,8 @@ import { log } from './log'
 export interface TargetSourceEventMap {
   frame: [FrameMessage]
   'url-changed': [string]
+  /** The page's cursor as CSS, for the canvas (see shared/cursor.ts). */
+  cursor: [string]
   'load-error': [LoadError]
   loading: [boolean]
   /**
@@ -161,6 +164,8 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private textScale = DEFAULT_TEXT_SCALE
   /** Whether the current window has emulation on, so leaving it can turn it off. */
   private emulating = false
+  /** The page's cursor as CSS; a fresh window starts at the arrow. */
+  private cursor = DEFAULT_CURSOR
   private readonly fps: number
   /** See TargetSourceOptions.mobileEmulation. */
   private readonly mobileEmulation: boolean
@@ -222,6 +227,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       enableLargerThanScreen: true,
       webPreferences: {
         preload: join(__dirname, '../preload/sync.js'),
+        // The preload is shared with the native pane and must know which
+        // page it is in: only the offscreen one needs its <select>s drawn
+        // for it (see shared/selectPopup.ts).
+        additionalArguments: ['--obsrv-target'],
         offscreen: { deviceScaleFactor: this.dsf },
         contextIsolation: true,
         sandbox: true,
@@ -232,6 +241,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     this.win = win
     this.firstNavDone = false
     this.emulating = false
+    this.cursor = DEFAULT_CURSOR
 
     const wc = win.webContents
     wc.setFrameRate(this.fps)
@@ -240,6 +250,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     // backgrounded before a dsf change would otherwise come back painting.
     if (!this.paintingWanted) wc.stopPainting()
     wc.setAudioMuted(true)
+    // The page's cursor, for the canvas that stands in for this window on
+    // screen: Chromium reports every change, and an offscreen window has
+    // nothing of its own to show it on.
+    wc.on('cursor-changed', (_e, type, image, _scale, _size, hotspot) => {
+      const custom =
+        type === 'custom' && image && !image.isEmpty() && hotspot ? { dataUrl: image.toDataURL(), hotspot } : undefined
+      const css = cursorCss(type, custom)
+      if (css === this.cursor) return
+      this.cursor = css
+      this.emit('cursor', css)
+    })
     this.defaultUserAgent ??= wc.getUserAgent()
     wc.setUserAgent(this.mobile && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
@@ -409,6 +430,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
   getTextScale(): number {
     return this.textScale
+  }
+
+  /** The page's cursor as CSS, as last reported (see `cursor` event). */
+  getCursor(): string {
+    return this.cursor
   }
 
   /**
