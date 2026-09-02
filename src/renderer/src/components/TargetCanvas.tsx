@@ -33,6 +33,19 @@ export interface TargetCanvasProps {
 /** Spec §9: no paint for this long, when one was expected, is a stall. */
 const STALL_MS = 2000
 
+/**
+ * How long a lost WebGL context is given to come back before the canvas is
+ * replaced for a fresh one. Chromium's restore after a GPU reset lands well
+ * inside this on a healthy machine; missing it costs only a wasted restore.
+ */
+const RESTORE_GRACE_MS = 1500
+/**
+ * Attempts at a fresh context, and the pause between them: the GPU process
+ * is itself restarting, and the first ask can land before it is back.
+ */
+const RECOVERY_ATTEMPTS = 2
+const RETRY_MS = 3000
+
 export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<GlRenderer | null>(null)
@@ -55,12 +68,28 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const stallTimer = useRef(0)
   const armedOnce = useRef(false)
 
+  // Which canvas element this is. A lost WebGL context that Chromium will not
+  // restore is written off with its element: bumping the epoch (the canvas's
+  // React key) mounts a fresh one, and a fresh element is the only way to a
+  // fresh context. `glGone` is the end of that road — no context to be had,
+  // WebGL is off for the session and only a relaunch brings it back.
+  const [epoch, setEpoch] = useState(0)
+  const [glGone, setGlGone] = useState(false)
+  // True from a context loss until a renderer is running again. The watchdog
+  // is muted meanwhile: with no renderer there is nothing for a frame to land
+  // on, and "no frames from target renderer" would be the one thing that is
+  // not true.
+  const lost = useRef(false)
+  // Failed asks for a fresh context in the current episode.
+  const attempts = useRef(0)
+
   const disarm = useCallback((): void => {
     window.clearTimeout(stallTimer.current)
     setStalled(false)
   }, [])
 
   const arm = useCallback((): void => {
+    if (lost.current) return
     window.clearTimeout(stallTimer.current)
     setStalled(false)
     stallTimer.current = window.setTimeout(() => setStalled(true), STALL_MS)
@@ -157,6 +186,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     let gl: GlRenderer | null = null
     let offFrame: (() => void) | null = null
     let raf = 0
+    // The pending recovery step after a context loss, if any.
+    let recovery = 0
 
     // Slices are uploaded as they arrive; the draw is batched to one per
     // animation frame, however many dirty rects a paint was split into.
@@ -175,9 +206,22 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       try {
         gl = new GlRenderer(canvas)
       } catch (e) {
-        onFatal(e instanceof Error ? e.message : 'WebGL2 is not available')
+        // On the first canvas this is a machine without WebGL2, and there is
+        // nothing to show. On a replacement it is a context Chromium will not
+        // grant: once more after a pause, in case the GPU process is still
+        // coming back, and then it is gone for the session.
+        canvas.dataset.gl = 'none'
+        if (epoch === 0) onFatal(e instanceof Error ? e.message : 'WebGL2 is not available')
+        else if (++attempts.current < RECOVERY_ATTEMPTS) recovery = window.setTimeout(() => setEpoch(n => n + 1), RETRY_MS)
+        else setGlGone(true)
         return false
       }
+      // The context's state, for the e2e suite: asking `getContext` from a
+      // test would create one on a canvas that has none, and report a health
+      // the app never had.
+      canvas.dataset.gl = 'ok'
+      attempts.current = 0
+      lost.current = false
       glRef.current = gl
       setMaxOutput(gl.maxOutputSize)
       const image = imageRef.current
@@ -210,14 +254,28 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       glRef.current = null
     }
 
-    // Minimal context-loss handling: preventDefault keeps the context
-    // restorable; on restore, rebuild the renderer and resubscribe.
+    // Context loss — in practice the GPU process dying under the app.
+    // `preventDefault` keeps the context restorable. The subscription goes
+    // with the renderer, since frames have nowhere to land, so the watchdog
+    // is disarmed with it: left armed it would report "no frames" over a
+    // target that is painting for nobody, and its Reload button reloads the
+    // wrong thing. Chromium restores after a single reset and the renderer is
+    // rebuilt on the same canvas. When the restore does not come inside the
+    // grace period, the canvas is replaced (see `epoch`). A frame is owed
+    // either way — a new subscription is answered with a full frame — so the
+    // watchdog is re-armed to watch for it.
     const onLost = (e: Event): void => {
       e.preventDefault()
       stop()
+      canvas.dataset.gl = 'lost'
+      lost.current = true
+      disarm()
+      window.clearTimeout(recovery)
+      recovery = window.setTimeout(() => setEpoch(n => n + 1), RESTORE_GRACE_MS)
     }
     const onRestored = (): void => {
-      start()
+      window.clearTimeout(recovery)
+      if (start() && selectTab(useStore.getState()).mode === 'url') arm()
     }
     canvas.addEventListener('webglcontextlost', onLost)
     canvas.addEventListener('webglcontextrestored', onRestored)
@@ -277,15 +335,18 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     window.addEventListener('mouseup', onWindowUp)
 
     const started = start()
+    // A replacement canvas is a fresh subscription, so a frame is on its way.
+    if (started && epoch > 0 && selectTab(useStore.getState()).mode === 'url') arm()
 
     return () => {
+      window.clearTimeout(recovery)
       if (started) stop()
       canvas.removeEventListener('webglcontextlost', onLost)
       canvas.removeEventListener('webglcontextrestored', onRestored)
       canvas.removeEventListener('wheel', onWheel)
       window.removeEventListener('mouseup', onWindowUp)
     }
-  }, [onFatal, disarm])
+  }, [onFatal, disarm, arm, epoch])
 
   // Arm on a main-frame, cross-document navigation only — not on
   // `targetLoading`, which also rises for a subframe load: an iframe on a
@@ -537,22 +598,34 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // `left: 0` holds while a wide canvas is scrolled horizontally.
   return (
     <>
-      {stalled && (
-        <div className="stall" role="alert">
-          <span>No frames from target renderer</span>
-          <button
-            type="button"
-            onClick={() => {
-              arm()
-              window.obsrv.reload()
-            }}
-          >
-            Reload
+      {glGone ? (
+        // Not a stall: the target is painting, this renderer cannot draw it,
+        // and nothing in this process can change that.
+        <div className="stall gl-gone" role="alert">
+          <span>Graphics reset: WebGL is unavailable until Obsrv restarts</span>
+          <button type="button" onClick={() => window.obsrv.relaunch()}>
+            Restart Obsrv
           </button>
         </div>
+      ) : (
+        stalled && (
+          <div className="stall" role="alert">
+            <span>No frames from target renderer</span>
+            <button
+              type="button"
+              onClick={() => {
+                arm()
+                window.obsrv.reload()
+              }}
+            >
+              Reload
+            </button>
+          </div>
+        )
       )}
       <div className="target-wrap">
         <canvas
+          key={epoch}
           ref={canvasRef}
           // Resting state carries no class in either view: the pane is
           // interactive, so the page's own cursors show through. Option is

@@ -1,6 +1,7 @@
 export const IPC = {
   navigate: 'obsrv:navigate',
   reload: 'obsrv:reload',
+  relaunch: 'obsrv:relaunch',
   back: 'obsrv:back',
   forward: 'obsrv:forward',
   setViewport: 'obsrv:set-viewport',

@@ -48,5 +48,24 @@ function boot(): void {
   exposeForTests(ctx)
 }
 
+// The target canvas is WebGL, and a GPU-process death (a driver reset, a dock
+// or display change, memory pressure) loses every WebGL context in the app.
+// Chromium restores a context after one reset; after the second it blocks
+// WebGL for the renderer's *domain* for the rest of the session — a policy
+// written for a browser, where a page gets an infobar with a button that
+// lifts the block. Electron has neither the infobar nor the API, so the block
+// would hold until relaunch and the target pane would stay white. Off, then:
+// one bundle on one file: URL is not a hostile origin that needs sandboxing
+// from the GPU. Chromium's own crash limit (three, then software compositing)
+// still stands, and the canvas reports that case honestly.
+app.commandLine.appendSwitch('disable-domain-blocking-for-3d-apis')
+
+// The evidence a "target went blank" report needs and never has: whether the
+// GPU process died, and why Chromium says it did.
+app.on('child-process-gone', (_e, details) => {
+  if (details.type !== 'GPU') return
+  console.warn(`obsrv: GPU process gone (${details.reason}, exit code ${details.exitCode})`)
+})
+
 void app.whenReady().then(boot)
 app.on('window-all-closed', () => app.quit())
