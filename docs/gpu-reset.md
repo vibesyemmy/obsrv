@@ -95,8 +95,11 @@ go: a packaged app launched from the Dock has no stderr, and Chromium's own
 logging is off in packaged builds. Main now writes its own log —
 `~/Library/Logs/Obsrv/obsrv.log`, revealed by **Help → Show Log File**, one
 megabyte and one predecessor at most — with the things the renderer cannot
-see: the version and Chromium's GPU verdict at boot, every child process that
-dies and Chromium's reason, the window going hidden and coming back. The
+see: the version at boot, Chromium's GPU verdict when it reports it and again
+whenever it changes (not at `ready`, where the answer is placeholders — the
+0.18.3 line said "disabled" on a healthy machine for that reason), every
+child process that dies and Chromium's reason, the window going hidden and
+coming back. The
 renderer reports through it what main cannot see: a WebGL context lost, and
 whether it was restored, replaced, or written off. Under the e2e suite the
 file lives in the throwaway user-data directory instead.

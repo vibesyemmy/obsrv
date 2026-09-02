@@ -17,10 +17,6 @@ log.info(
 
 function boot(): void {
   const win = createMainWindow()
-  // What Chromium decided about this machine's GPU, at the top of the file a
-  // "target went blank" report will be read from.
-  const gpu = app.getGPUFeatureStatus()
-  log.info(`gpu: compositing ${gpu.gpu_compositing}, webgl ${gpu.webgl}`)
   win.webContents.on('render-process-gone', (_e, d) => {
     log.error(`shell renderer gone (${d.reason}, exit code ${d.exitCode})`)
   })
@@ -100,6 +96,22 @@ app.on('child-process-gone', (_e, d) => {
   const line = `${d.type} process gone (${d.reason}, exit code ${d.exitCode}${d.name ? `, ${d.name}` : ''})`
   if (d.type === 'GPU') log.warn(line)
   else log.info(line)
+})
+
+// What Chromium decided about this machine's GPU, at the top of the file a
+// "target went blank" report will be read from. Not read at `ready`: the GPU
+// process has not reported by then and the answer is placeholders (measured:
+// "disabled_software, disabled_off" at boot, "enabled, enabled" milliseconds
+// later, which is what 0.18.3 wrote). Logged on every change instead, so the
+// first line is the real verdict and a later fall-back to software
+// compositing — Chromium's answer to a third GPU crash — is on record too.
+let gpuLine = ''
+app.on('gpu-info-update', () => {
+  const gpu = app.getGPUFeatureStatus()
+  const line = `gpu: compositing ${gpu.gpu_compositing}, webgl ${gpu.webgl}`
+  if (line === gpuLine) return
+  gpuLine = line
+  log.info(line)
 })
 
 void app.whenReady().then(boot)
