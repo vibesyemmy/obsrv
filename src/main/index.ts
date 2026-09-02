@@ -1,14 +1,29 @@
 import { app } from 'electron'
+import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
-import { registerIpc, TOOLBAR_H } from './ipc'
+import { readAppVersion, registerIpc, TOOLBAR_H } from './ipc'
+import { initLog, log } from './log'
 import { installMenu } from './menu'
 import { Overlay } from './overlay'
 import { TabManager } from './tabs'
 import { exposeForTests } from './testHooks'
 import { createMainWindow } from './window'
 
+// First, so everything below has somewhere to write.
+const logFile = initLog()
+log.info(
+  `obsrv ${readAppVersion()} starting: electron ${process.versions.electron}, chrome ${process.versions.chrome}, ${process.platform} ${process.arch}${app.isPackaged ? '' : ', unpackaged'}`,
+)
+
 function boot(): void {
   const win = createMainWindow()
+  // What Chromium decided about this machine's GPU, at the top of the file a
+  // "target went blank" report will be read from.
+  const gpu = app.getGPUFeatureStatus()
+  log.info(`gpu: compositing ${gpu.gpu_compositing}, webgl ${gpu.webgl}`)
+  win.webContents.on('render-process-gone', (_e, d) => {
+    log.error(`shell renderer gone (${d.reason}, exit code ${d.exitCode})`)
+  })
 
   // The manager builds its first session, attaches the one frame bus to it and
   // installs the single sender-routed `ipcMain` listener. Everything a pane
@@ -19,7 +34,25 @@ function boot(): void {
   // native pane and therefore starts on top. `show` re-raises it anyway, for
   // the panes added by later tabs.
   const overlay = new Overlay(win)
-  const ctx: AppContext = { win, tabs, bus: tabs.bus, toolbarH: TOOLBAR_H, overlay }
+  const ctx: AppContext = { win, tabs, bus: tabs.bus, toolbarH: TOOLBAR_H, overlay, logFile }
+
+  // Nobody is looking at a hidden window, so the active target stops
+  // rasterising while it is one. macOS sends `hide`/`show` for occlusion as
+  // well as for the Dock, so a window entirely behind another app's counts.
+  // Logged on change only — occlusion can flap — and logged at all because
+  // the transitions are the evidence for "it hangs when I come back".
+  const setVisible = (visible: boolean): void => {
+    if (!tabs.setShellVisible(visible)) return
+    log.info(visible ? 'window shown; target rasterisation resumed' : 'window hidden; target rasterisation paused')
+    // The renderer's stall watchdog has to know: a paused target owes no
+    // frame, and the shell's own page visibility does not reflect any of
+    // this (measured: it stays `visible` through hide and minimise).
+    if (!win.isDestroyed()) win.webContents.send(IPC.targetPaused, !visible)
+  }
+  win.on('hide', () => setVisible(false))
+  win.on('minimize', () => setVisible(false))
+  win.on('show', () => setVisible(true))
+  win.on('restore', () => setVisible(true))
 
   // Request/response channels, the host-display watch and the native-pane
   // layout fallback all live in `registerIpc`.
@@ -60,11 +93,13 @@ function boot(): void {
 // still stands, and the canvas reports that case honestly.
 app.commandLine.appendSwitch('disable-domain-blocking-for-3d-apis')
 
-// The evidence a "target went blank" report needs and never has: whether the
-// GPU process died, and why Chromium says it did.
-app.on('child-process-gone', (_e, details) => {
-  if (details.type !== 'GPU') return
-  console.warn(`obsrv: GPU process gone (${details.reason}, exit code ${details.exitCode})`)
+// The evidence a "target went blank" report needs and never had: which
+// process died, and why Chromium says it did. The GPU is the one that
+// matters, and the one that is warned about.
+app.on('child-process-gone', (_e, d) => {
+  const line = `${d.type} process gone (${d.reason}, exit code ${d.exitCode}${d.name ? `, ${d.name}` : ''})`
+  if (d.type === 'GPU') log.warn(line)
+  else log.info(line)
 })
 
 void app.whenReady().then(boot)

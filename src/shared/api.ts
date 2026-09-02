@@ -35,6 +35,18 @@ export interface ObsrvApi {
    * there is a new session, and nothing inside this one can bring it back.
    */
   relaunch(): void
+  /**
+   * A line for the app log (Help → Show Log File): what the renderer saw
+   * that main cannot — a lost WebGL context, and what became of it.
+   */
+  log(message: string): void
+  /**
+   * Main pauses the target's rasterisation while the window is hidden,
+   * minimised or fully occluded (see `TabManager.setShellVisible`), and says
+   * so here. The renderer cannot tell on its own: the shell's page
+   * visibility stays `visible` through all three.
+   */
+  onTargetPaused(cb: (paused: boolean) => void): () => void
   back(): void
   forward(): void
   /**

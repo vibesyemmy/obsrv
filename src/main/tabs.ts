@@ -37,6 +37,23 @@ export class TabManager {
    */
   private slot: Rect | null = null
 
+  /**
+   * Whether anyone can see the window. Hidden, minimised or fully occluded,
+   * the active target would otherwise rasterise a full viewport at 30 fps for
+   * nobody — `backgroundThrottling` is off for it by design — and on a
+   * machine whose GPU is already struggling, that load is the last thing
+   * wanted while the user is elsewhere. Background *tabs* are `activate`'s
+   * business; this is the window-level switch over the active one.
+   */
+  private shellVisible = true
+
+  /**
+   * Outstanding reasons to rasterise regardless. An agent capturing a hidden
+   * window must see the page as it is now, not the last frame painted before
+   * the window went away.
+   */
+  private paintHolds = 0
+
   /** The one bus. Re-pointed by `activate`, never duplicated. */
   readonly bus: FrameBus
 
@@ -154,7 +171,7 @@ export class TabManager {
     const prev = this.list.find(t => t.id === this.id)
     this.id = id
     if (prev && prev !== next) prev.native.setVisible(false)
-    next.setPainting(true)
+    next.setPainting(this.wantPainting)
     this.bus.setSource(next.target)
     this.bus.setEnabled(this.busEnabled(next))
     if (this.slot) next.native.setBounds(this.slot)
@@ -180,6 +197,8 @@ export class TabManager {
       const fresh = this.create()
       this.list.push(fresh)
       this.id = fresh.id
+      // A fresh source starts painting; a hidden window wants it not to.
+      fresh.setPainting(this.wantPainting)
       this.bus.setSource(fresh.target)
       this.bus.setEnabled(this.busEnabled(fresh))
       if (this.slot) fresh.native.setBounds(this.slot)
@@ -192,6 +211,48 @@ export class TabManager {
     // session that is already gone. `activate` above may have published one
     // too; the message is idempotent, and a stale extra costs a re-render.
     this.onTabsChanged()
+  }
+
+  /**
+   * Reports the window's visibility. Returns whether anything changed, so the
+   * caller can log the transitions without logging every occlusion event
+   * macOS sends. Resuming asks for a frame: whatever changed while nobody
+   * looked was never painted, and the canvas would show the frame from
+   * before the window went away until the page next moved.
+   */
+  setShellVisible(visible: boolean): boolean {
+    if (this.shellVisible === visible) return false
+    this.shellVisible = visible
+    this.applyPainting()
+    return true
+  }
+
+  /**
+   * Rasterises the active target, window visible or not, until the returned
+   * release is called. Holds nest, and a release is idempotent.
+   */
+  holdPainting(): () => void {
+    this.paintHolds++
+    this.applyPainting()
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      this.paintHolds--
+      this.applyPainting()
+    }
+  }
+
+  private get wantPainting(): boolean {
+    return this.shellVisible || this.paintHolds > 0
+  }
+
+  private applyPainting(): void {
+    const active = this.active()
+    const want = this.wantPainting
+    if (active.painting === want) return
+    active.setPainting(want)
+    if (want) active.target.invalidate()
   }
 
   /** One slot on screen; every view is moved to it, only the active one shows. */

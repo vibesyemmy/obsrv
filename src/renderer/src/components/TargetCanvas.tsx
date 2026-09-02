@@ -82,6 +82,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const lost = useRef(false)
   // Failed asks for a fresh context in the current episode.
   const attempts = useRef(0)
+  // Main has paused the target's rasterisation: the window is hidden,
+  // minimised or fully occluded. Told, not inferred — the shell's own page
+  // visibility stays `visible` through all three.
+  const paused = useRef(false)
 
   const disarm = useCallback((): void => {
     window.clearTimeout(stallTimer.current)
@@ -89,7 +93,11 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   }, [])
 
   const arm = useCallback((): void => {
-    if (lost.current) return
+    // No renderer, or nobody looking: main pauses the target's rasterisation
+    // while the window is hidden (see `TabManager.setShellVisible`), so a
+    // navigation made then owes no frame until the window is back — and it
+    // gets one the moment it is, because resuming invalidates the target.
+    if (lost.current || paused.current) return
     window.clearTimeout(stallTimer.current)
     setStalled(false)
     stallTimer.current = window.setTimeout(() => setStalled(true), STALL_MS)
@@ -211,9 +219,15 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         // grant: once more after a pause, in case the GPU process is still
         // coming back, and then it is gone for the session.
         canvas.dataset.gl = 'none'
-        if (epoch === 0) onFatal(e instanceof Error ? e.message : 'WebGL2 is not available')
-        else if (++attempts.current < RECOVERY_ATTEMPTS) recovery = window.setTimeout(() => setEpoch(n => n + 1), RETRY_MS)
-        else setGlGone(true)
+        if (epoch === 0) {
+          onFatal(e instanceof Error ? e.message : 'WebGL2 is not available')
+        } else if (++attempts.current < RECOVERY_ATTEMPTS) {
+          window.obsrv.log(`no webgl context on the replacement canvas (attempt ${attempts.current}); retrying`)
+          recovery = window.setTimeout(() => setEpoch(n => n + 1), RETRY_MS)
+        } else {
+          window.obsrv.log('no webgl context on the replacement canvas; webgl is gone for the session, restart offered')
+          setGlGone(true)
+        }
         return false
       }
       // The context's state, for the e2e suite: asking `getContext` from a
@@ -270,12 +284,18 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       canvas.dataset.gl = 'lost'
       lost.current = true
       disarm()
+      window.obsrv.log('webgl context lost')
       window.clearTimeout(recovery)
-      recovery = window.setTimeout(() => setEpoch(n => n + 1), RESTORE_GRACE_MS)
+      recovery = window.setTimeout(() => {
+        window.obsrv.log('webgl context not restored in time; replacing the canvas')
+        setEpoch(n => n + 1)
+      }, RESTORE_GRACE_MS)
     }
     const onRestored = (): void => {
       window.clearTimeout(recovery)
-      if (start() && selectTab(useStore.getState()).mode === 'url') arm()
+      const ok = start()
+      window.obsrv.log(ok ? 'webgl context restored' : 'webgl context restored, but no renderer could be built on it')
+      if (ok && selectTab(useStore.getState()).mode === 'url') arm()
     }
     canvas.addEventListener('webglcontextlost', onLost)
     canvas.addEventListener('webglcontextrestored', onRestored)
@@ -336,7 +356,10 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
     const started = start()
     // A replacement canvas is a fresh subscription, so a frame is on its way.
-    if (started && epoch > 0 && selectTab(useStore.getState()).mode === 'url') arm()
+    if (started && epoch > 0) {
+      window.obsrv.log(`webgl context recovered on a replacement canvas (${epoch})`)
+      if (selectTab(useStore.getState()).mode === 'url') arm()
+    }
 
     return () => {
       window.clearTimeout(recovery)
@@ -373,6 +396,17 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   useEffect(() => {
     if (mode !== 'url') disarm()
   }, [mode, disarm])
+
+  // `arm` refuses while paused; this drops a watch that was already running
+  // when the window went away, since the frame it waits for is not coming.
+  useEffect(
+    () =>
+      window.obsrv.onTargetPaused(isPaused => {
+        paused.current = isPaused
+        if (isPaused) disarm()
+      }),
+    [disarm],
+  )
 
   // A viewport change invalidates the target, so a frame is owed. Not on
   // mount, though: the shell's own boot sequence (viewport push, frame

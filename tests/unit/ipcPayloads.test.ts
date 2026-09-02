@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_LOG_MESSAGE,
   MAX_RECT,
   parseDeviceScaleFactor,
   parseInputEvent,
+  parseLogMessage,
   parseMode,
   parseRect,
   parseScrollPos,
@@ -370,5 +372,25 @@ describe('parseScrollReport', () => {
     ['an unknown scroller kind', { id: 1, x: 0, y: 0, scroller: 'window' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseScrollReport(raw)).toBeNull()
+  })
+})
+
+describe('parseLogMessage', () => {
+  it('keeps a short printable line, trimmed', () => {
+    expect(parseLogMessage('  webgl context lost ')).toBe('webgl context lost')
+  })
+  it('drops control characters rather than the message, so a newline cannot forge a second entry', () => {
+    expect(parseLogMessage('one\nforged  two ')).toBe('one forged  two')
+  })
+  it.each([
+    ['a non-string', 42],
+    ['an empty string', ''],
+    ['whitespace only', ' \n\t '],
+    ['an over-long line', 'x'.repeat(MAX_LOG_MESSAGE + 1)],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseLogMessage(raw)).toBeNull()
+  })
+  it('accepts exactly the limit', () => {
+    expect(parseLogMessage('x'.repeat(MAX_LOG_MESSAGE))).toHaveLength(MAX_LOG_MESSAGE)
   })
 })
