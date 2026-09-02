@@ -38,10 +38,13 @@ const captureBoth = async (ctx: any, screen: any, url: string) => {
   ctx.sync.expect(url)
   await Promise.all([ctx.native.load(url), ctx.target.load(url)])
 
-  const framePromise = new Promise<any>((res, rej) => {
+  const framePromise = new Promise<any>(res => {
+    // Resolves null on timeout rather than rejecting: a rejection that lands
+    // after its test has already timed out is reported by Playwright as an
+    // error outside any test, and fails the run even when every test passed.
     const timer = setTimeout(() => {
       ctx.target.off('frame', onFrame)
-      rej(new Error('no full 600x400 paint within 10s'))
+      res(null)
     }, 10_000)
     const onFrame = (f: any): void => {
       const full = f.frame.x === 0 && f.frame.y === 0 && f.frame.width === 600 && f.frame.height === 400
@@ -54,6 +57,7 @@ const captureBoth = async (ctx: any, screen: any, url: string) => {
   })
   ctx.target.invalidate()
   const frame = await framePromise
+  if (!frame) return null
 
   const lum = (b: Uint8Array, i: number): number => 0.2126 * b[i + 2]! + 0.7152 * b[i + 1]! + 0.0722 * b[i]!
   let bitmap = new Uint8Array(0)
@@ -87,7 +91,9 @@ test('the target really rasterises at 1x: half the rows of ink, darker glyphs', 
   const seen = await app.evaluate(async ({ screen }, arg: { url: string; capture: string }) => {
     const ctx = (globalThis as any).__obsrv
     // eslint-disable-next-line no-eval
-    const { sf, frame, bitmap, nativeW, nativeH, lum } = await (0, eval)(arg.capture)(ctx, screen, arg.url)
+    const captured = await (0, eval)(arg.capture)(ctx, screen, arg.url)
+    if (!captured) return null
+    const { sf, frame, bitmap, nativeW, nativeH, lum } = captured
 
     /** Rows containing at least one pixel darker than `INK`, from BGRA bytes. */
     const inkRows = (bgra: Uint8Array, width: number, height: number): number => {
@@ -156,6 +162,7 @@ test('the target really rasterises at 1x: half the rows of ink, darker glyphs', 
   }, { url: THIN, capture: `(${captureBoth.toString()})` })
 
   // The 1x frame is the CSS box, not the device box.
+  if (!seen) throw new Error('no full 600x400 paint within 10s')
   expect(seen.targetWidth).toBe(600)
   expect(seen.targetHeight).toBe(400)
   expect(seen.target).toBeGreaterThan(3)
@@ -183,7 +190,9 @@ test('a 0.5px hairline does not scale with the raster: one device row in both pa
   const seen = await app.evaluate(async ({ screen }, arg: { url: string; capture: string }) => {
     const ctx = (globalThis as any).__obsrv
     // eslint-disable-next-line no-eval
-    const { sf, frame, bitmap, nativeW, nativeH, lum } = await (0, eval)(arg.capture)(ctx, screen, arg.url)
+    const captured = await (0, eval)(arg.capture)(ctx, screen, arg.url)
+    if (!captured) return null
+    const { sf, frame, bitmap, nativeW, nativeH, lum } = captured
 
     // A hairline is the only thing in the fixture spanning (nearly) the full
     // width; text never reaches 80% of a row and the gradient ramp's dark
@@ -225,6 +234,7 @@ test('a 0.5px hairline does not scale with the raster: one device row in both pa
 
   // Chromium snaps a 0.5px border to one device row at either scale, so each
   // of the fixture's two hairlines is exactly one row of ink in both rasters…
+  if (!seen) throw new Error('no full 600x400 paint within 10s')
   expect(seen.targetHairlines).toHaveLength(2)
   expect(seen.nativeHairlines).toHaveLength(2)
 

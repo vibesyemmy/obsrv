@@ -28,11 +28,16 @@ let page: Page
 
 async function installFrameHelper(a: ElectronApplication): Promise<void> {
   await a.evaluate(() => {
-    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, label: string) =>
-      new Promise<any>((res, rej) => {
+    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, _label: string) =>
+      new Promise<any>(res => {
+        // Resolves null on timeout rather than rejecting. A rejection that
+        // lands after its test has already timed out is reported by
+        // Playwright as an error outside any test, and that fails the run
+        // even when every test passed (it did, at v0.18.3). The caller
+        // returns null in its turn and the spec asserts on it.
         const timer = setTimeout(() => {
           target.off('frame', onFrame)
-          rej(new Error(`no ${label} paint within 10s`))
+          res(null)
         }, 10_000)
         const onFrame = (f: any): void => {
           if (!matches(f)) return
@@ -126,8 +131,10 @@ test('rotating a phone preset swaps the real raster, not just the store', async 
     )
     ctx.target.invalidate()
     const m = await painted
+    if (!m) return null
     return { width: m.frameWidth, height: m.frameHeight, dsf: ctx.target.getDeviceScaleFactor() }
   })
+  if (!f) throw new Error('no 2556x1179 paint within 10s')
   expect(f).toEqual({ width: 2556, height: 1179, dsf: 3 })
 
   // The density is untouched: rotation is the same panel turned sideways.
