@@ -74,6 +74,23 @@ the file is unaffected.
 
 That is a genuine fix. The rest below is handling.
 
+## A green run that still fails: "1 error was not a part of any test"
+
+The v0.18.3 tag run: 261 passed, 2 flaky (both green on retry), exit code 1.
+Playwright's last lines were the retried test's first-attempt error again —
+`no 2556x1179 paint within 10s` — under **"1 error was not a part of any
+test"**, which fails the run whatever the tests did.
+
+The mechanism: a few specs install a `__waitForFrame` helper *in main* that
+rejected on a 10 s timer. On a loaded runner a test can stack enough 10 s
+`expect.poll`s to hit its 30 s budget while that evaluate is still in flight.
+Playwright abandons the call and retries the test; main's timer then fires,
+the abandoned evaluate rejects, and the rejection arrives with no test to
+belong to. So: **a helper installed in main must never reject on a timer.**
+It resolves `null`, the evaluate returns `null`, and the spec asserts on the
+Playwright side — a late *resolution* is silently dropped, a late rejection
+is not. `mobile`, `orientation`, `target-source` and `rendering` do this now.
+
 ## What was done about it
 
 `retries: 1` in `playwright.config.ts`. This is handling, not a fix — the cause

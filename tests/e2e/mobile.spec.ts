@@ -24,11 +24,16 @@ let page: Page
  */
 async function installFrameHelper(a: ElectronApplication): Promise<void> {
   await a.evaluate(() => {
-    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, label: string) =>
-      new Promise<any>((res, rej) => {
+    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, _label: string) =>
+      new Promise<any>(res => {
+        // Resolves null on timeout rather than rejecting. A rejection that
+        // lands after its test has already timed out is reported by
+        // Playwright as an error outside any test, and that fails the run
+        // even when every test passed (it did, at v0.18.3). The caller
+        // returns null in its turn and the spec asserts on it.
         const timer = setTimeout(() => {
           target.off('frame', onFrame)
-          rej(new Error(`no ${label} paint within 10s`))
+          res(null)
         }, 10_000)
         const onFrame = (f: any): void => {
           if (!matches(f)) return
@@ -91,8 +96,10 @@ test('iPhone preset rasterises at 3x: frames are CSS×3 and the page sees dpr 3'
     )
     ctx.target.invalidate()
     const m = await painted
+    if (!m) return null
     return { width: m.frameWidth, height: m.frameHeight, dsf: ctx.target.getDeviceScaleFactor() }
   })
+  if (!f) throw new Error('no 1179x2556 paint within 10s')
   expect(f).toEqual({ width: 1179, height: 2556, dsf: 3 })
 
   // The footer states the density and the per-device-pixel magnification.
@@ -144,12 +151,13 @@ test('a click on the canvas lands on the page through the device-pixel scale', a
   await page.evaluate(u => window.obsrv.navigate(u), BUTTON)
   await expect.poll(targetTitle).toBe('ready')
   // The click must hit painted pixels, not a mid-navigation blank.
-  await app.evaluate(async () => {
+  const buttonPainted = await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
     const painted = (globalThis as any).__waitForFrame(ctx.target, () => true, 'button page')
     ctx.target.invalidate()
-    await painted
+    return (await painted) !== null
   })
+  if (!buttonPainted) throw new Error('no button page paint within 10s')
 
   // The button fills the whole viewport, so any canvas point that maps inside
   // the page works; near the origin stays visible however small S gets.
@@ -176,6 +184,7 @@ test('switching back to a desktop preset restores 1x frames, dpr 1 and the deskt
     )
     ctx.target.invalidate()
     const m = await painted
+    if (!m) return null
     return {
       width: m.frameWidth,
       height: m.frameHeight,
@@ -184,6 +193,7 @@ test('switching back to a desktop preset restores 1x frames, dpr 1 and the deskt
       url: ctx.target.webContents.getURL(),
     }
   })
+  if (!f) throw new Error('no 1920x1080 paint within 10s')
   expect(f.width).toBe(1920)
   expect(f.height).toBe(1080)
   expect(f.dsf).toBe(1)
@@ -219,8 +229,10 @@ test('rapid density switches land on the final preset with the page intact', asy
     )
     ctx.target.invalidate()
     const m = await painted
+    if (!m) return null
     return { width: m.frameWidth, height: m.frameHeight, dsf: ctx.target.getDeviceScaleFactor() }
   })
+  if (!f) throw new Error('no 720x1600 paint within 10s')
   expect(f).toEqual({ width: 720, height: 1600, dsf: 2 })
 
   // The page, not just the surface: still the button fixture, fully loaded.

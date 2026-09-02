@@ -9,18 +9,23 @@ let app: ElectronApplication
 
 /**
  * Installs `globalThis.__waitForFrame(target, matches, label)` in main: it
- * resolves with the first `frame` event `matches` accepts and rejects loudly
- * after 10 s. Playwright serialises each `evaluate` callback's source, so a
+ * resolves with the first `frame` event `matches` accepts, or with null after
+ * 10 s (never a rejection — see inside). Playwright serialises each `evaluate` callback's source, so a
  * helper defined in this file would not exist inside main — it is installed
  * once per app instead.
  */
 async function installFrameHelper(a: ElectronApplication): Promise<void> {
   await a.evaluate(() => {
-    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, label: string) =>
-      new Promise<any>((res, rej) => {
+    ;(globalThis as any).__waitForFrame = (target: any, matches: (f: any) => boolean, _label: string) =>
+      new Promise<any>(res => {
+        // Resolves null on timeout rather than rejecting. A rejection that
+        // lands after its test has already timed out is reported by
+        // Playwright as an error outside any test, and that fails the run
+        // even when every test passed (it did, at v0.18.3). The caller
+        // returns null in its turn and the spec asserts on it.
         const timer = setTimeout(() => {
           target.off('frame', onFrame)
-          rej(new Error(`no ${label} paint within 10s`))
+          res(null)
         }, 10_000)
         const onFrame = (f: any): void => {
           if (!matches(f)) return
@@ -56,6 +61,7 @@ test('rasterises at 1x: frame size equals the CSS viewport', async () => {
       (m: any) => m.frameWidth === 1366 && m.frameHeight === 768,
       '1366x768',
     )
+    if (!f) return null
     return {
       hostScale,
       frameWidth: f.frameWidth,
@@ -64,6 +70,7 @@ test('rasterises at 1x: frame size equals the CSS viewport', async () => {
       expectedBytes: f.frame.width * f.frame.height * 4,
     }
   }, FIXTURE)
+  if (!seen) throw new Error('no 1366x768 paint within 10s')
 
   // The forced host scale must have taken, or the assertion proves nothing.
   expect(seen.hostScale).toBe(2)
@@ -87,10 +94,12 @@ test('frame bytes are BGRA of the rendered page', async () => {
       (m: any) => m.frameWidth === 200 && m.frameHeight === 100,
       '200x100',
     )
+    if (!f) return null
     const d = f.frame.data
     return { x: f.frame.x, y: f.frame.y, b: d[0], g: d[1], r: d[2], a: d[3] }
   })
 
+  if (!px) throw new Error('no 200x100 paint within 10s')
   expect(px).toEqual({ x: 0, y: 0, b: 0, g: 0, r: 255, a: 255 })
 })
 
@@ -207,7 +216,7 @@ test('forwards clicks into the offscreen page', async () => {
       'green button',
     )
     await ctx.target.load('data:text/html,' + encodeURIComponent(html))
-    await painted
+    if (!(await painted)) return 'no green button paint within 10s'
 
     const common = { button: 'left' as const, clickCount: 1, modifiers: [] as never[] }
     ctx.target.sendInput({ type: 'mouseDown', x: 200, y: 100, ...common })
