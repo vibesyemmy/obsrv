@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ua-paint-fixture</title>
+    <style>html, body { margin: 0; height: 100%; }</style>
+  </head>
+  <body>
+    <script>
+      // Solid red under a mobile UA, solid blue otherwise: a render says
+      // which identity the page was served, in a pixel.
+      document.body.style.background = /Mobile|Android|iPhone/.test(navigator.userAgent) ? '#ff0000' : '#0000ff'
+      document.title = navigator.userAgent.includes('Electron') ? 'electron' : 'chrome'
+    </script>
+  </body>
+</html>

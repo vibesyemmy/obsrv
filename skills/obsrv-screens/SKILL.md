@@ -47,8 +47,13 @@ $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 `--timeout`).
 
 If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
-`obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
-comes back inline. If the Obsrv desktop app is open with "Agent control" on
+`obsrv_audit` / `obsrv_presets`), prefer them over shelling out — same
+pipeline, and the PNG comes back inline. `obsrv_audit` (or `obsrv audit`)
+measures every tap target and text element in **millimetres on the chosen
+screen** and lists what is under 7 mm / 2 mm (provisional, tunable): a 24 CSS
+px control is 6.6 mm on a 24" 1080p and 4.5 mm on a 6.5" phone, so run it on
+a phone preset before declaring a mobile layout usable, and quote the
+millimetres, not the pixels. If the Obsrv desktop app is open with "Agent control" on
 (toolbar toggle), snaps drive the visible window — the user watches — and
 `obsrv_drive` flips its URL/preset/profile directly, and can also scroll,
 click, pan and highlight to walk the user through what it found; no app

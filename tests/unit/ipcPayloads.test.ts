@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MAX_LOG_MESSAGE,
   MAX_RECT,
+  parseAuditReport,
   parseDeviceScaleFactor,
   parseInputEvent,
   parseInspectPoint,
@@ -431,6 +432,31 @@ describe('parseInspectReport', () => {
   it('drops fields it does not know', () => {
     const r = parseInspectReport({ ...good, __proto__: { evil: 1 }, extra: 'x' }) as unknown as Record<string, unknown>
     expect(r.extra).toBeUndefined()
+  })
+})
+
+describe('parseAuditReport', () => {
+  const good = {
+    viewport: { width: 1920, height: 1080 },
+    pageHeight: 2400,
+    targets: [{ element: 'button#tiny', text: 'Close', rect: { x: 16, y: 76, width: 24, height: 24 } }],
+    text: [{ element: 'p#caption', text: 'A caption', fontSizePx: 10, rect: { x: 16, y: 200, width: 600, height: 12 } }],
+    truncated: { targets: 0, text: 2 },
+  }
+  it('copies a good report, lists included', () => {
+    const r = parseAuditReport(good)!
+    expect(r).toEqual(good)
+    expect(r.targets).not.toBe(good.targets)
+  })
+  it.each([
+    ['a bad entry, dropping the whole report', { ...good, targets: [{ element: 'a', text: 'x', rect: { x: 0, y: 0, width: 'w', height: 1 } }] }],
+    ['a negative font size', { ...good, text: [{ ...good.text[0], fontSizePx: -1 }] }],
+    ['a non-integer truncation count', { ...good, truncated: { targets: 1.5, text: 0 } }],
+    ['a list past the bound', { ...good, targets: Array.from({ length: 5001 }, () => good.targets[0]) }],
+    ['a missing viewport', { ...good, viewport: undefined }],
+    ['not an object', 'nope'],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseAuditReport(raw)).toBeNull()
   })
 })
 

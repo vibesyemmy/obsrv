@@ -42,6 +42,52 @@ export interface DiffToolInput {
   timeoutMs?: number | undefined
 }
 
+export interface AuditToolInput {
+  url: string
+  preset?: string | undefined
+  orientation?: Orientation | undefined
+  width?: number | undefined
+  height?: number | undefined
+  deviceScaleFactor?: number | undefined
+  diagonalInches?: number | undefined
+  tapMm?: number | undefined
+  textMm?: number | undefined
+  waitMs?: number | undefined
+  timeoutMs?: number | undefined
+}
+
+/** Maps `obsrv_audit` input to CLI argv; the preset-XOR-custom rule is snap's. */
+export function buildAuditArgs(input: AuditToolInput): string[] {
+  const custom =
+    input.width !== undefined ||
+    input.height !== undefined ||
+    input.deviceScaleFactor !== undefined ||
+    input.diagonalInches !== undefined
+  if (input.preset !== undefined && custom) {
+    throw new UsageError(
+      '`preset` and custom dimensions are mutually exclusive — pass either `preset`, ' +
+        'or `width` + `height` (with `diagonalInches`, without which there are no millimetres). ' +
+        'Use obsrv_presets to list the preset ids.',
+    )
+  }
+  if (custom && (input.width === undefined || input.height === undefined)) {
+    throw new UsageError('custom dimensions need both `width` and `height` — or pass `preset` instead.')
+  }
+  const args = ['audit', input.url]
+  if (input.preset !== undefined) args.push('--preset', input.preset)
+  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (custom) {
+    args.push('--width', String(input.width), '--height', String(input.height))
+    if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
+    if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
+  }
+  if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
+  if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
+  if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
+  if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
+  return args
+}
+
 /**
  * Maps `obsrv_snap` input to `bin/obsrv.js` argv. Enforces the preset-XOR-
  * custom-dims rule up front so the model gets one actionable message instead

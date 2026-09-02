@@ -46,11 +46,11 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: four tools with schemas, honestly annotated', async () => {
+test('initialize + tools/list: five tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
-  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_snap'])
+  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_snap'])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
     // obsrv_drive mutates visible app state and says so; the rest are reads.
@@ -70,6 +70,28 @@ test('initialize + tools/list: four tools with schemas, honestly annotated', asy
   expect(Object.keys(drive.inputSchema.properties ?? {})).toEqual(
     expect.arrayContaining(['url', 'preset', 'profile', 'viewMode']),
   )
+  const audit = tools.find(t => t.name === 'obsrv_audit')!
+  expect(Object.keys(audit.inputSchema.properties ?? {})).toEqual(
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'diagonalInches', 'tapMm', 'textMm']),
+  )
+  // Layout, not pixels: no panel profile.
+  expect(Object.keys(audit.inputSchema.properties ?? {})).not.toContain('profile')
+})
+
+test('obsrv_audit: the fixture measured in millimetres on a 6.5" phone', async () => {
+  const r = await call('obsrv_audit', { url: fixture('audit.html'), preset: 'android-65' })
+  expect(r.isError).toBeFalsy()
+  const result = r.structuredContent as {
+    ppi: number
+    thresholds: { tapMm: number; textMm: number }
+    findings: { kind: string; element: string; mm: number }[]
+    summary: { targets: { count: number; under: number }; text: { count: number; under: number } }
+  }
+  expect(result.ppi).toBeCloseTo(269.8, 0)
+  expect(result.thresholds).toEqual({ tapMm: 7, textMm: 2 })
+  expect(result.findings.map(f => f.kind)).toEqual(['small-text', 'small-text', 'small-target'])
+  expect(result.findings[2]).toMatchObject({ element: 'button#tiny' })
+  expect(result.summary.targets).toMatchObject({ count: 2, under: 1 })
 })
 
 test('obsrv_presets: the full catalog, straight from presets.ts', async () => {

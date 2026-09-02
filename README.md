@@ -126,6 +126,11 @@ npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --out
 
 # Machine-readable 1x-vs-2x comparison (ink coverage, row ratios, band deltas):
 npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
+
+# Tap targets and text measured in millimetres on the chosen screen — a 24 CSS px
+# control is 6.6 mm on a 24" 1080p and 4.5 mm on a 6.5" phone, and only one of
+# those is a thumb's worth. Findings under 7 mm / 2 mm (provisional, tunable):
+npx -y getobsrv audit http://localhost:5173 --preset android-65
 ```
 
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings

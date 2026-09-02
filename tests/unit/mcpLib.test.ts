@@ -3,6 +3,7 @@ import {
   APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
+  buildAuditArgs,
   buildDiffArgs,
   buildSnapArgs,
   extractTrailingJson,
@@ -244,5 +245,23 @@ describe('listCatalog', () => {
     expect(tn?.summary).toContain('72% sRGB')
     expect(tn?.summary).toContain('6-bit+FRC')
     expect(catalog.profiles.find(p => p.id === 'reference')?.summary).toMatch(/pass-through/)
+  })
+})
+
+describe('buildAuditArgs', () => {
+  it('maps the preset, orientation, thresholds and budgets to their flags', () => {
+    expect(buildAuditArgs({ url: URL })).toEqual(['audit', URL])
+    expect(
+      buildAuditArgs({ url: URL, preset: 'android-65', orientation: 'landscape', tapMm: 9, textMm: 1.5, waitMs: 250, timeoutMs: 5000 }),
+    ).toEqual(['audit', URL, '--preset', 'android-65', '--orientation', 'landscape', '--tap-mm', '9', '--text-mm', '1.5', '--wait', '250', '--timeout', '5000'])
+  })
+  it('custom dimensions map to --width/--height with the optional --dsf and --diagonal', () => {
+    expect(buildAuditArgs({ url: URL, width: 1280, height: 720, deviceScaleFactor: 2, diagonalInches: 14 })).toEqual([
+      'audit', URL, '--width', '1280', '--height', '720', '--dsf', '2', '--diagonal', '14',
+    ])
+  })
+  it('refuses preset with custom dims, and custom dims without both sides', () => {
+    expect(() => buildAuditArgs({ url: URL, preset: 'laptop-768', width: 100 })).toThrow(UsageError)
+    expect(() => buildAuditArgs({ url: URL, width: 100 })).toThrow(UsageError)
   })
 })
