@@ -225,10 +225,15 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
 async function runDiff(cmd: DiffCommand): Promise<void> {
   const profile = findProfile(cmd.profileId)
 
-  // The target: the preset as configured, panel profile applied — the point
-  // of the comparison is "this screen" vs "the screen you develop on".
+  // The target: the preset as configured, *without* the panel profile. The
+  // comparison is about rasterisation — "this screen" vs "the screen you
+  // develop on" — and a profile's brightness and black floor darken every
+  // pixel past the ink threshold (white through budget-tn at the default
+  // host lands at luminance 186, under INK_LUMINANCE's 200), which reported
+  // 100% ink coverage and a "+90pp" band finding for every band. The
+  // reference is unprofiled too, so like is compared with like.
   const t = await render(cmd.url, cmd.spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
-  const target = applyPanelProfile(bgraToRgba(t.frame.bgra, t.frame.width, t.frame.height), profile)
+  const target = bgraToRgba(t.frame.bgra, t.frame.width, t.frame.height)
 
   // The reference: the same CSS viewport at dsf 2 (what a HiDPI dev sees) —
   // desktop UA and viewport semantics, only the raster density differs — then
@@ -251,6 +256,9 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
   const warnings = [
     ...t.warnings.map(w => `target: ${w}`),
     ...r.warnings.map(w => `reference: ${w}`),
+    ...(profile.id === 'reference'
+      ? []
+      : [`the panel profile (${profile.id}) is not applied to a diff: the comparison is about rasterisation and is measured without it`]),
   ]
   const metrics = diffMetrics(target, reference, referenceDeviceRows, settled)
 
@@ -363,7 +371,9 @@ async function runReport(cmd: ReportCommand): Promise<void> {
 
   for (const spec of cmd.specs) {
     const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true })
-    const img = applyPanelProfile(bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height), profile)
+    const raw = bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height)
+    const profiled = profile.id !== 'reference'
+    const img = profiled ? applyPanelProfile(raw, profile) : raw
     const warnings = [...r.warnings]
     const audit =
       r.auditReport === null || r.auditReport === undefined
@@ -389,8 +399,17 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       const referenceFull = bgraToRgba(ref.frame.bgra, ref.frame.width, ref.frame.height)
       const referenceDeviceRows = inkRows(referenceFull)
       const reference = boxDownsample(referenceFull, 2)
-      const metrics = diffMetrics(img, reference, referenceDeviceRows, r.frame.settled && ref.frame.settled)
-      diff = { metrics, reference: toImage(encodePng(reference), reference.width, reference.height) }
+      // Measured on the unprofiled render: the comparison is about
+      // rasterisation, and a panel profile's brightness and black floor
+      // would darken every pixel past the ink threshold (measured: 100%
+      // coverage under budget-tn, every band "+90pp"). The reference is
+      // unprofiled too, so like is compared with like.
+      const metrics = diffMetrics(raw, reference, referenceDeviceRows, r.frame.settled && ref.frame.settled)
+      diff = {
+        metrics,
+        target: profiled ? toImage(encodePng(raw), raw.width, raw.height) : null,
+        reference: toImage(encodePng(reference), reference.width, reference.height),
+      }
       warnings.push(...ref.warnings.map(w => `reference: ${w}`))
     }
 

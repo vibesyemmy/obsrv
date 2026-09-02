@@ -26,6 +26,12 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   screens, this screen next to the 2x reference, both on the same 1x grid,
   with ink coverage, ink-row ratio and the band findings); the audit
   summary and its findings, smallest first; any warnings from the renders.
+- The panel profile applies to the render shown. The 1x-vs-2x comparison is
+  measured **without** it: it is about rasterisation, and a profile's
+  brightness and black floor would darken every pixel past the ink
+  threshold (measured: 100% coverage under `budget-tn`, every band "+90pp").
+  With a profile set, a 1x screen therefore shows its profiled render and,
+  below it, the unprofiled pair the numbers were taken from.
 
 The page holds its own images (PNG, inline), its own style, and no script.
 Nothing is fetched when it is opened. Everything that came from the page

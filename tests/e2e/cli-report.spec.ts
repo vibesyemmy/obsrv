@@ -86,10 +86,19 @@ test('the default matrix is four screens and the default file is obsrv-report.ht
   expect(help.stdout).toContain('obsrv-report.html')
 })
 
-test('--profile applies to the renders and the diff', async () => {
+test('--profile applies to the render shown; the diff is measured without it', async () => {
   const out = join(outDir, 'tn.html')
   const r = await runCli(['report', fixture('audit.html'), '--preset', 'laptop-768', '--profile', 'budget-tn', '--out', out])
   expect(r.code, r.stderr).toBe(0)
-  expect(JSON.parse(r.stdout).profile).toBe('budget-tn')
-  expect(readFileSync(out, 'utf8')).toContain('Panel profile <b>Budget TN</b>')
+  const summary = JSON.parse(r.stdout)
+  expect(summary.profile).toBe('budget-tn')
+  // The fixture is mostly white: a profile that darkened it into the ink
+  // threshold would report near-100% coverage, which is the defect this
+  // pins. Unprofiled, a page of a few lines of text is a few percent ink.
+  expect(summary.screens[0].diff.inkCoverage.target).toBeLessThan(0.2)
+  const html = readFileSync(out, 'utf8')
+  expect(html).toContain('Panel profile <b>Budget TN</b>')
+  // The profiled render, plus the unprofiled pair: three images.
+  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+  expect(html).toContain('without the panel profile')
 })

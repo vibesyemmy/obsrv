@@ -33,8 +33,14 @@ export interface ReportScreen {
   settled: boolean
   /** Null when the page did not answer the audit. */
   audit: AuditResult | null
-  /** 1x screens only: the 2x reference, downsampled, and the comparison. */
-  diff: { metrics: DiffMetrics; reference: ReportImage } | null
+  /**
+   * 1x screens only: the comparison, the 2x reference (downsampled), and the
+   * 1x render the comparison was measured on — which is the render *without*
+   * the panel profile, since the comparison is about rasterisation and the
+   * profile would darken everything past the ink threshold. Null `target`
+   * means it is the same image as `png` (the reference profile).
+   */
+  diff: { metrics: DiffMetrics; target: ReportImage | null; reference: ReportImage } | null
   /** Why there is no diff, when there is none. */
   diffSkipped: string | null
   warnings: string[]
@@ -70,7 +76,7 @@ h3 { font-size: 14px; margin: 20px 0 8px; text-transform: uppercase; letter-spac
 .facts { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 .facts b { color: var(--ink); font-weight: 600; }
 figure { margin: 0; }
-figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); background: #fff; }
+figure img { display: block; max-width: 100%; max-height: 720px; width: auto; height: auto; border: 1px solid var(--line); background: #fff; }
 figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .pair { grid-template-columns: 1fr; } }
@@ -123,10 +129,12 @@ function diffSection(s: ReportScreen): string {
   }
   const m = s.diff.metrics
   const ratio = m.rows.ratio === null ? 'n/a' : num(m.rows.ratio, 2)
+  const target = s.diff.target ?? s.png
+  const unprofiled = s.diff.target !== null ? ', without the panel profile — the comparison is about rasterisation' : ''
   return (
     `<h3>1x vs 2x — this screen against the one it was designed on</h3>` +
     `<div class="pair">` +
-    `<figure><img src="data:image/png;base64,${s.png.base64}" alt="This screen"><figcaption>This screen, 1x, ${s.png.width}×${s.png.height} device px</figcaption></figure>` +
+    `<figure><img src="data:image/png;base64,${target.base64}" alt="This screen"><figcaption>This screen, 1x, ${target.width}×${target.height} device px${unprofiled}</figcaption></figure>` +
     `<figure><img src="data:image/png;base64,${s.diff.reference.base64}" alt="2x reference"><figcaption>2x reference, box-downsampled to the same grid</figcaption></figure>` +
     `</div>` +
     `<table style="margin-top:12px"><tr><th></th><th class="n">This screen</th><th class="n">Reference</th><th class="n">Delta</th></tr>` +
@@ -146,9 +154,12 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `<p class="facts"><b>${s.cssWidth}×${s.cssHeight}</b> CSS px${s.deviceScaleFactor !== 1 ? ` at <b>${s.deviceScaleFactor}x</b>` : ''} · ` +
     `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.orientation)}` +
     `${s.settled ? '' : ' · <span class="bad">not settled</span>'}</p>` +
-    (s.diff
+    // The screen's own figure: always for a screen with no comparison, and
+    // for a compared screen only when the profile made it a different image
+    // from the one the comparison shows.
+    (s.diff && s.diff.target === null
       ? ''
-      : `<figure><img src="data:image/png;base64,${s.png.base64}" alt="${escapeHtml(s.label)}"><figcaption>Shown scaled to fit; ${s.png.width}×${s.png.height} device px on a screen ${physical}.</figcaption></figure>`) +
+      : `<figure><img src="data:image/png;base64,${s.png.base64}" alt="${escapeHtml(s.label)}"><figcaption>Shown scaled to fit; ${s.png.width}×${s.png.height} device px on a screen ${physical}${s.diff ? ', through the panel profile' : ''}.</figcaption></figure>`) +
     diffSection(s) +
     auditSection(s, thresholds) +
     (s.warnings.length > 0 ? `<h3>Warnings</h3><ul class="plain muted">${s.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '') +

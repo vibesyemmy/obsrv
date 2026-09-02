@@ -152,7 +152,8 @@ audit flags:
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
   --out <file>         The HTML file (default ${DEFAULT_REPORT_OUT}). Self-contained: PNGs inline, no script.
-  --tap-mm / --text-mm As for audit. --profile applies to the renders and the diff, as for snap.
+  --tap-mm / --text-mm As for audit. --profile applies to the renders shown; the 1x-vs-2x
+                       comparison is measured without it (it is about rasterisation, not the panel).
                        Each screen costs one render plus, for 1x screens, a 2x reference render.
 
 Repeated flags: the last occurrence wins.

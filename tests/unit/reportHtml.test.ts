@@ -44,6 +44,7 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
       bands: [],
       findings: ['band 3: hairline lost at 1x'],
     },
+    target: null,
     reference: { base64: 'AAAA', width: 1366, height: 768 },
   },
   diffSkipped: null,
@@ -114,6 +115,14 @@ describe('reportHtml', () => {
     expect(html).toContain('data:image/png;base64,BBBB')
     expect(html).toContain('not settled')
     expect(html).toContain('at <b>2x</b>')
+  })
+  it('with a panel profile, a compared screen shows its profiled render and the unprofiled pair it was measured on', () => {
+    const s = screen()
+    const html = reportHtml(data([{ ...s, diff: { ...s.diff!, target: { base64: 'RAW1', width: 1366, height: 768 } } }]))
+    expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+    expect(html).toContain('data:image/png;base64,RAW1')
+    expect(html).toContain('through the panel profile')
+    expect(html).toContain('without the panel profile')
   })
   it('says when the page did not answer the audit', () => {
     const html = reportHtml(data([screen({ audit: null })]))
