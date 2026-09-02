@@ -6,6 +6,8 @@ import { clampViewport, maxCssViewport } from '../shared/calibration'
 import { classifyFileNavigation } from '../shared/fileNav'
 import { fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
+import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { parseInspectReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
 import { log } from './log'
 
@@ -491,6 +493,27 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** Forces a full-frame repaint, e.g. after the renderer loses its texture. */
   invalidate(): void {
     if (!this.win.isDestroyed()) this.win.webContents.invalidate()
+  }
+
+  /**
+   * What is under a viewport point, as the page reports it. The script runs
+   * in an isolated world of its own — it reads the DOM, and nothing the page
+   * defines can shadow what it calls — and its answer is parsed like any
+   * other payload from something untrusted. Null before the first
+   * navigation, off the page, or when the answer did not parse.
+   */
+  async inspectAt(x: number, y: number): Promise<InspectReport | null> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return null
+    const wc = this.win.webContents
+    try {
+      const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
+        { code: `${INSPECT_SCRIPT}(${Number(x)}, ${Number(y)})` },
+      ])
+      return parseInspectReport(raw)
+    } catch {
+      // A navigation mid-call, or a page that threw: nothing to report.
+      return null
+    }
   }
 
   sendInput(ev: TargetInputEvent): void {

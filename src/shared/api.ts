@@ -1,5 +1,6 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
 import type { HistoryEntry } from './history'
+import type { InspectReport } from './inspect'
 import type { TabSnapshot } from './tabList'
 import type { FrameSlice, HostInfo, LoadError, Settings, TargetInputEvent, UpdateState } from './types'
 
@@ -47,6 +48,13 @@ export interface ObsrvApi {
    * visibility stays `visible` through all three.
    */
   onTargetPaused(cb: (paused: boolean) => void): () => void
+  /**
+   * What is under a point of the target page, in CSS pixels of its
+   * viewport: element, font, text colour and the background it sits on.
+   * Null off the page, before the first navigation, or when the page's
+   * answer did not parse.
+   */
+  inspect(point: { x: number; y: number }): Promise<InspectReport | null>
   back(): void
   forward(): void
   /**

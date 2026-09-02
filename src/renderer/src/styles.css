@@ -825,6 +825,36 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   border: 1px dashed var(--chrome-0);
   box-sizing: border-box;
 }
+/* The inspector's highlight: the agent highlight's twin, for the element
+   under the pointer. Same neutral ring, same no-interception. */
+.inspect-highlight {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  outline: 2px solid var(--text-0);
+  border: 1px dashed var(--chrome-0);
+  box-sizing: border-box;
+}
+/* The inspector's switch lives in the target footer. It must not make the
+   strip taller than the native footer's, or the panes' bottoms drift apart:
+   sized inside the 11px/1.4 line box, never outside it. */
+.pane-footer { align-items: center; }
+.pane-footer .trailing { margin-left: auto; display: flex; align-items: center; }
+.inspect-toggle {
+  font: inherit;
+  font-size: 10px;
+  line-height: 13px;
+  height: 15px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+}
+.inspect-toggle[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
+.inspect-toggle:focus { outline: none; }
+.inspect-toggle:focus-visible { outline: 1px solid var(--text-1); outline-offset: 1px; }
 .stall {
   position: sticky;
   top: 0;
@@ -865,6 +895,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .target-canvas.fit { cursor: zoom-in; }
 .target-canvas.pan-ready { cursor: grab; }
 .target-canvas.panning { cursor: grabbing; }
+.target-canvas.inspecting { cursor: crosshair; }
 
 /* Notice shown when the renderer loads outside Electron (plain browser tab). */
 .browser-notice {

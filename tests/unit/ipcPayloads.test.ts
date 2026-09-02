@@ -4,6 +4,8 @@ import {
   MAX_RECT,
   parseDeviceScaleFactor,
   parseInputEvent,
+  parseInspectPoint,
+  parseInspectReport,
   parseLogMessage,
   parseMode,
   parseRect,
@@ -372,6 +374,63 @@ describe('parseScrollReport', () => {
     ['an unknown scroller kind', { id: 1, x: 0, y: 0, scroller: 'window' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseScrollReport(raw)).toBeNull()
+  })
+})
+
+describe('parseInspectPoint', () => {
+  it('keeps a finite point inside the bound', () => {
+    expect(parseInspectPoint({ x: 12.5, y: 0 })).toEqual({ x: 12.5, y: 0 })
+  })
+  it.each([
+    ['a negative coordinate', { x: -1, y: 0 }],
+    ['a coordinate past the bound', { x: 0, y: MAX_RECT + 1 }],
+    ['a non-number', { x: '1', y: 0 }],
+    ['NaN', { x: NaN, y: 0 }],
+    ['not an object', 5],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseInspectPoint(raw)).toBeNull()
+  })
+})
+
+describe('parseInspectReport', () => {
+  const good = {
+    tag: 'p',
+    id: 'grey',
+    classes: 'a b',
+    text: 'Grey caption',
+    rect: { x: 10, y: 10, width: 300, height: 15 },
+    fontSizePx: 13,
+    fontWeight: 400,
+    fontFamily: 'Arial',
+    color: [107, 114, 128, 1],
+    background: [255, 255, 255, 1],
+    backgroundNote: 'computed',
+  }
+  it('copies a good report field by field', () => {
+    const r = parseInspectReport(good)!
+    expect(r).toEqual(good)
+    expect(r).not.toBe(good)
+    expect(r.color).not.toBe(good.color)
+  })
+  it('keeps an image background as null with its note', () => {
+    expect(parseInspectReport({ ...good, background: null, backgroundNote: 'image' })?.background).toBeNull()
+  })
+  it.each([
+    ['a computed note with no background', { ...good, background: null }],
+    ['a colour channel out of range', { ...good, color: [300, 0, 0, 1] }],
+    ['an alpha out of range', { ...good, color: [0, 0, 0, 2] }],
+    ['a three-channel colour', { ...good, color: [0, 0, 0] }],
+    ['an unknown note', { ...good, backgroundNote: 'guess' }],
+    ['a negative font size', { ...good, fontSizePx: -1 }],
+    ['an over-long tag', { ...good, tag: 'x'.repeat(201) }],
+    ['a missing rect', { ...good, rect: undefined }],
+    ['extra fields smuggled through', 'nope'],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseInspectReport(raw)).toBeNull()
+  })
+  it('drops fields it does not know', () => {
+    const r = parseInspectReport({ ...good, __proto__: { evil: 1 }, extra: 'x' }) as unknown as Record<string, unknown>
+    expect(r.extra).toBeUndefined()
   })
 })
 
