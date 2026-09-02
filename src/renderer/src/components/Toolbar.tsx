@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { formatTextScale, TEXT_SCALES } from '../../../shared/textScale'
 import { useShallow } from 'zustand/react/shallow'
 import { matchHistory } from '../../../shared/history'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../../../shared/presets'
@@ -94,6 +95,13 @@ const PROFILE_GROUPS: SelectGroup[] = [
   { options: PANEL_PROFILES.map(p => ({ value: p.id, label: p.label })) },
 ]
 
+// The value is the number as a string, so an agent-applied scale the menu
+// does not list (×1.75, say) still reads back: the label is computed from
+// the tab, not looked up here.
+const TEXT_SCALE_GROUPS: SelectGroup[] = [
+  { options: TEXT_SCALES.map(s => ({ value: String(s), label: `Text ${formatTextScale(s)}` })) },
+]
+
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
   const mode = useStore(s => selectTab(s).mode)
   const presetId = useStore(s => selectTab(s).presetId)
@@ -110,6 +118,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const orientation = useStore(s => selectTab(s).orientation)
   const orientationShapes = useStore(useShallow(selectOrientationShapes))
   const setOrientation = useStore(s => s.setOrientation)
+  const textScale = useStore(s => selectTab(s).textScale)
+  const setTextScale = useStore(s => s.setTextScale)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
@@ -473,6 +483,19 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           ariaLabel="Panel profile"
           groups={PROFILE_GROUPS}
           onChange={setProfile}
+        />
+
+        {/* Browser zoom as reflow on the target: what the page does for a
+            user at 150 %. A menu, not a stepper, because the four values
+            are the ones people actually set and a footer fact says which
+            is in force. */}
+        <Select
+          className="text-scale-select"
+          value={String(textScale)}
+          label={`Text ${formatTextScale(textScale)}`}
+          ariaLabel="Text scale"
+          groups={TEXT_SCALE_GROUPS}
+          onChange={v => setTextScale(Number(v))}
         />
 
         {/* No spacer: this row centres its controls, and the chip below is out

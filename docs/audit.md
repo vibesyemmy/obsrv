@@ -103,3 +103,13 @@ test runs the stringified form). Its answer is parsed field by field on the
 way back (`parseAuditReport`), then `cli/audit.ts` — pure, no Electron — turns
 CSS pixels into millimetres from the preset's diagonal and applies the
 thresholds. `obsrv_audit` maps its input to the same argv.
+
+## Under a text scale
+
+`--text-scale 1.5` (or `textScale` on `obsrv_audit`) renders the page as a
+user at 150 % sees it — browser zoom as reflow, see `docs/text-scale.md` —
+and every millimetre grows by the scale: the 24 px control that is 6.1 mm
+on the 15.6" laptop at ×1 is 9.1 mm at ×1.5 and stops being a finding.
+`rect`s and `pageHeight` stay in the page's own CSS px; `cssWidth` and
+`cssHeight` are the screen's, and the JSON says the `textScale` when one
+other than 1 was applied.

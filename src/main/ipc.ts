@@ -11,6 +11,7 @@ import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
 import { log } from './log'
 import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
+import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
@@ -234,6 +235,14 @@ export function registerIpc(ctx: AppContext): () => void {
     }
     const v = tab().target.setViewport(width, height, dsf, rawMobile === true)
     return { width: v.width, height: v.height }
+  })
+  handle(IPC.setTextScale, (e, raw: unknown) => {
+    assertRenderer(e)
+    // Refused, not clamped: a scale outside the range would render something
+    // nobody asked for, and the renderer only ever sends the values it offers.
+    const scale = parseTextScale(raw)
+    if (scale === null) throw new Error('invalid textScale')
+    tab().target.setTextScale(scale)
   })
   on(IPC.sendInput, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
@@ -510,6 +519,12 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     set orientation(v: Orientation) {
       tab().orientation = v
+    },
+    get textScale() {
+      return tab().textScale
+    },
+    set textScale(v: number) {
+      tab().textScale = v
     },
     get mode() {
       return tab().reportedMode
@@ -879,6 +894,7 @@ export function registerIpc(ctx: AppContext): () => void {
         presetId: t.presetId,
         profileId: t.profileId,
         orientation: t.orientation,
+        textScale: t.textScale,
       })),
       activeIndex: tabs.activeIndex,
     }
@@ -929,6 +945,12 @@ export function registerIpc(ctx: AppContext): () => void {
       s.presetId = entry.presetId
       s.profileId = entry.profileId
       s.orientation = entry.orientation
+      // The scale is the target's to render as well as the renderer's to
+      // show, and the target is here already: applied now, so the restored
+      // page lays out at its scale from the first paint rather than after
+      // the renderer has reported back.
+      s.textScale = entry.textScale
+      s.target.setTextScale(entry.textScale)
       sessions.push(s)
     }
     // One activation, at the end: `add` leaves a tab in the background on

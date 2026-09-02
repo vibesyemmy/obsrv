@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { DEFAULT_TEXT_SCALE } from '../shared/textScale'
 import type { VisionType } from '../shared/vision'
 import type { AgentViewMode } from '../shared/control'
 import { IPC } from '../shared/ipc'
@@ -59,6 +60,8 @@ export class TabSession {
 
   presetId = '1080p-24'
   profileId = 'reference'
+  /** Mirrored from the renderer like the preset; restored from disk before any renderer reports. */
+  textScale = DEFAULT_TEXT_SCALE
   /**
    * Which way round this tab's screen is held. Per tab like the preset it
    * rotates, and mirrored here from the renderer's `uiState` for the same

@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { spawn } from 'node:child_process'
@@ -166,6 +167,16 @@ const snapInputShape = {
     .optional()
     .describe('Raster density for custom dims (device px per CSS px, default 1). Device pixels are capped at 4096 per axis.'),
   diagonalInches: z.number().min(0.1).optional().describe('Simulated panel diagonal in inches, for custom dims.'),
+  textScale: z
+    .number()
+    .min(MIN_TEXT_SCALE)
+    .max(MAX_TEXT_SCALE)
+    .optional()
+    .describe(
+      'Browser zoom as reflow, e.g. 1.5 for a user at 150% (default 1). The page lays out in 1/textScale of the CSS ' +
+        'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
+        'and the PNG stays the screen\'s size.',
+    ),
   profile: profileField,
   fullPage: z.boolean().optional().describe('Capture the full page height (device px capped at 4096; a warning reports clamping).'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
@@ -219,6 +230,7 @@ const snapOutputShape = {
         "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
         "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
   deviceScaleFactor: z.number().optional().describe('Headless only.'),
+  textScale: z.number().optional().describe('Browser zoom as reflow the page was rendered at. Present only when a scale other than 1 was applied.'),
   profile: z.string().optional().describe('Headless only: applied panel profile id.'),
   settled: z
     .boolean()
@@ -348,6 +360,15 @@ const driveInputShape = {
     .describe('Navigate the app (both panes) to this http://, https:// or file:// URL (bare hosts also work).'),
   preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
   orientation: orientationField,
+  textScale: z
+    .number()
+    .min(MIN_TEXT_SCALE)
+    .max(MAX_TEXT_SCALE)
+    .optional()
+    .describe(
+      "Set the target's text scale — browser zoom as reflow, 1 = none. The native pane and the other tabs " +
+        'are untouched. An app older than text scale rejects the command.',
+    ),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
   panes: z
@@ -442,6 +463,7 @@ const driveOutputShape = {
   url: z.string().describe('The URL the target pane reports showing.'),
   presetId: z.string(),
   profileId: z.string(),
+  textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
   orientation: z
     .string()
     .describe(
@@ -609,6 +631,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     if (input.orientation !== undefined) {
       await controlCall(info, 'setOrientation', { orientation: input.orientation }, LIVE_APPLY_TIMEOUT_MS)
     }
+    if (input.textScale !== undefined) {
+      await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
+    }
     if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
   } catch (e) {
     return toolError(liveFailure(e))
@@ -654,6 +679,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     profileId: status.profileId,
     orientation: status.orientation,
     screenShape: status.screenShape,
+    textScale: status.textScale,
     cssWidth: status.cssWidth,
     cssHeight: status.cssHeight,
     viewMode: status.viewMode,
@@ -828,6 +854,16 @@ const auditInputShape = {
     .min(0.1)
     .optional()
     .describe('Panel diagonal in inches, for custom dims. Without it there are no millimetres and no findings.'),
+  textScale: z
+    .number()
+    .min(MIN_TEXT_SCALE)
+    .max(MAX_TEXT_SCALE)
+    .optional()
+    .describe(
+      'Browser zoom as reflow, e.g. 1.5 for a user at 150% (default 1). The page lays out in 1/textScale of the CSS ' +
+        'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
+        'so every millimetre grows with it.',
+    ),
   tapMm: z
     .number()
     .min(0)
@@ -855,6 +891,7 @@ const auditOutputShape = {
   cssWidth: z.number(),
   cssHeight: z.number(),
   deviceScaleFactor: z.number(),
+  textScale: z.number().optional().describe('Browser zoom as reflow the page was measured at. Present only when a scale other than 1 was applied.'),
   pageHeight: z.number().describe('The page\'s full height in CSS px; rects are page coordinates, so the audit covers all of it.'),
   ppi: z.number().nullable().describe('Device pixels per inch of the screen; null for custom dims without a diagonal.'),
   thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
@@ -927,6 +964,16 @@ const reportInputShape = {
     .optional()
     .describe(`Screens to cover, by preset id (obsrv_presets lists them). Default: ${DEFAULT_REPORT_MATRIX.join(', ')}.`),
   orientation: orientationField,
+  textScale: z
+    .number()
+    .min(MIN_TEXT_SCALE)
+    .max(MAX_TEXT_SCALE)
+    .optional()
+    .describe(
+      'Browser zoom as reflow, e.g. 1.5 for a user at 150% (default 1). The page lays out in 1/textScale of the CSS ' +
+        'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
+        'on every screen in the matrix.',
+    ),
   profile: profileField,
   tapMm: z.number().min(0).optional().describe(`Audit threshold for tap targets, mm. Default ${DEFAULT_TAP_MM} (provisional).`),
   textMm: z.number().min(0).optional().describe(`Audit threshold for text, mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
@@ -947,6 +994,7 @@ const reportOutputShape = {
       cssWidth: z.number(),
       cssHeight: z.number(),
       deviceScaleFactor: z.number(),
+      textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
       audit: z
@@ -1050,6 +1098,7 @@ server.registerTool(
     url?: string
     preset?: string
     orientation?: 'portrait' | 'landscape'
+    textScale?: number
     profile?: string
     viewMode?: '1:1' | 'fit'
     panes?: 'both' | 'target'
@@ -1085,6 +1134,9 @@ server.registerTool(
       // that order or the rotation would be spent on the outgoing preset.
       if (input.orientation !== undefined) {
         await controlCall(live.info, 'setOrientation', { orientation: input.orientation }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.textScale !== undefined) {
+        await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
       if (input.viewMode !== undefined) {

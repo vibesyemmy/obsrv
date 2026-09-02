@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
 import { screenShape } from './calibration'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import { DEFAULT_TEXT_SCALE, isTextScale, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from './textScale'
 import type { Orientation } from './types'
 
 /**
@@ -54,6 +55,8 @@ export interface AgentUiState {
   panes: AgentPanes
   /** Which way round the tab's screen is held — mirrors the store's `orientation`. */
   orientation: Orientation
+  /** Browser zoom as reflow on the target, 1 = none — mirrors the store's `textScale`. */
+  textScale: number
   mode: 'url' | 'image'
   /** The viewer simulation, so a capture is never silently colour-shifted. */
   visionType: VisionType
@@ -155,6 +158,7 @@ export interface AgentApplyPatch {
   viewMode?: AgentViewMode
   panes?: AgentPanes
   orientation?: Orientation
+  textScale?: number
   pixelExact?: boolean
   visionType?: VisionType
   visionSeverity?: number
@@ -173,6 +177,7 @@ export const CONTROL_COMMANDS = [
   'setPanes',
   'setVision',
   'setOrientation',
+  'setTextScale',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
   'scroll',
@@ -292,6 +297,11 @@ export function viewModeApplyError(v: unknown): string | null {
  */
 export function orientationApplyError(v: unknown): string | null {
   return isOrientation(v) ? null : `setOrientation payload must be { orientation: 'portrait' | 'landscape' }`
+}
+
+/** Validates a `setTextScale` payload: a finite number within the range the app renders. */
+export function textScaleApplyError(v: unknown): string | null {
+  return isTextScale(v) ? null : `setTextScale payload must be { textScale: number } with ${MIN_TEXT_SCALE} <= textScale <= ${MAX_TEXT_SCALE}`
 }
 
 export function panesApplyError(v: unknown): string | null {
@@ -419,6 +429,9 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // already been bitten by twice.
   const orientation = raw.orientation ?? DEFAULT_ORIENTATION
   if (!isOrientation(orientation)) return null
+  // Same skew once more: an app that predates text scale renders at ×1.
+  const textScale = raw.textScale ?? DEFAULT_TEXT_SCALE
+  if (!isTextScale(textScale)) return null
   // And once more for the dimensions and the derived shape. `0` means "the app
   // did not say", which is the truthful answer for one that predates them —
   // inventing a size would be worse than admitting the gap.
@@ -442,6 +455,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     viewMode,
     panes,
     orientation,
+    textScale,
     mode,
     visionType,
     visionSeverity,

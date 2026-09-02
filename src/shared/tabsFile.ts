@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS } from './presets'
+import { DEFAULT_TEXT_SCALE, isTextScale } from './textScale'
 import type { Orientation } from './types'
 
 export interface StoredTab {
@@ -14,6 +15,8 @@ export interface StoredTab {
    * a file written before this field existed gets.
    */
   orientation: Orientation
+  /** Browser zoom as reflow, 1 = none. Out of range or absent falls to 1, like the orientation. */
+  textScale: number
 }
 
 export interface StoredTabs {
@@ -64,6 +67,7 @@ export function loadTabs(file: string, max = Infinity): StoredTabs {
         presetId: SCREEN_PRESETS.some(p => p.id === entry.presetId) ? (entry.presetId as string) : DEFAULT_PRESET,
         profileId: PANEL_PROFILES.some(p => p.id === entry.profileId) ? (entry.profileId as string) : DEFAULT_PROFILE,
         orientation: isOrientation(entry.orientation) ? entry.orientation : DEFAULT_ORIENTATION,
+        textScale: isTextScale(entry.textScale) ? entry.textScale : DEFAULT_TEXT_SCALE,
       })
     }
     // Truncated before the index is bounded, and both after validation:

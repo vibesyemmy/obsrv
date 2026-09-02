@@ -136,6 +136,11 @@ npx -y getobsrv audit http://localhost:5173 --preset android-65
 # phones by default: each render, the audit in millimetres, the 1x-vs-2x diff.
 # The thing to attach to a PR.
 npx -y getobsrv report http://localhost:5173 --out obsrv-report.html
+
+# The page as a user at 150% sees it: browser zoom as reflow, on any command.
+# The PNG stays the screen's size; the page lays out in two thirds of it at
+# 1.5x the density, and the audit's millimetres grow to match.
+npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out zoomed.png
 ```
 
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings

@@ -72,6 +72,8 @@ export interface TabInfo {
   profileId: string
   /** Which way round that screen is held; here for the same restore reason. */
   orientation: Orientation
+  /** The text scale it was being viewed at; here for the same restore reason. */
+  textScale: number
 }
 
 /** The whole strip, as `getTabs` answers and `tabsChanged` publishes it. */

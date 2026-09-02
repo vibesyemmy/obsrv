@@ -14,6 +14,7 @@ import {
   profileApplyError,
   tokenEqual,
   orientationApplyError,
+  textScaleApplyError,
   panesApplyError,
   visionApplyError,
   viewModeApplyError,
@@ -236,6 +237,13 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const orientation = payload.orientation as Orientation
         return this.applyAndConfirm({ orientation }, s => s.orientation === orientation)
+      }
+
+      case 'setTextScale': {
+        const err = textScaleApplyError(payload.textScale)
+        if (err) return reply(400, { error: err })
+        const textScale = payload.textScale as number
+        return this.applyAndConfirm({ textScale }, s => s.textScale === textScale)
       }
 
       case 'captureVisible': {

@@ -72,3 +72,18 @@ describe('auditFindings', () => {
     expect(r.warnings.join(' ')).toMatch(/3 targets/)
   })
 })
+
+describe('auditFindings under a text scale', () => {
+  it('×1.5 on the 24" 1080p: the 24px control is 9.96 mm and no longer small; nothing else changes', () => {
+    const r = auditFindings(report, { ...screenOf('1080p-24'), textScale: 1.5 }, thresholds)
+    expect(r.ppi).toBeCloseTo(91.8, 1)
+    expect(r.findings).toEqual([])
+    expect(r.summary.targets).toEqual({ count: 2, under: 0, smallestPx: 24, smallestMm: 9.96 })
+    expect(r.summary.text.smallestMm).toBeCloseTo(4.15, 1)
+  })
+  it('absent means ×1', () => {
+    expect(auditFindings(report, screenOf('1080p-24'), thresholds)).toEqual(
+      auditFindings(report, { ...screenOf('1080p-24'), textScale: 1 }, thresholds),
+    )
+  })
+})

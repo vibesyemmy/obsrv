@@ -1,4 +1,5 @@
 import { maxCssViewport } from '../shared/calibration'
+import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
 import type { Orientation } from '../shared/types'
 
@@ -30,6 +31,13 @@ export interface RenderSpec {
    * dense and a desktop — so it is carried, not inferred from `deviceScaleFactor`.
    */
   mobile: boolean
+  /**
+   * Browser zoom as reflow, 1 = none: the page lays out in `cssWidth /
+   * textScale` CSS px of its own at `deviceScaleFactor × textScale`. The
+   * fields above describe the surface — the PNG is still `cssWidth ×
+   * deviceScaleFactor` wide — and this says what the page saw of it.
+   */
+  textScale: number
 }
 
 export interface AuditCommand {
@@ -128,6 +136,11 @@ ${presets}
                        dims too. The diagonal, raster density and physical size never
                        change: it is the same panel turned sideways. Each render's JSON
                        and log line name the resulting shape.
+  --text-scale <f>     Browser zoom as reflow, e.g. 1.5 for a user at 150% (default 1;
+                       ${MIN_TEXT_SCALE} to ${MAX_TEXT_SCALE}). The page lays out in 1/f of the screen's CSS
+                       viewport at f times its density — what a larger-text setting or a
+                       Windows panel at 150% does to a layout — and the PNG stays the
+                       screen's size. The audit's millimetres grow with it.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
   --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
@@ -168,10 +181,10 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm'])
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale'])
 type Command = 'snap' | 'diff' | 'audit' | 'report'
 /** Flags every command takes. */
-const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal'])
+const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale'])
 /**
  * The rest, per command. A flag outside a command's set is refused, and the
  * message names the first command (in this order) that takes it — so
@@ -259,7 +272,14 @@ function presetSpec(id: string): RenderSpec {
     diagonalInches: preset.diagonalInches,
     orientation: DEFAULT_ORIENTATION,
     mobile: preset.group === 'mobile',
+    textScale: DEFAULT_TEXT_SCALE,
   }
+}
+
+function resolveTextScale(flags: Map<string, string | true>): number {
+  const scale = float(flags, 'text-scale', DEFAULT_TEXT_SCALE, MIN_TEXT_SCALE)
+  if (scale > MAX_TEXT_SCALE) throw new ArgError(`--text-scale: expected a number <= ${MAX_TEXT_SCALE}, got "${scale}"`)
+  return scale
 }
 
 function resolveOrientation(flags: Map<string, string | true>): Orientation {
@@ -280,7 +300,19 @@ function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
   return { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
 }
 
+/**
+ * The screens a run covers, each at the run's orientation and text scale.
+ * The scale is applied last and to every spec alike: it changes nothing
+ * about the screen — not its axes, its density or its diff bounds — only
+ * what the page is told about it.
+ */
 function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
+  const textScale = resolveTextScale(flags)
+  const { specs, matrix } = resolveScreens(flags)
+  return { specs: specs.map(s => ({ ...s, textScale })), matrix }
+}
+
+function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
   const orientation = resolveOrientation(flags)
   const custom = ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
   if (custom && flags.has('preset')) throw new ArgError('--preset and --width/--height are mutually exclusive')
@@ -307,6 +339,7 @@ function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[];
       diagonalInches: diagonal,
       orientation: DEFAULT_ORIENTATION,
       mobile: false,
+      textScale: DEFAULT_TEXT_SCALE,
     }
     return { specs: [orientSpec(spec, orientation)], matrix: false }
   }
@@ -363,7 +396,8 @@ export function parseArgs(argv: string[]): CliCommand {
     // Nothing named means the default matrix, not the default preset.
     const named = flags.has('preset') || flags.has('matrix') || ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
     const orientation = resolveOrientation(flags)
-    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => orientSpec(presetSpec(id), orientation))
+    const textScale = resolveTextScale(flags)
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation), textScale }))
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
     return {
       command,

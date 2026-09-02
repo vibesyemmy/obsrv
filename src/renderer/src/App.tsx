@@ -62,6 +62,7 @@ export function App() {
   const presetId = useStore(s => selectTab(s).presetId)
   const profileId = useStore(s => selectTab(s).profileId)
   const orientation = useStore(s => selectTab(s).orientation)
+  const textScale = useStore(s => selectTab(s).textScale)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const visionType = useStore(s => selectTab(s).visionType)
   const visionSeverity = useStore(s => selectTab(s).visionSeverity)
@@ -130,6 +131,13 @@ export function App() {
   useEffect(() => {
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor, isMobileScreen)
   }, [viewport.width, viewport.height, deviceScaleFactor, isMobileScreen])
+
+  // The target keeps its own scale per tab, so a switch between two tabs at
+  // the same scale sends nothing and one between different scales sends the
+  // incoming tab's — which its target already has. Idempotent either way.
+  useEffect(() => {
+    void window.obsrv.setTextScale(textScale)
+  }, [textScale])
 
   useEffect(() => {
     window.obsrv.setMode(mode)
@@ -206,8 +214,8 @@ export function App() {
   // renderer has nothing worth saying about a list it has not yet been told.
   useEffect(() => {
     if (!tabsKnown) return
-    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
-  }, [tabsKnown, activeId, presetId, profileId, orientation, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, textScale, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
+  }, [tabsKnown, activeId, presetId, profileId, orientation, textScale, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -220,6 +228,7 @@ export function App() {
       if (patch.presetId !== undefined) s.setPreset(patch.presetId)
       if (patch.profileId !== undefined) s.setProfile(patch.profileId)
       if (patch.orientation !== undefined) s.setOrientation(patch.orientation)
+      if (patch.textScale !== undefined) s.setTextScale(patch.textScale)
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
       if (patch.panes !== undefined) s.setPanes(patch.panes)
       if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)

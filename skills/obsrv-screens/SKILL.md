@@ -39,12 +39,15 @@ $OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --out shots/fu
 
 # Numbers instead of eyeballs: 1x target vs a 2x-reference downsample, JSON to stdout:
 $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
+
+# The page as a user at 150% sees it (browser zoom as reflow; works on every command):
+$OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out shots/laptop-150.png
 ```
 
 `$OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
 `android-65`, `iphone-61`, …), profile (`reference`, `office-ips`,
-`budget-tn`, `old-laptop`), and flag (`--width/--height/--dsf`, `--wait`,
-`--timeout`).
+`budget-tn`, `old-laptop`), and flag (`--width/--height/--dsf`, `--text-scale`,
+`--wait`, `--timeout`).
 
 If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
 `obsrv_audit` / `obsrv_presets`), prefer them over shelling out — same

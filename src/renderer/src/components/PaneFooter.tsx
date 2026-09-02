@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { formatTextScale } from '../../../shared/textScale'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
 import { cssPxToMm, effectiveContrast, formatRatio, hex } from '../../../shared/contrast'
@@ -53,6 +54,7 @@ export function TargetFooter() {
   const viewMode = useStore(s => selectTab(s).viewMode)
   const fitScale = useStore(s => selectTab(s).fitScale)
   const dsf = useStore(selectDeviceScaleFactor)
+  const textScale = useStore(s => selectTab(s).textScale)
   const shape = useStore(selectScreenShape)
   const screen = useStore(useShallow(selectScreen))
   const visionType = useStore(s => selectTab(s).visionType)
@@ -109,7 +111,9 @@ export function TargetFooter() {
       const r = inspection
       const firstClass = r.classes.split(/\s+/).find(c => c.length > 0)
       const element = `${r.tag}${r.id ? `#${r.id}` : ''}${firstClass ? `.${firstClass}` : ''}`
-      const mm = cssPxToMm(r.fontSizePx, dsf, ppi(screen.width * dsf, screen.height * dsf, screen.diagonalInches))
+      // The font size is the page's own CSS px; under a text scale each is
+      // `textScale` device px more, and the density is still the screen's.
+      const mm = cssPxToMm(r.fontSizePx, dsf * textScale, ppi(screen.width * dsf, screen.height * dsf, screen.diagonalInches))
       const sizeFact = `${Number.isInteger(r.fontSizePx) ? r.fontSizePx : r.fontSizePx.toFixed(1)}px${
         Number.isFinite(mm) ? ` = ${mm.toFixed(1)} mm` : ''
       }${r.fontWeight !== 400 ? ` w${r.fontWeight}` : ''}`
@@ -138,6 +142,8 @@ export function TargetFooter() {
       facts={
         inspect ?? [
           size,
+          // Stated only when in force: at ×1 the page saw the screen as it is.
+          ...(textScale !== 1 ? [`text ${formatTextScale(textScale)}`] : []),
           ...magnification,
           profile.label,
           params.dither ? `${depth}+FRC` : depth,
