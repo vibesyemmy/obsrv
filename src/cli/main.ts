@@ -262,6 +262,11 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
 // best effort for direct `electron out/main/cli.js` invocations.
 const userData = process.env.OBSRV_CLI_USER_DATA ?? mkdtempSync(join(tmpdir(), 'obsrv-cli-'))
 app.setPath('userData', userData)
+// As in the app: Chrome's user agent without Electron's added token, which
+// sites that refuse embedded browsers key on. A headless render of a page
+// that serves an Electron UA a different page would be a render of the
+// wrong page.
+app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, '')
 const cleanupUserData = (): void => {
   try {
     rmSync(userData, { recursive: true, force: true })

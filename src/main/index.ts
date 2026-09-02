@@ -11,6 +11,15 @@ import { createMainWindow } from './window'
 
 // First, so everything below has somewhere to write.
 const logFile = initLog()
+
+// Both panes are Chrome, and say so. Electron's default user agent is
+// Chrome's with an `Electron/x.y.z` token added, and that token is what
+// Google and Microsoft refuse sign-in to ("this browser or app may not be
+// secure"), which made any app with "Sign in with Google" untestable here.
+// Set once, before any window exists: every webContents inherits it, and
+// the target reads its desktop UA from its own webContents. The mobile UA
+// is a fixed string and never carried the token.
+app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, '')
 log.info(
   `obsrv ${readAppVersion()} starting: electron ${process.versions.electron}, chrome ${process.versions.chrome}, ${process.platform} ${process.arch}${app.isPackaged ? '' : ', unpackaged'}`,
 )
