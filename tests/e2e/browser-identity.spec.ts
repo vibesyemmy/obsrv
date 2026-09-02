@@ -68,3 +68,24 @@ test('switching away from a phone restores the desktop identity', async () => {
   // changed — which is exactly the case the old rule could not express.
   await expect.poll(async () => (await identity()).mobileUA).toBe(false)
 })
+
+// Google and Microsoft refuse sign-in to a user agent carrying an
+// `Electron/x.y.z` token, which Electron's default UA does. With it, any
+// app whose login is "Sign in with Google" could not be tested here at
+// all. Both panes must present as the Chrome they are.
+test('neither pane names Electron in its user agent', async () => {
+  await choose(app, page, '.preset-select', 'laptop-768')
+  const uas: { native: string; target: string; brands: string[] } = await app.evaluate(async () => {
+    const ctx = (globalThis as any).__obsrv
+    const ua = (wc: any): Promise<string> => wc.executeJavaScript('navigator.userAgent')
+    const brands: string[] = await ctx.target.webContents.executeJavaScript(
+      '(navigator.userAgentData ? navigator.userAgentData.brands.map(b => b.brand) : [])',
+    )
+    return { native: await ua(ctx.native.webContents), target: await ua(ctx.target.webContents), brands }
+  })
+  for (const [pane, ua] of Object.entries({ native: uas.native, target: uas.target })) {
+    expect(ua, pane).not.toMatch(/Electron/i)
+    expect(ua, pane).toMatch(/Chrome\/\d+/)
+  }
+  expect(uas.brands.join(' '), 'client-hint brands').not.toMatch(/Electron/i)
+})
