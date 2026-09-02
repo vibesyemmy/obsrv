@@ -88,6 +88,50 @@ running it. Against the code before this change the burst test fails as the
 field did — the context stays lost — and the third-crash test fails because
 no notice exists.
 
+## The log file
+
+The report above came with no evidence because there was nowhere for any to
+go: a packaged app launched from the Dock has no stderr, and Chromium's own
+logging is off in packaged builds. Main now writes its own log —
+`~/Library/Logs/Obsrv/obsrv.log`, revealed by **Help → Show Log File**, one
+megabyte and one predecessor at most — with the things the renderer cannot
+see: the version and Chromium's GPU verdict at boot, every child process that
+dies and Chromium's reason, the window going hidden and coming back. The
+renderer reports through it what main cannot see: a WebGL context lost, and
+whether it was restored, replaced, or written off. Under the e2e suite the
+file lives in the throwaway user-data directory instead.
+
+A field example, from the instance that raised the report:
+
+```
+… warn  GPU process gone (abnormal-exit, exit code 8704)
+```
+
+8704 is Chromium result code 34, *GPU exit on context lost*: the process
+chose to restart because its own Metal context was lost. 512 is code 2,
+*hung*: the watchdog killed a frozen GPU process, and the seconds before it
+are the hang the user felt.
+
+## Rasterising only while someone is looking
+
+The active target paints at 30 fps with `backgroundThrottling` off, by
+design: the pane must not stutter when the app is merely unfocused. Left
+alone, it also painted a full viewport at 30 fps for nobody the whole time
+the window was hidden, minimised or entirely behind another app. On a machine
+whose GPU is already struggling, that is the load wanted least while the user
+is elsewhere — and "it hangs when I come back to it" was the second report.
+
+`TabManager.setShellVisible` now pauses the active target on the window's
+`hide`/`minimize` events and resumes it on `show`/`restore`, invalidating so
+the frame that changed while nobody looked arrives at once. macOS sends
+`hide`/`show` for occlusion too, so a window fully behind another app counts.
+Main tells the renderer when it pauses (`IPC.targetPaused`), and the stall
+watchdog stays quiet meanwhile, since a navigation made then owes no frame
+until the window returns. Told, not inferred: the shell's own page
+visibility was measured staying `visible` through hide and minimise. An agent capture
+of a hidden window takes a painting hold for its duration, so it sees the
+page as it is, not the last frame before the window went away.
+
 ## Why the GPU process dies
 
 Unknown, and out of the app's hands. The instance that raised the report had

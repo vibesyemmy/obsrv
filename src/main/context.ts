@@ -27,4 +27,6 @@ export interface AppContext {
    * the window's DOM, so a menu rendered there opens underneath it.
    */
   overlay: Overlay
+  /** Where main writes its log; Help → Show Log File reveals it. */
+  logFile: string
 }

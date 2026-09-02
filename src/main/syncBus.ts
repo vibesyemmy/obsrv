@@ -1,6 +1,7 @@
 import type { IpcMainEvent } from 'electron'
 import { IPC } from '../shared/ipc'
 import { parseScrollPos } from '../shared/ipcPayloads'
+import { log } from './log'
 import type { NativePane } from './nativePane'
 import type { TargetSource } from './targetSource'
 
@@ -83,7 +84,7 @@ export function attachSyncBus(
     if (alternations >= LOOP_ALTERNATIONS) {
       if (!loopWarned) {
         loopWarned = true
-        console.warn(`obsrv: navigation mirror loop broken (${from} -> ${to}: ${url})`)
+        log.warn(`navigation mirror loop broken (${from} -> ${to}: ${url})`)
       }
       return
     }

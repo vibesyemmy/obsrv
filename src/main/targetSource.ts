@@ -7,6 +7,7 @@ import { classifyFileNavigation } from '../shared/fileNav'
 import { fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
+import { log } from './log'
 
 /**
  * Frames are emitted in the exact shape they travel over IPC (`FrameMessage`
@@ -291,6 +292,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     // our own teardown.
     wc.on('render-process-gone', (_e, details) => {
       if (details.reason === 'clean-exit') return
+      log.warn(`target renderer gone (${details.reason}, exit code ${details.exitCode}) at ${wc.getURL()}`)
       this.emit('load-error', {
         code: details.exitCode,
         description: `renderer crashed: ${details.reason}`,

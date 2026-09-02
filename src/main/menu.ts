@@ -1,4 +1,4 @@
-import { Menu, type MenuItemConstructorOptions } from 'electron'
+import { Menu, shell, type MenuItemConstructorOptions } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 
@@ -25,7 +25,7 @@ import type { AppContext } from './context'
  * back: `TabManager` publishes the strip itself on every change, so the
  * renderer follows with no round trip — the same path `IPC.addTab` takes.
  */
-export function installMenu({ win, tabs }: AppContext): void {
+export function installMenu({ win, tabs, logFile }: AppContext): void {
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
@@ -127,6 +127,16 @@ export function installMenu({ win, tabs }: AppContext): void {
     // here rather than being folklore, and the labels say which is which.
     { label: 'Tab', submenu: selectItems },
     { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        // The evidence a bug report needs. The file is the one place main
+        // writes what the renderer cannot see: GPU and renderer processes
+        // dying, WebGL contexts lost and recovered, the window going hidden
+        // and coming back.
+        { id: 'show-log', label: 'Show Log File', click: () => shell.showItemInFolder(logFile) },
+      ],
+    },
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

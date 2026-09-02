@@ -9,7 +9,8 @@ import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
-import { parseDeviceScaleFactor, parseInputEvent, parseMenuRequest, parseMode, parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
+import { log } from './log'
+import { parseDeviceScaleFactor, parseInputEvent, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
@@ -30,6 +31,20 @@ export const TOOLBAR_H = 114
 
 /** Largest design export `readImageFile` will hand to the renderer (encoded bytes). */
 export const MAX_IMAGE_FILE_BYTES = 64 * 1024 * 1024
+
+/**
+ * The app's version. Unpackaged (dev, e2e) `app.getVersion()` is Electron's
+ * own version; the app's lives in package.json two levels above out/main —
+ * the same file inside app.asar when packaged.
+ */
+export function readAppVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version?: string }
+    return pkg.version ?? app.getVersion()
+  } catch {
+    return app.getVersion()
+  }
+}
 
 /**
  * How long an agent scroll waits for the target pane to report the offset it
@@ -172,6 +187,14 @@ export function registerIpc(ctx: AppContext): () => void {
     if (!fromRenderer(e)) return
     app.relaunch()
     app.quit()
+  })
+  // What the renderer saw that main cannot: a WebGL context lost, and what
+  // became of it. One bounded line; the parser drops control characters so
+  // a message cannot forge a second entry.
+  on(IPC.log, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const message = parseLogMessage(raw)
+    if (message !== null) log.info(`renderer: ${message}`)
   })
   on(IPC.back, e => {
     if (!fromRenderer(e)) return
@@ -689,17 +712,7 @@ export function registerIpc(ctx: AppContext): () => void {
     height: Math.max(1, Math.round(r.height)),
   })
 
-  // Unpackaged (dev, e2e) `app.getVersion()` is Electron's own version; the
-  // app's version lives in package.json two levels above out/main — the same
-  // file inside app.asar when packaged.
-  const appVersion = ((): string => {
-    try {
-      const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8')) as { version?: string }
-      return pkg.version ?? app.getVersion()
-    } catch {
-      return app.getVersion()
-    }
-  })()
+  const appVersion = readAppVersion()
 
   // --- update check ---------------------------------------------------------
   // The release URL lives here and only here; `openRelease` takes no argument,
@@ -774,7 +787,7 @@ export function registerIpc(ctx: AppContext): () => void {
     try {
       saveHistory(historyFile, next)
     } catch (e) {
-      console.warn('obsrv: could not write history.json', e)
+      log.warn('could not write history.json', e)
       return
     }
     history = next
@@ -868,7 +881,7 @@ export function registerIpc(ctx: AppContext): () => void {
     } catch (e) {
       // A read-only home directory or a full disk costs the user their tab
       // list at the next launch. It must not cost them this one.
-      console.warn('obsrv: could not save tabs', e)
+      log.warn('could not save tabs', e)
     }
   }
   tabs.onTabUrlChanged = (): void => {
@@ -919,7 +932,7 @@ export function registerIpc(ctx: AppContext): () => void {
         try {
           await navigateBoth(wanted, s)
         } catch (e) {
-          console.warn('obsrv: could not restore a tab', e)
+          log.warn('could not restore a tab', e)
         }
         // `s.url` is written by a *committed* navigation, and a refused
         // connection commits nothing — so a tab whose page did not come up is
@@ -1029,7 +1042,7 @@ export function registerIpc(ctx: AppContext): () => void {
         if (pendingApplies.length >= MAX_PENDING_APPLIES) {
           if (!warnedPendingOverflow) {
             warnedPendingOverflow = true
-            console.warn('obsrv: agent-apply queue full before the renderer mounted; dropping oldest entries')
+            log.warn('agent-apply queue full before the renderer mounted; dropping oldest entries')
           }
           pendingApplies.shift()
         }
@@ -1038,34 +1051,48 @@ export function registerIpc(ctx: AppContext): () => void {
       }
       win.webContents.send(IPC.agentApply, patch)
     },
+    // Both captures hold the target painting for their duration: a hidden
+    // window pauses it (see `TabManager.setShellVisible`), and `settleTarget`
+    // waits for a frame that a paused target would never send — the capture
+    // would then show the last frame before the window went away.
     captureVisible: async () => {
-      await awaitViewportStable()
-      await settleTarget()
-      const image = await win.webContents.capturePage()
-      const size = image.getSize()
-      return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
+      const release = tabs.holdPainting()
+      try {
+        await awaitViewportStable()
+        await settleTarget()
+        const image = await win.webContents.capturePage()
+        const size = image.getSize()
+        return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
+      } finally {
+        release()
+      }
     },
     captureTarget: async () => {
-      await awaitViewportStable()
-      const settled = await settleTarget()
-      // `capturePage(rect)` crops in the same CSS coordinates the renderer
-      // measured, so the reported rect needs no conversion. Crop to the
-      // rendered screen, not the pane: a minified mobile preset otherwise
-      // comes back as a small phone inside a large empty rectangle.
-      const bounds = canvasBounds ?? targetBounds
-      const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
-      const image = await win.webContents.capturePage(known ? roundRect(bounds) : undefined)
-      const size = image.getSize()
-      const warnings: string[] = []
-      if (!known) warnings.push('the renderer has not reported the pane bounds yet; captured the full window instead')
-      else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
-      if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
-      else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
-      return {
-        data: image.toPNG().toString('base64'),
-        width: size.width,
-        height: size.height,
-        warnings,
+      const release = tabs.holdPainting()
+      try {
+        await awaitViewportStable()
+        const settled = await settleTarget()
+        // `capturePage(rect)` crops in the same CSS coordinates the renderer
+        // measured, so the reported rect needs no conversion. Crop to the
+        // rendered screen, not the pane: a minified mobile preset otherwise
+        // comes back as a small phone inside a large empty rectangle.
+        const bounds = canvasBounds ?? targetBounds
+        const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
+        const image = await win.webContents.capturePage(known ? roundRect(bounds) : undefined)
+        const size = image.getSize()
+        const warnings: string[] = []
+        if (!known) warnings.push('the renderer has not reported the pane bounds yet; captured the full window instead')
+        else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
+        if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
+        else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
+        return {
+          data: image.toPNG().toString('base64'),
+          width: size.width,
+          height: size.height,
+          warnings,
+        }
+      } finally {
+        release()
       }
     },
     viewport: () => tab().target.getViewport(),
@@ -1103,7 +1130,7 @@ export function registerIpc(ctx: AppContext): () => void {
   const applyAgentControl = (enabled: boolean): void => {
     if (enabled) {
       control.start().catch((e: unknown) => {
-        console.error('obsrv: agent-control server failed to start', e)
+        log.error('agent-control server failed to start', e)
       })
     } else {
       control.stop()
