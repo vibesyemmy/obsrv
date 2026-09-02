@@ -41,6 +41,7 @@ const api: ObsrvApi = {
   relaunch: () => ipcRenderer.send(IPC.relaunch),
   log: message => ipcRenderer.send(IPC.log, message),
   onTargetPaused: cb => subscribe<boolean>(IPC.targetPaused, cb),
+  inspect: point => ipcRenderer.invoke(IPC.inspect, point),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),
   setViewport: (width, height, deviceScaleFactor, mobile) =>

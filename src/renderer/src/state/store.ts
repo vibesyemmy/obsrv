@@ -19,6 +19,7 @@ import {
 import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../shared/tabList'
 import type { AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
+import type { InspectReport } from '../../../shared/inspect'
 import type { HostInfo, LoadError, Orientation, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
 import type { VisionType } from '../../../shared/vision'
 
@@ -133,6 +134,15 @@ export interface AppState {
   panes: Panes
   /** The settings modal is covering the panes, so the native view steps aside. */
   nativeObscured: boolean
+  /**
+   * The inspector. While on, the canvas reads the page under the pointer
+   * instead of forwarding to it, and the target footer shows the readout.
+   * A click pins the current report so the pointer can leave; the report
+   * itself is what the page last answered, or null between elements.
+   */
+  inspecting: boolean
+  inspectPinned: boolean
+  inspection: InspectReport | null
 
   setMode(mode: Mode): void
   setUrl(url: string): void
@@ -166,6 +176,10 @@ export interface AppState {
   setViewMode(v: ViewMode): void
   setPanes(p: Panes): void
   setNativeObscured(v: boolean): void
+  /** Off clears the pin and the report with it: nothing of the inspector survives it. */
+  setInspecting(on: boolean): void
+  setInspectPinned(pinned: boolean): void
+  setInspection(report: InspectReport | null): void
   setFitScale(v: number | null): void
   requestAgentPan(p: { x: number; y: number }): void
   clearAgentPan(): void
@@ -298,6 +312,9 @@ export const useStore = create<AppState>()((set, get) => ({
   surround: 'graphite',
   panes: 'both',
   nativeObscured: false,
+  inspecting: false,
+  inspectPinned: false,
+  inspection: null,
 
   // Does not clear `error`: a failed load navigates to Chromium's error page,
   // so clearing here would wipe the toolbar badge the moment it appeared.
@@ -341,6 +358,9 @@ export const useStore = create<AppState>()((set, get) => ({
   // re-raster the target, so the highlight still marks the pixels it marked.
   setPanes: panes => set({ panes }),
   setNativeObscured: nativeObscured => set({ nativeObscured }),
+  setInspecting: on => set(on ? { inspecting: true } : { inspecting: false, inspectPinned: false, inspection: null }),
+  setInspectPinned: inspectPinned => set({ inspectPinned }),
+  setInspection: inspection => set({ inspection }),
   setFitScale: fitScale => set(patchActive({ fitScale })),
   requestAgentPan: p => set(patchActiveWith(t => ({ agentPan: { ...p, seq: (t.agentPan?.seq ?? 0) + 1 } }))),
   clearAgentPan: () => set(patchActive({ agentPan: null })),

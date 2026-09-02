@@ -13,7 +13,7 @@ import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
 import { visionMatrix } from '../../../shared/vision'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
-import { keyDownEvents, keyUpEvent, mouseEvent, wheelEvent } from '../input/inputBridge'
+import { keyDownEvents, keyUpEvent, mouseEvent, toTargetPoint, wheelEvent } from '../input/inputBridge'
 import {
   selectDeviceScaleFactor,
   selectPanelParams,
@@ -46,6 +46,9 @@ const RESTORE_GRACE_MS = 1500
 const RECOVERY_ATTEMPTS = 2
 const RETRY_MS = 3000
 
+/** The inspector asks the page at most this often while the pointer moves. */
+const INSPECT_EVERY_MS = 80
+
 export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glRef = useRef<GlRenderer | null>(null)
@@ -64,6 +67,11 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const setViewMode = useStore(s => s.setViewMode)
   const setFitScale = useStore(s => s.setFitScale)
   const activeId = useStore(s => s.activeId)
+  const inspecting = useStore(s => s.inspecting)
+  const inspectPinned = useStore(s => s.inspectPinned)
+  const inspection = useStore(s => s.inspection)
+  const setInspection = useStore(s => s.setInspection)
+  const setInspectPinned = useStore(s => s.setInspectPinned)
   const [stalled, setStalled] = useState(false)
   const stallTimer = useRef(0)
   const armedOnce = useRef(false)
@@ -600,6 +608,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     (type: 'mouseDown' | 'mouseUp' | 'mouseMove') =>
     (e: ReactMouseEvent<HTMLCanvasElement>): void => {
       if (mode !== 'url') return
+      // The inspector reads the page instead of driving it.
+      if (inspecting) return
       // Both views forward: fit is interactive, at its own magnification,
       // which the `scale` below already carries. The pan chords still own the
       // pointer — nothing forwards while a pan is live, or for the middle
@@ -616,6 +626,41 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         else if (type === 'mouseUp') forwardDrag.current = false
       }
     }
+
+  // The inspector's hover. The page is asked what is under the pointer at
+  // most every INSPECT_EVERY_MS, with a trailing ask so the readout ends on
+  // where the pointer stopped, and answers that arrive out of order are
+  // dropped: a slow answer about where the pointer *was* must not land on
+  // top of a fresh one about where it is.
+  const inspectSeq = useRef(0)
+  const inspectLast = useRef(0)
+  const inspectTimer = useRef(0)
+  const inspectPoint = useRef<{ x: number; y: number } | null>(null)
+  const flushInspect = (): void => {
+    const p = inspectPoint.current
+    if (!p) return
+    inspectPoint.current = null
+    inspectLast.current = performance.now()
+    const seq = ++inspectSeq.current
+    void window.obsrv.inspect(p).then(report => {
+      if (seq === inspectSeq.current) setInspection(report)
+    })
+  }
+  const inspectAt = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+    // The canvas shows device pixels at `scale` host px each; the page
+    // answers in CSS pixels, `dsf` device pixels big — the same mapping the
+    // forwarded input uses.
+    inspectPoint.current = toTargetPoint(e, e.currentTarget.getBoundingClientRect(), (scale * dsf) / dpr)
+    const due = INSPECT_EVERY_MS - (performance.now() - inspectLast.current)
+    if (due <= 0) flushInspect()
+    else if (inspectTimer.current === 0) {
+      inspectTimer.current = window.setTimeout(() => {
+        inspectTimer.current = 0
+        flushInspect()
+      }, due)
+    }
+  }
+  useEffect(() => () => window.clearTimeout(inspectTimer.current), [])
 
   // Backing store is `round(viewport × S)` device pixels (the rounding is
   // `GlRenderer.draw`'s); the CSS box divides that back out so the browser
@@ -664,17 +709,30 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
           // Resting state carries no class in either view: the pane is
           // interactive, so the page's own cursors show through. Option is
           // what reveals a view gesture — the jump in fit, the pan at 1:1.
-          className={`target-canvas${panning ? ' panning' : altHeld ? (fit ? ' fit' : ' pan-ready') : ''}`}
+          className={`target-canvas${
+            inspecting ? ' inspecting' : panning ? ' panning' : altHeld ? (fit ? ' fit' : ' pan-ready') : ''
+          }`}
           tabIndex={0}
           style={{ width: `${cssW}px`, height: `${cssH}px` }}
-          onClick={jumpTo1x}
+          // In inspect mode a click pins the readout so the pointer can
+          // leave; the fit-to-1:1 jump is the click's meaning otherwise.
+          onClick={e => {
+            if (inspecting) setInspectPinned(!inspectPinned)
+            else jumpTo1x(e)
+          }}
           onPointerDown={startPan}
           onPointerMove={movePan}
           onPointerUp={e => endPan(e, false)}
           onPointerCancel={e => endPan(e, true)}
           onMouseDown={send('mouseDown')}
           onMouseUp={send('mouseUp')}
-          onMouseMove={send('mouseMove')}
+          onMouseMove={e => {
+            if (!inspecting) send('mouseMove')(e)
+            else if (!inspectPinned) inspectAt(e)
+          }}
+          onMouseLeave={() => {
+            if (inspecting && !inspectPinned) setInspection(null)
+          }}
           // No onMouseLeave release: the window mouseup listener above catches
           // a release that lands outside the canvas, and a drag that crosses
           // the edge and comes back stays a drag.
@@ -705,6 +763,20 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
               top: `${(agentHighlight.y * scale) / dpr}px`,
               width: `${(agentHighlight.width * scale) / dpr}px`,
               height: `${(agentHighlight.height * scale) / dpr}px`,
+            }}
+          />
+        )}
+        {inspecting && inspection && (
+          // The inspector's highlight: the agent highlight's twin, for the
+          // element under the pointer. The page answers in CSS pixels, so
+          // its rect scales by `dsf` on the way to canvas coordinates.
+          <div
+            className="inspect-highlight"
+            style={{
+              left: `${(inspection.rect.x * dsf * scale) / dpr}px`,
+              top: `${(inspection.rect.y * dsf * scale) / dpr}px`,
+              width: `${(inspection.rect.width * dsf * scale) / dpr}px`,
+              height: `${(inspection.rect.height * dsf * scale) / dpr}px`,
             }}
           />
         )}

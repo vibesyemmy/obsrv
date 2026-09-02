@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>contrast-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font-family: Arial, sans-serif; }
+      /* Grey body text on the page's white: the everyday 4.5:1-ish case. */
+      #grey { position: absolute; left: 10px; top: 10px; width: 300px; margin: 0; font-size: 13px; color: #6b7280; }
+      /* A dark card whose text has no background of its own: the walk must find the card. */
+      #card { position: absolute; left: 10px; top: 60px; width: 300px; height: 80px; background: #111111; }
+      #card p { margin: 0; padding: 20px; font-size: 16px; font-weight: 700; color: #cccccc; }
+      /* A translucent veil over the white: the walk must composite it. */
+      #veil { position: absolute; left: 10px; top: 160px; width: 300px; height: 40px; background: rgba(0, 0, 0, 0.5); }
+      #veil span { font-size: 12px; color: #ffffff; }
+      /* Text over a gradient: nothing stated is the colour under it. */
+      #photo { position: absolute; left: 10px; top: 220px; width: 300px; height: 40px; background: linear-gradient(90deg, #000, #fff); }
+      #photo span { font-size: 12px; color: #ff0000; }
+    </style>
+  </head>
+  <body>
+    <p id="grey">Grey caption text on white</p>
+    <div id="card"><p id="card-text">Light text on a dark card</p></div>
+    <div id="veil"><span id="veil-text">White on a half-black veil</span></div>
+    <div id="photo"><span id="photo-text">Red on a gradient</span></div>
+  </body>
+</html>

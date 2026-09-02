@@ -1,4 +1,4 @@
-import { Menu, shell, type MenuItemConstructorOptions } from 'electron'
+import { Menu, shell, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 
@@ -28,6 +28,11 @@ import type { AppContext } from './context'
 export function installMenu({ win, tabs, logFile }: AppContext): void {
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
+  }
+  const toggleDetachedDevTools = (wc: WebContents): void => {
+    if (wc.isDestroyed()) return
+    if (wc.isDevToolsOpened()) wc.closeDevTools()
+    else wc.openDevTools({ mode: 'detach' })
   }
   /** Add *and* activate: "new tab" means the tab you asked for is in front. */
   const openTab = (): void => {
@@ -112,8 +117,24 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
           click: () => send(IPC.focusUrl),
         },
         { type: 'separator' },
+        // Three inspectors for three documents. The native pane and the
+        // target are pages the user is testing; theirs open detached, since
+        // neither has a window of its own to dock into (the target has no
+        // visible window at all). The last is Obsrv's own shell.
         {
-          label: 'Toggle Developer Tools',
+          id: 'page-devtools',
+          label: 'Toggle Page Developer Tools',
+          accelerator: 'Shift+CmdOrCtrl+I',
+          click: () => toggleDetachedDevTools(tabs.active().native.webContents),
+        },
+        {
+          id: 'target-devtools',
+          label: 'Toggle Target Developer Tools',
+          accelerator: 'Shift+Alt+CmdOrCtrl+I',
+          click: () => toggleDetachedDevTools(tabs.active().target.webContents),
+        },
+        {
+          label: 'Toggle Obsrv Developer Tools',
           accelerator: 'Alt+CmdOrCtrl+I',
           click: () => {
             if (!win.isDestroyed()) win.webContents.toggleDevTools()

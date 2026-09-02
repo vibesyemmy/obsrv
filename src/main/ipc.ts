@@ -10,7 +10,7 @@ import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
 import { log } from './log'
-import { parseDeviceScaleFactor, parseInputEvent, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseTabId, parseUiState } from '../shared/ipcPayloads'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
@@ -206,6 +206,15 @@ export function registerIpc(ctx: AppContext): () => void {
   })
 
   // --- target ---------------------------------------------------------------
+  // The inspector's hover. The point is the renderer's, the answer is the
+  // page's; both are parsed, and a bad point is a null rather than a call
+  // into the page with something unchecked in it.
+  handle(IPC.inspect, (e, raw: unknown) => {
+    assertRenderer(e)
+    const point = parseInspectPoint(raw)
+    if (!point) return null
+    return tab().target.inspectAt(point.x, point.y)
+  })
   handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown, rawMobile: unknown) => {
     assertRenderer(e)
     // The resize the pending flag was waiting for has arrived; from here
