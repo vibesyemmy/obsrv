@@ -164,6 +164,15 @@ export function registerIpc(ctx: AppContext): () => void {
     if (!fromRenderer(e)) return
     reloadBoth()
   })
+  // The target canvas's last resort once Chromium has given up on the GPU for
+  // the session (see `TargetCanvas`): only a new process gets WebGL back.
+  // `quit`, not `exit`, so the sessions are torn down through the same
+  // `close` path as any other exit.
+  on(IPC.relaunch, e => {
+    if (!fromRenderer(e)) return
+    app.relaunch()
+    app.quit()
+  })
   on(IPC.back, e => {
     if (!fromRenderer(e)) return
     goBack()

@@ -38,6 +38,7 @@ function subscribeFrames(cb: (m: FrameMessage) => void): () => void {
 const api: ObsrvApi = {
   navigate: url => ipcRenderer.invoke(IPC.navigate, url),
   reload: () => ipcRenderer.send(IPC.reload),
+  relaunch: () => ipcRenderer.send(IPC.relaunch),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),
   setViewport: (width, height, deviceScaleFactor, mobile) =>

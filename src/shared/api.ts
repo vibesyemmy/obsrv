@@ -29,6 +29,12 @@ export interface Rect {
 export interface ObsrvApi {
   navigate(url: string): Promise<string>
   reload(): void
+  /**
+   * Quits and starts a new process. The target canvas's last resort: once
+   * Chromium has given up on the GPU for the session, WebGL is gone until
+   * there is a new session, and nothing inside this one can bring it back.
+   */
+  relaunch(): void
   back(): void
   forward(): void
   /**
