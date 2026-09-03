@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_THROTTLE } from '../../../shared/throttle'
 import { DEFAULT_TEXT_SCALE } from '../../../shared/textScale'
 import {
   applyOrientation,
@@ -80,6 +81,11 @@ export interface TabState {
    * untouched, the page simply lays out in `1/textScale` of them.
    */
   textScale: number
+  /**
+   * Network and CPU conditions on the target, a preset id (`none` = as the
+   * host). Per tab like the text scale; unlike it, never written to disk.
+   */
+  throttle: string
   custom: TargetScreen
   pixelExact: boolean
   visionType: VisionType
@@ -167,6 +173,7 @@ export interface AppState {
   setPreset(id: string): void
   setOrientation(o: Orientation): void
   setTextScale(scale: number): void
+  setThrottle(id: string): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setVision(type: VisionType, severity: number): void
@@ -239,6 +246,7 @@ function blankTab(): TabState {
     presetId: '1080p-24',
     orientation: DEFAULT_ORIENTATION,
     textScale: DEFAULT_TEXT_SCALE,
+    throttle: DEFAULT_THROTTLE,
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
     pixelExact: false,
     visionType: 'none',
@@ -347,6 +355,7 @@ export const useStore = create<AppState>()((set, get) => ({
   // Same shape as a rotation: the page reflows, so a highlight's rect is stale.
   setTextScale: textScale =>
     set(patchActiveWith(t => (t.textScale === textScale ? null : { textScale, agentHighlight: null }))),
+  setThrottle: throttle => set(patchActiveWith(t => (t.throttle === throttle ? null : { throttle }))),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),

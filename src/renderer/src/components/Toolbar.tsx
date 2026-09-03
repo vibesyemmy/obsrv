@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { THROTTLE_PROFILES } from '../../../shared/throttle'
 import { formatTextScale, TEXT_SCALES } from '../../../shared/textScale'
 import { useShallow } from 'zustand/react/shallow'
 import { matchHistory } from '../../../shared/history'
@@ -102,6 +103,14 @@ const TEXT_SCALE_GROUPS: SelectGroup[] = [
   { options: TEXT_SCALES.map(s => ({ value: String(s), label: `Text ${formatTextScale(s)}` })) },
 ]
 
+const THROTTLE_GROUPS: SelectGroup[] = [
+  { options: THROTTLE_PROFILES.map(t => ({ value: t.id, label: `Throttle ${t.id === 'none' ? 'none' : t.label}` })) },
+]
+const throttleLabel = (id: string): string => {
+  const p = THROTTLE_PROFILES.find(t => t.id === id)
+  return `Throttle ${!p || p.id === 'none' ? 'none' : p.label}`
+}
+
 export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProps) {
   const mode = useStore(s => selectTab(s).mode)
   const presetId = useStore(s => selectTab(s).presetId)
@@ -120,6 +129,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setOrientation = useStore(s => s.setOrientation)
   const textScale = useStore(s => selectTab(s).textScale)
   const setTextScale = useStore(s => s.setTextScale)
+  const throttle = useStore(s => selectTab(s).throttle)
+  const setThrottle = useStore(s => s.setThrottle)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
@@ -496,6 +507,18 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           ariaLabel="Text scale"
           groups={TEXT_SCALE_GROUPS}
           onChange={v => setTextScale(Number(v))}
+        />
+
+        {/* Network and CPU conditions on the target — DevTools' presets. The
+            control an agent's `obsrv_drive { throttle }` lands on, and how a
+            person turns it off again. */}
+        <Select
+          className="throttle-select"
+          value={throttle}
+          label={throttleLabel(throttle)}
+          ariaLabel="Throttle"
+          groups={THROTTLE_GROUPS}
+          onChange={setThrottle}
         />
 
         {/* No spacer: this row centres its controls, and the chip below is out
