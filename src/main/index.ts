@@ -75,12 +75,14 @@ function boot(): void {
   // makes the destroy safe; the other way round the app quits by crashing
   // (see `registerIpc`).
   win.on('close', () => {
+    log.info('closing: main window; sessions going down')
     stopIpc()
     tabs.destroy()
     // Last, and after the sessions: this is the teardown the app's exit depends
     // on least, so it must not stand between the listeners going quiet and the
     // offscreen windows going away.
     overlay.destroy()
+    log.info('closed: sessions down')
   })
 
   exposeForTests(ctx)
@@ -125,3 +127,13 @@ app.on('gpu-info-update', () => {
 
 void app.whenReady().then(boot)
 app.on('window-all-closed', () => app.quit())
+
+// The quit's milestones are logged so that a report of the app not quitting
+// says how far it got: `quitting` (asked to — Cmd-Q, a driver, or the last
+// window gone), `closing` and `closed` around the sessions' teardown above,
+// and `exiting` (Electron about to end the process). Between `closed` and
+// `exiting` Chromium tears down its own processes, the one stretch this code
+// does not own. `window-all-closed` is not a milestone: Electron skips it
+// when the windows close because of `app.quit()`.
+app.on('before-quit', () => log.info('quitting'))
+app.on('will-quit', () => log.info('exiting'))

@@ -13,6 +13,7 @@ contention. This records what was investigated so it is not investigated again.
 | `UnknownVizError` from a capture | Chromium's GPU compositor |
 | A seam drag landing short of the pointer | Synthesised input timing |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
+| `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
 
 Each one passes when its file is run alone, and on a plain re-run.
 
@@ -148,6 +149,43 @@ bus. Found 2026-09-03 when `text-scale.spec.ts` went red on the built-in
 Retina display after passing on an external 1x monitor — the "second"
 failure that followed was Playwright restarting the worker after the
 first, so the next test met a fresh app without the scale it assumed.
+
+## `solo-target.spec`: the `afterAll` that timed out in `app.close()`
+
+Seen once, on the 0.22.1 tag run: the file's last test passed in under a
+second, then `app.close()` in `afterAll` ran past the 30 s hook budget, the
+file was marked failed and the whole of it re-ran green. Playwright's
+Electron close is two steps — evaluate `app.quit()` in main, then wait for
+the process to exit — so the process stayed up for at least 30 s after
+being told to quit.
+
+What was checked (2026-09-03):
+
+- Every `webContents.send` in main is guarded against a destroyed window,
+  and the quit path is straight-line: the main window's `close` handler
+  stops the IPC listeners, destroys the sessions (the offscreen windows
+  with them) and the overlay; `will-quit` stops the control server
+  synchronously. Nothing defers a window creation past teardown, and
+  nothing calls `preventDefault` on a close or a quit.
+- The test's setup — the largest preset (`4k-27`, a density change that
+  recreates the offscreen window) in the smallest window the app allows,
+  then close — was repeated 26 times here with `uncaughtException` and
+  `unhandledRejection` hooks writing to the app log: closes took 50–180 ms,
+  with tracing on and off, and main threw nothing.
+
+So there is no mechanism to fix yet. What is in place instead:
+
+- The harness bounds `app.close()` (`tests/e2e/launch.ts`, 10 s). Past
+  the bound it prints the app's log tail and kills the process; the spec
+  stays green and the output carries the evidence.
+- The app logs the quit's milestones — `quitting`, then `closing` and
+  `closed` around the sessions' teardown, then `exiting` — so that tail says
+  which stretch did not finish: between `closing` and `closed` is this
+  code's teardown, between `closed` and `exiting` is Chromium's. Measured:
+  a normal close logs all four in that order and resolves in about 90 ms;
+  a quit forced to stall in `will-quit` logs all four too (the stall sits
+  past the last milestone), and the close resolves at the bound with the
+  tail printed.
 
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 

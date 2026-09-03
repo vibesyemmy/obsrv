@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -75,6 +75,15 @@ export async function launchApp(
  * expression is evaluated as before.
  */
 function hardenEvaluate(raw: ElectronApplication): ElectronApplication {
+  const evaluateVia = (pageFunction: unknown, arg?: unknown): Promise<unknown> =>
+    raw.evaluate(
+      async (electron, [src, a]: [string, unknown]) => {
+        // eslint-disable-next-line no-new-func
+        const built: unknown = new Function(`return (${src})`)()
+        return typeof built === 'function' ? await built(electron, a) : built
+      },
+      [String(pageFunction), arg] as [string, unknown],
+    )
   // A Proxy rather than an own property: Playwright names the API in its
   // error text after the frame that called it, so the real method must be
   // reached by an ordinary `evaluate(...)` call from a function of that
@@ -83,20 +92,71 @@ function hardenEvaluate(raw: ElectronApplication): ElectronApplication {
     get(target, key, receiver) {
       if (key === 'evaluate') {
         return function evaluate(pageFunction: unknown, arg?: unknown): Promise<unknown> {
-          return target.evaluate(
-            async (electron, [src, a]: [string, unknown]) => {
-              // eslint-disable-next-line no-new-func
-              const built: unknown = new Function(`return (${src})`)()
-              return typeof built === 'function' ? await built(electron, a) : built
-            },
-            [String(pageFunction), arg] as [string, unknown],
-          )
+          return evaluateVia(pageFunction, arg)
         }
       }
+      if (key === 'close') return (): Promise<void> => boundedClose(target, evaluateVia)
       const value = Reflect.get(target, key, receiver)
       return typeof value === 'function' ? value.bind(target) : value
     },
   })
+}
+
+/**
+ * How long a graceful close may take before the harness stops waiting.
+ * Measured here: 50–180 ms after any spec, the largest preset in the
+ * smallest window included, with and without tracing. The CI run that
+ * motivated this sat in `app.close()` for the whole 30 s `afterAll` budget.
+ */
+const CLOSE_GRACE_MS = 10_000
+
+/**
+ * `app.close()` with a bound, and evidence when the bound is hit.
+ *
+ * Playwright's close evaluates `app.quit()` in main and then waits for the
+ * process to exit — for as long as that takes. Once on CI (the 0.22.1 tag
+ * run, `solo-target.spec`) it took longer than the `afterAll` budget: the
+ * spec had passed, the process stayed up, the whole file failed and re-ran.
+ * Not reproduced since, in 26 timed closes after the same setup, so there
+ * is no mechanism to fix yet — only a way to make the next occurrence carry
+ * evidence instead of a timeout. Past the grace the process is killed and
+ * the app's log tail is printed: the app logs `quitting`, `closing`,
+ * `closed` and `exiting`, so the tail says which stretch did not finish.
+ * The spec that saw it stays green; the line in the output is the report.
+ */
+async function boundedClose(
+  raw: ElectronApplication,
+  evaluateVia: (pageFunction: unknown, arg?: unknown) => Promise<unknown>,
+): Promise<void> {
+  // Read before quitting: after it, nothing in main answers.
+  const logFile = (await evaluateVia(
+    () => (globalThis as { __obsrv?: { logFile?: string } }).__obsrv?.logFile ?? '',
+  ).catch(() => '')) as string
+  const started = Date.now()
+  const timer = setTimeout(() => {
+    const proc = raw.process()
+    // The tail first: the launcher removes the user-data directory, log
+    // included, as soon as the process is gone.
+    process.stderr.write(
+      `[launch] app.close() has taken ${Date.now() - started} ms; killing pid ${proc.pid}. ` +
+        `App log tail:\n${logTail(logFile)}\n`,
+    )
+    proc.kill('SIGKILL')
+  }, CLOSE_GRACE_MS)
+  try {
+    await raw.close()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function logTail(path: string, lines = 40): string {
+  if (!path) return '  (no log file: the test hook did not answer)'
+  try {
+    return readFileSync(path, 'utf8').trimEnd().split('\n').slice(-lines).map(l => `  ${l}`).join('\n')
+  } catch (e) {
+    return `  (log unreadable at ${path}: ${e instanceof Error ? e.message : String(e)})`
+  }
 }
 
 /**
