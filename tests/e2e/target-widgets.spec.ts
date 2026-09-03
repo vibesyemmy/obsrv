@@ -155,7 +155,12 @@ test('the native pane still opens its own select popups: the hook is the target\
 test('under a text scale the menu is anchored where the select is drawn', async () => {
   await app.evaluate(() => (globalThis as any).__obsrv.target.setTextScale(1.5))
   await expect.poll(() => inTarget<number>('devicePixelRatio')).toBe(1.5)
-  const sel = await centreOf('sel')
+  // The page's CSS px are 1.5 surface px now: the click goes where the
+  // select is drawn, and Chromium maps it back through the emulation.
+  const r = await inTarget<{ x: number; y: number }>(
+    `(() => { const r = document.getElementById('sel').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })()`,
+  )
+  const sel = await canvasPoint(r.x * 1.5, r.y * 1.5)
   await page.mouse.click(sel.x, sel.y)
   await waitForMenu(app)
   const menu = await app.evaluate(() =>
