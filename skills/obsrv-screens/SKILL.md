@@ -46,6 +46,9 @@ $OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out sho
 # How it feels on a budget phone over 3G with a slow CPU: settledMs in the JSON, next to
 # a --throttle none baseline (presets: fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone):
 $OBSRV snap http://localhost:5173 --preset android-65 --throttle budget-phone --out shots/slow.png
+
+# One element, measured (font mm, colours, contrast as stated and on the panel, WCAG verdict):
+$OBSRV inspect http://localhost:5173 --preset android-65 --profile budget-tn --selector '#cta'
 ```
 
 `$OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
@@ -54,7 +57,7 @@ $OBSRV snap http://localhost:5173 --preset android-65 --throttle budget-phone --
 `--throttle`, `--wait`, `--timeout`).
 
 If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
-`obsrv_audit` / `obsrv_presets`), prefer them over shelling out — same
+`obsrv_audit` / `obsrv_inspect` / `obsrv_presets`), prefer them over shelling out — same
 pipeline, and the PNG comes back inline. `obsrv_audit` (or `obsrv audit`)
 measures every tap target and text element in **millimetres on the chosen
 screen** and lists what is under 7 mm / 2 mm (provisional, tunable): a 24 CSS

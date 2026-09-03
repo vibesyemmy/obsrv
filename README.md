@@ -145,6 +145,10 @@ npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 
 # How the page feels there: Chrome DevTools' network and CPU presets, and the time
 # to paint-quiet in the JSON (settledMs). Compare against --throttle none.
 npx -y getobsrv snap http://localhost:5173 --preset android-65 --throttle budget-phone --out slow.png
+
+# One element, measured: font in millimetres on that screen, colours, and contrast
+# as stated and on the panel, against the WCAG threshold for text that size.
+npx -y getobsrv inspect http://localhost:5173 --preset android-65 --profile budget-tn --selector '#cta'
 ```
 
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings

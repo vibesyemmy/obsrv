@@ -653,7 +653,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // its millimetres by the same factor.
       const k = this.textScale
       const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${INSPECT_SCRIPT}(${Number(x) / k}, ${Number(y) / k})` },
+        { code: `${INSPECT_SCRIPT}('point', ${Number(x) / k}, ${Number(y) / k})` },
       ])
       const report = parseInspectReport(raw)
       if (report === null || k === 1) return report
@@ -661,6 +661,27 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
+      return null
+    }
+  }
+
+  /**
+   * The first match of a CSS selector, reported like `inspectAt` — box in
+   * surface CSS px, font size the page's own. Null when nothing matches,
+   * the selector is invalid, or the page did not answer.
+   */
+  async inspectSelector(selector: string): Promise<InspectReport | null> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return null
+    try {
+      const k = this.textScale
+      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
+        { code: `${INSPECT_SCRIPT}('selector', ${JSON.stringify(selector)})` },
+      ])
+      const report = parseInspectReport(raw)
+      if (report === null || k === 1) return report
+      const r = report.rect
+      return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
+    } catch {
       return null
     }
   }

@@ -67,3 +67,26 @@ highlight lands where the element is drawn. The readout's `px` stays the
 page's own font size — what the stylesheet says — and its millimetres are
 that many CSS px at `density × scale`: `16px = 4.4 mm` at ×1 reads
 `16px = 6.6 mm` at ×1.5, which is the size on the glass.
+
+## For agents: `obsrv inspect` and `obsrv_inspect`
+
+```
+obsrv inspect <url> --selector '#cta' --preset android-65 --profile budget-tn
+obsrv inspect <url> --at 20,17
+obsrv_inspect { selector: '#cta' }              # live: the page the user is looking at
+obsrv_inspect { url, at: { x, y }, preset }     # headless
+```
+
+The readout as JSON: `element`, `text`, the box in CSS px and in millimetres
+on the screen, the font in px and millimetres, the text colour and the
+background it sits on, and `contrast` twice — `asIs`, the pair as stated,
+and `onPanel`, the pair through the panel profile (and, live, the vision
+setting) — judged against the WCAG AA threshold that applies to text that
+size (`aaThreshold` 4.5, or 3 for large text). `found: false` is nothing
+there, not an error; `contrast: null` is text over an image.
+
+The tool's `auto` mode inspects a running Obsrv with agent control on — the
+screen, panel and vision setting in force, navigating it to `url` first if
+one is given — and falls back to a headless load otherwise, with the same
+screen options as `obsrv_snap`. Live, a custom screen's diagonal is not
+known to the tool, so its millimetres are null; the presets carry theirs.

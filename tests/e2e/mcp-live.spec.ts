@@ -316,3 +316,21 @@ test('a drive on a second tab is answered by that tab, and leaves the first alon
 
   await app.evaluate((_e, id: string) => (globalThis as any).__obsrv.tabs.close(id), second)
 })
+
+test('obsrv_inspect (auto) inspects the running app: the page it is navigated to, on the screen in force', async () => {
+  const contrast = pathToFileURL(resolve(__dirname, '../fixtures/contrast.html')).href
+  const r = await call('obsrv_inspect', { url: contrast, selector: '#grey' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { mode: string; found: boolean; url: string; preset: string; readout: { id: string; font: { px: number }; contrast: { asIs: number } } }
+  expect(m.mode).toBe('live')
+  expect(m.found).toBe(true)
+  expect(m.url).toContain('contrast.html')
+  expect(m.readout.id).toBe('grey')
+  expect(m.readout.font.px).toBe(13)
+  expect(m.readout.contrast.asIs).toBeCloseTo(4.84, 1)
+  // A point works too, and nothing there is found: false.
+  const at = await call('obsrv_inspect', { at: { x: 20, y: 17 } })
+  expect((at.structuredContent as { readout: { id: string } }).readout.id).toBe('grey')
+  const off = await call('obsrv_inspect', { selector: '#nope' })
+  expect(off.structuredContent).toMatchObject({ mode: 'live', found: false })
+})

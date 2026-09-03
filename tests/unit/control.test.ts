@@ -88,7 +88,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty commands', () => {
+  it('knows exactly the twenty-one commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -97,6 +97,7 @@ describe('command validation', () => {
       'focusWindow',
       'forward',
       'highlight',
+      'inspect',
       'navigate',
       'panTo',
       'reload',

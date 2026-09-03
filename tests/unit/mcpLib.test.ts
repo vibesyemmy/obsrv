@@ -5,7 +5,9 @@ import {
   UsageError,
   buildAuditArgs,
   buildDiffArgs,
+  buildInspectArgs,
   buildReportArgs,
+  inspectWhereError,
   buildSnapArgs,
   extractTrailingJson,
   killBudgetMs,
@@ -316,5 +318,27 @@ describe('throttle maps to --throttle on every tool', () => {
     expect(c.throttles.map(t => t.id)).toEqual(['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone'])
     expect(c.throttles.find(t => t.id === 'budget-phone')).toMatchObject({ cpuRate: 6, network: { latencyMs: 400 } })
     expect(c.throttles[0]).toMatchObject({ network: null, cpuRate: 1 })
+  })
+})
+
+describe('buildInspectArgs', () => {
+  it('a selector or a point, with the screen and panel options', () => {
+    expect(buildInspectArgs({ url: URL, selector: '#grey', preset: 'laptop-768', profile: 'budget-tn' })).toEqual([
+      'inspect', URL, '--selector', '#grey', '--preset', 'laptop-768', '--profile', 'budget-tn',
+    ])
+    expect(buildInspectArgs({ url: URL, at: { x: 20, y: 17 }, textScale: 1.5, throttle: '3g', waitMs: 100 })).toEqual([
+      'inspect', URL, '--at', '20,17', '--text-scale', '1.5', '--throttle', '3g', '--wait', '100',
+    ])
+    expect(buildInspectArgs({ url: URL, selector: 'p', width: 800, height: 600, diagonalInches: 13.3 })).toEqual([
+      'inspect', URL, '--selector', 'p', '--width', '800', '--height', '600', '--diagonal', '13.3',
+    ])
+  })
+  it('needs a url headlessly, exactly one of at / selector, and preset xor custom dims', () => {
+    expect(() => buildInspectArgs({ selector: 'p' })).toThrow(UsageError)
+    expect(() => buildInspectArgs({ url: URL })).toThrow(/exactly one of `at`/)
+    expect(() => buildInspectArgs({ url: URL, at: { x: 1, y: 1 }, selector: 'p' })).toThrow(/exactly one of `at`/)
+    expect(() => buildInspectArgs({ url: URL, selector: 'p', preset: 'laptop-768', width: 100, height: 100 })).toThrow(/mutually exclusive/)
+    expect(inspectWhereError({ selector: '   ' })).toMatch(/exactly one/)
+    expect(inspectWhereError({ at: { x: 0, y: 0 } })).toBeNull()
   })
 })

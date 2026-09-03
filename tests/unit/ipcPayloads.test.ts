@@ -16,8 +16,7 @@ import {
   parseSettings,
   parseTabId,
   parseOrientation,
-  parseUiState,
-} from '../../src/shared/ipcPayloads'
+  parseUiState, parseInspectRequest } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
 
 describe('parseRect', () => {
@@ -485,5 +484,19 @@ describe('parseLogMessage', () => {
   })
   it('accepts exactly the limit', () => {
     expect(parseLogMessage('x'.repeat(MAX_LOG_MESSAGE))).toHaveLength(MAX_LOG_MESSAGE)
+  })
+})
+
+describe('parseInspectRequest', () => {
+  it('a point, or a selector, trimmed', () => {
+    expect(parseInspectRequest({ x: 20, y: 17 })).toEqual({ x: 20, y: 17 })
+    expect(parseInspectRequest({ selector: '  #grey ' })).toEqual({ selector: '#grey' })
+  })
+  it('anything else is a message naming both forms', () => {
+    expect(parseInspectRequest(null)).toMatch(/\{ x, y \}.*\{ selector \}/)
+    expect(parseInspectRequest({ x: -1, y: 0 })).toMatch(/\{ x, y \}/)
+    expect(parseInspectRequest({ selector: '' })).toMatch(/1 to 512 characters/)
+    expect(parseInspectRequest({ selector: 'p'.repeat(513) })).toMatch(/1 to 512 characters/)
+    expect(parseInspectRequest({ selector: 42 })).toBe('selector must be a string')
   })
 })

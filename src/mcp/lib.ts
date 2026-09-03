@@ -65,6 +65,25 @@ export interface AuditToolInput {
   timeoutMs?: number | undefined
 }
 
+export interface InspectToolInput {
+  /** Headless: required. Live: navigates the app there first when given. */
+  url?: string | undefined
+  /** A point in CSS px of the target screen; exactly one of `at` / `selector`. */
+  at?: { x: number; y: number } | undefined
+  selector?: string | undefined
+  preset?: string | undefined
+  orientation?: Orientation | undefined
+  width?: number | undefined
+  height?: number | undefined
+  deviceScaleFactor?: number | undefined
+  diagonalInches?: number | undefined
+  textScale?: number | undefined
+  throttle?: string | undefined
+  profile?: string | undefined
+  waitMs?: number | undefined
+  timeoutMs?: number | undefined
+}
+
 export interface ReportToolInput {
   url: string
   /** Preset ids; the CLI's default matrix when omitted. */
@@ -78,6 +97,50 @@ export interface ReportToolInput {
   textMm?: number | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
+}
+
+/** Exactly one of `at` / `selector`; the message names both. */
+export function inspectWhereError(input: Pick<InspectToolInput, 'at' | 'selector'>): string | null {
+  const hasAt = input.at !== undefined
+  const hasSelector = input.selector !== undefined && input.selector.trim().length > 0
+  if (hasAt === hasSelector) return 'obsrv_inspect needs exactly one of `at` ({ x, y } in CSS px of the target screen) or `selector` (a CSS selector; its first match).'
+  return null
+}
+
+/** Maps `obsrv_inspect` input to `obsrv inspect` argv (headless). Needs a url. */
+export function buildInspectArgs(input: InspectToolInput): string[] {
+  if (input.url === undefined || input.url.trim().length === 0) {
+    throw new UsageError('headless obsrv_inspect needs `url`; without one it can only inspect a running Obsrv with agent control on (mode: live).')
+  }
+  const where = inspectWhereError(input)
+  if (where) throw new UsageError(where)
+  const custom =
+    input.width !== undefined ||
+    input.height !== undefined ||
+    input.deviceScaleFactor !== undefined ||
+    input.diagonalInches !== undefined
+  if (input.preset !== undefined && custom) {
+    throw new UsageError('`preset` and custom dimensions are mutually exclusive — pass either `preset`, or `width` + `height`.')
+  }
+  if (custom && (input.width === undefined || input.height === undefined)) {
+    throw new UsageError('custom dimensions need both `width` and `height` — or pass `preset` instead.')
+  }
+  const args = ['inspect', input.url.trim()]
+  if (input.at !== undefined) args.push('--at', `${input.at.x},${input.at.y}`)
+  else args.push('--selector', input.selector!.trim())
+  if (input.preset !== undefined) args.push('--preset', input.preset)
+  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (custom) {
+    args.push('--width', String(input.width), '--height', String(input.height))
+    if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
+    if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
+  }
+  if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
+  if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
+  if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
+  return args
 }
 
 /** Maps `obsrv_report` input to CLI argv; the HTML always lands at `outPath`. */
