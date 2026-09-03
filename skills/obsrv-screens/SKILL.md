@@ -7,8 +7,9 @@ description: Check how a site or CSS change actually looks on the screens users 
 
 Obsrv renders any URL in an offscreen Chromium surface at a *target screen's*
 true raster density — a real 1x raster for monitor presets (not your HiDPI
-monitor's pixels resampled), the device's real 2x/3x DPR plus mobile UA and
-viewport semantics for phone presets — with optional cheap-panel simulation
+monitor's pixels resampled), the 1.25x/1.5x of Windows display scaling, the
+device's real 2x/3x (or 2.625x Pixel) DPR plus mobile UA and viewport
+semantics for phone presets — with optional cheap-panel simulation
 (contrast floor, sRGB coverage, 6-bit + FRC dithering, brightness). Dev-tools
 emulation only changes the viewport; Obsrv changes the rasterisation, which is
 where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.

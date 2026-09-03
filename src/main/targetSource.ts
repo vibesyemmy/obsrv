@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { FrameMessage } from '../shared/api'
 import { clampViewport, maxCssViewport } from '../shared/calibration'
 import { classifyFileNavigation } from '../shared/fileNav'
-import { fitsFrame, isFullFrame } from '../shared/paint'
+import { clipToExtent, paintedExtent, fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
@@ -290,19 +290,23 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // mis-composited slice is worse than a dropped one, and the next paint
       // (or the capture's own invalidate) supplies the pixels anyway.
       if (!isFull && !fitsFrame(dirty, full.width, full.height)) return
+      // The frame is what Chromium painted, which for a fractional density is
+      // one column and row short of the bitmap (see `paintedExtent`); a slice
+      // in that sliver alone carries nothing.
+      const extent = paintedExtent(full, this.viewport, this.dsf)
+      const rect = clipToExtent(isFull ? { x: 0, y: 0, width: full.width, height: full.height } : dirty, extent)
+      if (!rect) return
+      const whole = rect.x === 0 && rect.y === 0 && rect.width === full.width && rect.height === full.height
       this.emit('frame', {
         frame: {
-          x: isFull ? 0 : dirty.x,
-          y: isFull ? 0 : dirty.y,
-          width: isFull ? full.width : dirty.width,
-          height: isFull ? full.height : dirty.height,
+          ...rect,
           // `toBitmap()` already returns a fresh copy of the pixels (unlike the
           // deprecated `getBitmap()`, typed `void` in Electron 43), and a
           // Buffer is a Uint8Array, so this is the only copy of the slice.
-          data: (isFull ? image : image.crop(dirty)).toBitmap(),
+          data: (whole ? image : image.crop(rect)).toBitmap(),
         },
-        frameWidth: full.width,
-        frameHeight: full.height,
+        frameWidth: extent.width,
+        frameHeight: extent.height,
       })
     })
 

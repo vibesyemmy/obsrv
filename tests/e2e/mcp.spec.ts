@@ -101,7 +101,7 @@ test('obsrv_presets: the full catalog, straight from presets.ts', async () => {
     presets: { id: string; cssWidth: number; deviceScaleFactor: number; ppi: number }[]
     profiles: { id: string; contrastRatio: number | null; summary: string }[]
   }
-  expect(catalog.presets).toHaveLength(22)
+  expect(catalog.presets).toHaveLength(26)
   expect(catalog.profiles).toHaveLength(4)
   const throttles = (r.structuredContent as { throttles: { id: string; cpuRate: number }[] }).throttles
   expect(throttles.map(t => t.id)).toEqual(['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone'])
@@ -109,7 +109,7 @@ test('obsrv_presets: the full catalog, straight from presets.ts', async () => {
   expect(catalog.profiles.find(p => p.id === 'budget-tn')?.contrastRatio).toBe(700)
   // The text block carries the same payload for structured-content-blind clients.
   const text = r.content.find(c => c.type === 'text')
-  expect(JSON.parse((text as { text: string }).text).presets).toHaveLength(22)
+  expect(JSON.parse((text as { text: string }).text).presets).toHaveLength(26)
 })
 
 test('obsrv_snap: laptop-768 render returns metadata and an inline PNG', async () => {
