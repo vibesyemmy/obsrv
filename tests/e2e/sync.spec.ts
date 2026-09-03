@@ -142,6 +142,27 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   expect(seen.at(-1)).toBe(HAIRLINE)
 })
 
+test('quick legitimate reversals are not a loop: three navigations back and forth within a second all mirror', async () => {
+  // Two test navigations 140 ms apart followed by a redirect used to trip the
+  // breaker on a fast runner, and the target then sat on the page it already
+  // showed. A loop bounces — a pane commits something else within a beat of
+  // the load it was mirrored — and these do not: each navigation is a
+  // person's (or a spec's), so every one of them must reach the other pane.
+  const CONTRAST = pathToFileURL(resolve(__dirname, '../fixtures/contrast.html')).href
+  const steps: [pane: 'native' | 'target', url: string][] = [
+    ['native', TALL],
+    ['target', HAIRLINE],
+    ['native', CONTRAST],
+    ['target', TALL],
+  ]
+  for (const [pane, url] of steps) {
+    await app.evaluate(async (_electron, [p, u]: [string, string]) => {
+      await (globalThis as any).__obsrv[p].load(u)
+    }, [pane, url] as [string, string])
+    await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: url, target: url })
+  }
+})
+
 test('a page that rewrites its own URL trips the loop breaker, once', async () => {
   await app.evaluate(() => {
     const g = globalThis as any

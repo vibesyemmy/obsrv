@@ -31,9 +31,23 @@ type Pane = 'native' | 'target'
  * differs from the other's and they chase each other forever. One reversal is
  * legitimate (a redirect mirrored one way, then a navigation the other way);
  * the third alternation within the window is the loop's signature.
+ *
+ * But only when the commits *bounce*: a loop's every hop is a pane rewriting
+ * its URL *in place* within a beat of the mirrored load it was just sent —
+ * a same-document commit, the one kind only mirroring can make endless. A
+ * person clicking back and forth between the panes, a redirect, an explicit
+ * load: each of those commits a new document, and a page that redirects
+ * itself forever loops in any browser, mirrored or not. So a cross-document
+ * commit resets the count and only in-place rewrites that follow a mirror
+ * accumulate. Time alone could not draw that line: a spec navigates at
+ * machine speed, and two quick test navigations followed by a redirect used
+ * to trip the breaker, leaving the target on the page it already showed
+ * (the sync.spec flake, 2026-09-03).
  */
 const LOOP_WINDOW_MS = 1_000
 const LOOP_ALTERNATIONS = 2
+/** An in-place rewrite this soon after a mirrored load into the same pane is a bounce. */
+const BOUNCE_MS = 300
 
 /** Mirrors scroll offset and navigation between the two panes. */
 export function attachSyncBus(
@@ -48,13 +62,15 @@ export function attachSyncBus(
    * not leave a stale expectation that swallows a later genuine mirror.
    */
   const pending: Record<Pane, string | null> = { native: null, target: null }
+  /** When a mirrored load was last issued *into* each pane; a commit soon after is a bounce. */
+  const lastMirroredLoadAt: Record<Pane, number> = { native: 0, target: 0 }
   let lastReported = ''
   let lastMirror: { from: Pane; at: number } | null = null
   /** Consecutive direction reversals within `LOOP_WINDOW_MS` of each other. */
   let alternations = 0
   let loopWarned = false
 
-  function mirror(from: Pane, url: string): void {
+  function mirror(from: Pane, url: string, inPage: boolean): void {
     const expected = pending[from]
     pending[from] = null
     // Report every commit except the echo of one already reported — the
@@ -74,9 +90,13 @@ export function attachSyncBus(
     if (other.webContents.isDestroyed() || other.webContents.getURL() === url) return
 
     const now = Date.now()
-    // Same-direction mirrors leave the count alone: a mirrored load commits
-    // twice when the page rewrites its URL, and only a quiet window resets.
-    if (!lastMirror || now - lastMirror.at >= LOOP_WINDOW_MS) alternations = 0
+    // Only a bounce accumulates: an in-place rewrite within a beat of a
+    // mirrored load into this pane. Anything else — a new document, or a
+    // rewrite long after — starts the count afresh. Same-direction mirrors
+    // leave the count alone: a mirrored load commits twice when the page
+    // rewrites its URL, and otherwise only a quiet window resets.
+    const bounced = inPage && now - lastMirroredLoadAt[from] < BOUNCE_MS
+    if (!bounced || !lastMirror || now - lastMirror.at >= LOOP_WINDOW_MS) alternations = 0
     else if (lastMirror.from === to) alternations++
     // A dropped attempt is recorded too, so a loop that keeps committing stays
     // broken until it has been quiet for the whole window.
@@ -90,14 +110,15 @@ export function attachSyncBus(
     }
 
     pending[to] = url
+    lastMirroredLoadAt[to] = now
     void other.load(url)
   }
 
-  const onNativeNav = (_e: Electron.Event, url: string): void => mirror('native', url)
+  const onNativeNav = (_e: Electron.Event, url: string): void => mirror('native', url, false)
   const onNativeNavInPage = (_e: Electron.Event, url: string, isMainFrame: boolean): void => {
-    if (isMainFrame) mirror('native', url)
+    if (isMainFrame) mirror('native', url, true)
   }
-  const onTargetNav = (url: string): void => mirror('target', url)
+  const onTargetNav = (url: string, inPage: boolean): void => mirror('target', url, inPage)
 
   native.webContents.on('did-navigate', onNativeNav)
   native.webContents.on('did-navigate-in-page', onNativeNavInPage)
