@@ -1,4 +1,8 @@
 import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { inspectReadout } from '../shared/inspectReadout'
+import { profileToParams } from '../shared/panelSim'
+import { findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
+import { visionMatrix } from '../shared/vision'
 import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -1157,6 +1161,36 @@ export function registerIpc(ctx: AppContext): () => void {
       }
     },
     viewport: () => tab().target.getViewport(),
+    inspect: async req => {
+      const t = tab().target
+      const report = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
+      if (!report) return null
+      const vp = t.getViewport()
+      // The screen's diagonal comes from the preset table; a custom screen's
+      // lives in the renderer's own store and is not mirrored here, so it
+      // reads as unknown: no millimetres, the rest intact.
+      let diagonalInches: number | null = null
+      try {
+        diagonalInches = findScreenPreset(uiState.presetId).diagonalInches
+      } catch {
+        diagonalInches = null
+      }
+      let profile
+      try {
+        profile = findPanelProfile(uiState.profileId)
+      } catch {
+        profile = findPanelProfile('reference')
+      }
+      const vision =
+        uiState.visionType === 'none'
+          ? undefined
+          : { label: `${uiState.visionType} ${Math.round(uiState.visionSeverity * 100)}%`, matrix: visionMatrix(uiState.visionType, uiState.visionSeverity) }
+      return inspectReadout(
+        report,
+        { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor: t.getDeviceScaleFactor(), diagonalInches, textScale: t.getTextScale() },
+        { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
+      )
+    },
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and
     // suppresses its own echo, so the two arrive together with no loop.

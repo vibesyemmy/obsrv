@@ -7,10 +7,12 @@ import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
 import { boxDownsample, rgbaToBgra, type RGBAImage } from '../shared/downsample'
-import { SCREEN_PRESETS, findProfile } from '../shared/presets'
+import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
+import { inspectReadout } from '../shared/inspectReadout'
+import { profileToParams } from '../shared/panelSim'
 import type { LoadError } from '../shared/types'
 import type { AuditReport } from '../shared/audit'
-import { ArgError, parseArgs, type AuditCommand, type DiffCommand, type RenderSpec, type ReportCommand, type SnapCommand } from './args'
+import { ArgError, parseArgs, type AuditCommand, type DiffCommand, type InspectCommand, type RenderSpec, type ReportCommand, type SnapCommand } from './args'
 import { auditFindings } from './audit'
 import { bgraToRgba, captureQuiescent, type CapturedFrame } from './capture'
 import { diffMetrics, inkRows } from './metrics'
@@ -328,6 +330,68 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
  * are captured — so a single load and the page's own answer are all it takes.
  * Rects are page coordinates, so the whole page is covered from one viewport.
  */
+/**
+ * One element, measured: the inspector's report turned into millimetres and
+ * contrast on the named panel — the footer readout, for a script. Nothing
+ * found is not a failure: the JSON says `found: false` and exits 0, so an
+ * agent can tell "not there" from "could not look".
+ */
+async function runInspect(cmd: InspectCommand): Promise<void> {
+  const profile = findProfile(cmd.profileId)
+  const target = new TargetSource(30, { mobileEmulation: true })
+  try {
+    const watch = watchFailures(target)
+    const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
+    target.setTextScale(cmd.spec.textScale)
+    if (cmd.spec.throttle !== null) {
+      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
+      if (refused) human(`warning: ${refused}`)
+    }
+    await loadWithin(target, cmd.url, cmd, watch)
+    const report = cmd.selector !== null ? await target.inspectSelector(cmd.selector) : await target.inspectAt(cmd.at!.x, cmd.at!.y)
+    if (report === null) {
+      const err = watch.failed()
+      if (err) throw err
+    }
+    const where = cmd.selector !== null ? `selector ${JSON.stringify(cmd.selector)}` : `(${cmd.at!.x}, ${cmd.at!.y})`
+    const readout =
+      report === null
+        ? null
+        : inspectReadout(
+            report,
+            {
+              cssWidth: applied.width,
+              cssHeight: applied.height,
+              deviceScaleFactor: cmd.spec.deviceScaleFactor,
+              diagonalInches: cmd.spec.diagonalInches,
+              textScale: cmd.spec.textScale,
+            },
+            { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) },
+          )
+    human(
+      readout === null
+        ? `inspect ${cmd.url} @ ${cmd.spec.presetId}: nothing at ${where}`
+        : `inspect ${cmd.url} @ ${cmd.spec.presetId}: ${readout.element} · ${readout.font.px}px` +
+            `${readout.font.mm !== null ? ` = ${readout.font.mm} mm` : ''} · ${readout.color} on ${readout.background ?? 'an image'}` +
+            `${readout.contrast ? ` · ${readout.contrast.asIs}:1 here · ${readout.contrast.onPanel}:1 on ${profile.label}` : ''}`,
+    )
+    await machine({
+      url: cmd.url,
+      preset: cmd.spec.presetId,
+      cssWidth: applied.width,
+      cssHeight: applied.height,
+      deviceScaleFactor: cmd.spec.deviceScaleFactor,
+      profile: profile.id,
+      ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
+      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
+      found: readout !== null,
+      readout,
+    })
+  } finally {
+    target.destroy()
+  }
+}
+
 async function runAudit(cmd: AuditCommand): Promise<void> {
   const target = new TargetSource(30, { mobileEmulation: true })
   try {
@@ -583,6 +647,8 @@ void app.whenReady().then(async () => {
       await runAudit(cmd)
     } else if (cmd.command === 'report') {
       await runReport(cmd)
+    } else if (cmd.command === 'inspect') {
+      await runInspect(cmd)
     } else {
       await runDiff(cmd)
     }

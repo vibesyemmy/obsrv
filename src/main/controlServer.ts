@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto'
+import { parseInspectRequest, type InspectRequest } from '../shared/ipcPayloads'
+import type { InspectReadout } from '../shared/inspectReadout'
 import type { VisionType } from '../shared/vision'
 import { rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
@@ -86,6 +88,12 @@ export interface ControlDeps {
   reload(): void
   /** Bring the app window to the front. */
   focusWindow(): void
+  /**
+   * The inspector, for agents: what is under a point of the target screen
+   * or what a selector names, with millimetres and contrast on the panel in
+   * force. Null when nothing is there.
+   */
+  inspect(req: InspectRequest): Promise<InspectReadout | null>
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
 }
@@ -254,6 +262,13 @@ export class ControlServer {
       case 'captureTarget': {
         const capture = await this.deps.captureTarget()
         return reply(200, { ok: true, ...capture })
+      }
+
+      case 'inspect': {
+        const req = parseInspectRequest(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        const readout = await this.deps.inspect(req)
+        return reply(200, { ok: true, found: readout !== null, readout })
       }
 
       case 'scroll': {

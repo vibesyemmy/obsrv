@@ -1,14 +1,15 @@
 /// <reference lib="dom" />
-// The DOM lib is pulled in for this file alone: `inspectAtPoint` is written
+// The DOM lib is pulled in for this file alone: `inspectTarget` is written
 // here so main can ship it as source, and main's own configuration has no
 // DOM. Nothing in this file runs in main except the string.
 
 /**
- * The inspector: what is under a point of the target page, as the page
- * reports it — element, font, text colour, and the background that colour
- * actually sits on. The contrast maths that turns this into "4.6:1 here,
- * 3.0:1 on this panel" lives in `contrast.ts`; this file is the report and
- * the script that produces it.
+ * The inspector: what is under a point of the target page — or what a CSS
+ * selector names — as the page reports it: element, font, text colour, and
+ * the background that colour actually sits on. The contrast maths that
+ * turns this into "4.6:1 here, 3.0:1 on this panel" lives in `contrast.ts`
+ * and `inspectReadout.ts`; this file is the report and the script that
+ * produces it.
  */
 
 /** A colour as the page states it, 0..255 channels and 0..1 alpha. */
@@ -51,14 +52,30 @@ export interface InspectReport {
  */
 export const INSPECT_WORLD_ID = 7301
 
+/** Longest selector the inspector accepts from an agent or the CLI. */
+export const MAX_SELECTOR_LENGTH = 512
+
 /**
  * Runs inside the target page. Self-contained on purpose — it is shipped as
  * source (`INSPECT_SCRIPT`) and evaluated there, so it must reference nothing
- * from this module. Returns a plain object the parser on the main side
- * checks field by field; the page is not trusted, its DOM merely measured.
+ * from this module. `'point'` takes a viewport point; `'selector'` takes a
+ * CSS selector and reports its first match (an invalid selector, or one that
+ * matches nothing, is null). Returns a plain object the parser on the main
+ * side checks field by field; the page is not trusted, its DOM merely
+ * measured.
  */
-export function inspectAtPoint(x: number, y: number): InspectReport | null {
-  const el = document.elementFromPoint(x, y)
+export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?: number): InspectReport | null {
+  let el: Element | null = null
+  if (mode === 'point') {
+    const hit = document.elementFromPoint(Number(a), Number(b))
+    el = hit instanceof Element ? hit : null
+  } else {
+    try {
+      el = document.querySelector(String(a))
+    } catch {
+      el = null
+    }
+  }
   if (!(el instanceof Element)) return null
 
   const parseColor = (s: string): RGBA | null => {
@@ -66,15 +83,15 @@ export function inspectAtPoint(x: number, y: number): InspectReport | null {
     if (!m) return null
     const p = m[1]!.split(/[,/ ]+/).filter(v => v.length > 0).map(v => parseFloat(v))
     if (p.length < 3 || p.slice(0, 3).some(v => !Number.isFinite(v))) return null
-    const a = p.length > 3 && Number.isFinite(p[3]!) ? p[3]! : 1
-    return [p[0]!, p[1]!, p[2]!, a]
+    const alpha = p.length > 3 && Number.isFinite(p[3]!) ? p[3]! : 1
+    return [p[0]!, p[1]!, p[2]!, alpha]
   }
   const over = (top: RGBA, under: RGBA): RGBA => {
-    const a = top[3]
+    const alpha = top[3]
     return [
-      top[0] * a + under[0] * (1 - a),
-      top[1] * a + under[1] * (1 - a),
-      top[2] * a + under[2] * (1 - a),
+      top[0] * alpha + under[0] * (1 - alpha),
+      top[1] * alpha + under[1] * (1 - alpha),
+      top[2] * alpha + under[2] * (1 - alpha),
       1,
     ]
   }
@@ -132,5 +149,10 @@ export function inspectAtPoint(x: number, y: number): InspectReport | null {
   }
 }
 
-/** `inspectAtPoint` as source, for `executeJavaScriptInIsolatedWorld`. */
-export const INSPECT_SCRIPT = `(${inspectAtPoint.toString()})`
+/** The point form, for the browser tests and anything else in-page. */
+export function inspectAtPoint(x: number, y: number): InspectReport | null {
+  return inspectTarget('point', x, y)
+}
+
+/** `inspectTarget` as source, for `executeJavaScriptInIsolatedWorld`. */
+export const INSPECT_SCRIPT = `(${inspectTarget.toString()})`

@@ -322,3 +322,22 @@ describe('parseArgs: --throttle', () => {
     expect(() => snap('https://x.test', '--throttle', 'edge')).toThrow(/--throttle: expected one of none, fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone/)
   })
 })
+
+describe('parseArgs: inspect', () => {
+  const inspect = (...args: string[]) => parseArgs(['inspect', 'https://x.test', ...args])
+  it('a point, or a selector, on one screen with a panel', () => {
+    const at = inspect('--at', '20,17', '--preset', 'laptop-768', '--profile', 'budget-tn')
+    expect(at).toMatchObject({ command: 'inspect', url: 'https://x.test', at: { x: 20, y: 17 }, selector: null, profileId: 'budget-tn' })
+    if (at.command === 'inspect') expect(at.spec.presetId).toBe('laptop-768')
+    const sel = inspect('--selector', ' #grey ')
+    expect(sel).toMatchObject({ at: null, selector: '#grey' })
+  })
+  it('exactly one of the two, and a point is x,y', () => {
+    expect(() => inspect()).toThrow(/exactly one of --at <x,y> or --selector <css>/)
+    expect(() => inspect('--at', '1,1', '--selector', 'p')).toThrow(/exactly one/)
+    expect(() => inspect('--at', 'twenty')).toThrow(/--at: expected x,y/)
+    expect(() => inspect('--at', '-1,5')).toThrow(/--at: expected x,y/)
+    expect(() => inspect('--selector', '')).toThrow(/--selector/)
+    expect(() => inspect('--selector', 'p', '--matrix', 'laptop-768,android-65')).toThrow(/--matrix is a snap flag/)
+  })
+})

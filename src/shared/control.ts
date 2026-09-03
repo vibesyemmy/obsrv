@@ -190,6 +190,8 @@ export const CONTROL_COMMANDS = [
   'setPixelExact',
   'captureTarget',
   'focusWindow',
+  // v0.24 — the inspector for agents: a point or a selector, a readout back.
+  'inspect',
 ] as const
 
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number]

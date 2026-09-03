@@ -21,6 +21,9 @@ import {
   PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
+  buildInspectArgs,
+  inspectWhereError,
+  type InspectToolInput,
   buildDiffArgs,
   buildReportArgs,
   buildSnapArgs,
@@ -103,7 +106,7 @@ function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
-function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report', run: CliRun, killAfterMs: number): CallToolResult {
+function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) {
     return toolError(
       `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated. ` +
@@ -991,6 +994,87 @@ server.registerTool(
   },
 )
 
+const inspectInputShape = {
+  url: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Headless: required. Live: the app is navigated there first when given; omitted, the page it is showing is inspected.'),
+  at: z
+    .object({ x: z.number().min(0), y: z.number().min(0) })
+    .optional()
+    .describe('A point in CSS px of the target screen — what is drawn there. Exactly one of `at` / `selector`.'),
+  selector: z.string().min(1).max(512).optional().describe('A CSS selector; its first match is inspected. Exactly one of `at` / `selector`.'),
+  mode: z
+    .enum(['auto', 'headless', 'live'])
+    .optional()
+    .describe(
+      "auto (default): a running Obsrv with agent control on is inspected — the page the user is looking at, on the " +
+        "screen and panel in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
+    ),
+  preset: z.enum(PRESET_IDS).optional().describe('Headless: the target screen. Default: 1080p-24. Use obsrv_presets for ids.'),
+  orientation: orientationField,
+  width: z.number().int().min(1).optional().describe('Headless custom CSS viewport width. Needs height; mutually exclusive with preset.'),
+  height: z.number().int().min(1).optional().describe('Headless custom CSS viewport height. Needs width.'),
+  deviceScaleFactor: z.number().min(1).optional().describe('Headless custom dims: raster density (default 1).'),
+  diagonalInches: z.number().min(0.1).optional().describe('Headless custom dims: panel diagonal, without which there are no millimetres.'),
+  textScale: z.number().min(MIN_TEXT_SCALE).max(MAX_TEXT_SCALE).optional().describe('Headless: browser zoom as reflow (see obsrv_snap).'),
+  throttle: throttleField,
+  profile: z.enum(PROFILE_IDS).optional().describe('Headless: the panel the second contrast figure is measured on. Default reference.'),
+  waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+}
+
+const readoutShape = z
+  .object({
+    element: z.string().describe('tag#id.first-class'),
+    tag: z.string(),
+    id: z.string(),
+    classes: z.string(),
+    text: z.string().describe("The element's own text, trimmed, at most 60 characters."),
+    rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).describe('Border box in CSS px of the target screen.'),
+    rectMm: z.object({ width: z.number(), height: z.number() }).nullable().describe('The box in millimetres on this screen; null without a diagonal.'),
+    font: z.object({
+      px: z.number().describe("The page's own font size in CSS px."),
+      mm: z.number().nullable().describe('Cap-to-cap size on the glass: the px at this density (and text scale). Null without a diagonal.'),
+      weight: z.number(),
+      family: z.string(),
+    }),
+    color: z.string().describe('Text colour, #rrggbb.'),
+    background: z.string().nullable().describe('The colour the text sits on, composited; null when an image or gradient is under it.'),
+    backgroundNote: z.enum(['computed', 'image']),
+    contrast: z
+      .object({
+        asIs: z.number().describe('WCAG 2 contrast of the pair as stated: what a reference display shows.'),
+        onPanel: z.number().describe('The same pair through the panel profile (and the vision setting, live): what that screen shows.'),
+        largeText: z.boolean().describe('24px+, or 18.66px+ at weight 700+: WCAG applies 3:1 instead of 4.5:1.'),
+        aaThreshold: z.number(),
+        passesAsIs: z.boolean(),
+        passesOnPanel: z.boolean(),
+        panel: z.string().describe('The profile id the onPanel figure was measured on.'),
+        vision: z.string().optional().describe('Live only: the colour-vision simulation in force, if any.'),
+      })
+      .nullable()
+      .describe('Null when the background could not be computed (an image or gradient under the text).'),
+    ppi: z.number().nullable(),
+  })
+  .nullable()
+
+const inspectOutputShape = {
+  mode: z.enum(['headless', 'live']),
+  url: z.string().describe('The page inspected: the argument (headless) or what the app reports showing (live).'),
+  preset: z.string().optional().describe("Headless: preset id or 'custom'. Live: the app's preset."),
+  profile: z.string().describe('The panel the onPanel contrast was measured on.'),
+  cssWidth: z.number().optional(),
+  cssHeight: z.number().optional(),
+  deviceScaleFactor: z.number().optional(),
+  textScale: z.number().optional(),
+  throttle: z.string().optional(),
+  found: z.boolean().describe('False when nothing is at the point / the selector matched nothing; `readout` is then null.'),
+  readout: readoutShape,
+  notes: z.array(z.string()),
+}
+
 const reportInputShape = {
   url: urlField,
   presets: z
@@ -1258,6 +1342,86 @@ server.registerTool(
     } catch (e) {
       return toolError(liveFailure(e))
     }
+  },
+)
+
+server.registerTool(
+  'obsrv_inspect',
+  {
+    title: 'Inspect one element on a target screen: font in mm, colours, contrast here and on the panel',
+    description:
+      `The app's inspector, for agents. Name a point (\`at\`, CSS px of the target screen) or a CSS selector, and get ` +
+      `the element there: tag/id/class, its text, its box in CSS px and in millimetres on that screen, its font size in ` +
+      `px and in millimetres, its text colour and the background it actually sits on (walked up through translucent ` +
+      `layers), and its WCAG 2 contrast twice — as stated, and as the panel profile would show it — against the ` +
+      `threshold that applies to text that size (4.5:1, or 3:1 for large text). A pair that clears 4.5:1 on the ` +
+      `display a page was designed on can fall under 3:1 on a budget TN panel; the second number says so.\n\n` +
+      `auto mode inspects a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
+      `panel and vision setting in force — and falls back to a headless load of \`url\` otherwise. Headless takes ` +
+      `the same screen options as obsrv_snap. \`found: false\` means nothing was there; it is not an error.`,
+    inputSchema: inspectInputShape,
+    outputSchema: inspectOutputShape,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  },
+  async (input: InspectToolInput & { mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+    const where = inspectWhereError(input)
+    if (where) return toolError(where)
+    if (input.url !== undefined) {
+      const badScheme = urlSchemeError(input.url)
+      if (badScheme) return toolError(badScheme)
+    }
+    const requestedMode = input.mode ?? 'auto'
+    const notes: string[] = []
+    if (requestedMode !== 'headless') {
+      const live = await discoverControl()
+      const custom =
+        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+      if (live && custom) notes.push('custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.')
+      if (live && !custom) {
+        try {
+          if (input.url !== undefined) {
+            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+          }
+          const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
+          const answer = await controlCall(live.info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+          if (!status) return toolError('the running app answered `status` with something this server could not parse')
+          for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+          }
+          const structured = {
+            mode: 'live',
+            url: status.url,
+            preset: status.presetId,
+            profile: status.profileId,
+            cssWidth: status.cssWidth,
+            cssHeight: status.cssHeight,
+            textScale: status.textScale,
+            found: answer.found === true,
+            readout: answer.readout ?? null,
+            notes,
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+        } catch (e) {
+          return toolError(`the running app refused the inspect: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
+    }
+    let args: string[]
+    try {
+      args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
+    } catch (e) {
+      if (e instanceof UsageError) return toolError(e.message)
+      throw e
+    }
+    const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
+    const run = await runCli(args, killAfterMs)
+    if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
+    const result = extractTrailingJson(run.stdout)
+    if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
+    const structured = { mode: 'headless', ...result, notes }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
 

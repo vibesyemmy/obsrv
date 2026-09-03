@@ -1,4 +1,5 @@
 import { maxCssViewport } from '../shared/calibration'
+import { MAX_SELECTOR_LENGTH } from '../shared/inspect'
 import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
@@ -60,6 +61,19 @@ export interface AuditCommand {
   timeoutMs: number
 }
 
+export interface InspectCommand {
+  command: 'inspect'
+  url: string
+  spec: RenderSpec
+  /** The panel the second contrast figure is measured on. */
+  profileId: string
+  /** Exactly one of the two: a point in CSS px of the target screen, or a CSS selector (first match). */
+  at: { x: number; y: number } | null
+  selector: string | null
+  waitMs: number
+  timeoutMs: number
+}
+
 export interface ReportCommand {
   command: 'report'
   url: string
@@ -103,7 +117,7 @@ export interface HelpCommand {
   text: string
 }
 
-export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | HelpCommand
+export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | InspectCommand | HelpCommand
 
 /** The screens a report covers when none are named: two laptops-and-desktops, two phones. */
 export const DEFAULT_REPORT_MATRIX = ['laptop-768', '1080p-24', 'android-65', 'iphone-61'] as const
@@ -125,6 +139,8 @@ Usage:
   obsrv diff <url> [flags]   Render <url> at 1x and against a 2x reference; print JSON metrics.
   obsrv audit <url> [flags]  Measure tap targets and text on a target screen, in millimetres; print JSON findings.
   obsrv report <url> [flags] Render, audit and (for 1x screens) diff a matrix of screens into one HTML page.
+  obsrv inspect <url> [flags] What is under a point, or what a selector names: font in millimetres, colours,
+                             contrast as stated and on the panel; print JSON.
   obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
   obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
 
@@ -176,6 +192,13 @@ audit flags:
                        screen's diagonal, so custom dimensions need --diagonal to get any.
                        Measures layout, not pixels: --profile does not apply, and one preset per run.
 
+inspect flags:
+  --at <x,y>           A point in CSS px of the target screen: what is drawn there.
+  --selector <css>     A CSS selector; its first match. Exactly one of --at / --selector.
+                       --profile names the panel the second contrast figure is measured on;
+                       the first is the pair as stated. WCAG AA is judged at 4.5:1, or 3:1 for
+                       large text (24px, or 18.66px bold). Millimetres need the screen's diagonal.
+
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
   --out <file>         The HTML file (default ${DEFAULT_REPORT_OUT}). Self-contained: PNGs inline, no script.
@@ -195,8 +218,8 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle'])
-type Command = 'snap' | 'diff' | 'audit' | 'report'
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector'])
+type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect'
 /** Flags every command takes. */
 const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
 /**
@@ -209,6 +232,7 @@ const EXTRA_FLAGS: Record<Command, Set<string>> = {
   diff: new Set(['out-dir', 'json']),
   audit: new Set(['tap-mm', 'text-mm']),
   report: new Set(['out', 'matrix', 'tap-mm', 'text-mm']),
+  inspect: new Set(['at', 'selector']),
 }
 
 interface Parsed {
@@ -395,7 +419,7 @@ export function parseArgs(argv: string[]): CliCommand {
   if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     return { command: 'help', text: usage() }
   }
-  if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report') {
+  if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report' && command !== 'inspect') {
     throw new ArgError(`unknown command: ${command}\n\n${usage()}`)
   }
 
@@ -436,6 +460,26 @@ export function parseArgs(argv: string[]): CliCommand {
       waitMs,
       timeoutMs,
     }
+  }
+
+  if (command === 'inspect') {
+    if (matrix) throw new ArgError('`obsrv inspect` looks at one screen per run; --matrix is a snap flag')
+    const atRaw = flags.get('at')
+    const selectorRaw = flags.get('selector')
+    if ((atRaw === undefined) === (selectorRaw === undefined)) {
+      throw new ArgError('inspect needs exactly one of --at <x,y> or --selector <css>')
+    }
+    let at: { x: number; y: number } | null = null
+    if (atRaw !== undefined) {
+      const m = /^\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*$/.exec(String(atRaw))
+      if (!m) throw new ArgError(`--at: expected x,y in CSS px of the target screen, got "${String(atRaw)}"`)
+      at = { x: Number(m[1]), y: Number(m[2]) }
+    }
+    const selector = selectorRaw === undefined ? null : String(selectorRaw).trim()
+    if (selector !== null && (selector.length === 0 || selector.length > MAX_SELECTOR_LENGTH)) {
+      throw new ArgError(`--selector: expected 1 to ${MAX_SELECTOR_LENGTH} characters`)
+    }
+    return { command, url, spec: specs[0]!, profileId, at, selector, waitMs, timeoutMs }
   }
 
   const spec = specs[0]!

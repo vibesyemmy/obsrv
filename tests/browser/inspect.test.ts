@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { INSPECT_SCRIPT, inspectAtPoint } from '../../src/shared/inspect'
+import { INSPECT_SCRIPT, inspectAtPoint, type inspectTarget } from '../../src/shared/inspect'
 
 /**
  * `inspectAtPoint` runs inside the target page, so it is tested against a
@@ -79,10 +79,14 @@ describe('inspectAtPoint', () => {
   it('is null off the document', () => {
     expect(inspectAtPoint(-10, -10)).toBeNull()
   })
-  it('works as the shipped source, which must be self-contained', () => {
+  it('works as the shipped source, which must be self-contained: by point and by selector', () => {
     // eslint-disable-next-line no-new-func
-    const fromSource = new Function(`return ${INSPECT_SCRIPT}`)() as typeof inspectAtPoint
+    const fromSource = new Function(`return ${INSPECT_SCRIPT}`)() as typeof inspectTarget
     const { x, y } = centre('card-text')
-    expect(fromSource(x, y)).toEqual(inspectAtPoint(x, y))
+    expect(fromSource('point', x, y)).toEqual(inspectAtPoint(x, y))
+    expect(fromSource('selector', '#card-text')).toEqual(inspectAtPoint(x, y))
+    // Nothing matched, or not a selector at all: null, never a throw.
+    expect(fromSource('selector', '#no-such-element')).toBeNull()
+    expect(fromSource('selector', '[[[')).toBeNull()
   })
 })

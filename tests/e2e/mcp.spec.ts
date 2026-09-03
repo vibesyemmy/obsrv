@@ -46,11 +46,11 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: six tools with schemas, honestly annotated', async () => {
+test('initialize + tools/list: seven tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
-  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_presets', 'obsrv_report', 'obsrv_snap'])
+  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_inspect', 'obsrv_presets', 'obsrv_report', 'obsrv_snap'])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
     // obsrv_drive mutates visible app state and says so; the rest are reads.
@@ -200,4 +200,33 @@ test('obsrv_report: one screen, rendered, audited and diffed, as a file plus a s
   expect(result.screens[0]).toMatchObject({ preset: 'laptop-768', diffSkipped: null })
   expect(result.screens[0]!.audit?.findings).toBeGreaterThanOrEqual(1)
   expect(result.screens[0]!.diff).not.toBeNull()
+})
+
+test('obsrv_inspect (headless, no app): the grey caption by selector, in millimetres and contrast on a budget panel', async () => {
+  const r = await call('obsrv_inspect', { url: fixture('contrast.html'), selector: '#grey', preset: 'laptop-768', profile: 'budget-tn' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as {
+    mode: string
+    found: boolean
+    readout: { element: string; font: { px: number; mm: number }; color: string; contrast: { asIs: number; onPanel: number; panel: string } }
+  }
+  expect(m.mode).toBe('headless')
+  expect(m.found).toBe(true)
+  expect(m.readout.element).toBe('p#grey')
+  expect(m.readout.font.px).toBe(13)
+  expect(m.readout.font.mm).toBeCloseTo(3.29, 1)
+  expect(m.readout.color).toBe('#6b7280')
+  expect(m.readout.contrast.panel).toBe('budget-tn')
+  expect(m.readout.contrast.onPanel).toBeLessThan(m.readout.contrast.asIs)
+
+  const none = await call('obsrv_inspect', { url: fixture('contrast.html'), selector: '#nope' })
+  expect(none.isError).toBeFalsy()
+  expect(none.structuredContent).toMatchObject({ found: false, readout: null })
+
+  const neither = await call('obsrv_inspect', { url: fixture('contrast.html') })
+  expect(neither.isError).toBe(true)
+  expect((neither.content[0] as { text: string }).text).toMatch(/exactly one of `at`/)
+  const live = await call('obsrv_inspect', { selector: 'p', mode: 'live' })
+  expect(live.isError).toBe(true)
+  expect((live.content[0] as { text: string }).text).toMatch(/Agent control/)
 })
