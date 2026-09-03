@@ -39,11 +39,16 @@ zoom the native pane beside it and every other tab on the same origin, and
 Electron persists it. So the scale is applied as device emulation on the
 target's own `webContents`, the same call the phone presets have always
 used for their viewport semantics: the emulated view is the surface
-divided by the scale at the surface's density multiplied by it, and the
-two cancel so the page fills the surface's device pixels exactly. The
-native pane, the other tabs and the surface are untouched. It is
-re-applied on every navigation, and on the fresh window a density change
-swaps in.
+divided by the scale at the surface's density multiplied by it, drawn
+back onto the surface with a transform of the scale — the emulation's
+`scale`, which is what makes the smaller view fill the surface's device
+pixels. (Without it the view is painted 1:1 into the top-left corner, and
+the density is only what the page is *told*: 0.22.0 shipped that way, and
+the frame is now pinned by pixels rather than by the page's arithmetic.)
+The raster stays sharp: the compositor rasters at the transformed scale
+rather than upsampling. The native pane, the other tabs and the surface
+are untouched. It is re-applied on every navigation, and on the fresh
+window a density change swaps in.
 
 ## Where it shows
 
