@@ -1,4 +1,5 @@
 import { app, nativeImage } from 'electron'
+import { findThrottle } from '../shared/throttle'
 import { formatTextScale } from '../shared/textScale'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -62,6 +63,12 @@ interface RenderResult {
   warnings: string[]
   /** The audit walk, when asked for; null when the page did not answer. */
   auditReport?: AuditReport | null
+  /**
+   * Time from the start of navigation to the page going paint-quiet, with
+   * `--wait` taken back out; null when it never settled within the budget.
+   * How the page *feels* on the screen, under `--throttle` or without.
+   */
+  settledMs: number | null
 }
 
 interface RenderOptions {
@@ -145,6 +152,14 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // Before the load: `did-navigate` re-applies it, so the page lays out at
     // its scale from the first paint rather than reflowing after.
     target.setTextScale(spec.textScale)
+    // Before the load, so the page fetches and runs under the conditions from
+    // its first byte; a refusal is a warning, not a failure — the render is
+    // still a render, and the JSON says the throttle was asked for.
+    if (spec.throttle !== null) {
+      const refused = await target.setThrottle(findThrottle(spec.throttle))
+      if (refused) warn(`warning: ${refused}`)
+    }
+    const startedAt = Date.now()
     await loadWithin(target, url, options, watch)
 
     let cssHeight = applied.height
@@ -177,8 +192,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
 
     const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed })
+    const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
     const auditReport = options.audit ? await target.auditPage() : undefined
-    return { frame, cssWidth: applied.width, cssHeight, warnings, ...(auditReport !== undefined ? { auditReport } : {}) }
+    return { frame, cssWidth: applied.width, cssHeight, warnings, settledMs, ...(auditReport !== undefined ? { auditReport } : {}) }
   } finally {
     target.destroy()
   }
@@ -212,7 +228,8 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
     human(
       `snap ${cmd.url} → ${out} (${r.frame.width}×${r.frame.height} device px, ` +
         `${r.cssWidth}×${r.cssHeight} CSS ${shape}, preset ${spec.presetId}, profile ${profile.id}` +
-        `${spec.textScale !== 1 ? `, text ${formatTextScale(spec.textScale)}` : ''})`,
+        `${spec.textScale !== 1 ? `, text ${formatTextScale(spec.textScale)}` : ''}` +
+        `${spec.throttle !== null ? `, throttle ${spec.throttle}, ${r.settledMs === null ? 'not settled' : `settled in ${r.settledMs} ms`}` : ''})`,
     )
     results.push({
       out,
@@ -223,6 +240,9 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // Only when one was applied: at ×1 this object is the contract every
       // consumer already parses, and a run that asked for a scale is new code.
       ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),
+      // Same rule for the throttle, keyed on the flag rather than the value:
+      // `--throttle none` is a baseline someone asked for by name.
+      ...(spec.throttle !== null ? { throttle: spec.throttle, settledMs: r.settledMs } : {}),
       profile: profile.id,
       // False means a best-effort capture of a page that never went
       // paint-quiet (animation); machine consumers can gate on it.
@@ -314,6 +334,10 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
+    if (cmd.spec.throttle !== null) {
+      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
+      if (refused) human(`warning: ${refused}`)
+    }
     await loadWithin(target, cmd.url, cmd, watch)
     const report = await target.auditPage()
     if (!report) {
@@ -352,6 +376,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       deviceScaleFactor: cmd.spec.deviceScaleFactor,
       // Present only when a scale other than 1 was applied, as in `snap`.
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
+      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       pageHeight: report.pageHeight,
       ...result,
     })
@@ -447,6 +472,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       orientation: screenShape(r.cssWidth, r.cssHeight),
       png: toImage(encodePng(img), img.width, img.height),
       settled: r.frame.settled,
+      settledMs: r.settledMs,
       audit,
       diff,
       diffSkipped,
@@ -463,7 +489,17 @@ async function runReport(cmd: ReportCommand): Promise<void> {
   const version = cliVersion()
   const out = resolve(cmd.out)
   mkdirSync(dirname(out), { recursive: true })
-  const html = reportHtml({ url: cmd.url, generatedAt, version, profile: { id: profile.id, label: profile.label }, thresholds, screens })
+  const throttleId = cmd.specs[0]?.throttle ?? null
+  const throttle = throttleId === null ? null : findThrottle(throttleId)
+  const html = reportHtml({
+    url: cmd.url,
+    generatedAt,
+    version,
+    profile: { id: profile.id, label: profile.label },
+    thresholds,
+    screens,
+    ...(throttle ? { throttle: { id: throttle.id, label: throttle.label, summary: throttle.summary } } : {}),
+  })
   writeFileSync(out, html)
   human(`report ${cmd.url} → ${out} (${screens.length} screen(s), ${Math.round(html.length / 1024)} KiB)`)
 
@@ -474,6 +510,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
     generatedAt,
     profile: profile.id,
     thresholds,
+    ...(throttleId !== null ? { throttle: throttleId } : {}),
     screens: screens.map(s => ({
       preset: s.presetId,
       cssWidth: s.cssWidth,
@@ -482,6 +519,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       ...(s.textScale !== 1 ? { textScale: s.textScale } : {}),
       ppi: s.ppi,
       settled: s.settled,
+      ...(throttleId !== null ? { settledMs: s.settledMs } : {}),
       audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,
       diff: s.diff
         ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }

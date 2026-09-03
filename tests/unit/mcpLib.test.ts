@@ -299,3 +299,22 @@ describe('textScale maps to --text-scale', () => {
     ])
   })
 })
+
+describe('throttle maps to --throttle on every tool', () => {
+  it('snap, after the text scale', () => {
+    expect(buildSnapArgs({ url: URL, preset: 'android-65', textScale: 1.5, throttle: 'budget-phone' }, OUT)).toEqual([
+      'snap', URL, '--preset', 'android-65', '--text-scale', '1.5', '--throttle', 'budget-phone', '--out', OUT,
+    ])
+  })
+  it('diff, audit and report', () => {
+    expect(buildDiffArgs({ url: URL, throttle: '3g' }, DIR)).toEqual(['diff', URL, '--throttle', '3g', '--out-dir', DIR])
+    expect(buildAuditArgs({ url: URL, throttle: 'cpu-4x' })).toEqual(['audit', URL, '--throttle', 'cpu-4x'])
+    expect(buildReportArgs({ url: URL, throttle: 'none' }, '/tmp/r.html')).toEqual(['report', URL, '--throttle', 'none', '--out', '/tmp/r.html'])
+  })
+  it('the catalog lists the presets with their numbers', () => {
+    const c = listCatalog()
+    expect(c.throttles.map(t => t.id)).toEqual(['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone'])
+    expect(c.throttles.find(t => t.id === 'budget-phone')).toMatchObject({ cpuRate: 6, network: { latencyMs: 400 } })
+    expect(c.throttles[0]).toMatchObject({ network: null, cpuRate: 1 })
+  })
+})

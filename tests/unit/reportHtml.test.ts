@@ -129,6 +129,16 @@ describe('reportHtml', () => {
     expect(reportHtml(data([screen()]))).not.toContain('text <b>')
     expect(reportHtml(data([screen({ textScale: 1.5 })]))).toContain('· text <b>150%</b>')
   })
+  it('states the throttle and each screen’s time to paint-quiet when a throttle was named', () => {
+    const plain = reportHtml(data([screen()]))
+    expect(plain).not.toContain('settled in')
+    expect(plain).not.toContain('throttle <b>')
+    const d = data([screen({ settledMs: 812 }), screen({ presetId: 'android-65', settledMs: null, settled: false })])
+    const html = reportHtml({ ...d, throttle: { id: 'budget-phone', label: 'Budget phone', summary: '3G and CPU 6×' } })
+    expect(html).toContain('throttle <b>Budget phone</b> (3G and CPU 6×)')
+    expect(html).toContain('settled in <b>0.8 s</b>')
+    expect(html).toContain('never settled')
+  })
   it('says when the page did not answer the audit', () => {
     const html = reportHtml(data([screen({ audit: null })]))
     expect(html).toContain('did not answer the audit')

@@ -1,4 +1,5 @@
 import { maxCssViewport } from '../shared/calibration'
+import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
 import type { Orientation } from '../shared/types'
@@ -38,6 +39,14 @@ export interface RenderSpec {
    * deviceScaleFactor` wide — and this says what the page saw of it.
    */
   textScale: number
+  /**
+   * Network and CPU conditions for the render (see shared/throttle.ts).
+   * Null when `--throttle` was not given at all, which is what keeps the
+   * flagless JSON the contract it always was: the `throttle` and
+   * `settledMs` keys appear only when the flag was — `--throttle none`
+   * included, so a baseline can be asked for by name.
+   */
+  throttle: string | null
 }
 
 export interface AuditCommand {
@@ -141,6 +150,11 @@ ${presets}
                        viewport at f times its density — what a larger-text setting or a
                        Windows panel at 150% does to a layout — and the PNG stays the
                        screen's size. The audit's millimetres grow with it.
+  --throttle <id>      Network and CPU conditions, as Chrome DevTools presets them:
+${THROTTLE_PROFILES.map(t => `                         ${t.id.padEnd(13)} ${t.summary}`).join('\n')}
+                       Given, the JSON carries \`throttle\` and, for snap and report,
+                       \`settledMs\`: the time from navigation to the page going paint-quiet
+                       (a baseline: --throttle none). Absent, the JSON is unchanged.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
   --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
@@ -181,10 +195,10 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale'])
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle'])
 type Command = 'snap' | 'diff' | 'audit' | 'report'
 /** Flags every command takes. */
-const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale'])
+const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
 /**
  * The rest, per command. A flag outside a command's set is refused, and the
  * message names the first command (in this order) that takes it — so
@@ -273,7 +287,16 @@ function presetSpec(id: string): RenderSpec {
     orientation: DEFAULT_ORIENTATION,
     mobile: preset.group === 'mobile',
     textScale: DEFAULT_TEXT_SCALE,
+    throttle: null,
   }
+}
+
+/** Null when the flag is absent (see `RenderSpec.throttle`); an unknown id names the valid ones. */
+function resolveThrottle(flags: Map<string, string | true>): string | null {
+  const raw = flags.get('throttle')
+  if (raw === undefined) return null
+  if (!isThrottleId(raw)) throw new ArgError(`--throttle: expected one of ${THROTTLE_IDS.join(', ')}, got "${String(raw)}"`)
+  return raw
 }
 
 function resolveTextScale(flags: Map<string, string | true>): number {
@@ -308,8 +331,9 @@ function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
  */
 function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
   const textScale = resolveTextScale(flags)
+  const throttle = resolveThrottle(flags)
   const { specs, matrix } = resolveScreens(flags)
-  return { specs: specs.map(s => ({ ...s, textScale })), matrix }
+  return { specs: specs.map(s => ({ ...s, textScale, throttle })), matrix }
 }
 
 function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
@@ -340,6 +364,7 @@ function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[
       orientation: DEFAULT_ORIENTATION,
       mobile: false,
       textScale: DEFAULT_TEXT_SCALE,
+      throttle: null,
     }
     return { specs: [orientSpec(spec, orientation)], matrix: false }
   }
@@ -397,7 +422,8 @@ export function parseArgs(argv: string[]): CliCommand {
     const named = flags.has('preset') || flags.has('matrix') || ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
     const orientation = resolveOrientation(flags)
     const textScale = resolveTextScale(flags)
-    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation), textScale }))
+    const throttle = resolveThrottle(flags)
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation), textScale, throttle }))
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
     return {
       command,

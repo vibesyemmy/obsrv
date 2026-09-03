@@ -34,6 +34,8 @@ export interface ReportScreen {
   /** The render, at the screen's device pixels, panel profile applied. */
   png: ReportImage
   settled: boolean
+  /** Time to paint-quiet from navigation, ms; null when it never settled. Shown when a throttle was named. */
+  settledMs?: number | null
   /** Null when the page did not answer the audit. */
   audit: AuditResult | null
   /**
@@ -50,6 +52,8 @@ export interface ReportScreen {
 }
 
 export interface ReportData {
+  /** The network and CPU conditions every screen was rendered under, when `--throttle` was given. */
+  throttle?: { id: string; label: string; summary: string }
   url: string
   generatedAt: string
   version: string
@@ -157,6 +161,7 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `<p class="facts"><b>${s.cssWidth}×${s.cssHeight}</b> CSS px${s.deviceScaleFactor !== 1 ? ` at <b>${s.deviceScaleFactor}x</b>` : ''} · ` +
     `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.orientation)}` +
     `${s.textScale !== 1 ? ` · text <b>${escapeHtml(formatTextScale(s.textScale))}</b>` : ''}` +
+    `${s.settledMs === undefined ? '' : s.settledMs === null ? ' · <span class="bad">never settled</span>' : ` · settled in <b>${num(s.settledMs / 1000, 1)} s</b>`}` +
     `${s.settled ? '' : ' · <span class="bad">not settled</span>'}</p>` +
     // The screen's own figure: always for a screen with no comparison, and
     // for a compared screen only when the profile made it a different image
@@ -179,6 +184,7 @@ export function reportHtml(data: ReportData): string {
     `<title>Obsrv report — ${url}</title>\n<style>${CSS}</style>\n</head>\n<body>\n<main>\n` +
     `<h1>Obsrv report</h1>\n<p class="facts"><a href="${url}">${url}</a><br>` +
     `Panel profile <b>${escapeHtml(data.profile.label)}</b> · thresholds ${data.thresholds.tapMm} mm targets, ${data.thresholds.textMm} mm text · ` +
+    `${data.throttle ? `throttle <b>${escapeHtml(data.throttle.label)}</b> (${escapeHtml(data.throttle.summary)}) · ` : ''}` +
     `${escapeHtml(data.generatedAt)} · obsrv ${escapeHtml(data.version)}</p>\n` +
     `<p>The same page on the screens people own. Each render is at the screen's true density; the audit measures ` +
     `tap targets and text in millimetres on that screen; 1x screens are compared with the 2x display the page was ` +

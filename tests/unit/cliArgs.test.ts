@@ -30,7 +30,7 @@ describe('parseArgs: snap', () => {
     const cmd = snap('https://x.test')
     expect(cmd.url).toBe('https://x.test')
     expect(cmd.specs).toEqual([
-      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait', mobile: false, textScale: 1 },
+      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait', mobile: false, textScale: 1, throttle: null },
     ])
     expect(cmd.profileId).toBe('reference')
     expect(cmd.out).toBe('obsrv-1080p-24.png')
@@ -41,7 +41,7 @@ describe('parseArgs: snap', () => {
   })
   it('resolves a preset, including mobile dsf', () => {
     const cmd = snap('x.test', '--preset', 'iphone-61')
-    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait', mobile: true, textScale: 1 })
+    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait', mobile: true, textScale: 1, throttle: null })
     expect(cmd.out).toBe('obsrv-iphone-61.png')
   })
   it('rejects an unknown preset, listing the valid ids', () => {
@@ -50,12 +50,12 @@ describe('parseArgs: snap', () => {
   })
   it('accepts custom --width/--height with optional --dsf and --diagonal', () => {
     const cmd = snap('x.test', '--width', '800', '--height', '600', '--dsf', '2', '--diagonal', '13.3')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait', mobile: false, textScale: 1 })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait', mobile: false, textScale: 1, throttle: null })
     expect(cmd.out).toBe('obsrv-custom.png')
   })
   it('custom dims default dsf 1 and no diagonal', () => {
     const cmd = snap('x.test', '--width', '640', '--height', '480')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait', mobile: false, textScale: 1 })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait', mobile: false, textScale: 1, throttle: null })
   })
   it('rejects --preset combined with custom dims', () => {
     expect(() => snap('x.test', '--preset', 'laptop-768', '--width', '800', '--height', '600')).toThrow(/mutually exclusive/)
@@ -129,7 +129,7 @@ describe('parseArgs: --orientation', () => {
       deviceScaleFactor: 3,
       diagonalInches: 6.1,
       orientation: 'landscape',
-      mobile: true, textScale: 1,
+      mobile: true, textScale: 1, throttle: null,
     })
   })
 
@@ -301,5 +301,24 @@ describe('parseArgs: report', () => {
     expect(() => report('x.test', '--full-page')).toThrow(/snap flag/)
     expect(() => report('x.test', '--out-dir', 'd')).toThrow(/diff flag/)
     expect(() => parseArgs(['diff', 'x.test', '--out', 'r.html'])).toThrow(/snap flag/)
+  })
+})
+
+describe('parseArgs: --throttle', () => {
+  it('absent is null on every spec, so the flagless JSON stays the contract it was', () => {
+    expect(snap('https://x.test').specs[0]!.throttle).toBeNull()
+    expect(diff('https://x.test').spec.throttle).toBeNull()
+  })
+  it('a preset id lands on every spec of the run, `none` included', () => {
+    expect(snap('https://x.test', '--throttle', '3g').specs[0]!.throttle).toBe('3g')
+    expect(snap('https://x.test', '--throttle', 'none').specs[0]!.throttle).toBe('none')
+    const m = snap('https://x.test', '--matrix', 'laptop-768,android-65', '--throttle', 'budget-phone')
+    expect(m.specs.map(s => s.throttle)).toEqual(['budget-phone', 'budget-phone'])
+    const r = parseArgs(['report', 'https://x.test', '--throttle', 'mid-phone']) as ReportCommand
+    expect(r.specs.every(s => s.throttle === 'mid-phone')).toBe(true)
+    expect((parseArgs(['audit', 'https://x.test', '--throttle', 'cpu-6x']) as AuditCommand).spec.throttle).toBe('cpu-6x')
+  })
+  it('an unknown id names the valid ones', () => {
+    expect(() => snap('https://x.test', '--throttle', 'edge')).toThrow(/--throttle: expected one of none, fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone/)
   })
 })

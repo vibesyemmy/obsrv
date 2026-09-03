@@ -60,11 +60,11 @@ test('initialize + tools/list: six tools with schemas, honestly annotated', asyn
   }
   const snap = tools.find(t => t.name === 'obsrv_snap')!
   expect(Object.keys(snap.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs', 'mode', 'textScale']),
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'waitMs', 'timeoutMs', 'mode', 'textScale', 'throttle']),
   )
   const diff = tools.find(t => t.name === 'obsrv_diff')!
   expect(Object.keys(diff.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'profile', 'includeImages']),
+    expect.arrayContaining(['url', 'preset', 'profile', 'includeImages', 'throttle']),
   )
   const drive = tools.find(t => t.name === 'obsrv_drive')!
   expect(Object.keys(drive.inputSchema.properties ?? {})).toEqual(
@@ -103,6 +103,8 @@ test('obsrv_presets: the full catalog, straight from presets.ts', async () => {
   }
   expect(catalog.presets).toHaveLength(22)
   expect(catalog.profiles).toHaveLength(4)
+  const throttles = (r.structuredContent as { throttles: { id: string; cpuRate: number }[] }).throttles
+  expect(throttles.map(t => t.id)).toEqual(['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone'])
   expect(catalog.presets.find(p => p.id === 'laptop-768')).toMatchObject({ cssWidth: 1366, deviceScaleFactor: 1, ppi: 100 })
   expect(catalog.profiles.find(p => p.id === 'budget-tn')?.contrastRatio).toBe(700)
   // The text block carries the same payload for structured-content-blind clients.

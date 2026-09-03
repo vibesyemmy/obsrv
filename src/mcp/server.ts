@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -152,6 +153,16 @@ const orientationField = z
       'landscape phone layout, or a monitor stood on end.',
   )
 
+const throttleField = z
+  .enum(THROTTLE_IDS)
+  .optional()
+  .describe(
+    'Network and CPU conditions for the render, as Chrome DevTools presets them: ' +
+      THROTTLE_PROFILES.map(t => `${t.id} (${t.summary})`).join('; ') +
+      '. Default: none. Given, the result carries `settledMs` — the time from navigation to the page going ' +
+      'paint-quiet — which is how the page feels on that screen; ask for `none` too for a baseline to compare against.',
+  )
+
 const snapInputShape = {
   url: urlField,
   preset: z
@@ -177,6 +188,7 @@ const snapInputShape = {
         'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
         'and the PNG stays the screen\'s size.',
     ),
+  throttle: throttleField,
   profile: profileField,
   fullPage: z.boolean().optional().describe('Capture the full page height (device px capped at 4096; a warning reports clamping).'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
@@ -231,6 +243,15 @@ const snapOutputShape = {
         "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
   deviceScaleFactor: z.number().optional().describe('Headless only.'),
   textScale: z.number().optional().describe('Browser zoom as reflow the page was rendered at. Present only when a scale other than 1 was applied.'),
+  throttle: z.string().optional().describe('Headless only, and only when `throttle` was given: the conditions applied.'),
+  settledMs: z
+    .number()
+    .nullable()
+    .optional()
+    .describe(
+      'Headless only, and only when `throttle` was given: ms from navigation to the page going paint-quiet (waitMs taken out). ' +
+        'Null when it never settled within timeoutMs. Compare against a `none` run of the same page.',
+    ),
   profile: z.string().optional().describe('Headless only: applied panel profile id.'),
   settled: z
     .boolean()
@@ -280,6 +301,7 @@ const diffInputShape = {
     .optional()
     .describe('Screen preset id — 1x presets only (e.g. laptop-768, 1080p-24); dense presets are refused. Default: 1080p-24.'),
   profile: profileField,
+  throttle: throttleField,
   includeImages: z
     .boolean()
     .optional()
@@ -323,6 +345,17 @@ const diffOutputShape = {
 }
 
 const presetsOutputShape = {
+  throttles: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        network: z.object({ downloadBps: z.number(), uploadBps: z.number(), latencyMs: z.number() }).nullable(),
+        cpuRate: z.number(),
+        summary: z.string(),
+      }),
+    )
+    .describe("The `throttle` values obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report take: Chrome DevTools' presets."),
   orientation: z
     .string()
     .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation.'),
@@ -864,6 +897,7 @@ const auditInputShape = {
         'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
         'so every millimetre grows with it.',
     ),
+  throttle: throttleField,
   tapMm: z
     .number()
     .min(0)
@@ -892,6 +926,7 @@ const auditOutputShape = {
   cssHeight: z.number(),
   deviceScaleFactor: z.number(),
   textScale: z.number().optional().describe('Browser zoom as reflow the page was measured at. Present only when a scale other than 1 was applied.'),
+  throttle: z.string().optional().describe('Only when `throttle` was given: the conditions the page loaded under.'),
   pageHeight: z.number().describe('The page\'s full height in CSS px; rects are page coordinates, so the audit covers all of it.'),
   ppi: z.number().nullable().describe('Device pixels per inch of the screen; null for custom dims without a diagonal.'),
   thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
@@ -974,6 +1009,7 @@ const reportInputShape = {
         'viewport at textScale times the density — what a larger-text setting or a Windows panel at 150% does — ' +
         'on every screen in the matrix.',
     ),
+  throttle: throttleField,
   profile: profileField,
   tapMm: z.number().min(0).optional().describe(`Audit threshold for tap targets, mm. Default ${DEFAULT_TAP_MM} (provisional).`),
   textMm: z.number().min(0).optional().describe(`Audit threshold for text, mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
@@ -988,6 +1024,7 @@ const reportOutputShape = {
   generatedAt: z.string(),
   profile: z.string(),
   thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
+  throttle: z.string().optional().describe('Only when `throttle` was given: the conditions every screen rendered under.'),
   screens: z.array(
     z.object({
       preset: z.string(),
@@ -997,6 +1034,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
+      settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       audit: z
         .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
         .nullable(),
@@ -1226,10 +1264,11 @@ server.registerTool(
 server.registerTool(
   'obsrv_presets',
   {
-    title: 'List screen presets and panel profiles',
+    title: 'List screen presets, panel profiles and throttle presets',
     description:
       `List every screen preset (id, label, group, CSS dims, deviceScaleFactor, panel diagonal, derived physical ` +
-      `ppi) and panel profile (id, label, simulation params) accepted by obsrv_snap and obsrv_diff. Read straight ` +
+      `ppi), panel profile (id, label, simulation params) and throttle preset (network conditions, CPU rate) accepted ` +
+      `by obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report. Read straight ` +
       `from the app's preset table — nothing is rendered. The dimensions are each preset's natural orientation ` +
       `(portrait for the mobile ones, landscape for the monitors); every preset also rotates — see the ` +
       `\`orientation\` note in the result.`,
