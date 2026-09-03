@@ -31,6 +31,7 @@ export async function launchApp(
     env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
   })
   if (userData === undefined) app.on('close', () => rmSync(dir, { recursive: true, force: true }))
+  hardenEvaluate(app)
   await app.evaluate(async ({ app: electronApp }) => {
     await electronApp.whenReady()
     if (!(globalThis as { __obsrv?: unknown }).__obsrv) {
@@ -49,6 +50,42 @@ export async function launchApp(
     { timeout: 10_000 },
   )
   return app
+}
+
+/**
+ * Closes the window behind `Resulting promise was garbage collected`.
+ *
+ * `app.evaluate` runs the function in main through the Node inspector's
+ * `Runtime.callFunctionOn` with `awaitPromise`, and V8's inspector holds
+ * the promise it awaits *weakly*. Playwright's utility wraps the result in
+ * a promise; when the evaluated function is synchronous that promise is
+ * already resolved as the inspector call returns, and nothing references
+ * it until the next microtask checkpoint runs the inspector's handler. On
+ * a main process that allocates hard — every tab's frames arrive over IPC —
+ * a collection in that gap takes the promise, and Playwright reports it
+ * collected although the function ran. Measured: a synchronous callback
+ * with a collection forced in that gap is lost every time; a callback that
+ * returns a promise resolves inside a checkpoint and is never lost.
+ *
+ * So every evaluate goes through an async frame in main: the caller's
+ * function travels as source, is rebuilt there, and is awaited. Nothing is
+ * retried, so nothing runs twice — the failure was a lost result, and a
+ * retry would have re-run whatever the function did. The constraints are
+ * Playwright's own: no closures, one serialisable argument. A string
+ * expression is evaluated as before.
+ */
+function hardenEvaluate(app: ElectronApplication): void {
+  const original = app.evaluate.bind(app)
+  const hardened = (pageFunction: unknown, arg?: unknown): Promise<unknown> =>
+    original(
+      async (electron, [src, a]: [string, unknown]) => {
+        // eslint-disable-next-line no-new-func
+        const built: unknown = new Function(`return (${src})`)()
+        return typeof built === 'function' ? await built(electron, a) : built
+      },
+      [String(pageFunction), arg] as [string, unknown],
+    )
+  Object.defineProperty(app, 'evaluate', { value: hardened, configurable: true, writable: true })
 }
 
 /**

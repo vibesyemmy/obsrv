@@ -16,26 +16,50 @@ contention. This records what was investigated so it is not investigated again.
 
 Each one passes when its file is run alone, and on a plain re-run.
 
-## `Resulting promise was garbage collected` — what it actually is
+## `Resulting promise was garbage collected` — what it actually is, and the fix
 
-Playwright rewrites CDP's `Promise was collected` into that message
-(`playwright-core/lib/coreBundle.js`, `rewriteError`). `app.evaluate` issues
-`Runtime.callFunctionOn` with `awaitPromise: true` against the main process, and
-V8's inspector reports this when the promise it is awaiting becomes unreachable
-before it settles.
+Playwright rewrites CDP's `Promise was collected` into that message. `app.evaluate`
+issues `Runtime.callFunctionOn` with `awaitPromise: true` against the main
+process's Node inspector, and **V8's inspector holds the promise it awaits
+weakly**. Playwright's utility wraps the evaluated function's result in a
+promise. When the function is *synchronous*, that promise is already resolved
+as the inspector call returns, and from then until the next microtask
+checkpoint runs the inspector's own handler, nothing references it. A garbage
+collection in that gap takes it, and the call fails — although the function
+ran. Main allocates hard (every tab's frames arrive over IPC), so on a loaded
+runner the gap is hit a few times per thousand evaluates: "a different spec
+each time, always green alone", and in the v0.22.1 tag run it landed in a
+synchronous `steerNative` evaluate while a navigation was committing.
 
-**It was not reproducible.** Attempts, all zero occurrences:
+Reproduced on demand (2026-09-03, `--js-flags=--expose-gc`, a collection
+forced in every gap after the function returns — microtask, `setImmediate`,
+timers at 0/1/3 ms):
 
-- 300 synchronous, 300 async and 150 sleeping `app.evaluate` calls on an idle app
-- 400 synchronous and 100 sleeping calls with four tabs painting continuously, so
-  main was taking a live BGRA frame stream over IPC
-- 25 forced major GCs (`--js-flags=--expose-gc`) landing inside the window of a
-  promise deliberately left pending for 300ms
-- Five full suite runs on a quiet machine — roughly 1,200 tests, no occurrence
+| Callback | Lost |
+| --- | --- |
+| synchronous, returns a value | 20 of 20 (and a counter showed every one had run) |
+| synchronous, returns `Promise.resolve(value)` | 0 of 20 |
+| async | 0 of 40 |
+| either kind, through the wrapper below | 0 of 60 |
 
-The forced-GC result is the informative one: V8 keeps a pending promise alive
-while anything can still resolve it, so "the collector took it mid-flight" is
-**not** the mechanism. The promise has to be one that can never settle.
+The earlier attempts that found nothing had forced collections *while a
+promise was still pending*, which V8 keeps alive; the window is after
+resolution, and only for a promise resolved outside a checkpoint.
+
+**The fix is in the harness:** `launchApp` replaces `app.evaluate` with a
+version that sends the caller's function as source, rebuilds it in main, and
+awaits it inside an async wrapper (`hardenEvaluate` in `tests/e2e/launch.ts`).
+The promise Playwright awaits then resolves inside a checkpoint and is never
+unreferenced while unsettled. Nothing is retried, so nothing runs twice — the
+old per-spec retry in `image-mode.spec.ts` re-ran the function on every hit
+and is gone. The constraints are Playwright's own: no closures, one
+serialisable argument.
+
+Related, and not the same thing: `webContents.executeJavaScript` on a
+webContents that is destroyed mid-call (a density change recreates the
+target's window) never settles — it hangs, and the promise stays reachable,
+so an evaluate awaiting it runs into the test timeout rather than this error.
+A spec that awaits a page script across a recreation should race it.
 
 ## Ruled out
 

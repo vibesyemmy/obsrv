@@ -184,23 +184,15 @@ test('Enter takes the 2x default, Escape cancels, and a partial edge is reported
 })
 
 /**
- * Both panes' URLs from main. Evaluating in main right as a navigation
- * commits occasionally trips Playwright's inspector ("Resulting promise was
- * garbage collected"); that is the harness, not the app, so retry it.
+ * Both panes' URLs from main. This used to retry on "Resulting promise was
+ * garbage collected"; `launchApp` now closes that window for every evaluate
+ * (see `hardenEvaluate` in launch.ts), so a plain read is enough.
  */
-async function paneUrls(): Promise<{ native: string; target: string }> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await app.evaluate(() => {
-        const g = (globalThis as any).__obsrv
-        return { native: g.native.webContents.getURL(), target: g.target.webContents.getURL() }
-      })
-    } catch (e) {
-      if (attempt >= 4 || !/garbage collected/.test(String(e))) throw e
-      await new Promise(r => setTimeout(r, 100))
-    }
-  }
-}
+const paneUrls = (): Promise<{ native: string; target: string }> =>
+  app.evaluate(() => {
+    const g = (globalThis as any).__obsrv
+    return { native: g.native.webContents.getURL(), target: g.target.webContents.getURL() }
+  })
 
 /**
  * Steers the native pane at `url` from inside its page, the way an OS drop
