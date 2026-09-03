@@ -29,10 +29,36 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
   const send = (channel: string): void => {
     if (!win.isDestroyed()) win.webContents.send(channel)
   }
+  /**
+   * Deferred out of whatever is on the stack, and refused while an open is
+   * still in flight. Closing a detached inspector synchronously from inside
+   * a Node-inspector dispatch (an `app.evaluate` in the e2e harness, or any
+   * future remote driver) in the beat after its frontend has loaded trips a
+   * CHECK in Chromium's DevTools teardown and takes the main process down
+   * with SIGTRAP — measured 3 of 3, against 0 of 3 for the same close from a
+   * timer, or 300 ms later. A menu click from the UI never sits on that
+   * stack, so a human never saw it; a tick of deferral costs them nothing.
+   * The in-flight guard is the other half: a second toggle before
+   * `devtools-opened` used to re-open rather than close, since
+   * `isDevToolsOpened()` answers for the request, not the window.
+   */
+  const devToolsOpening = new WeakSet<WebContents>()
   const toggleDetachedDevTools = (wc: WebContents): void => {
-    if (wc.isDestroyed()) return
-    if (wc.isDevToolsOpened()) wc.closeDevTools()
-    else wc.openDevTools({ mode: 'detach' })
+    if (wc.isDestroyed() || devToolsOpening.has(wc)) return
+    setTimeout(() => {
+      if (wc.isDestroyed() || devToolsOpening.has(wc)) return
+      if (wc.isDevToolsOpened()) {
+        wc.closeDevTools()
+        return
+      }
+      devToolsOpening.add(wc)
+      const settle = (): void => {
+        devToolsOpening.delete(wc)
+      }
+      wc.once('devtools-opened', settle)
+      wc.once('devtools-closed', settle)
+      wc.openDevTools({ mode: 'detach' })
+    }, 0)
   }
   /** Add *and* activate: "new tab" means the tab you asked for is in front. */
   const openTab = (): void => {

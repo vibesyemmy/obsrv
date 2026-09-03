@@ -148,3 +148,32 @@ bus. Found 2026-09-03 when `text-scale.spec.ts` went red on the built-in
 Retina display after passing on an external 1x monitor — the "second"
 failure that followed was Playwright restarting the worker after the
 first, so the next test met a fresh app without the scale it assumed.
+
+## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
+
+The one flaky retry in the first CI run after the collected-promise fix
+was `devtools.spec.ts:31`, whose second evaluate found the app channel
+closed. Not the harness: **Electron's main process died with SIGTRAP**
+(`EXC_BREAKPOINT` on `CrBrowserMain`, a Chromium CHECK) and Playwright's
+context closed because the CDP connection went with it.
+
+Measured (2026-09-03), closing the target's detached inspector after its
+`devtools-opened` event:
+
+| Close issued | 0 ms after the event | 300 ms after |
+| --- | --- | --- |
+| synchronously inside an `app.evaluate` | crashed 3 of 3 | 0 of 3 |
+| from a `setTimeout` in main | 0 of 3 | 0 of 3 |
+
+So the crash is re-entrancy: DevTools teardown in the beat after the
+frontend loads, re-entering inspector machinery while a Node-inspector
+dispatch is on the stack. A menu click from the UI never sits on that
+stack, so no human saw it; every spec that drives the menu through
+`app.evaluate` did. The original spec closed on `isDevToolsOpened()`, which
+answers for the request rather than the window, and a loaded runner
+landed that close in the window.
+
+Fixed in the app rather than the spec: `toggleDetachedDevTools` defers a
+tick and refuses a second toggle while an open is in flight (that second
+toggle used to re-open, for the same flag-versus-window reason). The spec
+now runs the crashing sequence itself, twice, as a regression test.
