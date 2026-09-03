@@ -141,6 +141,10 @@ npx -y getobsrv report http://localhost:5173 --out obsrv-report.html
 # The PNG stays the screen's size; the page lays out in two thirds of it at
 # 1.5x the density, and the audit's millimetres grow to match.
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out zoomed.png
+
+# How the page feels there: Chrome DevTools' network and CPU presets, and the time
+# to paint-quiet in the JSON (settledMs). Compare against --throttle none.
+npx -y getobsrv snap http://localhost:5173 --preset android-65 --throttle budget-phone --out slow.png
 ```
 
 `npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings

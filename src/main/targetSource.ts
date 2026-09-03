@@ -1,4 +1,5 @@
 import { BrowserWindow, type WebContents } from 'electron'
+import { NO_THROTTLE, type ThrottleProfile } from '../shared/throttle'
 import { cursorCss, DEFAULT_CURSOR } from '../shared/cursor'
 import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
@@ -166,6 +167,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private emulating = false
   /** The page's cursor as CSS; a fresh window starts at the arrow. */
   private cursor = DEFAULT_CURSOR
+  /**
+   * Network conditions and CPU rate for the page, applied through
+   * Chromium's debugger the way DevTools applies them (see
+   * `shared/throttle.ts`). Held here so a recreated window gets them again.
+   */
+  private throttle: ThrottleProfile = NO_THROTTLE
   private readonly fps: number
   /** See TargetSourceOptions.mobileEmulation. */
   private readonly mobileEmulation: boolean
@@ -262,6 +269,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       this.emit('cursor', css)
     })
     this.defaultUserAgent ??= wc.getUserAgent()
+    // A fresh webContents has a fresh debugger session: the throttle in
+    // force is applied to it again. Best effort here — a recreation has no
+    // caller to report to; `setThrottle` reports for the explicit path.
+    if (this.throttle !== NO_THROTTLE) void this.applyThrottle()
     wc.setUserAgent(this.mobile && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
     wc.on('paint', (_event, dirty, image) => {
@@ -298,6 +309,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // Chromium wiped any device emulation with the old document; re-apply
       // before reporting, so the page lays out mobile from its first paint.
       this.applyEmulation()
+      // The CPU rate is renderer state and a cross-process commit can start
+      // running the document before Chromium's own restore of it lands;
+      // saying it again here is cheap and closes most of that window.
+      if (this.throttle !== NO_THROTTLE) void this.applyThrottle()
       if (this.internal) return
       this.intendedUrl = url
       this.emit('url-changed', url)
@@ -438,6 +453,47 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** The page's cursor as CSS, as last reported (see `cursor` event). */
   getCursor(): string {
     return this.cursor
+  }
+
+  /**
+   * Sets the network conditions and CPU rate the page runs under, or lifts
+   * them (`NO_THROTTLE`). Resolves with a message when Chromium refused —
+   * a debugger already attached by other tooling, say — and null when the
+   * conditions are in force. Applied to the current window at once and to
+   * every window a density change swaps in.
+   */
+  async setThrottle(profile: ThrottleProfile): Promise<string | null> {
+    this.throttle = profile
+    return this.applyThrottle()
+  }
+
+  getThrottle(): ThrottleProfile {
+    return this.throttle
+  }
+
+  private async applyThrottle(): Promise<string | null> {
+    if (this.disposed || this.win.isDestroyed()) return null
+    const dbg = this.win.webContents.debugger
+    const off = this.throttle.network === null && this.throttle.cpuRate === 1
+    try {
+      // Nothing to lift on a session that was never opened.
+      if (off && !dbg.isAttached()) return null
+      if (!dbg.isAttached()) dbg.attach('1.3')
+      await dbg.sendCommand('Network.enable')
+      const n = this.throttle.network
+      await dbg.sendCommand(
+        'Network.emulateNetworkConditions',
+        n
+          ? { offline: false, latency: n.latencyMs, downloadThroughput: n.downloadBps, uploadThroughput: n.uploadBps }
+          : { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 },
+      )
+      await dbg.sendCommand('Emulation.setCPUThrottlingRate', { rate: this.throttle.cpuRate })
+      // Lifted conditions leave no session behind; the page runs as before.
+      if (off) dbg.detach()
+      return null
+    } catch (e) {
+      return `throttle ${this.throttle.id} not applied: ${e instanceof Error ? e.message : String(e)}`
+    }
   }
 
   /**

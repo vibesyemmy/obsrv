@@ -1,4 +1,5 @@
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
+import { THROTTLE_PROFILES } from '../shared/throttle'
 import type { Orientation } from '../shared/types'
 
 /**
@@ -28,6 +29,8 @@ export interface SnapToolInput {
   diagonalInches?: number | undefined
   /** Browser zoom as reflow, 1 = none (`--text-scale`). */
   textScale?: number | undefined
+  /** Network and CPU conditions (`--throttle`); see the catalog's `throttles`. */
+  throttle?: string | undefined
   profile?: string | undefined
   fullPage?: boolean | undefined
   waitMs?: number | undefined
@@ -42,6 +45,7 @@ export interface DiffToolInput {
   profile?: string | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
+  throttle?: string | undefined
 }
 
 export interface AuditToolInput {
@@ -53,6 +57,8 @@ export interface AuditToolInput {
   deviceScaleFactor?: number | undefined
   diagonalInches?: number | undefined
   textScale?: number | undefined
+  /** Network and CPU conditions (`--throttle`); see the catalog's `throttles`. */
+  throttle?: string | undefined
   tapMm?: number | undefined
   textMm?: number | undefined
   waitMs?: number | undefined
@@ -65,6 +71,8 @@ export interface ReportToolInput {
   presets?: string[] | undefined
   orientation?: Orientation | undefined
   textScale?: number | undefined
+  /** Network and CPU conditions (`--throttle`); see the catalog's `throttles`. */
+  throttle?: string | undefined
   profile?: string | undefined
   tapMm?: number | undefined
   textMm?: number | undefined
@@ -81,6 +89,7 @@ export function buildReportArgs(input: ReportToolInput, outPath: string): string
   }
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
@@ -116,6 +125,7 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
     if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
   }
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
@@ -157,6 +167,7 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
     if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
   }
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.fullPage) args.push('--full-page')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
@@ -170,6 +181,7 @@ export function buildDiffArgs(input: DiffToolInput, outDir: string): string[] {
   const args = ['diff', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   args.push('--out-dir', outDir)
@@ -319,9 +331,19 @@ export interface ProfileEntry {
   summary: string
 }
 
+export interface ThrottleEntry {
+  id: string
+  label: string
+  network: { downloadBps: number; uploadBps: number; latencyMs: number } | null
+  cpuRate: number
+  summary: string
+}
+
 export interface Catalog {
   presets: PresetEntry[]
   profiles: ProfileEntry[]
+  /** The `throttle` values snap, diff, audit and report take: DevTools' presets. */
+  throttles: ThrottleEntry[]
   /** See ORIENTATION_NOTE — how the dimensions above relate to rotation. */
   orientation: string
 }
@@ -330,6 +352,7 @@ export interface Catalog {
 export function listCatalog(): Catalog {
   return {
     orientation: ORIENTATION_NOTE,
+    throttles: THROTTLE_PROFILES.map(t => ({ id: t.id, label: t.label, network: t.network, cpuRate: t.cpuRate, summary: t.summary })),
     presets: SCREEN_PRESETS.map(p => ({
       id: p.id,
       label: p.label,
