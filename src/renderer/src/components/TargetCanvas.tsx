@@ -466,6 +466,32 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     [dsf, scale, dpr],
   )
 
+  // A date, time or colour input on the page asked for its picker, which
+  // Chromium cannot open offscreen: the overlay hosts an input of the same
+  // type over the element's box on the canvas (see shared/pickerPopup.ts)
+  // and main streams its values into the page. Anchored like the select.
+  useEffect(
+    () =>
+      window.obsrv.onPickerPopup(async popup => {
+        const canvas = canvasRef.current
+        if (popup.tabId !== useStore.getState().activeId || !canvas) return
+        const box = canvas.getBoundingClientRect()
+        const k = (dsf * scale) / dpr
+        const { rect, ...rest } = popup
+        await window.obsrv.openPicker({
+          ...rest,
+          anchor: {
+            x: box.left + rect.x * k,
+            y: box.top + rect.y * k,
+            width: rect.width * k,
+            height: rect.height * k,
+          },
+        })
+        canvas.focus()
+      }),
+    [dsf, scale, dpr],
+  )
+
   // A viewport change invalidates the target, so a frame is owed. Not on
   // mount, though: the shell's own boot sequence (viewport push, frame
   // handshake) can take longer than STALL_MS on a cold start, and the notice

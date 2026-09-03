@@ -1,4 +1,5 @@
-import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
@@ -15,7 +16,10 @@ import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
 import { log } from './log'
-import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseSelectOpen, parseSelectResult, parseTabId, parseUiState } from '../shared/ipcPayloads'
+import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseSelectOpen,
+  parsePickerEvent,
+  parsePickerOpen,
+  parsePickerRequest, parseSelectResult, parseTabId, parseUiState } from '../shared/ipcPayloads'
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
@@ -332,6 +336,7 @@ export function registerIpc(ctx: AppContext): () => void {
     // A second open with one already up would strand the first caller's promise
     // for the life of the app; dismiss it rather than leaking it.
     settleMenu(null)
+    settlePicker()
     overlay.show(request)
     return new Promise<string | null>(resolve => {
       pendingMenu = resolve
@@ -343,6 +348,74 @@ export function registerIpc(ctx: AppContext): () => void {
     if (e.sender !== overlay.webContents) return
     if (raw !== null && typeof raw !== 'string') return
     settleMenu(raw)
+  })
+
+  // --- date, time and colour pickers on the target ---------------------------
+  // The same shape as the select popup below (shared/pickerPopup.ts), except
+  // that the overlay hosts a real input rather than drawing rows, so the
+  // values come back as a stream: `input` while a picker is dragged, `change`
+  // on commit. Main holds the one hosted picker as it holds the one menu, and
+  // the overlay can only report on what main asked it to host.
+  let pendingPicker: { request: PickerRequest; resolve: () => void } | null = null
+
+  const pickerTarget = (tabId: string): WebContents | null => {
+    const session = tabs.tabs.find(t => t.id === tabId)
+    return session && !session.target.webContents.isDestroyed() ? session.target.webContents : null
+  }
+
+  /** Puts the host away without a value: the page forgets the request, the chrome's call resolves. */
+  const settlePicker = (): void => {
+    const p = pendingPicker
+    pendingPicker = null
+    if (!p) return
+    overlay.hide()
+    pickerTarget(p.request.tabId)?.send(IPC.pickerPick, { id: p.request.id, value: null, done: true })
+    p.resolve()
+  }
+
+  on(IPC.pickerOpen, (e, raw: unknown) => {
+    const session = tabs.byWebContents(e.sender)
+    if (!session || session.target.webContents !== e.sender) return
+    const req = parsePickerOpen(raw)
+    if (!req) return
+    if (session.id !== tabs.activeId) {
+      e.sender.send(IPC.pickerPick, { id: req.id, value: null, done: true })
+      return
+    }
+    const k = session.target.getTextScale()
+    const rect = { x: req.rect.x * k, y: req.rect.y * k, width: req.rect.width * k, height: req.rect.height * k }
+    if (!win.isDestroyed()) win.webContents.send(IPC.pickerPopup, { ...req, rect, tabId: session.id })
+  })
+  handle(IPC.pickerHost, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const request = parsePickerRequest(raw)
+    if (!request) return
+    settleMenu(null)
+    settlePicker()
+    overlay.showPicker(request)
+    return new Promise<void>(resolve => {
+      pendingPicker = { request, resolve }
+    })
+  })
+  on(IPC.pickerReady, e => {
+    if (e.sender !== overlay.webContents || !pendingPicker) return
+    const a = pendingPicker.request.anchor
+    overlay.clickAt(Math.round(a.x + a.width / 2), Math.round(a.y + a.height / 2))
+  })
+  on(IPC.pickerEvent, (e, raw: unknown) => {
+    if (e.sender !== overlay.webContents || !pendingPicker) return
+    const ev = parsePickerEvent(raw)
+    if (!ev) return
+    const p = pendingPicker
+    pickerTarget(p.request.tabId)?.send(IPC.pickerPick, { id: p.request.id, value: ev.value, done: ev.done })
+    if (!ev.done) return
+    pendingPicker = null
+    overlay.hide()
+    p.resolve()
+  })
+  on(IPC.pickerClose, e => {
+    if (e.sender !== overlay.webContents) return
+    settlePicker()
   })
 
   // --- <select> popups on the target -----------------------------------------

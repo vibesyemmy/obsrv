@@ -1,6 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { pickerHost, setPickerValue, waitForPicker } from './helpers/picker'
 import { menuKey, menuRows, menuTicked, pickMenu, waitForMenu } from './helpers/select'
 import { launchApp, rendererWindow } from './launch'
 
@@ -178,4 +179,83 @@ test('under a text scale the menu is anchored where the select is drawn', async 
   expect(menu.x).toBeGreaterThanOrEqual(canvasBox.x - 2)
   await menuKey(app, 'Escape')
   await app.evaluate(() => (globalThis as any).__obsrv.target.setTextScale(1))
+})
+
+// --- date, time and colour pickers (shared/pickerPopup.ts) -------------------
+// Chromium's picker is a widget outside the page and cannot be reached from a
+// test any more than from an offscreen window; what is checked is the host
+// input the overlay lays over the page's, that main's click landed on it, and
+// that what the host takes reaches the page with the events a real pick fires.
+
+test('clicking a date input hosts a picker input over it in the overlay; a pick lands in the page with input and change', async () => {
+  const date = await centreOf('date')
+  await page.mouse.click(date.x, date.y)
+  const host = await waitForPicker(app)
+  expect(host.type).toBe('date')
+  expect(host.value).toBe('2026-09-02')
+  expect(host.min).toBe('2026-01-01')
+  expect(host.max).toBe('2026-12-31')
+  // Laid over the input's box on the canvas.
+  const box = await inTarget<{ x: number; y: number }>(
+    `(() => { const r = document.getElementById('date').getBoundingClientRect(); return { x: r.x, y: r.y } })()`,
+  )
+  const corner = await canvasPoint(box.x, box.y)
+  expect(Math.abs(host.x - corner.x)).toBeLessThan(3)
+  expect(Math.abs(host.y - corner.y)).toBeLessThan(3)
+  // Main's click landed and carried a gesture: the host holds focus and
+  // Chromium showed its calendar for `showPicker()` (it throws otherwise).
+  await expect.poll(() => pickerHost(app).then(h => h?.focused ?? false)).toBe(true)
+  await expect.poll(() => pickerHost(app).then(h => h?.shown ?? '')).toBe('ok')
+
+  await setPickerValue(app, '2026-10-05', true)
+  await expect.poll(() => inTarget<string>("document.getElementById('date').value")).toBe('2026-10-05')
+  const log = await pageLog()
+  expect(log).toContain('mousedown:date')
+  expect(log).toContain('input:date')
+  expect(log).toContain('change:date')
+  await expect.poll(() => pickerHost(app)).toBeNull()
+  await expect(page.locator('.target-canvas')).toBeFocused()
+})
+
+test('a colour input streams its values live and commits once', async () => {
+  const before = (await pageLog()).length
+  const c = await centreOf('color')
+  await page.mouse.click(c.x, c.y)
+  const host = await waitForPicker(app)
+  expect(host.type).toBe('color')
+  expect(host.value).toBe('#336699')
+  await expect.poll(() => pickerHost(app).then(h => h?.shown ?? '')).toBe('ok')
+  await setPickerValue(app, '#ff0000', false)
+  await expect.poll(() => inTarget<string>("document.getElementById('color').value")).toBe('#ff0000')
+  // Still up while the picker is being dragged.
+  expect(await pickerHost(app)).not.toBeNull()
+  await setPickerValue(app, '#00ff00', true)
+  await expect.poll(() => inTarget<string>("document.getElementById('color').value")).toBe('#00ff00')
+  const log = (await pageLog()).slice(before)
+  expect(log.filter(l => l === 'input:color')).toHaveLength(2)
+  expect(log.filter(l => l === 'change:color')).toHaveLength(1)
+  await expect.poll(() => pickerHost(app)).toBeNull()
+})
+
+test('Escape dismisses a picker without a change', async () => {
+  const before = (await pageLog()).length
+  const date = await centreOf('date')
+  await page.mouse.click(date.x, date.y)
+  await waitForPicker(app)
+  await menuKey(app, 'Escape')
+  await expect.poll(() => pickerHost(app)).toBeNull()
+  expect(await inTarget<string>("document.getElementById('date').value")).toBe('2026-10-05')
+  expect((await pageLog()).slice(before).filter(l => l.startsWith('change'))).toEqual([])
+  await expect(page.locator('.target-canvas')).toBeFocused()
+})
+
+test('a menu opening puts a hosted picker away', async () => {
+  const date = await centreOf('date')
+  await page.mouse.click(date.x, date.y)
+  await waitForPicker(app)
+  await page.locator('.preset-select').click()
+  await waitForMenu(app)
+  expect(await pickerHost(app)).toBeNull()
+  await menuKey(app, 'Escape')
+  await expect.poll(() => menuRows(app).then(r => r.length)).toBe(0)
 })

@@ -3,6 +3,7 @@ import '@fontsource/ibm-plex-mono/600.css'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { MenuLayer } from './components/MenuLayer'
+import { PickerHost } from './components/PickerHost'
 import './styles.css'
 
 /**
@@ -37,5 +38,14 @@ const overlay = new URLSearchParams(location.search).has('overlay')
 if (overlay) document.documentElement.dataset.overlay = ''
 
 createRoot(document.getElementById('root')!).render(
-  !('obsrv' in window) ? <BrowserNotice /> : overlay ? <MenuLayer /> : <App />,
+  !('obsrv' in window) ? (
+    <BrowserNotice />
+  ) : overlay ? (
+    <>
+      <MenuLayer />
+      <PickerHost />
+    </>
+  ) : (
+    <App />
+  ),
 )

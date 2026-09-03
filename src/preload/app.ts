@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { SelectPopup } from '../shared/selectPopup'
+import type { PickerEvent, PickerPopup, PickerRequest } from '../shared/pickerPopup'
 import type { FrameMessage, MenuRequest, ObsrvApi, TabReport } from '../shared/api'
 import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
@@ -45,6 +46,8 @@ const api: ObsrvApi = {
   onTargetCursor: cb => subscribe<{ tabId: string; cursor: string }>(IPC.targetCursor, cb),
   onSelectPopup: cb => subscribe<SelectPopup>(IPC.selectPopup, cb),
   pickSelect: result => ipcRenderer.send(IPC.selectResult, result),
+  onPickerPopup: cb => subscribe<PickerPopup>(IPC.pickerPopup, cb),
+  openPicker: request => ipcRenderer.invoke(IPC.pickerHost, request),
   inspect: point => ipcRenderer.invoke(IPC.inspect, point),
   back: () => ipcRenderer.send(IPC.back),
   forward: () => ipcRenderer.send(IPC.forward),
@@ -62,6 +65,10 @@ const api: ObsrvApi = {
     return () => ipcRenderer.off(IPC.menuShow, h)
   },
   pickMenu: value => ipcRenderer.send(IPC.menuPick, value),
+  onPickerShow: fn => subscribe<PickerRequest | null>(IPC.pickerShow, fn),
+  pickerReady: () => ipcRenderer.send(IPC.pickerReady),
+  pickerEvent: (ev: PickerEvent) => ipcRenderer.send(IPC.pickerEvent, ev),
+  closePicker: () => ipcRenderer.send(IPC.pickerClose),
   setMode: mode => ipcRenderer.send(IPC.setMode, mode),
   sendInput: ev => ipcRenderer.send(IPC.sendInput, ev),
   getHostInfo: () => ipcRenderer.invoke(IPC.getHostInfo),
