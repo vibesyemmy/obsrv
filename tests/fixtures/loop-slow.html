@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>loop-fixture-slow</title>
+    <!-- The same SPA as loop.html, rewriting its URL a beat after load rather
+         than during parse — the shape of a router that redirects after mount,
+         and of the loop as a slow machine sees it: the rewrite lands well after
+         the mirrored load that caused it. -->
+    <script>setTimeout(() => history.replaceState(null, '', '?r=' + Math.random().toString(36).slice(2)), 400)</script>
+  </head>
+  <body></body>
+</html>

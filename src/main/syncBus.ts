@@ -44,10 +44,19 @@ type Pane = 'native' | 'target'
  * to trip the breaker, leaving the target on the page it already showed
  * (the sync.spec flake, 2026-09-03).
  */
-const LOOP_WINDOW_MS = 1_000
+const LOOP_WINDOW_MS = 3_000
 const LOOP_ALTERNATIONS = 2
-/** An in-place rewrite this soon after a mirrored load into the same pane is a bounce. */
-const BOUNCE_MS = 300
+/**
+ * A bounce is the first in-place rewrite a pane commits after a load the bus
+ * itself issued into it — a state, not a stopwatch. The first cut of this
+ * breaker gave the rewrite 300 ms to arrive; the CI runner's loop hopped
+ * every ~330 ms and ran for 15 loads unbroken (2026-09-03). This bound is a
+ * backstop only, so that a load left armed by a page that never rewrote is
+ * not attributed the user's own in-page click a minute later.
+ */
+const BOUNCE_MS = 1_500
+/** An issued load that has not committed in this long is forgotten. */
+const ISSUED_MAX_AGE_MS = 10_000
 
 /** Mirrors scroll offset and navigation between the two panes. */
 export function attachSyncBus(
@@ -56,48 +65,77 @@ export function attachSyncBus(
   onUrlChanged: (url: string) => void,
 ): SyncBus {
   /**
-   * The URL each pane is expected to commit next because we (or an explicit
-   * `navigate`) sent it there. A pane's commit always clears its own slot,
-   * matching or not: a redirect, a failed load or an aborted navigation must
-   * not leave a stale expectation that swallows a later genuine mirror.
+   * Every URL we (or an explicit `navigate`) sent into each pane and have
+   * not seen commit, with when it was sent. A pane's commit of one of them
+   * is an echo — not news, not a mirror, not a reset — *whichever* of them
+   * it is: two mirrored loads can be in flight into one pane at once, and
+   * the superseded one still commits. A single "next expected URL" read
+   * that commit as a new document and reset the loop count, which is how
+   * the loop fixture ran for 252 loads unbroken (2026-09-03). An echo also
+   * retires whatever was sent before it, and a new document retires
+   * everything: a redirect, a failed load or an aborted navigation must not
+   * leave a stale entry that swallows a later genuine navigation. The age
+   * bound is the backstop for a load that never commits at all.
    */
-  const pending: Record<Pane, string | null> = { native: null, target: null }
-  /** When a mirrored load was last issued *into* each pane; a commit soon after is a bounce. */
-  const lastMirroredLoadAt: Record<Pane, number> = { native: 0, target: 0 }
+  const issued: Record<Pane, Map<string, number>> = { native: new Map(), target: new Map() }
+  /**
+   * When the bus last issued a load *into* each pane (0: never, or retired
+   * by a new document since). The load's own commit and the in-place
+   * rewrites after it leave the arm — they are what it is for.
+   */
+  const armedAt: Record<Pane, number> = { native: 0, target: 0 }
   let lastReported = ''
   let lastMirror: { from: Pane; at: number } | null = null
   /** Consecutive direction reversals within `LOOP_WINDOW_MS` of each other. */
   let alternations = 0
+  /** One line per loop episode, not per hop: reset with the count. */
   let loopWarned = false
 
+  /** Takes `url` out of the pane's issued set, and everything sent before it; false if it was not there. */
+  function retire(pane: Pane, url: string, now: number): boolean {
+    const sent = issued[pane].get(url)
+    for (const [u, at] of issued[pane]) {
+      if ((sent !== undefined && at <= sent) || now - at > ISSUED_MAX_AGE_MS) issued[pane].delete(u)
+    }
+    return sent !== undefined
+  }
+
   function mirror(from: Pane, url: string, inPage: boolean): void {
-    const expected = pending[from]
-    pending[from] = null
+    const now = Date.now()
+    const echo = retire(from, url, now)
     // Report every commit except the echo of one already reported — the
     // second pane committing the URL the first one was mirrored to (or both
     // panes committing an explicit `navigate`). A same-URL commit that is not
     // an echo is still news: Electron emits no `did-navigate` for a committed
     // error page, so the Back that returns from one lands on the URL last
     // reported, and the renderer clears its load-error badge on that report.
-    if (url !== lastReported || expected !== url) {
+    if (url !== lastReported || !echo) {
       lastReported = url
       onUrlChanged(url)
     }
-    if (expected === url) return
+    if (echo) return
 
     const to: Pane = from === 'native' ? 'target' : 'native'
     const other = from === 'native' ? target : native
+    // A new document in this pane supersedes whatever was still in flight
+    // into it, and disarms it: only what the bus sends from here on counts.
+    if (!inPage) {
+      issued[from].clear()
+      armedAt[from] = 0
+    }
     if (other.webContents.isDestroyed() || other.webContents.getURL() === url) return
 
-    const now = Date.now()
-    // Only a bounce accumulates: an in-place rewrite within a beat of a
-    // mirrored load into this pane. Anything else — a new document, or a
-    // rewrite long after — starts the count afresh. Same-direction mirrors
-    // leave the count alone: a mirrored load commits twice when the page
-    // rewrites its URL, and otherwise only a quiet window resets.
-    const bounced = inPage && now - lastMirroredLoadAt[from] < BOUNCE_MS
-    if (!bounced || !lastMirror || now - lastMirror.at >= LOOP_WINDOW_MS) alternations = 0
-    else if (lastMirror.from === to) alternations++
+    // Only a bounce accumulates; anything else starts the count afresh.
+    // Same-direction mirrors leave the count alone: a mirrored load commits
+    // twice when the page rewrites its URL, and otherwise only a quiet
+    // window resets.
+    const armed = armedAt[from]
+    const bounced = inPage && armed !== 0 && now - armed < BOUNCE_MS
+    if (!bounced || !lastMirror || now - lastMirror.at >= LOOP_WINDOW_MS) {
+      // A fresh count is a fresh episode: the next loop gets its own line.
+      alternations = 0
+      loopWarned = false
+    } else if (lastMirror.from === to) alternations++
     // A dropped attempt is recorded too, so a loop that keeps committing stays
     // broken until it has been quiet for the whole window.
     lastMirror = { from, at: now }
@@ -109,8 +147,8 @@ export function attachSyncBus(
       return
     }
 
-    pending[to] = url
-    lastMirroredLoadAt[to] = now
+    issued[to].set(url, now)
+    armedAt[to] = now
     void other.load(url)
   }
 
@@ -126,8 +164,9 @@ export function attachSyncBus(
 
   return {
     expect(url: string): void {
-      pending.native = url
-      pending.target = url
+      const now = Date.now()
+      issued.native.set(url, now)
+      issued.target.set(url, now)
     },
     // This channel is driven by the sync preload inside the two *page*
     // webContents, never by the app's own renderer, so the sender check here

@@ -7,6 +7,7 @@ const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 const REDIRECT = pathToFileURL(resolve(__dirname, '../fixtures/redirect.html')).href
 const LOOP = pathToFileURL(resolve(__dirname, '../fixtures/loop.html')).href
+const LOOP_SLOW = pathToFileURL(resolve(__dirname, '../fixtures/loop-slow.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -163,7 +164,7 @@ test('quick legitimate reversals are not a loop: three navigations back and fort
   }
 })
 
-test('a page that rewrites its own URL trips the loop breaker, once', async () => {
+async function expectLoopBrokenOnce(loopUrl: string): Promise<void> {
   await app.evaluate(() => {
     const g = globalThis as any
     g.__warns = [] as string[]
@@ -182,8 +183,8 @@ test('a page that rewrites its own URL trips the loop breaker, once', async () =
     g.__obsrv.target.webContents.on('did-navigate', g.__onTarget)
   })
 
-  await page.evaluate(u => window.obsrv.navigate(u), LOOP)
-  await expect.poll(() => app.evaluate(() => (globalThis as any).__warns.length), { timeout: 5_000 }).toBe(1)
+  await page.evaluate(u => window.obsrv.navigate(u), loopUrl)
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__warns.length), { timeout: 10_000 }).toBe(1)
 
   // Let the loads in flight at the trip land and the breaker's window reset,
   // then check the panes stay put: the loop must not pick up again once the
@@ -193,8 +194,8 @@ test('a page that rewrites its own URL trips the loop breaker, once', async () =
   await new Promise(r => setTimeout(r, 500))
   const after = await urls(app)
   expect(after).toEqual(before)
-  expect(after.native.startsWith(LOOP)).toBe(true)
-  expect(after.target.startsWith(LOOP)).toBe(true)
+  expect(after.native.startsWith(loopUrl)).toBe(true)
+  expect(after.target.startsWith(loopUrl)).toBe(true)
 
   const seen = await app.evaluate(() => {
     const g = globalThis as any
@@ -210,4 +211,15 @@ test('a page that rewrites its own URL trips the loop breaker, once', async () =
   // most one mirror out, four back, and the reversing third alternation is
   // the one dropped.
   expect(seen.loads.native + seen.loads.target - 2).toBeLessThanOrEqual(5)
+}
+
+test('a page that rewrites its own URL trips the loop breaker, once', async () => {
+  await expectLoopBrokenOnce(LOOP)
+})
+
+// The CI runner's shape of the same loop: each hop took ~330 ms there, and a
+// bounce window of 300 ms let it run (15 and 17 mirrored loads, 2026-09-03).
+// A rewrite that lands 400 ms after the load must still read as a bounce.
+test('a page that rewrites its URL a beat after load trips the loop breaker too', async () => {
+  await expectLoopBrokenOnce(LOOP_SLOW)
 })

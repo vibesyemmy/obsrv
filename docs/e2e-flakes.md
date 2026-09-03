@@ -278,6 +278,32 @@ the line: a spec navigates as fast as a loop. The loop fixture still trips
 it once; a new test does four quick reversals and expects every one to
 mirror.
 
+That first cut gave the rewrite 300 ms to arrive after the mirrored load,
+and the 0.25.1 `main` run showed what a stopwatch is worth: the runner's
+loop hopped every ~330 ms, no hop read as a bounce, and the fixture ran
+for 15 and 17 mirrored loads on the two attempts. Reproduced here with a
+fixture that rewrites 400 ms after load (`loop-slow.html`, now a test):
+the breaker never fired. Two changes, both measured on that fixture:
+
+- The bounce is a state, not a time: a pane is *armed* by a load the bus
+  issued into it, and stays armed through that load's commit and the
+  in-place rewrites after it, until a new document commits there. The
+  time bound (`BOUNCE_MS`, 1.5 s) is a backstop for a page that never
+  rewrote, so an arm cannot claim the user's own in-page click a minute
+  later; the window for consecutive alternations is 3 s.
+- The bus remembers *every* URL it sent into a pane, not the latest. With
+  two mirrored loads in flight into one pane the superseded one still
+  commits, and a single "next expected URL" read that commit as a new
+  document and reset the count — the loop fixture ran for 252 loads once
+  the arm was in place. Now any issued URL's commit is an echo: not news,
+  not a mirror, not a reset. An echo retires what was sent before it, a
+  new document retires everything, and an entry older than 10 s is
+  forgotten.
+
+The breaker also warns once per loop *episode* now, not once per tab: the
+flag resets with the count, which is what let the two loop tests share an
+app.
+
 Mode two, seen once in the v0.25.0 `main` run: `Target page, context or
 browser has been closed` 130 ms into the test, on the evaluate that loads
 the redirecting page into the native pane. That message from `app.evaluate`
