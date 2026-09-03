@@ -26,12 +26,12 @@ export async function launchApp(
   userData?: string,
 ): Promise<ElectronApplication> {
   const dir = userData ?? mkdtempSync(join(tmpdir(), 'obsrv-e2e-'))
-  const app = await electron.launch({
+  const raw = await electron.launch({
     args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${dir}`, ...extraArgs],
     env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
   })
-  if (userData === undefined) app.on('close', () => rmSync(dir, { recursive: true, force: true }))
-  hardenEvaluate(app)
+  if (userData === undefined) raw.on('close', () => rmSync(dir, { recursive: true, force: true }))
+  const app = hardenEvaluate(raw)
   await app.evaluate(async ({ app: electronApp }) => {
     await electronApp.whenReady()
     if (!(globalThis as { __obsrv?: unknown }).__obsrv) {
@@ -74,18 +74,29 @@ export async function launchApp(
  * Playwright's own: no closures, one serialisable argument. A string
  * expression is evaluated as before.
  */
-function hardenEvaluate(app: ElectronApplication): void {
-  const original = app.evaluate.bind(app)
-  const hardened = (pageFunction: unknown, arg?: unknown): Promise<unknown> =>
-    original(
-      async (electron, [src, a]: [string, unknown]) => {
-        // eslint-disable-next-line no-new-func
-        const built: unknown = new Function(`return (${src})`)()
-        return typeof built === 'function' ? await built(electron, a) : built
-      },
-      [String(pageFunction), arg] as [string, unknown],
-    )
-  Object.defineProperty(app, 'evaluate', { value: hardened, configurable: true, writable: true })
+function hardenEvaluate(raw: ElectronApplication): ElectronApplication {
+  // A Proxy rather than an own property: Playwright names the API in its
+  // error text after the frame that called it, so the real method must be
+  // reached by an ordinary `evaluate(...)` call from a function of that
+  // name — `bind` or `.call` would label every error `original` or `call`.
+  return new Proxy(raw, {
+    get(target, key, receiver) {
+      if (key === 'evaluate') {
+        return function evaluate(pageFunction: unknown, arg?: unknown): Promise<unknown> {
+          return target.evaluate(
+            async (electron, [src, a]: [string, unknown]) => {
+              // eslint-disable-next-line no-new-func
+              const built: unknown = new Function(`return (${src})`)()
+              return typeof built === 'function' ? await built(electron, a) : built
+            },
+            [String(pageFunction), arg] as [string, unknown],
+          )
+        }
+      }
+      const value = Reflect.get(target, key, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
 }
 
 /**
