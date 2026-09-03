@@ -407,7 +407,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       viewPosition: { x: 0, y: 0 },
       viewSize: size,
       deviceScaleFactor: this.dsf * scale,
-      scale: 1,
+      // The transform that draws the emulated view onto the surface. Without
+      // it the view is painted at 1:1 into the top-left corner: the density
+      // above is what the page is *told*, not what the compositor rasters at.
+      scale,
     })
     this.emulating = true
   }

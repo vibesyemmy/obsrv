@@ -20,10 +20,15 @@ let page: Page
 let server: Server
 let url: string
 
+// A black box at the origin and a red square pinned to the far corner: the
+// painted frame is checked at both ends, since the page's own arithmetic
+// cannot tell whether the compositor drew it at the scale it was told.
 const PAGE =
   '<!doctype html><title>scale</title><meta name="viewport" content="width=device-width">' +
-  '<style>body{margin:0;font:16px/1.2 sans-serif}#box{width:120px;height:40px;background:#000;color:#fff}</style>' +
-  '<div id="box">box</div><p id="text">text</p>'
+  '<style>html,body{margin:0;background:#00f}body{font:16px/1.2 sans-serif}#box{width:120px;height:40px;background:#000;color:#fff}' +
+  '#corner{position:fixed;right:0;bottom:0;width:50px;height:50px;background:#f00}</style>' +
+  // No text in the box: the frame probe scans a row of it for its edge.
+  '<div id="box"></div><p id="text">text</p><div id="corner"></div>'
 
 interface View {
   innerWidth: number
@@ -41,6 +46,50 @@ const nativeView = (): Promise<View> => viewIn(app, 'native')
 const setScale = (scale: number): Promise<void> =>
   app.evaluate(({}, s: number) => (globalThis as any).__obsrv.target.setTextScale(s), scale)
 const footer = (): Promise<string> => page.locator('.target-pane .pane-footer').innerText()
+
+interface FrameProbe {
+  full: string
+  boxWidthDevicePx: number
+  /** RGB at the frame's far corner: red when the page's corner element reaches it. */
+  corner: number[]
+  /** RGB across the box's right edge: black, black, blue, blue when the raster is sharp. */
+  edge: number[][]
+}
+
+/**
+ * One painted frame, read as pixels: where the black box ends on row 20,
+ * what sits in the far corner, and whether the box's edge is a hard step.
+ * This is the surface the user sees and the CLI writes — the only place a
+ * layout-only emulation shows up as a page in the top-left corner.
+ */
+const frameProbe = (): Promise<FrameProbe> =>
+  app.evaluate(async () => {
+    const ctx = (globalThis as any).__obsrv
+    const got: any = await new Promise(resolve => {
+      ctx.target.once('frame', (m: any) => resolve(m))
+      ctx.target.webContents.invalidate()
+    })
+    const { frame, frameWidth, frameHeight } = got
+    const data: Uint8Array = frame.data
+    const px = (x: number, y: number): number[] => {
+      const i = ((y - frame.y) * frame.width + (x - frame.x)) * 4
+      return [data[i + 2]!, data[i + 1]!, data[i]!]
+    }
+    let boxWidthDevicePx = 0
+    for (let x = 0; x < frameWidth; x++) {
+      const [r, g, b] = px(x, 20)
+      if (r! > 40 || g! > 40 || b! > 40) {
+        boxWidthDevicePx = x
+        break
+      }
+    }
+    return {
+      full: `${frameWidth}x${frameHeight}`,
+      boxWidthDevicePx,
+      corner: px(frameWidth - 5, frameHeight - 5),
+      edge: [px(boxWidthDevicePx - 2, 20), px(boxWidthDevicePx - 1, 20), px(boxWidthDevicePx, 20), px(boxWidthDevicePx + 1, 20)],
+    }
+  })
 
 test.beforeAll(async () => {
   server = createServer((_req, res) => {
@@ -87,6 +136,30 @@ test('×1.5 on the 1080p desktop: the page sees 1280×720 at 1.5x; the surface a
   )
   expect(box).toEqual({ w: 180, h: 60 })
   expect(await nativeView()).toEqual(nativeBefore)
+})
+
+test('the painted frame is the page at the scale: the box grows, the corner is reached, the edge is sharp', async () => {
+  await setScale(1)
+  await expect.poll(targetView, { timeout: 5_000 }).toMatchObject({ innerWidth: 1920 })
+  await expect.poll(frameProbe, { timeout: 5_000 }).toMatchObject({ full: '1920x1080', boxWidthDevicePx: 120, corner: [255, 0, 0] })
+  await setScale(1.5)
+  await expect.poll(targetView, { timeout: 5_000 }).toMatchObject({ innerWidth: 1280 })
+  // 0.22.0 painted the 1280-wide layout at 1:1 into the top-left corner: the
+  // box stayed 120 device px and the far corner showed page background.
+  await expect.poll(frameProbe, { timeout: 5_000 }).toEqual({
+    full: '1920x1080',
+    boxWidthDevicePx: 180,
+    corner: [255, 0, 0],
+    edge: [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 0, 255],
+      [0, 0, 255],
+    ],
+  })
+  await setScale(2)
+  await expect.poll(frameProbe, { timeout: 5_000 }).toMatchObject({ boxWidthDevicePx: 240, corner: [255, 0, 0] })
+  await setScale(1)
 })
 
 test('the scale survives a navigation', async () => {

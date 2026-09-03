@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>fill</title>
+<meta name="viewport" content="width=device-width">
+<style>
+  html, body { margin: 0; height: 100%; background: #ff0000; }
+  /* Pinned to the far corner: a render that lays the page out smaller than
+     the surface and paints it 1:1 leaves this short of the corner. */
+  #corner { position: fixed; right: 0; bottom: 0; width: 40px; height: 40px; background: #0000ff; }
+  #box { width: 120px; height: 40px; background: #000; }
+</style>
+<div id="box"></div>
+<div id="corner"></div>

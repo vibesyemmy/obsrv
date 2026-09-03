@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { decodePng, pixelAt } from './helpers/decodePng'
 
 /**
  * `--text-scale`: browser zoom as reflow, headless. The PNG must stay the
@@ -77,6 +78,30 @@ test('audit --text-scale 1.5: every millimetre grows by the scale, so the small 
   expect(after.summary.targets.smallestMm).toBeCloseTo(9.1, 1)
   // The page laid out in two thirds of the screen: its own viewport says so.
   expect(after.cssWidth).toBe(1366)
+})
+
+test('the PNG is the page at the scale, read by pixels: the box grows and the corner element reaches the corner', async () => {
+  // 0.22.0 wrote the 1/scale layout at 1:1 into the top-left of a PNG the
+  // screen's size; the page's own numbers were right and the pixels wrong.
+  const rgb = (png: ReturnType<typeof decodePng>, x: number, y: number): number[] => pixelAt(png, x, y).slice(0, 3)
+  const plain = join(outDir, 'fill-1.png')
+  const r1 = await runCli(['snap', fixture('fill.html'), '--preset', 'laptop-768', '--out', plain])
+  expect(r1.code, r1.stderr).toBe(0)
+  const p1 = decodePng(readFileSync(plain))
+  expect(pngSize(plain)).toEqual({ width: 1366, height: 768 })
+  expect(rgb(p1, 110, 20)).toEqual([0, 0, 0])
+  expect(rgb(p1, 130, 20)).toEqual([255, 0, 0])
+  expect(rgb(p1, 1361, 763)).toEqual([0, 0, 255])
+
+  const scaled = join(outDir, 'fill-1.5.png')
+  const r2 = await runCli(['snap', fixture('fill.html'), '--preset', 'laptop-768', '--text-scale', '1.5', '--out', scaled])
+  expect(r2.code, r2.stderr).toBe(0)
+  const p2 = decodePng(readFileSync(scaled))
+  expect(pngSize(scaled)).toEqual({ width: 1366, height: 768 })
+  // The 120 CSS px box is 180 device px now; the corner is still the corner.
+  expect(rgb(p2, 170, 20)).toEqual([0, 0, 0])
+  expect(rgb(p2, 190, 20)).toEqual([255, 0, 0])
+  expect(rgb(p2, 1361, 763)).toEqual([0, 0, 255])
 })
 
 test('the scale is one number, in range, on every command', async () => {
