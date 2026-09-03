@@ -334,3 +334,17 @@ test('obsrv_inspect (auto) inspects the running app: the page it is navigated to
   const off = await call('obsrv_inspect', { selector: '#nope' })
   expect(off.structuredContent).toMatchObject({ mode: 'live', found: false })
 })
+
+test('obsrv_drive sets a throttle on the live target; status and the footer report it', async () => {
+  const r = await call('obsrv_drive', { throttle: 'cpu-6x' })
+  expect(r.isError).toBeFalsy()
+  expect(r.structuredContent).toMatchObject({ throttle: 'cpu-6x' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getThrottle().id)).toBe('cpu-6x')
+  const page = await rendererWindow(app)
+  await expect(page.locator('.target-pane .pane-footer')).toContainText('throttle cpu-6x')
+  const back = await call('obsrv_drive', { throttle: 'none' })
+  expect(back.structuredContent).toMatchObject({ throttle: 'none' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getThrottle().id)).toBe('none')
+  const bad = await call('obsrv_drive', { throttle: 'edge' })
+  expect(bad.isError).toBe(true)
+})

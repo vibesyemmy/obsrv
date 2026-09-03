@@ -1,4 +1,5 @@
 import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import { findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
@@ -247,6 +248,15 @@ export function registerIpc(ctx: AppContext): () => void {
     const scale = parseTextScale(raw)
     if (scale === null) throw new Error('invalid textScale')
     tab().target.setTextScale(scale)
+  })
+  handle(IPC.setThrottle, async (e, raw: unknown) => {
+    assertRenderer(e)
+    if (!isThrottleId(raw)) throw new Error('invalid throttle')
+    // A refusal by Chromium (another debugger on the target, say) is not
+    // the renderer's error to catch: it is logged, and the footer still
+    // states what was asked for.
+    const refused = await tab().target.setThrottle(findThrottle(raw))
+    if (refused) log.warn(refused)
   })
   on(IPC.sendInput, (e, raw: unknown) => {
     if (!fromRenderer(e)) return
@@ -559,6 +569,12 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     set textScale(v: number) {
       tab().textScale = v
+    },
+    get throttle() {
+      return tab().throttle
+    },
+    set throttle(v: string) {
+      tab().throttle = v
     },
     get mode() {
       return tab().reportedMode

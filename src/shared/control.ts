@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { DEFAULT_THROTTLE, isThrottleId, THROTTLE_IDS } from './throttle'
 import { isVisionType, VISION_TYPES, type VisionType } from './vision'
 import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
@@ -57,6 +58,8 @@ export interface AgentUiState {
   orientation: Orientation
   /** Browser zoom as reflow on the target, 1 = none — mirrors the store's `textScale`. */
   textScale: number
+  /** Network and CPU conditions on the target, a preset id, `none` = as the host — mirrors the store's `throttle`. */
+  throttle: string
   mode: 'url' | 'image'
   /** The viewer simulation, so a capture is never silently colour-shifted. */
   visionType: VisionType
@@ -159,6 +162,7 @@ export interface AgentApplyPatch {
   panes?: AgentPanes
   orientation?: Orientation
   textScale?: number
+  throttle?: string
   pixelExact?: boolean
   visionType?: VisionType
   visionSeverity?: number
@@ -192,6 +196,8 @@ export const CONTROL_COMMANDS = [
   'focusWindow',
   // v0.24 — the inspector for agents: a point or a selector, a readout back.
   'inspect',
+  // v0.25 — throttling on the live target.
+  'setThrottle',
 ] as const
 
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number]
@@ -304,6 +310,11 @@ export function orientationApplyError(v: unknown): string | null {
 /** Validates a `setTextScale` payload: a finite number within the range the app renders. */
 export function textScaleApplyError(v: unknown): string | null {
   return isTextScale(v) ? null : `setTextScale payload must be { textScale: number } with ${MIN_TEXT_SCALE} <= textScale <= ${MAX_TEXT_SCALE}`
+}
+
+/** Validates a `setThrottle` payload: one of the preset ids. */
+export function throttleApplyError(v: unknown): string | null {
+  return isThrottleId(v) ? null : `setThrottle payload must be { throttle: id } with id one of ${THROTTLE_IDS.join(', ')}`
 }
 
 export function panesApplyError(v: unknown): string | null {
@@ -434,6 +445,9 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // Same skew once more: an app that predates text scale renders at ×1.
   const textScale = raw.textScale ?? DEFAULT_TEXT_SCALE
   if (!isTextScale(textScale)) return null
+  // And the throttle: an app older than it runs the target as the host.
+  const throttle = raw.throttle ?? DEFAULT_THROTTLE
+  if (!isThrottleId(throttle)) return null
   // And once more for the dimensions and the derived shape. `0` means "the app
   // did not say", which is the truthful answer for one that predates them —
   // inventing a size would be worse than admitting the gap.
@@ -458,6 +472,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     panes,
     orientation,
     textScale,
+    throttle,
     mode,
     visionType,
     visionSeverity,

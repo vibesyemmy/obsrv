@@ -44,6 +44,7 @@ $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 $OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out shots/laptop-150.png
 
 # How it feels on a budget phone over 3G with a slow CPU: settledMs in the JSON, next to
+# (live: obsrv_drive { throttle: 'budget-phone' } throttles the tab the user is looking at)
 # a --throttle none baseline (presets: fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone):
 $OBSRV snap http://localhost:5173 --preset android-65 --throttle budget-phone --out shots/slow.png
 

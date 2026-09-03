@@ -51,6 +51,7 @@ const api: ObsrvApi = {
   setViewport: (width, height, deviceScaleFactor, mobile) =>
     ipcRenderer.invoke(IPC.setViewport, width, height, deviceScaleFactor, mobile),
   setTextScale: scale => ipcRenderer.invoke(IPC.setTextScale, scale),
+  setThrottle: id => ipcRenderer.invoke(IPC.setThrottle, id),
   setNativeBounds: rect => ipcRenderer.send(IPC.setNativeBounds, rect),
   setNativeVisible: visible => ipcRenderer.send(IPC.setNativeVisible, visible),
   setNativeObscured: obscured => ipcRenderer.send(IPC.setNativeObscured, obscured),

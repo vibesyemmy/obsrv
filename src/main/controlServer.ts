@@ -17,6 +17,7 @@ import {
   tokenEqual,
   orientationApplyError,
   textScaleApplyError,
+  throttleApplyError,
   panesApplyError,
   visionApplyError,
   viewModeApplyError,
@@ -252,6 +253,13 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const textScale = payload.textScale as number
         return this.applyAndConfirm({ textScale }, s => s.textScale === textScale)
+      }
+
+      case 'setThrottle': {
+        const err = throttleApplyError(payload.throttle)
+        if (err) return reply(400, { error: err })
+        const throttle = payload.throttle as string
+        return this.applyAndConfirm({ throttle }, s => s.throttle === throttle)
       }
 
       case 'captureVisible': {

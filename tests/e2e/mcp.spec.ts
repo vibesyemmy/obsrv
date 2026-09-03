@@ -68,7 +68,7 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   )
   const drive = tools.find(t => t.name === 'obsrv_drive')!
   expect(Object.keys(drive.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'profile', 'viewMode', 'textScale']),
+    expect.arrayContaining(['url', 'preset', 'profile', 'viewMode', 'textScale', 'throttle']),
   )
   const audit = tools.find(t => t.name === 'obsrv_audit')!
   expect(Object.keys(audit.inputSchema.properties ?? {})).toEqual(

@@ -55,6 +55,7 @@ export function TargetFooter() {
   const fitScale = useStore(s => selectTab(s).fitScale)
   const dsf = useStore(selectDeviceScaleFactor)
   const textScale = useStore(s => selectTab(s).textScale)
+  const throttle = useStore(s => selectTab(s).throttle)
   const shape = useStore(selectScreenShape)
   const screen = useStore(useShallow(selectScreen))
   const visionType = useStore(s => selectTab(s).visionType)
@@ -144,6 +145,7 @@ export function TargetFooter() {
           size,
           // Stated only when in force: at ×1 the page saw the screen as it is.
           ...(textScale !== 1 ? [`text ${formatTextScale(textScale)}`] : []),
+          ...(throttle !== 'none' ? [`throttle ${throttle}`] : []),
           ...magnification,
           profile.label,
           params.dither ? `${depth}+FRC` : depth,

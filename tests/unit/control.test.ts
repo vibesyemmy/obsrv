@@ -14,6 +14,7 @@ import {
   orientationApplyError,
   panesApplyError,
   textScaleApplyError,
+  throttleApplyError,
   parseHighlight,
   pixelExactApplyError,
   presetApplyError,
@@ -88,7 +89,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty-one commands', () => {
+  it('knows exactly the twenty-two commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
       'captureTarget',
@@ -108,6 +109,7 @@ describe('command validation', () => {
       'setPreset',
       'setProfile',
       'setTextScale',
+      'setThrottle',
       'setViewMode',
       'setVision',
       'status',
@@ -258,6 +260,7 @@ describe('parseControlStatus', () => {
     panes: 'both',
     orientation: 'portrait',
     textScale: 1,
+    throttle: 'none',
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -427,5 +430,40 @@ describe('textScaleApplyError', () => {
     for (const bad of [undefined, '1.5', 0.4, 4.5, Number.NaN, Number.POSITIVE_INFINITY, null]) {
       expect(textScaleApplyError(bad)).toMatch(/setTextScale payload must be \{ textScale: number \} with 0.5 <= textScale <= 4/)
     }
+  })
+})
+
+describe('parseControlStatus throttle', () => {
+  const base = {
+    version: '0.24.1',
+    url: 'https://a.test/',
+    presetId: 'laptop-768',
+    profileId: 'reference',
+    viewMode: '1:1',
+    mode: 'url',
+    panes: 'both',
+    orientation: 'portrait',
+    textScale: 1,
+    cssWidth: 1366,
+    cssHeight: 768,
+    tabId: 'tab-1',
+    tabIndex: 0,
+    visionType: 'none',
+    visionSeverity: 1,
+  }
+  it('an app older than the throttle reports none, which is what it renders', () => {
+    expect(parseControlStatus(base)?.throttle).toBe('none')
+    expect(parseControlStatus({ ...base, throttle: null })?.throttle).toBe('none')
+  })
+  it('carries a preset the app reports; anything else is a malformed status', () => {
+    expect(parseControlStatus({ ...base, throttle: 'budget-phone' })?.throttle).toBe('budget-phone')
+    for (const bad of ['edge', '', 3, {}]) expect(parseControlStatus({ ...base, throttle: bad })).toBeNull()
+  })
+})
+
+describe('throttleApplyError', () => {
+  it('accepts every preset id and names them for anything else', () => {
+    for (const ok of ['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone']) expect(throttleApplyError(ok)).toBeNull()
+    for (const bad of [undefined, 'edge', 4, null]) expect(throttleApplyError(bad)).toMatch(/setThrottle payload must be \{ throttle: id \} with id one of none, fast-4g/)
   })
 })

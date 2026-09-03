@@ -405,6 +405,15 @@ const driveInputShape = {
       "Set the target's text scale — browser zoom as reflow, 1 = none. The native pane and the other tabs " +
         'are untouched. An app older than text scale rejects the command.',
     ),
+  throttle: z
+    .enum(THROTTLE_IDS)
+    .optional()
+    .describe(
+      "Set the target's network and CPU conditions in the app: " +
+        THROTTLE_PROFILES.map(t => t.id).join(', ') +
+        ' (see obsrv_presets → throttles). The user sees it in the footer and can turn it off from the toolbar; ' +
+        'it is not remembered across launches. An app older than the field rejects the command.',
+    ),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
   panes: z
@@ -500,6 +509,7 @@ const driveOutputShape = {
   presetId: z.string(),
   profileId: z.string(),
   textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
+  throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
   orientation: z
     .string()
     .describe(
@@ -670,6 +680,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     if (input.textScale !== undefined) {
       await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
     }
+    if (input.throttle !== undefined) {
+      await controlCall(info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
+    }
     if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
   } catch (e) {
     return toolError(liveFailure(e))
@@ -716,6 +729,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     orientation: status.orientation,
     screenShape: status.screenShape,
     textScale: status.textScale,
+    throttle: status.throttle,
     cssWidth: status.cssWidth,
     cssHeight: status.cssHeight,
     viewMode: status.viewMode,
@@ -1221,6 +1235,7 @@ server.registerTool(
     preset?: string
     orientation?: 'portrait' | 'landscape'
     textScale?: number
+    throttle?: string
     profile?: string
     viewMode?: '1:1' | 'fit'
     panes?: 'both' | 'target'
@@ -1259,6 +1274,9 @@ server.registerTool(
       }
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.throttle !== undefined) {
+        await controlCall(live.info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
       if (input.viewMode !== undefined) {
@@ -1397,6 +1415,7 @@ server.registerTool(
             cssWidth: status.cssWidth,
             cssHeight: status.cssHeight,
             textScale: status.textScale,
+    throttle: status.throttle,
             found: answer.found === true,
             readout: answer.readout ?? null,
             notes,

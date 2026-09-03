@@ -92,6 +92,12 @@ export interface ObsrvApi {
    * See `shared/textScale.ts` for the range; main refuses anything outside it.
    */
   setTextScale(scale: number): Promise<void>
+  /**
+   * Network and CPU conditions on the target (a preset id from
+   * `shared/throttle.ts`), the same debugger call the CLI makes. Main
+   * refuses an unknown id; a Chromium refusal is logged, not thrown.
+   */
+  setThrottle(id: string): Promise<void>
   setNativeBounds(rect: Rect): void
   /**
    * Whether the native pane is on screen. It is an OS-level overlay, so
