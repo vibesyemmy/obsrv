@@ -46,9 +46,13 @@ The earlier attempts that found nothing had forced collections *while a
 promise was still pending*, which V8 keeps alive; the window is after
 resolution, and only for a promise resolved outside a checkpoint.
 
-**The fix is in the harness:** `launchApp` replaces `app.evaluate` with a
-version that sends the caller's function as source, rebuilds it in main, and
-awaits it inside an async wrapper (`hardenEvaluate` in `tests/e2e/launch.ts`).
+**The fix is in the harness:** `launchApp` hands specs a proxy of the app
+whose `evaluate` sends the caller's function as source, rebuilds it in main,
+and awaits it inside an async wrapper (`hardenEvaluate` in
+`tests/e2e/launch.ts`). A proxy rather than an own property because Playwright
+names the API in its error text after the calling frame: through `bind` or
+`.call` every error read `electronApplication.original`; through a function
+named `evaluate` it reads `electronApplication.evaluate` as before.
 The promise Playwright awaits then resolves inside a checkpoint and is never
 unreferenced while unsettled. Nothing is retried, so nothing runs twice — the
 old per-spec retry in `image-mode.spec.ts` re-ran the function on every hit
