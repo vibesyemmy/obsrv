@@ -14,6 +14,7 @@ contention. This records what was investigated so it is not investigated again.
 | A seam drag landing short of the pointer | Synthesised input timing |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
+| `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | macOS occlusion, reported as hidden |
 
 Each one passes when its file is run alone, and on a plain re-run.
 
@@ -226,6 +227,26 @@ report appeared — a clean exit or a kill from outside. A normal close
 prints nothing. The frames are Electron's exported symbols nearest the
 addresses, not a symbolicated stack; they place the fault, they do not
 name the line.
+
+## `visibility.spec` and `log.spec`: a window under another window is already hidden
+
+Five tests failed twice in a row in full runs on 2026-09-03 and passed
+alone in between: `log.spec`'s "hidden and coming back is on record" (no
+`window hidden` line after `win.hide()`) and the four `visibility.spec`
+tests that start by hiding the window (painting never paused). Not the
+code under test, and not the run order. On macOS Electron reports a
+window's *occlusion* as `hide` and `show` — a window fully covered by
+another application's window is hidden as far as the app can tell, and
+the app dedupes a second hide as "not news". Between the passing solo
+run and the failing full runs, another application had opened a window
+over the region where the test windows appear (a documentation preview
+pane, as it happened). Closing it made the same five pass again.
+
+So: these specs need the screen region the app's window occupies to be
+uncovered while they run. On CI nothing else is on the display. On a
+desk, a full-screen editor, a browser or a preview beside the terminal
+over that region is enough to fail them, and nothing in the failure
+names the cause — the symptom is the same as a broken hide path.
 
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 
