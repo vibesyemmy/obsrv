@@ -605,6 +605,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     return this.setViewport(this.viewport.width, this.viewport.height, deviceScaleFactor, this.mobile)
   }
 
+  /** Whether this surface is a phone: the mobile user agent and viewport semantics. */
+  isMobile(): boolean {
+    return this.mobile
+  }
+
   getViewport(): { width: number; height: number } {
     return { ...this.viewport }
   }

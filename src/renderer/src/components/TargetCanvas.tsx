@@ -11,6 +11,7 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../../shared/api'
 import { GlRenderer, MAX_OUTPUT_SIZE, fitScale } from '../gl/renderer'
+import { REFERENCE_DSF } from '../../../shared/onionSkin'
 import { visionMatrix } from '../../../shared/vision'
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio'
 import { keyDownEvents, keyUpEvent, mouseEvent, toTargetPoint, wheelEvent } from '../input/inputBridge'
@@ -177,7 +178,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // Read by the frame callback, which is installed once and must not go
   // stale. `dsf` rides along for the input bridge: the canvas shows device
   // pixels, `sendInputEvent` wants CSS ones.
-  const draw = useRef({ scale, params, smooth, dsf, vision })
+  // The onion skin's second pass: the reference frame is `REFERENCE_DSF`
+  // device px per CSS px where the target's is `dsf`, so the same CSS box
+  // draws at that ratio of the target's magnification.
+  const onionSkin = useStore(s => selectTab(s).onionSkin)
+  const onion = { opacity: onionSkin, scale: (scale * dsf) / REFERENCE_DSF }
+  const draw = useRef({ scale, params, smooth, dsf, vision, onion })
   // Read by `start` after a context restore, so the image is re-uploaded
   // without waiting for a frame that image mode will never send.
   const imageRef = useRef(imageFrame)
@@ -205,6 +211,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
 
     let gl: GlRenderer | null = null
     let offFrame: (() => void) | null = null
+    let offReference: (() => void) | null = null
     let raf = 0
     // The pending recovery step after a context loss, if any.
     let recovery = 0
@@ -268,11 +275,22 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         gl.uploadSlice(m.frame)
         schedule()
       })
+      // The reference render's frames, when a skin is on: the same shape,
+      // into the second texture. Subscribing opens delivery as above.
+      offReference = window.obsrv.onReferenceFrame(m => {
+        if (!gl) return
+        if (selectTab(useStore.getState()).mode !== 'url') return
+        gl.resizeReference(m.frameWidth, m.frameHeight)
+        gl.uploadReferenceSlice(m.frame)
+        schedule()
+      })
       return true
     }
     const stop = (): void => {
       offFrame?.()
       offFrame = null
+      offReference?.()
+      offReference = null
       if (raf !== 0) cancelAnimationFrame(raf)
       raf = 0
       gl?.dispose()
@@ -510,10 +528,14 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // without a new frame — a static page sends none, so without the redraw here
   // the setting would appear to do nothing until something else moved.
   useEffect(() => {
-    draw.current = { scale, params, smooth, dsf, vision }
+    draw.current = { scale, params, smooth, dsf, vision, onion: { opacity: onionSkin, scale: (scale * dsf) / REFERENCE_DSF } }
     const gl = glRef.current
+    // A skin turned off drops the reference texture too, so that the next
+    // skin starts from the full frame main sends and not from a ghost of
+    // whatever page the last one showed.
+    if (gl && onionSkin === 0) gl.clearReference()
     if (gl && gl.sourceWidth > 0) gl.draw(draw.current)
-  }, [scale, params, smooth, dsf, vision])
+  }, [scale, params, smooth, dsf, vision, onionSkin])
 
   // Live frames are already stopped by main's `setMode`, so there is no race.
   // On the way back to URL mode the next live frame (main resends a full one)

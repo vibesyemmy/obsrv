@@ -414,6 +414,17 @@ const driveInputShape = {
         ' (see obsrv_presets → throttles). The user sees it in the footer and can turn it off from the toolbar; ' +
         'it is not remembered across launches. An app older than the field rejects the command.',
     ),
+  onionSkin: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "The onion skin's opacity, 0 to 1 (0 = off): the same page rendered at HiDPI and blended over the target's raster " +
+        "in the app, for seeing what the target screen's raster moved — a line wrapped differently, a hairline gone. " +
+        'Read back in status; 0 when the app could not render a reference for the viewport (4K and ultrawide at 1x). ' +
+        'Not remembered across launches. An app older than the field rejects the command.',
+    ),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
   viewMode: z.enum(['1:1', 'fit']).optional().describe("Switch the app's target pane between 1:1 (actual size) and fit."),
   panes: z
@@ -510,6 +521,7 @@ const driveOutputShape = {
   profileId: z.string(),
   textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
   throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
+  onionSkin: z.number().describe("The onion skin's opacity, 0 = off. Reported as 0 by an app older than the field."),
   orientation: z
     .string()
     .describe(
@@ -730,6 +742,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     screenShape: status.screenShape,
     textScale: status.textScale,
     throttle: status.throttle,
+    onionSkin: status.onionSkin,
     cssWidth: status.cssWidth,
     cssHeight: status.cssHeight,
     viewMode: status.viewMode,
@@ -1235,6 +1248,7 @@ server.registerTool(
     preset?: string
     orientation?: 'portrait' | 'landscape'
     textScale?: number
+    onionSkin?: number
     throttle?: string
     profile?: string
     viewMode?: '1:1' | 'fit'
@@ -1274,6 +1288,9 @@ server.registerTool(
       }
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
+      }
+      if (input.onionSkin !== undefined) {
+        await controlCall(live.info, 'setOnionSkin', { onionSkin: input.onionSkin }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.throttle !== undefined) {
         await controlCall(live.info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)

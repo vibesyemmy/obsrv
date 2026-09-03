@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dppx</title>
+<meta name="viewport" content="width=device-width">
+<style>
+  /* Blue at 1x, red on a HiDPI raster: the one page whose two renders differ
+     in every pixel, so a blend of the two is measurable. */
+  html, body { margin: 0; height: 100%; background: #0000ff; }
+  @media (min-resolution: 2dppx) { html, body { background: #ff0000; } }
+</style>
+<body></body>

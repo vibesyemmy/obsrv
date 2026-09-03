@@ -221,6 +221,7 @@ describe('parseUiState', () => {
     orientation: 'portrait',
     textScale: 1,
     throttle: 'none',
+    onionSkin: 0,
     mode: 'url',
     visionType: 'none',
     visionSeverity: 1,
@@ -506,5 +507,18 @@ describe('parseInspectRequest', () => {
     expect(parseInspectRequest({ selector: '' })).toMatch(/1 to 512 characters/)
     expect(parseInspectRequest({ selector: 'p'.repeat(513) })).toMatch(/1 to 512 characters/)
     expect(parseInspectRequest({ selector: 42 })).toBe('selector must be a string')
+  })
+})
+
+describe('parseUiState onion skin', () => {
+  const good = {
+    tabId: 'tab-1', presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both',
+    orientation: 'portrait', textScale: 1, throttle: 'none', mode: 'url', visionType: 'none', visionSeverity: 1,
+  }
+  it('carries the opacity, defaulting an absent or null one to off and refusing a bad one', () => {
+    expect(parseUiState({ ...good, onionSkin: 0.5 })?.onionSkin).toBe(0.5)
+    expect(parseUiState(good)?.onionSkin).toBe(0)
+    expect(parseUiState({ ...good, onionSkin: null })?.onionSkin).toBe(0)
+    for (const bad of [2, -1, '0.5', {}]) expect(parseUiState({ ...good, onionSkin: bad })).toBeNull()
   })
 })

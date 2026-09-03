@@ -243,6 +243,7 @@ export function registerIpc(ctx: AppContext): () => void {
       throw new Error('invalid mobile flag')
     }
     const v = tab().target.setViewport(width, height, dsf, rawMobile === true)
+    tab().syncReference()
     return { width: v.width, height: v.height }
   })
   handle(IPC.setTextScale, (e, raw: unknown) => {
@@ -252,6 +253,15 @@ export function registerIpc(ctx: AppContext): () => void {
     const scale = parseTextScale(raw)
     if (scale === null) throw new Error('invalid textScale')
     tab().target.setTextScale(scale)
+    tab().syncReference()
+  })
+  // The onion skin's reference render (shared/onionSkin.ts): kept only while
+  // the skin is on. Main answers whether one fits the viewport; the renderer
+  // owns the opacity and turns the skin off again on a refusal.
+  handle(IPC.setOnionSkin, (e, raw: unknown) => {
+    assertRenderer(e)
+    if (typeof raw !== 'boolean') throw new Error('invalid onionSkin')
+    return tabs.setReference(tab(), raw)
   })
   handle(IPC.setThrottle, async (e, raw: unknown) => {
     assertRenderer(e)
@@ -314,6 +324,7 @@ export function registerIpc(ctx: AppContext): () => void {
     // would break the URL bar, back/forward and link clicks in exactly the
     // view where the target pane is the only thing on screen.
     bus.setEnabled(tab().modeIsLive)
+    tabs.referenceBus.setEnabled(tab().modeIsLive)
   })
 
   // --- menus ----------------------------------------------------------------
@@ -648,6 +659,12 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     set throttle(v: string) {
       tab().throttle = v
+    },
+    get onionSkin() {
+      return tab().onionSkin
+    },
+    set onionSkin(v: number) {
+      tab().onionSkin = v
     },
     get mode() {
       return tab().reportedMode

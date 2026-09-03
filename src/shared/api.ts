@@ -150,6 +150,14 @@ export interface ObsrvApi {
   getSettings(): Promise<Settings>
   setSettings(s: Settings): Promise<void>
   onFrame(cb: (m: FrameMessage) => void): () => void
+  /**
+   * Keep a HiDPI render of the target's page alongside it while `on`, for
+   * the onion skin (shared/onionSkin.ts); resolves false when the viewport
+   * is too large for one. The opacity is the renderer's own business.
+   */
+  setOnionSkin(on: boolean): Promise<boolean>
+  /** Frames of that render, on their own channel; the first subscriber opens delivery. */
+  onReferenceFrame(cb: (m: FrameMessage) => void): () => void
   onUrlChanged(cb: (e: TabReport & { url: string }) => void): () => void
   /**
    * Chromium's page title for one tab — the strip's first choice of label,

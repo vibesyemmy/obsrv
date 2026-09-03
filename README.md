@@ -69,8 +69,9 @@ npm run dev
 
 Type a URL (localhost is fine), pick a target screen preset (1080p 24", 1366×768
 laptop, iPhone 6.1" @3x, …), pick a panel profile (Reference, Office IPS, Budget TN, Old laptop) or open
-the advanced sliders. Enter your own monitor's diagonal in Settings once so the target
-pane renders at true physical size. Drop a 2x/3x PNG or JPG export to check a design
+the advanced sliders. Step the **Onion** skin up to see the page's HiDPI render ghosted over the
+1x raster — what the cheap raster moved, in one place (`docs/onion-skin.md`). Enter your own
+monitor's diagonal in Settings once so the target pane renders at true physical size. Drop a 2x/3x PNG or JPG export to check a design
 before it's built.
 
 The target pane opens in **Fit**, a fit-to-pane view of the whole render. Fit

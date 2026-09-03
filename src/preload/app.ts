@@ -23,19 +23,23 @@ function subscribe<T>(channel: string, cb: (v: T) => void): () => void {
  * a reload, which resets this module) sends `frameSubscribe`, and main answers
  * with a full frame — see `attachFrameBus`.
  */
-let frameSubscribers = 0
-
-function subscribeFrames(cb: (m: FrameMessage) => void): () => void {
-  const off = subscribe<FrameMessage>(IPC.frame, cb)
-  if (++frameSubscribers === 1) ipcRenderer.send(IPC.frameSubscribe)
-  let active = true
-  return () => {
-    if (!active) return
-    active = false
-    frameSubscribers--
-    off()
+function frameChannel(channel: string, subscribeChannel: string): (cb: (m: FrameMessage) => void) => () => void {
+  let subscribers = 0
+  return cb => {
+    const off = subscribe<FrameMessage>(channel, cb)
+    if (++subscribers === 1) ipcRenderer.send(subscribeChannel)
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      subscribers--
+      off()
+    }
   }
 }
+const subscribeFrames = frameChannel(IPC.frame, IPC.frameSubscribe)
+/** The onion skin's reference render: the same handshake on its own channel. */
+const subscribeReferenceFrames = frameChannel(IPC.referenceFrame, IPC.referenceSubscribe)
 
 const api: ObsrvApi = {
   navigate: url => ipcRenderer.invoke(IPC.navigate, url),
@@ -75,6 +79,8 @@ const api: ObsrvApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: s => ipcRenderer.invoke(IPC.setSettings, s),
   onFrame: subscribeFrames,
+  setOnionSkin: on => ipcRenderer.invoke(IPC.setOnionSkin, on),
+  onReferenceFrame: subscribeReferenceFrames,
   // Each of these names the tab it describes: main no longer gates them on the
   // tab being in front, so a background tab keeps its own strip entry current
   // without touching the address bar of the tab that is showing.

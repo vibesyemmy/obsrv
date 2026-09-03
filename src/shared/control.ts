@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { DEFAULT_THROTTLE, isThrottleId, THROTTLE_IDS } from './throttle'
+import { DEFAULT_ONION_SKIN, isOnionSkin } from './onionSkin'
 import { isVisionType, VISION_TYPES, type VisionType } from './vision'
 import { join } from 'node:path'
 import { parseRect } from './ipcPayloads'
@@ -60,6 +61,8 @@ export interface AgentUiState {
   textScale: number
   /** Network and CPU conditions on the target, a preset id, `none` = as the host — mirrors the store's `throttle`. */
   throttle: string
+  /** The onion skin's opacity, 0 = off — mirrors the store's `onionSkin` (see shared/onionSkin.ts). */
+  onionSkin: number
   mode: 'url' | 'image'
   /** The viewer simulation, so a capture is never silently colour-shifted. */
   visionType: VisionType
@@ -163,6 +166,7 @@ export interface AgentApplyPatch {
   orientation?: Orientation
   textScale?: number
   throttle?: string
+  onionSkin?: number
   pixelExact?: boolean
   visionType?: VisionType
   visionSeverity?: number
@@ -182,6 +186,7 @@ export const CONTROL_COMMANDS = [
   'setVision',
   'setOrientation',
   'setTextScale',
+  'setOnionSkin',
   'captureVisible',
   // v0.5 drive controls (spec §14 "Drive controls").
   'scroll',
@@ -317,6 +322,11 @@ export function throttleApplyError(v: unknown): string | null {
   return isThrottleId(v) ? null : `setThrottle payload must be { throttle: id } with id one of ${THROTTLE_IDS.join(', ')}`
 }
 
+/** Validates a `setOnionSkin` payload: an opacity, 0 for off. */
+export function onionSkinApplyError(v: unknown): string | null {
+  return isOnionSkin(v) ? null : 'setOnionSkin payload must be { onionSkin: number } with 0 <= onionSkin <= 1 (0 is off)'
+}
+
 export function panesApplyError(v: unknown): string | null {
   return v === 'both' || v === 'target' ? null : `setPanes payload must be { panes: 'both' | 'target' }`
 }
@@ -448,6 +458,9 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // And the throttle: an app older than it runs the target as the host.
   const throttle = raw.throttle ?? DEFAULT_THROTTLE
   if (!isThrottleId(throttle)) return null
+  // And the onion skin: an app older than it draws none.
+  const onionSkin = raw.onionSkin ?? DEFAULT_ONION_SKIN
+  if (!isOnionSkin(onionSkin)) return null
   // And once more for the dimensions and the derived shape. `0` means "the app
   // did not say", which is the truthful answer for one that predates them —
   // inventing a size would be worse than admitting the gap.
@@ -473,6 +486,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     orientation,
     textScale,
     throttle,
+    onionSkin,
     mode,
     visionType,
     visionSeverity,

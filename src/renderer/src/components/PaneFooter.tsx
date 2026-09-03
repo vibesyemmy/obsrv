@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { formatTextScale } from '../../../shared/textScale'
+import { formatOnionSkin } from '../../../shared/onionSkin'
 import { useShallow } from 'zustand/react/shallow'
 import { ppi } from '../../../shared/calibration'
 import { cssPxToMm, effectiveContrast, formatRatio, hex } from '../../../shared/contrast'
@@ -56,6 +57,7 @@ export function TargetFooter() {
   const dsf = useStore(selectDeviceScaleFactor)
   const textScale = useStore(s => selectTab(s).textScale)
   const throttle = useStore(s => selectTab(s).throttle)
+  const onionSkin = useStore(s => selectTab(s).onionSkin)
   const shape = useStore(selectScreenShape)
   const screen = useStore(useShallow(selectScreen))
   const visionType = useStore(s => selectTab(s).visionType)
@@ -146,6 +148,7 @@ export function TargetFooter() {
           // Stated only when in force: at ×1 the page saw the screen as it is.
           ...(textScale !== 1 ? [`text ${formatTextScale(textScale)}`] : []),
           ...(throttle !== 'none' ? [`throttle ${throttle}`] : []),
+          ...(onionSkin > 0 ? [`onion ${formatOnionSkin(onionSkin)}`] : []),
           ...magnification,
           profile.label,
           params.dither ? `${depth}+FRC` : depth,

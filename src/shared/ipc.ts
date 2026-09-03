@@ -54,6 +54,11 @@ export const IPC = {
   setSettings: 'obsrv:set-settings',
   frame: 'obsrv:frame',
   frameSubscribe: 'obsrv:frame-subscribe',
+  /** Chrome -> main: keep (true) or drop (false) the onion skin's reference render; answers whether one fits. */
+  setOnionSkin: 'obsrv:set-onion-skin',
+  /** Main -> chrome: a frame of the reference render, on its own channel (see shared/onionSkin.ts). */
+  referenceFrame: 'obsrv:reference-frame',
+  referenceSubscribe: 'obsrv:reference-subscribe',
   urlChanged: 'obsrv:url-changed',
   titleChanged: 'obsrv:title-changed',
   loadError: 'obsrv:load-error',
