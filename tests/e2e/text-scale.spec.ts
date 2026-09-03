@@ -60,17 +60,25 @@ test.afterAll(async () => {
   await new Promise<void>(r => server.close(() => r()))
 })
 
-test('×1.5 on the 1080p desktop: the page sees 1280×720 at 1.5x; the surface and the native pane do not move', async () => {
-  const nativeBefore = await nativeView()
-  await setScale(1.5)
-  await expect.poll(targetView, { timeout: 5_000 }).toEqual({ innerWidth: 1280, innerHeight: 720, dpr: 1.5, screenWidth: 1280 })
-  // The surface is still the screen: 1920×1080 CSS px at 1x.
-  expect(await app.evaluate(() => (globalThis as any).__obsrv.target.getViewport())).toEqual({ width: 1920, height: 1080 })
-  const shot = await app.evaluate(async () => {
+// `capturePage` on the offscreen window answers at the *host display's*
+// scale (3840×2160 on a Retina Mac, 1920×1080 on a 1x monitor), whatever
+// the target's own density — so the surface check is relative: the capture
+// is the same size before and after the scale, never an absolute number.
+const shotSize = (): Promise<{ width: number; height: number }> =>
+  app.evaluate(async () => {
     const img = await (globalThis as any).__obsrv.target.webContents.capturePage()
     return img.getSize()
   })
-  expect(shot).toEqual({ width: 1920, height: 1080 })
+
+test('×1.5 on the 1080p desktop: the page sees 1280×720 at 1.5x; the surface and the native pane do not move', async () => {
+  const nativeBefore = await nativeView()
+  const shotBefore = await shotSize()
+  await setScale(1.5)
+  await expect.poll(targetView, { timeout: 5_000 }).toEqual({ innerWidth: 1280, innerHeight: 720, dpr: 1.5, screenWidth: 1280 })
+  // The surface is still the screen: 1920×1080 CSS px at 1x, and a capture
+  // of it the size it was.
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.target.getViewport())).toEqual({ width: 1920, height: 1080 })
+  expect(await shotSize()).toEqual(shotBefore)
   // A 120 CSS px box is 180 device px wide now — reflow, not a magnified bitmap.
   const box = await app.evaluate(() =>
     (globalThis as any).__obsrv.target.webContents.executeJavaScript(
@@ -82,6 +90,9 @@ test('×1.5 on the 1080p desktop: the page sees 1280×720 at 1.5x; the surface a
 })
 
 test('the scale survives a navigation', async () => {
+  // Set here as well as above: a retry runs this in a fresh app.
+  await setScale(1.5)
+  await expect.poll(targetView, { timeout: 5_000 }).toMatchObject({ innerWidth: 1280 })
   await page.fill('.url-form input', `${url}?again`)
   await page.press('.url-form input', 'Enter')
   await expect.poll(

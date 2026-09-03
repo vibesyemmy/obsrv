@@ -51,6 +51,10 @@ const INSPECT_EVERY_MS = 80
 
 export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // The page's cursor, as CSS (see shared/cursor.ts). Worn only at rest: the
+  // view gestures' classes (pan, fit, inspect) say what a press would do
+  // here, and that outranks what the page would do there.
+  const [pageCursor, setPageCursor] = useState('default')
   const glRef = useRef<GlRenderer | null>(null)
 
   const viewport = useStore(useShallow(selectViewport))
@@ -416,6 +420,52 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     [disarm],
   )
 
+  // Every tab's target reports its cursor; the canvas draws one tab. Main
+  // re-sends the incoming tab's on a switch, so nothing is reset here — a
+  // reset would race that message and win.
+  useEffect(
+    () =>
+      window.obsrv.onTargetCursor(({ tabId, cursor }) => {
+        if (tabId === useStore.getState().activeId) setPageCursor(cursor)
+      }),
+    [],
+  )
+
+  // A <select> on the page cannot open offscreen; its rows arrive here and
+  // are drawn by the overlay menu the toolbar uses, anchored over the
+  // element's box on the canvas (surface CSS px, the inspect highlight's
+  // space). The choice goes back to main, which writes it into the page.
+  // Subscribed against the current geometry: the anchor needs the scale in
+  // force when the popup arrives, not when the canvas mounted.
+  useEffect(
+    () =>
+      window.obsrv.onSelectPopup(async popup => {
+        const canvas = canvasRef.current
+        if (popup.tabId !== useStore.getState().activeId || !canvas) {
+          window.obsrv.pickSelect({ tabId: popup.tabId, id: popup.id, index: null })
+          return
+        }
+        const box = canvas.getBoundingClientRect()
+        const k = (dsf * scale) / dpr
+        const picked = await window.obsrv.openMenu({
+          groups: popup.groups,
+          value: String(popup.selectedIndex),
+          ariaLabel: popup.ariaLabel,
+          anchor: {
+            x: box.left + popup.rect.x * k,
+            y: box.top + popup.rect.y * k,
+            width: popup.rect.width * k,
+            height: popup.rect.height * k,
+          },
+        })
+        window.obsrv.pickSelect({ tabId: popup.tabId, id: popup.id, index: picked === null ? null : Number(picked) })
+        // The select keeps focus in the page; the canvas takes it back here
+        // so the next keystroke reaches it, as after any forwarded click.
+        canvas.focus()
+      }),
+    [dsf, scale, dpr],
+  )
+
   // A viewport change invalidates the target, so a frame is owed. Not on
   // mount, though: the shell's own boot sequence (viewport push, frame
   // handshake) can take longer than STALL_MS on a cold start, and the notice
@@ -713,7 +763,12 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
             inspecting ? ' inspecting' : panning ? ' panning' : altHeld ? (fit ? ' fit' : ' pan-ready') : ''
           }`}
           tabIndex={0}
-          style={{ width: `${cssW}px`, height: `${cssH}px` }}
+          style={{
+            width: `${cssW}px`,
+            height: `${cssH}px`,
+            // The page's cursor at rest; a view gesture's class outranks it.
+            ...(inspecting || panning || altHeld ? {} : { cursor: pageCursor }),
+          }}
           // In inspect mode a click pins the readout so the pointer can
           // leave; the fit-to-1:1 jump is the click's meaning otherwise.
           onClick={e => {

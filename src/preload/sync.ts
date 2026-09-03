@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { IPC } from '../shared/ipc'
+import type { MenuGroup } from '../shared/api'
+import type { MAX_SELECT_OPTIONS, SelectOpen, SelectPick } from '../shared/selectPopup'
 import type { ScrollPos, ScrollReport, ScrollRequest, ScrollerKind } from '../shared/types'
 
 /**
@@ -274,3 +276,119 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
     ipcRenderer.send(SCROLL_RESULT, { id: req.id, x: reached.x, y: reached.y, scroller, warnings } satisfies ScrollReport)
   }
 })
+
+// --- <select> popups ---------------------------------------------------------
+// The offscreen target cannot show a select's popup: Chromium draws it
+// outside the page's compositor (a native menu on macOS), and an offscreen
+// window has nothing to hang it on — the select reports itself open, swallows
+// the keyboard and shows nothing. So, in the target only, the press is caught
+// before Chromium acts on it and the options are sent to main, which has the
+// chrome draw them over the canvas; the pick comes back here and is written
+// into the element with the events a real pick fires. Native `<select
+// multiple>` and sized listboxes render in-page and are left alone. See
+// shared/selectPopup.ts for the round trip and the reason for the indexes.
+
+const SELECT_OPEN = 'obsrv:select-open' satisfies typeof IPC.selectOpen
+const SELECT_PICK = 'obsrv:select-pick' satisfies typeof IPC.selectPick
+const SELECT_ROWS = 1000 satisfies typeof MAX_SELECT_OPTIONS
+/** Label length main accepts (`MAX_MENU_LABEL`); longer is cut, not refused. */
+const LABEL_MAX = 120
+/**
+ * Only the offscreen target names itself (see `TargetSource.createWindow`).
+ * Guarded for the browser test that imports this module for `findScroller`,
+ * where there is no `process` at all.
+ */
+const IS_TARGET = typeof process !== 'undefined' && Array.isArray(process.argv) && process.argv.includes('--obsrv-target')
+
+let nextSelectId = 1
+const pendingSelects = new Map<number, HTMLSelectElement>()
+
+/** A select whose popup Chromium would draw as a widget: single, not a listbox, enabled. */
+function popupSelect(el: unknown): el is HTMLSelectElement {
+  return el instanceof HTMLSelectElement && !el.multiple && el.size <= 1 && !el.disabled
+}
+
+const cut = (s: string): string => (s.length > LABEL_MAX ? s.slice(0, LABEL_MAX) : s)
+
+/** The select's rows as menu groups, one per optgroup; disabled rows are left out. */
+function menuGroupsOf(sel: HTMLSelectElement): MenuGroup[] {
+  const groups: MenuGroup[] = []
+  let current: MenuGroup | null = null
+  let currentParent: Element | null = null
+  let rows = 0
+  for (let i = 0; i < sel.options.length && rows < SELECT_ROWS; i++) {
+    const opt = sel.options[i]!
+    const parent = opt.parentElement
+    const group = parent instanceof HTMLOptGroupElement ? parent : null
+    if (group?.disabled || opt.disabled) continue
+    if (current === null || currentParent !== parent) {
+      current = group ? { label: cut(group.label), options: [] } : { options: [] }
+      currentParent = parent
+      groups.push(current)
+    }
+    current.options.push({ value: String(i), label: cut(opt.label || opt.text) })
+    rows++
+  }
+  return groups.filter(g => g.options.length > 0)
+}
+
+function accessibleName(sel: HTMLSelectElement): string {
+  const explicit = sel.getAttribute('aria-label')
+  if (explicit) return cut(explicit)
+  const label = sel.labels?.[0]?.textContent?.trim()
+  return label ? cut(label) : 'Select'
+}
+
+function openSelect(sel: HTMLSelectElement): void {
+  const groups = menuGroupsOf(sel)
+  if (groups.length === 0) return
+  const id = nextSelectId++
+  pendingSelects.set(id, sel)
+  const r = sel.getBoundingClientRect()
+  ipcRenderer.send(SELECT_OPEN, {
+    id,
+    rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+    selectedIndex: sel.selectedIndex,
+    ariaLabel: accessibleName(sel),
+    groups,
+  } satisfies SelectOpen)
+}
+
+if (IS_TARGET) {
+  // Capture phase, so the page's own handlers still run after — only the
+  // default action (Chromium's popup, and with it the focus) is taken over.
+  document.addEventListener(
+    'mousedown',
+    e => {
+      const el = e.target
+      if (e.button !== 0 || !popupSelect(el)) return
+      e.preventDefault()
+      el.focus()
+      openSelect(el)
+    },
+    true,
+  )
+  // The keys that open a closed select; typing a letter still changes the
+  // value in place, as it does in a real browser, and needs no popup.
+  document.addEventListener(
+    'keydown',
+    e => {
+      const el = document.activeElement
+      if (!popupSelect(el)) return
+      if (e.key !== ' ' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      e.preventDefault()
+      openSelect(el)
+    },
+    true,
+  )
+  ipcRenderer.on(SELECT_PICK, (_e, pick: SelectPick) => {
+    const sel = pendingSelects.get(pick.id)
+    pendingSelects.delete(pick.id)
+    if (!sel || !sel.isConnected || pick.index === null) return
+    const opt = sel.options[pick.index]
+    if (!opt || opt.disabled || pick.index === sel.selectedIndex) return
+    sel.selectedIndex = pick.index
+    sel.dispatchEvent(new Event('input', { bubbles: true }))
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}

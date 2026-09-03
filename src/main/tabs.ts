@@ -178,6 +178,9 @@ export class TabManager {
     next.native.setVisible(this.nativeVisible(next))
     if (prev && prev !== next) prev.setPainting(false)
     this.onTabsChanged()
+    // Chromium reports a cursor only when it changes, and the incoming
+    // tab's may not change for a while: send what it last said.
+    this.toRenderer(IPC.targetCursor, { tabId: id, cursor: next.target.getCursor() })
   }
 
   close(id: string): void {
@@ -331,6 +334,12 @@ export class TabManager {
       // notification that arrives ahead of the value it is about writes the
       // previous URL back to disk.
       this.onTabUrlChanged(s)
+    })
+
+    // The page's cursor, for the canvas. Only the tab in front has a canvas
+    // to wear it; a switch re-sends the incoming tab's (see `activate`).
+    s.target.on('cursor', cursor => {
+      if (s.id === this.id) this.toRenderer(IPC.targetCursor, { tabId: s.id, cursor })
     })
 
     // The strip's first choice of label. Taken from the native pane rather than
