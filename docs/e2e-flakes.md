@@ -187,6 +187,46 @@ So there is no mechanism to fix yet. What is in place instead:
   past the last milestone), and the close resolves at the bound with the
   tail printed.
 
+## When the app dies under a spec: what the harness prints now
+
+A spec whose app is gone sees `Target page, context or browser has been
+closed` from its next call, and nothing else. Twice that was the whole
+report of a real death: the inspector-close SIGTRAP above hid behind it
+until the crash reports were read by hand, and `sync.spec`'s second mode
+(the channel closed 130 ms into a load, once on CI) still has nothing but
+that line. So from 2026-09-03 `launchApp` watches the process from launch,
+and an exit that arrives before any close was requested prints, to the
+runner's stderr:
+
+- the exit code and signal, and the app's log tail (the user-data
+  directory is removed after this, not on Playwright's `close` event,
+  which fires first);
+- the crash report macOS wrote for that pid, from
+  `~/Library/Logs/DiagnosticReports`, matched by the `pid` in the
+  report's body rather than by time, and polled for up to 6 s because
+  ReportCrash writes it a beat after the death: exception type and
+  signal, the termination line, the faulting thread and its top frames.
+
+Measured, with main crashed by `process.crash()` from an evaluate:
+
+```
+[launch] app pid 1655 exited on its own (code null, signal SIGSEGV); no close was requested. App log tail:
+  2026-09-03T16:47:42.608Z info  obsrv 0.25.0 starting: electron 43.4.1, …
+[launch] crash report for pid 1655:
+  Electron-2026-09-03-174746.ips
+  Electron at 2026-09-03 17:47:42.9644 +0100: EXC_BAD_ACCESS (SIGSEGV), Segmentation fault: 11
+  faulting thread 0 CrBrowserMain:
+    Electron Framework  node::PrincipalRealm::inspector_enable_async_hooks() const
+    …
+```
+
+The report arrived about four seconds after the exit line. An `app.exit(0)`
+from an evaluate prints `code 0, signal null` and, after the wait, that no
+report appeared — a clean exit or a kill from outside. A normal close
+prints nothing. The frames are Electron's exported symbols nearest the
+addresses, not a symbolicated stack; they place the fault, they do not
+name the line.
+
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 
 The one flaky retry in the first CI run after the collected-promise fix

@@ -1,6 +1,6 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
@@ -30,7 +30,7 @@ export async function launchApp(
     args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${dir}`, ...extraArgs],
     env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
   })
-  if (userData === undefined) raw.on('close', () => rmSync(dir, { recursive: true, force: true }))
+  watchExit(raw, dir, userData === undefined)
   const app = hardenEvaluate(raw)
   await app.evaluate(async ({ app: electronApp }) => {
     await electronApp.whenReady()
@@ -95,7 +95,7 @@ function hardenEvaluate(raw: ElectronApplication): ElectronApplication {
           return evaluateVia(pageFunction, arg)
         }
       }
-      if (key === 'close') return (): Promise<void> => boundedClose(target, evaluateVia)
+      if (key === 'close') return (): Promise<void> => boundedClose(target)
       const value = Reflect.get(target, key, receiver)
       return typeof value === 'function' ? value.bind(target) : value
     },
@@ -124,14 +124,9 @@ const CLOSE_GRACE_MS = 10_000
  * `closed` and `exiting`, so the tail says which stretch did not finish.
  * The spec that saw it stays green; the line in the output is the report.
  */
-async function boundedClose(
-  raw: ElectronApplication,
-  evaluateVia: (pageFunction: unknown, arg?: unknown) => Promise<unknown>,
-): Promise<void> {
-  // Read before quitting: after it, nothing in main answers.
-  const logFile = (await evaluateVia(
-    () => (globalThis as { __obsrv?: { logFile?: string } }).__obsrv?.logFile ?? '',
-  ).catch(() => '')) as string
+async function boundedClose(raw: ElectronApplication): Promise<void> {
+  closeRequested.add(raw)
+  const logFile = logFileOf(raw)
   const started = Date.now()
   const timer = setTimeout(() => {
     const proc = raw.process()
@@ -147,6 +142,107 @@ async function boundedClose(
     await raw.close()
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/** Apps whose close the harness asked for; an exit before that is the app's own doing. */
+const closeRequested = new WeakSet<ElectronApplication>()
+const userDataOf = new WeakMap<ElectronApplication, string>()
+const logFileOf = (raw: ElectronApplication): string => join(userDataOf.get(raw) ?? '', 'logs', 'obsrv.log')
+
+/**
+ * Evidence when the app dies under a spec.
+ *
+ * A spec whose app is gone sees `Target page, context or browser has been
+ * closed` from its next call, which says nothing about why — and twice
+ * that was the whole report of a real crash (the inspector-close SIGTRAP;
+ * `sync.spec`'s second mode, still open). So the process's exit is watched
+ * from launch: one that arrives before any close was requested prints the
+ * exit code and signal, the app's log tail, and — matched by pid, since
+ * macOS writes it a beat after the death — the crash report from
+ * `~/Library/Logs/DiagnosticReports`, with the faulting thread's top
+ * frames. The user-data directory is removed here rather than on
+ * Playwright's `close` event, which fires first and would take the log
+ * with it.
+ */
+function watchExit(raw: ElectronApplication, dir: string, removeDir: boolean): void {
+  userDataOf.set(raw, dir)
+  const proc = raw.process()
+  proc.once('exit', (code, signal) => {
+    if (!closeRequested.has(raw)) {
+      process.stderr.write(
+        `[launch] app pid ${proc.pid} exited on its own (code ${code}, signal ${signal}); no close was requested. ` +
+          `App log tail:\n${logTail(logFileOf(raw))}\n`,
+      )
+      void crashReportFor(proc.pid ?? -1).then(report => {
+        process.stderr.write(
+          report
+            ? `[launch] crash report for pid ${proc.pid}:\n${report}\n`
+            : `[launch] no crash report for pid ${proc.pid} within ${CRASH_REPORT_WAIT_MS} ms (a clean exit, or a kill from outside).\n`,
+        )
+      })
+    }
+    if (removeDir) rmSync(dir, { recursive: true, force: true })
+  })
+}
+
+const CRASH_REPORT_WAIT_MS = 6_000
+const REPORTS_DIR = join(homedir(), 'Library', 'Logs', 'DiagnosticReports')
+
+/** The `.ips` report macOS wrote for `pid`, summarised; empty when none appears in time. */
+async function crashReportFor(pid: number): Promise<string> {
+  const deadline = Date.now() + CRASH_REPORT_WAIT_MS
+  const seen = new Set<string>()
+  for (;;) {
+    let names: string[] = []
+    try {
+      names = readdirSync(REPORTS_DIR)
+        .filter(n => /^(Electron|Obsrv)-.*\.ips$/.test(n) && !seen.has(n))
+        .map(n => ({ n, t: statSync(join(REPORTS_DIR, n)).mtimeMs }))
+        .sort((a, b) => b.t - a.t)
+        .map(x => x.n)
+    } catch {
+      return ''
+    }
+    for (const name of names) {
+      seen.add(name)
+      const text = summariseReport(join(REPORTS_DIR, name), pid)
+      if (text) return `  ${name}\n${text}`
+    }
+    if (Date.now() >= deadline) return ''
+    await new Promise(r => setTimeout(r, 500))
+  }
+}
+
+/** Reads one `.ips` (a JSON header line, then a JSON body); empty unless it is `pid`'s. */
+function summariseReport(path: string, pid: number): string {
+  try {
+    const [, ...rest] = readFileSync(path, 'utf8').split('\n')
+    const body = JSON.parse(rest.join('\n')) as {
+      pid?: number
+      procName?: string
+      captureTime?: string
+      exception?: { type?: string; signal?: string }
+      termination?: { indicator?: string }
+      faultingThread?: number
+      threads?: { name?: string; queue?: string; frames?: { symbol?: string; imageIndex?: number; imageOffset?: number }[] }[]
+      usedImages?: { name?: string }[]
+    }
+    if (body.pid !== pid) return ''
+    const lines = [
+      `  ${body.procName ?? '?'} at ${body.captureTime ?? '?'}: ${body.exception?.type ?? '?'} (${body.exception?.signal ?? '?'}), ${body.termination?.indicator ?? '?'}`,
+    ]
+    const thread = body.threads?.[body.faultingThread ?? -1]
+    if (thread) {
+      lines.push(`  faulting thread ${body.faultingThread} ${thread.name ?? thread.queue ?? ''}:`)
+      for (const f of (thread.frames ?? []).slice(0, 10)) {
+        const image = f.imageIndex === undefined ? '?' : (body.usedImages?.[f.imageIndex]?.name ?? '?')
+        lines.push(`    ${image}  ${f.symbol ?? `+0x${(f.imageOffset ?? 0).toString(16)}`}`)
+      }
+    }
+    return lines.join('\n')
+  } catch {
+    return ''
   }
 }
 
