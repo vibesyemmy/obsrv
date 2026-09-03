@@ -22,7 +22,8 @@ import { log } from './log'
  */
 export interface TargetSourceEventMap {
   frame: [FrameMessage]
-  'url-changed': [string]
+  /** A committed main-frame navigation; the flag is true for a same-document one (`did-navigate-in-page`). */
+  'url-changed': [string, boolean]
   /** The page's cursor as CSS, for the canvas (see shared/cursor.ts). */
   cursor: [string]
   'load-error': [LoadError]
@@ -315,12 +316,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       if (this.throttle !== NO_THROTTLE) void this.applyThrottle()
       if (this.internal) return
       this.intendedUrl = url
-      this.emit('url-changed', url)
+      this.emit('url-changed', url, false)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame && !this.internal) {
         this.intendedUrl = url
-        this.emit('url-changed', url)
+        this.emit('url-changed', url, true)
       }
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {

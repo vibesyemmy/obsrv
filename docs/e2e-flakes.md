@@ -177,3 +177,33 @@ Fixed in the app rather than the spec: `toggleDetachedDevTools` defers a
 tick and refuses a second toggle while an open is in flight (that second
 toggle used to re-open, for the same flag-versus-window reason). The spec
 now runs the crashing sequence itself, twice, as a regression test.
+
+## `sync.spec`: the redirect test, two failure modes
+
+Mode one, seen in the v0.22.1 tag run: `seen.length >= 1` against zero — the
+target never followed the native pane back to the redirecting page. Not a
+stale expectation, the thing the test guards; the **loop breaker** in
+`SyncBus`. It counted direction reversals between mirrors less than a second
+apart, and once tripped stayed tripped while traffic continued. The file's
+earlier tests mirror native-to-target and target-to-native 140 ms apart, and
+the redirect's own replace can reverse once more; on a runner where those
+landed inside one second the breaker dropped the very mirror the test
+needed. Reproduced on demand: a hammer of the sequence every 150 ms lost
+every mirror from the seventh round on.
+
+Fixed in the app: a loop *bounces* — a pane rewrites its URL in place within
+a beat of the mirrored load it was just sent, a same-document commit, the
+one kind only mirroring can make endless. A click, a redirect or an explicit
+load commits a new document, so those now reset the count and only in-place
+rewrites after a mirror accumulate (`BOUNCE_MS`). Time alone could not draw
+the line: a spec navigates as fast as a loop. The loop fixture still trips
+it once; a new test does four quick reversals and expects every one to
+mirror.
+
+Mode two, seen once in the v0.25.0 `main` run: `Target page, context or
+browser has been closed` 130 ms into the test, on the evaluate that loads
+the redirecting page into the native pane. That message from `app.evaluate`
+means the app channel went away — with the devtools flake it was the
+process dying. Not reproduced locally (25 hammer rounds, 48 spec runs, no
+exit); no crash report from CI. On the ledger, with the exit signal and
+crash reports the first things to look at if it returns.
