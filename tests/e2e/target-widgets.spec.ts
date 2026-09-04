@@ -237,12 +237,23 @@ test('a colour input streams its values live and commits once', async () => {
   await expect.poll(() => pickerHost(app)).toBeNull()
 })
 
-test('Escape dismisses a picker without a change', async () => {
+test('a press beside the picker dismisses it without a change', async () => {
   const before = (await pageLog()).length
   const date = await centreOf('date')
   await page.mouse.click(date.x, date.y)
-  await waitForPicker(app)
-  await menuKey(app, 'Escape')
+  const host = await waitForPicker(app)
+  await expect.poll(() => pickerHost(app).then(h => h?.shown ?? '')).toBe('ok')
+  // Chromium's calendar is a widget outside any page, and while it is up it
+  // holds the keyboard: a synthetic key sent to the overlay never reaches
+  // it (a real Escape does — the popup closes and fires `cancel` on the
+  // input, which the host follows; measured once the desk delivered real
+  // events, that path cannot be driven from here). A press beside the host
+  // lands on the overlay's backdrop, the other way out, and can be.
+  await app.evaluate(({}, p: { x: number; y: number }) => {
+    const wc = (globalThis as any).__obsrv.overlay.webContents
+    wc.sendInputEvent({ type: 'mouseDown', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+    wc.sendInputEvent({ type: 'mouseUp', x: p.x, y: p.y, button: 'left', clickCount: 1 })
+  }, { x: Math.round(host.x + host.width + 40), y: Math.round(host.y + host.height + 40) })
   await expect.poll(() => pickerHost(app)).toBeNull()
   expect(await inTarget<string>("document.getElementById('date').value")).toBe('2026-10-05')
   expect((await pageLog()).slice(before).filter(l => l.startsWith('change'))).toEqual([])
