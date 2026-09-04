@@ -584,7 +584,7 @@ export function selectViewport(s: AppState): {
  * result. `ppi` throws on a bad diagonal and `GlRenderer.draw` refuses a scale
  * that is not finite and positive, so every guard lives here, once.
  */
-function calibratedScale(s: AppState): number | null {
+function calibratedScale(s: AppState, pixelExact: boolean = selectTab(s).pixelExact): number | null {
   if (s.host.physicalWidth <= 0 || s.host.physicalHeight <= 0 || s.host.scaleFactor <= 0) return null
   if (!(s.settings.hostDiagonalInches > 0)) return null
   const screen = selectScreen(s)
@@ -595,13 +595,24 @@ function calibratedScale(s: AppState): number | null {
     diagonalInches: s.settings.hostDiagonalInches,
     scaleFactor: s.host.scaleFactor,
   }
-  const scale = computeScale(host, screen, selectTab(s).pixelExact)
+  const scale = computeScale(host, screen, pixelExact)
   return Number.isFinite(scale) && scale > 0 ? scale : null
 }
 
 /** Magnification for the target pane. Always finite and positive (spec §9). */
 export function selectScale(s: AppState): number {
   return calibratedScale(s) ?? FALLBACK_SCALE
+}
+
+/**
+ * The magnification at which the target is its physical size, whatever the
+ * pixel-exact flag says: what Fit never enlarges past. Pixel-exact belongs
+ * to the 1:1 view alone; a Fit reached from it must show the same picture as
+ * a Fit reached from Actual (measured 2026-09-04: 0.52 against 0.51 on a
+ * phone that fit, and the whole pane against true size in a wide window).
+ */
+export function selectPhysicalScale(s: AppState): number {
+  return calibratedScale(s, false) ?? FALLBACK_SCALE
 }
 
 /** Spec §9: true while the pane is drawn at the flat fallback, so Settings can say so. */

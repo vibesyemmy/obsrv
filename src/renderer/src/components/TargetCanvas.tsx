@@ -18,6 +18,7 @@ import { keyDownEvents, keyUpEvent, mouseEvent, toTargetPoint, wheelEvent } from
 import {
   selectDeviceScaleFactor,
   selectPanelParams,
+  selectPhysicalScale,
   selectScale,
   selectTab,
   selectViewport,
@@ -67,6 +68,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const vision = useMemo(() => visionMatrix(visionType, visionSeverity), [visionType, visionSeverity])
   const dsf = useStore(selectDeviceScaleFactor)
   const requestedScale = useStore(selectScale)
+  const physicalScale = useStore(selectPhysicalScale)
   const mode = useStore(s => selectTab(s).mode)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const setViewMode = useStore(s => s.setViewMode)
@@ -151,11 +153,15 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   const oneToOne = fitScale(source.width, source.height, requestedScale, maxOutput)
 
   // Fit mode scales the whole viewport into the pane — never enlarged past
-  // 1:1 — and minifies through the renderer's smooth sampler, because
-  // nearest decimation at a small fraction moirés.
+  // true size — and minifies through the renderer's smooth sampler, because
+  // nearest decimation at a small fraction moirés. The cap is the physical
+  // 1:1, not `oneToOne`: that one follows the pixel-exact flag, which is the
+  // 1:1 view's business and stays set underneath Fit, and a cap that moved
+  // with it made Fit-from-Pixels a different picture from Fit-from-Actual.
   const fit = viewMode === 'fit'
+  const trueSize = fitScale(source.width, source.height, physicalScale, maxOutput)
   const scale = fit
-    ? computeFitScale(pane.width, pane.height, dpr, source.width, source.height, oneToOne)
+    ? computeFitScale(pane.width, pane.height, dpr, source.width, source.height, trueSize)
     : oneToOne
   // 1:1 on a mobile preset usually minifies too (a 460 PPI phone pixel gets
   // ~0.3 host pixels), and nearest decimation below 1 is as wrong there as in
