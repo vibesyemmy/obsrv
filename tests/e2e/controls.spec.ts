@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { closeSettings, launchApp, openSettings, rendererWindow } from './launch'
+import { drawerSettled } from './helpers/select'
 import { choose } from './helpers/select'
 
 let app: ElectronApplication
@@ -29,6 +30,8 @@ const openPanel = async (): Promise<void> => {
   const button = page.locator('.toggle-panel')
   if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click()
   await expect(page.locator('.drawer .nits-slider')).toHaveCount(1)
+  // The drawer slides in; the pane measurements below need it landed.
+  await drawerSettled(page, true)
 }
 
 test.beforeAll(async () => {

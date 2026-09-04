@@ -4,6 +4,8 @@ import {
   ArrowRight,
   ChevronDown,
   EllipsisVertical,
+  Info,
+  PanelRight,
   Plus,
   RectangleHorizontal,
   RectangleVertical,
@@ -28,6 +30,8 @@ const ICONS = {
   overflow: EllipsisVertical,
   close: X,
   sliders: SlidersHorizontal,
+  info: Info,
+  panelRight: PanelRight,
   gear: Settings,
   chevron: ChevronDown,
   // The listbox's tick. Marks the chosen row the way the native menu did.

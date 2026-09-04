@@ -411,7 +411,7 @@ const driveInputShape = {
     .describe(
       "Set the target's network and CPU conditions in the app: " +
         THROTTLE_PROFILES.map(t => t.id).join(', ') +
-        ' (see obsrv_presets → throttles). The user sees it in the footer and can turn it off from the toolbar; ' +
+        ' (see obsrv_presets → throttles). The user sees it in the footer and can turn it off from the side panel; ' +
         'it is not remembered across launches. An app older than the field rejects the command.',
     ),
   onionSkin: z

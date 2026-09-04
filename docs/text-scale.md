@@ -1,7 +1,7 @@
 # Text scale
 
 ```
-Toolbar › Text 100% · 125% · 150% · 200%
+Side panel › Page › Text 100% · 125% · 150% · 200%
 obsrv snap|diff|audit|report <url> --text-scale 1.5
 obsrv_snap / obsrv_audit / obsrv_report { textScale: 1.5 }
 obsrv_drive { textScale: 1.5 }
@@ -81,7 +81,7 @@ paint. A file from before the field, or one with junk in it, reads as ×1.
 
 ## Range
 
-The toolbar offers ×1, ×1.25, ×1.5 and ×2. The CLI and the tools take any
+The side panel's Page section offers ×1, ×1.25, ×1.5 and ×2. The CLI and the tools take any
 number from 0.5 to 4 (Chromium's own zoom stops at 25 % and 500 %; below
 one half nothing is legible and above four nothing fits). Out of range is
 refused, not clamped — a clamped ×10 would render something nobody asked

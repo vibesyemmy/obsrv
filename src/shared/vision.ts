@@ -25,10 +25,10 @@ export type VisionType = 'none' | 'protan' | 'deutan' | 'tritan' | 'achromat'
 
 export const VISION_TYPES: { id: VisionType; label: string; note: string }[] = [
   { id: 'none', label: 'Normal', note: 'No simulation' },
-  { id: 'protan', label: 'Protan', note: 'Red-weak — reds darken as well as shift' },
-  { id: 'deutan', label: 'Deutan', note: 'Green-weak — the most common deficiency' },
-  { id: 'tritan', label: 'Tritan', note: 'Blue-yellow — rare, and it breaks blue palettes' },
-  { id: 'achromat', label: 'Achromat', note: 'No hue at all — the strongest test of colour-only meaning' },
+  { id: 'protan', label: 'Protan', note: 'Red-weak: reds look darker as well as shifted' },
+  { id: 'deutan', label: 'Deutan', note: 'Green-weak: the most common colour vision deficiency' },
+  { id: 'tritan', label: 'Tritan', note: 'Blue and yellow confused: rare, and hard on blue palettes' },
+  { id: 'achromat', label: 'Achromat', note: 'No colour at all: the strongest test of anything that relies on colour alone' },
 ]
 
 /** Row-major 3×3, applied to linear RGB. */

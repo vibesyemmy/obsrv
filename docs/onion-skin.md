@@ -1,13 +1,13 @@
 # The onion skin
 
 ```
-Toolbar › Onion off · 25% · 50% · 75% · 100%
+Side panel › Compare › Onion skin 0–100%
 obsrv_drive { onionSkin: 0.5 }      status → onionSkin
 ```
 
 The target pane shows a page as a 1x screen rasterises it. The onion skin
 shows, over that, the same page as a HiDPI screen rasterises it — the one
-the designer is looking at — blended at an opacity you step between. What
+the designer is looking at — blended at an opacity you drag between. What
 the cheap raster *moved* is visible as a ghost: a line that wraps a word
 earlier because hinted metrics are wider, a hairline that is there in one
 and gone in the other, a weight that thinned. At 100% the pane is the
@@ -37,7 +37,7 @@ starts without one.
 The reference doubles the device pixels. A 4K or ultrawide desktop preset
 at 1x is already at the raster budget's edge, and a reference at a clamped,
 narrower viewport would be a picture of a different layout — so the skin
-is refused there rather than rendered wrong: the menu falls back to `off`,
+is refused there rather than rendered wrong: the slider falls back to `off`,
 and an agent reads `0` back. Everything up to 2048 CSS px on each axis
 takes one; every laptop, phone and tablet preset does.
 

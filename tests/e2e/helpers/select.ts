@@ -89,6 +89,24 @@ export async function menuKey(app: ElectronApplication, key: string): Promise<vo
 }
 
 /**
+ * Opens the side panel (the drawer text scale, throttle, the onion skin, the
+ * panel sliders and vision live in) if it is closed. Idempotent.
+ */
+export async function openPanel(page: Page): Promise<void> {
+  const toggle = page.locator('.toggle-panel')
+  if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click()
+  await expect(page.locator('.drawer')).toBeVisible()
+  await drawerSettled(page, true)
+}
+
+/** The drawer slides; a spec that measures the panes waits for the width to land. */
+export async function drawerSettled(page: Page, open: boolean): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()))
+    .toBe(open ? '309px' : '0px')
+}
+
+/**
  * Picks a value from one of the app's menus: opens it from the trigger, clicks
  * the row, and waits for the choice to reach the chrome.
  *
