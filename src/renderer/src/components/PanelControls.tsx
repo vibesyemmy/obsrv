@@ -152,7 +152,10 @@ export function PanelControls({ focus = null, focusKey = 0 }: { focus?: PanelSec
 
       <section className="panel-section" data-section="panel">
       <h2>Panel</h2>
-      <p className="muted">Approximation — not colourimetric.</p>
+      <p className="muted">
+        Simulate a cheaper screen: dimmer, less contrast, fewer colours. A rough
+        model, not a measured one.
+      </p>
 
       <Slider
         label="Brightness"
@@ -211,7 +214,7 @@ export function PanelControls({ focus = null, focusKey = 0 }: { focus?: PanelSec
         <span>FRC dithering</span>
       </label>
 
-      <p className="muted">Choosing a profile in the toolbar resets these.</p>
+      <p className="muted">Choosing a profile in the toolbar resets these sliders.</p>
       </section>
 
       <section className="panel-section" data-section="vision">
@@ -235,7 +238,10 @@ function PageControls() {
   return (
     <section className="panel-section" data-section="page">
       <h2>Page</h2>
-      <p className="muted">What the page is given: its zoom, and the connection and CPU it loads on.</p>
+      <p className="muted">
+        How the page is loaded on the target screen: its zoom level, and how
+        fast a network and processor it gets.
+      </p>
       <label className="control">
         <span className="control-row">
           <span>Text scale</span>
@@ -278,7 +284,9 @@ function CompareControls() {
     <section className="panel-section" data-section="compare">
       <h2>Compare</h2>
       <p className="muted">
-        The same page rendered at 2× and ghosted over the 1x raster: what the cheap raster moved.
+        Lay a sharp, high-resolution render of the same page over the low-resolution
+        one. Drag the slider to see what the cheap screen changes: text that wraps
+        differently, or a thin line that disappears.
       </p>
       <Slider
         label="Onion skin"
@@ -312,8 +320,9 @@ function VisionControls() {
     <>
       <h2>Vision</h2>
       <p className="muted">
-        Simulated on the render, after the panel — the screen emits light, then
-        the eye receives it.
+        See the render as someone with a colour vision deficiency would. Applied
+        after the panel above, because the screen shows the colours first and the
+        eye sees them second.
       </p>
 
       <div className="vision-control" role="group" aria-label="Colour vision">
@@ -348,10 +357,10 @@ function VisionControls() {
       />
 
       <p className="muted">
-        Matrices from Machado et al. (2009) at full severity; the steps between
-        are interpolated, so treat the middle as indicative rather than
-        measured. A simulation answers “does this survive without that hue”. It
-        does not replace a contrast check for text.
+        Full severity uses published research figures (Machado et al., 2009);
+        the values in between are estimates. This shows whether something still
+        works without a particular colour. It is not a substitute for checking
+        text contrast.
       </p>
     </>
   )
