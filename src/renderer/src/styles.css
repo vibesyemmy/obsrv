@@ -686,9 +686,14 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   color: var(--text-1);
 }
 .controls h2:first-child { margin-top: 0; }
-.panel-section:first-child h2 { margin-top: 0; }
+/* Sections read as sections: air on both sides of a rule between them, and
+   the heading sat on its rule rather than floating between two. */
+.panel-section { padding: 18px 0 20px; scroll-margin-top: 8px; border-radius: 4px; }
+.panel-section:first-child { padding-top: 0; }
+.panel-section:last-child { padding-bottom: 8px; }
+.panel-section + .panel-section { border-top: 1px solid var(--line); }
+.panel-section h2 { margin-top: 0; }
 /* A footer fact brought this section up: light it for a beat. */
-.panel-section { scroll-margin-top: 8px; border-radius: 4px; }
 .panel-section.flash { animation: panel-flash 0.9s ease-out; }
 @keyframes panel-flash { from { background: var(--chrome-3); } to { background: transparent; } }
 /* The menus the drawer took from the toolbar fill its width. */
