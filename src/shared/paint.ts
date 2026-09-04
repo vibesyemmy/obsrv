@@ -66,3 +66,39 @@ export function fitsFrame(dirty: Rect, frameWidth: number, frameHeight: number):
  * the viewport, so nothing the live path watched had moved.
  */
 export const SETTLE_QUIET_MS = 400
+
+/**
+ * The pixels Chromium actually paints into an offscreen bitmap for a CSS
+ * viewport at a density. A fractional density can put `CSS × dsf` between
+ * two whole pixels — 412 × 2.625 is 1081.5 — and then Electron allocates the
+ * bitmap at the rounding (1082) while Chromium's viewport is the floor
+ * (1081): the last column, and row, are never painted. Measured on the
+ * Pixel preset: a black edge, and a capture that never went quiet because
+ * its coverage mask never filled. So the frame is the floor, and only when
+ * the bitmap is that rounding — a bitmap of some other size is a frame
+ * painted against a previous viewport, still in flight, and is left whole.
+ */
+export function paintedExtent(
+  full: { width: number; height: number },
+  viewport: { width: number; height: number },
+  dsf: number,
+): { width: number; height: number } {
+  const w = viewport.width * dsf
+  const h = viewport.height * dsf
+  // The epsilon absorbs float noise in a product that is whole in decimal.
+  return {
+    width: full.width === Math.round(w) ? Math.min(full.width, Math.floor(w + 1e-6)) : full.width,
+    height: full.height === Math.round(h) ? Math.min(full.height, Math.floor(h + 1e-6)) : full.height,
+  }
+}
+
+/** `rect` cut to the extent; null when nothing of it is inside. */
+export function clipToExtent(
+  rect: { x: number; y: number; width: number; height: number },
+  extent: { width: number; height: number },
+): { x: number; y: number; width: number; height: number } | null {
+  const x1 = Math.min(rect.x + rect.width, extent.width)
+  const y1 = Math.min(rect.y + rect.height, extent.height)
+  if (rect.x >= x1 || rect.y >= y1) return null
+  return { x: rect.x, y: rect.y, width: x1 - rect.x, height: y1 - rect.y }
+}

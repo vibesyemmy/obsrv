@@ -56,6 +56,11 @@ export class TabManager {
 
   /** The one bus. Re-pointed by `activate`, never duplicated. */
   readonly bus: FrameBus
+  /**
+   * The onion skin's bus, on its own channels: the active tab's reference
+   * render, or nothing while that tab has none. Re-pointed with the other.
+   */
+  readonly referenceBus: FrameBus
 
   /** The cap from Settings. `registerIpc` owns the settings file and writes it. */
   maxTabs = DEFAULT_SETTINGS.maxTabs
@@ -99,6 +104,7 @@ export class TabManager {
     const session = this.byWebContents(e.sender)
     if (!session) return
     session.sync.onScroll(e, raw)
+    session.forwardScroll(e, raw)
   }
 
   constructor(private readonly win: BrowserWindow) {
@@ -108,7 +114,21 @@ export class TabManager {
     // The bus binds its constructor argument as the initial source, so the
     // first session needs no `setSource`; every later activation does.
     this.bus = attachFrameBus(first.target, win)
+    this.referenceBus = attachFrameBus(null, win, { frame: IPC.referenceFrame, subscribe: IPC.referenceSubscribe })
     ipcMain.on(IPC.syncScroll, this.route)
+  }
+
+  /**
+   * Turns a tab's onion-skin reference on or off (see `TabSession.setReference`)
+   * and, for the tab in front, points the reference bus at the result.
+   */
+  setReference(session: TabSession, on: boolean): boolean {
+    const ok = session.setReference(on)
+    if (session.id === this.id) {
+      this.referenceBus.setSource(session.reference)
+      this.referenceBus.setEnabled(this.busEnabled(session))
+    }
+    return ok
   }
 
   get tabs(): readonly TabSession[] {
@@ -174,6 +194,8 @@ export class TabManager {
     next.setPainting(this.wantPainting)
     this.bus.setSource(next.target)
     this.bus.setEnabled(this.busEnabled(next))
+    this.referenceBus.setSource(next.reference)
+    this.referenceBus.setEnabled(this.busEnabled(next))
     if (this.slot) next.native.setBounds(this.slot)
     next.native.setVisible(this.nativeVisible(next))
     if (prev && prev !== next) prev.setPainting(false)
@@ -204,6 +226,8 @@ export class TabManager {
       fresh.setPainting(this.wantPainting)
       this.bus.setSource(fresh.target)
       this.bus.setEnabled(this.busEnabled(fresh))
+      this.referenceBus.setSource(null)
+      this.referenceBus.setEnabled(this.busEnabled(fresh))
       if (this.slot) fresh.native.setBounds(this.slot)
       fresh.native.setVisible(this.nativeVisible(fresh))
     } else if (result.activeId !== this.id) {
@@ -271,6 +295,7 @@ export class TabManager {
   destroy(): void {
     ipcMain.off(IPC.syncScroll, this.route)
     this.bus.detach()
+    this.referenceBus.detach()
     for (const t of this.list) t.destroy()
     this.list.length = 0
   }

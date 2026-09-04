@@ -54,12 +54,36 @@ itself to it (`additionalArguments`). Listbox selects (`multiple`, or a
 `size` above 1) render in-page and are left to Chromium. Menus hold up to
 a thousand rows, which covers a country list.
 
+## Date, time and colour pickers
+
+The picker on `<input type=date|time|datetime-local|month|week|color>` is
+a widget too — a page popup for the dates, the colour panel for colour —
+and offscreen it never opens, though the field still takes typing. It is
+not a list Obsrv could draw as menu rows, so the overlay does something
+else: it hosts a real, invisible `<input>` of the same type over the
+element's box on the canvas, and main clicks it once as a user would.
+A trusted click is what opens a picker, and the overlay is an onscreen
+page, so Chromium draws its own — the same calendar and the same colour
+panel the native pane gets — hanging on the hosted input.
+
+Every value the hosted input takes is written into the page's element
+with the events a real pick fires: `input` for each change while a colour
+is dragged, `change` when the picker commits, and nothing on a dismissal
+(Escape, or a click beside it). `min`, `max` and `step` travel with the
+request, so the calendar greys out the same days. The press on the page's
+own input is not intercepted for the date family — a click into a date
+field also picks the segment the keyboard edits, and that still works;
+only a colour input's click is taken over, since it has nothing to edit
+in place. Space, F4 and Alt+ArrowDown on a focused input open the picker
+as they do in Chromium.
+
+Typing stays the faster path for an agent, and `obsrv_drive` never needs
+the picker: `fill` writes the value directly.
+
 ## What is still native, and what to expect
 
 | Widget | Offscreen behaviour | What to do |
 | --- | --- | --- |
-| `<input type=date>` and friends | The picker never opens; typing into the field works | Type the value; use the native pane for the picker |
-| `<input type=color>` | Nothing opens | Native pane |
 | `<input type=file>` | Untested | Native pane |
 | `alert()` / `confirm()` / `prompt()` | Dismissed unseen after ~300 ms; the page is not blocked (measured) | Native pane to read the message |
 | `title` tooltips | Not shown | — |
@@ -67,5 +91,4 @@ a thousand rows, which covers a country list.
 
 These are Chromium widgets too, drawn the same way, and the same approach
 would carry them one by one if a real page needs one. Tooltips could be
-drawn like the select rows; the pickers are large, and typing is the
-faster path anyway.
+drawn like the select rows.

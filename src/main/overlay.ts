@@ -2,6 +2,7 @@ import { app, WebContentsView, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
 import type { MenuRequest } from '../shared/api'
+import type { PickerRequest } from '../shared/pickerPopup'
 
 /**
  * A transparent view spanning the window, for the one kind of UI the renderer
@@ -77,10 +78,39 @@ export class Overlay {
     this.view.webContents.send(IPC.menuShow, request)
   }
 
+  /**
+   * The view's other job: host a real input of a picker's type over the
+   * target's own, so Chromium's picker — which offscreen never opens —
+   * hangs on this one instead (see shared/pickerPopup.ts).
+   */
+  showPicker(request: PickerRequest): void {
+    this.win.contentView.addChildView(this.view)
+    this.layout()
+    this.view.setVisible(true)
+    this.open = true
+    this.view.webContents.focus()
+    this.view.webContents.send(IPC.pickerShow, request)
+  }
+
+  /**
+   * A click as a user would make it, at window content coordinates (the
+   * view's own, since it spans the content area from its origin). A trusted
+   * event is what opens a hosted input's picker: `showPicker()` from the
+   * page would need an activation the page never got.
+   */
+  clickAt(x: number, y: number): void {
+    const wc = this.view.webContents
+    wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+    wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+  }
+
   hide(): void {
     if (!this.open) return
     this.open = false
     this.view.setVisible(false)
+    // Whatever the view was showing is taken down with it; a hosted input
+    // left mounted would keep the page's focus and answer the next click.
+    if (!this.view.webContents.isDestroyed()) this.view.webContents.send(IPC.pickerShow, null)
     // Focus goes back to the chrome, or the next keystroke would land nowhere
     // and the trigger could not take its focus ring back.
     this.win.webContents.focus()

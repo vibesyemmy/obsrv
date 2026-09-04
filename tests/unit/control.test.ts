@@ -14,6 +14,7 @@ import {
   orientationApplyError,
   panesApplyError,
   textScaleApplyError,
+  onionSkinApplyError,
   throttleApplyError,
   parseHighlight,
   pixelExactApplyError,
@@ -103,6 +104,7 @@ describe('command validation', () => {
       'panTo',
       'reload',
       'scroll',
+      'setOnionSkin',
       'setOrientation',
       'setPanes',
       'setPixelExact',
@@ -261,6 +263,7 @@ describe('parseControlStatus', () => {
     orientation: 'portrait',
     textScale: 1,
     throttle: 'none',
+    onionSkin: 0,
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -465,5 +468,26 @@ describe('throttleApplyError', () => {
   it('accepts every preset id and names them for anything else', () => {
     for (const ok of ['none', 'fast-4g', 'slow-4g', '3g', 'cpu-4x', 'cpu-6x', 'mid-phone', 'budget-phone']) expect(throttleApplyError(ok)).toBeNull()
     for (const bad of [undefined, 'edge', 4, null]) expect(throttleApplyError(bad)).toMatch(/setThrottle payload must be \{ throttle: id \} with id one of none, fast-4g/)
+  })
+})
+
+describe('parseControlStatus onion skin', () => {
+  const base = {
+    version: '0.26.0', url: 'about:blank', presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url',
+  }
+  it('an app older than the onion skin reports 0, which is what it draws', () => {
+    expect(parseControlStatus(base)?.onionSkin).toBe(0)
+    expect(parseControlStatus({ ...base, onionSkin: null })?.onionSkin).toBe(0)
+  })
+  it('carries an opacity and refuses anything outside [0, 1]', () => {
+    expect(parseControlStatus({ ...base, onionSkin: 0.75 })?.onionSkin).toBe(0.75)
+    for (const bad of [1.5, -0.1, '1', {}]) expect(parseControlStatus({ ...base, onionSkin: bad })).toBeNull()
+  })
+})
+
+describe('onionSkinApplyError', () => {
+  it('accepts an opacity and names the shape otherwise', () => {
+    for (const ok of [0, 0.25, 1]) expect(onionSkinApplyError(ok)).toBeNull()
+    for (const bad of [undefined, 2, -1, '0.5', null]) expect(onionSkinApplyError(bad)).toMatch(/setOnionSkin payload must be \{ onionSkin: number \}/)
   })
 })

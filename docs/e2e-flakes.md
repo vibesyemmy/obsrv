@@ -14,6 +14,7 @@ contention. This records what was investigated so it is not investigated again.
 | A seam drag landing short of the pointer | Synthesised input timing |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
+| `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | The desk: Electron's macOS hide/show are occlusion transitions |
 
 Each one passes when its file is run alone, and on a plain re-run.
 
@@ -226,6 +227,36 @@ report appeared — a clean exit or a kill from outside. A normal close
 prints nothing. The frames are Electron's exported symbols nearest the
 addresses, not a symbolicated stack; they place the fault, they do not
 name the line.
+
+## `visibility.spec` and `log.spec`: when Electron delivers no hide or show at all
+
+Five tests failed in four full and partial runs on the evening of
+2026-09-03 and passed alone once in between: `log.spec`'s "hidden and
+coming back is on record" (no `window hidden` line after `win.hide()`)
+and the four `visibility.spec` tests that begin by hiding the window
+(painting never paused). Not the code: with a listener on the window,
+`win.hide()` and `win.show()` flipped `isVisible()` and fired **no `hide`
+or `show` event at all** — at the launch position, after
+`app.focus({ steal: true })`, moved to the other display — and the
+0.25.1 build, which had passed these tests on the same machine that
+afternoon, did exactly the same when rebuilt and probed.
+
+On macOS Electron derives a window's `hide` and `show` from its occlusion
+state rather than from `orderOut`, so they arrive only when the window
+*transitions* between visible and occluded. Something about the desk's
+state kept the window from ever counting as visible. What was ruled out
+by measurement: the display asleep (`pmset -g log`; it was on, and
+`caffeinate -d -u` changed nothing), the screen locked
+(`powerMonitor.getSystemIdleState` said idle), the screensaver (not
+running), a full-screen Space (none), another console session (one, the
+user's). What was not: which window or state was covering the app's.
+The user was away for the whole stretch.
+
+So these five specs need a desk where Electron delivers occlusion
+transitions, and a failure of exactly these five with no other symptom
+is that desk, not the hide path. CI has never shown it. On a desk, check
+`hide` fires at all with a listener before reading anything into the
+failure.
 
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 

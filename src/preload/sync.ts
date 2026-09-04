@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type { IPC } from '../shared/ipc'
 import type { MenuGroup } from '../shared/api'
 import type { MAX_SELECT_OPTIONS, SelectOpen, SelectPick } from '../shared/selectPopup'
+import type { MAX_PICKER_VALUE, PickerOpen, PickerPick, PickerType } from '../shared/pickerPopup'
 import type { ScrollPos, ScrollReport, ScrollRequest, ScrollerKind } from '../shared/types'
 
 /**
@@ -332,11 +333,11 @@ function menuGroupsOf(sel: HTMLSelectElement): MenuGroup[] {
   return groups.filter(g => g.options.length > 0)
 }
 
-function accessibleName(sel: HTMLSelectElement): string {
-  const explicit = sel.getAttribute('aria-label')
+function accessibleName(el: HTMLSelectElement | HTMLInputElement, fallback: string): string {
+  const explicit = el.getAttribute('aria-label')
   if (explicit) return cut(explicit)
-  const label = sel.labels?.[0]?.textContent?.trim()
-  return label ? cut(label) : 'Select'
+  const label = el.labels?.[0]?.textContent?.trim()
+  return label ? cut(label) : fallback
 }
 
 function openSelect(sel: HTMLSelectElement): void {
@@ -349,7 +350,7 @@ function openSelect(sel: HTMLSelectElement): void {
     id,
     rect: { x: r.left, y: r.top, width: r.width, height: r.height },
     selectedIndex: sel.selectedIndex,
-    ariaLabel: accessibleName(sel),
+    ariaLabel: accessibleName(sel, 'Select'),
     groups,
   } satisfies SelectOpen)
 }
@@ -390,5 +391,89 @@ if (IS_TARGET) {
     sel.selectedIndex = pick.index
     sel.dispatchEvent(new Event('input', { bubbles: true }))
     sel.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
+
+// --- date, time and colour pickers -------------------------------------------
+// The picker Chromium hangs on these inputs is a widget too — a page popup
+// for the dates, the colour panel — and offscreen it never opens, though the
+// field still takes typing. So the press is reported to main, which has the
+// overlay host an input of the same type over the element and click it:
+// Chromium's own picker opens there, and every value it takes is written
+// back here with the events a real pick fires. The press itself is left to
+// Chromium for the date family — a click into a date field also picks the
+// segment the keyboard edits, and that still works; a colour input has
+// nothing to edit in place. See shared/pickerPopup.ts for the round trip.
+
+const PICKER_OPEN = 'obsrv:picker-open' satisfies typeof IPC.pickerOpen
+const PICKER_PICK = 'obsrv:picker-pick' satisfies typeof IPC.pickerPick
+const PICKER_KINDS = ['date', 'time', 'datetime-local', 'month', 'week', 'color'] satisfies readonly PickerType[]
+const VALUE_MAX = 64 satisfies typeof MAX_PICKER_VALUE
+
+let nextPickerId = 1
+/** The input each open request is for, and its value when the picker opened (what `change` compares against). */
+const pendingPickers = new Map<number, { el: HTMLInputElement; initial: string }>()
+
+function pickerInput(el: unknown): el is HTMLInputElement {
+  return el instanceof HTMLInputElement && (PICKER_KINDS as readonly string[]).includes(el.type) && !el.disabled && !el.readOnly
+}
+
+/** An attribute longer than main accepts is dropped, not the request: the picker still opens. */
+const bounded = (s: string): string => (s.length > VALUE_MAX ? '' : s)
+
+function openPicker(el: HTMLInputElement): void {
+  const id = nextPickerId++
+  pendingPickers.set(id, { el, initial: el.value })
+  const r = el.getBoundingClientRect()
+  ipcRenderer.send(PICKER_OPEN, {
+    id,
+    rect: { x: r.left, y: r.top, width: r.width, height: r.height },
+    type: el.type as PickerType,
+    value: bounded(el.value),
+    min: bounded(el.min),
+    max: bounded(el.max),
+    step: bounded(el.step),
+    ariaLabel: accessibleName(el, 'Pick'),
+  } satisfies PickerOpen)
+}
+
+if (IS_TARGET) {
+  document.addEventListener(
+    'mousedown',
+    e => {
+      const el = e.target
+      if (e.button !== 0 || !pickerInput(el)) return
+      if (el.type === 'color') {
+        e.preventDefault()
+        el.focus()
+      }
+      openPicker(el)
+    },
+    true,
+  )
+  // The keys that open a picker in Chromium; the digits and arrows that edit
+  // a date field in place are left alone.
+  document.addEventListener(
+    'keydown',
+    e => {
+      const el = document.activeElement
+      if (!pickerInput(el)) return
+      if (e.key !== ' ' && e.key !== 'F4' && !(e.key === 'ArrowDown' && e.altKey)) return
+      e.preventDefault()
+      openPicker(el)
+    },
+    true,
+  )
+  ipcRenderer.on(PICKER_PICK, (_e, pick: PickerPick) => {
+    const pending = pendingPickers.get(pick.id)
+    if (pick.done) pendingPickers.delete(pick.id)
+    if (!pending || pick.value === null) return
+    const { el, initial } = pending
+    if (!el.isConnected) return
+    if (el.value !== pick.value) {
+      el.value = pick.value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    if (pick.done && el.value !== initial) el.dispatchEvent(new Event('change', { bubbles: true }))
   })
 }

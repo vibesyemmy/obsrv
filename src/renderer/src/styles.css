@@ -1023,6 +1023,20 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    what a native menu's invisible tracking window does. */
 .menu-backdrop { position: fixed; inset: 0; }
 
+/* A picker's host in the overlay: an input laid over the target's own on the
+   canvas, kept invisible — the page already draws the field, and only
+   Chromium's picker, which hangs on this one, should show. Opacity rather than
+   visibility, or it could take neither the click nor the focus. */
+.picker-host {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+}
+
 /* --- settings modal ------------------------------------------------------- */
 /* Covers the panes deliberately: the native view is taken off screen while this
    is up (see `setNativeObscured`), which is correct here and was not for the

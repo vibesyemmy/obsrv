@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { SCREEN_PRESETS, PANEL_PROFILES, findPreset, findProfile, MAX_VIEWPORT, DEFAULT_SETTINGS } from '../../src/shared/presets'
 
 describe('presets', () => {
-  it('has the twenty-two screen presets: laptops, desktops, then mobiles', () => {
+  it('has the twenty-six screen presets: laptops, desktops, then mobiles', () => {
     expect(SCREEN_PRESETS.map(p => p.id)).toEqual([
       'laptop-768', 'laptop-768-14', 'laptop-768-11', 'laptop-800-11', 'laptop-900-17', 'laptop-1080-15',
+      'laptop-1080-125', 'laptop-1080-150',
       'mbp-14', 'mbp-16',
-      '1080p-24', '1080p-27', '1440p-27', 'sxga-19', '1440x900-19', '4k-27', 'ultrawide-34',
-      'phone-320', 'android-65', 'iphone-se', 'iphone-61', 'iphone-67', 'ipad-109', 'ipad-pro-129',
+      '1080p-24', '1080p-27', '1440p-27', 'sxga-19', '1440x900-19', '4k-27', '4k-27-150', 'ultrawide-34',
+      'phone-320', 'android-65', 'iphone-se', 'iphone-61', 'pixel-8', 'iphone-67', 'ipad-109', 'ipad-pro-129',
     ])
     expect(findPreset('laptop-768')).toMatchObject({ width: 1366, height: 768, diagonalInches: 15.6, group: 'laptop' })
   })
@@ -23,10 +24,11 @@ describe('presets', () => {
   it('each preset matches its panel\'s published pixel density', () => {
     const published: Record<string, number> = {
       'laptop-768': 100, 'laptop-768-14': 112, 'laptop-768-11': 135, 'laptop-800-11': 130,
-      'laptop-900-17': 106, 'laptop-1080-15': 141, 'mbp-14': 254, 'mbp-16': 254,
+      'laptop-900-17': 106, 'laptop-1080-15': 141, 'laptop-1080-125': 141, 'laptop-1080-150': 157,
+      'mbp-14': 254, 'mbp-16': 254,
       '1080p-24': 92, '1080p-27': 82, '1440p-27': 109, 'sxga-19': 86, '1440x900-19': 89,
-      '4k-27': 163, 'ultrawide-34': 110,
-      'phone-320': 326, 'android-65': 270, 'iphone-se': 326, 'iphone-61': 460,
+      '4k-27': 163, '4k-27-150': 163, 'ultrawide-34': 110,
+      'phone-320': 326, 'android-65': 270, 'iphone-se': 326, 'iphone-61': 460, 'pixel-8': 428,
       'iphone-67': 460, 'ipad-109': 264, 'ipad-pro-129': 264,
     }
     for (const p of SCREEN_PRESETS) {
@@ -50,9 +52,9 @@ describe('presets', () => {
   })
   it('splits into laptop, desktop and mobile groups with no strays', () => {
     const groups = SCREEN_PRESETS.map(p => p.group)
-    expect(groups.slice(0, 8)).toEqual(Array(8).fill('laptop'))
-    expect(groups.slice(8, 15)).toEqual(Array(7).fill('desktop'))
-    expect(groups.slice(15)).toEqual(Array(7).fill('mobile'))
+    expect(groups.slice(0, 10)).toEqual(Array(10).fill('laptop'))
+    expect(groups.slice(10, 18)).toEqual(Array(8).fill('desktop'))
+    expect(groups.slice(18)).toEqual(Array(8).fill('mobile'))
   })
   /**
    * This used to say every laptop and desktop rasterises at 1x, which was true
@@ -72,6 +74,25 @@ describe('presets', () => {
     expect(findPreset('iphone-se')).toMatchObject({ width: 375, height: 667, deviceScaleFactor: 2, diagonalInches: 4.7, group: 'mobile' })
     expect(findPreset('iphone-61')).toMatchObject({ width: 393, height: 852, deviceScaleFactor: 3, diagonalInches: 6.1, group: 'mobile' })
     expect(findPreset('ipad-109')).toMatchObject({ width: 820, height: 1180, deviceScaleFactor: 2, diagonalInches: 10.9, group: 'mobile' })
+  })
+  /**
+   * The fractional rows describe the same panels as their 1x neighbours at
+   * the scaling their OS ships: the device raster is the panel, only the CSS
+   * viewport changes. Pinned as arithmetic, so a typo in a CSS size cannot
+   * describe a panel nobody owns. The raster is the floor of the product,
+   * which is what Chromium paints (see `paintedExtent`): whole for the
+   * Windows rows, one short of the Pixel's 1081.5 × 2401.875.
+   */
+  it('fractional presets are their panels at the OS scaling', () => {
+    const panel = (id: string) => {
+      const p = findPreset(id)
+      return { w: Math.floor(p.width * p.deviceScaleFactor + 1e-6), h: Math.floor(p.height * p.deviceScaleFactor + 1e-6) }
+    }
+    expect(panel('laptop-1080-125')).toEqual({ w: 1920, h: 1080 })
+    expect(panel('laptop-1080-150')).toEqual({ w: 1920, h: 1080 })
+    expect(panel('4k-27-150')).toEqual({ w: 3840, h: 2160 })
+    expect(panel('pixel-8')).toEqual({ w: 1081, h: 2401 })
+    expect(findPreset('pixel-8')).toMatchObject({ width: 412, height: 915, deviceScaleFactor: 2.625, group: 'mobile' })
   })
   it('mobile presets carry the intended device-pixel densities', () => {
     const devicePpi = (p: { width: number; height: number; diagonalInches: number; deviceScaleFactor: number }) =>

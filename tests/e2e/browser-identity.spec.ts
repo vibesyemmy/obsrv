@@ -45,7 +45,8 @@ test('a dense laptop is still a desktop browser', async () => {
 })
 
 test('every laptop and desktop preset keeps the desktop identity', async () => {
-  for (const id of ['1080p-24', '4k-27', 'ultrawide-34', 'laptop-768', 'mbp-16']) {
+  // The fractional Windows rows included: a dense laptop is still a desktop browser.
+  for (const id of ['1080p-24', '4k-27', '4k-27-150', 'ultrawide-34', 'laptop-768', 'laptop-1080-125', 'mbp-16']) {
     await choose(app, page, '.preset-select', id)
     await expect.poll(async () => (await identity()).mobileUA, { message: id }).toBe(false)
   }
@@ -54,7 +55,7 @@ test('every laptop and desktop preset keeps the desktop identity', async () => {
 test('every mobile preset still gets phone fidelity', async () => {
   // The other half: this is what the old dsf-based rule got right, and the
   // reason it survived so long. It must keep working.
-  for (const id of ['iphone-61', 'iphone-67', 'android-65', 'ipad-pro-129']) {
+  for (const id of ['iphone-61', 'iphone-67', 'android-65', 'pixel-8', 'ipad-pro-129']) {
     await choose(app, page, '.preset-select', id)
     await expect.poll(async () => (await identity()).mobileUA, { message: id }).toBe(true)
   }

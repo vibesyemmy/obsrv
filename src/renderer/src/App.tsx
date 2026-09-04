@@ -64,6 +64,7 @@ export function App() {
   const orientation = useStore(s => selectTab(s).orientation)
   const textScale = useStore(s => selectTab(s).textScale)
   const throttle = useStore(s => selectTab(s).throttle)
+  const onionSkin = useStore(s => selectTab(s).onionSkin)
   const viewMode = useStore(s => selectTab(s).viewMode)
   const visionType = useStore(s => selectTab(s).visionType)
   const visionSeverity = useStore(s => selectTab(s).visionSeverity)
@@ -145,6 +146,20 @@ export function App() {
     void window.obsrv.setThrottle(throttle)
   }, [throttle])
 
+  // The onion skin's reference render lives in main only while the skin is
+  // on; the opacity is drawn here. Main answers whether one fits the
+  // viewport, and a refusal turns the skin off again rather than leaving a
+  // menu that says 50% over a canvas showing nothing of the kind.
+  useEffect(() => {
+    let live = true
+    void window.obsrv.setOnionSkin(onionSkin > 0).then(ok => {
+      if (live && !ok && onionSkin > 0) useStore.getState().setOnionSkin(0)
+    })
+    return () => {
+      live = false
+    }
+  }, [onionSkin])
+
   useEffect(() => {
     window.obsrv.setMode(mode)
   }, [mode])
@@ -220,8 +235,8 @@ export function App() {
   // renderer has nothing worth saying about a list it has not yet been told.
   useEffect(() => {
     if (!tabsKnown) return
-    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, textScale, throttle, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
-  }, [tabsKnown, activeId, presetId, profileId, orientation, textScale, throttle, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
+    window.obsrv.reportUiState({ tabId: activeId, presetId, profileId, orientation, textScale, throttle, onionSkin, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds })
+  }, [tabsKnown, activeId, presetId, profileId, orientation, textScale, throttle, onionSkin, viewMode, panes, mode, visionType, visionSeverity, targetBounds, canvasBounds])
 
   // An agent-control command lands exactly as a toolbar interaction would:
   // the same store actions, so the viewport effect above (and everything else
@@ -236,6 +251,7 @@ export function App() {
       if (patch.orientation !== undefined) s.setOrientation(patch.orientation)
       if (patch.textScale !== undefined) s.setTextScale(patch.textScale)
       if (patch.throttle !== undefined) s.setThrottle(patch.throttle)
+      if (patch.onionSkin !== undefined) s.setOnionSkin(patch.onionSkin)
       if (patch.viewMode !== undefined) s.setViewMode(patch.viewMode)
       if (patch.panes !== undefined) s.setPanes(patch.panes)
       if (patch.pixelExact !== undefined) s.setPixelExact(patch.pixelExact)

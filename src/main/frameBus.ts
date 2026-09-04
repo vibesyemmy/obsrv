@@ -19,7 +19,13 @@ export interface FrameBus {
    * filled by a full frame immediately rather than waiting for the new page
    * to happen to repaint.
    */
-  setSource(next: TargetSource): void
+  setSource(next: TargetSource | null): void
+}
+
+/** The channels one bus speaks on; the reference render has its own pair. */
+export interface FrameChannels {
+  frame: string
+  subscribe: string
 }
 
 /**
@@ -48,58 +54,63 @@ export interface FrameBus {
  * window, and the background one would keep overwriting the foreground tab's
  * pixels.
  */
-export function attachFrameBus(target: TargetSource, win: BrowserWindow): FrameBus {
+export function attachFrameBus(
+  target: TargetSource | null,
+  win: BrowserWindow,
+  channels: FrameChannels = { frame: IPC.frame, subscribe: IPC.frameSubscribe },
+): FrameBus {
   let ready = false
   let enabled = true
   // The current source, not the constructor argument: every later read has to
   // follow `setSource`, and closing over `target` is how that silently fails.
-  let source = target
+  // Null while there is nothing to read — the onion skin's bus between skins.
+  let source: TargetSource | null = target
 
   const gone = (): boolean => win.isDestroyed() || win.webContents.isDestroyed()
 
   const onFrame = (msg: FrameMessage): void => {
     if (!ready || !enabled || gone()) return
-    win.webContents.send(IPC.frame, msg)
+    win.webContents.send(channels.frame, msg)
   }
 
   const onSubscribe = (e: IpcMainEvent): void => {
     if (gone() || e.sender !== win.webContents) return
     ready = true
-    if (enabled) source.invalidate()
+    if (enabled) source?.invalidate()
   }
 
   const onRendererGone = (details: Event<WebContentsDidStartNavigationEventParams>): void => {
     if (details.isMainFrame && !details.isSameDocument) ready = false
   }
 
-  const bind = (next: TargetSource): void => {
-    source.off('frame', onFrame)
+  const bind = (next: TargetSource | null): void => {
+    source?.off('frame', onFrame)
     source = next
-    source.on('frame', onFrame)
+    source?.on('frame', onFrame)
   }
 
-  source.on('frame', onFrame)
-  ipcMain.on(IPC.frameSubscribe, onSubscribe)
+  source?.on('frame', onFrame)
+  ipcMain.on(channels.subscribe, onSubscribe)
   win.webContents.on('did-start-navigation', onRendererGone)
 
   return {
     detach(): void {
       ready = false
-      source.off('frame', onFrame)
-      ipcMain.removeListener(IPC.frameSubscribe, onSubscribe)
+      source?.off('frame', onFrame)
+      ipcMain.removeListener(channels.subscribe, onSubscribe)
       if (!gone()) win.webContents.off('did-start-navigation', onRendererGone)
     },
     setEnabled(next: boolean): void {
       enabled = next
-      if (enabled && ready) source.invalidate()
+      if (enabled && ready) source?.invalidate()
     },
     // Deliberately not short-circuited when `next` is already the source:
     // unbind-then-rebind is idempotent, and the identity guard would hide the
     // one failure this has to rule out — a `bind` that subscribes without
     // unsubscribing, which stacks listeners and delivers every paint twice.
-    setSource(next: TargetSource): void {
+    setSource(next: TargetSource | null): void {
       bind(next)
-      if (ready && enabled) next.invalidate()
+      if (ready && enabled) next?.invalidate()
     },
   }
 }

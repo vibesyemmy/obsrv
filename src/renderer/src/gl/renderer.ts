@@ -21,6 +21,12 @@ export interface DrawOptions {
    * a single path.
    */
   vision?: Matrix3
+  /**
+   * The onion skin (shared/onionSkin.ts): the reference texture drawn over
+   * the target at `opacity`, at `scale` host pixels per reference pixel.
+   * Skipped at opacity 0 or while no reference frame has arrived.
+   */
+  onion?: { opacity: number; scale: number }
 }
 
 /**
@@ -88,6 +94,7 @@ interface Uniforms {
   dither: WebGLUniformLocation | null
   smooth: WebGLUniformLocation | null
   vision: WebGLUniformLocation | null
+  opacity: WebGLUniformLocation | null
 }
 
 function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
@@ -129,6 +136,12 @@ export class GlRenderer {
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   private readonly tex: WebGLTexture
+  /** The onion skin's reference frame; sized by `resizeReference`, 0×0 until one arrives. */
+  private readonly refTex: WebGLTexture
+  private refWidth = 0
+  private refHeight = 0
+  private refMipsDirty = true
+  private refSmoothFilter = false
   private readonly vao: WebGLVertexArrayObject
   private readonly u: Uniforms
   private readonly maxOutput: number
@@ -157,15 +170,20 @@ export class GlRenderer {
 
     const vao = gl.createVertexArray()
     const tex = gl.createTexture()
-    if (!vao || !tex) throw new WebGL2UnavailableError('could not allocate GL objects')
+    const refTex = gl.createTexture()
+    if (!vao || !tex || !refTex) throw new WebGL2UnavailableError('could not allocate GL objects')
     this.vao = vao
     this.tex = tex
+    this.refTex = refTex
 
+    for (const t of [tex, refTex]) {
+      gl.bindTexture(gl.TEXTURE_2D, t)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    }
     gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     // Dirty rects are tightly packed at any width.
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
 
@@ -187,7 +205,35 @@ export class GlRenderer {
       dither: gl.getUniformLocation(this.program, 'uDither'),
       smooth: gl.getUniformLocation(this.program, 'uSmooth'),
       vision: gl.getUniformLocation(this.program, 'uVision'),
+      opacity: gl.getUniformLocation(this.program, 'uOpacity'),
     }
+  }
+
+  /** Whether a reference frame is held, i.e. the onion skin has something to draw. */
+  get hasReference(): boolean {
+    return this.refWidth > 0 && this.refHeight > 0
+  }
+
+  /** (Re)allocates the reference texture; contents are undefined until the next upload. */
+  resizeReference(width: number, height: number): void {
+    if (width === this.refWidth && height === this.refHeight) return
+    this.refWidth = width
+    this.refHeight = height
+    const gl = this.gl
+    gl.bindTexture(gl.TEXTURE_2D, this.refTex)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    this.refMipsDirty = true
+  }
+
+  /** One dirty rect of the reference, with `uploadSlice`'s rules. */
+  uploadReferenceSlice(slice: FrameSlice): boolean {
+    return this.upload(this.refTex, this.refWidth, this.refHeight, slice, () => (this.refMipsDirty = true))
+  }
+
+  /** Forgets the reference frame: the next skin starts from a fresh full frame. */
+  clearReference(): void {
+    this.refWidth = 0
+    this.refHeight = 0
   }
 
   get sourceWidth(): number {
@@ -245,19 +291,23 @@ export class GlRenderer {
    * they are stale by definition, so dropping them is the right answer.
    */
   uploadSlice(slice: FrameSlice): boolean {
+    return this.upload(this.tex, this.width, this.height, slice, () => (this.mipsDirty = true))
+  }
+
+  private upload(tex: WebGLTexture, width: number, height: number, slice: FrameSlice, dirtied: () => void): boolean {
     if (
       slice.x < 0 ||
       slice.y < 0 ||
       slice.width <= 0 ||
       slice.height <= 0 ||
-      slice.x + slice.width > this.width ||
-      slice.y + slice.height > this.height ||
+      slice.x + slice.width > width ||
+      slice.y + slice.height > height ||
       slice.data.byteLength < slice.width * slice.height * 4
     ) {
       return false
     }
     const gl = this.gl
-    gl.bindTexture(gl.TEXTURE_2D, this.tex)
+    gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.texSubImage2D(
       gl.TEXTURE_2D,
       0,
@@ -269,7 +319,7 @@ export class GlRenderer {
       gl.UNSIGNED_BYTE,
       slice.data,
     )
-    this.mipsDirty = true
+    dirtied()
     return true
   }
 
@@ -278,7 +328,7 @@ export class GlRenderer {
    * not a positive finite number (a zero-sized pane mid-layout, say). A scale
    * the backing store cannot hold is reduced with `fitScale`, never refused.
    */
-  draw({ scale: requested, params, smooth = false, vision = IDENTITY_VISION }: DrawOptions): boolean {
+  draw({ scale: requested, params, smooth = false, vision = IDENTITY_VISION, onion }: DrawOptions): boolean {
     if (!(requested > 0 && Number.isFinite(requested))) return false
     const gl = this.gl
     const scale = fitScale(this.width, this.height, requested, this.maxOutput)
@@ -292,33 +342,13 @@ export class GlRenderer {
     gl.useProgram(this.program)
     gl.bindVertexArray(this.vao)
     gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, this.tex)
-
-    // The min filter follows the draw's path; mips are (re)generated only
-    // while smooth mode is asking for them, never on the exact path.
-    if (smooth !== this.smoothFilter) {
-      this.smoothFilter = smooth
-      gl.texParameteri(
-        gl.TEXTURE_2D,
-        gl.TEXTURE_MIN_FILTER,
-        smooth ? gl.LINEAR_MIPMAP_LINEAR : gl.NEAREST,
-      )
-    }
-    if (smooth && this.mipsDirty) {
-      gl.generateMipmap(gl.TEXTURE_2D)
-      this.mipsDirty = false
-    }
-
     gl.uniform1i(this.u.tex, 0)
-    gl.uniform1f(this.u.scale, scale)
     gl.uniform1f(this.u.canvasH, h)
-    gl.uniform2i(this.u.srcSize, this.width, this.height)
     gl.uniform1f(this.u.brightness, params.brightness)
     gl.uniform1f(this.u.blackFloor, params.blackFloor)
     gl.uniform1f(this.u.gamut, params.gamut)
     gl.uniform1f(this.u.levels, params.levels)
     gl.uniform1f(this.u.dither, params.dither ? 1 : 0)
-    gl.uniform1f(this.u.smooth, smooth ? 1 : 0)
     // Column-major for GL, row-major in `vision.ts`: `transpose` is false in
     // WebGL2's uniformMatrix3fv, so the array is handed over transposed.
     gl.uniformMatrix3fv(this.u.vision, false, [
@@ -327,8 +357,58 @@ export class GlRenderer {
       vision[2], vision[5], vision[8],
     ])
 
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    this.smoothFilter = this.pass(this.tex, this.width, this.height, scale, smooth, this.smoothFilter, () => {
+      const dirty = this.mipsDirty
+      this.mipsDirty = false
+      return dirty
+    }, 1)
+
+    // The onion skin: the reference over the target, blended. Its own
+    // magnification (it is denser than the target by REFERENCE_DSF / dsf)
+    // and its own smooth decision — it is nearly always minified.
+    if (onion && onion.opacity > 0 && this.hasReference) {
+      const refScale = fitScale(this.refWidth, this.refHeight, onion.scale * (scale / requested), this.maxOutput)
+      const refSmooth = refScale < 1
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+      this.refSmoothFilter = this.pass(this.refTex, this.refWidth, this.refHeight, refScale, refSmooth, this.refSmoothFilter, () => {
+        const dirty = this.refMipsDirty
+        this.refMipsDirty = false
+        return dirty
+      }, Math.min(1, onion.opacity))
+      gl.disable(gl.BLEND)
+    }
     return true
+  }
+
+  /**
+   * One fullscreen pass of `tex` at `scale`. The min filter follows the
+   * pass's path; mips are (re)generated only while smooth mode is asking
+   * for them, never on the exact path. Returns the filter now set, for the
+   * caller to remember per texture.
+   */
+  private pass(
+    tex: WebGLTexture,
+    width: number,
+    height: number,
+    scale: number,
+    smooth: boolean,
+    filterWasSmooth: boolean,
+    takeMipsDirty: () => boolean,
+    opacity: number,
+  ): boolean {
+    const gl = this.gl
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    if (smooth !== filterWasSmooth) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, smooth ? gl.LINEAR_MIPMAP_LINEAR : gl.NEAREST)
+    }
+    if (smooth && takeMipsDirty()) gl.generateMipmap(gl.TEXTURE_2D)
+    gl.uniform1f(this.u.scale, scale)
+    gl.uniform2i(this.u.srcSize, width, height)
+    gl.uniform1f(this.u.smooth, smooth ? 1 : 0)
+    gl.uniform1f(this.u.opacity, opacity)
+    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    return smooth
   }
 
   /** RGBA rows top-down, matching the frame and image conventions. */
@@ -350,6 +430,7 @@ export class GlRenderer {
   dispose(): void {
     const gl = this.gl
     gl.deleteTexture(this.tex)
+    gl.deleteTexture(this.refTex)
     gl.deleteVertexArray(this.vao)
     gl.deleteProgram(this.program)
   }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { THROTTLE_PROFILES } from '../../../shared/throttle'
+import { formatOnionSkin, ONION_STEPS } from '../../../shared/onionSkin'
 import { formatTextScale, TEXT_SCALES } from '../../../shared/textScale'
 import { useShallow } from 'zustand/react/shallow'
 import { matchHistory } from '../../../shared/history'
@@ -106,6 +107,12 @@ const TEXT_SCALE_GROUPS: SelectGroup[] = [
 const THROTTLE_GROUPS: SelectGroup[] = [
   { options: THROTTLE_PROFILES.map(t => ({ value: t.id, label: `Throttle ${t.id === 'none' ? 'none' : t.label}` })) },
 ]
+// The value is the number as a string, like the text scale: an agent-set
+// opacity the menu does not list still reads back from the tab.
+const ONION_GROUPS: SelectGroup[] = [
+  { options: ONION_STEPS.map(v => ({ value: String(v), label: `Onion ${formatOnionSkin(v)}` })) },
+]
+
 const throttleLabel = (id: string): string => {
   const p = THROTTLE_PROFILES.find(t => t.id === id)
   return `Throttle ${!p || p.id === 'none' ? 'none' : p.label}`
@@ -131,6 +138,8 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const setTextScale = useStore(s => s.setTextScale)
   const throttle = useStore(s => selectTab(s).throttle)
   const setThrottle = useStore(s => s.setThrottle)
+  const onionSkin = useStore(s => selectTab(s).onionSkin)
+  const setOnionSkin = useStore(s => s.setOnionSkin)
   const setProfile = useStore(s => s.setProfile)
   const setPixelExact = useStore(s => s.setPixelExact)
   const setError = useStore(s => s.setError)
@@ -519,6 +528,17 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           ariaLabel="Throttle"
           groups={THROTTLE_GROUPS}
           onChange={setThrottle}
+        />
+
+        {/* The onion skin: the page at HiDPI blended over the target's raster,
+            for seeing what the 1x raster moved. Off on every launch. */}
+        <Select
+          className="onion-select"
+          value={String(onionSkin)}
+          label={`Onion ${formatOnionSkin(onionSkin)}`}
+          ariaLabel="Onion skin"
+          groups={ONION_GROUPS}
+          onChange={v => setOnionSkin(Number(v))}
         />
 
         {/* No spacer: this row centres its controls, and the chip below is out

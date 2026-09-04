@@ -16,6 +16,7 @@ import {
   profileApplyError,
   tokenEqual,
   orientationApplyError,
+  onionSkinApplyError,
   textScaleApplyError,
   throttleApplyError,
   panesApplyError,
@@ -260,6 +261,16 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const throttle = payload.throttle as string
         return this.applyAndConfirm({ throttle }, s => s.throttle === throttle)
+      }
+
+      case 'setOnionSkin': {
+        const err = onionSkinApplyError(payload.onionSkin)
+        if (err) return reply(400, { error: err })
+        const onionSkin = payload.onionSkin as number
+        // The renderer turns the skin off again when main cannot render a
+        // reference for the viewport, so the confirmation is the value or
+        // off — and off is what the agent reads back.
+        return this.applyAndConfirm({ onionSkin }, s => s.onionSkin === onionSkin || s.onionSkin === 0)
       }
 
       case 'captureVisible': {

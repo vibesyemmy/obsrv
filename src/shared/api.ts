@@ -1,5 +1,6 @@
 import type { AgentApplyPatch, AgentUiReport } from './control'
 import type { SelectPopup, SelectResult } from './selectPopup'
+import type { PickerEvent, PickerPopup, PickerRequest } from './pickerPopup'
 import type { HistoryEntry } from './history'
 import type { InspectReport } from './inspect'
 import type { TabSnapshot } from './tabList'
@@ -62,6 +63,14 @@ export interface ObsrvApi {
    */
   onSelectPopup(cb: (popup: SelectPopup) => void): () => void
   pickSelect(result: SelectResult): void
+  /**
+   * A date, time or colour input on the target page asked for its picker,
+   * which Chromium cannot open offscreen; the canvas has the overlay host an
+   * input of the same type over the element's box with `openPicker`, which
+   * resolves once the host is put away. The values flow main → page.
+   */
+  onPickerPopup(cb: (popup: PickerPopup) => void): () => void
+  openPicker(request: PickerRequest): Promise<void>
   /**
    * What is under a point of the target page, in CSS pixels of its
    * viewport: element, font, text colour and the background it sits on.
@@ -127,12 +136,28 @@ export interface ObsrvApi {
   onMenuShow(fn: (request: MenuRequest) => void): () => void
   /** Overlay side: report the outcome and let main put the view away. */
   pickMenu(value: string | null): void
+  /** Overlay side: the input to host, or null to take it down. */
+  onPickerShow(fn: (request: PickerRequest | null) => void): () => void
+  /** Overlay side: the hosted input is in place; main clicks it to open Chromium's picker. */
+  pickerReady(): void
+  /** Overlay side: the hosted input took a value; `done` when the picker committed. */
+  pickerEvent(ev: PickerEvent): void
+  /** Overlay side: dismissed without a value. */
+  closePicker(): void
   setMode(mode: 'url' | 'image'): void
   sendInput(ev: TargetInputEvent): void
   getHostInfo(): Promise<HostInfo>
   getSettings(): Promise<Settings>
   setSettings(s: Settings): Promise<void>
   onFrame(cb: (m: FrameMessage) => void): () => void
+  /**
+   * Keep a HiDPI render of the target's page alongside it while `on`, for
+   * the onion skin (shared/onionSkin.ts); resolves false when the viewport
+   * is too large for one. The opacity is the renderer's own business.
+   */
+  setOnionSkin(on: boolean): Promise<boolean>
+  /** Frames of that render, on their own channel; the first subscriber opens delivery. */
+  onReferenceFrame(cb: (m: FrameMessage) => void): () => void
   onUrlChanged(cb: (e: TabReport & { url: string }) => void): () => void
   /**
    * Chromium's page title for one tab — the strip's first choice of label,

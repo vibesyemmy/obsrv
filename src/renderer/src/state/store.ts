@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_THROTTLE } from '../../../shared/throttle'
+import { DEFAULT_ONION_SKIN } from '../../../shared/onionSkin'
 import { DEFAULT_TEXT_SCALE } from '../../../shared/textScale'
 import {
   applyOrientation,
@@ -86,6 +87,11 @@ export interface TabState {
    * host). Per tab like the text scale; unlike it, never written to disk.
    */
   throttle: string
+  /**
+   * The onion skin's opacity, 0 = off: the page at HiDPI blended over the
+   * target's raster (shared/onionSkin.ts). Per tab, never written to disk.
+   */
+  onionSkin: number
   custom: TargetScreen
   pixelExact: boolean
   visionType: VisionType
@@ -174,6 +180,7 @@ export interface AppState {
   setOrientation(o: Orientation): void
   setTextScale(scale: number): void
   setThrottle(id: string): void
+  setOnionSkin(opacity: number): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setVision(type: VisionType, severity: number): void
@@ -247,6 +254,7 @@ function blankTab(): TabState {
     orientation: DEFAULT_ORIENTATION,
     textScale: DEFAULT_TEXT_SCALE,
     throttle: DEFAULT_THROTTLE,
+    onionSkin: DEFAULT_ONION_SKIN,
     custom: { width: 1920, height: 1080, diagonalInches: 24 },
     pixelExact: false,
     visionType: 'none',
@@ -356,6 +364,7 @@ export const useStore = create<AppState>()((set, get) => ({
   setTextScale: textScale =>
     set(patchActiveWith(t => (t.textScale === textScale ? null : { textScale, agentHighlight: null }))),
   setThrottle: throttle => set(patchActiveWith(t => (t.throttle === throttle ? null : { throttle }))),
+  setOnionSkin: onionSkin => set(patchActiveWith(t => (t.onionSkin === onionSkin ? null : { onionSkin }))),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),

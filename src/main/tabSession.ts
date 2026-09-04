@@ -1,4 +1,7 @@
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainEvent } from 'electron'
+import { parseScrollPos } from '../shared/ipcPayloads'
+import { DEFAULT_ONION_SKIN, REFERENCE_DSF, referenceFits } from '../shared/onionSkin'
+import { MAX_VIEWPORT } from '../shared/presets'
 import { DEFAULT_THROTTLE } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE } from '../shared/textScale'
 import type { VisionType } from '../shared/vision'
@@ -27,6 +30,15 @@ export class TabSession {
   readonly native: NativePane
   readonly target: TargetSource
   readonly sync: SyncBus
+  /**
+   * The onion skin's other half (shared/onionSkin.ts): the same page at
+   * `REFERENCE_DSF` and the target's CSS viewport, kept only while the skin
+   * is on. It follows the target — URL, viewport, phone-ness, text scale,
+   * scroll — and is otherwise a second offscreen surface like the first.
+   */
+  reference: TargetSource | null = null
+  /** Mirrored from the renderer like the throttle, for `status`; never persisted. */
+  onionSkin = DEFAULT_ONION_SKIN
 
   // `modeIsLive` and `reportedMode` describe the same idea from opposite
   // directions and must not be collapsed into one field. `modeIsLive` is
@@ -119,6 +131,76 @@ export class TabSession {
     // native pane is driven here.
     this.sync.expect('about:blank')
     this.ready = Promise.all([this.native.load('about:blank'), this.target.ready]).then(() => undefined)
+
+    // The reference follows every new document the target commits; an
+    // in-place rewrite is the page's own and the reference's page does the
+    // same to itself.
+    this.target.on('url-changed', (url, inPage) => {
+      if (!inPage && this.reference) void this.reference.load(url)
+    })
+  }
+
+  /**
+   * Keeps a HiDPI render of the target's page for the onion skin, or drops
+   * it. False when none fits the device-pixel budget at this viewport —
+   * the skin is refused, not rendered at a clamped, mismatched size.
+   */
+  setReference(on: boolean): boolean {
+    if (!on) {
+      this.reference?.destroy()
+      this.reference = null
+      return true
+    }
+    const vp = this.target.getViewport()
+    if (!referenceFits(vp.width, vp.height, MAX_VIEWPORT)) {
+      this.setReference(false)
+      return false
+    }
+    if (!this.reference) {
+      const ref = new TargetSource()
+      this.reference = ref
+      ref.setPainting(this.target.painting)
+      this.syncReference()
+      // Its own first navigation must land before it can be driven (see
+      // `TargetSource.ready`); the page it then loads is whatever the target
+      // shows by then.
+      void ref.ready.then(() => {
+        if (this.reference === ref) void ref.load(this.target.webContents.getURL())
+      })
+    }
+    return true
+  }
+
+  /**
+   * The reference takes the target's viewport, phone-ness and text scale.
+   * Called after each change of those; a viewport the reference can no
+   * longer fit drops it, and the renderer's skin then draws nothing over
+   * the target until the viewport fits again and the skin is set anew.
+   */
+  syncReference(): void {
+    const ref = this.reference
+    if (!ref) return
+    const vp = this.target.getViewport()
+    if (!referenceFits(vp.width, vp.height, MAX_VIEWPORT)) {
+      this.setReference(false)
+      return
+    }
+    ref.setViewport(vp.width, vp.height, REFERENCE_DSF, this.target.isMobile())
+    ref.setTextScale(this.target.getTextScale())
+  }
+
+  /**
+   * A pane's scroll, as `SyncBus.onScroll` mirrors it to the other pane,
+   * applied to the reference too so the ghost stays over the same content.
+   * The reference's own preload also reports scrolls; those are nobody's
+   * to mirror and the manager's router never resolves them to a session.
+   */
+  forwardScroll(e: IpcMainEvent, raw: unknown): void {
+    const ref = this.reference
+    if (!ref || ref.webContents.isDestroyed()) return
+    if (e.sender !== this.native.webContents && e.sender !== this.target.webContents) return
+    const pos = parseScrollPos(raw)
+    if (pos) ref.webContents.send(IPC.applyScroll, pos)
   }
 
   /**
@@ -138,6 +220,7 @@ export class TabSession {
    */
   setPainting(painting: boolean): void {
     this.target.setPainting(painting)
+    this.reference?.setPainting(painting)
   }
 
   /** Whether this session is producing pixels. */
@@ -147,6 +230,8 @@ export class TabSession {
 
   destroy(): void {
     this.sync.detach()
+    this.reference?.destroy()
+    this.reference = null
     this.target.destroy()
     this.native.view.webContents.close()
   }

@@ -14,6 +14,22 @@ export const IPC = {
   selectResult: 'obsrv:select-result',
   /** Main -> target preload: write the pick into the element. */
   selectPick: 'obsrv:select-pick',
+  /** Target preload -> main: a date/time/colour input wants its picker (see shared/pickerPopup.ts). */
+  pickerOpen: 'obsrv:picker-open',
+  /** Main -> chrome: host a picker over the canvas for that input. */
+  pickerPopup: 'obsrv:picker-popup',
+  /** Chrome -> main: host this input in the overlay at this anchor; resolves when it is put away. */
+  pickerHost: 'obsrv:picker-host',
+  /** Main -> overlay: host this input, or null to take it down. */
+  pickerShow: 'obsrv:picker-show',
+  /** Overlay -> main: the hosted input is in place and may be clicked. */
+  pickerReady: 'obsrv:picker-ready',
+  /** Overlay -> main: the hosted input took a value (`done` on commit). */
+  pickerEvent: 'obsrv:picker-event',
+  /** Overlay -> main: the host was dismissed without a value. */
+  pickerClose: 'obsrv:picker-close',
+  /** Main -> target preload: write the value into the element, or forget the request. */
+  pickerPick: 'obsrv:picker-pick',
   inspect: 'obsrv:inspect',
   back: 'obsrv:back',
   forward: 'obsrv:forward',
@@ -38,6 +54,11 @@ export const IPC = {
   setSettings: 'obsrv:set-settings',
   frame: 'obsrv:frame',
   frameSubscribe: 'obsrv:frame-subscribe',
+  /** Chrome -> main: keep (true) or drop (false) the onion skin's reference render; answers whether one fits. */
+  setOnionSkin: 'obsrv:set-onion-skin',
+  /** Main -> chrome: a frame of the reference render, on its own channel (see shared/onionSkin.ts). */
+  referenceFrame: 'obsrv:reference-frame',
+  referenceSubscribe: 'obsrv:reference-subscribe',
   urlChanged: 'obsrv:url-changed',
   titleChanged: 'obsrv:title-changed',
   loadError: 'obsrv:load-error',
