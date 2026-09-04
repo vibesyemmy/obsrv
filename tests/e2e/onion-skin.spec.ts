@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { decodePng, pixelAt } from './helpers/decodePng'
+import { openPanel } from './helpers/select'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -85,15 +86,17 @@ test.beforeAll(async () => {
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('document.title')), { timeout: 10_000 }).toBe('dppx')
   await expect.poll(() => page.evaluate(() => document.querySelector<HTMLCanvasElement>('canvas.target-canvas')?.dataset.gl)).toBe('ok')
   await page.click('.panes-target')
+  // The onion-skin slider lives in the side panel.
+  await openPanel(page)
 })
 test.afterAll(async () => {
   await app.close()
 })
 
-test('off by default: the 1x raster alone, no reference, the menu says off', async () => {
+test('off by default: the 1x raster alone, no reference, the slider at 0', async () => {
   await expect.poll(centre).toEqual([0, 0, 255])
   expect(await reference()).toBeNull()
-  await expect(page.locator('.onion-select')).toHaveAttribute('data-value', '0')
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
   expect(await footer()).not.toContain('onion ')
   const s = await call('status')
   expect(s.body).toMatchObject({ onionSkin: 0 })
@@ -106,7 +109,7 @@ test('at 50% a 2× reference exists at the target viewport, and the pane is the 
   await expect.poll(() => reference().then(x => x?.url ?? '')).toBe(DPPX)
   await expect.poll(async () => near(await centre(), [128, 0, 128]), { timeout: 10_000 }).toBe(true)
   await expect.poll(footer).toContain('onion 50%')
-  await expect(page.locator('.onion-select')).toHaveAttribute('data-value', '0.5')
+  await expect(page.locator('.onion-slider')).toHaveValue('50')
   expect((await call('status')).body).toMatchObject({ onionSkin: 0.5 })
 })
 
@@ -136,7 +139,7 @@ test('a viewport too wide for a 2× reference refuses the skin: the value reads 
   expect(r.status, JSON.stringify(r.body)).toBe(200)
   await expect.poll(async () => (await call('status')).body.onionSkin).toBe(0)
   expect(await reference()).toBeNull()
-  await expect(page.locator('.onion-select')).toHaveAttribute('data-value', '0')
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
   await call('setPreset', { id: '1080p-24' })
 })
 

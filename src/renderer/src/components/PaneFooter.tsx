@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { PanelSection } from './PanelControls'
 import { formatTextScale } from '../../../shared/textScale'
 import { formatOnionSkin } from '../../../shared/onionSkin'
 import { useShallow } from 'zustand/react/shallow'
@@ -17,9 +18,12 @@ import {
   useStore,
 } from '../state/store'
 
+/** A readout, or a readout that is also the way to the control behind it. */
+export type Fact = string | { text: string; title: string; onClick: () => void }
+
 export interface PaneFooterProps {
   role: string
-  facts: string[]
+  facts: Fact[]
   /** A control at the far end of the strip; the target's inspector toggle. */
   trailing?: ReactNode
 }
@@ -28,7 +32,20 @@ export function PaneFooter({ role, facts, trailing }: PaneFooterProps) {
   return (
     <div className="pane-footer">
       <span className="role">{role}</span>
-      <span>{facts.join(' · ')}</span>
+      <span className="facts">
+        {facts.map((f, i) => (
+          <span key={i}>
+            {i > 0 && ' · '}
+            {typeof f === 'string' ? (
+              f
+            ) : (
+              <button type="button" className="fact-link" title={f.title} onClick={f.onClick}>
+                {f.text}
+              </button>
+            )}
+          </span>
+        ))}
+      </span>
       {trailing !== undefined && <span className="trailing">{trailing}</span>}
     </div>
   )
@@ -44,7 +61,7 @@ export function NativeFooter({ width, height }: { width: number; height: number 
   )
 }
 
-export function TargetFooter() {
+export function TargetFooter({ onOpenPanel }: { onOpenPanel?: (section: PanelSection) => void }) {
   const viewport = useStore(useShallow(selectViewport))
   const params = useStore(useShallow(selectPanelParams))
   const scale = useStore(selectScale)
@@ -91,13 +108,13 @@ export function TargetFooter() {
   // output. The severity rides along because 40% deutan and full deutan are
   // different pictures.
   const visionOn = !visionIsIdentity(visionType, visionSeverity)
-  const vision = visionOn
-    ? [
-        `${VISION_TYPES.find(t => t.id === visionType)?.label ?? visionType} ${Math.round(
-          visionSeverity * 100,
-        )}%`,
-      ]
-    : []
+  const visionText = `${VISION_TYPES.find(t => t.id === visionType)?.label ?? visionType} ${Math.round(visionSeverity * 100)}%`
+  const vision = visionOn ? [visionText] : []
+
+  // A condition in force is a link to the control that set it — the drawer
+  // section it lives in — so an agent's setting is one click from off.
+  const link = (text: string, section: PanelSection): Fact =>
+    onOpenPanel ? { text, title: 'Open in the side panel', onClick: () => onOpenPanel(section) } : text
 
   // The inspector's readout takes the strip over while it is on: element,
   // size in px and in mm on this screen, the colour pair, and the contrast
@@ -146,13 +163,13 @@ export function TargetFooter() {
         inspect ?? [
           size,
           // Stated only when in force: at ×1 the page saw the screen as it is.
-          ...(textScale !== 1 ? [`text ${formatTextScale(textScale)}`] : []),
-          ...(throttle !== 'none' ? [`throttle ${throttle}`] : []),
-          ...(onionSkin > 0 ? [`onion ${formatOnionSkin(onionSkin)}`] : []),
+          ...(textScale !== 1 ? [link(`text ${formatTextScale(textScale)}`, 'page')] : []),
+          ...(throttle !== 'none' ? [link(`throttle ${throttle}`, 'page')] : []),
+          ...(onionSkin > 0 ? [link(`onion ${formatOnionSkin(onionSkin)}`, 'compare')] : []),
           ...magnification,
           profile.label,
           params.dither ? `${depth}+FRC` : depth,
-          ...vision,
+          ...(visionOn ? [link(visionText, 'vision')] : []),
         ]
       }
       trailing={

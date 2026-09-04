@@ -686,6 +686,17 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   color: var(--text-1);
 }
 .controls h2:first-child { margin-top: 0; }
+.panel-section:first-child h2 { margin-top: 0; }
+/* A footer fact brought this section up: light it for a beat. */
+.panel-section { scroll-margin-top: 8px; border-radius: 4px; }
+.panel-section.flash { animation: panel-flash 0.9s ease-out; }
+@keyframes panel-flash { from { background: var(--chrome-3); } to { background: transparent; } }
+/* The menus the drawer took from the toolbar fill its width. */
+.drawer .select-shell { display: block; }
+.drawer .select-trigger { width: 100%; box-sizing: border-box; }
+/* A readout that is also the way to its control. */
+.fact-link { all: unset; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.fact-link:hover, .fact-link:focus-visible { color: var(--text-0); }
 .controls p { margin: 6px 0; font-size: 11px; }
 .control { display: block; margin: 10px 0; }
 .control-row {

@@ -4,7 +4,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { choose } from './helpers/select'
+import { choose, openPanel } from './helpers/select'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -191,7 +191,8 @@ test('inspect maps surface points into the scaled page and boxes back out', asyn
   await setScale(1)
 })
 
-test('the toolbar menu sets it, the footer states it, and ×1 states nothing', async () => {
+test('the panel menu sets it, the footer states it, and ×1 states nothing', async () => {
+  await openPanel(page)
   await expect(page.locator('.text-scale-select')).toHaveAttribute('data-value', '1')
   await expect(page.locator('.text-scale-select')).toHaveText(/Text 100%/)
   expect(await footer()).not.toContain('text ')
@@ -207,6 +208,7 @@ test('the toolbar menu sets it, the footer states it, and ×1 states nothing', a
 })
 
 test('on a phone preset the scale composes with the mobile emulation', async () => {
+  await openPanel(page)
   await choose(app, page, '.preset-select', 'iphone-61')
   await expect.poll(targetView, { timeout: 10_000 }).toMatchObject({ innerWidth: 393, dpr: 3 })
   await choose(app, page, '.text-scale-select', '2')
@@ -219,6 +221,7 @@ test('on a phone preset the scale composes with the mobile emulation', async () 
 })
 
 test('the scale is per tab', async () => {
+  await openPanel(page)
   await choose(app, page, '.text-scale-select', '1.5')
   await expect.poll(targetView, { timeout: 5_000 }).toMatchObject({ innerWidth: 1280 })
   await page.locator('.chrome-tabs .tab-new').click()
@@ -242,11 +245,13 @@ test.describe('the scale survives a relaunch', () => {
   })
 
   test('a scaled tab comes back scaled, laid out at its scale from the first paint', async () => {
+  await openPanel(page)
     const home = dir()
     const first = await launchApp([], {}, home)
     const p1 = await rendererWindow(first)
     await p1.evaluate(u => window.obsrv.navigate(u), url)
     await expect.poll(() => viewIn(first, 'target').then(v => v.innerWidth), { timeout: 10_000 }).toBe(1920)
+    await openPanel(p1)
     await choose(first, p1, '.text-scale-select', '1.5')
     await expect.poll(() => viewIn(first, 'target').then(v => v.innerWidth), { timeout: 5_000 }).toBe(1280)
     await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
@@ -257,6 +262,7 @@ test.describe('the scale survives a relaunch', () => {
 
     const second = await launchApp([], {}, home)
     const p2 = await rendererWindow(second)
+    await openPanel(p2)
     await expect(p2.locator('.text-scale-select')).toHaveAttribute('data-value', '1.5', { timeout: 10_000 })
     await expect.poll(() => viewIn(second, 'target'), { timeout: 10_000 }).toMatchObject({ innerWidth: 1280, dpr: 1.5 })
     await second.close()

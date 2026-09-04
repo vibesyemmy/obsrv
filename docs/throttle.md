@@ -65,14 +65,14 @@ and a warning says the throttle was not applied.
 ## Live, in the app
 
 ```
-Toolbar › Throttle none · Fast 4G · … · Budget phone
+Side panel › Page › Throttle none · Fast 4G · … · Budget phone
 obsrv_drive { throttle: 'budget-phone' }      status → throttle
 ```
 
 The same debugger call on the tab in front's target. An agent sets it
 with `obsrv_drive` and reads it back in `status`; the footer says
-`throttle budget-phone` while one is in force; the menu in the screen row
-is how a person turns off what an agent turned on. Per tab, like the text
+`throttle budget-phone` while one is in force, and clicking that fact opens
+the side panel at the menu that turns off what an agent turned on. Per tab, like the text
 scale — and unlike it, **not remembered across launches**: a page that
 seemed slow the morning after would be a puzzle nobody asked for, so every
 launch starts unthrottled. An app older than the field reports `none`,

@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { choose } from './helpers/select'
+import { choose, openPanel } from './helpers/select'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -37,6 +37,8 @@ test.beforeAll(async () => {
   await page.fill('.url-form input', url)
   await page.press('.url-form input', 'Enter')
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('document.title')), { timeout: 10_000 }).toBe('throttle')
+  // The throttle menu lives in the side panel.
+  await openPanel(page)
 })
 test.afterAll(async () => {
   await app.close()

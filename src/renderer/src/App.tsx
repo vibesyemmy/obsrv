@@ -8,7 +8,7 @@ import { ImagePane } from './components/ImagePane'
 import { NativeSlot } from './components/NativeSlot'
 import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
 import { TargetFooter } from './components/PaneFooter'
-import { PanelControls } from './components/PanelControls'
+import { PanelControls, type PanelSection } from './components/PanelControls'
 import { SettingsModal } from './components/SettingsModal'
 import { EmptyState } from './components/EmptyState'
 import { TargetCanvas } from './components/TargetCanvas'
@@ -22,6 +22,13 @@ import { selectDeviceScaleFactor,
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
+  // A footer fact opens the drawer at its section; the key makes a second
+  // click on the same fact scroll again.
+  const [panelFocus, setPanelFocus] = useState<{ section: PanelSection; key: number } | null>(null)
+  const openPanel = (section: PanelSection): void => {
+    setDrawer('panel')
+    setPanelFocus(p => ({ section, key: (p?.key ?? 0) + 1 }))
+  }
   /**
    * Decoded files, one per tab. Keyed the same way every other piece of tab
    * state is, because image mode is per tab: a single slot here meant the tab
@@ -413,7 +420,7 @@ export function App() {
                   would cost a context restore on every first navigation. */}
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
             </div>
-            <TargetFooter />
+            <TargetFooter onOpenPanel={openPanel} />
           </div>
           {/* Spans both panes rather than sitting in the target half. That is
               only possible because a blank tab has the native view hidden (see
@@ -423,7 +430,7 @@ export function App() {
         </div>
         {drawer === 'panel' && (
           <aside className="drawer">
-            <PanelControls />
+            <PanelControls focus={panelFocus?.section ?? null} focusKey={panelFocus?.key ?? 0} />
           </aside>
         )}
       </div>
