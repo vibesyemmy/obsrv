@@ -692,12 +692,14 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .panel-section:first-child { padding-top: 0; }
 .panel-section:last-child { padding-bottom: 8px; }
 .panel-section + .panel-section { border-top: 1px solid var(--line); }
-.panel-section h2 { margin-top: 0; display: flex; align-items: center; gap: 6px; }
-/* The section's explanation, behind an info mark: a bubble on hover or focus,
-   hung from the mark's right edge so it opens into the drawer, never past it. */
+.panel-section h2 { margin-top: 0; position: relative; display: flex; align-items: center; gap: 6px; }
+/* The section's explanation, behind an info mark: a bubble on hover or focus.
+   The bubble is positioned against the heading, not the mark, so it spans the
+   drawer's width under the heading — the drawer clips anything outside its
+   box, and a bubble hung from the mark ran under the pane. */
 .info {
   all: unset;
-  position: relative;
+  position: static;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -713,9 +715,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   display: none;
   position: absolute;
   z-index: 70;
+  left: 0;
   right: 0;
   top: calc(100% + 6px);
-  width: 236px;
   padding: 8px 10px;
   box-sizing: border-box;
   font-size: 11px;
