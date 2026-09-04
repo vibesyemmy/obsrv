@@ -96,6 +96,14 @@ export async function openPanel(page: Page): Promise<void> {
   const toggle = page.locator('.toggle-panel')
   if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click()
   await expect(page.locator('.drawer')).toBeVisible()
+  await drawerSettled(page, true)
+}
+
+/** The drawer slides; a spec that measures the panes waits for the width to land. */
+export async function drawerSettled(page: Page, open: boolean): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()))
+    .toBe(open ? '309px' : '0px')
 }
 
 /**

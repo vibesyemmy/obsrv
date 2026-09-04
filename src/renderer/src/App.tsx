@@ -19,6 +19,9 @@ import { DEFAULT_IMAGE_LIMITS, loadImage, type LoadedImage } from './image/loadI
 import { selectDeviceScaleFactor,
   selectIsMobileScreen, selectTab, selectViewport, useStore } from './state/store'
 
+/** The drawer's slide, in ms; the stylesheet's transition and this unmount delay agree on it. */
+const DRAWER_MS = 220
+
 export function App() {
   const [fatal, setFatal] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<Drawer>('none')
@@ -29,6 +32,19 @@ export function App() {
     setDrawer('panel')
     setPanelFocus(p => ({ section, key: (p?.key ?? 0) + 1 }))
   }
+  // The drawer slides: `--drawer-w` transitions (see the stylesheet), so the
+  // aside stays mounted for the length of the collapse and goes afterwards.
+  // Mounted at once on open, so it is there for the width to grow into.
+  const panelOpen = drawer === 'panel'
+  const [panelMounted, setPanelMounted] = useState(panelOpen)
+  useEffect(() => {
+    if (panelOpen) {
+      setPanelMounted(true)
+      return
+    }
+    const t = window.setTimeout(() => setPanelMounted(false), DRAWER_MS + 40)
+    return () => window.clearTimeout(t)
+  }, [panelOpen])
   /**
    * Decoded files, one per tab. Keyed the same way every other piece of tab
    * state is, because image mode is per tab: a single slot here meant the tab
@@ -386,6 +402,7 @@ export function App() {
     <div
       className="app"
       data-panes={panes}
+      data-drawer={drawer}
       style={{ '--split': split, '--pane-min': `${MIN_PANE_PX}px` } as CSSProperties}
     >
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
@@ -428,8 +445,8 @@ export function App() {
               while it is up nothing the renderer paints can appear over it. */}
           {blank && <EmptyState />}
         </div>
-        {drawer === 'panel' && (
-          <aside className="drawer">
+        {panelMounted && (
+          <aside className="drawer" inert={!panelOpen} aria-hidden={!panelOpen}>
             <PanelControls focus={panelFocus?.section ?? null} focusKey={panelFocus?.key ?? 0} />
           </aside>
         )}

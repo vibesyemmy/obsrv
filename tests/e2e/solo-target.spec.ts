@@ -2,7 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openSettings, rendererWindow } from './launch'
-import { choose } from './helpers/select'
+import { drawerSettled, choose } from './helpers/select'
 
 /** The 5000px-spacer fixture sync.spec.ts scrolls; its height is fixed so both
  *  panes reach the same offset whatever their widths. */
@@ -76,10 +76,9 @@ test('the native view is repositioned before it is shown again', async () => {
   // the fresh one are the same rectangle and the assertion below is vacuous.
   // The drawer narrows the row, so a view that was never repositioned keeps its
   // wider solo-era bounds and is caught.
-  // NOTE(task-9): `.toggle-panel` now lives in the overflow menu, so the click
-  // is reached through `openSettings` — it is load-bearing, not clutter, and it
-  // still narrows the row exactly as before.
+  // The drawer slides in; the row is narrowed only once it has landed.
   await page.click('.toggle-panel')
+  await drawerSettled(page, true)
 
   await page.click('.panes-both')
   await expect.poll(nativeVisible).toBe(true)
