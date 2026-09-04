@@ -383,21 +383,10 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
           )}
         </div>
 
-        {/* Two buttons rather than a menu of two items plus a checkbox. The
-            menu was a click that only ever led somewhere else; settings is a
-            modal now, and the panel drawer is a drawer, so each gets the one
-            control that opens it. Agent control moved into the modal, where
+        {/* Settings is a modal and gets its one button here; the drawer's
+            toggle sits at the right end of the screen row below, next to
+            the drawer it opens. Agent control lives in the modal, where
             there is room to say what it turns on. */}
-        <button
-          type="button"
-          className="icon-button toggle-panel"
-          title="Controls: text scale, throttle, onion skin, panel, vision"
-          aria-label="Controls"
-          aria-pressed={drawer === 'panel'}
-          onClick={onTogglePanel}
-        >
-          <Icon name="sliders" />
-        </button>
         <button
           type="button"
           className="icon-button toggle-settings"
@@ -480,9 +469,21 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
 
         {/* Agent control opens a loopback server, so it is never silently on:
             the chip persists while enabled and brightens for ~3s of activity. */}
-        {agentControl && (
-          <span className={`agent-activity${agentActive ? ' active' : ''}`}>AGENT</span>
-        )}
+        <span className="screen-tail">
+          {agentControl && <span className={`agent-activity${agentActive ? ' active' : ''}`}>AGENT</span>}
+          {/* The drawer's toggle, beside the drawer it opens: the right edge
+              of the row is where the panel appears. */}
+          <button
+            type="button"
+            className="icon-button toggle-panel"
+            title="Side panel: text scale, throttle, onion skin, panel, vision"
+            aria-label="Side panel"
+            aria-pressed={drawer === 'panel'}
+            onClick={onTogglePanel}
+          >
+            <Icon name="panelRight" />
+          </button>
+        </span>
       </div>
     </div>
   )

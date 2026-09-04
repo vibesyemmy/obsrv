@@ -101,7 +101,11 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    was switched on, and a control that moves when an unrelated setting changes
    is worse than one slightly off-centre. */
 .chrome-screen { height: 38px; background: var(--chrome-0); justify-content: center; position: relative; }
-.chrome-screen .agent-activity { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
+/* The row's tail: the agent chip and the drawer's toggle, out of flow so
+   their presence cannot shift the centred controls, at the edge the drawer
+   opens from. */
+.chrome-screen .screen-tail { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 8px; }
+.icon-button[aria-pressed='true'] { background: var(--chrome-3); border-color: var(--text-1); }
 .chrome-spacer { flex: 1 1 auto; }
 
 /* The tab strip. Ground is the darkest chrome step so an inactive tab (one
