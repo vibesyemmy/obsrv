@@ -6,6 +6,7 @@ import { THROTTLE_PROFILES } from '../../../shared/throttle'
 import type { PanelProfile } from '../../../shared/types'
 import { VISION_TYPES } from '../../../shared/vision'
 import { selectHostNits, selectProfile, selectTab, useStore } from '../state/store'
+import { Icon } from './Icon'
 import { Select, type SelectGroup } from './Select'
 
 /**
@@ -83,6 +84,20 @@ export function customProfile(
   }
 }
 
+/**
+ * A section's explanation, behind an info mark in its heading rather than a
+ * paragraph under it: the drawer is a column of controls, and the words are
+ * for the first time, not every time. The text is the button's accessible
+ * name as well as its bubble, so a screen reader gets it too.
+ */
+function Info({ tip }: { tip: string }) {
+  return (
+    <button type="button" className="info" aria-label={tip} data-tip={tip}>
+      <Icon name="info" size={12} />
+    </button>
+  )
+}
+
 /** A slider row in the inspector: label left, value pinned right in the mono face. */
 function Slider({
   label,
@@ -151,11 +166,10 @@ export function PanelControls({ focus = null, focusKey = 0 }: { focus?: PanelSec
       <CompareControls />
 
       <section className="panel-section" data-section="panel">
-      <h2>Panel</h2>
-      <p className="muted">
-        Simulate a cheaper screen: dimmer, less contrast, fewer colours. A rough
-        model, not a measured one.
-      </p>
+      <h2>
+        Panel
+        <Info tip="Simulates a cheaper screen: dimmer, less contrast, fewer colours. A rough model, not a measured one. Choosing a profile in the toolbar resets these sliders." />
+      </h2>
 
       <Slider
         label="Brightness"
@@ -214,7 +228,6 @@ export function PanelControls({ focus = null, focusKey = 0 }: { focus?: PanelSec
         <span>FRC dithering</span>
       </label>
 
-      <p className="muted">Choosing a profile in the toolbar resets these sliders.</p>
       </section>
 
       <section className="panel-section" data-section="vision">
@@ -237,11 +250,10 @@ function PageControls() {
   const setThrottle = useStore(s => s.setThrottle)
   return (
     <section className="panel-section" data-section="page">
-      <h2>Page</h2>
-      <p className="muted">
-        How the page is loaded on the target screen: its zoom level, and how
-        fast a network and processor it gets.
-      </p>
+      <h2>
+        Page
+        <Info tip="How the page is loaded on the target screen: its zoom level, and how fast a network and processor it gets." />
+      </h2>
       <label className="control">
         <span className="control-row">
           <span>Text scale</span>
@@ -282,12 +294,10 @@ function CompareControls() {
   const setOnionSkin = useStore(s => s.setOnionSkin)
   return (
     <section className="panel-section" data-section="compare">
-      <h2>Compare</h2>
-      <p className="muted">
-        Lay a sharp, high-resolution render of the same page over the low-resolution
-        one. Drag the slider to see what the cheap screen changes: text that wraps
-        differently, or a thin line that disappears.
-      </p>
+      <h2>
+        Compare
+        <Info tip="Lays a sharp, high-resolution render of the same page over the low-resolution one. Drag the slider to see what the cheap screen changes: text that wraps differently, or a thin line that disappears." />
+      </h2>
       <Slider
         label="Onion skin"
         value={formatOnionSkin(onionSkin)}
@@ -314,16 +324,13 @@ function VisionControls() {
   const type = useStore(s => selectTab(s).visionType)
   const severity = useStore(s => selectTab(s).visionSeverity)
   const setVision = useStore(s => s.setVision)
-  const active = VISION_TYPES.find(t => t.id === type) ?? VISION_TYPES[0]!
 
   return (
     <>
-      <h2>Vision</h2>
-      <p className="muted">
-        See the render as someone with a colour vision deficiency would. Applied
-        after the panel above, because the screen shows the colours first and the
-        eye sees them second.
-      </p>
+      <h2>
+        Vision
+        <Info tip="Shows the render as someone with a colour vision deficiency would see it, applied after the panel above. Full severity uses published research figures (Machado et al., 2009); the values in between are estimates. It does not replace checking text contrast." />
+      </h2>
 
       <div className="vision-control" role="group" aria-label="Colour vision">
         {VISION_TYPES.map(t => (
@@ -339,7 +346,6 @@ function VisionControls() {
           </button>
         ))}
       </div>
-      <p className="muted vision-note">{active.note}</p>
 
       {/* Severity is the point, not a refinement: full dichromacy is the rare
           end. Deuteranomaly — partial, not absent — is what most people with a
@@ -356,12 +362,6 @@ function VisionControls() {
         onChange={pct => setVision(type, pct / 100)}
       />
 
-      <p className="muted">
-        Full severity uses published research figures (Machado et al., 2009);
-        the values in between are estimates. This shows whether something still
-        works without a particular colour. It is not a substitute for checking
-        text contrast.
-      </p>
     </>
   )
 }

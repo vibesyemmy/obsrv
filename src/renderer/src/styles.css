@@ -692,7 +692,45 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .panel-section:first-child { padding-top: 0; }
 .panel-section:last-child { padding-bottom: 8px; }
 .panel-section + .panel-section { border-top: 1px solid var(--line); }
-.panel-section h2 { margin-top: 0; }
+.panel-section h2 { margin-top: 0; display: flex; align-items: center; gap: 6px; }
+/* The section's explanation, behind an info mark: a bubble on hover or focus,
+   hung from the mark's right edge so it opens into the drawer, never past it. */
+.info {
+  all: unset;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--text-1);
+  cursor: help;
+}
+.info:hover, .info:focus-visible { color: var(--text-0); }
+.info::after {
+  content: attr(data-tip);
+  display: none;
+  position: absolute;
+  z-index: 70;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 236px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: normal;
+  color: var(--text-0);
+  background: var(--chrome-3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.info:hover::after, .info:focus-visible::after { display: block; }
 /* A footer fact brought this section up: light it for a beat. */
 .panel-section.flash { animation: panel-flash 0.9s ease-out; }
 @keyframes panel-flash { from { background: var(--chrome-3); } to { background: transparent; } }
@@ -1170,4 +1208,3 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
    weight, never hue — which matters more here than anywhere, since the control
    next to it is busy changing the colours. */
 .vision-control button[aria-pressed='true'] { background: var(--chrome-3); color: var(--text-0); }
-.vision-note { min-height: 2.4em; }
