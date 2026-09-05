@@ -342,3 +342,33 @@ means the app channel went away — with the devtools flake it was the
 process dying. Not reproduced locally (25 hammer rounds, 48 spec runs, no
 exit); no crash report from CI. On the ledger, with the exit signal and
 crash reports the first things to look at if it returns.
+
+## `sync.spec`: the scroll read that hung, once
+
+Seen once, on the 0.29.0 cycle's first `main` run for 0.28.0 (2026-09-05,
+attempt 1). "scrolling the target moves the native pane" scrolled the
+target to 2400, polled the native pane and saw it arrive — the poll
+passed — and then the very next `executeJavaScript('window.scrollY')` on
+the native pane, the same call the poll had just made, never settled. The
+test hit its 30 s timeout, the harness closed the app, and Playwright
+reported the evaluate as "Target page, context or browser has been
+closed", which is the close, not the cause. The app's own log showed a
+normal quit. Nothing in that test navigates or recreates a pane, so the
+one known hang (a read on a webContents destroyed mid-call, above) does
+not obviously apply.
+
+Re-run of the failed job: green. Locally, `--repeat-each 4`: 40 of 40. No
+earlier run in the previous fourteen shows the shape. On the ledger as a
+one-off; if it recurs, read the app log tail for anything the native pane
+did between the poll and the read, and consider racing that read against
+a timer the way a spec that spans a recreation should.
+
+What the same run did show, and what changed because of it: **a retry
+cannot pass a test that depends on an earlier test's navigation.** A
+Playwright retry restarts the worker — `beforeAll` relaunches the app —
+and re-runs only the failed test, so the retry of that test found a fresh
+"New tab" and failed on its own terms (`Received: 0`), and so did the
+next test in the file, on both of its attempts, for the same reason. Two
+failures on the report, one event underneath. The scroll tests now settle
+the tall fixture for themselves (`onTall`), so a retry of any of them
+starts from the page it needs.

@@ -56,9 +56,26 @@ function urls(a: ElectronApplication): Promise<{ native: string; target: string 
   })
 }
 
-test('scrolling the native pane moves the target', async () => {
+/**
+ * The scroll tests need the tall fixture in both panes. The first test used
+ * to navigate there for all three, but a Playwright retry restarts the
+ * worker — `beforeAll` relaunches the app — and re-runs only the failed
+ * test, which then found a fresh "New tab" and failed on its own, as did
+ * every test after it in the file (the 0.28.0 `main` run). So each scroll
+ * test settles the page it needs for itself, and the settle is a poll on
+ * both panes' URLs rather than a sleep.
+ */
+async function onTall(): Promise<void> {
+  const at = await urls(app)
+  if (at.native === TALL && at.target === TALL) return
   await page.evaluate(u => window.obsrv.navigate(u), TALL)
+  await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: TALL, target: TALL })
+  // The panes' scroll preloads come up with the document; give them a beat.
   await new Promise(r => setTimeout(r, 500))
+}
+
+test('scrolling the native pane moves the target', async () => {
+  await onTall()
 
   const at = await scrollAndRead(app, 'native', 1200)
   expect(at.native).toBe(1200)
@@ -66,12 +83,14 @@ test('scrolling the native pane moves the target', async () => {
 })
 
 test('scrolling the target moves the native pane', async () => {
+  await onTall()
   const at = await scrollAndRead(app, 'target', 2400)
   expect(at.target).toBe(2400)
   expect(at.native).toBe(2400)
 })
 
 test('repeated scrolls keep tracking, so the bus is not jammed by echoes', async () => {
+  await onTall()
   const first = await scrollAndRead(app, 'native', 300)
   expect(first.target).toBe(300)
 
