@@ -46,12 +46,22 @@ const MAX_TILE_BANDS = 8
 function lintDetail(g: LintGroup): string {
   const f = g.exemplar
   const many = g.count > 1 ? ` · ×${g.count}` : ''
-  if (f.rule === 'hairline') return `hairline ${f.kind} ${f.cssPx}px = ${f.devicePx} device px${many}`
-  if (f.rule === 'thin-text') return `thin text ${f.fontWeight} at ${f.fontSizePx}px${many}`
-  if (f.rule === 'contrast') return `contrast ${f.color} on ${f.background} ${f.asIs}:1${many}`
-  if (f.rule === 'contrast-on-panel') return `on panel ${f.asIs}:1 → ${f.onPanel}:1${many}`
-  if (f.rule === 'image-upscaled') return `upscaled ${f.factor}×${many}`
-  return `oversized ${f.factor}×${many}`
+  // A switch, not an if-chain: two of the rules share one union member, and
+  // only a switch on the discriminant narrows it away (as `groupKey` does).
+  switch (f.rule) {
+    case 'hairline':
+      return `hairline ${f.kind} ${f.cssPx}px = ${f.devicePx} device px${many}`
+    case 'thin-text':
+      return `thin text ${f.fontWeight} at ${f.fontSizePx}px${many}`
+    case 'contrast':
+      return `contrast ${f.color} on ${f.background} ${f.asIs}:1${many}`
+    case 'contrast-on-panel':
+      return `on panel ${f.asIs}:1 → ${f.onPanel}:1${many}`
+    case 'image-upscaled':
+      return `upscaled ${f.factor}×${many}`
+    case 'image-oversized':
+      return `oversized ${f.factor}×${many}`
+  }
 }
 
 /**
