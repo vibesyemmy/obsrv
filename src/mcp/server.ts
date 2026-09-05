@@ -1147,6 +1147,32 @@ const lintInputShape = {
 }
 
 const lintRectShape = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+const lintFindingShape = z.object({
+  rule: z.enum([...LINT_RULES] as [string, ...string[]]),
+  element: z.string().describe('tag#id.first-class'),
+  text: z.string(),
+  rect: lintRectShape.describe("Page CSS px, scroll included: what obsrv_drive's highlight takes with space: 'page'."),
+  message: z.string().describe('One sentence with the figures in it.'),
+  kind: z.string().optional().describe('hairline: which edge (border-top, box-shadow, height, …).'),
+  cssPx: z.number().optional(),
+  devicePx: z.number().optional().describe('hairline: the edge in device px; thin-text: the font size in device px.'),
+  fontSizePx: z.number().optional(),
+  fontWeight: z.number().optional(),
+  color: z.string().optional(),
+  background: z.string().optional(),
+  asIs: z.number().optional().describe('contrast rules: WCAG 2 contrast of the pair as stated.'),
+  onPanel: z.number().optional().describe('contrast rules: the same pair through the panel profile (and the vision setting, live).'),
+  threshold: z.number().optional(),
+  largeText: z.boolean().optional(),
+  naturalWidth: z.number().optional(),
+  naturalHeight: z.number().optional(),
+  drawnDevicePx: z.object({ width: z.number(), height: z.number() }).optional(),
+  factor: z.number().optional().describe('image rules: how many times the image is scaled up (upscaled) or down (oversized).'),
+  srcset: z.boolean().optional(),
+  candidates: z.array(z.string()).optional(),
+  src: z.string().optional(),
+})
+
 const lintOutputShape = {
   mode: z.enum(['headless', 'live']),
   url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
@@ -1173,33 +1199,22 @@ const lintOutputShape = {
     .describe('Every finding counted, listed or not.'),
   findings: z
     .array(
-      z.object({
-        rule: z.enum([...LINT_RULES] as [string, ...string[]]),
-        element: z.string().describe('tag#id.first-class'),
-        text: z.string(),
-        rect: lintRectShape.describe("Page CSS px, scroll included: what obsrv_drive's highlight takes with space: 'page'."),
-        message: z.string().describe('One sentence with the figures in it.'),
-        kind: z.string().optional().describe('hairline: which edge (border-top, box-shadow, height, …).'),
-        cssPx: z.number().optional(),
-        devicePx: z.number().optional().describe('hairline: the edge in device px; thin-text: the font size in device px.'),
-        fontSizePx: z.number().optional(),
-        fontWeight: z.number().optional(),
-        color: z.string().optional(),
-        background: z.string().optional(),
-        asIs: z.number().optional().describe('contrast rules: WCAG 2 contrast of the pair as stated.'),
-        onPanel: z.number().optional().describe('contrast rules: the same pair through the panel profile (and the vision setting, live).'),
-        threshold: z.number().optional(),
-        largeText: z.boolean().optional(),
-        naturalWidth: z.number().optional(),
-        naturalHeight: z.number().optional(),
-        drawnDevicePx: z.object({ width: z.number(), height: z.number() }).optional(),
-        factor: z.number().optional().describe('image rules: how many times the image is scaled up (upscaled) or down (oversized).'),
-        srcset: z.boolean().optional(),
-        candidates: z.array(z.string()).optional(),
-        src: z.string().optional(),
-      }),
+      lintFindingShape,
     )
     .describe('Rule by rule in a fixed order, worst first within a rule; at most 200 listed, the rest counted in truncated.findings.'),
+  groups: z
+    .array(
+      z.object({
+        rule: z.enum([...LINT_RULES] as [string, ...string[]]),
+        key: z.string().describe('What the members share: a colour pair, a weight and size, an edge kind and thickness, an image asset size.'),
+        count: z.number(),
+        exemplar: lintFindingShape.describe('The worst member, as listed.'),
+        elements: z.array(z.string()).describe('Up to five distinct elements in the group.'),
+      }),
+    )
+    .describe(
+      'The findings grouped by what they share, over every finding counted (listed or not): a page with 270 identical contrast failures is one group with count 270. Quote a group, not its members.',
+    ),
   skipped: z.object({ textOnImages: z.number() }).describe('Text over an image or gradient: no colour to measure, so no contrast verdict.'),
   truncated: z.object({ findings: z.number(), text: z.number(), edges: z.number(), images: z.number() }),
   warnings: z.array(z.string()),
@@ -1403,6 +1418,7 @@ const reportInputShape = {
   profile: profileField,
   tapMm: z.number().min(0).optional().describe(`Audit threshold for tap targets, mm. Default ${DEFAULT_TAP_MM} (provisional).`),
   textMm: z.number().min(0).optional().describe(`Audit threshold for text, mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
+  thinPx: z.number().min(0).optional().describe(`Lint threshold: light text under this many device px is flagged. Default ${DEFAULT_THIN_PX} (provisional).`),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after each load, in ms. Default 0.'),
   timeoutMs: z.number().int().min(1).optional().describe(`Per-render budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
@@ -1429,6 +1445,22 @@ const reportOutputShape = {
       audit: z
         .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
         .nullable(),
+      lint: z
+        .object({
+          summary: z.object({
+            hairline: z.number(),
+            'thin-text': z.number(),
+            contrast: z.number(),
+            'contrast-on-panel': z.number(),
+            'image-upscaled': z.number(),
+            'image-oversized': z.number(),
+          }),
+          findings: z.number(),
+          groups: z.number().describe('Findings grouped by what they share; the HTML lists the groups.'),
+          skipped: z.object({ textOnImages: z.number() }),
+        })
+        .nullable()
+        .describe('The lint on the same loaded page, judged on the report profile; null when the page did not answer.'),
       diff: z
         .object({
           settled: z.boolean(),

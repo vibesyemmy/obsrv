@@ -903,6 +903,46 @@ export function registerIpc(ctx: AppContext): () => void {
     return quiet ? 'settled' : 'painting'
   }
 
+  /**
+   * The native pane is an OS-level view the window's own capture cannot see:
+   * it came back black, which misled anyone judging follow-along from the
+   * agent's image rather than the screen. Capture the pane itself and paint
+   * it in at its bounds, in the window's device pixels. Anything that stops
+   * that — the pane hidden, a capture refused, a scale mismatch — leaves the
+   * window shot as it was rather than failing the capture.
+   */
+  const withNativePane = async (shot: Electron.NativeImage): Promise<Electron.NativeImage> => {
+    const native = tab().native
+    const bounds = native.getBounds()
+    if (!native.isVisible() || bounds.width < 1 || bounds.height < 1) return shot
+    let pane: Electron.NativeImage
+    try {
+      pane = await native.view.webContents.capturePage()
+    } catch {
+      return shot
+    }
+    const sf = shot.getScaleFactors()[0] ?? 1
+    if ((pane.getScaleFactors()[0] ?? 1) !== sf) return shot
+    const shotDip = shot.getSize()
+    const paneDip = pane.getSize()
+    const dstW = Math.round(shotDip.width * sf)
+    const dstH = Math.round(shotDip.height * sf)
+    const srcW = Math.round(paneDip.width * sf)
+    const srcH = Math.round(paneDip.height * sf)
+    const dst = Buffer.from(shot.toBitmap())
+    const src = pane.toBitmap()
+    if (dst.length !== dstW * dstH * 4 || src.length !== srcW * srcH * 4) return shot
+    const x0 = Math.round(bounds.x * sf)
+    const y0 = Math.round(bounds.y * sf)
+    const w = Math.min(srcW, dstW - x0)
+    const h = Math.min(srcH, dstH - y0)
+    if (x0 < 0 || y0 < 0 || w <= 0 || h <= 0) return shot
+    for (let row = 0; row < h; row++) {
+      src.copy(dst, ((y0 + row) * dstW + x0) * 4, row * srcW * 4, row * srcW * 4 + w * 4)
+    }
+    return nativeImage.createFromBitmap(dst, { width: dstW, height: dstH, scaleFactor: sf })
+  }
+
   /** capturePage wants integer CSS pixels; a fractional rect crops short. */
   const roundRect = (r: Rect): Rect => ({
     x: Math.round(r.x),
@@ -1267,7 +1307,7 @@ export function registerIpc(ctx: AppContext): () => void {
       try {
         await awaitViewportStable()
         await settleTarget()
-        const image = await win.webContents.capturePage()
+        const image = await withNativePane(await win.webContents.capturePage())
         const size = image.getSize()
         return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
       } finally {

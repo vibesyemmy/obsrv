@@ -1,4 +1,5 @@
 import type { AuditResult, AuditThresholds } from './audit'
+import { LINT_RULES, type LintResult, type LintRule } from './lint'
 import type { UnsettledReason } from './capture'
 import { formatTextScale } from '../shared/textScale'
 import type { DiffMetrics } from './metrics'
@@ -12,10 +13,17 @@ import type { DiffMetrics } from './metrics'
  */
 
 export interface ReportImage {
-  /** PNG bytes, base64. */
+  /** The encoded bytes, base64. */
   base64: string
   width: number
   height: number
+  /**
+   * PNG unless said otherwise. Only the full-page overview is JPEG: it is a
+   * downsampled map whose job the pins do, while every image that is
+   * rasterisation evidence — the render, the 1x-vs-2x pair, the crops —
+   * stays lossless, or the report would soften what it exists to show.
+   */
+  mime?: 'image/png' | 'image/jpeg'
 }
 
 /** One located problem: a pin on the full-page overview and a crop of it. */
@@ -68,6 +76,8 @@ export interface ReportScreen {
   settledMs?: number | null
   /** Null when the page did not answer the audit. */
   audit: AuditResult | null
+  /** Null when the page did not answer the lint. */
+  lint: LintResult | null
   /**
    * 1x screens only: the comparison, the 2x reference (downsampled), and the
    * 1x render the comparison was measured on — which is the render *without*
@@ -99,6 +109,7 @@ export function escapeHtml(s: string): string {
 }
 
 const pct = (v: number): string => `${(v * 100).toFixed(2)}%`
+const src = (img: ReportImage): string => `data:${img.mime ?? 'image/png'};base64,${img.base64}`
 const mm = (v: number | null | undefined): string => (v === null || v === undefined ? '—' : `${v.toFixed(1)} mm`)
 const num = (v: number, places = 1): string => v.toFixed(places)
 
@@ -177,7 +188,7 @@ function problemsSection(s: ReportScreen): string {
   const crops = p.features
     .map(
       f =>
-        `<figure class="crop"><img src="data:image/png;base64,${f.crop.base64}" alt="Finding ${f.n}: ${escapeHtml(f.element)}">` +
+        `<figure class="crop"><img src="${src(f.crop)}" alt="Finding ${f.n}: ${escapeHtml(f.element)}">` +
         `<figcaption><b>${f.n}</b> <code>${escapeHtml(f.element)}</code> · ${escapeHtml(f.detail)}</figcaption></figure>`,
     )
     .join('')
@@ -188,9 +199,45 @@ function problemsSection(s: ReportScreen): string {
   const many = p.features.length === 1 ? 'the smallest finding, located on the page' : `the ${p.features.length} smallest findings, located on the page`
   return (
     `<h3>Where the problems are — ${many}</h3>` +
-    `<div class="overview"><img src="data:image/png;base64,${p.overview.base64}" alt="The full page, with the worst findings marked">${pins}</div>` +
+    `<div class="overview"><img src="${src(p.overview)}" alt="The full page, with the worst findings marked">${pins}</div>` +
     `<div class="crops">${crops}</div>` +
     below
+  )
+}
+
+const LINT_LABEL: Record<LintRule, string> = {
+  hairline: 'hairline',
+  'thin-text': 'thin text',
+  contrast: 'contrast',
+  'contrast-on-panel': 'contrast on panel',
+  'image-upscaled': 'upscaled image',
+  'image-oversized': 'oversized image',
+}
+
+function lintSection(s: ReportScreen): string {
+  if (!s.lint) return `<h3>Lint</h3><p class="note">The page did not answer the lint (it may have navigated away, or thrown while being measured).</p>`
+  const l = s.lint
+  const cell = (n: number): string => (n === 0 ? '0' : `<span class="bad">${n}</span>`)
+  const summary =
+    `<table><tr>${LINT_RULES.map(r => `<th class="n">${escapeHtml(LINT_LABEL[r])}</th>`).join('')}</tr>` +
+    `<tr>${LINT_RULES.map(r => `<td class="n">${cell(l.summary[r])}</td>`).join('')}</tr></table>`
+  const rows = l.groups
+    .map(
+      g =>
+        `<tr><td><span class="kind">${escapeHtml(LINT_LABEL[g.rule])}</span></td><td class="n">${g.count}</td>` +
+        `<td><code>${escapeHtml(g.exemplar.element)}</code>${g.count > 1 ? ` <span class="muted">and ${g.count - 1} more</span>` : ''}</td>` +
+        `<td>${escapeHtml(g.key)}</td><td>${escapeHtml(g.exemplar.message)}</td></tr>`,
+    )
+    .join('')
+  const skipped = l.skipped.textOnImages > 0 ? `<p class="muted">${l.skipped.textOnImages} text element(s) sit on an image or gradient and got no contrast verdict.</p>` : ''
+  return (
+    `<h3>Lint — what this screen and its panel break</h3>` +
+    summary +
+    (l.groups.length > 0
+      ? `<table style="margin-top:12px"><tr><th></th><th class="n">Count</th><th>Element</th><th>What they share</th><th>Finding</th></tr>${rows}</table>`
+      : `<p class="muted">Nothing the rules catch.</p>`) +
+    skipped +
+    (l.warnings.length > 0 ? `<ul class="plain muted">${l.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '')
   )
 }
 
@@ -205,8 +252,8 @@ function diffSection(s: ReportScreen): string {
   return (
     `<h3>1x vs 2x — this screen against the one it was designed on</h3>` +
     `<div class="pair">` +
-    `<figure><img src="data:image/png;base64,${target.base64}" alt="This screen"><figcaption>This screen, 1x, ${target.width}×${target.height} device px${unprofiled}</figcaption></figure>` +
-    `<figure><img src="data:image/png;base64,${s.diff.reference.base64}" alt="2x reference"><figcaption>2x reference, box-downsampled to the same grid</figcaption></figure>` +
+    `<figure><img src="${src(target)}" alt="This screen"><figcaption>This screen, 1x, ${target.width}×${target.height} device px${unprofiled}</figcaption></figure>` +
+    `<figure><img src="${src(s.diff.reference)}" alt="2x reference"><figcaption>2x reference, box-downsampled to the same grid</figcaption></figure>` +
     `</div>` +
     `<table style="margin-top:12px"><tr><th></th><th class="n">This screen</th><th class="n">Reference</th><th class="n">Delta</th></tr>` +
     `<tr><td>Ink coverage</td><td class="n">${pct(m.inkCoverage.target)}</td><td class="n">${pct(m.inkCoverage.reference)}</td><td class="n${m.inkCoverage.delta < 0 ? ' bad' : ''}">${pct(m.inkCoverage.delta)}</td></tr>` +
@@ -232,10 +279,11 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     // from the one the comparison shows.
     (s.diff && s.diff.target === null
       ? ''
-      : `<figure><img src="data:image/png;base64,${s.png.base64}" alt="${escapeHtml(s.label)}"><figcaption>Shown scaled to fit; ${s.png.width}×${s.png.height} device px on a screen ${physical}${s.diff ? ', through the panel profile' : ''}.</figcaption></figure>`) +
+      : `<figure><img src="${src(s.png)}" alt="${escapeHtml(s.label)}"><figcaption>Shown scaled to fit; ${s.png.width}×${s.png.height} device px on a screen ${physical}${s.diff ? ', through the panel profile' : ''}.</figcaption></figure>`) +
     problemsSection(s) +
     diffSection(s) +
     auditSection(s, thresholds) +
+    lintSection(s) +
     (s.warnings.length > 0 ? `<h3>Warnings</h3><ul class="plain muted">${s.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '') +
     `</section>`
   )
@@ -253,10 +301,10 @@ export function reportHtml(data: ReportData): string {
     `${escapeHtml(data.generatedAt)} · obsrv ${escapeHtml(data.version)}</p>\n` +
     `<p>The same page on the screens people own. Each render is at the screen's true density; the audit measures ` +
     `tap targets and text in millimetres on that screen; 1x screens are compared with the 2x display the page was ` +
-    `probably designed on.</p>\n<p class="muted">${nav}</p>\n` +
+    `probably designed on; the lint names the elements a 1x screen and a cheap panel break, grouped by what they share.</p>\n<p class="muted">${nav}</p>\n` +
     data.screens.map(s => screenSection(s, data.thresholds)).join('\n') +
     `\n<footer>Thresholds are provisional and stated above; findings are informational. Images are shown scaled to fit — ` +
-    `open the PNGs at 1:1, or the page in Obsrv, for the actual pixels. Generated by obsrv ${escapeHtml(data.version)}.</footer>\n` +
+    `open them at 1:1, or the page in Obsrv, for the actual pixels; the full-page overview is a JPEG map, everything else is lossless. Generated by obsrv ${escapeHtml(data.version)}.</footer>\n` +
     `</main>\n</body>\n</html>\n`
   )
 }

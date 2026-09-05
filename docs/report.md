@@ -25,10 +25,16 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   screen's physical size in millimetres and its ppi; the render (or, for 1x
   screens, this screen next to the 2x reference, both on the same 1x grid,
   with ink coverage, ink-row ratio and the band findings); the audit
-  summary and its findings, smallest first; any warnings from the renders.
+  summary and its findings, smallest first; the lint on the same loaded
+  page, judged on the report's profile — six rule counts, then the findings
+  grouped by what they share (one colour pair, one weight and size, one edge
+  kind, one image asset), each group with its count, its worst member and
+  the finding's sentence, so 270 identical contrast failures are one row;
+  any warnings from the renders.
 - **Where the problems are**, when a screen has findings: the full page,
-  captured, with a numbered pin on each of the worst findings (the smallest
-  first, up to eight) and a crop of each at the render's own pixels, so the
+  captured, with a numbered pin on each of the worst findings — the audit's
+  smallest first and one exemplar per lint group, up to six of each — and a
+  crop of each at the render's own pixels, so the
   reader sees not just that a control is 5 mm but where it sits and what it
   looks like. A page taller than one capture surface (4096 device px, so
   4096 CSS px at 1x, 2048 at 2x, 1365 at 3x) is captured in bands: the
@@ -40,7 +46,9 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   few seconds more. Past eight bands the report says how many findings lie
   beyond what was captured. The overview is downsampled to about 800 device
   px wide and at most 3200 tall, so a long page becomes a map and the crops
-  carry the detail. The machine output and `obsrv_report` carry
+  carry the detail; it is embedded as a JPEG for the same reason, while every
+  image that is rasterisation evidence — the render, the 1x-vs-2x pair, the
+  crops — stays a lossless PNG. The machine output and `obsrv_report` carry
   `problems: { featured, belowCapture }` per screen; the images are in the
   HTML, not the JSON. `snap --full-page` keeps its single-surface cap; the
   bands are the report's.

@@ -83,12 +83,67 @@ export type LintFinding =
       src: string
     })
 
+/** Findings that share a cause, counted together; the list caps at 200, the groups do not. */
+export interface LintGroup {
+  rule: LintRule
+  /** What the members share: a colour pair, a weight and size, an edge kind and thickness, an image's natural size. */
+  key: string
+  count: number
+  /** The worst member, as listed: first in the rule's worst-first order. */
+  exemplar: LintFinding
+  /** Up to a few distinct elements, for the reader. */
+  elements: string[]
+}
+/** Groups are few by nature; this bounds a pathological page. */
+export const LINT_MAX_GROUPS = 100
+export const LINT_GROUP_ELEMENTS = 5
+
+/** What two findings must share to be one group. */
+export function groupKey(f: LintFinding): string {
+  switch (f.rule) {
+    case 'hairline':
+      return `${f.kind} ${f.cssPx}px`
+    case 'thin-text':
+      return `${f.fontWeight} at ${f.fontSizePx}px`
+    case 'contrast':
+    case 'contrast-on-panel':
+      return `${f.color} on ${f.background}${f.largeText ? ' (large text)' : ''}`
+    case 'image-upscaled':
+    case 'image-oversized':
+      return `${f.naturalWidth}×${f.naturalHeight} px`
+  }
+}
+
+/**
+ * Groups findings by rule and `groupKey`, in the order they arrive (rule
+ * order, worst first), so a group's exemplar is its worst member. Over every
+ * finding, not the listed cap: a page with 270 identical contrast failures
+ * is one group with count 270.
+ */
+export function groupFindings(findings: LintFinding[]): LintGroup[] {
+  const groups = new Map<string, LintGroup>()
+  for (const f of findings) {
+    const key = groupKey(f)
+    const id = `${f.rule}|${key}`
+    const g = groups.get(id)
+    if (g) {
+      g.count++
+      if (g.elements.length < LINT_GROUP_ELEMENTS && !g.elements.includes(f.element)) g.elements.push(f.element)
+    } else if (groups.size < LINT_MAX_GROUPS) {
+      groups.set(id, { rule: f.rule, key, count: 1, exemplar: f, elements: [f.element] })
+    }
+  }
+  return [...groups.values()]
+}
+
 export interface LintResult {
   profile: string
   thresholds: LintThresholds
   /** Every finding counted, listed or not. */
   summary: Record<LintRule, number>
   findings: LintFinding[]
+  /** The same findings grouped by what they share, over every one counted; see `groupFindings`. */
+  groups: LintGroup[]
   /** Text over an image or gradient: no colour to measure, so no contrast verdict. */
   skipped: { textOnImages: number }
   truncated: { findings: number; text: number; edges: number; images: number }
@@ -274,6 +329,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     thresholds,
     summary,
     findings,
+    groups: groupFindings(all),
     skipped: { textOnImages },
     truncated: { findings: all.length - findings.length, text: over.text, edges: over.edges, images: over.images },
     warnings,

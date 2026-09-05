@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THIN_PX, LINT_MAX_FINDINGS, LINT_RULES, isLargeText, lintFindings, type LintPanel } from '../../src/cli/lint'
+import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, type LintPanel } from '../../src/cli/lint'
 import { effectiveContrast } from '../../src/shared/contrast'
 import type { LintEdge, LintImage, LintReport, LintText } from '../../src/shared/lint'
 import { profileToParams } from '../../src/shared/panelSim'
@@ -160,5 +160,33 @@ describe('the list', () => {
     const res = lintFindings(report({ truncated: { text: 3, edges: 0, images: 1 } }), screen(1), reference, thresholds)
     expect(res.truncated).toEqual({ findings: 0, text: 3, edges: 0, images: 1 })
     expect(res.warnings[0]).toMatch(/3 text elements, 0 edges and 1 images/)
+  })
+})
+
+describe('groups', () => {
+  it('findings that share a cause are one group with a count, the worst first as exemplar, a few distinct elements', () => {
+    const texts = Array.from({ length: 12 }, (_, i) => text({ element: `span.r${i % 4}`, color: [130, 130, 130, 1], background: [246, 246, 239, 1] }))
+    const res = lintFindings(report({ text: texts }), screen(1), reference, thresholds)
+    expect(res.summary.contrast).toBe(12)
+    expect(res.groups).toHaveLength(1)
+    expect(res.groups[0]).toMatchObject({ rule: 'contrast', key: '#828282 on #f6f6ef', count: 12, elements: ['span.r0', 'span.r1', 'span.r2', 'span.r3'] })
+    expect(res.groups[0]!.exemplar.element).toBe('span.r0')
+    expect(LINT_GROUP_ELEMENTS).toBe(5)
+  })
+  it('groups run over every finding counted, past the listed cap', () => {
+    const edges = Array.from({ length: LINT_MAX_FINDINGS + 30 }, (_, i) => edge({ element: `div#e${i}`, px: 0.5 }))
+    const res = lintFindings(report({ edges }), screen(1), reference, thresholds)
+    expect(res.findings).toHaveLength(LINT_MAX_FINDINGS)
+    expect(res.groups).toEqual([expect.objectContaining({ rule: 'hairline', key: 'border-top 0.5px', count: LINT_MAX_FINDINGS + 30 })])
+  })
+  it('the key names what is shared, per rule', () => {
+    const base = lintFindings(report({ text: [text({ fontWeight: 300, fontSizePx: 12 }), text({ color: [153, 153, 153, 1] })], images: [image({ naturalWidth: 100, naturalHeight: 100 })] }), screen(1), reference, thresholds)
+    expect(base.groups.map(g => [g.rule, g.key])).toEqual([
+      ['thin-text', '300 at 12px'],
+      ['contrast', '#999999 on #ffffff'],
+      ['image-upscaled', '100×100 px'],
+    ])
+    expect(groupKey(base.groups[1]!.exemplar)).toBe('#999999 on #ffffff')
+    expect(groupFindings([])).toEqual([])
   })
 })

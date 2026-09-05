@@ -142,7 +142,8 @@ npx -y getobsrv audit http://localhost:5173 --preset android-65
 npx -y getobsrv lint http://localhost:5173 --preset 1080p-24 --profile budget-tn
 
 # All of the above on one self-contained HTML page — two laptops/desktops and two
-# phones by default: each render, the audit in millimetres, the 1x-vs-2x diff.
+# phones by default: each render, the audit in millimetres, the lint grouped by
+# cause, the 1x-vs-2x diff, and the worst findings pinned and cropped on the page.
 # The thing to attach to a PR.
 npx -y getobsrv report http://localhost:5173 --out obsrv-report.html
 

@@ -97,6 +97,8 @@ export interface ReportCommand {
   out: string
   tapMm: number
   textMm: number
+  /** The lint's light-text threshold, device px. */
+  thinPx: number
   waitMs: number
   timeoutMs: number
 }
@@ -151,7 +153,7 @@ Usage:
   obsrv snap <url> [flags]   Render <url> on a target screen; write a PNG, print JSON.
   obsrv diff <url> [flags]   Render <url> at 1x and against a 2x reference; print JSON metrics.
   obsrv audit <url> [flags]  Measure tap targets and text on a target screen, in millimetres; print JSON findings.
-  obsrv report <url> [flags] Render, audit and (for 1x screens) diff a matrix of screens into one HTML page.
+  obsrv report <url> [flags] Render, audit, lint and (for 1x screens) diff a matrix of screens into one HTML page.
   obsrv inspect <url> [flags] What is under a point, or what a selector names: font in millimetres, colours,
                              contrast as stated and on the panel; print JSON.
   obsrv lint <url> [flags]   Rules over the rendered page for what a 1x screen and a cheap panel break:
@@ -225,6 +227,7 @@ lint flags:
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
   --out <file>         The HTML file (default ${DEFAULT_REPORT_OUT}). Self-contained: PNGs inline, no script.
+  --thin-px <px>       As for lint: light text under this many device px is flagged (default ${DEFAULT_THIN_PX}).
   --tap-mm / --text-mm As for audit. --profile applies to the renders shown; the 1x-vs-2x
                        comparison is measured without it (it is about rasterisation, not the panel).
                        Each screen costs one render plus, for 1x screens, a 2x reference render.
@@ -254,9 +257,12 @@ const EXTRA_FLAGS: Record<Command, Set<string>> = {
   snap: new Set(['out', 'full-page', 'matrix']),
   diff: new Set(['out-dir', 'json']),
   audit: new Set(['tap-mm', 'text-mm']),
-  report: new Set(['out', 'matrix', 'tap-mm', 'text-mm']),
-  inspect: new Set(['at', 'selector']),
+  // Order matters for a shared flag's named owner: the command that owns the
+  // concept comes first (audit before report for --tap-mm, lint before report
+  // for --thin-px).
   lint: new Set(['thin-px']),
+  report: new Set(['out', 'matrix', 'tap-mm', 'text-mm', 'thin-px']),
+  inspect: new Set(['at', 'selector']),
 }
 
 interface Parsed {
@@ -486,6 +492,7 @@ export function parseArgs(argv: string[]): CliCommand {
       out,
       tapMm: float(flags, 'tap-mm', DEFAULT_TAP_MM, 0),
       textMm: float(flags, 'text-mm', DEFAULT_TEXT_MM, 0),
+      thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0),
       waitMs,
       timeoutMs,
     }

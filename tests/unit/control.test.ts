@@ -32,6 +32,20 @@ describe('parseControlFile', () => {
   it('accepts a well-formed discovery file', () => {
     expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN }))).toEqual({ port: 49152, token: TOKEN })
   })
+  it('carries the owner stamp when present, and an older file without one still parses', () => {
+    const stamped = { port: 49152, token: TOKEN, pid: 4242, startedAt: '2026-09-05T16:00:00.000Z' }
+    expect(parseControlFile(JSON.stringify(stamped))).toEqual(stamped)
+    expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, pid: 4242 }))).toEqual({ port: 49152, token: TOKEN, pid: 4242 })
+  })
+  it.each([
+    ['pid 0', JSON.stringify({ port: 8080, token: TOKEN, pid: 0 })],
+    ['fractional pid', JSON.stringify({ port: 8080, token: TOKEN, pid: 12.5 })],
+    ['pid as string', JSON.stringify({ port: 8080, token: TOKEN, pid: '4242' })],
+    ['startedAt not a date', JSON.stringify({ port: 8080, token: TOKEN, startedAt: 'yesterday' })],
+    ['startedAt as number', JSON.stringify({ port: 8080, token: TOKEN, startedAt: 1700000000 })],
+  ])('rejects a malformed stamp: %s', (_name, raw) => {
+    expect(parseControlFile(raw)).toBeNull()
+  })
   it.each([
     ['not JSON', '{nope'],
     ['not an object', '"str"'],
