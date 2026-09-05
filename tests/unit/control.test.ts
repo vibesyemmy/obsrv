@@ -91,7 +91,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty-five commands', () => {
+  it('knows exactly the twenty-six commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'audit',
       'back',
@@ -103,6 +103,7 @@ describe('command validation', () => {
       'forward',
       'highlight',
       'inspect',
+      'lint',
       'navigate',
       'panTo',
       'reload',

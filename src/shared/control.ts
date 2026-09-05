@@ -206,6 +206,8 @@ export const CONTROL_COMMANDS = [
   'inspect',
   // v0.29 — the physical-units audit on the page in front, as `obsrv audit` measures a headless load.
   'audit',
+  // v0.30 — the lint on the page in front, as `obsrv lint` judges a headless load.
+  'lint',
   // v0.25 — throttling on the live target.
   'setThrottle',
 ] as const

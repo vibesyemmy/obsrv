@@ -12,8 +12,19 @@ import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import type { LoadError } from '../shared/types'
 import type { AuditReport } from '../shared/audit'
-import { ArgError, parseArgs, type AuditCommand, type DiffCommand, type InspectCommand, type RenderSpec, type ReportCommand, type SnapCommand } from './args'
+import {
+  ArgError,
+  parseArgs,
+  type AuditCommand,
+  type DiffCommand,
+  type InspectCommand,
+  type LintCommand,
+  type RenderSpec,
+  type ReportCommand,
+  type SnapCommand,
+} from './args'
 import { auditFindings } from './audit'
+import { lintFindings } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -458,6 +469,59 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
   }
 }
 
+async function runLint(cmd: LintCommand): Promise<void> {
+  const profile = findProfile(cmd.profileId)
+  const target = new TargetSource(30, { mobileEmulation: true })
+  try {
+    const watch = watchFailures(target)
+    const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
+    target.setTextScale(cmd.spec.textScale)
+    if (cmd.spec.throttle !== null) {
+      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
+      if (refused) human(`warning: ${refused}`)
+    }
+    await loadWithin(target, cmd.url, cmd, watch)
+    // One device pixel on this screen, in the page's CSS px: the walk
+    // brings back only the edges thinner than that.
+    const report = await target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale))
+    if (!report) {
+      const err = watch.failed()
+      if (err) throw err
+      throw new Error('the page did not answer the lint (it may have navigated away, or thrown while being measured)')
+    }
+    const result = lintFindings(
+      report,
+      { cssWidth: applied.width, cssHeight: applied.height, deviceScaleFactor: cmd.spec.deviceScaleFactor, textScale: cmd.spec.textScale },
+      { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) },
+      { thinPx: cmd.thinPx },
+    )
+    for (const w of result.warnings) human(`warning: ${w}`)
+    const s = result.summary
+    const total = Object.values(s).reduce((a, b) => a + b, 0)
+    human(
+      `lint ${cmd.url} @ ${cmd.spec.presetId} ` +
+        `(${applied.width}×${applied.height} CSS ${screenShape(applied.width, applied.height)} ×${cmd.spec.deviceScaleFactor}` +
+        `${cmd.spec.textScale !== 1 ? `, text ${formatTextScale(cmd.spec.textScale)}` : ''}, ${profile.label}): ` +
+        `${total} finding(s): ${s.hairline} hairline, ${s['thin-text']} thin text, ${s.contrast} contrast, ` +
+        `${s['contrast-on-panel']} contrast on panel, ${s['image-upscaled']} upscaled, ${s['image-oversized']} oversized`,
+    )
+    // Findings are informational — CI thresholds are the caller's job.
+    await machine({
+      url: cmd.url,
+      preset: cmd.spec.presetId,
+      cssWidth: applied.width,
+      cssHeight: applied.height,
+      deviceScaleFactor: cmd.spec.deviceScaleFactor,
+      ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
+      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
+      pageHeight: report.pageHeight,
+      ...result,
+    })
+  } finally {
+    target.destroy()
+  }
+}
+
 /** The package version: two levels above out/main, the same file inside app.asar. */
 function cliVersion(): string {
   try {
@@ -660,6 +724,8 @@ void app.whenReady().then(async () => {
       await runReport(cmd)
     } else if (cmd.command === 'inspect') {
       await runInspect(cmd)
+    } else if (cmd.command === 'lint') {
+      await runLint(cmd)
     } else {
       await runDiff(cmd)
     }

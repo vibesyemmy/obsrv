@@ -16,7 +16,7 @@ import {
   parseSettings,
   parseTabId,
   parseOrientation,
-  parseUiState, parseInspectRequest, parseAuditRequest } from '../../src/shared/ipcPayloads'
+  parseUiState, parseInspectRequest, parseAuditRequest, parseLintRequest } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
 
 describe('parseRect', () => {
@@ -525,6 +525,19 @@ describe('parseAuditRequest', () => {
     expect(parseAuditRequest({ textMm: 'two' })).toMatch(/^textMm must be/)
     expect(parseAuditRequest({ tapMm: Number.NaN })).toMatch(/^tapMm must be/)
     expect(parseAuditRequest('audit')).toMatch(/tapMm\?, textMm\?/)
+  })
+})
+
+describe('parseLintRequest', () => {
+  it('no payload, or an empty one, means the default threshold', () => {
+    expect(parseLintRequest(undefined)).toEqual({})
+    expect(parseLintRequest({})).toEqual({})
+    expect(parseLintRequest({ thinPx: 12 })).toEqual({ thinPx: 12 })
+  })
+  it('refuses a threshold that is not a finite, non-negative number', () => {
+    expect(parseLintRequest({ thinPx: -1 })).toMatch(/^thinPx must be/)
+    expect(parseLintRequest({ thinPx: 'x' })).toMatch(/^thinPx must be/)
+    expect(parseLintRequest('lint')).toMatch(/thinPx\?/)
   })
 })
 

@@ -65,6 +65,23 @@ export interface AuditToolInput {
   timeoutMs?: number | undefined
 }
 
+export interface LintToolInput {
+  url: string
+  preset?: string | undefined
+  orientation?: Orientation | undefined
+  width?: number | undefined
+  height?: number | undefined
+  deviceScaleFactor?: number | undefined
+  diagonalInches?: number | undefined
+  textScale?: number | undefined
+  throttle?: string | undefined
+  /** The panel the contrast-on-panel rule is judged on. */
+  profile?: string | undefined
+  thinPx?: number | undefined
+  waitMs?: number | undefined
+  timeoutMs?: number | undefined
+}
+
 export interface InspectToolInput {
   /** Headless: required. Live: navigates the app there first when given. */
   url?: string | undefined
@@ -163,6 +180,37 @@ export function buildReportArgs(input: ReportToolInput, outPath: string): string
 }
 
 /** Maps `obsrv_audit` input to CLI argv; the preset-XOR-custom rule is snap's. */
+export function buildLintArgs(input: LintToolInput): string[] {
+  const custom =
+    input.width !== undefined ||
+    input.height !== undefined ||
+    input.deviceScaleFactor !== undefined ||
+    input.diagonalInches !== undefined
+  if (input.preset !== undefined && custom) {
+    throw new UsageError(
+      '`preset` and custom dimensions are mutually exclusive — pass either `preset`, or `width` + `height`. Use obsrv_presets to list the preset ids.',
+    )
+  }
+  if (custom && (input.width === undefined || input.height === undefined)) {
+    throw new UsageError('custom dimensions need both `width` and `height` — or pass `preset` instead.')
+  }
+  const args = ['lint', input.url]
+  if (input.preset !== undefined) args.push('--preset', input.preset)
+  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (custom) {
+    args.push('--width', String(input.width), '--height', String(input.height))
+    if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
+    if (input.diagonalInches !== undefined) args.push('--diagonal', String(input.diagonalInches))
+  }
+  if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
+  if (input.throttle !== undefined) args.push('--throttle', input.throttle)
+  if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.thinPx !== undefined) args.push('--thin-px', String(input.thinPx))
+  if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
+  if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
+  return args
+}
+
 export function buildAuditArgs(input: AuditToolInput): string[] {
   const custom =
     input.width !== undefined ||

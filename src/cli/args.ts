@@ -4,6 +4,7 @@ import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttl
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { DEFAULT_ORIENTATION, isOrientation, PANEL_PROFILES, SCREEN_PRESETS, findPreset, findProfile } from '../shared/presets'
 import type { Orientation } from '../shared/types'
+import { DEFAULT_THIN_PX } from './lint'
 
 /**
  * Pure argv parsing for the headless CLI (`bin/obsrv.js` → `out/main/cli.js`).
@@ -57,6 +58,18 @@ export interface AuditCommand {
   /** Findings thresholds, in millimetres on the target screen. */
   tapMm: number
   textMm: number
+  waitMs: number
+  timeoutMs: number
+}
+
+export interface LintCommand {
+  command: 'lint'
+  url: string
+  spec: RenderSpec
+  /** The panel the contrast-on-panel rule is judged on. */
+  profileId: string
+  /** Text lighter than regular below this many device pixels of font size is flagged. */
+  thinPx: number
   waitMs: number
   timeoutMs: number
 }
@@ -117,7 +130,7 @@ export interface HelpCommand {
   text: string
 }
 
-export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | InspectCommand | HelpCommand
+export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | InspectCommand | LintCommand | HelpCommand
 
 /** The screens a report covers when none are named: two laptops-and-desktops, two phones. */
 export const DEFAULT_REPORT_MATRIX = ['laptop-768', '1080p-24', 'android-65', 'iphone-61'] as const
@@ -141,6 +154,9 @@ Usage:
   obsrv report <url> [flags] Render, audit and (for 1x screens) diff a matrix of screens into one HTML page.
   obsrv inspect <url> [flags] What is under a point, or what a selector names: font in millimetres, colours,
                              contrast as stated and on the panel; print JSON.
+  obsrv lint <url> [flags]   Rules over the rendered page for what a 1x screen and a cheap panel break:
+                             sub-pixel edges, light text, contrast on the panel, upscaled and oversized
+                             images; print JSON findings.
   obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
   obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
 
@@ -199,6 +215,13 @@ inspect flags:
                        the first is the pair as stated. WCAG AA is judged at 4.5:1, or 3:1 for
                        large text (24px, or 18.66px bold). Millimetres need the screen's diagonal.
 
+lint flags:
+  --thin-px <px>       Flag text lighter than regular (weight under 400) whose font size is under
+                       this many device pixels (default ${DEFAULT_THIN_PX}). Edges are flagged under one
+                       device pixel and images by natural against drawn size, both at the screen's
+                       density times the text scale; --profile names the panel the contrast-on-panel
+                       rule is judged on. One preset per run.
+
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
   --out <file>         The HTML file (default ${DEFAULT_REPORT_OUT}). Self-contained: PNGs inline, no script.
@@ -218,8 +241,8 @@ warning naming what was missing. Only a render that painted nothing errors.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector'])
-type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect'
+const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
+type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
 /** Flags every command takes. */
 const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
 /**
@@ -233,6 +256,7 @@ const EXTRA_FLAGS: Record<Command, Set<string>> = {
   audit: new Set(['tap-mm', 'text-mm']),
   report: new Set(['out', 'matrix', 'tap-mm', 'text-mm']),
   inspect: new Set(['at', 'selector']),
+  lint: new Set(['thin-px']),
 }
 
 interface Parsed {
@@ -419,7 +443,7 @@ export function parseArgs(argv: string[]): CliCommand {
   if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     return { command: 'help', text: usage() }
   }
-  if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report' && command !== 'inspect') {
+  if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report' && command !== 'inspect' && command !== 'lint') {
     throw new ArgError(`unknown command: ${command}\n\n${usage()}`)
   }
 
@@ -439,6 +463,11 @@ export function parseArgs(argv: string[]): CliCommand {
     const tapMm = float(flags, 'tap-mm', DEFAULT_TAP_MM, 0)
     const textMm = float(flags, 'text-mm', DEFAULT_TEXT_MM, 0)
     return { command, url, spec: specs[0]!, tapMm, textMm, waitMs, timeoutMs }
+  }
+
+  if (command === 'lint') {
+    if (matrix) throw new ArgError('`obsrv lint` judges one screen per run; --matrix is a snap flag')
+    return { command, url, spec: specs[0]!, profileId, thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0), waitMs, timeoutMs }
   }
 
   if (command === 'report') {
