@@ -25,7 +25,7 @@ import {
 } from './args'
 import { auditFindings } from './audit'
 import { lintFindings } from './lint'
-import { bgraToRgba, captureQuiescent, type CapturedFrame } from './capture'
+import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
@@ -36,6 +36,10 @@ const REPORT_CROP_LIMIT = 8
 const REPORT_OVERVIEW_WIDTH = 800
 /** Padding around a finding's rect in the crop, in device px. */
 const REPORT_CROP_PAD = 16
+/** The overview is also kept under this many device px tall; a long page becomes a map, the crops carry the detail. */
+const REPORT_OVERVIEW_MAX_HEIGHT = 3200
+/** A tiled full-page capture stops after this many bands; the report counts what lies past them. */
+const MAX_TILE_BANDS = 8
 
 /**
  * Headless CLI entry (`bin/obsrv.js` spawns `electron out/main/cli.js -- …`).
@@ -93,6 +97,14 @@ interface RenderResult {
 
 interface RenderOptions {
   fullPage: boolean
+  /**
+   * With `fullPage`: a page taller than the device-pixel cap is captured in
+   * bands — the viewport held at the cap, the page scrolled a band at a time,
+   * each band captured quiescent and stitched into one raster — instead of
+   * being clamped. The report asks for this so its findings can be located
+   * anywhere on the page; `snap --full-page` keeps its documented cap.
+   */
+  tiled?: boolean
   waitMs: number
   timeoutMs: number
   /** False only for the diff reference: dense raster, desktop semantics. */
@@ -183,6 +195,11 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     await loadWithin(target, url, options, watch)
 
     let cssHeight = applied.height
+    let frame: CapturedFrame | null = null
+    // Under a throttle the quiet moment is the measurement (`settledMs`), and
+    // a page loading over 3G paints steadily too: no early exit there.
+    const quiescent = (): Promise<CapturedFrame> =>
+      captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed, animationExit: spec.throttle === null })
     if (options.fullPage) {
       // Layout is final at did-finish-load (+ --wait for late movers), so the
       // page height needs no pixels: resize *before* the one and only capture
@@ -199,26 +216,63 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       const surfaceHeight = Math.ceil(scrollHeight * spec.textScale)
       if (surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
-        const wanted = Math.min(surfaceHeight, limit)
-        if (surfaceHeight > limit) {
-          warn(
-            `warning: full page is ${surfaceHeight} CSS px tall; clamped to ${wanted} ` +
-              `(device pixels are capped at 4096 per axis)`,
-          )
+        if (surfaceHeight > limit && options.tiled) {
+          // Taller than one surface: hold the viewport at the cap and capture
+          // the page a band at a time, scrolling between captures. Each band
+          // is its own quiescent capture, so an animating page pays its early
+          // exit per band. A sticky header repeats at the top of every band —
+          // which is what scrolling shows a person, too.
+          target.setViewport(applied.width, limit, spec.deviceScaleFactor, spec.mobile)
+          cssHeight = limit
+          const bandPage = limit / spec.textScale
+          const bandsWanted = Math.ceil(scrollHeight / bandPage)
+          const bandCount = Math.min(bandsWanted, MAX_TILE_BANDS)
+          const bands: CaptureBand[] = []
+          let settled = true
+          let unsettledReason: UnsettledReason | undefined
+          for (let i = 0; i < bandCount; i++) {
+            const wantY = Math.round(i * bandPage)
+            const y = Math.round(
+              (await target.webContents.executeJavaScript(
+                `window.scrollTo({ top: ${wantY}, left: 0, behavior: 'instant' }); window.scrollY`,
+              )) as number,
+            )
+            const f = await quiescent()
+            if (!f.settled) {
+              settled = false
+              if (unsettledReason === undefined) unsettledReason = f.unsettledReason
+            }
+            bands.push({ y: Math.round(y * spec.textScale * spec.deviceScaleFactor), width: f.width, height: f.height, bgra: f.bgra })
+            // The scroll clamped short of where the next band would start:
+            // that was the bottom, and the band already covers it.
+            if (y < wantY) break
+          }
+          const width = bands[0]!.width
+          const height = Math.max(...bands.map(b => b.y + b.height))
+          frame = { width, height, bgra: stitchBands(width, height, bands), settled, ...(unsettledReason !== undefined ? { unsettledReason } : {}) }
+          if (bandsWanted > bandCount) {
+            warn(
+              `warning: full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${limit} CSS px ` +
+                `(${MAX_TILE_BANDS} at most) — what lies past them is not in the raster`,
+            )
+          } else {
+            human(`full page is ${surfaceHeight} CSS px tall; captured in ${bands.length} band(s) of ${limit} CSS px`)
+          }
+        } else {
+          const wanted = Math.min(surfaceHeight, limit)
+          if (surfaceHeight > limit) {
+            warn(
+              `warning: full page is ${surfaceHeight} CSS px tall; clamped to ${wanted} ` +
+                `(device pixels are capped at 4096 per axis)`,
+            )
+          }
+          target.setViewport(applied.width, wanted, spec.deviceScaleFactor, spec.mobile)
+          cssHeight = wanted
         }
-        target.setViewport(applied.width, wanted, spec.deviceScaleFactor, spec.mobile)
-        cssHeight = wanted
       }
     }
 
-    // Under a throttle the quiet moment is the measurement (`settledMs`), and
-    // a page loading over 3G paints steadily too: no early exit there.
-    const frame = await captureQuiescent(target, {
-      timeoutMs: options.timeoutMs,
-      onWarn: warn,
-      failure: failed,
-      animationExit: spec.throttle === null,
-    })
+    if (frame === null) frame = await quiescent()
     const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
     const auditReport = options.audit ? await target.auditPage() : undefined
     return { frame, cssWidth: applied.width, cssHeight, warnings, settledMs, ...(auditReport !== undefined ? { auditReport } : {}) }
@@ -574,7 +628,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
     // a downsampled overview and cropped at the render's own pixels.
     let problems: ReportProblems | undefined
     if (audit && audit.findings.length > 0) {
-      const full = await render(cmd.url, spec, { fullPage: true, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
+      const full = await render(cmd.url, spec, { fullPage: true, tiled: true, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
       const fullRaw = bgraToRgba(full.frame.bgra, full.frame.width, full.frame.height)
       const fullImg = profiled ? applyPanelProfile(fullRaw, profile) : fullRaw
       // Device px per page CSS px, read from the raster's own width so it holds
@@ -584,7 +638,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       const within = audit.findings.filter(f => f.rect.y + f.rect.height / 2 <= capturedCssHeight)
       const featured = within.slice(0, REPORT_CROP_LIMIT)
       if (featured.length > 0) {
-        const overviewFactor = Math.max(1, Math.round(fullImg.width / REPORT_OVERVIEW_WIDTH))
+        const overviewFactor = Math.max(1, Math.round(fullImg.width / REPORT_OVERVIEW_WIDTH), Math.ceil(fullImg.height / REPORT_OVERVIEW_MAX_HEIGHT))
         const overview = boxDownsample(fullImg, overviewFactor)
         const features = featured.map((f, i) => {
           let cr = cropImage(fullImg, f.rect.x * k - REPORT_CROP_PAD, f.rect.y * k - REPORT_CROP_PAD, f.rect.width * k + REPORT_CROP_PAD * 2, f.rect.height * k + REPORT_CROP_PAD * 2)

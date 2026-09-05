@@ -275,3 +275,34 @@ export function bgraToRgba(bgra: Uint8Array, width: number, height: number): RGB
   }
   return { width, height, data }
 }
+
+/** One captured band of a taller page, placed at a device-pixel row. */
+export interface CaptureBand {
+  /** Where the band's top row sits in the stitched raster, in device px. */
+  y: number
+  width: number
+  height: number
+  /** BGRA, row-major, as `captureQuiescent` returns it. */
+  bgra: Uint8Array
+}
+
+/**
+ * Stitches bands captured by scrolling into one raster of the given size.
+ * Rows no band painted are left white (a page's own default), and a band
+ * that overlaps the previous one — the last band, since a scroll clamps at
+ * the bottom — simply paints the same pixels again. Pure, unit-tested; the
+ * scrolling and capturing that produce the bands live in the CLI.
+ */
+export function stitchBands(width: number, height: number, bands: CaptureBand[]): Uint8Array {
+  const out = new Uint8Array(width * height * 4).fill(0xff)
+  for (const b of bands) {
+    const cols = Math.min(width, b.width)
+    for (let row = 0; row < b.height; row++) {
+      const y = b.y + row
+      if (y < 0 || y >= height) continue
+      const src = row * b.width * 4
+      out.set(b.bgra.subarray(src, src + cols * 4), y * width * 4)
+    }
+  }
+  return out
+}

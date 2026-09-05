@@ -84,6 +84,29 @@ test('a laptop and a phone on one page: renders, audit, diff where it applies, a
   expect(r.stderr).toMatch(/report .* → .*report\.html \(2 screen\(s\)/)
 })
 
+test('a page taller than the capture cap is captured in bands, so a finding at the bottom is located too', async () => {
+  const out = join(outDir, 'tall.html')
+  const r = await runCli(['report', fixture('tall-audit.html'), '--preset', 'laptop-768', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const summary = JSON.parse(r.stdout)
+  const [laptop] = summary.screens
+  // Two small buttons, one at the top and one ~8.7k px down: both are
+  // findings, and with the page captured in bands neither is below the
+  // captured height.
+  expect(laptop.audit.summary.targets).toMatchObject({ count: 3, under: 2 })
+  expect(laptop.problems).toMatchObject({ featured: 2, belowCapture: 0 })
+  // The bands, not a clamp: the human line says so and no clamp warning is raised.
+  expect(r.stderr).toMatch(/captured in 3 band\(s\) of 4096 CSS px/)
+  expect(laptop.warnings.join(' ')).not.toMatch(/clamped to/)
+  const html = readFileSync(out, 'utf8')
+  expect((html.match(/class="pin"/g) ?? []).length).toBe(2)
+  expect(html).toContain('button#bottom')
+  // The bottom pin sits near the foot of the overview: its top fraction is
+  // well past the point a single capped capture would have reached.
+  const tops = [...html.matchAll(/class="pin" style="left:[\d.]+%;top:([\d.]+)%"/g)].map(m => Number(m[1]))
+  expect(Math.max(...tops)).toBeGreaterThan(90)
+})
+
 test('the default matrix is four screens and the default file is obsrv-report.html', async () => {
   // Parsed, not rendered: six renders is more than a spec should spend on a filename.
   const r = await runCli(['report'])

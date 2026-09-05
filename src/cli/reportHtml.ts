@@ -130,7 +130,7 @@ ul.plain { margin: 8px 0; padding-left: 20px; }
 footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
 code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .overview { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
-.overview img { max-height: 900px; }
+.overview img { max-height: 1400px; }
 .pin { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--bad); color: #fff; font: 700 12px/22px -apple-system, sans-serif; text-align: center; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--bad); }
 .crops { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 14px; }
 .crop { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }

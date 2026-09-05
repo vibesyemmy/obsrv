@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tall-audit-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font-family: Arial, sans-serif; color: #111; }
+      body { padding: 16px; }
+      /* A page far taller than one 4096-device-px surface at 1x: the bottom
+         button can only be reached by a capture that scrolls. */
+      #spacer { height: 8600px; background: linear-gradient(#fff, #f3f3f3); }
+      #top, #bottom { display: block; width: 24px; height: 24px; padding: 0; font-size: 10px; }
+      #big { display: block; width: 200px; height: 48px; font-size: 16px; margin: 0 0 12px; }
+      p { font-size: 16px; }
+    </style>
+  </head>
+  <body>
+    <button id="big" type="button">A generous button</button>
+    <button id="top" type="button" aria-label="Close">×</button>
+    <p>Sixteen-pixel body text near the top.</p>
+    <div id="spacer"></div>
+    <p>Sixteen-pixel body text near the bottom, past every capture cap.</p>
+    <button id="bottom" type="button" aria-label="Menu">≡</button>
+  </body>
+</html>
