@@ -79,8 +79,7 @@ and the same rules (`cli/lint.ts`, Electron-free), so the numbers match.
 
 ## Not yet
 
-- The report does not include the lint. It composes snap, audit and diff
-  per screen; the lint's findings are the natural fourth column and the
-  next step for it.
+- (Done in 0.32.0: the report carries the lint, grouped, and pins its
+  exemplars on the page.)
 - Picture sources and `sizes`: the lint reads `<img>` and the candidate
   Chromium chose; `<picture>` is judged by whichever `<img>` it resolved to.

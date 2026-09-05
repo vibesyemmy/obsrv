@@ -77,7 +77,7 @@ millimetres, not the pixels. With the app open and Agent control on,
 the screen and text scale in force, in whatever state you drove it into
 (scrolled, a menu open, text at 150%); `mode: 'headless'` forces a fresh
 load of the URL. `obsrv_report` (or `obsrv report`) does snap,
-audit and diff for a whole matrix of screens and writes one self-contained
+audit, lint and diff for a whole matrix of screens and writes one self-contained
 HTML page — attach that to the PR rather than a folder of PNGs; it returns
 the path and a per-screen summary; it stays headless, since a batch over a
 matrix of screens should not commandeer the window. If the Obsrv desktop app is open with "Agent control" on

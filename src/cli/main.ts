@@ -12,6 +12,7 @@ import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import type { LoadError } from '../shared/types'
 import type { AuditReport } from '../shared/audit'
+import type { LintReport } from '../shared/lint'
 import {
   ArgError,
   parseArgs,
@@ -24,14 +25,14 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings } from './lint'
+import { lintFindings, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
-/** The worst findings featured on the report's full-page overview: pins + crops. */
-const REPORT_CROP_LIMIT = 8
+/** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
+const REPORT_CROP_LIMIT = 6
 /** The overview is downsampled to about this device-pixel width to keep the file small. */
 const REPORT_OVERVIEW_WIDTH = 800
 /** Padding around a finding's rect in the crop, in device px. */
@@ -40,6 +41,18 @@ const REPORT_CROP_PAD = 16
 const REPORT_OVERVIEW_MAX_HEIGHT = 3200
 /** A tiled full-page capture stops after this many bands; the report counts what lies past them. */
 const MAX_TILE_BANDS = 8
+
+/** One line under a lint group's crop: the rule, what the group shares, how many. */
+function lintDetail(g: LintGroup): string {
+  const f = g.exemplar
+  const many = g.count > 1 ? ` · ×${g.count}` : ''
+  if (f.rule === 'hairline') return `hairline ${f.kind} ${f.cssPx}px = ${f.devicePx} device px${many}`
+  if (f.rule === 'thin-text') return `thin text ${f.fontWeight} at ${f.fontSizePx}px${many}`
+  if (f.rule === 'contrast') return `contrast ${f.color} on ${f.background} ${f.asIs}:1${many}`
+  if (f.rule === 'contrast-on-panel') return `on panel ${f.asIs}:1 → ${f.onPanel}:1${many}`
+  if (f.rule === 'image-upscaled') return `upscaled ${f.factor}×${many}`
+  return `oversized ${f.factor}×${many}`
+}
 
 /**
  * Headless CLI entry (`bin/obsrv.js` spawns `electron out/main/cli.js -- …`).
@@ -87,6 +100,8 @@ interface RenderResult {
   warnings: string[]
   /** The audit walk, when asked for; null when the page did not answer. */
   auditReport?: AuditReport | null
+  /** The lint walk, when asked for; null when the page did not answer. */
+  lintReport?: LintReport | null
   /**
    * Time from the start of navigation to the page going paint-quiet, with
    * `--wait` taken back out; null when it never settled within the budget.
@@ -111,6 +126,8 @@ interface RenderOptions {
   mobileEmulation?: boolean
   /** Also run the audit walk on the loaded page, so a report costs one load per screen. */
   audit?: boolean
+  /** Also run the lint walk on the loaded page. */
+  lint?: boolean
 }
 
 /**
@@ -275,7 +292,16 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     if (frame === null) frame = await quiescent()
     const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
     const auditReport = options.audit ? await target.auditPage() : undefined
-    return { frame, cssWidth: applied.width, cssHeight, warnings, settledMs, ...(auditReport !== undefined ? { auditReport } : {}) }
+    const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
+    return {
+      frame,
+      cssWidth: applied.width,
+      cssHeight,
+      warnings,
+      settledMs,
+      ...(auditReport !== undefined ? { auditReport } : {}),
+      ...(lintReport !== undefined ? { lintReport } : {}),
+    }
   } finally {
     target.destroy()
   }
@@ -564,7 +590,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
         `(${applied.width}×${applied.height} CSS ${screenShape(applied.width, applied.height)} ×${cmd.spec.deviceScaleFactor}` +
         `${cmd.spec.textScale !== 1 ? `, text ${formatTextScale(cmd.spec.textScale)}` : ''}, ${profile.label}): ` +
         `${total} finding(s): ${s.hairline} hairline, ${s['thin-text']} thin text, ${s.contrast} contrast, ` +
-        `${s['contrast-on-panel']} contrast on panel, ${s['image-upscaled']} upscaled, ${s['image-oversized']} oversized`,
+        `${s['contrast-on-panel']} contrast on panel, ${s['image-upscaled']} upscaled, ${s['image-oversized']} oversized` +
+        ` in ${result.groups.length} group(s)`,
     )
     // Findings are informational — CI thresholds are the caller's job.
     await machine({
@@ -608,7 +635,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
   const referenceMax = maxCssViewport(2)
 
   for (const spec of cmd.specs) {
-    const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true })
+    const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true, lint: true })
     const raw = bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height)
     const profiled = profile.id !== 'reference'
     const img = profiled ? applyPanelProfile(raw, profile) : raw
@@ -622,12 +649,24 @@ async function runReport(cmd: ReportCommand): Promise<void> {
             thresholds,
           )
 
+    const lint =
+      r.lintReport === null || r.lintReport === undefined
+        ? null
+        : lintFindings(
+            r.lintReport,
+            { cssWidth: r.cssWidth, cssHeight: r.cssHeight, deviceScaleFactor: spec.deviceScaleFactor, textScale: spec.textScale },
+            { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) },
+            { thinPx: cmd.thinPx },
+          )
+
     // The full page with the worst findings located on it: one extra render,
-    // taken only when there is something to point at. The findings are already
-    // smallest-first; the first few, within the captured height, are pinned on
-    // a downsampled overview and cropped at the render's own pixels.
+    // taken only when there is something to point at. Candidates come from
+    // both walks — the audit's smallest first, then one exemplar per lint
+    // group in rule order — a few of each within the captured height, pinned
+    // on a downsampled overview and cropped at the render's own pixels.
     let problems: ReportProblems | undefined
-    if (audit && audit.findings.length > 0) {
+    const lintGroups = lint ? lint.groups : []
+    if ((audit && audit.findings.length > 0) || lintGroups.length > 0) {
       const full = await render(cmd.url, spec, { fullPage: true, tiled: true, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
       const fullRaw = bgraToRgba(full.frame.bgra, full.frame.width, full.frame.height)
       const fullImg = profiled ? applyPanelProfile(fullRaw, profile) : fullRaw
@@ -635,29 +674,36 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       // whatever the density and text scale did to it.
       const k = fullImg.width / r.cssWidth
       const capturedCssHeight = fullImg.height / k
-      const within = audit.findings.filter(f => f.rect.y + f.rect.height / 2 <= capturedCssHeight)
-      const featured = within.slice(0, REPORT_CROP_LIMIT)
+      type Candidate = { rect: { x: number; y: number; width: number; height: number }; element: string; detail: string }
+      const within = (c: Candidate): boolean => c.rect.y + c.rect.height / 2 <= capturedCssHeight
+      const fromAudit: Candidate[] = (audit?.findings ?? []).map(f => ({
+        rect: f.rect,
+        element: f.element,
+        detail:
+          f.kind === 'small-target'
+            ? `target ${Math.round(f.cssWidth)}×${Math.round(f.cssHeight)} px · ${f.mm.toFixed(2)} mm`
+            : `text ${Math.round(f.fontSizePx)} px · ${f.mm.toFixed(2)} mm`,
+      }))
+      const fromLint: Candidate[] = lintGroups.map(g => ({ rect: g.exemplar.rect, element: g.exemplar.element, detail: lintDetail(g) }))
+      const featured = [...fromAudit.filter(within).slice(0, REPORT_CROP_LIMIT), ...fromLint.filter(within).slice(0, REPORT_CROP_LIMIT)]
+      const belowCapture = fromAudit.filter(c => !within(c)).length + fromLint.filter(c => !within(c)).length
       if (featured.length > 0) {
         const overviewFactor = Math.max(1, Math.round(fullImg.width / REPORT_OVERVIEW_WIDTH), Math.ceil(fullImg.height / REPORT_OVERVIEW_MAX_HEIGHT))
         const overview = boxDownsample(fullImg, overviewFactor)
-        const features = featured.map((f, i) => {
-          let cr = cropImage(fullImg, f.rect.x * k - REPORT_CROP_PAD, f.rect.y * k - REPORT_CROP_PAD, f.rect.width * k + REPORT_CROP_PAD * 2, f.rect.height * k + REPORT_CROP_PAD * 2)
+        const features = featured.map((c, i) => {
+          let cr = cropImage(fullImg, c.rect.x * k - REPORT_CROP_PAD, c.rect.y * k - REPORT_CROP_PAD, c.rect.width * k + REPORT_CROP_PAD * 2, c.rect.height * k + REPORT_CROP_PAD * 2)
           const cropFactor = Math.max(1, Math.ceil(Math.max(cr.width / 560, cr.height / 420)))
           if (cropFactor > 1) cr = boxDownsample(cr, cropFactor)
-          const detail =
-            f.kind === 'small-target'
-              ? `${Math.round(f.cssWidth)}×${Math.round(f.cssHeight)} px · ${f.mm.toFixed(2)} mm`
-              : `${Math.round(f.fontSizePx)} px · ${f.mm.toFixed(2)} mm`
           return {
             n: i + 1,
-            xFrac: (f.rect.x + f.rect.width / 2) / r.cssWidth,
-            yFrac: (f.rect.y + f.rect.height / 2) / capturedCssHeight,
+            xFrac: (c.rect.x + c.rect.width / 2) / r.cssWidth,
+            yFrac: (c.rect.y + c.rect.height / 2) / capturedCssHeight,
             crop: toImage(encodePng(cr), cr.width, cr.height),
-            element: f.element,
-            detail,
+            element: c.element,
+            detail: c.detail,
           }
         })
-        problems = { overview: toImage(encodePng(overview), overview.width, overview.height), features, belowCapture: audit.findings.length - within.length }
+        problems = { overview: toImage(encodePng(overview), overview.width, overview.height), features, belowCapture }
         warnings.push(...full.warnings.map(w => `full page: ${w}`))
       }
     }
@@ -713,6 +759,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       unsettledReason: r.frame.unsettledReason,
       settledMs: r.settledMs,
       audit,
+      lint,
       diff,
       diffSkipped,
       ...(problems ? { problems } : {}),
@@ -762,6 +809,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       ...(s.settled ? {} : { unsettledReason: s.unsettledReason }),
       ...(throttleId !== null ? { settledMs: s.settledMs } : {}),
       audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,
+      lint: s.lint ? { summary: s.lint.summary, findings: s.lint.findings.length, groups: s.lint.groups.length, skipped: s.lint.skipped } : null,
       diff: s.diff
         ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }
         : null,

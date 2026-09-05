@@ -65,6 +65,9 @@ test('a laptop and a phone on one page: renders, audit, diff where it applies, a
   // is in the JSON, the images in the HTML.
   expect(laptop.problems).toMatchObject({ featured: 1, belowCapture: 0 })
   expect(phone.problems).toMatchObject({ featured: 3, belowCapture: 0 })
+  // The lint ran on the same loaded page; this fixture gives it nothing.
+  expect(laptop.lint).toMatchObject({ findings: 0, groups: 0 })
+  expect(phone.lint).toMatchObject({ findings: 0, groups: 0 })
   expect(summary.htmlBytes).toBe(statSync(out).size)
 
   const html = readFileSync(out, 'utf8')
@@ -105,6 +108,26 @@ test('a page taller than the capture cap is captured in bands, so a finding at t
   // well past the point a single capped capture would have reached.
   const tops = [...html.matchAll(/class="pin" style="left:[\d.]+%;top:([\d.]+)%"/g)].map(m => Number(m[1]))
   expect(Math.max(...tops)).toBeGreaterThan(90)
+})
+
+test('the lint is on the page too: grouped rows, and its exemplars get pins and crops alongside the audit', async () => {
+  const out = join(outDir, 'lint.html')
+  const r = await runCli(['report', fixture('lint.html'), '--preset', '1080p-24', '--profile', 'budget-tn', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const summary = JSON.parse(r.stdout)
+  const [screen] = summary.screens
+  // The same numbers `obsrv lint --preset 1080p-24 --profile budget-tn` reports (cli-lint.spec): seven findings, each its own group.
+  expect(screen.lint.summary).toEqual({ hairline: 2, 'thin-text': 1, contrast: 1, 'contrast-on-panel': 1, 'image-upscaled': 1, 'image-oversized': 1 })
+  expect(screen.lint).toMatchObject({ findings: 7, groups: 7, skipped: { textOnImages: 1 } })
+  // No audit findings on this fixture at 1080p, so the featured pins are lint exemplars: the per-source cap of six.
+  expect(screen.audit.findings).toBe(0)
+  expect(screen.problems).toMatchObject({ featured: 6, belowCapture: 0 })
+  const html = readFileSync(out, 'utf8')
+  expect(html).toContain('Lint — what this screen and its panel break')
+  expect(html).toContain('p#grey')
+  expect(html).toContain('#767676 on #ffffff')
+  expect((html.match(/class="pin"/g) ?? []).length).toBe(6)
+  expect(html).toContain('hairline height 0.5px = 0.5 device px')
 })
 
 test('the default matrix is four screens and the default file is obsrv-report.html', async () => {

@@ -37,6 +37,7 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
     truncated: { findings: 3, targets: 0, text: 0 },
     warnings: [],
   },
+  lint: null,
   diff: {
     metrics: {
       settled: true,
@@ -127,6 +128,44 @@ describe('reportHtml', () => {
     expect(html).toContain('10 px · 1.90 mm')
     // The ones past the captured height are counted, not silently dropped.
     expect(html).toContain('5 more finding(s) sit below the captured area')
+  })
+
+  it('renders the lint as grouped rows with an exemplar, and says when the page did not answer', () => {
+    const finding = {
+      rule: 'contrast' as const,
+      element: 'span.rank',
+      text: '1.',
+      rect: { x: 10, y: 20, width: 30, height: 14 },
+      message: '#828282 on #f6f6ef is 3.54:1 as stated; WCAG AA asks 4.5:1 of text this size',
+      fontSizePx: 13,
+      fontWeight: 400,
+      color: '#828282',
+      background: '#f6f6ef',
+      asIs: 3.54,
+      onPanel: 3.1,
+      threshold: 4.5,
+      largeText: false,
+    }
+    const withLint = screen({
+      lint: {
+        profile: 'budget-tn',
+        thresholds: { thinPx: 14 },
+        summary: { hairline: 0, 'thin-text': 0, contrast: 270, 'contrast-on-panel': 10, 'image-upscaled': 0, 'image-oversized': 0 },
+        findings: [finding],
+        groups: [{ rule: 'contrast', key: '#828282 on #f6f6ef', count: 270, exemplar: finding, elements: ['span.rank', 'span.sitebit', 'span.sitestr'] }],
+        skipped: { textOnImages: 3 },
+        truncated: { findings: 70, text: 0, edges: 0, images: 0 },
+        warnings: ['70 more findings past the 200 listed; the summary counts them all'],
+      },
+    })
+    const html = reportHtml(data([withLint]))
+    expect(html).toContain('Lint — what this screen and its panel break')
+    expect(html).toContain('<span class="bad">270</span>')
+    expect(html).toContain('#828282 on #f6f6ef')
+    expect(html).toContain('and 269 more')
+    expect(html).toContain('3 text element(s) sit on an image')
+    expect(html).toContain('70 more findings past the 200 listed')
+    expect(reportHtml(data([screen({ lint: null })]))).toContain('The page did not answer the lint')
   })
 
   it('no problems block when there is nothing to feature', () => {
