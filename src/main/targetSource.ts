@@ -9,9 +9,10 @@ import { classifyFileNavigation } from '../shared/fileNav'
 import { clipToExtent, paintedExtent, fitsFrame, isFullFrame } from '../shared/paint'
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
+import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
-import { parseAuditReport, parseInspectReport } from '../shared/ipcPayloads'
+import { parseAuditReport, parseInspectReport, parseLintReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
 import { log } from './log'
 
@@ -710,6 +711,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
         { code: `${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})` },
       ])
       return parseAuditReport(raw)
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * The lint's page walk: text with the colours it is drawn in, edges under
+   * a device pixel on this screen (`edgeBelowPx`, that pixel in CSS px), and
+   * raster images with natural and drawn sizes — `cli/lint.ts` judges them.
+   * Same isolated world and the same untrusted parsing as the audit.
+   */
+  async lintPage(edgeBelowPx: number): Promise<LintReport | null> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return null
+    if (!Number.isFinite(edgeBelowPx) || edgeBelowPx <= 0) return null
+    try {
+      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
+        { code: `${LINT_SCRIPT}(${edgeBelowPx}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})` },
+      ])
+      return parseLintReport(raw)
     } catch {
       return null
     }

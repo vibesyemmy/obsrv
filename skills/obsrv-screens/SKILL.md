@@ -53,6 +53,11 @@ $OBSRV snap http://localhost:5173 --preset android-65 --throttle budget-phone --
 
 # One element, measured (font mm, colours, contrast as stated and on the panel, WCAG verdict):
 $OBSRV inspect http://localhost:5173 --preset android-65 --profile budget-tn --selector '#cta'
+
+# The elements this screen and panel break, named: edges under a device pixel, light text
+# too small for its weight, contrast failing as stated or only on the panel, images
+# upscaled or oversized. Findings carry a page rect a highlight can take (docs/lint.md).
+$OBSRV lint http://localhost:5173 --preset 1080p-24 --profile budget-tn
 ```
 
 `$OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
@@ -61,7 +66,7 @@ $OBSRV inspect http://localhost:5173 --preset android-65 --profile budget-tn --s
 `--throttle`, `--wait`, `--timeout`).
 
 If the obsrv MCP tools are connected (`obsrv_snap` / `obsrv_diff` /
-`obsrv_audit` / `obsrv_inspect` / `obsrv_presets`), prefer them over shelling out — same
+`obsrv_audit` / `obsrv_lint` / `obsrv_inspect` / `obsrv_presets`), prefer them over shelling out — same
 pipeline, and the PNG comes back inline. `obsrv_audit` (or `obsrv audit`)
 measures every tap target and text element in **millimetres on the chosen
 screen** and lists what is under 7 mm / 2 mm (provisional, tunable): a 24 CSS
@@ -108,8 +113,13 @@ ask the user. An empty `tabId` is an app older than tabs, which has only one.
 ## The loop that catches real regressions
 
 1. Snap the dev URL across `--matrix laptop-768,android-65,1080p-24`, plus a
-   `--profile budget-tn` snap of the most text-heavy screen.
-2. **Read each PNG and judge it like a user**: Is thin (300-weight) text still
+   `--profile budget-tn` snap of the most text-heavy screen. Run `lint` on
+   the 1080p and the phone with `--profile budget-tn` too: it names the
+   elements the rules can catch — sub-pixel rules and shadows, light text
+   too small for its weight, contrast that fails as stated or only on the
+   panel, images upscaled or oversized — each with a page rect you can
+   pass to `highlight` and one sentence with the figures. Quote those.
+2. **Read each PNG and judge it like a user**, for what no rule sees: Is thin (300-weight) text still
    readable or gone fuzzy-grey? Do 0.5px hairlines/dividers still separate
    anything? Is grey-on-grey copy legible with the contrast floor? Do
    gradients band? Did the mobile preset get the mobile layout?
@@ -117,14 +127,18 @@ ask the user. An empty `tabId` is an app older than tabs, which has only one.
    (negative = the 1x render is losing ink — strokes weakening), `rows.ratio`
    (≈0.5 is normal glyph scaling; hairlines contribute 1 row at any density),
    per-band deltas and humanised `findings`.
-4. Fix the CSS (heavier weight, ≥1px borders, more contrast), re-snap the same
-   presets, compare.
+4. Fix the CSS (heavier weight, ≥1px borders, more contrast), re-snap and
+   re-lint the same presets, compare.
 
 Don't declare frontend work done on visual grounds until step 2 has actually
 happened on the matrix snaps.
 
 ## Caveats
 
+- `lint` cannot see a sub-pixel *border*: Chromium snaps one up to a whole
+  device pixel at style time, so `border-top: 0.5px` is 1px here and a
+  Safari or Firefox question. A hairline drawn as an element's own height,
+  or as a box-shadow, it does see.
 - Rasterisation truth is **macOS Chromium**: it exposes hairline/weight/
   contrast problems faithfully, but Windows ClearType text will differ.
 - Panel profiles are principled approximations (documented transfer curves),

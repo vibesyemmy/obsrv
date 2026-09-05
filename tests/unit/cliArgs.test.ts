@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { DEFAULT_THIN_PX } from '../../src/cli/lint'
+import type { LintCommand } from '../../src/cli/args'
 import { ArgError, DEFAULT_REPORT_MATRIX, DEFAULT_REPORT_OUT, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, parseArgs, type AuditCommand, type DiffCommand, type ReportCommand, type SnapCommand } from '../../src/cli/args'
 
 const snap = (...args: string[]): SnapCommand => parseArgs(['snap', ...args]) as SnapCommand
@@ -320,6 +322,30 @@ describe('parseArgs: --throttle', () => {
   })
   it('an unknown id names the valid ones', () => {
     expect(() => snap('https://x.test', '--throttle', 'edge')).toThrow(/--throttle: expected one of none, fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone/)
+  })
+})
+
+describe('parseArgs: lint', () => {
+  const lint = (...args: string[]): LintCommand => parseArgs(['lint', ...args]) as LintCommand
+
+  it('defaults: 1080p-24, the reference panel, the provisional thin threshold', () => {
+    const cmd = lint('https://x.test')
+    expect(cmd.command).toBe('lint')
+    expect(cmd.spec.presetId).toBe('1080p-24')
+    expect(cmd.profileId).toBe('reference')
+    expect(cmd.thinPx).toBe(DEFAULT_THIN_PX)
+    expect(cmd.waitMs).toBe(0)
+  })
+  it('takes a profile (the contrast-on-panel rule needs one) and the threshold', () => {
+    const cmd = lint('x.test', '--preset', 'android-65', '--profile', 'budget-tn', '--thin-px', '12')
+    expect(cmd.spec.mobile).toBe(true)
+    expect(cmd.profileId).toBe('budget-tn')
+    expect(cmd.thinPx).toBe(12)
+  })
+  it("refuses --matrix and the other commands' flags, naming their owner", () => {
+    expect(() => lint('x.test', '--matrix', 'laptop-768,1080p-24')).toThrow(/snap flag/)
+    expect(() => lint('x.test', '--tap-mm', '9')).toThrow(/audit flag/)
+    expect(() => parseArgs(['audit', 'x.test', '--thin-px', '9'])).toThrow(/lint flag/)
   })
 })
 

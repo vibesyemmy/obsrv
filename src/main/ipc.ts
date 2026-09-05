@@ -1,5 +1,6 @@
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
+import { DEFAULT_THIN_PX, lintFindings } from '../cli/lint'
 import { captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
@@ -1411,6 +1412,32 @@ export function registerIpc(ctx: AppContext): () => void {
         report,
         { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, diagonalInches, textScale },
         { tapMm: req.tapMm ?? DEFAULT_TAP_MM, textMm: req.textMm ?? DEFAULT_TEXT_MM },
+      )
+      return { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale, pageHeight: report.pageHeight, ...result }
+    },
+    lint: async req => {
+      const t = tab().target
+      const textScale = t.getTextScale()
+      const deviceScaleFactor = t.getDeviceScaleFactor()
+      // One device pixel on this screen, in the page's CSS px.
+      const report = await t.lintPage(1 / (deviceScaleFactor * textScale))
+      if (!report) return null
+      const vp = t.getViewport()
+      let profile
+      try {
+        profile = findPanelProfile(uiState.profileId)
+      } catch {
+        profile = findPanelProfile('reference')
+      }
+      const vision =
+        uiState.visionType === 'none'
+          ? undefined
+          : { label: `${uiState.visionType} ${Math.round(uiState.visionSeverity * 100)}%`, matrix: visionMatrix(uiState.visionType, uiState.visionSeverity) }
+      const result = lintFindings(
+        report,
+        { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale },
+        { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
+        { thinPx: req.thinPx ?? DEFAULT_THIN_PX },
       )
       return { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale, pageHeight: report.pageHeight, ...result }
     },

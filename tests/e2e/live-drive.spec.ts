@@ -20,6 +20,7 @@ const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
 const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
+const LINT = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -634,6 +635,37 @@ test('audit measures the page in front on the screen and text scale in force, an
   const bad = await call('audit', { tapMm: -1 })
   expect(bad.status).toBe(400)
   expect(bad.body.error).toMatch(/tapMm/)
+})
+
+test('lint judges the page in front on the screen and panel in force, and takes the threshold', async () => {
+  await call('navigate', { url: LINT })
+  await expect.poll(async () => (await call('status')).body.url).toBe(LINT)
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+  await call('setProfile', { id: 'reference' })
+
+  // The same numbers `obsrv lint --preset 1080p-24` reports on this fixture (cli-lint.spec).
+  const r = await call('lint')
+  expect(r.status).toBe(200)
+  expect(r.body).toMatchObject({ ok: true, cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, textScale: 1, profile: 'reference', thresholds: { thinPx: 14 } })
+  expect(r.body.summary).toEqual({ hairline: 2, 'thin-text': 1, contrast: 1, 'contrast-on-panel': 0, 'image-upscaled': 1, 'image-oversized': 1 })
+
+  // The panel in force is the one judged on.
+  await call('setProfile', { id: 'budget-tn' })
+  await expect.poll(async () => (await call('status')).body.profileId).toBe('budget-tn')
+  const onPanel = await call('lint')
+  expect(onPanel.body.profile).toBe('budget-tn')
+  expect((onPanel.body.summary as { 'contrast-on-panel': number })['contrast-on-panel']).toBe(1)
+  expect((onPanel.body.findings as { rule: string; element: string }[]).find(f => f.rule === 'contrast-on-panel')!.element).toBe('p#grey')
+  await call('setProfile', { id: 'reference' })
+
+  // The threshold is the caller's; a bad one is refused.
+  const lenient = await call('lint', { thinPx: 10 })
+  expect(lenient.body.thresholds).toEqual({ thinPx: 10 })
+  expect((lenient.body.summary as { 'thin-text': number })['thin-text']).toBe(0)
+  const bad = await call('lint', { thinPx: -1 })
+  expect(bad.status).toBe(400)
+  expect(bad.body.error).toMatch(/thinPx/)
 })
 
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {

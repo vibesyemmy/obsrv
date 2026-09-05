@@ -376,6 +376,37 @@ test('obsrv_audit (auto) audits the running app on the screen in force, and name
   expect(nourl.isError).toBe(true)
 })
 
+test('obsrv_lint (auto) lints the running app on the screen and panel in force, and names the tab', async () => {
+  const lintPage = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
+  await call('obsrv_drive', { preset: '1080p-24', profile: 'budget-tn', textScale: 1 })
+  const r = await call('obsrv_lint', { url: lintPage })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as {
+    mode: string
+    url: string
+    preset: string
+    profile: string
+    tabId: string
+    tabIndex: number
+    textScale?: number
+    summary: Record<string, number>
+    findings: { rule: string; element: string }[]
+    notes: string[]
+  }
+  expect(m).toMatchObject({ mode: 'live', preset: '1080p-24', profile: 'budget-tn', tabIndex: 0, notes: [] })
+  expect(m.url).toContain('lint.html')
+  expect(typeof m.tabId).toBe('string')
+  expect(m.textScale).toBeUndefined()
+  expect(m.summary).toEqual({ hairline: 2, 'thin-text': 1, contrast: 1, 'contrast-on-panel': 1, 'image-upscaled': 1, 'image-oversized': 1 })
+  expect(m.findings.find(f => f.rule === 'contrast-on-panel')!.element).toBe('p#grey')
+  // Headless-only options are ignored live, with a note each; the threshold is honoured.
+  const noted = await call('obsrv_lint', { profile: 'reference', thinPx: 10 })
+  expect(noted.structuredContent).toMatchObject({ mode: 'live', profile: 'budget-tn', thresholds: { thinPx: 10 } })
+  expect((noted.structuredContent as { notes: string[] }).notes.join(' ')).toContain('`profile` is headless-only')
+  expect((noted.structuredContent as { summary: Record<string, number> }).summary['thin-text']).toBe(0)
+  await call('obsrv_drive', { profile: 'reference' })
+})
+
 test('obsrv_drive sets a throttle on the live target; status and the footer report it', async () => {
   const r = await call('obsrv_drive', { throttle: 'cpu-6x' })
   expect(r.isError).toBeFalsy()

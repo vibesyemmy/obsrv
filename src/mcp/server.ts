@@ -21,6 +21,7 @@ import {
   PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
+  buildLintArgs,
   buildInspectArgs,
   inspectWhereError,
   type InspectToolInput,
@@ -35,11 +36,13 @@ import {
   stderrTail,
   urlSchemeError,
   type AuditToolInput,
+  type LintToolInput,
   type DiffToolInput,
   type ReportToolInput,
   type SnapMode,
   type SnapToolInput,
 } from './lib'
+import { DEFAULT_THIN_PX, LINT_RULES } from '../cli/lint'
 
 /**
  * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
@@ -106,7 +109,7 @@ function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
-function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect', run: CliRun, killAfterMs: number): CallToolResult {
+function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) {
     return toolError(
       `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated. ` +
@@ -600,6 +603,8 @@ const LIVE_APPLY_TIMEOUT_MS = 5_000
 const LIVE_CAPTURE_TIMEOUT_MS = 30_000
 /** A live audit walks the whole DOM of the page in front: bounded like a capture, not like an apply. */
 const LIVE_AUDIT_TIMEOUT_MS = 20_000
+/** The lint walks the whole DOM too. */
+const LIVE_LINT_TIMEOUT_MS = 20_000
 /** How long a live snap waits for `status.url` to reflect the navigation. */
 const LIVE_SETTLE_MS = 5_000
 /**
@@ -1105,6 +1110,184 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
+    const structured = { mode: 'headless', ...result, notes }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  },
+)
+
+const lintInputShape = {
+  url: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Headless: required. Live: the app is navigated there first when given; omitted, the page it is showing is linted.'),
+  mode: z
+    .enum(['auto', 'headless', 'live'])
+    .optional()
+    .describe(
+      "auto (default): a running Obsrv with agent control on is linted — the page the user is looking at, on the " +
+        "screen, text scale and panel in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
+    ),
+  preset: z.enum(PRESET_IDS).optional().describe('Headless: the target screen. Default: 1080p-24. Use obsrv_presets for ids.'),
+  orientation: orientationField,
+  width: z.number().int().min(1).optional().describe('Headless custom CSS viewport width. Needs height; mutually exclusive with preset.'),
+  height: z.number().int().min(1).optional().describe('Headless custom CSS viewport height. Needs width.'),
+  deviceScaleFactor: z.number().min(1).optional().describe('Headless custom dims: raster density (default 1).'),
+  diagonalInches: z.number().min(0.1).optional().describe('Headless custom dims: panel diagonal (unused by the rules; accepted for symmetry).'),
+  textScale: z.number().min(MIN_TEXT_SCALE).max(MAX_TEXT_SCALE).optional().describe('Headless: browser zoom as reflow; multiplies the density every rule is judged at.'),
+  throttle: throttleField,
+  profile: z.enum(PROFILE_IDS).optional().describe('Headless: the panel the contrast-on-panel rule is judged on. Default reference (which never adds findings).'),
+  thinPx: z
+    .number()
+    .min(0)
+    .optional()
+    .describe(`Text lighter than regular (weight under 400) below this many device pixels of font size is flagged. Default ${DEFAULT_THIN_PX} (provisional).`),
+  waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+}
+
+const lintRectShape = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+const lintOutputShape = {
+  mode: z.enum(['headless', 'live']),
+  url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
+  preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
+  tabId: z.string().optional().describe('Live: the tab that was judged.'),
+  tabIndex: z.number().optional(),
+  cssWidth: z.number(),
+  cssHeight: z.number(),
+  deviceScaleFactor: z.number(),
+  textScale: z.number().optional().describe('Present only when a scale other than 1 was in force.'),
+  throttle: z.string().optional().describe('Only when a throttle was in force.'),
+  profile: z.string().describe('The panel the contrast-on-panel rule was judged on.'),
+  pageHeight: z.number().describe("The page's full height in CSS px; rects are page coordinates, so the lint covers all of it."),
+  thresholds: z.object({ thinPx: z.number() }),
+  summary: z
+    .object({
+      hairline: z.number(),
+      'thin-text': z.number(),
+      contrast: z.number(),
+      'contrast-on-panel': z.number(),
+      'image-upscaled': z.number(),
+      'image-oversized': z.number(),
+    })
+    .describe('Every finding counted, listed or not.'),
+  findings: z
+    .array(
+      z.object({
+        rule: z.enum([...LINT_RULES] as [string, ...string[]]),
+        element: z.string().describe('tag#id.first-class'),
+        text: z.string(),
+        rect: lintRectShape.describe("Page CSS px, scroll included: what obsrv_drive's highlight takes with space: 'page'."),
+        message: z.string().describe('One sentence with the figures in it.'),
+        kind: z.string().optional().describe('hairline: which edge (border-top, box-shadow, height, …).'),
+        cssPx: z.number().optional(),
+        devicePx: z.number().optional().describe('hairline: the edge in device px; thin-text: the font size in device px.'),
+        fontSizePx: z.number().optional(),
+        fontWeight: z.number().optional(),
+        color: z.string().optional(),
+        background: z.string().optional(),
+        asIs: z.number().optional().describe('contrast rules: WCAG 2 contrast of the pair as stated.'),
+        onPanel: z.number().optional().describe('contrast rules: the same pair through the panel profile (and the vision setting, live).'),
+        threshold: z.number().optional(),
+        largeText: z.boolean().optional(),
+        naturalWidth: z.number().optional(),
+        naturalHeight: z.number().optional(),
+        drawnDevicePx: z.object({ width: z.number(), height: z.number() }).optional(),
+        factor: z.number().optional().describe('image rules: how many times the image is scaled up (upscaled) or down (oversized).'),
+        srcset: z.boolean().optional(),
+        candidates: z.array(z.string()).optional(),
+        src: z.string().optional(),
+      }),
+    )
+    .describe('Rule by rule in a fixed order, worst first within a rule; at most 200 listed, the rest counted in truncated.findings.'),
+  skipped: z.object({ textOnImages: z.number() }).describe('Text over an image or gradient: no colour to measure, so no contrast verdict.'),
+  truncated: z.object({ findings: z.number(), text: z.number(), edges: z.number(), images: z.number() }),
+  warnings: z.array(z.string()),
+  notes: z.array(z.string()),
+}
+
+server.registerTool(
+  'obsrv_lint',
+  {
+    title: 'Lint a page for what a 1x screen and a cheap panel break',
+    description:
+      `Rules over the rendered page, judged on a target screen: edges under one device pixel (a 0.5px-high rule, ` +
+      `a half-pixel box-shadow — sub-pixel on a 1x monitor, whole on a phone), text lighter than regular below ` +
+      `\`thinPx\` device px of font size (strokes thinner than a pixel go grey and break), text whose contrast fails ` +
+      `WCAG AA as stated, text that passes as stated but fails once the panel profile is applied (a budget TN ` +
+      `lifts the blacks), raster images upscaled over their natural size (blurred) or far larger than drawn ` +
+      `(downsampled, soft). Every finding carries the element, a page rect an obsrv_drive highlight can take with ` +
+      `space: 'page', the figures, and one sentence. Chromium snaps a sub-pixel *border* to a whole device pixel, so ` +
+      `borders are never findings here; a hairline drawn as an element's own height, or as a shadow, is.\n\n` +
+      `Complements obsrv_audit (millimetres) and obsrv_diff (raster metrics): this is the DOM judged at the ` +
+      `screen's density, so it names elements. What it cannot see — a weight that survives the rules but still ` +
+      `looks grey, a gradient that bands — is what reading the obsrv_snap PNG is for.\n\n` +
+      `auto mode lints a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
+      `text scale and panel in force, in whatever state it has been driven into — and falls back to a headless ` +
+      `load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. Findings are ` +
+      `informational — apply your own thresholds.`,
+    inputSchema: lintInputShape,
+    outputSchema: lintOutputShape,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+  },
+  async (input: Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+    if (input.url !== undefined) {
+      const badScheme = urlSchemeError(input.url)
+      if (badScheme) return toolError(badScheme)
+    }
+    const requestedMode = input.mode ?? 'auto'
+    const notes: string[] = []
+    if (requestedMode !== 'headless') {
+      const live = await discoverControl()
+      const custom =
+        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+      if (live && custom) notes.push('custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.')
+      if (live && !custom) {
+        try {
+          if (input.url !== undefined) {
+            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+          }
+          const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
+          const answer = await controlCall(live.info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
+          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+          if (!status) return toolError('the running app answered `status` with something this server could not parse')
+          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+          }
+          const { ok: _ok, textScale, ...judged } = answer
+          const structured = {
+            mode: 'live',
+            url: status.url,
+            preset: status.presetId,
+            tabId: status.tabId,
+            tabIndex: status.tabIndex,
+            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+            ...judged,
+            notes,
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+        } catch (e) {
+          return toolError(`the running app refused the lint: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
+    }
+    if (input.url === undefined || input.url.trim().length === 0) {
+      return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
+    }
+    let args: string[]
+    try {
+      args = buildLintArgs({ ...input, url: input.url.trim() })
+    } catch (e) {
+      if (e instanceof UsageError) return toolError(e.message)
+      throw e
+    }
+    const killAfterMs = killBudgetMs(1, input.timeoutMs ?? DEFAULT_TIMEOUT_MS, input.waitMs ?? 0)
+    const run = await runCli(args, killAfterMs)
+    if (run.killed || run.code !== 0) return cliFailure('lint', run, killAfterMs)
+    const result = extractTrailingJson(run.stdout)
+    if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
     const structured = { mode: 'headless', ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },

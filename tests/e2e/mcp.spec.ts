@@ -50,7 +50,16 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
-  expect(tools.map(t => t.name).sort()).toEqual(['obsrv_audit', 'obsrv_diff', 'obsrv_drive', 'obsrv_inspect', 'obsrv_presets', 'obsrv_report', 'obsrv_snap'])
+  expect(tools.map(t => t.name).sort()).toEqual([
+    'obsrv_audit',
+    'obsrv_diff',
+    'obsrv_drive',
+    'obsrv_inspect',
+    'obsrv_lint',
+    'obsrv_presets',
+    'obsrv_report',
+    'obsrv_snap',
+  ])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
     // obsrv_drive mutates visible app state and says so; the rest are reads.
@@ -94,6 +103,25 @@ test('obsrv_audit: the fixture measured in millimetres on a 6.5" phone', async (
   expect(result.findings.map(f => f.kind)).toEqual(['small-text', 'small-text', 'small-target'])
   expect(result.findings[2]).toMatchObject({ element: 'button#tiny' })
   expect(result.summary.targets).toMatchObject({ count: 2, under: 1 })
+})
+
+test('obsrv_lint: the fixture judged on a 24" 1080p, headless, with the panel', async () => {
+  const r = await call('obsrv_lint', { url: fixture('lint.html'), preset: '1080p-24', profile: 'budget-tn' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as {
+    mode: string
+    profile: string
+    summary: Record<string, number>
+    findings: { rule: string; element: string; rect: { width: number } }[]
+    notes: string[]
+  }
+  expect(m).toMatchObject({ mode: 'headless', profile: 'budget-tn', notes: [] })
+  expect(m.summary).toEqual({ hairline: 2, 'thin-text': 1, contrast: 1, 'contrast-on-panel': 1, 'image-upscaled': 1, 'image-oversized': 1 })
+  expect(m.findings.map(f => f.rule)).toEqual(['hairline', 'hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized'])
+  expect(m.findings.find(f => f.rule === 'contrast-on-panel')!.element).toBe('p#grey')
+  for (const f of m.findings) expect(f.rect.width).toBeGreaterThan(0)
+  const nourl = await call('obsrv_lint', { mode: 'headless' })
+  expect(nourl.isError).toBe(true)
 })
 
 test('obsrv_presets: the full catalog, straight from presets.ts', async () => {

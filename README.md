@@ -135,6 +135,12 @@ npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
 # those is a thumb's worth. Findings under 7 mm / 2 mm (provisional, tunable):
 npx -y getobsrv audit http://localhost:5173 --preset android-65
 
+# The elements a 1x screen and a cheap panel break, named: edges under a device
+# pixel, light text too small for its weight, contrast that fails as stated or
+# only once the panel lifts the blacks, images upscaled or oversized. Each finding
+# carries a page rect and one sentence with the figures (docs/lint.md).
+npx -y getobsrv lint http://localhost:5173 --preset 1080p-24 --profile budget-tn
+
 # All of the above on one self-contained HTML page — two laptops/desktops and two
 # phones by default: each render, the audit in millimetres, the 1x-vs-2x diff.
 # The thing to attach to a PR.
@@ -166,7 +172,8 @@ The same CLI is also wrapped as an MCP server (stdio, stateless) so MCP
 clients get the tools natively: `obsrv_snap` (render a URL at a preset's true
 raster density — the PNG comes back as an inline image up to 1.5 MiB),
 `obsrv_diff` (the 1x-vs-2x metrics as structured output), `obsrv_audit` and
-`obsrv_inspect` (millimetres and contrast on a chosen screen), `obsrv_report`
+`obsrv_inspect` (millimetres and contrast on a chosen screen), `obsrv_lint`
+(the elements a 1x screen and a cheap panel break, named), `obsrv_report`
 (a whole matrix of screens as one HTML page) and `obsrv_presets` (every
 preset and panel profile, no render).
 
@@ -180,9 +187,9 @@ also scroll, click, pan and highlight while you watch — a drive session works
 as a guided demo. A `scroll` reports the offset it actually reached
 (`scrolled` / `scroller`), finds the inner scroll container on pages whose
 root cannot scroll, and takes a `scrollSelector` when you need to name the
-container yourself. `obsrv_inspect` and `obsrv_audit` follow the app the same
-way: they measure the page in front, on the screen and text scale in force,
-after whatever the drive did to it; `obsrv_report` is the exception and stays
+container yourself. `obsrv_inspect`, `obsrv_audit` and `obsrv_lint` follow the
+app the same way: they measure the page in front, on the screen, text scale
+and panel in force, after whatever the drive did to it; `obsrv_report` is the exception and stays
 headless, being a batch over a matrix of screens. With no app running,
 everything falls back to the headless render automatically.
 
