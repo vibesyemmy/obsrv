@@ -104,6 +104,7 @@ export class TabManager {
     const session = this.byWebContents(e.sender)
     if (!session) return
     session.sync.onScroll(e, raw)
+    session.noteTargetScroll(e, raw)
     session.forwardScroll(e, raw)
   }
 

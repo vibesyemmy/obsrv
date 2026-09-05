@@ -25,6 +25,8 @@ import {
   type AgentApplyPatch,
   type AgentClick,
   type ControlStatus,
+  pageRectToPane,
+  type TargetView,
 } from '../shared/control'
 import { parseScrollPos, parseScrollRequest } from '../shared/ipcPayloads'
 import type { Orientation, ScrollReport, ScrollRequest } from '../shared/types'
@@ -76,6 +78,8 @@ export interface ControlDeps {
   captureTarget(): Promise<{ data: string; width: number; height: number; warnings: string[] }>
   /** The target's current CSS viewport, for `click` bounds validation. */
   viewport(): { width: number; height: number }
+  /** The target's scroll, text scale, density and pane size: what a page-space rect is mapped through. */
+  targetView(): Promise<TargetView>
   /**
    * Absolute page scroll of both panes over the pane-sync `applyScroll`
    * channel; resolves with the offset the target pane actually reached, or
@@ -326,10 +330,28 @@ export class ControlServer {
       }
 
       case 'highlight': {
-        const highlight = parseHighlight(payload)
-        if (typeof highlight === 'string') return reply(400, { error: highlight })
+        const parsed = parseHighlight(payload)
+        if (typeof parsed === 'string') return reply(400, { error: parsed })
+        const { space, ...highlight } = parsed
+        if (space === 'page') {
+          // An audit finding's rect: mapped through what the target shows
+          // now, so the agent never reads the scroll back to do it.
+          const view = await this.deps.targetView()
+          const pane = pageRectToPane(highlight, view)
+          if (!pane) {
+            return reply(200, {
+              ok: true,
+              drawn: false,
+              warnings: [
+                `the page rect is off screen at the current scroll (${view.scrollX}, ${view.scrollY}); scroll it into view first`,
+              ],
+            })
+          }
+          this.deps.apply({ highlight: { ...pane, durationMs: highlight.durationMs } })
+          return reply(200, { ok: true, drawn: true, pane })
+        }
         this.deps.apply({ highlight })
-        return reply(200, { ok: true })
+        return reply(200, { ok: true, drawn: true, pane: { x: highlight.x, y: highlight.y, width: highlight.width, height: highlight.height } })
       }
 
       case 'back':

@@ -541,6 +541,36 @@ test('highlight draws a neutral overlay at rect × scale, replaces, and expires'
   await expect(overlay).toHaveCount(0, { timeout: 3_000 })
 })
 
+test("a page-space highlight is mapped through the scroll, and says so when it is off screen", async () => {
+  // Scroll the tall page, then mark a page rect as an audit finding gives it:
+  // page CSS px, scroll included. The overlay lands where the rect is now.
+  const s = await call('scroll', { x: 0, y: 1200 })
+  expect(s.status).toBe(200)
+  const scrolledY = (s.body.scrolled as { y: number }).y
+  // Whatever screen the earlier tests left in force: the pane rect is the
+  // page rect through the scroll and this density.
+  const dsf: number = await app.evaluate(() => (globalThis as any).__obsrv.target.getDeviceScaleFactor())
+  const r = await call('highlight', { x: 40, y: scrolledY + 300, width: 120, height: 50, durationMs: 8000, space: 'page' })
+  expect(r.status).toBe(200)
+  const pane = { x: Math.round(40 * dsf), y: Math.round(300 * dsf), width: Math.round(120 * dsf), height: Math.round(50 * dsf) }
+  expect(r.body).toMatchObject({ ok: true, drawn: true, pane })
+  const overlay = page.locator('.agent-highlight')
+  await expect(overlay).toHaveCount(1)
+  // Pixel-exact 1:1 here, as in the test above: one target pixel per CSS pixel.
+  const canvas = await page.locator('.target-canvas').boundingBox()
+  const box = await overlay.boundingBox()
+  expect(Math.abs(box!.x - (canvas!.x + pane.x))).toBeLessThanOrEqual(2)
+  expect(Math.abs(box!.y - (canvas!.y + pane.y))).toBeLessThanOrEqual(2)
+
+  // A rect above the fold at this scroll is not on screen: nothing is drawn,
+  // and the reply says where the page is scrolled to instead.
+  const off = await call('highlight', { x: 40, y: 100, width: 120, height: 50, space: 'page' })
+  expect(off.status).toBe(200)
+  expect(off.body).toMatchObject({ ok: true, drawn: false })
+  expect(String((off.body.warnings as string[])[0])).toContain('off screen')
+  await call('scroll', { x: 0, y: 0 })
+})
+
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
   const r = await call('highlight', { x: 10, y: 10, width: 100, height: 60, durationMs: 8000 })
   expect(r.status).toBe(200)

@@ -15,6 +15,14 @@ export interface FrameEmitter {
   invalidate(): void
 }
 
+/**
+ * Why a capture is not settled: `animating` — the frame was covered and the
+ * page kept painting at a steady rate, so the capture was taken early rather
+ * than at the budget; `timeout` — covered, still painting at the budget;
+ * `uncovered` — the budget ran out with pixels never painted.
+ */
+export type UnsettledReason = 'animating' | 'timeout' | 'uncovered'
+
 export interface CapturedFrame {
   /** Device pixels (CSS viewport × deviceScaleFactor). */
   width: number
@@ -26,6 +34,8 @@ export interface CapturedFrame {
    * capture of a page that never stopped painting (animation, video).
    */
   settled: boolean
+  /** Present when `settled` is false. */
+  unsettledReason?: UnsettledReason
 }
 
 export interface CaptureOptions {
@@ -40,11 +50,29 @@ export interface CaptureOptions {
    * timeout and reporting a misleading "no full frame painted".
    */
   failure?: () => Error | null
+  /**
+   * Capture early once the frame is covered and paints keep arriving at a
+   * steady rate (default true): an animating page never goes quiet, and
+   * waiting the whole budget to learn that cost thirty seconds per render
+   * on a page with a moving hero — every render of a report. Off under a
+   * throttle, where `settledMs` is the measurement and a page loading
+   * slowly over 3G paints steadily too.
+   */
+  animationExit?: boolean
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 export const DEFAULT_SETTLE_MS = SETTLE_QUIET_MS
+
+/**
+ * A covered frame that has kept painting for this long, with at least this
+ * many paints, is animating: capture now. Two seconds and eight paints is
+ * four frames a second sustained — a CSS animation or a video, not a page
+ * still loading, whose paints arrive in bursts with quiet gaps between.
+ */
+export const ANIMATING_AFTER_MS = 2_000
+export const ANIMATING_MIN_PAINTS = 8
 
 /**
  * The uncovered region's bounding box, for the rescue warning: "which part of
@@ -127,10 +155,14 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   let lastPaint = Date.now()
   /** Any pixels at all? The difference between a rescue and a hard failure. */
   let frames = 0
+  /** When coverage completed, and the paints since: the animation test's evidence. */
+  let coveredAt = 0
+  let paintsSinceCovered = 0
 
   const onFrame = (m: FrameMessage): void => {
     lastPaint = Date.now()
     frames++
+    if (covered) paintsSinceCovered++
     if (m.frameWidth !== width || m.frameHeight !== height) {
       width = m.frameWidth
       height = m.frameHeight
@@ -142,7 +174,11 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     const { x, y, width: w, height: h, data } = m.frame
     if (x === 0 && y === 0 && w === width && h === height) {
       buffer.set(data)
-      covered = true
+      if (!covered) {
+        covered = true
+        coveredAt = lastPaint
+        paintsSinceCovered = 0
+      }
       mask = null
       return
     }
@@ -162,6 +198,8 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       }
       if (uncovered === 0) {
         covered = true
+        coveredAt = lastPaint
+        paintsSinceCovered = 0
         mask = null
       }
     }
@@ -171,20 +209,38 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   try {
     source.invalidate()
     let settled = true
+    let unsettledReason: UnsettledReason | undefined
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const failed = options.failure?.()
       if (failed) throw failed
       if (covered && Date.now() - lastPaint >= settleMs) break
+      // Covered and painting steadily: it will not go quiet, and the frame
+      // in hand is as good as the one at the budget.
+      if (
+        options.animationExit !== false &&
+        covered &&
+        Date.now() - coveredAt >= ANIMATING_AFTER_MS &&
+        paintsSinceCovered >= ANIMATING_MIN_PAINTS
+      ) {
+        settled = false
+        unsettledReason = 'animating'
+        options.onWarn?.(
+          `page kept painting steadily for ${ANIMATING_AFTER_MS} ms after its first full frame (animation or video); capturing the current frame`,
+        )
+        break
+      }
       if (Date.now() >= deadline) {
         settled = false
         if (covered) {
+          unsettledReason = 'timeout'
           options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
           break
         }
         if (frames === 0 || width === 0 || height === 0) {
           throw new Error(`no frame painted within ${timeoutMs} ms`)
         }
+        unsettledReason = 'uncovered'
         const total = width * height
         const box = mask ? uncoveredBounds(mask, width, height) : null
         // Name what those pixels *are*, not just where: the buffer starts
@@ -202,7 +258,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       }
       await sleep(Math.min(50, settleMs))
     }
-    return { width, height, bgra: buffer.slice(), settled }
+    return { width, height, bgra: buffer.slice(), settled, ...(settled ? {} : { unsettledReason }) }
   } finally {
     source.off('frame', onFrame)
   }

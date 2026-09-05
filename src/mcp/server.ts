@@ -272,6 +272,14 @@ const snapOutputShape = {
         'the current scroll position, pan and in-page state. True when the app was pointed somewhere new — that is ' +
         'a fresh load, which starts at the top of the page.',
     ),
+  unsettledReason: z
+    .enum(['animating', 'timeout', 'uncovered'])
+    .optional()
+    .describe(
+      "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
+        "early (~2 s) rather than at the budget and waiting longer would not have helped; 'timeout' — still painting at the budget; " +
+        "'uncovered' — part of the frame never painted within the budget.",
+    ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
   url: z.string().optional().describe('Live only: the URL the app reports showing.'),
@@ -496,6 +504,14 @@ const driveInputShape = {
       width: z.number().min(1),
       height: z.number().min(1),
       durationMs: z.number().optional(),
+      space: z
+        .enum(['pane', 'page'])
+        .optional()
+        .describe(
+          "The rect's space. 'pane' (default): target-pane device pixels of what is showing. 'page': the page's own CSS px with " +
+            "scroll included — an obsrv_audit finding's rect or obsrv_inspect's pageRect, passed as they came; the app maps it " +
+            'through the current scroll, text scale and density. The result says whether it was on screen (drawn) and the pane rect used.',
+        ),
     })
     .optional()
     .describe(
@@ -1145,6 +1161,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
+      unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       audit: z
         .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
@@ -1216,7 +1233,7 @@ server.registerTool(
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → orientation → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
@@ -1263,7 +1280,7 @@ server.registerTool(
     scroll?: { x: number; y: number; scrollSelector?: string }
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
-    highlight?: { x: number; y: number; width: number; height: number; durationMs?: number }
+    highlight?: { x: number; y: number; width: number; height: number; durationMs?: number; space?: 'pane' | 'page' }
     capture?: 'window' | 'pane'
   }): Promise<CallToolResult> => {
     if (input.url !== undefined) {

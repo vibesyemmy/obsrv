@@ -390,17 +390,61 @@ export const HIGHLIGHT_DURATION_MAX_MS = 10_000
  * is presentation, not correctness — but a non-numeric one is refused, never
  * guessed. Returns the validated highlight, or the error message.
  */
-export function parseHighlight(raw: unknown): AgentHighlight | string {
+/** Which space a highlight rect is given in: the pane's device pixels (default), or the page's own CSS px. */
+export type HighlightSpace = 'pane' | 'page'
+
+/**
+ * A `highlight` payload as it arrives: the rect in `space`. `page` is the
+ * space an audit finding's `rect` and the inspector's `pageRect` are in —
+ * page CSS px, scroll included — and the control server maps it onto the
+ * pane through the target's scroll, text scale and density, so an agent can
+ * mark a finding without reading the scroll back and doing the arithmetic.
+ */
+export function parseHighlight(raw: unknown): (AgentHighlight & { space: HighlightSpace }) | string {
   const rect = parseRect(raw)
-  if (!rect) return 'highlight payload must be { x, y, width, height, durationMs? } with finite, non-negative target-pixel bounds'
-  if (rect.width < 1 || rect.height < 1) return 'highlight rect must be at least 1x1 target pixels'
-  const d = (raw as Record<string, unknown>).durationMs
-  if (d === undefined) return { ...rect, durationMs: HIGHLIGHT_DURATION_DEFAULT_MS }
+  if (!rect) return 'highlight payload must be { x, y, width, height, durationMs?, space? } with finite, non-negative bounds'
+  if (rect.width < 1 || rect.height < 1) return 'highlight rect must be at least 1x1 pixels'
+  const r = raw as Record<string, unknown>
+  const space = r.space ?? 'pane'
+  if (space !== 'pane' && space !== 'page') return "highlight space must be 'pane' (target-pane device px, the default) or 'page' (page CSS px)"
+  const d = r.durationMs
+  if (d === undefined) return { ...rect, durationMs: HIGHLIGHT_DURATION_DEFAULT_MS, space }
   if (typeof d !== 'number' || !Number.isFinite(d)) return 'highlight durationMs must be a finite number of milliseconds'
   return {
     ...rect,
     durationMs: Math.min(Math.max(Math.round(d), HIGHLIGHT_DURATION_MIN_MS), HIGHLIGHT_DURATION_MAX_MS),
+    space,
   }
+}
+
+/** What a page-space rect is mapped through: the target's scroll (page CSS px), text scale and density. */
+export interface TargetView {
+  scrollX: number
+  scrollY: number
+  textScale: number
+  dsf: number
+  /** The viewport, in the pane's device pixels. */
+  paneWidth: number
+  paneHeight: number
+}
+
+/**
+ * A page rect (CSS px, scroll included) onto the pane's device pixels, cut
+ * to the viewport; null when none of it is on screen at the current scroll.
+ * A page CSS px is `textScale` surface CSS px (the page lays out in
+ * `1/textScale` of the surface), and a surface CSS px is `dsf` device px.
+ */
+export function pageRectToPane(
+  rect: { x: number; y: number; width: number; height: number },
+  view: TargetView,
+): { x: number; y: number; width: number; height: number } | null {
+  const k = view.textScale * view.dsf
+  const x0 = Math.max(0, Math.round((rect.x - view.scrollX) * k))
+  const y0 = Math.max(0, Math.round((rect.y - view.scrollY) * k))
+  const x1 = Math.min(view.paneWidth, Math.round((rect.x + rect.width - view.scrollX) * k))
+  const y1 = Math.min(view.paneHeight, Math.round((rect.y + rect.height - view.scrollY) * k))
+  if (x1 - x0 < 1 || y1 - y0 < 1) return null
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
 }
 
 /**

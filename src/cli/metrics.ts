@@ -64,7 +64,7 @@ export interface Band {
  * frames cannot support one.
  */
 export const UNSETTLED_FINDING =
-  'renders did not go paint-quiet within the budget (animation or video), so the two captures are ' +
+  'renders did not go paint-quiet (animation or video, or a load that never finished), so the two captures are ' +
   'different frames — the band deltas below are frame-to-frame noise, not evidence about rasterisation. ' +
   'Compare a static page, or pass a longer --timeout if the page merely settles late.'
 

@@ -193,7 +193,14 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       }
     }
 
-    const frame = await captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed })
+    // Under a throttle the quiet moment is the measurement (`settledMs`), and
+    // a page loading over 3G paints steadily too: no early exit there.
+    const frame = await captureQuiescent(target, {
+      timeoutMs: options.timeoutMs,
+      onWarn: warn,
+      failure: failed,
+      animationExit: spec.throttle === null,
+    })
     const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
     const auditReport = options.audit ? await target.auditPage() : undefined
     return { frame, cssWidth: applied.width, cssHeight, warnings, settledMs, ...(auditReport !== undefined ? { auditReport } : {}) }
@@ -247,8 +254,10 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       ...(spec.throttle !== null ? { throttle: spec.throttle, settledMs: r.settledMs } : {}),
       profile: profile.id,
       // False means a best-effort capture of a page that never went
-      // paint-quiet (animation); machine consumers can gate on it.
+      // paint-quiet (animation); machine consumers can gate on it, and the
+      // reason says whether waiting longer could have helped.
       settled: r.frame.settled,
+      ...(r.frame.settled ? {} : { unsettledReason: r.frame.unsettledReason }),
       warnings: r.warnings,
     })
   }
@@ -536,6 +545,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       orientation: screenShape(r.cssWidth, r.cssHeight),
       png: toImage(encodePng(img), img.width, img.height),
       settled: r.frame.settled,
+      unsettledReason: r.frame.unsettledReason,
       settledMs: r.settledMs,
       audit,
       diff,
@@ -583,6 +593,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       ...(s.textScale !== 1 ? { textScale: s.textScale } : {}),
       ppi: s.ppi,
       settled: s.settled,
+      ...(s.settled ? {} : { unsettledReason: s.unsettledReason }),
       ...(throttleId !== null ? { settledMs: s.settledMs } : {}),
       audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,
       diff: s.diff

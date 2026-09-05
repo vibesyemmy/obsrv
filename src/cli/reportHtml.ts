@@ -1,4 +1,5 @@
 import type { AuditResult, AuditThresholds } from './audit'
+import type { UnsettledReason } from './capture'
 import { formatTextScale } from '../shared/textScale'
 import type { DiffMetrics } from './metrics'
 
@@ -34,6 +35,8 @@ export interface ReportScreen {
   /** The render, at the screen's device pixels, panel profile applied. */
   png: ReportImage
   settled: boolean
+  /** Present when `settled` is false: why (see cli/capture.ts). */
+  unsettledReason?: UnsettledReason
   /** Time to paint-quiet from navigation, ms; null when it never settled. Shown when a throttle was named. */
   settledMs?: number | null
   /** Null when the page did not answer the audit. */

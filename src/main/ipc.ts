@@ -562,7 +562,11 @@ export function registerIpc(ctx: AppContext): () => void {
       })
     })
     wc.send(IPC.applyScroll, { ...base, id })
-    return answered
+    // The reply names the scroller it moved and where it landed: the
+    // authority on the target's scroll for a page-space highlight.
+    const landed = await answered
+    if (landed) s.targetScroll = { x: landed.x, y: landed.y }
+    return landed
   }
 
   // --- host display ---------------------------------------------------------
@@ -1267,6 +1271,24 @@ export function registerIpc(ctx: AppContext): () => void {
       }
     },
     viewport: () => tab().target.getViewport(),
+    targetView: async () => {
+      const s = tab()
+      const t = s.target
+      const vp = t.getViewport()
+      const dsf = t.getDeviceScaleFactor()
+      // The session's record of the target's scroll, not `window.scrollY`
+      // asked of the page: an app shell scrolls an inner element and the
+      // window stays at 0 — the scroll command's reply knows which, and the
+      // session keeps what it said.
+      return {
+        scrollX: s.targetScroll.x,
+        scrollY: s.targetScroll.y,
+        textScale: t.getTextScale(),
+        dsf,
+        paneWidth: Math.round(vp.width * dsf),
+        paneHeight: Math.round(vp.height * dsf),
+      }
+    },
     inspect: async req => {
       const t = tab().target
       const report = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
