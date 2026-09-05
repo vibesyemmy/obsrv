@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { FrameMessage } from '../../src/shared/api'
-import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, bgraToRgba, captureQuiescent } from '../../src/cli/capture'
+import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, bgraToRgba, captureQuiescent, stitchBands } from '../../src/cli/capture'
 
 /** Emits scripted frames when poked; `invalidate()` replays the script once. */
 class FakeSource extends EventEmitter {
@@ -148,5 +148,26 @@ describe('bgraToRgba', () => {
     expect(Array.from(rgba.data)).toEqual([30, 20, 10, 255])
     expect(rgba.width).toBe(1)
     expect(rgba.height).toBe(1)
+  })
+})
+
+describe('stitchBands', () => {
+  // 2 px wide; each band is 2 rows; the pixel value is the band's number.
+  const band = (y: number, n: number, height = 2) => ({ y, width: 2, height, bgra: new Uint8Array(2 * height * 4).fill(n) })
+  const rowValue = (out: Uint8Array, row: number): number => out[row * 2 * 4]!
+
+  it('places each band at its row, and leaves unpainted rows white', () => {
+    const out = stitchBands(2, 6, [band(0, 1), band(4, 3)])
+    expect([0, 1, 2, 3, 4, 5].map(r => rowValue(out, r))).toEqual([1, 1, 255, 255, 3, 3])
+  })
+  it('an overlapping last band (the scroll clamped) paints the same rows again, and rows past the raster are dropped', () => {
+    const out = stitchBands(2, 5, [band(0, 1), band(2, 2), band(3, 3)])
+    expect([0, 1, 2, 3, 4].map(r => rowValue(out, r))).toEqual([1, 1, 2, 3, 3])
+  })
+  it('a band wider than the raster is cropped to it', () => {
+    const wide = { y: 0, width: 4, height: 1, bgra: new Uint8Array(4 * 4).fill(9) }
+    const out = stitchBands(2, 1, [wide])
+    expect(out.length).toBe(8)
+    expect(Array.from(out)).toEqual([9, 9, 9, 9, 9, 9, 9, 9])
   })
 })

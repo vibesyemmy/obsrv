@@ -18,6 +18,33 @@ export interface ReportImage {
   height: number
 }
 
+/** One located problem: a pin on the full-page overview and a crop of it. */
+export interface ReportProblemFeature {
+  /** 1-based, matching the pin, the crop and the caption. */
+  n: number
+  /** Pin centre on the overview, as a fraction of the captured page (0..1). */
+  xFrac: number
+  yFrac: number
+  /** A crop of the region, at the render's own pixels. */
+  crop: ReportImage
+  /** `tag#id.class`, the page's own selector for the element. */
+  element: string
+  /** The measured detail, e.g. "24×24 px · 6.07 mm" — already composed, escaped on render. */
+  detail: string
+}
+
+/**
+ * The full-page render with the worst findings located on it: an overview
+ * image, pins in page-fraction coordinates, and a crop of each. Present only
+ * when the screen has findings to show. `belowCapture` counts findings past
+ * the captured height (a page taller than the device-pixel capture cap).
+ */
+export interface ReportProblems {
+  overview: ReportImage
+  features: ReportProblemFeature[]
+  belowCapture: number
+}
+
 export interface ReportScreen {
   presetId: string
   label: string
@@ -51,6 +78,8 @@ export interface ReportScreen {
   diff: { metrics: DiffMetrics; target: ReportImage | null; reference: ReportImage } | null
   /** Why there is no diff, when there is none. */
   diffSkipped: string | null
+  /** The full page with the worst findings located and cropped; absent when there is nothing to show. */
+  problems?: ReportProblems
   warnings: string[]
 }
 
@@ -100,6 +129,14 @@ td.n { text-align: right; white-space: nowrap; }
 ul.plain { margin: 8px 0; padding-left: 20px; }
 footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
 code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.overview { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.overview img { max-height: 1400px; }
+.pin { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--bad); color: #fff; font: 700 12px/22px -apple-system, sans-serif; text-align: center; border: 2px solid var(--paper); box-shadow: 0 0 0 1px var(--bad); }
+.crops { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 14px; }
+.crop { border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.crop img { display: block; max-width: 100%; max-height: 260px; width: auto; border: 0; }
+.crop figcaption { margin: 0; padding: 6px 8px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+.crop figcaption b { color: var(--bad); }
 `
 
 function auditSection(s: ReportScreen, thresholds: AuditThresholds): string {
@@ -130,6 +167,30 @@ function auditSection(s: ReportScreen, thresholds: AuditThresholds): string {
     none +
     more +
     (a.warnings.length > 0 ? `<ul class="plain muted">${a.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '')
+  )
+}
+
+function problemsSection(s: ReportScreen): string {
+  const p = s.problems
+  if (!p || p.features.length === 0) return ''
+  const pins = p.features.map(f => `<span class="pin" style="left:${pct(f.xFrac)};top:${pct(f.yFrac)}">${f.n}</span>`).join('')
+  const crops = p.features
+    .map(
+      f =>
+        `<figure class="crop"><img src="data:image/png;base64,${f.crop.base64}" alt="Finding ${f.n}: ${escapeHtml(f.element)}">` +
+        `<figcaption><b>${f.n}</b> <code>${escapeHtml(f.element)}</code> · ${escapeHtml(f.detail)}</figcaption></figure>`,
+    )
+    .join('')
+  const below =
+    p.belowCapture > 0
+      ? `<p class="muted">${p.belowCapture} more finding(s) sit below the captured area — the page is taller than the capture can reach on this screen.</p>`
+      : ''
+  const many = p.features.length === 1 ? 'the smallest finding, located on the page' : `the ${p.features.length} smallest findings, located on the page`
+  return (
+    `<h3>Where the problems are — ${many}</h3>` +
+    `<div class="overview"><img src="data:image/png;base64,${p.overview.base64}" alt="The full page, with the worst findings marked">${pins}</div>` +
+    `<div class="crops">${crops}</div>` +
+    below
   )
 }
 
@@ -172,6 +233,7 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     (s.diff && s.diff.target === null
       ? ''
       : `<figure><img src="data:image/png;base64,${s.png.base64}" alt="${escapeHtml(s.label)}"><figcaption>Shown scaled to fit; ${s.png.width}×${s.png.height} device px on a screen ${physical}${s.diff ? ', through the panel profile' : ''}.</figcaption></figure>`) +
+    problemsSection(s) +
     diffSection(s) +
     auditSection(s, thresholds) +
     (s.warnings.length > 0 ? `<h3>Warnings</h3><ul class="plain muted">${s.warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : '') +

@@ -26,6 +26,24 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   screens, this screen next to the 2x reference, both on the same 1x grid,
   with ink coverage, ink-row ratio and the band findings); the audit
   summary and its findings, smallest first; any warnings from the renders.
+- **Where the problems are**, when a screen has findings: the full page,
+  captured, with a numbered pin on each of the worst findings (the smallest
+  first, up to eight) and a crop of each at the render's own pixels, so the
+  reader sees not just that a control is 5 mm but where it sits and what it
+  looks like. A page taller than one capture surface (4096 device px, so
+  4096 CSS px at 1x, 2048 at 2x, 1365 at 3x) is captured in bands: the
+  viewport is held at the cap, the page scrolled a band at a time with an
+  instant scroll, each band captured quiescent and stitched into one raster,
+  up to eight bands. Two things follow from that. A sticky header repeats at
+  the top of every band, as it does when a person scrolls. And an animating
+  page pays its early exit once per band, so a long animated page costs a
+  few seconds more. Past eight bands the report says how many findings lie
+  beyond what was captured. The overview is downsampled to about 800 device
+  px wide and at most 3200 tall, so a long page becomes a map and the crops
+  carry the detail. The machine output and `obsrv_report` carry
+  `problems: { featured, belowCapture }` per screen; the images are in the
+  HTML, not the JSON. `snap --full-page` keeps its single-surface cap; the
+  bands are the report's.
 - The panel profile applies to the render shown. The 1x-vs-2x comparison is
   measured **without** it: it is about rasterisation, and a profile's
   brightness and black floor would darken every pixel past the ink

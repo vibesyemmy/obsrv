@@ -61,19 +61,50 @@ test('a laptop and a phone on one page: renders, audit, diff where it applies, a
   expect(phone.diffSkipped).toMatch(/dense screen/)
   expect(phone.audit.findings).toBe(3)
   expect(phone.deviceScaleFactor).toBe(2)
+  // Each screen with findings locates them on a full-page overview: the count
+  // is in the JSON, the images in the HTML.
+  expect(laptop.problems).toMatchObject({ featured: 1, belowCapture: 0 })
+  expect(phone.problems).toMatchObject({ featured: 3, belowCapture: 0 })
   expect(summary.htmlBytes).toBe(statSync(out).size)
 
   const html = readFileSync(out, 'utf8')
   expect(html.startsWith('<!doctype html>')).toBe(true)
   expect(html).toContain('1366×768 15.6&quot;')
   expect(html).toContain('Budget Android 6.5&quot; @2x')
-  // Two renders plus the laptop's 2x reference.
-  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+  // Two renders plus the laptop's 2x reference, plus the full-page overviews
+  // and the crops of the located findings.
+  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBeGreaterThanOrEqual(3)
+  // The new "where" section: an overview with numbered pins and cropped findings.
+  expect(html).toContain('Where the problems are')
+  expect((html.match(/class="pin"/g) ?? []).length).toBe(4) // 1 on the laptop, 3 on the phone
   expect(html).toContain('button#tiny')
   expect(html).toContain('No comparison: a dense screen')
   expect(html).not.toMatch(/<script/i)
   expect(html).not.toMatch(/src="https?:/i)
   expect(r.stderr).toMatch(/report .* → .*report\.html \(2 screen\(s\)/)
+})
+
+test('a page taller than the capture cap is captured in bands, so a finding at the bottom is located too', async () => {
+  const out = join(outDir, 'tall.html')
+  const r = await runCli(['report', fixture('tall-audit.html'), '--preset', 'laptop-768', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const summary = JSON.parse(r.stdout)
+  const [laptop] = summary.screens
+  // Two small buttons, one at the top and one ~8.7k px down: both are
+  // findings, and with the page captured in bands neither is below the
+  // captured height.
+  expect(laptop.audit.summary.targets).toMatchObject({ count: 3, under: 2 })
+  expect(laptop.problems).toMatchObject({ featured: 2, belowCapture: 0 })
+  // The bands, not a clamp: the human line says so and no clamp warning is raised.
+  expect(r.stderr).toMatch(/captured in 3 band\(s\) of 4096 CSS px/)
+  expect(laptop.warnings.join(' ')).not.toMatch(/clamped to/)
+  const html = readFileSync(out, 'utf8')
+  expect((html.match(/class="pin"/g) ?? []).length).toBe(2)
+  expect(html).toContain('button#bottom')
+  // The bottom pin sits near the foot of the overview: its top fraction is
+  // well past the point a single capped capture would have reached.
+  const tops = [...html.matchAll(/class="pin" style="left:[\d.]+%;top:([\d.]+)%"/g)].map(m => Number(m[1]))
+  expect(Math.max(...tops)).toBeGreaterThan(90)
 })
 
 test('the default matrix is four screens and the default file is obsrv-report.html', async () => {
@@ -98,7 +129,7 @@ test('--profile applies to the render shown; the diff is measured without it', a
   expect(summary.screens[0].diff.inkCoverage.target).toBeLessThan(0.2)
   const html = readFileSync(out, 'utf8')
   expect(html).toContain('Panel profile <b>Budget TN</b>')
-  // The profiled render, plus the unprofiled pair: three images.
-  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+  // The profiled render, plus the unprofiled pair, plus the overview and crops.
+  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBeGreaterThanOrEqual(3)
   expect(html).toContain('without the panel profile')
 })
