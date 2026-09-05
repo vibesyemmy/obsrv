@@ -204,6 +204,8 @@ export const CONTROL_COMMANDS = [
   'focusWindow',
   // v0.24 — the inspector for agents: a point or a selector, a readout back.
   'inspect',
+  // v0.29 — the physical-units audit on the page in front, as `obsrv audit` measures a headless load.
+  'audit',
   // v0.25 — throttling on the live target.
   'setThrottle',
 ] as const

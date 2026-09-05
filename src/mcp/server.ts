@@ -598,6 +598,8 @@ const LIVE_STATUS_TIMEOUT_MS = 2_000
 const LIVE_APPLY_TIMEOUT_MS = 5_000
 /** Budget for `captureVisible` (a full-window PNG over loopback). */
 const LIVE_CAPTURE_TIMEOUT_MS = 30_000
+/** A live audit walks the whole DOM of the page in front: bounded like a capture, not like an apply. */
+const LIVE_AUDIT_TIMEOUT_MS = 20_000
 /** How long a live snap waits for `status.url` to reflect the navigation. */
 const LIVE_SETTLE_MS = 5_000
 /**
@@ -922,7 +924,18 @@ server.registerTool(
 )
 
 const auditInputShape = {
-  url: urlField,
+  url: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Headless: required. Live: the app is navigated there first when given; omitted, the page it is showing is audited.'),
+  mode: z
+    .enum(['auto', 'headless', 'live'])
+    .optional()
+    .describe(
+      "auto (default): a running Obsrv with agent control on is audited — the page the user is looking at, on the " +
+        "screen and text scale in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
+    ),
   preset: z
     .enum(PRESET_IDS)
     .optional()
@@ -969,8 +982,11 @@ const auditGroupShape = z.object({
 })
 
 const auditOutputShape = {
-  url: z.string(),
-  preset: z.string(),
+  mode: z.enum(['headless', 'live']),
+  url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
+  preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
+  tabId: z.string().optional().describe('Live: the tab that was measured.'),
+  tabIndex: z.number().optional(),
   cssWidth: z.number(),
   cssHeight: z.number(),
   deviceScaleFactor: z.number(),
@@ -996,6 +1012,7 @@ const auditOutputShape = {
     .describe('Smallest first; at most 200 listed, the rest counted in truncated.findings.'),
   truncated: z.object({ findings: z.number(), targets: z.number(), text: z.number() }),
   warnings: z.array(z.string()),
+  notes: z.array(z.string()),
 }
 
 server.registerTool(
@@ -1014,15 +1031,67 @@ server.registerTool(
       `applies, hidden and zero-size elements are skipped, and text over images is measured like any other. ` +
       `Findings are informational — apply your own thresholds.\n\n` +
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
-      `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all. Headless-only: never drives ` +
-      `the visible app.`,
+      `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all.\n\n` +
+      `auto mode audits a running Obsrv with agent control on — the page the user is looking at, on the screen and ` +
+      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — and falls ` +
+      `back to a headless load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. A live ` +
+      `audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
     inputSchema: auditInputShape,
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: AuditToolInput): Promise<CallToolResult> => {
-    const badScheme = urlSchemeError(input.url)
-    if (badScheme) return toolError(badScheme)
+  async (input: Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+    if (input.url !== undefined) {
+      const badScheme = urlSchemeError(input.url)
+      if (badScheme) return toolError(badScheme)
+    }
+    const requestedMode = input.mode ?? 'auto'
+    const notes: string[] = []
+    if (requestedMode !== 'headless') {
+      const live = await discoverControl()
+      const custom =
+        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+      if (live && custom) notes.push('custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.')
+      if (live && !custom) {
+        try {
+          if (input.url !== undefined) {
+            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+          }
+          const payload = {
+            ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
+            ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
+          }
+          const answer = await controlCall(live.info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
+          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+          if (!status) return toolError('the running app answered `status` with something this server could not parse')
+          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+          }
+          // The app answers with the CLI's own result plus the screen it
+          // measured on. `textScale` and `throttle` keep the headless contract:
+          // present only when something other than the default was in force.
+          const { ok: _ok, textScale, ...measured } = answer
+          const structured = {
+            mode: 'live',
+            url: status.url,
+            preset: status.presetId,
+            tabId: status.tabId,
+            tabIndex: status.tabIndex,
+            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+            ...measured,
+            notes,
+          }
+          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+        } catch (e) {
+          return toolError(`the running app refused the audit: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
+    }
+    if (input.url === undefined || input.url.trim().length === 0) {
+      return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
+    }
     let args: string[]
     try {
       args = buildAuditArgs({ ...input, url: input.url.trim() })
@@ -1036,7 +1105,8 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }
+    const structured = { mode: 'headless', ...result, notes }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
 
@@ -1460,7 +1530,7 @@ server.registerTool(
             cssWidth: status.cssWidth,
             cssHeight: status.cssHeight,
             textScale: status.textScale,
-    throttle: status.throttle,
+            throttle: status.throttle,
             found: answer.found === true,
             readout: answer.readout ?? null,
             notes,

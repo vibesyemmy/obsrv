@@ -19,6 +19,7 @@ const HYDRATE = pathToFileURL(resolve(__dirname, '../fixtures/hydrate.html')).hr
 const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).href
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
+const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -595,6 +596,44 @@ test("captureRaster returns the target's own frame at device pixels, the view un
   // The view the user sees did not change.
   expect((await call('status')).body.viewMode).toBe(view)
   await call('setPreset', { id: '1080p-24' })
+})
+
+test('audit measures the page in front on the screen and text scale in force, and takes the thresholds', async () => {
+  await call('navigate', { url: AUDIT })
+  await expect.poll(async () => (await call('status')).body.url).toBe(AUDIT)
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+
+  // The same numbers `obsrv audit --preset 1080p-24` reports on this fixture (cli-audit.spec).
+  const r = await call('audit')
+  expect(r.status).toBe(200)
+  expect(r.body).toMatchObject({ ok: true, cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, textScale: 1, thresholds: { tapMm: 7, textMm: 2 } })
+  expect(r.body.ppi as number).toBeCloseTo(91.8, 1)
+  expect(r.body.summary).toMatchObject({ targets: { count: 2, under: 1, smallestPx: 24 }, text: { count: 6, under: 0 } })
+  const findings = r.body.findings as Array<{ kind: string; element: string; mm: number }>
+  expect(findings).toHaveLength(1)
+  expect(findings[0]).toMatchObject({ kind: 'small-target', element: 'button#tiny' })
+  expect(findings[0]!.mm).toBeCloseTo(6.64, 1)
+
+  // The thresholds are the caller's: 7 mm fails the 24px button, 6 mm clears it.
+  const lenient = await call('audit', { tapMm: 6 })
+  expect(lenient.body.thresholds).toEqual({ tapMm: 6, textMm: 2 })
+  expect((lenient.body.summary as { targets: { under: number } }).targets.under).toBe(0)
+
+  // Text scale is part of the measurement: at ×1.5 the same 24px button is 1.5× the millimetres.
+  await call('setTextScale', { textScale: 1.5 })
+  await expect
+    .poll(async () => ((await call('audit')).body.summary as { targets: { smallestMm: number } }).targets.smallestMm, { timeout: 5_000 })
+    .toBeGreaterThan(9)
+  const scaled = await call('audit')
+  expect(scaled.body.textScale).toBe(1.5)
+  expect((scaled.body.summary as { targets: { smallestMm: number } }).targets.smallestMm).toBeCloseTo(6.64 * 1.5, 1)
+  await call('setTextScale', { textScale: 1 })
+  await expect.poll(async () => (await call('status')).body.textScale).toBe(1)
+
+  const bad = await call('audit', { tapMm: -1 })
+  expect(bad.status).toBe(400)
+  expect(bad.body.error).toMatch(/tapMm/)
 })
 
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {

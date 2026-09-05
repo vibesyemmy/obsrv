@@ -165,8 +165,10 @@ fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/S
 The same CLI is also wrapped as an MCP server (stdio, stateless) so MCP
 clients get the tools natively: `obsrv_snap` (render a URL at a preset's true
 raster density — the PNG comes back as an inline image up to 1.5 MiB),
-`obsrv_diff` (the 1x-vs-2x metrics as structured output) and `obsrv_presets`
-(every preset and panel profile, no render).
+`obsrv_diff` (the 1x-vs-2x metrics as structured output), `obsrv_audit` and
+`obsrv_inspect` (millimetres and contrast on a chosen screen), `obsrv_report`
+(a whole matrix of screens as one HTML page) and `obsrv_presets` (every
+preset and panel profile, no render).
 
 If the desktop app is open with the toolbar's **Agent control** toggle on,
 `obsrv_snap` drives the *visible* window instead: you watch the URL load and
@@ -178,8 +180,11 @@ also scroll, click, pan and highlight while you watch — a drive session works
 as a guided demo. A `scroll` reports the offset it actually reached
 (`scrolled` / `scroller`), finds the inner scroll container on pages whose
 root cannot scroll, and takes a `scrollSelector` when you need to name the
-container yourself. With no app running, everything falls back to the headless
-render automatically.
+container yourself. `obsrv_inspect` and `obsrv_audit` follow the app the same
+way: they measure the page in front, on the screen and text scale in force,
+after whatever the drive did to it; `obsrv_report` is the exception and stays
+headless, being a batch over a matrix of screens. With no app running,
+everything falls back to the headless render automatically.
 
 To photograph a scrolled or panned state, pass `capture: 'window' | 'pane'` to
 `obsrv_drive`: it captures after its commands run, and nothing in that tool

@@ -72,7 +72,7 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   )
   const audit = tools.find(t => t.name === 'obsrv_audit')!
   expect(Object.keys(audit.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'diagonalInches', 'tapMm', 'textMm', 'textScale']),
+    expect.arrayContaining(['url', 'mode', 'preset', 'width', 'height', 'diagonalInches', 'tapMm', 'textMm', 'textScale']),
   )
   // Layout, not pixels: no panel profile.
   expect(Object.keys(audit.inputSchema.properties ?? {})).not.toContain('profile')
@@ -81,6 +81,8 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
 test('obsrv_audit: the fixture measured in millimetres on a 6.5" phone', async () => {
   const r = await call('obsrv_audit', { url: fixture('audit.html'), preset: 'android-65' })
   expect(r.isError).toBeFalsy()
+  // No app in this suite: auto mode is a headless load, and says so.
+  expect(r.structuredContent).toMatchObject({ mode: 'headless', notes: [] })
   const result = r.structuredContent as {
     ppi: number
     thresholds: { tapMm: number; textMm: number }

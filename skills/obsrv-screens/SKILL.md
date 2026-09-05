@@ -67,10 +67,15 @@ measures every tap target and text element in **millimetres on the chosen
 screen** and lists what is under 7 mm / 2 mm (provisional, tunable): a 24 CSS
 px control is 6.6 mm on a 24" 1080p and 4.5 mm on a 6.5" phone, so run it on
 a phone preset before declaring a mobile layout usable, and quote the
-millimetres, not the pixels. `obsrv_report` (or `obsrv report`) does snap,
+millimetres, not the pixels. With the app open and Agent control on,
+`obsrv_audit` measures the page in front instead, like `obsrv_inspect`: on
+the screen and text scale in force, in whatever state you drove it into
+(scrolled, a menu open, text at 150%); `mode: 'headless'` forces a fresh
+load of the URL. `obsrv_report` (or `obsrv report`) does snap,
 audit and diff for a whole matrix of screens and writes one self-contained
 HTML page — attach that to the PR rather than a folder of PNGs; it returns
-the path and a per-screen summary. If the Obsrv desktop app is open with "Agent control" on
+the path and a per-screen summary; it stays headless, since a batch over a
+matrix of screens should not commandeer the window. If the Obsrv desktop app is open with "Agent control" on
 (toolbar toggle), snaps drive the visible window — the user watches — and
 `obsrv_drive` flips its URL/preset/profile directly, and can also scroll,
 click, pan and highlight to walk the user through what it found; no app
