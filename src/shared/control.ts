@@ -41,6 +41,10 @@ const TOKEN_RE = /^[0-9a-f]{64}$/
 export interface ControlInfo {
   port: number
   token: string
+  /** The process that wrote the file; absent from an app older than the stamp. */
+  pid?: number
+  /** When that process came up, ISO 8601; absent likewise. */
+  startedAt?: string
 }
 
 /** How the target pane shows the render — mirrors the renderer store's ViewMode. */
@@ -237,7 +241,13 @@ export function parseControlFile(raw: string): ControlInfo | null {
   const { port, token } = parsed
   if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return null
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null
-  return { port, token }
+  // The owner stamp is optional (an older app writes none) but, when
+  // present, must be well-formed: a stamp that cannot be trusted is worse
+  // than no stamp, since a reader would act on it.
+  const { pid, startedAt } = parsed
+  if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
+  if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
+  return { port, token, ...(pid !== undefined ? { pid } : {}), ...(startedAt !== undefined ? { startedAt } : {}) }
 }
 
 /**

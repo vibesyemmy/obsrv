@@ -91,6 +91,11 @@ test('writes a 0600 discovery file with a port and a 64-hex token', async () => 
   const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
   expect(parsed).not.toBeNull()
   info = parsed!
+  // The file names its owner: this very process, and when it came up.
+  expect(info.pid).toBe(await app.evaluate(() => process.pid))
+  expect(typeof info.startedAt).toBe('string')
+  expect(Number.isNaN(Date.parse(info.startedAt!))).toBe(false)
+  expect(Date.parse(info.startedAt!)).toBeLessThanOrEqual(Date.now())
 })
 
 test('status answers with the app state, and the toolbar shows the AGENT badge', async () => {

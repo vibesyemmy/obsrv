@@ -110,6 +110,16 @@ export async function discoverControl(timeoutMs = 500): Promise<LiveApp | null> 
   }
   const info = parseControlFile(raw)
   if (!info) return null
+  // A stamped file whose writer is gone is a crashed run's leftover, not an
+  // app: say so without knocking on a port nobody listens to. EPERM means
+  // the process exists but belongs to someone else, which is still alive.
+  if (info.pid !== undefined) {
+    try {
+      process.kill(info.pid, 0)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ESRCH') return null
+    }
+  }
   try {
     const status = parseControlStatus(await controlCall(info, 'status', {}, timeoutMs))
     return status ? { info, status } : null

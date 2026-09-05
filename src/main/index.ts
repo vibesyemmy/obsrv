@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { readAppVersion, registerIpc, TOOLBAR_H } from './ipc'
@@ -24,8 +24,14 @@ log.info(
   `obsrv ${readAppVersion()} starting: electron ${process.versions.electron}, chrome ${process.versions.chrome}, ${process.platform} ${process.arch}${app.isPackaged ? '' : ', unpackaged'}`,
 )
 
+/** The one visible window, for a second launch to bring to the front. */
+let mainWin: BrowserWindow | null = null
+/** How many second launches were refused this run; read by the e2e harness. */
+let secondInstances = 0
+
 function boot(): void {
   const win = createMainWindow()
+  mainWin = win
   win.webContents.on('render-process-gone', (_e, d) => {
     log.error(`shell renderer gone (${d.reason}, exit code ${d.exitCode})`)
   })
@@ -125,7 +131,28 @@ app.on('gpu-info-update', () => {
   log.info(line)
 })
 
-void app.whenReady().then(boot)
+// One Obsrv per profile. A second launch used to start a rival agent-control
+// server and overwrite the discovery file, so an agent would drive the window
+// that started last while the user watched the other (seen 2026-09-05). The
+// lock is keyed on the userData path, so the e2e harness's throwaway profiles
+// and the CLI's temp profile never contend with a running app. The loser
+// exits before it has a window; the holder brings its window to the front.
+if (!app.requestSingleInstanceLock()) {
+  log.info('another Obsrv already owns this profile; handing over to it and exiting')
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    secondInstances++
+    if (process.env.OBSRV_TEST === '1') (globalThis as { __obsrvSecondInstances?: number }).__obsrvSecondInstances = secondInstances
+    log.info('a second launch was refused; bringing this window to the front')
+    const win = mainWin
+    if (!win || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+  })
+  void app.whenReady().then(boot)
+}
 app.on('window-all-closed', () => app.quit())
 
 // The quit's milestones are logged so that a report of the app not quitting

@@ -140,6 +140,9 @@ export interface LiveLint extends LintResult {
   pageHeight: number
 }
 
+/** When this process came up: stamped into the discovery file with the pid. */
+const STARTED_AT = new Date().toISOString()
+
 interface Reply {
   code: number
   body: Record<string, unknown>
@@ -176,7 +179,11 @@ export class ControlServer {
     // `mode` only applies at creation, so a stale file (a crashed run) is
     // removed first — the fresh write must be 0600 from birth.
     rmSync(this.file, { force: true })
-    writeFileSync(this.file, JSON.stringify({ port, token: this.token }), { mode: 0o600 })
+    // The owner is named, so a reader can tell a live file from a crashed
+    // run's leftover, and two instances (now refused by the single-instance
+    // lock, but a packaged app and a dev build once fought over this file)
+    // can be told apart.
+    writeFileSync(this.file, JSON.stringify({ port, token: this.token, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
   }
 
   /**
