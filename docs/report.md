@@ -46,7 +46,9 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   few seconds more. Past eight bands the report says how many findings lie
   beyond what was captured. The overview is downsampled to about 800 device
   px wide and at most 3200 tall, so a long page becomes a map and the crops
-  carry the detail. The machine output and `obsrv_report` carry
+  carry the detail; it is embedded as a JPEG for the same reason, while every
+  image that is rasterisation evidence — the render, the 1x-vs-2x pair, the
+  crops — stays a lossless PNG. The machine output and `obsrv_report` carry
   `problems: { featured, belowCapture }` per screen; the images are in the
   HTML, not the JSON. `snap --full-page` keeps its single-surface cap; the
   bands are the report's.

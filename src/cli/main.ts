@@ -91,6 +91,15 @@ function encodePng(img: RGBAImage): Buffer {
   return image.toPNG()
 }
 
+/** The overview is a map, not evidence: JPEG at this quality is a fraction of the PNG. */
+const REPORT_OVERVIEW_JPEG_QUALITY = 85
+
+function encodeJpeg(img: RGBAImage, quality: number): Buffer {
+  const bgra = rgbaToBgra(img)
+  const image = nativeImage.createFromBitmap(Buffer.from(bgra.buffer, bgra.byteOffset, bgra.byteLength), { width: img.width, height: img.height })
+  return image.toJPEG(quality)
+}
+
 interface RenderResult {
   frame: CapturedFrame
   /** Applied CSS viewport (after clamping / full-page growth). */
@@ -619,7 +628,12 @@ function cliVersion(): string {
   }
 }
 
-const toImage = (png: Buffer, width: number, height: number): ReportImage => ({ base64: png.toString('base64'), width, height })
+const toImage = (bytes: Buffer, width: number, height: number, mime: 'image/png' | 'image/jpeg' = 'image/png'): ReportImage => ({
+  base64: bytes.toString('base64'),
+  width,
+  height,
+  ...(mime === 'image/png' ? {} : { mime }),
+})
 
 /**
  * The report: one self-contained HTML page for a matrix of screens. Each
@@ -703,7 +717,11 @@ async function runReport(cmd: ReportCommand): Promise<void> {
             detail: c.detail,
           }
         })
-        problems = { overview: toImage(encodePng(overview), overview.width, overview.height), features, belowCapture }
+        problems = {
+          overview: toImage(encodeJpeg(overview, REPORT_OVERVIEW_JPEG_QUALITY), overview.width, overview.height, 'image/jpeg'),
+          features,
+          belowCapture,
+        }
         warnings.push(...full.warnings.map(w => `full page: ${w}`))
       }
     }

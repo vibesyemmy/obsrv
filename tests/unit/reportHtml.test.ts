@@ -168,6 +168,20 @@ describe('reportHtml', () => {
     expect(reportHtml(data([screen({ lint: null })]))).toContain('The page did not answer the lint')
   })
 
+  it('an image that says it is a JPEG is embedded as one; the rest default to PNG', () => {
+    const withJpeg = screen({
+      problems: {
+        overview: { base64: 'SlBFRw==', width: 400, height: 1200, mime: 'image/jpeg' },
+        features: [{ n: 1, xFrac: 0.5, yFrac: 0.1, crop: { base64: 'Q1JPUA==', width: 40, height: 40 }, element: 'button#tiny', detail: '24×24 px · 6.07 mm' }],
+        belowCapture: 0,
+      },
+    })
+    const html = reportHtml(data([withJpeg]))
+    expect(html).toContain('data:image/jpeg;base64,SlBFRw==')
+    expect(html).toContain('data:image/png;base64,Q1JPUA==')
+    expect(html).toContain('data:image/png;base64,iVBORw0KGgo=')
+  })
+
   it('no problems block when there is nothing to feature', () => {
     const html = reportHtml(data([screen({ problems: undefined })]))
     expect(html).not.toContain('Where the problems are')

@@ -80,6 +80,9 @@ test('a laptop and a phone on one page: renders, audit, diff where it applies, a
   // The new "where" section: an overview with numbered pins and cropped findings.
   expect(html).toContain('Where the problems are')
   expect((html.match(/class="pin"/g) ?? []).length).toBe(4) // 1 on the laptop, 3 on the phone
+  // The two overviews are JPEG maps; the renders, the reference and the crops stay PNG.
+  expect((html.match(/src="data:image\/jpeg;base64,/g) ?? []).length).toBe(2)
+  expect((html.match(/class="crop"><img src="data:image\/png;base64,/g) ?? []).length).toBe(4)
   expect(html).toContain('button#tiny')
   expect(html).toContain('No comparison: a dense screen')
   expect(html).not.toMatch(/<script/i)
