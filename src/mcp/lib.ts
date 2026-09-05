@@ -36,7 +36,7 @@ export interface SnapToolInput {
   waitMs?: number | undefined
   timeoutMs?: number | undefined
   /** Live mode only: capture the whole app window (default) or just the target pane. */
-  capture?: 'window' | 'pane' | undefined
+  capture?: 'window' | 'pane' | 'raster' | undefined
 }
 
 export interface DiffToolInput {

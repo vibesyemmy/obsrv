@@ -55,6 +55,13 @@ export interface InspectReadout {
   text: string
   /** The element's border box in CSS px of the screen (surface), as the report gives it. */
   rect: { x: number; y: number; width: number; height: number }
+  /**
+   * The same box in page CSS px, scroll included — the space an audit
+   * finding's rect is in, and what `highlight { space: 'page' }` takes. The
+   * viewport rect plus the target's scroll as the app records it; equal to
+   * `rect` on a headless load, which is at the top.
+   */
+  pageRect: { x: number; y: number; width: number; height: number }
   /** The same box in millimetres on this screen; null without a diagonal. */
   rectMm: { width: number; height: number } | null
   font: { px: number; mm: number | null; weight: number; family: string }
@@ -74,7 +81,12 @@ export function isLargeText(fontSizePx: number, fontWeight: number): boolean {
   return fontSizePx >= 24 || (fontSizePx >= 18.66 && fontWeight >= 700)
 }
 
-export function inspectReadout(report: InspectReport, screen: InspectScreen, panel: InspectPanel): InspectReadout {
+export function inspectReadout(
+  report: InspectReport,
+  screen: InspectScreen,
+  panel: InspectPanel,
+  scroll: { x: number; y: number } = { x: 0, y: 0 },
+): InspectReadout {
   const ppi =
     screen.diagonalInches === null
       ? null
@@ -113,6 +125,12 @@ export function inspectReadout(report: InspectReport, screen: InspectScreen, pan
     rect: {
       x: round(report.rect.x, 1),
       y: round(report.rect.y, 1),
+      width: round(report.rect.width, 1),
+      height: round(report.rect.height, 1),
+    },
+    pageRect: {
+      x: round(report.rect.x + scroll.x, 1),
+      y: round(report.rect.y + scroll.y, 1),
       width: round(report.rect.width, 1),
       height: round(report.rect.height, 1),
     },

@@ -94,6 +94,7 @@ describe('command validation', () => {
   it('knows exactly the twenty-two commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
+      'captureRaster',
       'captureTarget',
       'captureVisible',
       'click',
@@ -267,6 +268,7 @@ describe('parseControlStatus', () => {
     textScale: 1,
     throttle: 'none',
     onionSkin: 0,
+    loading: false,
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -516,5 +518,16 @@ describe('pageRectToPane', () => {
   it('a text scale makes a page CSS px that many surface px', () => {
     const scaled = { ...view, scrollY: 0, textScale: 1.5, dsf: 1, paneWidth: 1366, paneHeight: 768 }
     expect(pageRectToPane({ x: 10, y: 20, width: 100, height: 40 }, scaled)).toEqual({ x: 15, y: 30, width: 150, height: 60 })
+  })
+})
+
+describe('parseControlStatus loading', () => {
+  const base = {
+    version: '0.28.0', url: 'about:blank', presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url',
+  }
+  it('an app older than the field reports not loading; a bad value is refused', () => {
+    expect(parseControlStatus(base)?.loading).toBe(false)
+    expect(parseControlStatus({ ...base, loading: true })?.loading).toBe(true)
+    expect(parseControlStatus({ ...base, loading: 'yes' })).toBeNull()
   })
 })

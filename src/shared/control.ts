@@ -123,6 +123,8 @@ export interface ControlStatus extends AgentUiState {
    */
   cssWidth: number
   cssHeight: number
+  /** Whether the target is loading a document. `false` from an app that predates the field. */
+  loading: boolean
   /**
    * The shape those dimensions actually have. `orientation` above is the
    * rotation *flag* — "the preset as its table stores it" vs "turned a quarter
@@ -198,6 +200,7 @@ export const CONTROL_COMMANDS = [
   'reload',
   'setPixelExact',
   'captureTarget',
+  'captureRaster',
   'focusWindow',
   // v0.24 — the inspector for agents: a point or a selector, a readout back.
   'inspect',
@@ -508,6 +511,8 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // And once more for the dimensions and the derived shape. `0` means "the app
   // did not say", which is the truthful answer for one that predates them —
   // inventing a size would be worse than admitting the gap.
+  const loading = raw.loading ?? false
+  if (typeof loading !== 'boolean') return null
   const cssWidth = raw.cssWidth ?? 0
   if (typeof cssWidth !== 'number' || !Number.isFinite(cssWidth) || cssWidth < 0) return null
   const cssHeight = raw.cssHeight ?? 0
@@ -538,6 +543,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     tabIndex,
     cssWidth,
     cssHeight,
+    loading,
     screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),
   }
 }

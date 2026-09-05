@@ -76,6 +76,8 @@ export interface ControlDeps {
    * full window (with a warning) when the renderer has not reported them.
    */
   captureTarget(): Promise<{ data: string; width: number; height: number; warnings: string[] }>
+  /** The target's own frame at device pixels — the raster an agent judges type on — with the capture's settle verdict. */
+  captureRaster(): Promise<{ data: string; width: number; height: number; settled: boolean; unsettledReason?: string; warnings: string[] }>
   /** The target's current CSS viewport, for `click` bounds validation. */
   viewport(): { width: number; height: number }
   /** The target's scroll, text scale, density and pane size: what a page-space rect is mapped through. */
@@ -91,7 +93,8 @@ export interface ControlDeps {
   /** The toolbar's history/reload actions, byte-for-byte (native-only history; reload reloads both). */
   back(): void
   forward(): void
-  reload(): void
+  /** Reloads both panes and resolves once the target has loaded again, or after a bound. */
+  reload(): Promise<void>
   /** Bring the app window to the front. */
   focusWindow(): void
   /**
@@ -287,6 +290,11 @@ export class ControlServer {
         return reply(200, { ok: true, ...capture })
       }
 
+      case 'captureRaster': {
+        const capture = await this.deps.captureRaster()
+        return reply(200, { ok: true, ...capture })
+      }
+
       case 'inspect': {
         const req = parseInspectRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
@@ -363,7 +371,9 @@ export class ControlServer {
         return reply(200, { ok: true })
 
       case 'reload':
-        this.deps.reload()
+        // Answered once the target has loaded again (bounded), so a capture
+        // after it in the same drive shows the reloaded page.
+        await this.deps.reload()
         return reply(200, { ok: true })
 
       case 'setPixelExact': {

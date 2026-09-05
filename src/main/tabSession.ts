@@ -46,6 +46,8 @@ export class TabSession {
    * every new document. What a page-space highlight is mapped through.
    */
   targetScroll: { x: number; y: number } = { x: 0, y: 0 }
+  /** Whether the target is loading a document, as it last reported; `status.loading`. */
+  targetLoading = false
 
   // `modeIsLive` and `reportedMode` describe the same idea from opposite
   // directions and must not be collapsed into one field. `modeIsLive` is
@@ -142,6 +144,9 @@ export class TabSession {
     // The reference follows every new document the target commits; an
     // in-place rewrite is the page's own and the reference's page does the
     // same to itself.
+    this.target.on('loading', loading => {
+      this.targetLoading = loading
+    })
     this.target.on('url-changed', (url, inPage) => {
       if (!inPage) this.targetScroll = { x: 0, y: 0 }
       if (!inPage && this.reference) void this.reference.load(url)

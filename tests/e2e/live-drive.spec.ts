@@ -571,6 +571,32 @@ test("a page-space highlight is mapped through the scroll, and says so when it i
   await call('scroll', { x: 0, y: 0 })
 })
 
+test('reload answers once the target has loaded again, and status says it is not loading', async () => {
+  const r = await call('reload')
+  expect(r.status).toBe(200)
+  const s = await call('status')
+  expect(s.body).toMatchObject({ loading: false })
+  // The reloaded page is the page: the native pane has its title back.
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getTitle() as string)).not.toBe('')
+})
+
+test("captureRaster returns the target's own frame at device pixels, the view untouched", async () => {
+  await call('setPreset', { id: 'android-65' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(360)
+  const view = (await call('status')).body.viewMode
+  const r = await call('captureRaster')
+  expect(r.status).toBe(200)
+  expect(r.body).toMatchObject({ ok: true, width: 720, height: 1600 })
+  expect(typeof r.body.settled).toBe('boolean')
+  const png = Buffer.from((r.body as { data: string }).data, 'base64')
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(png.readUInt32BE(16)).toBe(720)
+  expect(png.readUInt32BE(20)).toBe(1600)
+  // The view the user sees did not change.
+  expect((await call('status')).body.viewMode).toBe(view)
+  await call('setPreset', { id: '1080p-24' })
+})
+
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
   const r = await call('highlight', { x: 10, y: 10, width: 100, height: 60, durationMs: 8000 })
   expect(r.status).toBe(200)
