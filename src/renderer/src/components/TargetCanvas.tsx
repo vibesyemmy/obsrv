@@ -411,7 +411,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
   // `targetLoading`, which also rises for a subframe load: an iframe on a
   // healthy static page changes no pixel and owes no frame, so a watchdog
   // keyed to loading would cry wolf on it. (`targetLoading` still drives the
-  // toolbar spinner.) Image mode never arms: main stops target frames on
+  // URL field's loading strip.) Image mode never arms: main stops target frames on
   // `setMode('image')` by design, so "no frame" is the normal state there,
   // and a Cmd+R that reloads the hidden panes is tolerated for the same
   // reason.

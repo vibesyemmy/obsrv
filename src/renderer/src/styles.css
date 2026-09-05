@@ -60,7 +60,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .app { transition: --drawer-w 220ms ease; }
 .app[data-drawer='panel'] { --drawer-w: 309px; }
-@media (prefers-reduced-motion: reduce) { .app { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .app, .url-progress, .url-progress-bar { transition: none; }
+}
 
 /* Where the native pane's right edge falls, in window coordinates: the very
    clamp `.panes > .pane:first-child` is laid out with, applied to the width
@@ -255,6 +257,33 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   border-radius: 5px;
 }
 .url-form input[readonly] { color: var(--text-1); }
+
+/* Chrome's loading strip, inside the field: a hairline along the bottom
+   edge, inset past the border and the corner curve, that creeps towards the
+   right while the target loads and completes when it stops. The creep is
+   one long transition (Chromium reports no progress figure); `done` is a
+   short one to the end plus a fade. Reduced motion drops the transitions:
+   the strip still appears and goes, it just does not move. */
+.url-field { position: relative; }
+.url-progress {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.url-progress-bar {
+  height: 100%;
+  background: var(--text-0);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 15s cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+.url-progress[data-go] .url-progress-bar { transform: scaleX(0.9); }
+.url-progress[data-phase='done'] .url-progress-bar { transform: scaleX(1); transition: transform 160ms ease-out; }
+.url-progress[data-phase='done'] { opacity: 0; transition: opacity 200ms ease 160ms; }
 
 /* Visited-URL type-ahead. Its left edge is clamped to the native pane's right
    edge because that pane is an OS-level WebContentsView painting over
