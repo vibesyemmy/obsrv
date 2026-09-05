@@ -15,6 +15,7 @@ import {
 } from '../state/store'
 import { useAgentActivity } from '../hooks/useAgentActivity'
 import { Icon } from './Icon'
+import { UrlProgress } from './UrlProgress'
 import { Segmented } from './Segmented'
 import { TabBar } from './TabBar'
 import { Select, type SelectGroup, type SelectOption } from './Select'
@@ -101,6 +102,7 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   const pixelExact = useStore(s => selectTab(s).pixelExact)
   const error = useStore(s => selectTab(s).error)
   const loading = useStore(s => selectTab(s).targetLoading)
+  const activeId = useStore(s => s.activeId)
   const barText = useStore(selectUrlBarText)
   const viewport = useStore(useShallow(selectViewport))
 
@@ -293,27 +295,32 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         </button>
 
         <form className="url-form" onSubmit={submit}>
-          <input
-            ref={inputRef}
-            value={draft}
-            readOnly={readOnly}
-            spellCheck={false}
-            placeholder="Enter a URL, or drop a PNG"
-            role="combobox"
-            aria-expanded={listOpen}
-            aria-controls="url-history"
-            aria-autocomplete="list"
-            aria-activedescendant={picked ? `url-history-${highlight}` : undefined}
-            onChange={e => {
-              setDraft(e.target.value)
-              setOpen(true)
-              // Typing re-queries, so whatever was picked is about to be a
-              // different row; start from the typed text again.
-              setHighlight(-1)
-            }}
-            onKeyDown={onKeyDown}
-            onBlur={closeList}
-          />
+          {/* The strip is the field's own: it sits along the input's bottom edge
+              and is keyed by tab, so a switch mid-load shows that tab's state. */}
+          <div className="url-field">
+            <input
+              ref={inputRef}
+              value={draft}
+              readOnly={readOnly}
+              spellCheck={false}
+              placeholder="Enter a URL, or drop a PNG"
+              role="combobox"
+              aria-expanded={listOpen}
+              aria-controls="url-history"
+              aria-autocomplete="list"
+              aria-activedescendant={picked ? `url-history-${highlight}` : undefined}
+              onChange={e => {
+                setDraft(e.target.value)
+                setOpen(true)
+                // Typing re-queries, so whatever was picked is about to be a
+                // different row; start from the typed text again.
+                setHighlight(-1)
+              }}
+              onKeyDown={onKeyDown}
+              onBlur={closeList}
+            />
+            <UrlProgress key={activeId} loading={loading} />
+          </div>
           {listOpen && (
             <ul className="url-history" id="url-history" role="listbox" aria-label="Visited addresses">
               {matches.map((m, i) => (
@@ -360,7 +367,6 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
               <Icon name="close" />
             </button>
           )}
-          {loading && <span className="muted">loading…</span>}
           {error && (
             <span className="badge-error" title={error.description}>
               {error.code}
