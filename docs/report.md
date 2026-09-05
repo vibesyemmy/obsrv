@@ -26,6 +26,16 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   screens, this screen next to the 2x reference, both on the same 1x grid,
   with ink coverage, ink-row ratio and the band findings); the audit
   summary and its findings, smallest first; any warnings from the renders.
+- **Where the problems are**, when a screen has findings: the full page,
+  captured, with a numbered pin on each of the worst findings (the smallest
+  first, up to eight) and a crop of each at the render's own pixels, so the
+  reader sees not just that a control is 5 mm but where it sits and what it
+  looks like. Findings below the captured height are counted in a note —
+  the full-page capture obeys the 4096-device-pixel cap, so on a dense phone
+  (2x or 3x) a long page reaches only part-way down; per-region capture for
+  the rest is a planned follow-up. The machine output and `obsrv_report`
+  carry `problems: { featured, belowCapture }` per screen; the images are in
+  the HTML, not the JSON.
 - The panel profile applies to the render shown. The 1x-vs-2x comparison is
   measured **without** it: it is about rasterisation, and a profile's
   brightness and black floor would darken every pixel past the ink

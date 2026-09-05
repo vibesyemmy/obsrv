@@ -101,6 +101,40 @@ describe('reportHtml', () => {
     expect(html).toContain('band 3: hairline lost at 1x')
     expect(html).toContain('obsrv 0.21.0')
   })
+  it('locates the worst findings: a full-page overview with a numbered pin and a crop for each', () => {
+    const withProblems = screen({
+      problems: {
+        overview: { base64: 'T1ZFUlZJRVc=', width: 400, height: 1200 },
+        features: [
+          { n: 1, xFrac: 0.5, yFrac: 0.0625, crop: { base64: 'Q1JPUDE=', width: 56, height: 56 }, element: 'button#tiny', detail: '24×24 px · 6.07 mm' },
+          { n: 2, xFrac: 0.1, yFrac: 0.4, crop: { base64: 'Q1JPUDI=', width: 120, height: 40 }, element: 'p#caption', detail: '10 px · 1.90 mm' },
+        ],
+        belowCapture: 5,
+      },
+    })
+    const html = reportHtml(data([withProblems]))
+    expect(html).toContain('Where the problems are')
+    // The overview image and both crops are present.
+    expect(html).toContain('data:image/png;base64,T1ZFUlZJRVc=')
+    expect(html).toContain('data:image/png;base64,Q1JPUDE=')
+    expect(html).toContain('data:image/png;base64,Q1JPUDI=')
+    // Pins placed by page fraction, matching the crops.
+    expect(html).toContain('class="pin"')
+    expect(html).toContain('top:6.25%')
+    expect(html).toContain('left:50.00%')
+    // Captions carry the element and the measurement.
+    expect(html).toContain('p#caption')
+    expect(html).toContain('10 px · 1.90 mm')
+    // The ones past the captured height are counted, not silently dropped.
+    expect(html).toContain('5 more finding(s) sit below the captured area')
+  })
+
+  it('no problems block when there is nothing to feature', () => {
+    const html = reportHtml(data([screen({ problems: undefined })]))
+    expect(html).not.toContain('Where the problems are')
+    expect(html).not.toContain('class="pin"')
+  })
+
   it('a dense screen shows its render and says why there is no diff; an unsettled one is flagged', () => {
     const phone = screen({
       presetId: 'android-65',

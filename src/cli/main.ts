@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
-import { boxDownsample, rgbaToBgra, type RGBAImage } from '../shared/downsample'
+import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
 import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
@@ -28,7 +28,14 @@ import { lintFindings } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
-import { reportHtml, type ReportImage, type ReportScreen } from './reportHtml'
+import { reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
+
+/** The worst findings featured on the report's full-page overview: pins + crops. */
+const REPORT_CROP_LIMIT = 8
+/** The overview is downsampled to about this device-pixel width to keep the file small. */
+const REPORT_OVERVIEW_WIDTH = 800
+/** Padding around a finding's rect in the crop, in device px. */
+const REPORT_CROP_PAD = 16
 
 /**
  * Headless CLI entry (`bin/obsrv.js` spawns `electron out/main/cli.js -- …`).
@@ -561,6 +568,46 @@ async function runReport(cmd: ReportCommand): Promise<void> {
             thresholds,
           )
 
+    // The full page with the worst findings located on it: one extra render,
+    // taken only when there is something to point at. The findings are already
+    // smallest-first; the first few, within the captured height, are pinned on
+    // a downsampled overview and cropped at the render's own pixels.
+    let problems: ReportProblems | undefined
+    if (audit && audit.findings.length > 0) {
+      const full = await render(cmd.url, spec, { fullPage: true, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs })
+      const fullRaw = bgraToRgba(full.frame.bgra, full.frame.width, full.frame.height)
+      const fullImg = profiled ? applyPanelProfile(fullRaw, profile) : fullRaw
+      // Device px per page CSS px, read from the raster's own width so it holds
+      // whatever the density and text scale did to it.
+      const k = fullImg.width / r.cssWidth
+      const capturedCssHeight = fullImg.height / k
+      const within = audit.findings.filter(f => f.rect.y + f.rect.height / 2 <= capturedCssHeight)
+      const featured = within.slice(0, REPORT_CROP_LIMIT)
+      if (featured.length > 0) {
+        const overviewFactor = Math.max(1, Math.round(fullImg.width / REPORT_OVERVIEW_WIDTH))
+        const overview = boxDownsample(fullImg, overviewFactor)
+        const features = featured.map((f, i) => {
+          let cr = cropImage(fullImg, f.rect.x * k - REPORT_CROP_PAD, f.rect.y * k - REPORT_CROP_PAD, f.rect.width * k + REPORT_CROP_PAD * 2, f.rect.height * k + REPORT_CROP_PAD * 2)
+          const cropFactor = Math.max(1, Math.ceil(Math.max(cr.width / 560, cr.height / 420)))
+          if (cropFactor > 1) cr = boxDownsample(cr, cropFactor)
+          const detail =
+            f.kind === 'small-target'
+              ? `${Math.round(f.cssWidth)}×${Math.round(f.cssHeight)} px · ${f.mm.toFixed(2)} mm`
+              : `${Math.round(f.fontSizePx)} px · ${f.mm.toFixed(2)} mm`
+          return {
+            n: i + 1,
+            xFrac: (f.rect.x + f.rect.width / 2) / r.cssWidth,
+            yFrac: (f.rect.y + f.rect.height / 2) / capturedCssHeight,
+            crop: toImage(encodePng(cr), cr.width, cr.height),
+            element: f.element,
+            detail,
+          }
+        })
+        problems = { overview: toImage(encodePng(overview), overview.width, overview.height), features, belowCapture: audit.findings.length - within.length }
+        warnings.push(...full.warnings.map(w => `full page: ${w}`))
+      }
+    }
+
     let diff: ReportScreen['diff'] = null
     let diffSkipped: string | null = null
     if (spec.deviceScaleFactor !== 1) {
@@ -614,6 +661,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       audit,
       diff,
       diffSkipped,
+      ...(problems ? { problems } : {}),
       warnings,
     })
     human(
@@ -664,6 +712,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
         ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }
         : null,
       diffSkipped: s.diffSkipped,
+      ...(s.problems ? { problems: { featured: s.problems.features.length, belowCapture: s.problems.belowCapture } } : {}),
       warnings: s.warnings,
     })),
   })

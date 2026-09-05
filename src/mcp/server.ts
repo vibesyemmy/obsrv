@@ -1439,6 +1439,10 @@ const reportOutputShape = {
         .nullable()
         .describe('1x screens only; null with diffSkipped saying why.'),
       diffSkipped: z.string().nullable(),
+      problems: z
+        .object({ featured: z.number(), belowCapture: z.number() })
+        .optional()
+        .describe('Present when findings were located on the full-page overview: how many were pinned and cropped, and how many sit below the captured height. The images are in the HTML, not here.'),
       warnings: z.array(z.string()),
     }),
   ),

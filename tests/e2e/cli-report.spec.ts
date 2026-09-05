@@ -61,14 +61,22 @@ test('a laptop and a phone on one page: renders, audit, diff where it applies, a
   expect(phone.diffSkipped).toMatch(/dense screen/)
   expect(phone.audit.findings).toBe(3)
   expect(phone.deviceScaleFactor).toBe(2)
+  // Each screen with findings locates them on a full-page overview: the count
+  // is in the JSON, the images in the HTML.
+  expect(laptop.problems).toMatchObject({ featured: 1, belowCapture: 0 })
+  expect(phone.problems).toMatchObject({ featured: 3, belowCapture: 0 })
   expect(summary.htmlBytes).toBe(statSync(out).size)
 
   const html = readFileSync(out, 'utf8')
   expect(html.startsWith('<!doctype html>')).toBe(true)
   expect(html).toContain('1366×768 15.6&quot;')
   expect(html).toContain('Budget Android 6.5&quot; @2x')
-  // Two renders plus the laptop's 2x reference.
-  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+  // Two renders plus the laptop's 2x reference, plus the full-page overviews
+  // and the crops of the located findings.
+  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBeGreaterThanOrEqual(3)
+  // The new "where" section: an overview with numbered pins and cropped findings.
+  expect(html).toContain('Where the problems are')
+  expect((html.match(/class="pin"/g) ?? []).length).toBe(4) // 1 on the laptop, 3 on the phone
   expect(html).toContain('button#tiny')
   expect(html).toContain('No comparison: a dense screen')
   expect(html).not.toMatch(/<script/i)
@@ -98,7 +106,7 @@ test('--profile applies to the render shown; the diff is measured without it', a
   expect(summary.screens[0].diff.inkCoverage.target).toBeLessThan(0.2)
   const html = readFileSync(out, 'utf8')
   expect(html).toContain('Panel profile <b>Budget TN</b>')
-  // The profiled render, plus the unprofiled pair: three images.
-  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBe(3)
+  // The profiled render, plus the unprofiled pair, plus the overview and crops.
+  expect((html.match(/src="data:image\/png;base64,/g) ?? []).length).toBeGreaterThanOrEqual(3)
   expect(html).toContain('without the panel profile')
 })
