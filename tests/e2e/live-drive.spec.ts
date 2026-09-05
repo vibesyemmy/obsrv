@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
+import { decodePng, pixelAt } from './helpers/decodePng'
 
 /**
  * Drives the agent-control server over real loopback HTTP against the real
@@ -21,6 +22,7 @@ const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
 const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
 const LINT = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
+const SOLID_RED = pathToFileURL(resolve(__dirname, '../fixtures/solid-red.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -671,6 +673,26 @@ test('lint judges the page in front on the screen and panel in force, and takes 
   const bad = await call('lint', { thinPx: -1 })
   expect(bad.status).toBe(400)
   expect(bad.body.error).toMatch(/thinPx/)
+})
+
+test('the native pane is in the window capture, not a black hole where an OS-level view sits', async () => {
+  // Both panes show the page; the native one is a WebContentsView the
+  // window's own capture cannot see, so before the composite this pixel was
+  // the pane's dark background.
+  await call('setPanes', { panes: 'both' })
+  await call('navigate', { url: SOLID_RED })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getURL()), { timeout: 10_000 }).toBe(SOLID_RED)
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.getBounds().width)).toBeGreaterThan(50)
+  const bounds = await app.evaluate(() => (globalThis as any).__obsrv.native.getBounds() as { x: number; y: number; width: number; height: number })
+  const r = await call('captureVisible')
+  expect(r.status).toBe(200)
+  const { width, data } = r.body as { width: number; data: string }
+  const png = decodePng(Buffer.from(data, 'base64'))
+  const k = png.width / width // device px per window CSS px
+  const [red, green, blue] = pixelAt(png, Math.round((bounds.x + bounds.width / 2) * k), Math.round((bounds.y + bounds.height / 2) * k))
+  expect(red).toBeGreaterThan(200)
+  expect(green).toBeLessThan(80)
+  expect(blue).toBeLessThan(80)
 })
 
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
