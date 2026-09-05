@@ -1,4 +1,5 @@
-import { app, ipcMain, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout } from '../shared/inspectReadout'
@@ -32,6 +33,11 @@ import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
+
+/** How long a driver's reload waits for the target's load to finish before answering anyway. */
+const RELOAD_WAIT_MS = 15_000
+/** A raster capture's quiescence budget; an animating page returns after ~2 s anyway. */
+const RASTER_CAPTURE_MS = 8_000
 
 /** Toolbar height reserved at the top of the window; panes sit below it. */
 // 114px matches the three `.chrome-row` heights in styles.css (32 + 44 + 38,
@@ -177,17 +183,40 @@ export function registerIpc(ctx: AppContext): () => void {
   })
   // The toolbar's history/reload actions, shared verbatim with the
   // agent-control server's back/forward/reload commands.
-  const reloadBoth = (): void => {
-    tab().native.reload()
+  /**
+   * Resolves once the target has finished a load that starts within the
+   * bound, or at the bound: what a driver's `reload` waits for, so a capture
+   * in the same call shows the reloaded page and not the one before it.
+   */
+  const awaitTargetLoad = (s: TabSession, timeoutMs: number): Promise<void> =>
+    new Promise(resolve => {
+      let started = s.targetLoading
+      const on = (loading: boolean): void => {
+        if (loading) started = true
+        else if (started) done()
+      }
+      const timer = setTimeout(done, timeoutMs)
+      function done(): void {
+        clearTimeout(timer)
+        s.target.off('loading', on)
+        resolve()
+      }
+      s.target.on('loading', on)
+    })
+
+  const reloadBoth = (): Promise<void> => {
+    const s = tab()
+    s.native.reload()
     // A reload commits the URL the target already shows, so the mirror
     // (rightly) does nothing; reload the target on its own.
-    tab().target.reload()
+    s.target.reload()
+    return awaitTargetLoad(s, RELOAD_WAIT_MS)
   }
   const goBack = (): void => tab().native.back()
   const goForward = (): void => tab().native.forward()
   on(IPC.reload, e => {
     if (!fromRenderer(e)) return
-    reloadBoth()
+    void reloadBoth()
   })
   // The target canvas's last resort once Chromium has given up on the GPU for
   // the session (see `TargetCanvas`): only a new process gets WebGL back.
@@ -562,7 +591,11 @@ export function registerIpc(ctx: AppContext): () => void {
       })
     })
     wc.send(IPC.applyScroll, { ...base, id })
-    return answered
+    // The reply names the scroller it moved and where it landed: the
+    // authority on the target's scroll for a page-space highlight.
+    const landed = await answered
+    if (landed) s.targetScroll = { x: landed.x, y: landed.y }
+    return landed
   }
 
   // --- host display ---------------------------------------------------------
@@ -1175,6 +1208,7 @@ export function registerIpc(ctx: AppContext): () => void {
         // Mid-recreation or closing; zeroes are honest.
       }
       return {
+        loading: tab().targetLoading,
         version: appVersion,
         url,
         tabId: tabs.activeId,
@@ -1256,6 +1290,9 @@ export function registerIpc(ctx: AppContext): () => void {
         else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
         if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
         else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
+        if (settled === 'painting' && tab().onionSkin > 0) {
+          warnings.push('the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation, not the raster')
+        }
         return {
           data: image.toPNG().toString('base64'),
           width: size.width,
@@ -1266,7 +1303,60 @@ export function registerIpc(ctx: AppContext): () => void {
         release()
       }
     },
+    // The target's own frame, at its device pixels, through the same
+    // quiescence the headless CLI uses (cli/capture.ts is Electron-free):
+    // an agent judging type needs the raster, not the pane as it is shown,
+    // and this does not touch the view the user is looking at.
+    captureRaster: async () => {
+      const s = tab()
+      const release = tabs.holdPainting()
+      try {
+        await awaitViewportStable()
+        const frame = await captureQuiescent(s.target, { timeoutMs: RASTER_CAPTURE_MS })
+        const image = nativeImage.createFromBitmap(Buffer.from(frame.bgra.buffer, frame.bgra.byteOffset, frame.bgra.byteLength), {
+          width: frame.width,
+          height: frame.height,
+        })
+        const warnings: string[] = []
+        if (!frame.settled) {
+          warnings.push(
+            frame.unsettledReason === 'animating'
+              ? 'the page keeps painting (animation or video); this is one frame of it'
+              : 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
+          )
+        }
+        if (s.onionSkin > 0) warnings.push("the raster is the target's own frame; the onion skin is not blended into it")
+        return {
+          data: image.toPNG().toString('base64'),
+          width: frame.width,
+          height: frame.height,
+          settled: frame.settled,
+          ...(frame.settled ? {} : { unsettledReason: frame.unsettledReason }),
+          warnings,
+        }
+      } finally {
+        release()
+      }
+    },
     viewport: () => tab().target.getViewport(),
+    targetView: async () => {
+      const s = tab()
+      const t = s.target
+      const vp = t.getViewport()
+      const dsf = t.getDeviceScaleFactor()
+      // The session's record of the target's scroll, not `window.scrollY`
+      // asked of the page: an app shell scrolls an inner element and the
+      // window stays at 0 — the scroll command's reply knows which, and the
+      // session keeps what it said.
+      return {
+        scrollX: s.targetScroll.x,
+        scrollY: s.targetScroll.y,
+        textScale: t.getTextScale(),
+        dsf,
+        paneWidth: Math.round(vp.width * dsf),
+        paneHeight: Math.round(vp.height * dsf),
+      }
+    },
     inspect: async req => {
       const t = tab().target
       const report = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
@@ -1295,6 +1385,9 @@ export function registerIpc(ctx: AppContext): () => void {
         report,
         { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor: t.getDeviceScaleFactor(), diagonalInches, textScale: t.getTextScale() },
         { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
+        // The page rect is the viewport rect plus the scroll the session
+        // recorded — the same source a page-space highlight is mapped through.
+        tab().targetScroll,
       )
     },
     // An agent scroll drives both panes over the same `applyScroll` channel

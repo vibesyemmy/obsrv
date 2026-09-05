@@ -541,6 +541,62 @@ test('highlight draws a neutral overlay at rect × scale, replaces, and expires'
   await expect(overlay).toHaveCount(0, { timeout: 3_000 })
 })
 
+test("a page-space highlight is mapped through the scroll, and says so when it is off screen", async () => {
+  // Scroll the tall page, then mark a page rect as an audit finding gives it:
+  // page CSS px, scroll included. The overlay lands where the rect is now.
+  const s = await call('scroll', { x: 0, y: 1200 })
+  expect(s.status).toBe(200)
+  const scrolledY = (s.body.scrolled as { y: number }).y
+  // Whatever screen the earlier tests left in force: the pane rect is the
+  // page rect through the scroll and this density.
+  const dsf: number = await app.evaluate(() => (globalThis as any).__obsrv.target.getDeviceScaleFactor())
+  const r = await call('highlight', { x: 40, y: scrolledY + 300, width: 120, height: 50, durationMs: 8000, space: 'page' })
+  expect(r.status).toBe(200)
+  const pane = { x: Math.round(40 * dsf), y: Math.round(300 * dsf), width: Math.round(120 * dsf), height: Math.round(50 * dsf) }
+  expect(r.body).toMatchObject({ ok: true, drawn: true, pane })
+  const overlay = page.locator('.agent-highlight')
+  await expect(overlay).toHaveCount(1)
+  // Pixel-exact 1:1 here, as in the test above: one target pixel per CSS pixel.
+  const canvas = await page.locator('.target-canvas').boundingBox()
+  const box = await overlay.boundingBox()
+  expect(Math.abs(box!.x - (canvas!.x + pane.x))).toBeLessThanOrEqual(2)
+  expect(Math.abs(box!.y - (canvas!.y + pane.y))).toBeLessThanOrEqual(2)
+
+  // A rect above the fold at this scroll is not on screen: nothing is drawn,
+  // and the reply says where the page is scrolled to instead.
+  const off = await call('highlight', { x: 40, y: 100, width: 120, height: 50, space: 'page' })
+  expect(off.status).toBe(200)
+  expect(off.body).toMatchObject({ ok: true, drawn: false })
+  expect(String((off.body.warnings as string[])[0])).toContain('off screen')
+  await call('scroll', { x: 0, y: 0 })
+})
+
+test('reload answers once the target has loaded again, and status says it is not loading', async () => {
+  const r = await call('reload')
+  expect(r.status).toBe(200)
+  const s = await call('status')
+  expect(s.body).toMatchObject({ loading: false })
+  // The reloaded page is the page: the native pane has its title back.
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getTitle() as string)).not.toBe('')
+})
+
+test("captureRaster returns the target's own frame at device pixels, the view untouched", async () => {
+  await call('setPreset', { id: 'android-65' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(360)
+  const view = (await call('status')).body.viewMode
+  const r = await call('captureRaster')
+  expect(r.status).toBe(200)
+  expect(r.body).toMatchObject({ ok: true, width: 720, height: 1600 })
+  expect(typeof r.body.settled).toBe('boolean')
+  const png = Buffer.from((r.body as { data: string }).data, 'base64')
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(png.readUInt32BE(16)).toBe(720)
+  expect(png.readUInt32BE(20)).toBe(1600)
+  // The view the user sees did not change.
+  expect((await call('status')).body.viewMode).toBe(view)
+  await call('setPreset', { id: '1080p-24' })
+})
+
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
   const r = await call('highlight', { x: 10, y: 10, width: 100, height: 60, durationMs: 8000 })
   expect(r.status).toBe(200)

@@ -39,6 +39,15 @@ export class TabSession {
   reference: TargetSource | null = null
   /** Mirrored from the renderer like the throttle, for `status`; never persisted. */
   onionSkin = DEFAULT_ONION_SKIN
+  /**
+   * Where the target is scrolled, in page CSS px, as last reported: by the
+   * agent-control scroll's reply (the scroller it actually moved, root or
+   * inner element) or by the target's preload for a root scroll. Reset on
+   * every new document. What a page-space highlight is mapped through.
+   */
+  targetScroll: { x: number; y: number } = { x: 0, y: 0 }
+  /** Whether the target is loading a document, as it last reported; `status.loading`. */
+  targetLoading = false
 
   // `modeIsLive` and `reportedMode` describe the same idea from opposite
   // directions and must not be collapsed into one field. `modeIsLive` is
@@ -135,7 +144,11 @@ export class TabSession {
     // The reference follows every new document the target commits; an
     // in-place rewrite is the page's own and the reference's page does the
     // same to itself.
+    this.target.on('loading', loading => {
+      this.targetLoading = loading
+    })
     this.target.on('url-changed', (url, inPage) => {
+      if (!inPage) this.targetScroll = { x: 0, y: 0 }
       if (!inPage && this.reference) void this.reference.load(url)
     })
   }
@@ -195,6 +208,13 @@ export class TabSession {
    * The reference's own preload also reports scrolls; those are nobody's
    * to mirror and the manager's router never resolves them to a session.
    */
+  /** The target's preload reporting a root scroll: remembered for page-space mapping. */
+  noteTargetScroll(e: IpcMainEvent, raw: unknown): void {
+    if (e.sender !== this.target.webContents) return
+    const pos = parseScrollPos(raw)
+    if (pos) this.targetScroll = { x: pos.x, y: pos.y }
+  }
+
   forwardScroll(e: IpcMainEvent, raw: unknown): void {
     const ref = this.reference
     if (!ref || ref.webContents.isDestroyed()) return

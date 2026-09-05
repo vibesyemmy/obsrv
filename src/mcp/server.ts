@@ -209,7 +209,7 @@ const snapInputShape = {
         'live: require the app (error if unreachable). headless: never touch the app.',
     ),
   capture: z
-    .enum(['window', 'pane'])
+    .enum(['window', 'pane', 'raster'])
     .optional()
     .describe(
       "Live mode only: what the returned PNG shows — 'window' (default) is the whole app window, 'pane' is the " +
@@ -271,6 +271,14 @@ const snapOutputShape = {
       'Live only: false when the app was already showing this URL, so no reload was issued and the capture kept ' +
         'the current scroll position, pan and in-page state. True when the app was pointed somewhere new — that is ' +
         'a fresh load, which starts at the top of the page.',
+    ),
+  unsettledReason: z
+    .enum(['animating', 'timeout', 'uncovered'])
+    .optional()
+    .describe(
+      "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
+        "early (~2 s) rather than at the budget and waiting longer would not have helped; 'timeout' — still painting at the budget; " +
+        "'uncovered' — part of the frame never painted within the budget.",
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
@@ -496,6 +504,14 @@ const driveInputShape = {
       width: z.number().min(1),
       height: z.number().min(1),
       durationMs: z.number().optional(),
+      space: z
+        .enum(['pane', 'page'])
+        .optional()
+        .describe(
+          "The rect's space. 'pane' (default): target-pane device pixels of what is showing. 'page': the page's own CSS px with " +
+            "scroll included — an obsrv_audit finding's rect or obsrv_inspect's pageRect, passed as they came; the app maps it " +
+            'through the current scroll, text scale and density. The result says whether it was on screen (drawn) and the pane rect used.',
+        ),
     })
     .optional()
     .describe(
@@ -503,7 +519,7 @@ const driveInputShape = {
         '250-10000). A new highlight replaces the previous one.',
     ),
   capture: z
-    .enum(['window', 'pane'])
+    .enum(['window', 'pane', 'raster'])
     .optional()
     .describe(
       "Capture the app after the commands run: 'pane' crops to the rendered screen itself (the render, not the " +
@@ -522,6 +538,7 @@ const driveOutputShape = {
   textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
   throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
   onionSkin: z.number().describe("The onion skin's opacity, 0 = off. Reported as 0 by an app older than the field."),
+  loading: z.boolean().describe('Whether the target is loading a document. Reported as false by an app older than the field.'),
   orientation: z
     .string()
     .describe(
@@ -641,11 +658,12 @@ interface LiveCapture {
  * and write it to a per-call temp PNG. Shared by the live `obsrv_snap` path
  * and `obsrv_drive`'s `capture`, so both produce byte-identical results.
  */
-async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane'): Promise<LiveCapture> {
+async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane' | 'raster'): Promise<LiveCapture> {
   // `pane` crops to the target pane; both answer with the same
   // { data, width, height } shape plus their own warnings (e.g. the pre-mount
   // full-window fallback), which join the tool's.
-  const command = what === 'pane' ? 'captureTarget' : 'captureVisible'
+  // `raster` is the target's own frame at device pixels, the view untouched.
+  const command = what === 'pane' ? 'captureTarget' : what === 'raster' ? 'captureRaster' : 'captureVisible'
   const capture = await controlCall(info, command, {}, LIVE_CAPTURE_TIMEOUT_MS)
   const { data, width, height } = capture
   if (typeof data !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
@@ -726,7 +744,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
 
   let capture: LiveCapture
   try {
-    capture = await liveCapture(info, input.capture === 'pane' ? 'pane' : 'window')
+    capture = await liveCapture(info, input.capture ?? 'window')
   } catch (e) {
     return toolError(liveFailure(e))
   }
@@ -743,6 +761,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     textScale: status.textScale,
     throttle: status.throttle,
     onionSkin: status.onionSkin,
+    loading: status.loading,
     cssWidth: status.cssWidth,
     cssHeight: status.cssHeight,
     viewMode: status.viewMode,
@@ -1060,6 +1079,13 @@ const readoutShape = z
     classes: z.string(),
     text: z.string().describe("The element's own text, trimmed, at most 60 characters."),
     rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).describe('Border box in CSS px of the target screen.'),
+    pageRect: z
+      .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+      .optional()
+      .describe(
+        "The same box in page CSS px, scroll included — an obsrv_audit finding's space, and what obsrv_drive's highlight takes with " +
+          "space: 'page'. Absent from an app older than the field.",
+      ),
     rectMm: z.object({ width: z.number(), height: z.number() }).nullable().describe('The box in millimetres on this screen; null without a diagonal.'),
     font: z.object({
       px: z.number().describe("The page's own font size in CSS px."),
@@ -1145,6 +1171,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
+      unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       audit: z
         .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
@@ -1216,7 +1243,7 @@ server.registerTool(
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
       `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
-      `preset → orientation → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
@@ -1263,8 +1290,8 @@ server.registerTool(
     scroll?: { x: number; y: number; scrollSelector?: string }
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
-    highlight?: { x: number; y: number; width: number; height: number; durationMs?: number }
-    capture?: 'window' | 'pane'
+    highlight?: { x: number; y: number; width: number; height: number; durationMs?: number; space?: 'pane' | 'page' }
+    capture?: 'window' | 'pane' | 'raster'
   }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
@@ -1370,7 +1397,8 @@ server.registerTool(
       }
       const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(structured, null, 2) }]
       if (capture !== null) {
-        const label = input.capture === 'pane' ? 'The captured target pane' : 'The captured app window'
+        const label =
+          input.capture === 'pane' ? 'The captured target pane' : input.capture === 'raster' ? "The target's own raster" : 'The captured app window'
         content.push(await imageOrNote(capture.pngPath, label, 'read the file at pngPath'))
       }
       return { content, structuredContent: structured }
@@ -1472,12 +1500,18 @@ server.registerTool(
       `from the app's preset table — nothing is rendered. The dimensions are each preset's natural orientation ` +
       `(portrait for the mobile ones, landscape for the monitors); every preset also rotates — see the ` +
       `\`orientation\` note in the result.`,
-    inputSchema: {},
+    inputSchema: {
+      group: z
+        .enum(['laptop', 'desktop', 'mobile'])
+        .optional()
+        .describe('Only the screen presets of this group; the profiles and throttles come regardless. Omit for every preset.'),
+    },
     outputSchema: presetsOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
-  async (): Promise<CallToolResult> => {
-    const catalog = listCatalog()
+  async (input: { group?: 'laptop' | 'desktop' | 'mobile' }): Promise<CallToolResult> => {
+    const all = listCatalog()
+    const catalog = input.group === undefined ? all : { ...all, presets: all.presets.filter(p => p.group === input.group) }
     return {
       content: [{ type: 'text', text: JSON.stringify(catalog, null, 2) }],
       structuredContent: { ...catalog },

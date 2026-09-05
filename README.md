@@ -200,8 +200,11 @@ driven. An agent cannot open, close or switch tabs; that stays yours.
 A headless `snap` returns `settled: true` when the page went paint-quiet and
 every pixel painted. `settled: false` is still a usable capture, not a
 failure — a page that kept animating, or one whose repaint never completed,
-comes back as-is (exit code 0) with a warning saying what was missing. Only a
-render that painted nothing at all is an error.
+comes back as-is (exit code 0) with a warning saying what was missing and an
+`unsettledReason`: `animating` (captured after ~2 s of steady painting;
+waiting longer would not help), `timeout` (still painting at the budget) or
+`uncovered` (part of the frame never painted). Only a render that painted
+nothing at all is an error.
 
 Build first, then register:
 

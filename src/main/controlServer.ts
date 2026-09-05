@@ -25,6 +25,8 @@ import {
   type AgentApplyPatch,
   type AgentClick,
   type ControlStatus,
+  pageRectToPane,
+  type TargetView,
 } from '../shared/control'
 import { parseScrollPos, parseScrollRequest } from '../shared/ipcPayloads'
 import type { Orientation, ScrollReport, ScrollRequest } from '../shared/types'
@@ -74,8 +76,12 @@ export interface ControlDeps {
    * full window (with a warning) when the renderer has not reported them.
    */
   captureTarget(): Promise<{ data: string; width: number; height: number; warnings: string[] }>
+  /** The target's own frame at device pixels — the raster an agent judges type on — with the capture's settle verdict. */
+  captureRaster(): Promise<{ data: string; width: number; height: number; settled: boolean; unsettledReason?: string; warnings: string[] }>
   /** The target's current CSS viewport, for `click` bounds validation. */
   viewport(): { width: number; height: number }
+  /** The target's scroll, text scale, density and pane size: what a page-space rect is mapped through. */
+  targetView(): Promise<TargetView>
   /**
    * Absolute page scroll of both panes over the pane-sync `applyScroll`
    * channel; resolves with the offset the target pane actually reached, or
@@ -87,7 +93,8 @@ export interface ControlDeps {
   /** The toolbar's history/reload actions, byte-for-byte (native-only history; reload reloads both). */
   back(): void
   forward(): void
-  reload(): void
+  /** Reloads both panes and resolves once the target has loaded again, or after a bound. */
+  reload(): Promise<void>
   /** Bring the app window to the front. */
   focusWindow(): void
   /**
@@ -283,6 +290,11 @@ export class ControlServer {
         return reply(200, { ok: true, ...capture })
       }
 
+      case 'captureRaster': {
+        const capture = await this.deps.captureRaster()
+        return reply(200, { ok: true, ...capture })
+      }
+
       case 'inspect': {
         const req = parseInspectRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
@@ -326,10 +338,28 @@ export class ControlServer {
       }
 
       case 'highlight': {
-        const highlight = parseHighlight(payload)
-        if (typeof highlight === 'string') return reply(400, { error: highlight })
+        const parsed = parseHighlight(payload)
+        if (typeof parsed === 'string') return reply(400, { error: parsed })
+        const { space, ...highlight } = parsed
+        if (space === 'page') {
+          // An audit finding's rect: mapped through what the target shows
+          // now, so the agent never reads the scroll back to do it.
+          const view = await this.deps.targetView()
+          const pane = pageRectToPane(highlight, view)
+          if (!pane) {
+            return reply(200, {
+              ok: true,
+              drawn: false,
+              warnings: [
+                `the page rect is off screen at the current scroll (${view.scrollX}, ${view.scrollY}); scroll it into view first`,
+              ],
+            })
+          }
+          this.deps.apply({ highlight: { ...pane, durationMs: highlight.durationMs } })
+          return reply(200, { ok: true, drawn: true, pane })
+        }
         this.deps.apply({ highlight })
-        return reply(200, { ok: true })
+        return reply(200, { ok: true, drawn: true, pane: { x: highlight.x, y: highlight.y, width: highlight.width, height: highlight.height } })
       }
 
       case 'back':
@@ -341,7 +371,9 @@ export class ControlServer {
         return reply(200, { ok: true })
 
       case 'reload':
-        this.deps.reload()
+        // Answered once the target has loaded again (bounded), so a capture
+        // after it in the same drive shows the reloaded page.
+        await this.deps.reload()
         return reply(200, { ok: true })
 
       case 'setPixelExact': {

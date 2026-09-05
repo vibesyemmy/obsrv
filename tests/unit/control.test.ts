@@ -15,6 +15,7 @@ import {
   panesApplyError,
   textScaleApplyError,
   onionSkinApplyError,
+  pageRectToPane,
   throttleApplyError,
   parseHighlight,
   pixelExactApplyError,
@@ -93,6 +94,7 @@ describe('command validation', () => {
   it('knows exactly the twenty-two commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'back',
+      'captureRaster',
       'captureTarget',
       'captureVisible',
       'click',
@@ -200,6 +202,7 @@ describe('parseHighlight', () => {
       width: 300,
       height: 80,
       durationMs: HIGHLIGHT_DURATION_DEFAULT_MS,
+      space: 'pane',
     })
   })
   it('rounds coordinates like a pane rect and never passes unknown keys through', () => {
@@ -209,6 +212,7 @@ describe('parseHighlight', () => {
       width: 300,
       height: 80,
       durationMs: 500,
+      space: 'pane',
     })
   })
   it('clamps the duration into 250-10000 ms and rounds it', () => {
@@ -264,6 +268,7 @@ describe('parseControlStatus', () => {
     textScale: 1,
     throttle: 'none',
     onionSkin: 0,
+    loading: false,
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -489,5 +494,40 @@ describe('onionSkinApplyError', () => {
   it('accepts an opacity and names the shape otherwise', () => {
     for (const ok of [0, 0.25, 1]) expect(onionSkinApplyError(ok)).toBeNull()
     for (const bad of [undefined, 2, -1, '0.5', null]) expect(onionSkinApplyError(bad)).toMatch(/setOnionSkin payload must be \{ onionSkin: number \}/)
+  })
+})
+
+describe('parseHighlight space', () => {
+  it('defaults to the pane and accepts page', () => {
+    expect(parseHighlight({ x: 1, y: 2, width: 3, height: 4 })).toMatchObject({ space: 'pane' })
+    expect(parseHighlight({ x: 1, y: 2, width: 3, height: 4, space: 'page' })).toMatchObject({ space: 'page' })
+    expect(parseHighlight({ x: 1, y: 2, width: 3, height: 4, space: 'canvas' })).toMatch(/highlight space must be/)
+  })
+})
+
+describe('pageRectToPane', () => {
+  const view = { scrollX: 0, scrollY: 7228.5, textScale: 1, dsf: 2, paneWidth: 720, paneHeight: 1600 }
+  it('maps an audit rect through the scroll and the density', () => {
+    // The footer link the agent tried to mark: page (24, 7553.85) 30.6×18.75 at scroll 7228.5 on a 2× phone.
+    expect(pageRectToPane({ x: 24, y: 7553.85, width: 30.6, height: 18.75 }, view)).toEqual({ x: 48, y: 651, width: 61, height: 37 })
+  })
+  it('cuts to the viewport and reports nothing when the rect is off screen', () => {
+    expect(pageRectToPane({ x: 0, y: 100, width: 50, height: 20 }, view)).toBeNull()
+    expect(pageRectToPane({ x: 350, y: 7230, width: 40, height: 10 }, view)).toEqual({ x: 700, y: 3, width: 20, height: 20 })
+  })
+  it('a text scale makes a page CSS px that many surface px', () => {
+    const scaled = { ...view, scrollY: 0, textScale: 1.5, dsf: 1, paneWidth: 1366, paneHeight: 768 }
+    expect(pageRectToPane({ x: 10, y: 20, width: 100, height: 40 }, scaled)).toEqual({ x: 15, y: 30, width: 150, height: 60 })
+  })
+})
+
+describe('parseControlStatus loading', () => {
+  const base = {
+    version: '0.28.0', url: 'about:blank', presetId: 'laptop-768', profileId: 'reference', viewMode: 'fit', panes: 'both', mode: 'url',
+  }
+  it('an app older than the field reports not loading; a bad value is refused', () => {
+    expect(parseControlStatus(base)?.loading).toBe(false)
+    expect(parseControlStatus({ ...base, loading: true })?.loading).toBe(true)
+    expect(parseControlStatus({ ...base, loading: 'yes' })).toBeNull()
   })
 })

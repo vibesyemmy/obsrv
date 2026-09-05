@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { FrameMessage } from '../../src/shared/api'
-import { bgraToRgba, captureQuiescent } from '../../src/cli/capture'
+import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, bgraToRgba, captureQuiescent } from '../../src/cli/capture'
 
 /** Emits scripted frames when poked; `invalidate()` replays the script once. */
 class FakeSource extends EventEmitter {
@@ -93,6 +93,44 @@ describe('captureQuiescent', () => {
       clearInterval(noisy)
     }
   })
+  it('a covered page that keeps painting steadily is captured early as animating, not at the budget', async () => {
+    const src = new FakeSource([fullFrame(1, 1, 9)])
+    const noisy = setInterval(() => src.invalidate(), 20)
+    try {
+      const warnings: string[] = []
+      const t0 = Date.now()
+      const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 30_000, onWarn: m => warnings.push(m) })
+      const took = Date.now() - t0
+      expect(got.settled).toBe(false)
+      expect(got.unsettledReason).toBe('animating')
+      expect(took).toBeGreaterThanOrEqual(ANIMATING_AFTER_MS - 50)
+      expect(took).toBeLessThan(ANIMATING_AFTER_MS + 1_500)
+      expect(warnings.join(' ')).toMatch(/painting steadily/)
+      expect(ANIMATING_MIN_PAINTS).toBeLessThanOrEqual(ANIMATING_AFTER_MS / 20)
+    } finally {
+      clearInterval(noisy)
+    }
+  })
+
+  it('with the animation exit off, the same page runs to the budget and says timeout', async () => {
+    const src = new FakeSource([fullFrame(1, 1, 9)])
+    const noisy = setInterval(() => src.invalidate(), 20)
+    try {
+      const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 400, animationExit: false })
+      expect(got.settled).toBe(false)
+      expect(got.unsettledReason).toBe('timeout')
+    } finally {
+      clearInterval(noisy)
+    }
+  })
+
+  it('a frame that never fills says uncovered', async () => {
+    const half: FrameMessage = { frame: { x: 0, y: 0, width: 1, height: 1, data: new Uint8Array(4).fill(3) }, frameWidth: 2, frameHeight: 1 }
+    const got = await captureQuiescent(new FakeSource([half]), { settleMs: 20, timeoutMs: 150, onWarn: () => {} })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('uncovered')
+  })
+
   it('an external failure aborts immediately instead of burning the timeout', async () => {
     const t0 = Date.now()
     let failed: Error | null = null

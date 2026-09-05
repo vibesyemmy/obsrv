@@ -79,7 +79,17 @@ means the usual headless render.
 To see anything below the fold, scroll and capture in the **same**
 `obsrv_drive` call — `{ scroll: { x: 0, y: 1500 }, capture: 'pane' }`. That
 tool never navigates unless you pass `url`, so the scroll is still in place
-when the PNG is taken. Reaching for `obsrv_snap` after a scroll works only
+when the PNG is taken.
+
+To point the user at an audit finding, pass its `rect` to `highlight` as it
+came, with `space: 'page'` — `{ scroll: { x: 0, y: finding.rect.y - 200 },
+highlight: { ...finding.rect, space: 'page' } }` — and the app maps it through
+the scroll, text scale and density; the reply says whether it was on screen.
+`obsrv_inspect` answers with `pageRect` in the same space. To judge type,
+`capture: 'raster'` returns the target's own frame at device pixels without
+changing what the user sees (`'pane'` is the pane as shown, minified in Fit).
+`status.loading` says whether a load is still in flight; `reload` answers
+once it has finished. Reaching for `obsrv_snap` after a scroll works only
 when the app is already on that exact URL (it answers `navigated: false`);
 snapping a different URL is a fresh load and lands back at the top.
 
@@ -122,5 +132,10 @@ happened on the matrix snaps.
 - `diff` cannot say "the hairline vanished": a 0.5px hairline renders one
   device row at 1x *and* 2x. It reports ink deltas and row ratios; vanishing
   is judged by reading the PNG.
-- Animating pages never go paint-quiet; the capture takes the frame at
-  `--timeout` with a warning. Use `--wait` for late-settling content.
+- Animating pages never go paint-quiet. A covered frame that keeps painting
+  steadily is captured after ~2 s with `settled: false` and
+  `unsettledReason: "animating"` — waiting longer would not help, so don't
+  raise `--timeout` for it. `"timeout"` means still painting at the budget
+  (under a throttle the early exit is off, since `settledMs` is the
+  measurement); `"uncovered"` means part of the frame never painted. Use
+  `--wait` for content that settles late.
