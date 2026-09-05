@@ -16,7 +16,7 @@ import {
   parseSettings,
   parseTabId,
   parseOrientation,
-  parseUiState, parseInspectRequest } from '../../src/shared/ipcPayloads'
+  parseUiState, parseInspectRequest, parseAuditRequest } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
 
 describe('parseRect', () => {
@@ -507,6 +507,24 @@ describe('parseInspectRequest', () => {
     expect(parseInspectRequest({ selector: '' })).toMatch(/1 to 512 characters/)
     expect(parseInspectRequest({ selector: 'p'.repeat(513) })).toMatch(/1 to 512 characters/)
     expect(parseInspectRequest({ selector: 42 })).toBe('selector must be a string')
+  })
+})
+
+describe('parseAuditRequest', () => {
+  it('no payload, or an empty one, means the default thresholds', () => {
+    expect(parseAuditRequest(undefined)).toEqual({})
+    expect(parseAuditRequest(null)).toEqual({})
+    expect(parseAuditRequest({})).toEqual({})
+  })
+  it('takes either threshold on its own, in millimetres', () => {
+    expect(parseAuditRequest({ tapMm: 9 })).toEqual({ tapMm: 9 })
+    expect(parseAuditRequest({ textMm: 1.5, tapMm: 0 })).toEqual({ tapMm: 0, textMm: 1.5 })
+  })
+  it('refuses a threshold that is not a finite, non-negative number, naming it', () => {
+    expect(parseAuditRequest({ tapMm: -1 })).toMatch(/^tapMm must be/)
+    expect(parseAuditRequest({ textMm: 'two' })).toMatch(/^textMm must be/)
+    expect(parseAuditRequest({ tapMm: Number.NaN })).toMatch(/^tapMm must be/)
+    expect(parseAuditRequest('audit')).toMatch(/tapMm\?, textMm\?/)
   })
 })
 

@@ -335,6 +335,47 @@ test('obsrv_inspect (auto) inspects the running app: the page it is navigated to
   expect(off.structuredContent).toMatchObject({ mode: 'live', found: false })
 })
 
+test('obsrv_audit (auto) audits the running app on the screen in force, and names the tab', async () => {
+  const auditPage = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
+  await call('obsrv_drive', { preset: '1080p-24', textScale: 1 })
+  const r = await call('obsrv_audit', { url: auditPage })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as {
+    mode: string
+    url: string
+    preset: string
+    tabId: string
+    tabIndex: number
+    cssWidth: number
+    textScale?: number
+    ppi: number
+    thresholds: { tapMm: number; textMm: number }
+    summary: { targets: { count: number; under: number } }
+    findings: { kind: string; element: string; mm: number }[]
+    notes: string[]
+  }
+  // The same numbers the headless audit reports for this fixture on a 24" 1080p (mcp.spec / cli-audit.spec).
+  expect(m).toMatchObject({ mode: 'live', preset: '1080p-24', tabIndex: 0, cssWidth: 1920, thresholds: { tapMm: 7, textMm: 2 }, notes: [] })
+  expect(m.url).toContain('audit.html')
+  expect(typeof m.tabId).toBe('string')
+  expect(m.textScale).toBeUndefined()
+  expect(m.ppi).toBeCloseTo(91.8, 1)
+  expect(m.summary.targets).toMatchObject({ count: 2, under: 1 })
+  expect(m.findings).toHaveLength(1)
+  expect(m.findings[0]).toMatchObject({ kind: 'small-target', element: 'button#tiny' })
+  expect(m.findings[0]!.mm).toBeCloseTo(6.64, 1)
+  // Headless-only options are ignored live, with a note each; the thresholds are honoured.
+  const noted = await call('obsrv_audit', { preset: 'android-65', tapMm: 6 })
+  expect(noted.structuredContent).toMatchObject({ mode: 'live', preset: '1080p-24', thresholds: { tapMm: 6, textMm: 2 } })
+  expect((noted.structuredContent as { notes: string[] }).notes.join(' ')).toContain('`preset` is headless-only')
+  expect((noted.structuredContent as { summary: { targets: { under: number } } }).summary.targets.under).toBe(0)
+  // mode: 'headless' never touches the app, and needs a url.
+  const headless = await call('obsrv_audit', { url: auditPage, preset: 'android-65', mode: 'headless' })
+  expect(headless.structuredContent).toMatchObject({ mode: 'headless', preset: 'android-65', cssWidth: 360 })
+  const nourl = await call('obsrv_audit', { mode: 'headless' })
+  expect(nourl.isError).toBe(true)
+})
+
 test('obsrv_drive sets a throttle on the live target; status and the footer report it', async () => {
   const r = await call('obsrv_drive', { throttle: 'cpu-6x' })
   expect(r.isError).toBeFalsy()

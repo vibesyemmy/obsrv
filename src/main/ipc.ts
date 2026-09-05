@@ -1,4 +1,5 @@
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
@@ -1389,6 +1390,29 @@ export function registerIpc(ctx: AppContext): () => void {
         // recorded — the same source a page-space highlight is mapped through.
         tab().targetScroll,
       )
+    },
+    audit: async req => {
+      const t = tab().target
+      const report = await t.auditPage()
+      if (!report) return null
+      const vp = t.getViewport()
+      // The screen's diagonal comes from the preset table, as for inspect; a
+      // custom screen has none here, so there are no millimetres and the
+      // result's warnings say so.
+      let diagonalInches: number | null = null
+      try {
+        diagonalInches = findScreenPreset(uiState.presetId).diagonalInches
+      } catch {
+        diagonalInches = null
+      }
+      const textScale = t.getTextScale()
+      const deviceScaleFactor = t.getDeviceScaleFactor()
+      const result = auditFindings(
+        report,
+        { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, diagonalInches, textScale },
+        { tapMm: req.tapMm ?? DEFAULT_TAP_MM, textMm: req.textMm ?? DEFAULT_TEXT_MM },
+      )
+      return { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale, pageHeight: report.pageHeight, ...result }
     },
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import { parseInspectRequest, type InspectRequest } from '../shared/ipcPayloads'
+import { parseAuditRequest, parseInspectRequest, type AuditRequest, type InspectRequest } from '../shared/ipcPayloads'
 import type { InspectReadout } from '../shared/inspectReadout'
+import type { AuditResult } from '../cli/audit'
 import type { VisionType } from '../shared/vision'
 import { rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
@@ -103,8 +104,24 @@ export interface ControlDeps {
    * force. Null when nothing is there.
    */
   inspect(req: InspectRequest): Promise<InspectReadout | null>
+  /**
+   * The physical-units audit on the page in front: every target and text
+   * element in millimetres on the screen in force, density and text scale
+   * included, as `obsrv audit` measures a headless load. Null when the page
+   * did not answer (navigated away, or threw while being measured).
+   */
+  audit(req: AuditRequest): Promise<LiveAudit | null>
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
+}
+
+/** What a live audit answers: the screen it was measured on, then `obsrv audit`'s own result. */
+export interface LiveAudit extends AuditResult {
+  cssWidth: number
+  cssHeight: number
+  deviceScaleFactor: number
+  textScale: number
+  pageHeight: number
 }
 
 interface Reply {
@@ -300,6 +317,14 @@ export class ControlServer {
         if (typeof req === 'string') return reply(400, { error: req })
         const readout = await this.deps.inspect(req)
         return reply(200, { ok: true, found: readout !== null, readout })
+      }
+
+      case 'audit': {
+        const req = parseAuditRequest(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        const result = await this.deps.audit(req)
+        if (!result) return reply(409, { error: 'the page did not answer the audit (it may have navigated away, or thrown while being measured)' })
+        return reply(200, { ok: true, ...result })
       }
 
       case 'scroll': {

@@ -91,8 +91,9 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty-two commands', () => {
+  it('knows exactly the twenty-five commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
+      'audit',
       'back',
       'captureRaster',
       'captureTarget',
