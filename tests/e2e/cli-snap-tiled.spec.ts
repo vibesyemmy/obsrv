@@ -61,3 +61,28 @@ test('a page that fits one surface is one band, and --tiled alone is refused', a
   expect(bad.code).toBe(2)
   expect(bad.stderr).toContain('--tiled goes with --full-page')
 })
+
+test('a page sized against the viewport is warned about on one surface, and not when tiled', async () => {
+  // `--full-page` alone makes the viewport as tall as the page, so a 100vh
+  // hero becomes the whole surface's height and the PNG is a layout the
+  // screen never shows. Measured, not assumed: the page is asked again after
+  // the surface grows, and only a page that actually moved is warned about.
+  const out = join(outDir, 'vu.png')
+  const one = await runCli(['snap', fixture('viewport-units.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(one.code, one.stderr).toBe(0)
+  const warned = (JSON.parse(one.stdout).warnings as string[]).join(' ')
+  expect(warned).toMatch(/lays out against the viewport height/)
+  expect(warned).toMatch(/Add --tiled/)
+
+  const tiled = await runCli(['snap', fixture('viewport-units.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(tiled.code, tiled.stderr).toBe(0)
+  const tiledJson = JSON.parse(tiled.stdout)
+  expect(tiledJson).toMatchObject({ tiled: true, cssHeight: 768 })
+  expect((tiledJson.warnings as string[]).join(' ')).not.toMatch(/lays out against the viewport height/)
+
+  // And a page that does not size itself against the viewport is not warned
+  // about, so the warning stays worth reading.
+  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(plain.code, plain.stderr).toBe(0)
+  expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/lays out against the viewport height/)
+})

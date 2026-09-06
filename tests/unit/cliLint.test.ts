@@ -177,7 +177,7 @@ describe('groups', () => {
     const res = lintFindings(report({ text: texts }), screen(1), reference, thresholds)
     expect(res.summary.contrast).toBe(12)
     expect(res.groups).toHaveLength(1)
-    expect(res.groups[0]).toMatchObject({ rule: 'contrast', key: '#828282 on #f6f6ef', count: 12, elements: ['span.r0', 'span.r1', 'span.r2', 'span.r3'] })
+    expect(res.groups[0]).toMatchObject({ rule: 'contrast', key: '#828282 on light backgrounds', count: 12, elements: ['span.r0', 'span.r1', 'span.r2', 'span.r3'] })
     expect(res.groups[0]!.exemplar.element).toBe('span.r0')
     expect(LINT_GROUP_ELEMENTS).toBe(5)
   })
@@ -187,14 +187,25 @@ describe('groups', () => {
     expect(res.findings).toHaveLength(LINT_MAX_FINDINGS)
     expect(res.groups).toEqual([expect.objectContaining({ rule: 'hairline', key: 'border-top 0.5px', count: LINT_MAX_FINDINGS + 30 })])
   })
+  it('contrast groups band the background: one text colour on a page of near-whites is one group', () => {
+    const texts = [[255, 255, 255], [253, 253, 253], [247, 247, 247], [248, 249, 250]].map((bg, i) => text({ element: `a.l${i}`, color: [51, 102, 204, 1], background: [...bg, 1] as [number, number, number, number] }))
+    const res = lintFindings(report({ text: texts }), screen(1), budget, thresholds)
+    const panel = res.groups.filter(g => g.rule === 'contrast-on-panel')
+    expect(panel).toHaveLength(1)
+    expect(panel[0]).toMatchObject({ key: '#3366cc on light backgrounds', count: 4 })
+    // The exemplar is the worst exact pair, so the figures are not lost.
+    expect(panel[0]!.exemplar.message).toMatch(/#3366cc on #f7f7f7/)
+    const dark = lintFindings(report({ text: [text({ color: [255, 151, 160, 1], background: [45, 48, 52, 1] })] }), screen(1), budget, thresholds)
+    expect(dark.groups.map(g => g.key)).toEqual(['#ff97a0 on dark backgrounds'])
+  })
   it('the key names what is shared, per rule', () => {
     const base = lintFindings(report({ text: [text({ fontWeight: 300, fontSizePx: 12 }), text({ color: [153, 153, 153, 1] })], images: [image({ naturalWidth: 100, naturalHeight: 100 })] }), screen(1), reference, thresholds)
     expect(base.groups.map(g => [g.rule, g.key])).toEqual([
       ['thin-text', '300 at 12px'],
-      ['contrast', '#999999 on #ffffff'],
+      ['contrast', '#999999 on light backgrounds'],
       ['image-upscaled', 'no srcset · 2–3×'],
     ])
-    expect(groupKey(base.groups[1]!.exemplar)).toBe('#999999 on #ffffff')
+    expect(groupKey(base.groups[1]!.exemplar)).toBe('#999999 on light backgrounds')
     expect(groupFindings([])).toEqual([])
   })
 })
@@ -227,7 +238,7 @@ describe('what is set aside', () => {
     const [g] = slimGroups(lintFindings(r, screen(1), reference, thresholds).groups)
     expect(g).toEqual({
       rule: 'contrast',
-      key: '#999999 on #ffffff',
+      key: '#999999 on light backgrounds',
       count: 1,
       elements: ['p#t'],
       exemplar: { element: 'p#t', text: 'some text', rect, message: expect.stringContaining('#999999 on #ffffff is 2.85:1') },

@@ -81,6 +81,12 @@ const api: ObsrvApi = {
   onFrame: subscribeFrames,
   setOnionSkin: on => ipcRenderer.invoke(IPC.setOnionSkin, on),
   onReferenceFrame: subscribeReferenceFrames,
+  onDrawNow: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.drawNow, listener)
+    return () => ipcRenderer.off(IPC.drawNow, listener)
+  },
+  drewNow: () => ipcRenderer.send(IPC.drewNow),
   // Each of these names the tab it describes: main no longer gates them on the
   // tab being in front, so a background tab keeps its own strip entry current
   // without touching the address bar of the tab that is showing.

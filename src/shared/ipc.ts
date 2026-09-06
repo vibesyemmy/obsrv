@@ -58,6 +58,10 @@ export const IPC = {
   setOnionSkin: 'obsrv:set-onion-skin',
   /** Main -> chrome: a frame of the reference render, on its own channel (see shared/onionSkin.ts). */
   referenceFrame: 'obsrv:reference-frame',
+  /** Main -> chrome: draw the frame already uploaded, now, without waiting for an animation frame. */
+  drawNow: 'obsrv:draw-now',
+  /** Chrome -> main: the draw `drawNow` asked for has run. */
+  drewNow: 'obsrv:drew-now',
   referenceSubscribe: 'obsrv:reference-subscribe',
   urlChanged: 'obsrv:url-changed',
   titleChanged: 'obsrv:title-changed',

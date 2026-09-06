@@ -86,7 +86,8 @@ alone.
 
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
-findings grouped by what they share — a colour pair, a weight and size, an
+findings grouped by what they share — a text colour on light, mid-tone or
+dark backgrounds, a weight and size, an
 edge kind, a `srcset`-or-not and a factor bucket for images; a control's
 short side or a font size for the audit — over every finding counted, each with a
 count, the worst member as exemplar and a few of the elements. A page with
@@ -197,6 +198,10 @@ happened on the matrix snaps.
 - `diff` cannot say "the hairline vanished": a 0.5px hairline renders one
   device row at 1x *and* 2x. It reports ink deltas and row ratios; vanishing
   is judged by reading the PNG.
+  It cannot name the element that weakened either: measured per box, the 1x
+  render carries *more* ink than the 2x reference, and the size of the
+  difference tracks the text's colour rather than its stroke (the figures
+  are in `src/cli/metrics.ts`). Ask `lint` which elements, and read the PNG.
 - Animating pages never go paint-quiet. A covered frame that keeps painting
   steadily is captured after ~2 s — headless and live alike — with
   `settled: false` and `unsettledReason: "animating"`; waiting longer would
@@ -209,4 +214,6 @@ happened on the matrix snaps.
   their size), so a sticky header repeats at the top of each band, as it
   does when a person scrolls.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
-  (`tiled: true` on `obsrv_snap`).
+  (`tiled: true` on `obsrv_snap`). On one surface the viewport is as tall as
+  the page, so a `100vh` hero becomes the whole surface's height: a page that
+  moves is warned about by name, and `--tiled` is the answer.

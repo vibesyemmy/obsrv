@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Viewport units</title>
+    <style>
+      body { margin: 0; font: 16px/1.5 system-ui, sans-serif; }
+      /* A hero sized against the viewport: it is the screen's height on the
+         screen, and a taller surface's height on a grown surface. That is the
+         difference `--full-page` hides and `--tiled` keeps. */
+      .hero { height: 100vh; background: #123; color: #fff; display: flex; align-items: center; justify-content: center; }
+      .after { height: 1200px; background: #eee; }
+    </style>
+  </head>
+  <body>
+    <section class="hero">A hero sized at 100vh</section>
+    <section class="after">Content below the fold</section>
+  </body>
+</html>

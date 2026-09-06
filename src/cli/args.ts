@@ -198,7 +198,9 @@ ${THROTTLE_PROFILES.map(t => `                         ${t.id.padEnd(13)} ${t.su
 snap flags:
   --out <file>         Output PNG (default ./obsrv-<preset>.png). Under --matrix: an
                        output directory, or a pattern containing {preset}.
-  --full-page          Capture the full page height (device pixels capped at 4096).
+  --full-page          Capture the full page height on one surface (device pixels capped at 4096).
+                       A page that sizes anything against the viewport lays out differently on a
+                       surface that tall, and says so; --tiled avoids it.
   --tiled              With --full-page: a page taller than the screen is captured a screenful at a
                        time (up to twelve) and stitched, instead of clamped at one surface. The
                        viewport stays the screen's, so 100vh sections keep their size; a sticky header

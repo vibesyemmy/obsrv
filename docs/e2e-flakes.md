@@ -236,6 +236,30 @@ prints nothing. The frames are Electron's exported symbols nearest the
 addresses, not a symbolicated stack; they place the fault, they do not
 name the line.
 
+## `cli.spec`'s "solid red": a download banner on the machine channel
+
+The one that failed on CI and passed on re-run, repeatedly, and never once
+locally. The failure was never about pixels:
+
+    SyntaxError: Unexpected token 'D', "Downloadin"... is not valid JSON
+      const json = JSON.parse(r.stdout)
+
+`require('electron')` returns the binary's path and downloads the binary
+first when it is missing, announcing that with `console.log('Downloading
+Electron binary...')` — stdout — and then spawning its installer with
+`stdio: 'inherit'`, so that lands on stdout too. `bin/obsrv.js` inherited
+both, and the CLI's contract is that stdout carries nothing but machine
+JSON. Locally the binary is always already there, which is why it never
+reproduced; on CI it is there only if the cache restored it, which is why
+it was intermittent, and why the failing attempt was always the slow one
+(4–5 s against 1 s on retry — the download).
+
+It was never a test problem. `bin/electronPath.js` now works the path out
+itself, which cannot print, and hands a genuinely missing binary to a child
+process whose stdout is redirected to stderr. The same fault hit the
+`npx -y getobsrv` first run the README documents, where every agent parsing
+stdout would have seen it.
+
 ## `visibility.spec` and `log.spec`: when Electron delivers no hide or show at all
 
 Five tests failed in four full and partial runs on the evening of
