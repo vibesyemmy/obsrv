@@ -23,11 +23,17 @@ describe('the Claude Code plugin', () => {
     const mcp = read('.mcp.json')
     expect(mcp.mcpServers.obsrv).toEqual({ command: 'npx', args: ['-y', 'getobsrv', 'mcp'] })
   })
-  it('the marketplace lists this plugin at the same version, sourced from the repo root', () => {
+  it('the marketplace lists this plugin at the same version, sourced from that version\'s release tag', () => {
     const pkg = read('package.json')
     const market = read('.claude-plugin/marketplace.json')
     expect(market.plugins).toHaveLength(1)
-    expect(market.plugins[0]).toMatchObject({ name: 'obsrv', source: './', version: pkg.version })
+    // A tag, not `./`: a relative source hands out whatever the marketplace
+    // clone is at, which between releases is main. The tag is the release.
+    expect(market.plugins[0]).toMatchObject({
+      name: 'obsrv',
+      version: pkg.version,
+      source: { source: 'github', repo: 'vibesyemmy/obsrv', ref: `v${pkg.version}` },
+    })
   })
   it('the manifests ship in the npm package', () => {
     const files: string[] = read('package.json').files

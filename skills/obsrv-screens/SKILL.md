@@ -21,7 +21,9 @@ including Electron, on first run). In a local Obsrv checkout, run
 `npm install && npm run build` there first. As a Claude Code plugin the
 repo installs the skill and the MCP server in one step:
 `claude plugin marketplace add vibesyemmy/obsrv` then
-`claude plugin install obsrv@obsrv`.
+`claude plugin install obsrv@obsrv` (installs the latest release; for a
+newer one later, `claude plugin marketplace update obsrv` then
+`claude plugin update obsrv@obsrv`).
 
 ```bash
 # Installed anywhere via npm (first run downloads Electron):
