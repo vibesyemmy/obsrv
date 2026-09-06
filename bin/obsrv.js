@@ -11,6 +11,7 @@ const { spawn } = require('node:child_process')
 const { existsSync, mkdtempSync, rmSync } = require('node:fs')
 const { tmpdir } = require('node:os')
 const { join } = require('node:path')
+const { resolveElectron } = require('./electronPath.js')
 
 // `obsrv mcp` serves the MCP server (plain node, no Electron) so one npx
 // invocation covers both: `npx -y getobsrv mcp`.
@@ -34,18 +35,15 @@ if (!existsSync(cliEntry)) {
   process.exit(1)
 }
 
-let electron
-try {
-  // Under plain node, require('electron') resolves to the binary's path.
-  electron = require('electron')
-} catch {
-  console.error('obsrv: electron is not installed — run `npm install` in the Obsrv repo first')
+// Not `require('electron')` directly: when the binary is missing that both
+// prints to stdout and spawns an installer that inherits it, and stdout here
+// is machine JSON. See bin/electronPath.js.
+const resolved = resolveElectron()
+if (resolved.error) {
+  console.error(`obsrv: ${resolved.error}`)
   process.exit(1)
 }
-if (typeof electron !== 'string') {
-  console.error('obsrv: require("electron") did not resolve to a binary path (already inside Electron?)')
-  process.exit(1)
-}
+const electron = resolved.path
 
 const env = { ...process.env }
 // Must boot the real Electron runtime, not Node-mode.
