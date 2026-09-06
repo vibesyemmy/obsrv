@@ -197,6 +197,10 @@ test('navigate + setPreset over HTTP actually drive the app', async () => {
   const preset = await call('setPreset', { id: 'laptop-768' })
   expect(preset.status).toBe(200)
   expect(preset.body).toMatchObject({ ok: true, applied: true, presetId: 'laptop-768' })
+  // A preset change recreates the target and reloads its page; the reply's
+  // status must not read as "no page and none coming" in the beat before the
+  // reload starts (it did: `url: ''`, `loading: false` on every change).
+  expect(preset.body.url !== '' || preset.body.loading === true, JSON.stringify(preset.body)).toBe(true)
   // The renderer applied it exactly as the toolbar would: its viewport effect
   // resized the offscreen target.
   await expect

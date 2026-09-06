@@ -268,7 +268,8 @@ export class ControlServer {
       case 'setPreset': {
         const err = presetApplyError(payload.id)
         if (err) return reply(400, { error: err })
-        return this.applyAndConfirm({ presetId: payload.id as string }, s => s.presetId === payload.id)
+        const pageBack = this.pageBack()
+        return this.applyAndConfirm({ presetId: payload.id as string }, s => s.presetId === payload.id && pageBack(s))
       }
 
       case 'setProfile': {
@@ -295,7 +296,8 @@ export class ControlServer {
         const err = orientationApplyError(payload.orientation)
         if (err) return reply(400, { error: err })
         const orientation = payload.orientation as Orientation
-        return this.applyAndConfirm({ orientation }, s => s.orientation === orientation)
+        const pageBack = this.pageBack()
+        return this.applyAndConfirm({ orientation }, s => s.orientation === orientation && pageBack(s))
       }
 
       case 'setTextScale': {
@@ -465,6 +467,19 @@ export class ControlServer {
    * the wait is not an error — the renderer may be busy — the caller can poll
    * `status`.
    */
+  /**
+   * A preset or a rotation recreates the offscreen target and reloads its
+   * page, and the renderer confirms the change before the new target has a
+   * page: a status read in that beat says `url: ''`, `loading: false` — no
+   * page and none coming (measured on every preset change). When the tab had
+   * a page, confirm that it is back or on its way too; the apply budget
+   * bounds the wait as before.
+   */
+  private pageBack(): (s: ControlStatus) => boolean {
+    const had = this.deps.status().url !== ''
+    return s => !had || s.url !== '' || s.loading
+  }
+
   private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: ControlStatus) => boolean): Promise<Reply> {
     this.deps.apply(patch)
     const deadline = Date.now() + APPLY_WAIT_MS
