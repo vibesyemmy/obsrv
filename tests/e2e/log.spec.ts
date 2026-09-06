@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
+import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
 
 /**
  * The app log. A packaged app launched from the Dock has no stderr, and the
@@ -17,6 +18,8 @@ const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).h
 let app: ElectronApplication
 let page: Page
 let logFile: string
+/** Probed once: the hidden-and-back test skips without it. */
+let hideEvents = false
 
 const logText = (): string => readFileSync(logFile, 'utf8')
 
@@ -27,6 +30,7 @@ test.beforeAll(async () => {
   await page.fill('.url-form input', FIXTURE)
   await page.press('.url-form input', 'Enter')
   await expect.poll(() => page.evaluate(() => document.querySelector<HTMLCanvasElement>('canvas.target-canvas')?.dataset.gl)).toBe('ok')
+  hideEvents = await hideEventsFire(app)
 })
 test.afterAll(async () => {
   await app.close()
@@ -42,14 +46,19 @@ test('lives under the user-data directory in tests, and opens with the boot line
 })
 
 test('the window going hidden and coming back is on record, once per transition', async () => {
-  const before = (logText().match(/window hidden/g) ?? []).length
+  test.skip(skipWithoutHideEvents(hideEvents), DESK_STATE_REASON)
+  // Counted, not matched: the desk probe in beforeAll already put one
+  // hidden-and-shown pair on record.
+  const hidden = (): number => (logText().match(/window hidden; target rasterisation paused/g) ?? []).length
+  const shown = (): number => (logText().match(/window shown; target rasterisation resumed/g) ?? []).length
+  const before = { hidden: hidden(), shown: shown() }
   await app.evaluate(() => (globalThis as any).__obsrv.win.hide())
-  await expect.poll(() => (logText().match(/window hidden; target rasterisation paused/g) ?? []).length).toBe(before + 1)
+  await expect.poll(hidden).toBe(before.hidden + 1)
   // A second hide event for a window that is already hidden is not news.
   await app.evaluate(() => (globalThis as any).__obsrv.win.hide())
   await app.evaluate(() => (globalThis as any).__obsrv.win.show())
-  await expect.poll(() => logText()).toMatch(/window shown; target rasterisation resumed/)
-  expect((logText().match(/window hidden/g) ?? []).length).toBe(before + 1)
+  await expect.poll(shown).toBe(before.shown + 1)
+  expect(hidden()).toBe(before.hidden + 1)
 })
 
 test('a GPU death, and what the renderer made of it, are on record', async () => {

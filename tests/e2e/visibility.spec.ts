@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
+import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
 
 /**
  * Nobody is looking at a hidden window. The active target rasterises at a
@@ -20,6 +21,8 @@ const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 
 let app: ElectronApplication
 let page: Page
+/** Probed once: the tests that begin by hiding the window skip without it. */
+let hideEvents = false
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
@@ -51,6 +54,7 @@ test.beforeAll(async () => {
   page = await rendererWindow(app)
   await page.fill('.url-form input', ANIMATED)
   await page.press('.url-form input', 'Enter')
+  hideEvents = await hideEventsFire(app)
   await expect.poll(() => paintsOver(500)).toBeGreaterThan(2)
 })
 test.afterAll(async () => {
@@ -58,6 +62,7 @@ test.afterAll(async () => {
 })
 
 test('hiding the window stops the target rasterising, and showing it resumes', async () => {
+  test.skip(skipWithoutHideEvents(hideEvents), DESK_STATE_REASON)
   await setShown(false)
   await expect.poll(painting).toBe(false)
   // Paints already in flight land; then nothing.
@@ -77,6 +82,7 @@ test('minimising counts as hidden', async () => {
 })
 
 test('a navigation while hidden raises no stall notice, and the page is there on return', async () => {
+  test.skip(skipWithoutHideEvents(hideEvents), DESK_STATE_REASON)
   await setShown(false)
   await expect.poll(painting).toBe(false)
   await page.fill('.url-form input', TALL)
@@ -93,6 +99,7 @@ test('a navigation while hidden raises no stall notice, and the page is there on
 })
 
 test('a tab activated while hidden stays paused until the window returns', async () => {
+  test.skip(skipWithoutHideEvents(hideEvents), DESK_STATE_REASON)
   await setShown(false)
   await expect.poll(painting).toBe(false)
   const id: string = await app.evaluate(() => {
@@ -111,6 +118,7 @@ test('a tab activated while hidden stays paused until the window returns', async
 // last frame painted before the window went away. `captureVisible` and
 // `captureTarget` take this hold for their duration.
 test('a painting hold rasterises a hidden window until released', async () => {
+  test.skip(skipWithoutHideEvents(hideEvents), DESK_STATE_REASON)
   await setShown(false)
   await expect.poll(painting).toBe(false)
   const seen = await app.evaluate(() => {
