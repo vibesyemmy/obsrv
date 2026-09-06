@@ -26,7 +26,10 @@ Text that is the same colour as its background (1:1) is not a contrast
 failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
 and it is counted under `skipped.invisibleText` with a warning rather than
 judged. Images group by cause, not by asset size: whether a `srcset` exists,
-and how many times over (2–3×, 3–5×, 5–10×, 10× and over).
+and how many times over (2–3×, 3–5×, 5–10×, 10× and over). Contrast groups
+key on the text colour and the band its background sits in (light, mid-tone,
+dark), not the exact pair: a page's links sit on a dozen near-whites and are
+one cause; the exemplar keeps the exact pair and its figures.
 
 An image with a `srcset` (or inside a `<picture>`) is judged by the file
 Chromium chose, not by the element's `naturalWidth`: with a srcset that

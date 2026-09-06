@@ -1,4 +1,4 @@
-import { effectiveContrast, hex } from '../shared/contrast'
+import { effectiveContrast, hex, relativeLuminance } from '../shared/contrast'
 import type { LintEdgeKind, LintRect, LintReport } from '../shared/lint'
 import type { PanelParams } from '../shared/types'
 import type { Matrix3 } from '../shared/vision'
@@ -88,7 +88,7 @@ export type LintFinding =
 /** Findings that share a cause, counted together; the list caps at 200, the groups do not. */
 export interface LintGroup {
   rule: LintRule
-  /** What the members share: a colour pair, a weight and size, an edge kind and thickness, an image's natural size. */
+  /** What the members share: a text colour on light, mid-tone or dark backgrounds; a weight and size; an edge kind and thickness; a srcset-or-not and a factor bucket. */
   key: string
   count: number
   /** The worst member, as listed: first in the rule's worst-first order. */
@@ -131,6 +131,18 @@ function factorBucket(rule: 'image-upscaled' | 'image-oversized', factor: number
 export const LINT_MAX_GROUPS = 100
 export const LINT_GROUP_ELEMENTS = 5
 
+/**
+ * The band a background sits in, for grouping: a text colour that fails on
+ * one near-white fails on its neighbours too, and a page's links sit on a
+ * dozen of them (Wikipedia: #ffffff, #fdfdfd, #f7f7f7, #f8f9fa, #fbfbfb — one
+ * cause, five groups by exact pair). The exemplar keeps the exact pair.
+ */
+function backgroundBand(hexColor: string): 'light' | 'mid-tone' | 'dark' {
+  const rgb = [1, 3, 5].map(i => parseInt(hexColor.slice(i, i + 2), 16)) as [number, number, number]
+  const l = relativeLuminance(rgb)
+  return l > 0.6 ? 'light' : l < 0.15 ? 'dark' : 'mid-tone'
+}
+
 /** What two findings must share to be one group. */
 export function groupKey(f: LintFinding): string {
   switch (f.rule) {
@@ -140,7 +152,7 @@ export function groupKey(f: LintFinding): string {
       return `${f.fontWeight} at ${f.fontSizePx}px`
     case 'contrast':
     case 'contrast-on-panel':
-      return `${f.color} on ${f.background}${f.largeText ? ' (large text)' : ''}`
+      return `${f.color} on ${backgroundBand(f.background)} backgrounds${f.largeText ? ' (large text)' : ''}`
     case 'image-upscaled':
     case 'image-oversized':
       // Not the asset's size: thirty images of thirty sizes are one cause.
