@@ -28,6 +28,13 @@ describe('parseArgs: commands', () => {
 })
 
 describe('parseArgs: snap', () => {
+  it('--tiled goes with --full-page, and is refused on its own', () => {
+    const cmd = parseArgs(['snap', 'https://x.test', '--full-page', '--tiled']) as SnapCommand
+    expect(cmd.fullPage).toBe(true)
+    expect(cmd.tiled).toBe(true)
+    expect((parseArgs(['snap', 'https://x.test']) as SnapCommand).tiled).toBe(false)
+    expect(() => parseArgs(['snap', 'https://x.test', '--tiled'])).toThrow(/goes with --full-page/)
+  })
   it('defaults: 1080p-24, reference profile, derived out name', () => {
     const cmd = snap('https://x.test')
     expect(cmd.url).toBe('https://x.test')

@@ -23,6 +23,10 @@ const OUT = '/tmp/mcp/snap.png'
 const DIR = '/tmp/mcp/diff'
 
 describe('buildSnapArgs', () => {
+  it('tiled rides on fullPage, and is refused without it', () => {
+    expect(buildSnapArgs({ url: URL, fullPage: true, tiled: true }, OUT)).toEqual(['snap', URL, '--full-page', '--tiled', '--out', OUT])
+    expect(() => buildSnapArgs({ url: URL, tiled: true }, OUT)).toThrow(/goes with `fullPage`/)
+  })
   it('minimal input maps to snap + url + --out (CLI defaults do the rest)', () => {
     expect(buildSnapArgs({ url: URL }, OUT)).toEqual(['snap', URL, '--out', OUT])
   })

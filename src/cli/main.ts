@@ -121,6 +121,8 @@ interface RenderResult {
   auditReport?: AuditReport | null
   /** The lint walk, when asked for; null when the page did not answer. */
   lintReport?: LintReport | null
+  /** With `tiled`: how many bands the page was captured in; absent when one surface held it. */
+  bands?: number
   /**
    * Time from the start of navigation to the page going paint-quiet, with
    * `--wait` taken back out; null when it never settled within the budget.
@@ -232,6 +234,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
 
     let cssHeight = applied.height
     let frame: CapturedFrame | null = null
+    let bandsCaptured: number | undefined
     // Under a throttle the quiet moment is the measurement (`settledMs`), and
     // a page loading over 3G paints steadily too: no early exit there.
     const quiescent = (): Promise<CapturedFrame> =>
@@ -286,6 +289,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           const width = bands[0]!.width
           const height = Math.max(...bands.map(b => b.y + b.height))
           frame = { width, height, bgra: stitchBands(width, height, bands), settled, ...(unsettledReason !== undefined ? { unsettledReason } : {}) }
+          bandsCaptured = bands.length
           if (bandsWanted > bandCount) {
             warn(
               `warning: full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${limit} CSS px ` +
@@ -320,6 +324,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       settledMs,
       ...(auditReport !== undefined ? { auditReport } : {}),
       ...(lintReport !== undefined ? { lintReport } : {}),
+      ...(bandsCaptured !== undefined ? { bands: bandsCaptured } : {}),
     }
   } finally {
     target.destroy()
@@ -363,6 +368,8 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
+      // Only when asked for: the flagless JSON is a contract.
+      ...(cmd.tiled ? { tiled: true, bands: r.bands ?? 1 } : {}),
       // Only when one was applied: at ×1 this object is the contract every
       // consumer already parses, and a run that asked for a scale is new code.
       ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),
