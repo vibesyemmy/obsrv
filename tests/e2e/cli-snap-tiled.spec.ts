@@ -35,18 +35,21 @@ test.afterAll(() => {
   rmSync(outDir, { recursive: true, force: true })
 })
 
-test('a 9,000 px page comes back whole in three bands, and the JSON says so', async () => {
+test('a 9,000 px page comes back whole in twelve screenfuls, and the JSON says so', async () => {
   const out = join(outDir, 'tall.png')
   const r = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
   expect(r.code, r.stderr).toBe(0)
   const json = JSON.parse(r.stdout)
-  expect(json).toMatchObject({ preset: 'laptop-768', tiled: true, bands: 3 })
+  // One band per screenful of the preset's own 768 px viewport — not a
+  // viewport held at the cap, which lays the page out differently.
+  expect(json).toMatchObject({ preset: 'laptop-768', tiled: true, bands: 12, cssHeight: 768 })
   expect(json.warnings.join(' ')).not.toMatch(/clamped/)
-  expect(r.stderr).toMatch(/captured in 3 band\(s\) of 4096 CSS px/)
+  expect(r.stderr).toMatch(/captured in 12 band\(s\) of 768 CSS px/)
   // The PNG is taller than one surface could be.
   const png = readFileSync(out)
   expect(png.readUInt32BE(16)).toBe(1366)
   expect(png.readUInt32BE(20)).toBeGreaterThan(4096)
+  expect(png.readUInt32BE(20)).toBeLessThanOrEqual(12 * 768)
 })
 
 test('a page that fits one surface is one band, and --tiled alone is refused', async () => {

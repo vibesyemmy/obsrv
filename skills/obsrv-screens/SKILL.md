@@ -85,8 +85,8 @@ alone.
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
 findings grouped by what they share — a colour pair, a weight and size, an
-edge kind, a `srcset`-or-not and a factor bucket for images; a control's CSS
-box or a font size for the audit — over every finding counted, each with a
+edge kind, a `srcset`-or-not and a factor bucket for images; a control's
+short side or a font size for the audit — over every finding counted, each with a
 count, the worst member as exemplar and a few of the elements. A page with
 270 identical contrast failures is one group with count 270. Read the
 summary, then the groups; ask `obsrv_lint { groupsOnly: true }` when the list
@@ -202,7 +202,9 @@ happened on the matrix snaps.
   painting at the budget (under a throttle the early exit is off, since
   `settledMs` is the measurement); `"uncovered"` means part of the frame
   never painted. Use `--wait` for content that settles late.
-- The report's full-page capture takes a tall page in bands, so a sticky
-  header repeats at the top of each band, as it does when a person scrolls.
+- The report's full-page capture takes a tall page in bands of one
+  screenful each (the viewport stays the screen's, so `100vh` sections keep
+  their size), so a sticky header repeats at the top of each band, as it
+  does when a person scrolls.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
   (`tiled: true` on `obsrv_snap`).

@@ -64,6 +64,9 @@ test('on a 24" 1080p: the sub-pixel edges, the light text, the failing grey, the
   expect(find(m, 'img#up').src).toBe('data:image/png;base64,')
   expect(byRule(m, 'image-oversized')).toEqual(['img#over'])
   expect(find(m, 'img#over')).toMatchObject({ naturalWidth: 1000, factor: 5 })
+  // The srcset images fit a 1x screen: the 100w candidate over 100 device px.
+  expect(find(m, 'img#responsive')).toBeUndefined()
+  expect(find(m, 'img#short')).toBeUndefined()
   // Every finding carries a page rect an agent can highlight.
   for (const f of m.findings) expect(f.rect.width).toBeGreaterThan(0)
   expect(m.skipped.textOnImages).toBe(1)
@@ -89,10 +92,16 @@ test('on a 6.5" phone at 2x: no sub-pixel edges, no thin text, images judged in 
   expect(m).toMatchObject({ cssWidth: 360, deviceScaleFactor: 2 })
   expect(m.summary.hairline).toBe(0)
   expect(m.summary['thin-text']).toBe(0)
-  expect(byRule(m, 'image-upscaled').sort()).toEqual(['img#fit', 'img#up'])
+  expect(byRule(m, 'image-upscaled').sort()).toEqual(['img#fit', 'img#short', 'img#up'])
   expect(find(m, 'img#up')).toMatchObject({ factor: 4, drawnDevicePx: { width: 400, height: 400 } })
   expect(find(m, 'img#fit')).toMatchObject({ factor: 2 })
   expect(find(m, 'img#over')).toMatchObject({ rule: 'image-oversized', factor: 2.5 })
+  // A srcset image is judged by the file Chromium chose, not by the element's
+  // density-corrected naturalWidth (which reads 100 for both of these): the
+  // 200w candidate covers 200 device px, the lone 100w one does not.
+  expect(find(m, 'img#responsive')).toBeUndefined()
+  expect(find(m, 'img#short')).toMatchObject({ factor: 2, naturalWidth: 100, srcset: true, candidates: ['100w'], chosen: '100w' })
+  expect(find(m, 'img#short').message).toContain('(the 100w candidate)')
 })
 
 test('text scale multiplies the density: at 200% on the 1080p the half-pixel edges are whole and the light text tall enough', async () => {

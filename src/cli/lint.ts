@@ -80,6 +80,8 @@ export type LintFinding =
       factor: number
       srcset: boolean
       candidates: string[]
+      /** The descriptor of the candidate Chromium chose, when the walk could match it. */
+      chosen?: string
       src: string
     })
 
@@ -315,8 +317,13 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
       drawnDevicePx: drawn,
       srcset: img.srcset,
       candidates: img.candidates,
+      ...(img.chosen !== undefined ? { chosen: img.chosen } : {}),
       src: img.src,
     }
+    // Which candidate the browser took, when the walk could tell: the reader
+    // then knows whether the srcset lacks a larger one or `sizes` undersold
+    // the slot.
+    const file = `${img.naturalWidth}×${img.naturalHeight} px${img.chosen !== undefined ? ` (the ${img.chosen} candidate)` : ''}`
     if (ratio < IMAGE_UPSCALED_TOLERANCE) {
       const factor = round(1 / ratio, 2)
       groups['image-upscaled'].push({
@@ -324,7 +331,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
         ...common,
         factor,
         message:
-          `${img.naturalWidth}×${img.naturalHeight} px drawn over ${drawn.width}×${drawn.height} device px: upscaled ${factor}×, ` +
+          `${file} drawn over ${drawn.width}×${drawn.height} device px: upscaled ${factor}×, ` +
           `so it is blurred on this screen${img.srcset ? '' : '; no srcset offers a larger candidate'}`,
       })
     } else if (ratio > IMAGE_OVERSIZED_FACTOR) {
@@ -334,7 +341,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
         ...common,
         factor,
         message:
-          `${img.naturalWidth}×${img.naturalHeight} px drawn at ${drawn.width}×${drawn.height} device px: downsampled ${factor}×, ` +
+          `${file} drawn at ${drawn.width}×${drawn.height} device px: downsampled ${factor}×, ` +
           `which softens fine lines and text in it${img.srcset ? '' : '; no srcset offers a candidate near this size'}`,
       })
     }

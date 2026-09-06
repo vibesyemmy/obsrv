@@ -101,8 +101,9 @@ describe('audit groups', () => {
     const res = auditFindings(report, { cssWidth: 360, cssHeight: 800, deviceScaleFactor: 2, diagonalInches: 6.5 }, { tapMm: 7, textMm: 2 })
     expect(res.findings.length).toBeGreaterThanOrEqual(5)
     const targets = res.groups.filter(g => g.kind === 'small-target')
-    // Widths 40..43 by height 22: the shorter side is 22 for all, but the CSS box differs per width, so four boxes.
-    expect(targets.map(g => g.key)).toEqual(['40×22 px', '41×22 px', '42×22 px', '43×22 px'])
+    // Widths 40..43 by height 22: the short side, the one measured, is 22 for
+    // all four, so one group — a row of links is one height and many widths.
+    expect(targets).toEqual([expect.objectContaining({ key: '22 px tall', count: 4, elements: ['a#a', 'a#b', 'a#c', 'a#d'] })])
     const text = res.groups.find(g => g.kind === 'small-text')!
     expect(text).toMatchObject({ key: '10 px', count: 2, elements: ['p#cap', 'p#cap2'] })
     expect(text.exemplar.element).toBe('p#cap')
@@ -115,7 +116,7 @@ describe('audit groups', () => {
       { tapMm: 7, textMm: 2 },
     )
     expect(res.findings).toHaveLength(200)
-    expect(res.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '40×22 px', count: 250 })])
+    expect(res.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '22 px tall', count: 250 })])
     expect(res.groups[0]!.elements).toHaveLength(5)
   })
 })

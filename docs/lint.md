@@ -19,14 +19,23 @@ the screen, and the reflow zoom on top of it.
 | `thin-text` | Text lighter than regular (weight under 400) whose font size is under `thinPx` device px (default 14). | Strokes thinner than a device pixel go grey and break up on a 1x screen; 300-weight at 12px is 12 device px on a monitor and 24 on a phone. |
 | `contrast` | Text whose WCAG 2 contrast fails AA as stated: under 4.5:1, or 3:1 for large text (24px, or 18.66px bold). | The plain failure; the same figure `obsrv inspect` reports as "as stated". |
 | `contrast-on-panel` | Text that passes as stated but fails once the panel profile (and, live, the vision setting) is applied. | A budget TN lifts the blacks and pulls the pair together: #767676 on white is 4.54:1 on the display it was designed on and under 4.5:1 on Budget TN. The reference profile never adds one. |
-| `image-upscaled` | A raster image drawn wider, in device px, than its natural width. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
-| `image-oversized` | A raster image whose natural width is more than 2× its drawn device width. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
+| `image-upscaled` | A raster image drawn wider, in device px, than the loaded file's own width. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
+| `image-oversized` | A raster image whose file is more than 2× wider than its drawn device width. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
 
 Text that is the same colour as its background (1:1) is not a contrast
 failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
 and it is counted under `skipped.invisibleText` with a warning rather than
 judged. Images group by cause, not by asset size: whether a `srcset` exists,
 and how many times over (2–3×, 3–5×, 5–10×, 10× and over).
+
+An image with a `srcset` (or inside a `<picture>`) is judged by the file
+Chromium chose, not by the element's `naturalWidth`: with a srcset that
+value is density-corrected — the candidate's pixels over its density, the
+CSS size it is meant for — so on a 2x screen every responsive image would
+read as upscaled 2×. The walk loads the chosen URL as a plain image (from
+cache) for its real pixels, and the finding names the candidate taken
+(`chosen`, e.g. `640w`), so a reader can tell a srcset with nothing larger
+from a `sizes` that undersold the slot.
 
 Findings come rule by rule in that order, the worst first within a rule
 (thinnest edge, smallest text, lowest ratio, largest factor), at most 200
