@@ -806,12 +806,22 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   // still come back — an unsettled picture beats no picture — carrying a
   // warning that names painting rather than resizing, which is what it used to
   // blame for every premature frame.
+  const started = Date.now()
   const r = await call('captureTarget')
+  const elapsed = Date.now() - started
   expect(r.status).toBe(200)
-  const body = r.body as { ok: boolean; warnings: string[] }
+  const body = r.body as { ok: boolean; warnings: string[]; settled: boolean; unsettledReason?: string }
   expect(body.ok).toBe(true)
-  expect(body.warnings.some(w => w.includes('still painting'))).toBe(true)
+  // A page plainly animating is not waited out: the capture comes back after
+  // about two seconds of steady painting (the full quiet budget is three),
+  // says so, and carries the verdict as fields, as a headless snap does.
+  expect(body.warnings.some(w => w.includes('keeps painting steadily'))).toBe(true)
   expect(body.warnings.some(w => w.includes('still resizing'))).toBe(false)
+  expect(body).toMatchObject({ settled: false, unsettledReason: 'animating' })
+  expect(elapsed).toBeLessThan(2_900)
+  // The window capture carries the same verdict.
+  const whole = await call('captureVisible')
+  expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
 })
 
 test('toggling agent control off stops the server and removes the discovery file', async () => {

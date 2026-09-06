@@ -1,7 +1,7 @@
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
-import { captureQuiescent } from '../cli/capture'
+import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout } from '../shared/inspectReadout'
@@ -846,30 +846,40 @@ export function registerIpc(ctx: AppContext): () => void {
    * poll cannot see: hydration repaints the page without ever changing the
    * viewport, so the size reads identically either side of it.
    */
-  const quiesce = (t: TargetSource, budgetMs: number): Promise<boolean> =>
+  const quiesce = (t: TargetSource, budgetMs: number, animationExit: boolean): Promise<'quiet' | 'animating' | 'painting'> =>
     new Promise(resolve => {
       // Same reasoning as `nextFrame`: a suspended source emits nothing, so
       // waiting for silence from it would always spend the whole budget.
       if (!t.painting) {
-        resolve(false)
+        resolve('painting')
         return
       }
       let quiet: ReturnType<typeof setTimeout>
-      const done = (ok: boolean): void => {
+      const done = (outcome: 'quiet' | 'animating' | 'painting'): void => {
         clearTimeout(quiet)
         clearTimeout(cap)
         t.off('frame', onFrame)
-        resolve(ok)
+        resolve(outcome)
       }
       // Every frame restarts the clock; the budget is the only thing that can
-      // cut a genuinely busy page short.
+      // cut a genuinely busy page short — except a page that is plainly
+      // animating: frames arriving steadily for two seconds will not stop for
+      // a third, so the headless capture's early exit applies here too. Not
+      // under a throttle, where a page loading slowly paints steadily as well.
+      const startedAt = Date.now()
+      let frames = 0
       const onFrame = (): void => {
         clearTimeout(quiet)
-        quiet = setTimeout(() => done(true), SETTLE_QUIET_MS)
+        frames++
+        if (animationExit && frames >= ANIMATING_MIN_PAINTS && Date.now() - startedAt >= ANIMATING_AFTER_MS) {
+          done('animating')
+          return
+        }
+        quiet = setTimeout(() => done('quiet'), SETTLE_QUIET_MS)
       }
-      const cap = setTimeout(() => done(false), budgetMs)
+      const cap = setTimeout(() => done('painting'), budgetMs)
       t.on('frame', onFrame)
-      quiet = setTimeout(() => done(true), SETTLE_QUIET_MS)
+      quiet = setTimeout(() => done('quiet'), SETTLE_QUIET_MS)
     })
 
   /**
@@ -878,7 +888,11 @@ export function registerIpc(ctx: AppContext): () => void {
    * warnings, and "still resizing" was being reported for a page that had
    * finished resizing long ago and was simply still painting.
    */
-  type Settle = 'settled' | 'resizing' | 'painting'
+  type Settle = 'settled' | 'resizing' | 'painting' | 'animating'
+
+  /** The verdict as reply fields, the shape a headless snap reports: `settled`, and why not. */
+  const settleFields = (v: Settle): { settled: boolean; unsettledReason?: 'animating' | 'timeout' | 'resizing' } =>
+    v === 'settled' ? { settled: true } : { settled: false, unsettledReason: v === 'painting' ? 'timeout' : v }
 
   /** Never throws; the worst it does is report what it could not wait out. */
   const settleTarget = async (t: TargetSource = tab().target): Promise<Settle> => {
@@ -898,9 +912,9 @@ export function registerIpc(ctx: AppContext): () => void {
     // Then wait for the page itself to stop. The size stopping only means the
     // *frame* stopped changing shape — a reloaded page hydrates at a fixed
     // viewport, and the shutter used to fire straight through it.
-    const quiet = painted && (await quiesce(t, SETTLE_QUIET_BUDGET_MS))
+    const outcome = painted ? await quiesce(t, SETTLE_QUIET_BUDGET_MS, t.getThrottle().id === 'none') : 'painting'
     await new Promise(r => setTimeout(r, SETTLE_DRAW_MS))
-    return quiet ? 'settled' : 'painting'
+    return outcome === 'quiet' ? 'settled' : outcome
   }
 
   /**
@@ -1306,10 +1320,10 @@ export function registerIpc(ctx: AppContext): () => void {
       const release = tabs.holdPainting()
       try {
         await awaitViewportStable()
-        await settleTarget()
+        const settled = await settleTarget()
         const image = await withNativePane(await win.webContents.capturePage())
         const size = image.getSize()
-        return { data: image.toPNG().toString('base64'), width: size.width, height: size.height }
+        return { data: image.toPNG().toString('base64'), width: size.width, height: size.height, ...settleFields(settled) }
       } finally {
         release()
       }
@@ -1332,11 +1346,13 @@ export function registerIpc(ctx: AppContext): () => void {
         else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
         if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
         else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
-        if (settled === 'painting' && tab().onionSkin > 0) {
+        else if (settled === 'animating') warnings.push('the page keeps painting steadily (animation or video); this is one frame of it, taken after two seconds rather than the full wait')
+        if ((settled === 'painting' || settled === 'animating') && tab().onionSkin > 0) {
           warnings.push('the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation, not the raster')
         }
         return {
           data: image.toPNG().toString('base64'),
+          ...settleFields(settled),
           width: size.width,
           height: size.height,
           warnings,
