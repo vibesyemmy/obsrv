@@ -130,7 +130,16 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
 
   return {
     viewport: { width: innerWidth, height: innerHeight },
-    pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
+    // See lint.ts: an app shell's document is exactly the viewport while its
+    // content, and so its findings, run far below.
+    pageHeight: Math.ceil(
+      Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0,
+        ...targets.map(t => t.rect.y + t.rect.height),
+        ...text.map(t => t.rect.y + t.rect.height),
+      ),
+    ),
     targets,
     text,
     truncated: { targets: targetsOver, text: textOver },

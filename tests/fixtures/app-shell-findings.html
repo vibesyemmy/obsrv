@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App shell — findings below the fold</title>
+    <!--
+      The app-shell pattern (see app-shell.html, which the live scroll tests
+      use) with something for the walks to find, and all of it well below the
+      first screen. A full-page capture scrolls the window, which this page
+      ignores, so nothing here can be pinned: that is what the capture warning
+      and the report's explanation are tested against.
+    -->
+    <style>
+      html, body { height: 100%; margin: 0; overflow: hidden; font: 16px/1.5 system-ui, sans-serif; }
+      .app { display: flex; flex-direction: column; height: 100%; }
+      .chrome { flex: 0 0 48px; background: #101828; color: #fff; display: flex; align-items: center; padding: 0 16px; }
+      #scroller { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px; }
+      .row { height: 120px; display: flex; align-items: center; }
+      /* Below the fold, and only there: a control too small for a thumb, and
+         grey text that fails AA as stated. */
+      #deep-button { width: 24px; height: 24px; padding: 0; font-size: 10px; }
+      #deep-text { color: #999999; background: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="chrome">Fixed chrome</header>
+      <main id="scroller">
+        <div class="row">Row 1</div><div class="row">Row 2</div><div class="row">Row 3</div>
+        <div class="row">Row 4</div><div class="row">Row 5</div><div class="row">Row 6</div>
+        <div class="row">Row 7</div><div class="row">Row 8</div><div class="row">Row 9</div>
+        <div class="row">Row 10</div><div class="row">Row 11</div><div class="row">Row 12</div>
+        <div class="row"><p id="deep-text">Grey text that fails AA, far below the fold.</p></div>
+        <div class="row"><button id="deep-button">x</button></div>
+      </main>
+    </div>
+  </body>
+</html>

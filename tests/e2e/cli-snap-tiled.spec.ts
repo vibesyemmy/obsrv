@@ -86,3 +86,40 @@ test('a page sized against the viewport is warned about on one surface, and not 
   expect(plain.code, plain.stderr).toBe(0)
   expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/lays out against the viewport height/)
 })
+
+test('an app shell says its content is out of reach rather than returning one screen quietly', async () => {
+  // `html, body { overflow: hidden }` with an inner scroller — dashboards,
+  // editors, most web apps. The document is exactly as tall as the viewport
+  // however much content it holds, so a full-page capture that scrolls the
+  // window gets the first screen and used to say nothing about it.
+  const out = join(outDir, 'shell.png')
+  const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const json = JSON.parse(r.stdout)
+  expect(json).toMatchObject({ tiled: true, bands: 1 })
+  const warned = (json.warnings as string[]).join(' ')
+  expect(warned).toMatch(/the document itself does not scroll/)
+  expect(warned).toMatch(/app shell/)
+  // It names the height it cannot reach, so the reader knows what is missing.
+  expect(warned).toMatch(/inner scroller \d{3,} CSS px tall/)
+
+  // A page the window can scroll is not accused of being one.
+  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(plain.code, plain.stderr).toBe(0)
+  expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/does not scroll/)
+})
+
+test('the walks measure an app shell whole, and pageHeight does not contradict the findings', async () => {
+  // The DOM walks see the inner scroller's content, so findings sit far below
+  // the document's own height. `pageHeight` used to report the document's,
+  // which left an agent with a finding at y=1761 on a page it called 768 tall.
+  for (const command of ['audit', 'lint']) {
+    const r = await runCli([command, fixture('app-shell-findings.html'), '--preset', 'laptop-768'])
+    expect(r.code, r.stderr).toBe(0)
+    const m = JSON.parse(r.stdout) as { pageHeight: number; findings: Array<{ rect: { y: number; height: number } }> }
+    expect(m.findings.length, `${command} should see below the fold`).toBeGreaterThan(0)
+    const deepest = Math.max(...m.findings.map(f => f.rect.y + f.rect.height))
+    expect(m.pageHeight, `${command}: pageHeight must cover its own findings`).toBeGreaterThanOrEqual(Math.floor(deepest))
+    expect(m.pageHeight).toBeGreaterThan(768)
+  }
+})
