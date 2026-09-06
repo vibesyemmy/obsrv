@@ -69,7 +69,7 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   }
   const snap = tools.find(t => t.name === 'obsrv_snap')!
   expect(Object.keys(snap.inputSchema.properties ?? {})).toEqual(
-    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'tiled', 'waitMs', 'timeoutMs', 'mode', 'textScale', 'throttle']),
+    expect.arrayContaining(['url', 'preset', 'width', 'height', 'profile', 'fullPage', 'tiled', 'singleSurface', 'waitMs', 'timeoutMs', 'mode', 'textScale', 'throttle']),
   )
   const diff = tools.find(t => t.name === 'obsrv_diff')!
   expect(Object.keys(diff.inputSchema.properties ?? {})).toEqual(

@@ -146,9 +146,9 @@ npx -y getobsrv snap http://localhost:5173 --matrix laptop-768,android-65,1080p-
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out tn.png
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
 
-# A page taller than one surface (4096 device px): captured in bands instead of clamped, at the
-# screen's own viewport, so a 100vh section keeps the height the screen gives it.
-npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --tiled --out full.png
+# The whole page: captured a screenful at a time at the screen's own viewport and stitched, so a
+# 100vh section keeps the height the screen gives it and an inner scroller is followed.
+npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
 
 # Machine-readable 1x-vs-2x comparison (ink coverage, row ratios, band deltas):
 npx -y getobsrv diff http://localhost:5173 --preset laptop-768 --out-dir diffout
@@ -311,14 +311,12 @@ belongs to an unrelated package.
   reached — but scrolling a nested container **by hand** in the native pane is not
   mirrored to the target: element scroll events don't bubble to `window`, so the report
   side never sees them. Dragging the page itself still syncs both ways.
-- An **app shell needs `--tiled`.** A page with `html, body { overflow: hidden }` and an
-  inner `overflow-y: auto` container reports a document exactly as tall as the viewport,
-  so scrolling the window captures the first screen and nothing else.
-  `snap --full-page --tiled` and the report scroll the container the page actually
-  scrolls — the same walk the live `scroll` uses (`src/shared/scrollHost.ts`) — and
-  stitch the chrome above it once, so the raster is laid out in the page's own
-  coordinates and the report's pins land on it. `--full-page` on its own still captures
-  one screen of such a page, and says so.
+- A **full-page capture repeats sticky chrome.** `--full-page` captures the page a
+  screenful at a time at the screen's own viewport and stitches the bands, so a sticky
+  header appears at the top of each one, exactly as it does when you scroll. That is the
+  price of a faithful layout: the alternative, one viewport as tall as the page, changes
+  how a page sized against the viewport lays out and cannot follow an inner scroller at
+  all. `--single-surface` asks for it anyway, and says when the layout moved.
 - Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
   shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
   (`document.querySelector` doesn't cross either boundary), so a web-component app that

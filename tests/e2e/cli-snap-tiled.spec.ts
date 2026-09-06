@@ -68,7 +68,7 @@ test('a page sized against the viewport is warned about on one surface, and not 
   // screen never shows. Measured, not assumed: the page is asked again after
   // the surface grows, and only a page that actually moved is warned about.
   const out = join(outDir, 'vu.png')
-  const one = await runCli(['snap', fixture('viewport-units.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  const one = await runCli(['snap', fixture('viewport-units.html'), '--preset', 'laptop-768', '--full-page', '--single-surface', '--out', out])
   expect(one.code, one.stderr).toBe(0)
   const warned = (JSON.parse(one.stdout).warnings as string[]).join(' ')
   expect(warned).toMatch(/lays out against the viewport height/)
@@ -112,16 +112,16 @@ test('an app shell is captured by scrolling the container the page actually scro
   expect(height).toBeGreaterThan(1000)
 })
 
-test('without --tiled the same page says the capture is one screen', async () => {
+test('--single-surface on the same page says the capture is one screen', async () => {
   const out = join(outDir, 'shell-flat.png')
-  const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--single-surface', '--out', out])
   expect(r.code, r.stderr).toBe(0)
   const warned = (JSON.parse(r.stdout).warnings as string[]).join(' ')
   expect(warned).toMatch(/the document itself does not scroll/)
   expect(warned).toMatch(/add --tiled to capture the scroller itself/)
 
   // A page the window can scroll is not accused of being an app shell.
-  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--single-surface', '--out', out])
   expect(plain.code, plain.stderr).toBe(0)
   expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/does not scroll/)
 })

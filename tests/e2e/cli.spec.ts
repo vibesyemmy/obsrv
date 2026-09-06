@@ -134,14 +134,17 @@ test('snap: a panel profile changes the pixels', async () => {
   expect(Buffer.compare(readFileSync(ref), readFileSync(tn))).not.toBe(0)
 })
 
-test('snap: --full-page grows to the page height and warns when clamped', async () => {
+test('snap: --full-page --single-surface grows to the page height and warns when clamped', async () => {
   // A 1366×4096 surface is a big ask of the software rasteriser on a loaded
   // machine: give both the CLI (--timeout) and the spec generous budgets.
   test.setTimeout(240_000)
   const out = join(outDir, 'tall.png')
   // tall.html is 5000 CSS px: taller than the 768 viewport AND past the 4096
   // device-px budget, so this exercises growth and the clamp warning at once.
-  const r = await runCli(['snap', fixture('tall.html'), '--preset', 'laptop-768', '--full-page', '--timeout', '120000', '--out', out])
+  // `--single-surface` is what asks for one viewport as tall as the page;
+  // `--full-page` on its own bands, and a banded capture has no clamp to warn
+  // about (tests/e2e/cli-snap-tiled.spec.ts covers that side).
+  const r = await runCli(['snap', fixture('tall.html'), '--preset', 'laptop-768', '--full-page', '--single-surface', '--timeout', '120000', '--out', out])
   expect(r.code).toBe(0)
   expect(r.stderr).toMatch(/clamped to 4096/)
   const json = JSON.parse(r.stdout)

@@ -40,9 +40,9 @@ $OBSRV snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out 
 # Worst realistic panel (cheap TN) on the small laptop:
 $OBSRV snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out shots/laptop-tn.png
 
-# Whole page, not just the first viewport (one surface: device px cap 4096, warns if clamped;
-# add --tiled to capture a taller page in bands instead):
-$OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --tiled --out shots/full.png
+# The whole page, not just the first viewport (captured a screenful at a time and stitched,
+# at the screen's own viewport, following an inner scroller if that is what the page scrolls):
+$OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --out shots/full.png
 
 # Numbers instead of eyeballs: 1x target vs a 2x-reference downsample, JSON to stdout:
 $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
@@ -213,15 +213,15 @@ happened on the matrix snaps.
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size), so a sticky header repeats at the top of each band, as it
   does when a person scrolls.
-- An **app shell needs `--tiled`** (`tiled: true` on `obsrv_snap`) — `html,
-  body { overflow: hidden }` with an inner `overflow-y: auto` container, which
-  is most web apps. Such a page reports a document exactly as tall as the
-  viewport, so scrolling the window captures the first screen only. Tiled, the
-  capture scrolls the container the page really scrolls, stitches the chrome
-  above it once, and the report pins findings on it as usual. The report does
-  this for you. `--full-page` alone still gets one screen of such a page and
-  says so. Driving the app was always fine: `obsrv_drive` finds the same
-  container and answers `scroller: 'element'`.
+- `--full-page` captures the page a screenful at a time and stitches it, at
+  the screen's own viewport, so `100vh` sections keep their size and a sticky
+  header repeats per band as it does when you scroll. An **app shell** —
+  `html, body { overflow: hidden }` with an inner `overflow-y: auto`
+  container, most web apps — is followed by scrolling that container, so its
+  content is captured and the report pins findings on it. `singleSurface`
+  (`--single-surface`) asks for one viewport as tall as the page instead,
+  which is faster and never repeats chrome, but lays a viewport-sized page out
+  differently and gets one screen of an app shell; it says so when it does.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
   (`tiled: true` on `obsrv_snap`). On one surface the viewport is as tall as
   the page, so a `100vh` hero becomes the whole surface's height: a page that
