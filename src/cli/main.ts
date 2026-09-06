@@ -272,16 +272,23 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           const rootScrolls = !!root && root.scrollHeight > root.clientHeight + 1
           const el = rootScrolls ? null : findScroller()
           window.__obsrvScrollHost = el
-          if (!el) return { rootScrolls, found: false, top: 0, height: 0, scrollHeight: 0 }
+          // A page that hides the root's overflow has said it manages its own
+          // scrolling. If nothing in its light DOM scrolls either, whatever it
+          // shows past this screen is somewhere the capture cannot go.
+          const hidden =
+            getComputedStyle(document.documentElement).overflowY === 'hidden' ||
+            (!!document.body && getComputedStyle(document.body).overflowY === 'hidden')
+          if (!el) return { rootScrolls, found: false, hidden, top: 0, height: 0, scrollHeight: 0 }
           const r = el.getBoundingClientRect()
           return {
             rootScrolls,
             found: true,
+            hidden,
             top: Math.round(r.top + window.scrollY),
             height: el.clientHeight,
             scrollHeight: Math.ceil(el.scrollHeight),
           }
-        })()`)) as { rootScrolls: boolean; found: boolean; top: number; height: number; scrollHeight: number }
+        })()`)) as { rootScrolls: boolean; found: boolean; hidden: boolean; top: number; height: number; scrollHeight: number }
       const shellBands = options.tiled && shell.found && shell.scrollHeight > shell.height + 1
       if (shellBands) {
         // The page scrolls an element, so the bands do too. Each band is a
@@ -349,6 +356,17 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         } else {
           human(`the page scrolls an inner container; captured in ${bands.length} band(s) of ${step} CSS px, the scroller's own height`)
         }
+      } else if (!shell.rootScrolls && !shell.found && shell.hidden) {
+        // Measured on play.tailwindcss.com: root and body both `overflow:
+        // hidden`, and not one light-DOM element with `overflow-y: auto` that
+        // overflows — a virtualised editor that scrolls by transform, and a
+        // preview in an iframe. The walk is right to find nothing, and the
+        // capture is genuinely one screen; saying so is the honest part.
+        warn(
+          `warning: this page hides the document's overflow and scrolls nothing the capture can reach — no ` +
+            `scrollable container in its light DOM. Content in an iframe, in a shadow root, or in a container ` +
+            `that scrolls by transform (a virtualised list or editor) is past this one screen and not in the PNG`,
+        )
       } else if (!shell.rootScrolls && shell.found && shell.scrollHeight > shell.height + 1) {
         // Same page, but without --tiled there is nothing to scroll: say what
         // is missing rather than returning the first screen quietly.
