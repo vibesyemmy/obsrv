@@ -114,7 +114,13 @@ export interface SnapCommand {
   matrix: boolean
   fullPage: boolean
   /** With `fullPage`: a page taller than one surface is captured in bands rather than clamped. */
+  /**
+   * Kept for the callers that passed it while it meant something: banding is
+   * what `--full-page` does now, so this is accepted and has no effect.
+   */
   tiled: boolean
+  /** `--single-surface`: the old full-page behaviour, one tall viewport. */
+  singleSurface: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -198,13 +204,15 @@ ${THROTTLE_PROFILES.map(t => `                         ${t.id.padEnd(13)} ${t.su
 snap flags:
   --out <file>         Output PNG (default ./obsrv-<preset>.png). Under --matrix: an
                        output directory, or a pattern containing {preset}.
-  --full-page          Capture the full page height on one surface (device pixels capped at 4096).
-                       A page that sizes anything against the viewport lays out differently on a
-                       surface that tall, and says so; --tiled avoids it.
-  --tiled              With --full-page: a page taller than the screen is captured a screenful at a
-                       time (up to twelve) and stitched, instead of clamped at one surface. The
-                       viewport stays the screen's, so 100vh sections keep their size; a sticky header
-                       repeats at the top of each band.
+  --full-page          Capture the whole page: the viewport stays the screen's own and the page is
+                       captured a screenful at a time (up to twelve) and stitched. A page that scrolls
+                       an inner container rather than the window is captured by scrolling that. A
+                       sticky header repeats at the top of each band, as it does when you scroll.
+  --single-surface     With --full-page: the old behaviour, one viewport as tall as the page (device
+                       pixels capped at 4096). Faster and never repeats a sticky header, but a page
+                       sized against the viewport lays out differently on a surface that tall, and a
+                       page that scrolls an inner container is captured as one screen.
+  --tiled              Accepted and ignored: banding is what --full-page does now.
   --matrix <id,id,…>   Render each listed preset in one run.
 
 diff flags:
@@ -250,7 +258,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'json'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'json'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
@@ -262,7 +270,7 @@ const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeo
  * `--out` given to diff is "a snap flag" even though report takes it too.
  */
 const EXTRA_FLAGS: Record<Command, Set<string>> = {
-  snap: new Set(['out', 'full-page', 'tiled', 'matrix']),
+  snap: new Set(['out', 'full-page', 'tiled', 'single-surface', 'matrix']),
   diff: new Set(['out-dir', 'json']),
   audit: new Set(['tap-mm', 'text-mm']),
   // Order matters for a shared flag's named owner: the command that owns the
@@ -471,8 +479,11 @@ export function parseArgs(argv: string[]): CliCommand {
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : matrix ? '.' : `obsrv-${specs[0]!.presetId}.png`
     const fullPage = flags.has('full-page')
     const tiled = flags.has('tiled')
-    if (tiled && !fullPage) throw new ArgError('--tiled goes with --full-page: it is how a page taller than one surface is captured')
-    return { command, url, specs, profileId, out, matrix, fullPage, tiled, waitMs, timeoutMs }
+    const singleSurface = flags.has('single-surface')
+    if (tiled && !fullPage) throw new ArgError('--tiled goes with --full-page (and is now its default, so it does nothing)')
+    if (singleSurface && !fullPage) throw new ArgError('--single-surface goes with --full-page: it is how the whole page is captured')
+    if (singleSurface && tiled) throw new ArgError('--single-surface and --tiled ask for opposite things; --tiled is the default and can be dropped')
+    return { command, url, specs, profileId, out, matrix, fullPage, tiled, singleSurface, waitMs, timeoutMs }
   }
 
   if (command === 'audit') {

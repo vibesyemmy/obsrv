@@ -23,9 +23,15 @@ const OUT = '/tmp/mcp/snap.png'
 const DIR = '/tmp/mcp/diff'
 
 describe('buildSnapArgs', () => {
-  it('tiled rides on fullPage, and is refused without it', () => {
-    expect(buildSnapArgs({ url: URL, fullPage: true, tiled: true }, OUT)).toEqual(['snap', URL, '--full-page', '--tiled', '--out', OUT])
+  it('fullPage bands by default; singleSurface opts out and tiled is a kept no-op', () => {
+    expect(buildSnapArgs({ url: URL, fullPage: true }, OUT)).toEqual(['snap', URL, '--full-page', '--out', OUT])
+    // Accepted, and adds nothing: banding is what fullPage does now.
+    expect(buildSnapArgs({ url: URL, fullPage: true, tiled: true }, OUT)).toEqual(['snap', URL, '--full-page', '--out', OUT])
+    expect(buildSnapArgs({ url: URL, fullPage: true, singleSurface: true }, OUT)).toEqual([
+      'snap', URL, '--full-page', '--single-surface', '--out', OUT,
+    ])
     expect(() => buildSnapArgs({ url: URL, tiled: true }, OUT)).toThrow(/goes with `fullPage`/)
+    expect(() => buildSnapArgs({ url: URL, singleSurface: true }, OUT)).toThrow(/goes with `fullPage`/)
   })
   it('minimal input maps to snap + url + --out (CLI defaults do the rest)', () => {
     expect(buildSnapArgs({ url: URL }, OUT)).toEqual(['snap', URL, '--out', OUT])

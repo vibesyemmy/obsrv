@@ -147,6 +147,8 @@ interface RenderOptions {
    * is the same capture on request.
    */
   tiled?: boolean
+  /** Opts out of banding: one viewport as tall as the page, as `--full-page` used to be. */
+  singleSurface?: boolean
   waitMs: number
   timeoutMs: number
   /** False only for the diff reference: dense raster, desktop semantics. */
@@ -282,7 +284,12 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
             scrollHeight: Math.ceil(el.scrollHeight),
           }
         })()`)) as { rootScrolls: boolean; found: boolean; top: number; height: number; scrollHeight: number }
-      const shellBands = options.tiled && shell.found && shell.scrollHeight > shell.height + 1
+      // Banding is what a full-page capture does now: a single tall surface
+      // either lays a viewport-sized page out differently or clamps at the
+      // device-pixel cap, and neither is the page. `--single-surface` asks for
+      // the old behaviour back.
+      const banding = !options.singleSurface
+      const shellBands = banding && shell.found && shell.scrollHeight > shell.height + 1
       if (shellBands) {
         // The page scrolls an element, so the bands do too. Each band is a
         // full-width capture of the viewport; the first carries the chrome
@@ -361,7 +368,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       }
       if (!shellBands && surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
-        if (options.tiled) {
+        if (banding) {
           // Taller than the screen: keep the viewport the screen's own and
           // capture the page a screenful at a time, scrolling between
           // captures. Not a taller viewport: a page laid out for one is a
@@ -494,8 +501,10 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
-      // Only when asked for: the flagless JSON is a contract.
-      ...(cmd.tiled ? { tiled: true, bands: r.bands ?? 1 } : {}),
+      // Only under --full-page: the flagless JSON is a contract. `tiled` says
+      // the page was captured in bands, which is now the default, so it is
+      // false only when --single-surface asked for one viewport.
+      ...(cmd.fullPage ? { tiled: !cmd.singleSurface, bands: r.bands ?? 1 } : {}),
       // Only when one was applied: at ×1 this object is the contract every
       // consumer already parses, and a run that asked for a scale is new code.
       ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),

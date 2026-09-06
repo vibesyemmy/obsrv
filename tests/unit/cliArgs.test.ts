@@ -28,12 +28,17 @@ describe('parseArgs: commands', () => {
 })
 
 describe('parseArgs: snap', () => {
-  it('--tiled goes with --full-page, and is refused on its own', () => {
-    const cmd = parseArgs(['snap', 'https://x.test', '--full-page', '--tiled']) as SnapCommand
-    expect(cmd.fullPage).toBe(true)
-    expect(cmd.tiled).toBe(true)
-    expect((parseArgs(['snap', 'https://x.test']) as SnapCommand).tiled).toBe(false)
+  it('--full-page bands by default; --single-surface opts out and --tiled is a kept no-op', () => {
+    const plain = parseArgs(['snap', 'https://x.test', '--full-page']) as SnapCommand
+    expect(plain).toMatchObject({ fullPage: true, singleSurface: false, tiled: false })
+    const one = parseArgs(['snap', 'https://x.test', '--full-page', '--single-surface']) as SnapCommand
+    expect(one.singleSurface).toBe(true)
+    // Accepted so callers from when it meant something keep working.
+    expect((parseArgs(['snap', 'https://x.test', '--full-page', '--tiled']) as SnapCommand).tiled).toBe(true)
+
     expect(() => parseArgs(['snap', 'https://x.test', '--tiled'])).toThrow(/goes with --full-page/)
+    expect(() => parseArgs(['snap', 'https://x.test', '--single-surface'])).toThrow(/goes with --full-page/)
+    expect(() => parseArgs(['snap', 'https://x.test', '--full-page', '--single-surface', '--tiled'])).toThrow(/opposite things/)
   })
   it('defaults: 1080p-24, reference profile, derived out name', () => {
     const cmd = snap('https://x.test')

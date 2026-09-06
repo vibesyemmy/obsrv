@@ -196,11 +196,19 @@ const snapInputShape = {
     ),
   throttle: throttleField,
   profile: profileField,
-  fullPage: z.boolean().optional().describe('Capture the full page height (device px capped at 4096; a warning reports clamping — or pass tiled).'),
-  tiled: z
+  fullPage: z
     .boolean()
     .optional()
-    .describe('With fullPage: a page taller than the screen is captured a screenful at a time (up to twelve bands) and stitched, instead of clamped at one surface. The viewport stays the screen\'s, so 100vh sections keep their size; a sticky header repeats at the top of each band. Headless only.'),
+    .describe(
+      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. A sticky header repeats per band, as it does when you scroll. Headless only.',
+    ),
+  singleSurface: z
+    .boolean()
+    .optional()
+    .describe(
+      'With fullPage: one viewport as tall as the page instead (device px capped at 4096). Faster and never repeats a sticky header, but a page sized against the viewport lays out differently on a surface that tall, and a page that scrolls an inner container comes back as one screen.',
+    ),
+  tiled: z.boolean().optional().describe('Accepted and ignored: banding is what fullPage does now.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
   timeoutMs: z
     .number()
@@ -226,8 +234,8 @@ const snapInputShape = {
 }
 
 const snapOutputShape = {
-  tiled: z.boolean().optional().describe('Only with `tiled`: the page was captured in bands.'),
-  bands: z.number().optional().describe('Only with `tiled`: how many bands the page was captured in (1 when one surface held it).'),
+  tiled: z.boolean().optional().describe('Only with `fullPage`: whether the page was captured in bands (false only under `singleSurface`).'),
+  bands: z.number().optional().describe('Only with `fullPage`: how many bands the page was captured in.'),
   mode: z
     .enum(['headless', 'live'])
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
