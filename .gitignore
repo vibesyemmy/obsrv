@@ -6,7 +6,9 @@ playwright-report/
 .vitest/
 .DS_Store
 *.tsbuildinfo
-/obsrv-*/
+# No rule for stray `obsrv-*/` directories: every mkdtemp in this repo roots
+# at os.tmpdir(), so one appearing here is a bug (1,401 of them accumulated
+# under the old rule, unnoticed). Leave them visible in `git status`.
 node-compile-cache/
 playwright-transform-cache-*/
 tsx-*/

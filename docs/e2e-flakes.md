@@ -236,6 +236,28 @@ prints nothing. The frames are Electron's exported symbols nearest the
 addresses, not a symbolicated stack; they place the fault, they do not
 name the line.
 
+## `mcp.spec`'s `obsrv_diff` row ratio: contention only, message not captured
+
+Seen twice on 2026-09-06, in two consecutive full local runs, both times at
+the same position — `[191/374] tests/e2e/mcp.spec.ts:173 obsrv_diff: thin
+text reproduces the ~0.5 row ratio, files on disk`, green on retry.
+
+It does not reproduce on its own (4 of 4 with `--repeat-each 4`) or in its
+own file (13 of 13), so it needs whatever else the full suite is doing at
+that point. That is plausible on the face of it: the test spawns the MCP
+server and the diff behind it performs *two* renders, the 1x target and the
+2x reference, which makes it the most expensive single test in the file.
+
+**The failure text was not captured.** Playwright had written it to
+`test-results/*/error-context.md`, and that directory was deleted in a
+tidy-up of the project root before anyone read it. So the mechanism above is
+where to start looking, not something that has been established.
+
+Next time it appears, read `test-results/` *before* cleaning anything, and
+record the assertion that failed: whether the ratio fell outside 0.3–0.7
+(the renders disagreeing) or one of the two PNGs was missing (the temp dir
+or the write losing a race) points at quite different causes.
+
 ## `cli.spec`'s "solid red": a download banner on the machine channel
 
 The one that failed on CI and passed on re-run, repeatedly, and never once
