@@ -51,13 +51,23 @@ export interface LintEdge {
 export interface LintImage {
   element: string
   rect: LintRect
+  /**
+   * The loaded file's own pixels. Not the element's `naturalWidth`: with a
+   * srcset that is density-corrected (the chosen candidate's pixels over its
+   * density — the CSS size it is meant for), which on a 2x screen would make
+   * every responsive image read as upscaled 2×. Probed by loading the chosen
+   * URL as a plain image, from cache.
+   */
   naturalWidth: number
   naturalHeight: number
   /** What Chromium chose to load, bounded; a data URL is cut at its media type. */
   src: string
+  /** The img has a srcset, or sits in a <picture> whose <source> has one. */
   srcset: boolean
   /** The srcset descriptors as written, e.g. `['1x', '2x']` or `['400w', '800w']`. */
   candidates: string[]
+  /** The descriptor of the candidate Chromium chose (`'640w'`, `'2x'`), when it can be matched. */
+  chosen?: string
 }
 
 export interface LintReport {
@@ -81,7 +91,7 @@ export const LINT_MAX_IMAGES = 500
  * px for the screen in force (`1 / (density × text scale)`), so a border
  * that is a whole pixel on this screen is not reported at all.
  */
-export function lintPage(edgeBelowPx: number, maxText: number, maxEdges: number, maxImages: number): LintReport {
+export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: number, maxImages: number): Promise<LintReport> {
   const label = (el: Element): string => {
     const id = el.id ? `#${el.id}` : ''
     const cls = (el.getAttribute('class') ?? '').split(/\s+/).find(c => c.length > 0)
@@ -146,6 +156,8 @@ export function lintPage(edgeBelowPx: number, maxText: number, maxEdges: number,
   const text: LintText[] = []
   const edges: LintEdge[] = []
   const images: LintImage[] = []
+  /** Images whose file pixels must be probed after the walk (see below). */
+  const probes: Array<{ at: number; url: string }> = []
   let textOver = 0
   let edgesOver = 0
   let imagesOver = 0
@@ -233,18 +245,95 @@ export function lintPage(edgeBelowPx: number, maxText: number, maxEdges: number,
       if (images.length >= maxImages) {
         imagesOver++
       } else {
-        const srcset = el.getAttribute('srcset') ?? ''
-        const candidates = srcset
-          .split(',')
-          .map(c => c.trim().split(/\s+/)[1] ?? '')
-          .filter(c => c.length > 0)
+        // The candidates the page offered: the img's own srcset and, inside a
+        // <picture>, each <source>'s. A srcset is "url descriptor, url
+        // descriptor"; split on whitespace, since a data URL carries a comma.
+        const parseSet = (set: string): Array<[string, string]> => {
+          const out: Array<[string, string]> = []
+          const tokens = set.trim().split(/\s+/).filter(t => t.length > 0)
+          for (let i = 0; i < tokens.length; i++) {
+            let url = tokens[i]!
+            if (url.endsWith(',')) {
+              out.push([url.replace(/,+$/, ''), ''])
+              continue
+            }
+            let descriptor = ''
+            if (i + 1 < tokens.length) {
+              descriptor = tokens[++i]!.replace(/,+$/, '')
+            }
+            url = url.replace(/,+$/, '')
+            if (url.length > 0) out.push([url, descriptor])
+          }
+          return out
+        }
+        const sets: Array<Array<[string, string]>> = []
+        const own = el.getAttribute('srcset') ?? ''
+        if (own.trim().length > 0) sets.push(parseSet(own))
+        const picture = el.parentElement
+        if (picture && picture.tagName === 'PICTURE') {
+          for (const source of Array.from(picture.querySelectorAll('source'))) {
+            const s = source.getAttribute('srcset') ?? ''
+            if (s.trim().length > 0) sets.push(parseSet(s))
+          }
+        }
+        const chosenUrl = el.currentSrc || el.src || ''
+        const resolve = (u: string): string => {
+          try {
+            return new URL(u, document.baseURI).href
+          } catch {
+            return u
+          }
+        }
+        let chosen: string | undefined
+        let from: Array<[string, string]> | undefined
+        for (const set of sets) {
+          const hit = set.find(([u]) => resolve(u) === chosenUrl)
+          if (hit) {
+            chosen = hit[1] || '1x'
+            from = set
+            break
+          }
+        }
+        const candidates = (from ?? sets[0] ?? [])
+          .map(([, d]) => d)
+          .filter(d => d.length > 0)
           .slice(0, 12)
-        const chosen = el.currentSrc || el.src || ''
-        const src = chosen.startsWith('data:') ? chosen.slice(0, Math.min(chosen.indexOf(',') + 1 || 40, 40)) : chosen.slice(0, 200)
-        images.push({ element: label(el), rect, naturalWidth: el.naturalWidth, naturalHeight: el.naturalHeight, src, srcset: srcset.length > 0, candidates })
+        const src = chosenUrl.startsWith('data:') ? chosenUrl.slice(0, Math.min(chosenUrl.indexOf(',') + 1 || 40, 40)) : chosenUrl.slice(0, 200)
+        if (sets.length > 0 && chosenUrl.length > 0) probes.push({ at: images.length, url: chosenUrl })
+        images.push({
+          element: label(el),
+          rect,
+          naturalWidth: el.naturalWidth,
+          naturalHeight: el.naturalHeight,
+          src,
+          srcset: sets.length > 0,
+          candidates,
+          ...(chosen !== undefined ? { chosen } : {}),
+        })
       }
     }
   }
+
+  // With a srcset, Chromium's naturalWidth is density-corrected: the chosen
+  // candidate's pixels over its density, which is the CSS size it is meant
+  // for — so on a 2x screen every responsive image would read as upscaled 2×.
+  // The file's own pixels come from loading the chosen URL as a plain image
+  // (no srcset, density 1), which the cache answers.
+  await Promise.all(
+    probes.map(async ({ at, url }) => {
+      const probe = new Image()
+      const loaded = new Promise<boolean>(resolve => {
+        probe.onload = () => resolve(true)
+        probe.onerror = () => resolve(false)
+      })
+      probe.src = url
+      const ok = await Promise.race([loaded, new Promise<boolean>(resolve => setTimeout(() => resolve(false), 2000))])
+      if (ok && probe.naturalWidth > 0 && probe.naturalHeight > 0) {
+        images[at]!.naturalWidth = probe.naturalWidth
+        images[at]!.naturalHeight = probe.naturalHeight
+      }
+    }),
+  )
 
   return {
     viewport: { width: innerWidth, height: innerHeight },

@@ -122,6 +122,14 @@ describe('contrast', () => {
 })
 
 describe('images', () => {
+  it('names the chosen candidate when the walk matched one', () => {
+    const r = report({ images: [image({ naturalWidth: 100, naturalHeight: 100, srcset: true, candidates: ['100w', '200w'], chosen: '100w' })] })
+    const phone = lintFindings(r, screen(2), reference, thresholds)
+    // The helper's 200 CSS px slot is 400 device px on the phone: 4× over a 100 px file.
+    expect(phone.findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 4, chosen: '100w' })
+    expect(phone.findings[0]!.message).toContain('100×100 px (the 100w candidate) drawn over 400×400')
+    expect(phone.findings[0]!.message).not.toContain('no srcset')
+  })
   it('drawn wider than it is: upscaled by the factor, more so on a denser screen', () => {
     const r = report({ images: [image({ naturalWidth: 100, naturalHeight: 100 })] })
     const at1x = lintFindings(r, screen(1), reference, thresholds)
