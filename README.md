@@ -146,7 +146,8 @@ npx -y getobsrv snap http://localhost:5173 --matrix laptop-768,android-65,1080p-
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out tn.png
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --out full.png
 
-# A page taller than one surface (4096 device px): captured in bands instead of clamped.
+# A page taller than one surface (4096 device px): captured in bands instead of clamped, at the
+# screen's own viewport, so a 100vh section keeps the height the screen gives it.
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --full-page --tiled --out full.png
 
 # Machine-readable 1x-vs-2x comparison (ink coverage, row ratios, band deltas):

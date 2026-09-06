@@ -210,4 +210,6 @@ happened on the matrix snaps.
   their size), so a sticky header repeats at the top of each band, as it
   does when a person scrolls.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
-  (`tiled: true` on `obsrv_snap`).
+  (`tiled: true` on `obsrv_snap`). On one surface the viewport is as tall as
+  the page, so a `100vh` hero becomes the whole surface's height: a page that
+  moves is warned about by name, and `--tiled` is the answer.

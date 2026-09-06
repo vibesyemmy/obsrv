@@ -316,6 +316,23 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           }
           target.setViewport(applied.width, wanted, spec.deviceScaleFactor, spec.mobile)
           cssHeight = wanted
+          // One surface means a viewport as tall as the page, and a page that
+          // sizes anything against the viewport is then a different page: a
+          // `100vh` hero is the screen's height on the screen and the whole
+          // surface's height here. Measured rather than assumed — the page is
+          // asked again, and only a page that actually moved is warned about.
+          const grownHeight = Math.ceil(
+            (await target.webContents.executeJavaScript(
+              'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
+            )) as number,
+          )
+          if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
+            warn(
+              `warning: this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
+                `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
+                `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
+            )
+          }
         }
       }
     }
