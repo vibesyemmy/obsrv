@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { parseAuditRequest, parseInspectRequest, parseLintRequest, type AuditRequest, type InspectRequest, type LintRequest } from '../shared/ipcPayloads'
 import type { InspectReadout } from '../shared/inspectReadout'
 import type { AuditResult } from '../cli/audit'
-import type { LintResult } from '../cli/lint'
+import type { LintGroupSummary, LintResult } from '../cli/lint'
 import type { VisionType } from '../shared/vision'
 import { rmSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
@@ -132,7 +132,9 @@ export interface LiveAudit extends AuditResult {
 }
 
 /** What a live lint answers: the screen it was judged on, then `obsrv lint`'s own result. */
-export interface LiveLint extends LintResult {
+export interface LiveLint extends Omit<LintResult, 'groups'> {
+  /** Slimmed for the wire: the exemplar is where it is and what it says. */
+  groups: LintGroupSummary[]
   cssWidth: number
   cssHeight: number
   deviceScaleFactor: number

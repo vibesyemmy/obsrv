@@ -407,6 +407,22 @@ test('obsrv_lint (auto) lints the running app on the screen and panel in force, 
   await call('obsrv_drive', { profile: 'reference' })
 })
 
+test('obsrv_drive reports its highlight and keeps it up for the capture in the same call', async () => {
+  const r = await call('obsrv_drive', { url: TALL, highlight: { x: 10, y: 10, width: 80, height: 20 }, capture: 'pane' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { highlight?: { drawn: boolean; pane?: unknown }; tabId: string }
+  expect(m.highlight).toMatchObject({ drawn: true })
+  expect(m.highlight!.pane).toBeDefined()
+  expect(typeof m.tabId).toBe('string')
+})
+
+test('obsrv_inspect (live) names the tab, like audit and lint do', async () => {
+  const r = await call('obsrv_inspect', { selector: 'body' })
+  expect(r.isError).toBeFalsy()
+  expect(r.structuredContent).toMatchObject({ mode: 'live', tabIndex: 0 })
+  expect(typeof (r.structuredContent as { tabId: string }).tabId).toBe('string')
+})
+
 test('obsrv_drive sets a throttle on the live target; status and the footer report it', async () => {
   const r = await call('obsrv_drive', { throttle: 'cpu-6x' })
   expect(r.isError).toBeFalsy()

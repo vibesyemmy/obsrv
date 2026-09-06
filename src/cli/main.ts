@@ -25,7 +25,7 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings, type LintGroup } from './lint'
+import { lintFindings, slimGroups, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -623,6 +623,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       pageHeight: report.pageHeight,
       ...result,
+      groups: slimGroups(result.groups),
     })
   } finally {
     target.destroy()

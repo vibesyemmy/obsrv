@@ -94,6 +94,37 @@ export interface LintGroup {
   /** Up to a few distinct elements, for the reader. */
   elements: string[]
 }
+/**
+ * A group as the CLI and the MCP hand it out: the exemplar cut down to where
+ * it is and what it says. The full finding is in `findings` (or, past the
+ * cap, counted); repeating it here doubled the payload for nothing.
+ */
+export interface LintGroupSummary {
+  rule: LintRule
+  key: string
+  count: number
+  elements: string[]
+  exemplar: { element: string; text: string; rect: LintRect; message: string }
+}
+export function slimGroups(groups: LintGroup[]): LintGroupSummary[] {
+  return groups.map(g => ({
+    rule: g.rule,
+    key: g.key,
+    count: g.count,
+    elements: g.elements,
+    exemplar: { element: g.exemplar.element, text: g.exemplar.text, rect: g.exemplar.rect, message: g.exemplar.message },
+  }))
+}
+
+/** Text whose colour is its background's: hidden by design (a mask, a reveal) or broken; not a contrast verdict. */
+export const INVISIBLE_CONTRAST = 1.1
+
+/** How many times over, in the buckets a reader thinks in. */
+function factorBucket(rule: 'image-upscaled' | 'image-oversized', factor: number): string {
+  if (rule === 'image-upscaled') return factor < 1.5 ? 'under 1.5×' : factor < 2 ? '1.5–2×' : factor < 3 ? '2–3×' : '3× and over'
+  return factor < 3 ? '2–3×' : factor < 5 ? '3–5×' : factor < 10 ? '5–10×' : '10× and over'
+}
+
 /** Groups are few by nature; this bounds a pathological page. */
 export const LINT_MAX_GROUPS = 100
 export const LINT_GROUP_ELEMENTS = 5
@@ -110,7 +141,8 @@ export function groupKey(f: LintFinding): string {
       return `${f.color} on ${f.background}${f.largeText ? ' (large text)' : ''}`
     case 'image-upscaled':
     case 'image-oversized':
-      return `${f.naturalWidth}×${f.naturalHeight} px`
+      // Not the asset's size: thirty images of thirty sizes are one cause.
+      return `${f.srcset ? 'srcset' : 'no srcset'} · ${factorBucket(f.rule, f.factor)}`
   }
 }
 
@@ -144,8 +176,11 @@ export interface LintResult {
   findings: LintFinding[]
   /** The same findings grouped by what they share, over every one counted; see `groupFindings`. */
   groups: LintGroup[]
-  /** Text over an image or gradient: no colour to measure, so no contrast verdict. */
-  skipped: { textOnImages: number }
+  /**
+   * Text that got no contrast verdict: over an image or gradient (no colour to
+   * measure), or the same colour as its background (hidden by design, or broken).
+   */
+  skipped: { textOnImages: number; invisibleText: number }
   truncated: { findings: number; text: number; edges: number; images: number }
   warnings: string[]
 }
@@ -188,6 +223,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
   groups.hairline.sort((a, b) => (a.rule === 'hairline' && b.rule === 'hairline' ? a.devicePx - b.devicePx : 0))
 
   let textOnImages = 0
+  let invisibleText = 0
   for (const t of report.text) {
     const devicePx = t.fontSizePx * k
     if (t.fontWeight < 400 && devicePx < thresholds.thinPx) {
@@ -213,6 +249,12 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     const threshold = large ? 3 : 4.5
     const fg = hex(t.color)
     const bg = hex(t.background)
+    // Text with no contrast at all is not failing a threshold: a reveal mask's
+    // duplicate, a decorative shadow layer, or a bug. Counted, not judged.
+    if (c.asIs < INVISIBLE_CONTRAST) {
+      invisibleText++
+      continue
+    }
     if (c.asIs < threshold) {
       groups.contrast.push({
         rule: 'contrast',
@@ -314,6 +356,9 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
   if (textOnImages > 0) {
     warnings.push(`${textOnImages} text element${textOnImages === 1 ? ' sits' : 's sit'} on an image or gradient and got no contrast verdict: the pixels under it are not a colour anyone stated`)
   }
+  if (invisibleText > 0) {
+    warnings.push(`${invisibleText} text element${invisibleText === 1 ? ' is' : 's are'} the same colour as the background (1:1): hidden by design or broken, not judged`)
+  }
   const over = report.truncated
   if (over.text > 0 || over.edges > 0 || over.images > 0) {
     warnings.push(
@@ -330,7 +375,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     summary,
     findings,
     groups: groupFindings(all),
-    skipped: { textOnImages },
+    skipped: { textOnImages, invisibleText },
     truncated: { findings: all.length - findings.length, text: over.text, edges: over.edges, images: over.images },
     warnings,
   }
