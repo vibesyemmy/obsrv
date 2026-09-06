@@ -198,6 +198,10 @@ happened on the matrix snaps.
 - `diff` cannot say "the hairline vanished": a 0.5px hairline renders one
   device row at 1x *and* 2x. It reports ink deltas and row ratios; vanishing
   is judged by reading the PNG.
+  It cannot name the element that weakened either: measured per box, the 1x
+  render carries *more* ink than the 2x reference, and the size of the
+  difference tracks the text's colour rather than its stroke (the figures
+  are in `src/cli/metrics.ts`). Ask `lint` which elements, and read the PNG.
 - Animating pages never go paint-quiet. A covered frame that keeps painting
   steadily is captured after ~2 s — headless and live alike — with
   `settled: false` and `unsettledReason: "animating"`; waiting longer would
