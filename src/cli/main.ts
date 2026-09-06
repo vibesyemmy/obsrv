@@ -258,6 +258,36 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       // The page measures itself in its own CSS px; under a text scale the
       // surface needs `textScale` times as many to hold it.
       const surfaceHeight = Math.ceil(scrollHeight * spec.textScale)
+      // An app shell (`html, body { overflow: hidden }` with an inner
+      // `overflow-y: auto` container — dashboards, editors, most web apps)
+      // reports a document exactly as tall as the viewport however much
+      // content it holds, so "the full page" silently means "the first
+      // screen". Ask whether the root scrolls at all and how far the tallest
+      // inner scroller's content runs, and say so when they disagree; the
+      // scrolling this capture does is `window.scrollTo`, which such a page
+      // ignores. Bounded so a large DOM cannot make this expensive.
+      const shell = (await target.webContents.executeJavaScript(`(() => {
+        const EPS = 1
+        const root = document.scrollingElement
+        const rootScrolls = !!root && root.scrollHeight > root.clientHeight + EPS
+        let inner = 0
+        const all = document.querySelectorAll('*')
+        for (let i = 0; i < all.length && i < 4000; i++) {
+          const el = all[i]
+          if (el.scrollHeight <= el.clientHeight + EPS) continue
+          const s = getComputedStyle(el)
+          if (s.overflowY !== 'auto' && s.overflowY !== 'scroll') continue
+          if (el.scrollHeight > inner) inner = el.scrollHeight
+        }
+        return { rootScrolls, inner: Math.ceil(inner) }
+      })()`)) as { rootScrolls: boolean; inner: number }
+      if (!shell.rootScrolls && shell.inner > scrollHeight) {
+        warn(
+          `warning: the document itself does not scroll — this page keeps its content in an inner scroller ` +
+            `${shell.inner} CSS px tall (an app shell). A full-page capture scrolls the window, which this page ` +
+            `ignores, so the PNG is the first screen only. The audit and lint walks still see the whole page`,
+        )
+      }
       if (surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
         if (options.tiled) {
@@ -765,7 +795,17 @@ async function runReport(cmd: ReportCommand): Promise<void> {
           features,
           belowCapture,
         }
-        warnings.push(...full.warnings.map(w => `full page: ${w}`))
+      }
+      // Outside the branch above on purpose: when nothing could be located,
+      // the reason is exactly what the reader needs. It used to be discarded
+      // here, so an app shell — whose findings all sit below a capture that
+      // is one screen — produced no located section and said nothing at all.
+      warnings.push(...full.warnings.map(w => `full page: ${w}`))
+      if (featured.length === 0 && belowCapture > 0) {
+        warnings.push(
+          `the ${belowCapture} finding${belowCapture === 1 ? '' : 's'} worth featuring all lie below what the full-page ` +
+            `capture could reach, so this screen has no "where the problems are" section; the findings themselves are listed above`,
+        )
       }
     }
 

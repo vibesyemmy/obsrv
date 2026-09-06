@@ -337,7 +337,19 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
 
   return {
     viewport: { width: innerWidth, height: innerHeight },
-    pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
+    // The document's own height understates an app shell, whose content
+    // lives in an inner scroller: the document is exactly the viewport while
+    // findings sit far below it. Take the deepest thing actually measured
+    // too, so `pageHeight` can never contradict a finding's own rect.
+    pageHeight: Math.ceil(
+      Math.max(
+        document.documentElement.scrollHeight,
+        document.body ? document.body.scrollHeight : 0,
+        ...text.map(t => t.rect.y + t.rect.height),
+        ...edges.map(e => e.rect.y + e.rect.height),
+        ...images.map(i => i.rect.y + i.rect.height),
+      ),
+    ),
     text,
     edges,
     images,
