@@ -11,6 +11,30 @@ import type { RGBAImage } from '../shared/downsample'
  * "the hairline vanished" is not a claim these numbers can make. What they can
  * show: ink-coverage deltas (thinning / darkening) and row-count ratios (a
  * glyph's rows scale with the raster — a hairline's do not).
+ * *
+ * Naming the *element* whose strokes weakened was tried, on the reasoning that
+ * the band deltas know a stripe of the page lost ink and the DOM knows which
+ * text is in that stripe. It does not work, and the numbers are worth keeping
+ * so it is not tried again (measured 2026-09-06, laptop-768, every text box of
+ * each page against the downsampled 2x reference):
+ *
+ *   - Ink *coverage* per box is the same in both renders to within 2% on the
+ *     thin-text fixture. At 1x a stroke is not thinner, so counting pixels
+ *     under a threshold sees nothing.
+ *   - Ink *mass* (each pixel weighted by how far it falls below the threshold)
+ *     does move — but the 1x render has consistently *more* of it, not less:
+ *     -0.30 on thin-text, -0.27 on hairline, a median of -0.03 across the 40
+ *     text boxes of a Wikipedia article. macOS lays down more ink per glyph
+ *     box at 1x. "Lost ink" is the wrong direction entirely.
+ *   - The magnitude looked like it might separate weak text from sound text,
+ *     and does not. On the lint fixture: 300-weight 12px diverges -0.076 and
+ *     400-weight 12px diverges -0.077 — the same — while 400-weight 16px grey
+ *     text diverges -0.187, more than either. It tracks how close the text
+ *     colour sits to the ink threshold, not the stroke. A rule built on it
+ *     would call grey body text weak and pass thin text.
+ *
+ * So the per-element question is still one for `lint` (which measures the DOM
+ * at the screen's density) and for reading the PNG, not for these rasters.
  */
 
 export const INK_LUMINANCE = 200
