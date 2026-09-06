@@ -140,3 +140,29 @@ test('the walks measure an app shell whole, and pageHeight does not contradict t
     expect(m.pageHeight).toBeGreaterThan(768)
   }
 })
+
+test('an app shell whose content the walk cannot reach says so, and an ordinary page is not accused', async () => {
+  // Measured on play.tailwindcss.com: root and body both `overflow: hidden`,
+  // and not one light-DOM element with `overflow-y: auto` that overflows —
+  // its editor scrolls by transform and its preview is an iframe. The walk
+  // finds nothing, correctly, and the capture really is one screen. The
+  // fixture has that exact shape.
+  const out = join(outDir, 'unreachable.png')
+  const r = await runCli(['snap', fixture('app-shell-unreachable.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const json = JSON.parse(r.stdout)
+  expect(json.bands).toBe(1)
+  const warned = (json.warnings as string[]).join(' ')
+  expect(warned).toMatch(/hides the document's overflow and scrolls nothing the capture can reach/)
+  expect(warned).toMatch(/iframe|shadow root|transform/)
+
+  // An app shell that does have a scroller is captured, not warned about.
+  const shell = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(shell.code, shell.stderr).toBe(0)
+  expect((JSON.parse(shell.stdout).warnings as string[]).join(' ')).not.toMatch(/scrolls nothing the capture can reach/)
+
+  // Nor is a short ordinary page, whose root simply has nothing to scroll.
+  const short = await runCli(['snap', fixture('solid-red.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(short.code, short.stderr).toBe(0)
+  expect((JSON.parse(short.stdout).warnings as string[]).join(' ')).not.toMatch(/scrolls nothing the capture can reach/)
+})
