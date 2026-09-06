@@ -266,6 +266,15 @@ is that desk, not the hide path. CI has never shown it. On a desk, check
 `hide` fires at all with a listener before reading anything into the
 failure.
 
+Since 0.36.0 the five probe for it themselves: `hideEventsFire` in
+`tests/e2e/helpers/deskState.ts` hides and shows the window once in
+`beforeAll` with a listener on `hide`, and each of the five skips with
+"this desk fires no hide event" when nothing fired — **off CI only**. On
+CI the tests run whatever the probe said, so a runner that ever stops
+delivering occlusion transitions still fails red rather than skipping
+green. A local run that reports these five as skipped is that desk; one
+that reports them failed is a real regression in the hide path.
+
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 
 The one flaky retry in the first CI run after the collected-promise fix
