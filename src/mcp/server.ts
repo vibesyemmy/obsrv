@@ -1014,6 +1014,14 @@ const auditGroupShape = z.object({
   smallestMm: z.number().nullable(),
 })
 
+const auditGroupRowShape = z.object({
+  kind: z.enum(['small-target', 'small-text']),
+  key: z.string().describe("What the members share: a control's CSS box, or a font size."),
+  count: z.number(),
+  exemplar: z.object({ element: z.string(), text: z.string(), rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }), mm: z.number() }),
+  elements: z.array(z.string()).describe('Up to five distinct elements in the group.'),
+})
+
 const auditOutputShape = {
   mode: z.enum(['headless', 'live']),
   url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
@@ -1043,6 +1051,9 @@ const auditOutputShape = {
       }),
     )
     .describe('Smallest first; at most 200 listed, the rest counted in truncated.findings.'),
+  groups: z
+    .array(auditGroupRowShape)
+    .describe('The findings grouped by kind and size over every one counted: forty footer links of one height are one group with count 40. Quote a group, not its members.'),
   truncated: z.object({ findings: z.number(), targets: z.number(), text: z.number() }),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
@@ -1482,7 +1493,7 @@ const reportOutputShape = {
       unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       audit: z
-        .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
+        .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), groups: z.number(), truncated: z.number() })
         .nullable(),
       lint: z
         .object({

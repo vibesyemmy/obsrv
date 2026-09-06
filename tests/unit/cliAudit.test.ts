@@ -87,3 +87,35 @@ describe('auditFindings under a text scale', () => {
     )
   })
 })
+
+describe('audit groups', () => {
+  const rect = { x: 0, y: 0, width: 40, height: 22 }
+  it('targets of one size are one group with a count; the exemplar is the smallest member', () => {
+    const report = {
+      viewport: { width: 1920, height: 1080 },
+      pageHeight: 2000,
+      targets: ['a', 'b', 'c', 'd'].map((id, i) => ({ element: `a#${id}`, text: id, rect: { ...rect, width: 40 + i } })),
+      text: [{ element: 'p#cap', text: 'caption', fontSizePx: 10, rect }, { element: 'p#cap2', text: 'caption', fontSizePx: 10, rect }],
+      truncated: { targets: 0, text: 0 },
+    }
+    const res = auditFindings(report, { cssWidth: 360, cssHeight: 800, deviceScaleFactor: 2, diagonalInches: 6.5 }, { tapMm: 7, textMm: 2 })
+    expect(res.findings.length).toBeGreaterThanOrEqual(5)
+    const targets = res.groups.filter(g => g.kind === 'small-target')
+    // Widths 40..43 by height 22: the shorter side is 22 for all, but the CSS box differs per width, so four boxes.
+    expect(targets.map(g => g.key)).toEqual(['40×22 px', '41×22 px', '42×22 px', '43×22 px'])
+    const text = res.groups.find(g => g.kind === 'small-text')!
+    expect(text).toMatchObject({ key: '10 px', count: 2, elements: ['p#cap', 'p#cap2'] })
+    expect(text.exemplar.element).toBe('p#cap')
+  })
+  it('groups run over every finding counted, not the listed cap', () => {
+    const many = Array.from({ length: 250 }, (_, i) => ({ element: `a#l${i}`, text: 'link', rect: { x: 0, y: i * 30, width: 40, height: 22 } }))
+    const res = auditFindings(
+      { viewport: { width: 360, height: 800 }, pageHeight: 8000, targets: many, text: [], truncated: { targets: 0, text: 0 } },
+      { cssWidth: 360, cssHeight: 800, deviceScaleFactor: 2, diagonalInches: 6.5 },
+      { tapMm: 7, textMm: 2 },
+    )
+    expect(res.findings).toHaveLength(200)
+    expect(res.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '40×22 px', count: 250 })])
+    expect(res.groups[0]!.elements).toHaveLength(5)
+  })
+})

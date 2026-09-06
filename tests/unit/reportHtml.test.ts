@@ -34,6 +34,15 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
         mm: 6.07,
       },
     ],
+    groups: [
+      {
+        kind: 'small-target',
+        key: '24×24 px',
+        count: 4,
+        exemplar: { element: 'button#tiny', text: '<script>alert("x")</script> & "quotes"', rect: { x: 16, y: 76, width: 24, height: 24 }, mm: 6.07 },
+        elements: ['button#tiny', 'button#tiny2'],
+      },
+    ],
     truncated: { findings: 3, targets: 0, text: 0 },
     warnings: [],
   },
@@ -97,6 +106,9 @@ describe('reportHtml', () => {
     expect(html).toContain('100 ppi')
     expect(html).toContain('button#tiny')
     expect(html).toContain('6.07 mm')
+    // The audit table is grouped: one row for the four 24×24 controls.
+    expect(html).toContain('and 3 more')
+    expect(html).toContain('24×24 px')
     expect(html).toContain('3 more finding(s) not listed')
     expect(html).toContain('3.10%')
     expect(html).toContain('band 3: hairline lost at 1x')

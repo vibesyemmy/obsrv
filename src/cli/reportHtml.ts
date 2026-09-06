@@ -156,13 +156,14 @@ function auditSection(s: ReportScreen, thresholds: AuditThresholds): string {
   const t = a.summary.targets
   const x = a.summary.text
   const under = (n: number | null): string => (n === null ? '—' : n === 0 ? '0' : `<span class="bad">${n}</span>`)
-  const rows = a.findings
+  // Grouped: forty footer links of one height are one row. The exemplar is
+  // the smallest member, so the millimetres shown are the worst in the group.
+  const rows = a.groups
     .map(
-      f =>
-        `<tr><td><span class="kind">${f.kind === 'small-target' ? 'target' : 'text'}</span></td>` +
-        `<td><code>${escapeHtml(f.element)}</code></td><td>${escapeHtml(f.text)}</td>` +
-        `<td class="n">${f.kind === 'small-target' ? `${num(f.cssWidth, 0)}×${num(f.cssHeight, 0)} px` : `${num(f.fontSizePx, 0)} px`}</td>` +
-        `<td class="n bad">${num(f.mm, 2)} mm</td></tr>`,
+      g =>
+        `<tr><td><span class="kind">${g.kind === 'small-target' ? 'target' : 'text'}</span></td><td class="n">${g.count}</td>` +
+        `<td><code>${escapeHtml(g.exemplar.element)}</code>${g.count > 1 ? ` <span class="muted">and ${g.count - 1} more</span>` : ''}</td>` +
+        `<td>${escapeHtml(g.exemplar.text)}</td><td class="n">${escapeHtml(g.key)}</td><td class="n bad">${num(g.exemplar.mm, 2)} mm</td></tr>`,
     )
     .join('')
   const more = a.truncated.findings > 0 ? `<p class="muted">${a.truncated.findings} more finding(s) not listed.</p>` : ''
@@ -173,7 +174,7 @@ function auditSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `<tr><td>Tap targets (shorter side, under ${thresholds.tapMm} mm)</td><td class="n">${t.count}</td><td class="n">${under(t.under)}</td><td class="n">${mm(t.smallestMm)}</td></tr>` +
     `<tr><td>Text (font size, under ${thresholds.textMm} mm)</td><td class="n">${x.count}</td><td class="n">${under(x.under)}</td><td class="n">${mm(x.smallestMm)}</td></tr></table>` +
     (a.findings.length > 0
-      ? `<table style="margin-top:12px"><tr><th></th><th>Element</th><th>Text</th><th class="n">CSS</th><th class="n">On this screen</th></tr>${rows}</table>`
+      ? `<table style="margin-top:12px"><tr><th></th><th class="n">Count</th><th>Element</th><th>Text</th><th class="n">CSS</th><th class="n">Smallest</th></tr>${rows}</table>`
       : '') +
     none +
     more +
