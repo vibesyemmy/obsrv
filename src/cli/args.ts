@@ -113,6 +113,8 @@ export interface SnapCommand {
   out: string
   matrix: boolean
   fullPage: boolean
+  /** With `fullPage`: a page taller than one surface is captured in bands rather than clamped. */
+  tiled: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -197,6 +199,8 @@ snap flags:
   --out <file>         Output PNG (default ./obsrv-<preset>.png). Under --matrix: an
                        output directory, or a pattern containing {preset}.
   --full-page          Capture the full page height (device pixels capped at 4096).
+  --tiled              With --full-page: a page taller than one surface is captured in bands, up to
+                       eight, instead of clamped; a sticky header repeats at the top of each band.
   --matrix <id,id,…>   Render each listed preset in one run.
 
 diff flags:
@@ -242,7 +246,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'json'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'json'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
@@ -254,7 +258,7 @@ const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeo
  * `--out` given to diff is "a snap flag" even though report takes it too.
  */
 const EXTRA_FLAGS: Record<Command, Set<string>> = {
-  snap: new Set(['out', 'full-page', 'matrix']),
+  snap: new Set(['out', 'full-page', 'tiled', 'matrix']),
   diff: new Set(['out-dir', 'json']),
   audit: new Set(['tap-mm', 'text-mm']),
   // Order matters for a shared flag's named owner: the command that owns the
@@ -461,7 +465,10 @@ export function parseArgs(argv: string[]): CliCommand {
 
   if (command === 'snap') {
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : matrix ? '.' : `obsrv-${specs[0]!.presetId}.png`
-    return { command, url, specs, profileId, out, matrix, fullPage: flags.has('full-page'), waitMs, timeoutMs }
+    const fullPage = flags.has('full-page')
+    const tiled = flags.has('tiled')
+    if (tiled && !fullPage) throw new ArgError('--tiled goes with --full-page: it is how a page taller than one surface is captured')
+    return { command, url, specs, profileId, out, matrix, fullPage, tiled, waitMs, timeoutMs }
   }
 
   if (command === 'audit') {

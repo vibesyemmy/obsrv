@@ -33,6 +33,8 @@ export interface SnapToolInput {
   throttle?: string | undefined
   profile?: string | undefined
   fullPage?: boolean | undefined
+  /** With fullPage: a page taller than one surface is captured in bands. */
+  tiled?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
   /** Live mode only: capture the whole app window (default) or just the target pane. */
@@ -280,7 +282,9 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.profile !== undefined) args.push('--profile', input.profile)
+  if (input.tiled && !input.fullPage) throw new UsageError('`tiled` goes with `fullPage`: it is how a page taller than one surface is captured.')
   if (input.fullPage) args.push('--full-page')
+  if (input.tiled) args.push('--tiled')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   args.push('--out', outPath)

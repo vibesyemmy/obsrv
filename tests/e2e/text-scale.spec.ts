@@ -234,6 +234,10 @@ test('the scale is per tab', async () => {
 })
 
 test.describe('the scale survives a relaunch', () => {
+  // A relaunch plus the drawer's slide is the slowest thing in the suite on a
+  // loaded runner; the default budget was hit there once, with the error
+  // landing after the test (see docs/e2e-flakes.md).
+  test.slow()
   const dirs: string[] = []
   const dir = (): string => {
     const d = mkdtempSync(join(tmpdir(), 'obsrv-text-scale-'))

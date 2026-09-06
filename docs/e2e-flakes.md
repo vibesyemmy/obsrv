@@ -121,6 +121,14 @@ It resolves `null`, the evaluate returns `null`, and the spec asserts on the
 Playwright side — a late *resolution* is silently dropped, a late rejection
 is not. `mobile`, `orientation`, `target-source` and `rendering` do this now.
 
+A second shape of the same error, seen on the 0.32.0 tag run: no helper in
+main at all, but a Playwright-side `expect.poll` (`drawerSettled`, 10 s)
+inside a test that relaunches the app. On a loaded runner the relaunch ate
+the 30 s budget, Playwright abandoned the test and retried it, and the
+poll's timeout rejection landed after the test had ended. Two changes: the
+drawer poll is bounded at 5 s (the transition is 220 ms), and the relaunch
+group is marked slow, so the budget fits what it does.
+
 ## What was done about it
 
 `retries: 1` in `playwright.config.ts`. This is handling, not a fix — the cause

@@ -38,8 +38,9 @@ $OBSRV snap http://localhost:5173 --matrix laptop-768,android-65,1080p-24 --out 
 # Worst realistic panel (cheap TN) on the small laptop:
 $OBSRV snap http://localhost:5173 --preset laptop-768 --profile budget-tn --out shots/laptop-tn.png
 
-# Whole page, not just the first viewport (one surface: device px cap 4096, warns if clamped):
-$OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --out shots/full.png
+# Whole page, not just the first viewport (one surface: device px cap 4096, warns if clamped;
+# add --tiled to capture a taller page in bands instead):
+$OBSRV snap http://localhost:5173 --preset laptop-768 --full-page --tiled --out shots/full.png
 
 # Numbers instead of eyeballs: 1x target vs a 2x-reference downsample, JSON to stdout:
 $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
@@ -203,4 +204,5 @@ happened on the matrix snaps.
   never painted. Use `--wait` for content that settles late.
 - The report's full-page capture takes a tall page in bands, so a sticky
   header repeats at the top of each band, as it does when a person scrolls.
-  `snap --full-page` keeps its single-surface cap.
+  `snap --full-page` keeps its single-surface cap unless you add `--tiled`
+  (`tiled: true` on `obsrv_snap`).

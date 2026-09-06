@@ -196,7 +196,11 @@ const snapInputShape = {
     ),
   throttle: throttleField,
   profile: profileField,
-  fullPage: z.boolean().optional().describe('Capture the full page height (device px capped at 4096; a warning reports clamping).'),
+  fullPage: z.boolean().optional().describe('Capture the full page height (device px capped at 4096; a warning reports clamping — or pass tiled).'),
+  tiled: z
+    .boolean()
+    .optional()
+    .describe('With fullPage: a page taller than one surface is captured in bands (up to eight) instead of clamped; a sticky header repeats at the top of each band. Headless only.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
   timeoutMs: z
     .number()
@@ -222,6 +226,8 @@ const snapInputShape = {
 }
 
 const snapOutputShape = {
+  tiled: z.boolean().optional().describe('Only with `tiled`: the page was captured in bands.'),
+  bands: z.number().optional().describe('Only with `tiled`: how many bands the page was captured in (1 when one surface held it).'),
   mode: z
     .enum(['headless', 'live'])
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),

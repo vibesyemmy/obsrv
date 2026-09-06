@@ -1522,6 +1522,10 @@ export function registerIpc(ctx: AppContext): () => void {
     focusWindow: () => {
       if (win.isDestroyed()) return
       win.show()
+      // The window's own `focus()` cannot activate an app that is not
+      // frontmost; `app.focus` asks for that, stealing where the OS allows it
+      // (macOS 14+ grants it only when the front app yields).
+      app.focus({ steal: true })
       win.focus()
     },
     activity: () => {

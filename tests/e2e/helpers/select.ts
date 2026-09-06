@@ -101,8 +101,12 @@ export async function openPanel(page: Page): Promise<void> {
 
 /** The drawer slides; a spec that measures the panes waits for the width to land. */
 export async function drawerSettled(page: Page, open: boolean): Promise<void> {
+  // The transition is 220 ms; five seconds is generous. Ten was enough for a
+  // poll to outlive a test that relaunches the app on a loaded runner, and a
+  // poll rejecting after its test ended is "1 error was not a part of any
+  // test" — a red run with every test green (0.32.0 tag job).
   await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()))
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()), { timeout: 5_000 })
     .toBe(open ? '309px' : '0px')
 }
 
