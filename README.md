@@ -311,14 +311,14 @@ belongs to an unrelated package.
   reached — but scrolling a nested container **by hand** in the native pane is not
   mirrored to the target: element scroll events don't bubble to `window`, so the report
   side never sees them. Dragging the page itself still syncs both ways.
-- A **headless full-page capture cannot reach an app shell's content.** Driving the app
-  handles it — `scroll` finds the inner scroller, as above — but `snap --full-page`,
-  `--tiled` and the report all scroll the *window*, which a page with
-  `html, body { overflow: hidden }` ignores, so the PNG is the first screen. It is
-  reported rather than silent: the capture names the inner scroller's height and says
-  the rest is out of reach, and the audit and lint walks still measure the whole page.
-  Sharing the live scroll-host detection with the headless path is the fix, and the
-  algorithm is already there (`src/preload/sync.ts`, exported for exactly this).
+- An **app shell needs `--tiled`.** A page with `html, body { overflow: hidden }` and an
+  inner `overflow-y: auto` container reports a document exactly as tall as the viewport,
+  so scrolling the window captures the first screen and nothing else.
+  `snap --full-page --tiled` and the report scroll the container the page actually
+  scrolls — the same walk the live `scroll` uses (`src/shared/scrollHost.ts`) — and
+  stitch the chrome above it once, so the raster is laid out in the page's own
+  coordinates and the report's pins land on it. `--full-page` on its own still captures
+  one screen of such a page, and says so.
 - Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
   shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
   (`document.querySelector` doesn't cross either boundary), so a web-component app that

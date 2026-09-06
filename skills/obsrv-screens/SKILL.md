@@ -213,14 +213,15 @@ happened on the matrix snaps.
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size), so a sticky header repeats at the top of each band, as it
   does when a person scrolls.
-- A **full-page capture cannot reach an app shell** — `html, body { overflow:
-  hidden }` with an inner `overflow-y: auto` container, which is most web
-  apps. The capture scrolls the window and the page ignores it, so the PNG is
-  the first screen; it says so, naming the inner scroller's height. `audit`
-  and `lint` still measure the whole page, and their findings carry page rects
-  well below the captured height, so a report of such a page lists its
-  findings but cannot pin them. To see below the fold, drive the app instead:
-  `obsrv_drive` finds the inner scroller and answers `scroller: 'element'`.
+- An **app shell needs `--tiled`** (`tiled: true` on `obsrv_snap`) — `html,
+  body { overflow: hidden }` with an inner `overflow-y: auto` container, which
+  is most web apps. Such a page reports a document exactly as tall as the
+  viewport, so scrolling the window captures the first screen only. Tiled, the
+  capture scrolls the container the page really scrolls, stitches the chrome
+  above it once, and the report pins findings on it as usual. The report does
+  this for you. `--full-page` alone still gets one screen of such a page and
+  says so. Driving the app was always fine: `obsrv_drive` finds the same
+  container and answers `scroller: 'element'`.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
   (`tiled: true` on `obsrv_snap`). On one surface the viewport is as tall as
   the page, so a `100vh` hero becomes the whole surface's height: a page that

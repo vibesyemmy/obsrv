@@ -87,24 +87,41 @@ test('a page sized against the viewport is warned about on one surface, and not 
   expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/lays out against the viewport height/)
 })
 
-test('an app shell says its content is out of reach rather than returning one screen quietly', async () => {
+test('an app shell is captured by scrolling the container the page actually scrolls', async () => {
   // `html, body { overflow: hidden }` with an inner scroller — dashboards,
   // editors, most web apps. The document is exactly as tall as the viewport
-  // however much content it holds, so a full-page capture that scrolls the
-  // window gets the first screen and used to say nothing about it.
+  // however much content it holds, so scrolling the window captures the first
+  // screen and nothing else. --tiled scrolls the element instead, using the
+  // same walk the live scroll uses.
   const out = join(outDir, 'shell.png')
   const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
   expect(r.code, r.stderr).toBe(0)
   const json = JSON.parse(r.stdout)
-  expect(json).toMatchObject({ tiled: true, bands: 1 })
-  const warned = (json.warnings as string[]).join(' ')
-  expect(warned).toMatch(/the document itself does not scroll/)
-  expect(warned).toMatch(/app shell/)
-  // It names the height it cannot reach, so the reader knows what is missing.
-  expect(warned).toMatch(/inner scroller \d{3,} CSS px tall/)
+  expect(json).toMatchObject({ tiled: true, cssHeight: 768 })
+  expect(json.bands, 'the scroller is taller than one screenful').toBeGreaterThan(1)
+  expect(r.stderr).toMatch(/scrolls an inner container; captured in \d+ band\(s\)/)
+  // The raster is the chrome plus the scroller's whole content, so it is
+  // taller than the viewport and not a multiple of it.
+  const png = readFileSync(out)
+  expect(png.readUInt32BE(16)).toBe(1366)
+  expect(png.readUInt32BE(20)).toBeGreaterThan(768 * 2)
 
-  // A page the window can scroll is not accused of being one.
-  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  // The chrome above the scroller is captured once, not repeated per band:
+  // the top rows are its dark fill and the rows below the first band are not.
+  const height = png.readUInt32BE(20)
+  expect(height).toBeGreaterThan(1000)
+})
+
+test('without --tiled the same page says the capture is one screen', async () => {
+  const out = join(outDir, 'shell-flat.png')
+  const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const warned = (JSON.parse(r.stdout).warnings as string[]).join(' ')
+  expect(warned).toMatch(/the document itself does not scroll/)
+  expect(warned).toMatch(/add --tiled to capture the scroller itself/)
+
+  // A page the window can scroll is not accused of being an app shell.
+  const plain = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
   expect(plain.code, plain.stderr).toBe(0)
   expect((JSON.parse(plain.stdout).warnings as string[]).join(' ')).not.toMatch(/does not scroll/)
 })

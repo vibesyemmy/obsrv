@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
+import { SCROLL_HOST_SCRIPT } from '../shared/scrollHost'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
 import { inspectReadout } from '../shared/inspectReadout'
@@ -261,34 +262,104 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       // An app shell (`html, body { overflow: hidden }` with an inner
       // `overflow-y: auto` container — dashboards, editors, most web apps)
       // reports a document exactly as tall as the viewport however much
-      // content it holds, so "the full page" silently means "the first
-      // screen". Ask whether the root scrolls at all and how far the tallest
-      // inner scroller's content runs, and say so when they disagree; the
-      // scrolling this capture does is `window.scrollTo`, which such a page
-      // ignores. Bounded so a large DOM cannot make this expensive.
-      const shell = (await target.webContents.executeJavaScript(`(() => {
-        const EPS = 1
-        const root = document.scrollingElement
-        const rootScrolls = !!root && root.scrollHeight > root.clientHeight + EPS
-        let inner = 0
-        const all = document.querySelectorAll('*')
-        for (let i = 0; i < all.length && i < 4000; i++) {
-          const el = all[i]
-          if (el.scrollHeight <= el.clientHeight + EPS) continue
-          const s = getComputedStyle(el)
-          if (s.overflowY !== 'auto' && s.overflowY !== 'scroll') continue
-          if (el.scrollHeight > inner) inner = el.scrollHeight
+      // content it holds, so scrolling the window gets the first screen and
+      // nothing else. Find the element the page really scrolls, using the same
+      // walk the live scroll uses (shared/scrollHost.ts), and leave it on the
+      // page for the band loop below to drive.
+      const shell = (await target.webContents.executeJavaScript(`${SCROLL_HOST_SCRIPT}
+        ;(() => {
+          const root = document.scrollingElement
+          const rootScrolls = !!root && root.scrollHeight > root.clientHeight + 1
+          const el = rootScrolls ? null : findScroller()
+          window.__obsrvScrollHost = el
+          if (!el) return { rootScrolls, found: false, top: 0, height: 0, scrollHeight: 0 }
+          const r = el.getBoundingClientRect()
+          return {
+            rootScrolls,
+            found: true,
+            top: Math.round(r.top + window.scrollY),
+            height: el.clientHeight,
+            scrollHeight: Math.ceil(el.scrollHeight),
+          }
+        })()`)) as { rootScrolls: boolean; found: boolean; top: number; height: number; scrollHeight: number }
+      const shellBands = options.tiled && shell.found && shell.scrollHeight > shell.height + 1
+      if (shellBands) {
+        // The page scrolls an element, so the bands do too. Each band is a
+        // full-width capture of the viewport; the first carries the chrome
+        // above the scroller, and every later one contributes just the
+        // scroller's own rows, placed where that scroll position puts them.
+        // The stitched raster is therefore laid out in the page's own
+        // coordinates — chrome at the top, content below it — which is the
+        // space the walks report their rects in, so the report's pins need no
+        // conversion.
+        const step = shell.height
+        const bandsWanted = Math.ceil(shell.scrollHeight / step)
+        const bandCount = Math.min(bandsWanted, MAX_TILE_BANDS)
+        const bands: CaptureBand[] = []
+        let settled = true
+        let unsettledReason: UnsettledReason | undefined
+        const k = spec.deviceScaleFactor * spec.textScale
+        for (let i = 0; i < bandCount; i++) {
+          const wantTop = i * step
+          const top = Math.round(
+            (await target.webContents.executeJavaScript(
+              `(() => { const el = window.__obsrvScrollHost; if (!el) return 0; el.scrollTop = ${wantTop}; return el.scrollTop })()`,
+            )) as number,
+          )
+          const f = await quiescent()
+          if (!f.settled) {
+            settled = false
+            if (unsettledReason === undefined) unsettledReason = f.unsettledReason
+          }
+          if (i === 0) {
+            bands.push({ y: 0, width: f.width, height: f.height, bgra: f.bgra })
+          } else {
+            // Just the scroller's rows out of the viewport capture. Bands are
+            // full width, so this is a contiguous slice.
+            const from = Math.max(0, Math.round(shell.top * k))
+            const to = Math.min(f.height, Math.round((shell.top + shell.height) * k))
+            if (to > from) {
+              bands.push({
+                y: Math.round((shell.top + top) * k),
+                width: f.width,
+                height: to - from,
+                bgra: f.bgra.subarray(from * f.width * 4, to * f.width * 4),
+              })
+            }
+          }
+          // The scroll clamped short of where the next band would start: that
+          // was the bottom, and this band already covers it.
+          if (top < wantTop) break
         }
-        return { rootScrolls, inner: Math.ceil(inner) }
-      })()`)) as { rootScrolls: boolean; inner: number }
-      if (!shell.rootScrolls && shell.inner > scrollHeight) {
+        // Put the page back where the walks expect it: their rects are
+        // measured against a scroller at the top, and audit and lint run after
+        // this capture.
+        await target.webContents.executeJavaScript(
+          '(() => { const el = window.__obsrvScrollHost; if (el) el.scrollTop = 0; return 0 })()',
+        )
+        const width = bands[0]!.width
+        const height = Math.round((shell.top + shell.scrollHeight) * k)
+        frame = { width, height, bgra: stitchBands(width, height, bands), settled, ...(unsettledReason !== undefined ? { unsettledReason } : {}) }
+        bandsCaptured = bands.length
+        if (bandsWanted > bandCount) {
+          warn(
+            `warning: the page scrolls an inner container ${shell.scrollHeight} CSS px tall; captured the first ${bandCount} ` +
+              `bands of ${step} CSS px (${MAX_TILE_BANDS} at most) — what lies past them is not in the raster`,
+          )
+        } else {
+          human(`the page scrolls an inner container; captured in ${bands.length} band(s) of ${step} CSS px, the scroller's own height`)
+        }
+      } else if (!shell.rootScrolls && shell.found && shell.scrollHeight > shell.height + 1) {
+        // Same page, but without --tiled there is nothing to scroll: say what
+        // is missing rather than returning the first screen quietly.
         warn(
           `warning: the document itself does not scroll — this page keeps its content in an inner scroller ` +
-            `${shell.inner} CSS px tall (an app shell). A full-page capture scrolls the window, which this page ` +
-            `ignores, so the PNG is the first screen only. The audit and lint walks still see the whole page`,
+            `${shell.scrollHeight} CSS px tall (an app shell). A full-page capture on one surface scrolls the window, ` +
+            `which this page ignores, so the PNG is the first screen only; add --tiled to capture the scroller itself. ` +
+            `The audit and lint walks see the whole page either way`,
         )
       }
-      if (surfaceHeight > cssHeight) {
+      if (!shellBands && surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
         if (options.tiled) {
           // Taller than the screen: keep the viewport the screen's own and
