@@ -18,3 +18,10 @@ getobsrv-*.tgz
 
 # Vitest browser-mode failure screenshots.
 tests/browser/__screenshots__/
+
+# Local agent configuration, never the repository's business. CLAUDE.md and
+# .claude/ were committed once by a careless `git add -A` (9488c44) and
+# removed in the commit that added these lines; ignoring them is what stops
+# that recurring.
+/CLAUDE.md
+/.claude/
