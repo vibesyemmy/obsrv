@@ -65,7 +65,15 @@ claude plugin install obsrv@obsrv
 ```
 
 That gives an agent the `obsrv-screens` skill and the seven-plus tools in one
-step; `obsrv install-skill` remains for the skill alone.
+step; `obsrv install-skill` remains for the skill alone. The marketplace entry
+points at the release tag, so what installs is a release, never main between
+releases. `marketplace add` does not refresh a marketplace you already have,
+so to move to a newer release:
+
+```bash
+claude plugin marketplace update obsrv
+claude plugin update obsrv@obsrv
+```
 
 **Both together** — install the app *and* the tools, then flip **Agent control**
 on in the app's toolbar: agent testing now drives the window you are watching
@@ -279,6 +287,11 @@ electron dev→prod dependency swap (this shipped a broken 0.4.0). The flow is:
 npm run release:pack
 npm publish ./getobsrv-<version>.tgz
 ```
+
+`npm version` also rewrites the plugin manifests: their version, and the
+marketplace entry's source, which is pinned to the tag `v<version>` the bump
+creates. Push that tag (after `main` is green) or the marketplace catalog
+points at a ref that does not exist yet.
 
 Obsrv publishes to npm as **`getobsrv`** (the installed commands remain `obsrv`
 and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name
