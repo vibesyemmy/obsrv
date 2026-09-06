@@ -1,0 +1,15 @@
+{
+  "name": "obsrv",
+  "description": "Obsrv: see your pages the way 1x screens and cheap panels show them \u2014 the obsrv-screens skill and the obsrv MCP tools (snap, diff, audit, lint, inspect, report, drive).",
+  "owner": {
+    "name": "Opeyemi Ajagbe"
+  },
+  "plugins": [
+    {
+      "name": "obsrv",
+      "source": "./",
+      "description": "See your pages the way 1x screens and cheap panels show them: true-density renders, millimetre audits, a lint that names the elements that break, and a report that locates them. Ships the obsrv-screens skill and the obsrv MCP server.",
+      "version": "0.32.0"
+    }
+  ]
+}

@@ -63,12 +63,50 @@ export interface AuditGroupSummary {
   smallestMm: number | null
 }
 
+/**
+ * Findings that share a kind and a size, counted together: forty footer links
+ * of one height are one row, not forty. Over every finding, not the listed
+ * cap. The exemplar is the smallest member, since the list is smallest first.
+ */
+export interface AuditGroup {
+  kind: 'small-target' | 'small-text'
+  /** What the members share: a control's CSS box, or a font size. */
+  key: string
+  count: number
+  exemplar: { element: string; text: string; rect: AuditRect; mm: number }
+  /** Up to a few distinct elements, for the reader. */
+  elements: string[]
+}
+export const AUDIT_GROUP_ELEMENTS = 5
+
+export function auditGroupKey(f: AuditFinding): string {
+  return f.kind === 'small-target' ? `${Math.round(f.cssWidth)}×${Math.round(f.cssHeight)} px` : `${round(f.fontSizePx, 1)} px`
+}
+
+export function groupAudit(findings: AuditFinding[]): AuditGroup[] {
+  const groups = new Map<string, AuditGroup>()
+  for (const f of findings) {
+    const key = auditGroupKey(f)
+    const id = `${f.kind}|${key}`
+    const g = groups.get(id)
+    if (g) {
+      g.count++
+      if (g.elements.length < AUDIT_GROUP_ELEMENTS && !g.elements.includes(f.element)) g.elements.push(f.element)
+    } else {
+      groups.set(id, { kind: f.kind, key, count: 1, exemplar: { element: f.element, text: f.text, rect: f.rect, mm: f.mm }, elements: [f.element] })
+    }
+  }
+  return [...groups.values()]
+}
+
 export interface AuditResult {
   /** Device pixels per inch of the screen, or null without a diagonal. */
   ppi: number | null
   thresholds: AuditThresholds
   summary: { targets: AuditGroupSummary; text: AuditGroupSummary }
   findings: AuditFinding[]
+  /** The same findings grouped by kind and size, over every one counted; see `groupAudit`. */
+  groups: AuditGroup[]
   truncated: { findings: number; targets: number; text: number }
   warnings: string[]
 }
@@ -147,6 +185,7 @@ export function auditFindings(report: AuditReport, screen: AuditScreen, threshol
       text: group(report.text.length, underText, smallestTextPx),
     },
     findings: listed,
+    groups: groupAudit(findings),
     truncated: { findings: findings.length - listed.length, targets: report.truncated.targets, text: report.truncated.text },
     warnings,
   }

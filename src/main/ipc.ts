@@ -1,6 +1,6 @@
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
-import { DEFAULT_THIN_PX, lintFindings } from '../cli/lint'
+import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
 import { captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
@@ -1479,7 +1479,7 @@ export function registerIpc(ctx: AppContext): () => void {
         { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
         { thinPx: req.thinPx ?? DEFAULT_THIN_PX },
       )
-      return { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale, pageHeight: report.pageHeight, ...result }
+      return { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor, textScale, pageHeight: report.pageHeight, ...result, groups: slimGroups(result.groups) }
     },
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and

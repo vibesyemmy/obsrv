@@ -260,3 +260,24 @@ test('obsrv_inspect (headless, no app): the grey caption by selector, in millime
   expect(live.isError).toBe(true)
   expect((live.content[0] as { text: string }).text).toMatch(/Agent control/)
 })
+
+test('obsrv_presets: a group answers with those presets alone, and phones is a name for mobile', async () => {
+  const r = await call('obsrv_presets', { group: 'phones' })
+  expect(r.isError).toBeFalsy()
+  const c = r.structuredContent as { presets: { group: string }[]; throttles?: unknown; profiles?: unknown; orientation?: unknown }
+  expect(c.presets.length).toBeGreaterThan(3)
+  expect(c.presets.every(p => p.group === 'mobile')).toBe(true)
+  expect(c.throttles).toBeUndefined()
+  expect(c.profiles).toBeUndefined()
+  expect(c.orientation).toBeUndefined()
+})
+
+test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list out', async () => {
+  const r = await call('obsrv_lint', { url: fixture('lint.html'), preset: '1080p-24', groupsOnly: true })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { findings: unknown[]; groups: { exemplar: Record<string, unknown> }[]; summary: Record<string, number>; skipped: Record<string, number> }
+  expect(m.findings).toEqual([])
+  expect(m.summary.hairline).toBe(2)
+  expect(Object.keys(m.groups[0]!.exemplar).sort()).toEqual(['element', 'message', 'rect', 'text'])
+  expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0 })
+})

@@ -113,3 +113,12 @@ on the 15.6" laptop at ×1 is 9.1 mm at ×1.5 and stops being a finding.
 `rect`s and `pageHeight` stay in the page's own CSS px; `cssWidth` and
 `cssHeight` are the screen's, and the JSON says the `textScale` when one
 other than 1 was applied.
+
+## Groups
+
+Every result also carries `groups`: the findings grouped by kind and size —
+a control's CSS box, or a font size — over every finding counted, not the
+listed cap, each with a count, the smallest member as exemplar, and up to
+five of the elements. Forty footer links of one height are one group with
+count 40. The report's audit table lists the groups. Quote a group, not its
+members.

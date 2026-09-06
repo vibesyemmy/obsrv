@@ -56,6 +56,17 @@ another agent framework). The skill is what makes an agent reach for Obsrv on
 its own when frontend work needs checking; the MCP registration is what gives
 it the tools to do so. New sessions pick both up.
 
+**As a Claude Code plugin** — the repo is one: it carries the skill, and its
+`.mcp.json` registers the MCP server.
+
+```bash
+claude plugin marketplace add vibesyemmy/obsrv
+claude plugin install obsrv@obsrv
+```
+
+That gives an agent the `obsrv-screens` skill and the seven-plus tools in one
+step; `obsrv install-skill` remains for the skill alone.
+
 **Both together** — install the app *and* the tools, then flip **Agent control**
 on in the app's toolbar: agent testing now drives the window you are watching
 instead of rendering invisibly.

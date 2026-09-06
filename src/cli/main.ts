@@ -25,7 +25,7 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings, type LintGroup } from './lint'
+import { lintFindings, slimGroups, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -623,6 +623,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       pageHeight: report.pageHeight,
       ...result,
+      groups: slimGroups(result.groups),
     })
   } finally {
     target.destroy()
@@ -836,7 +837,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       settled: s.settled,
       ...(s.settled ? {} : { unsettledReason: s.unsettledReason }),
       ...(throttleId !== null ? { settledMs: s.settledMs } : {}),
-      audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, truncated: s.audit.truncated.findings } : null,
+      audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, groups: s.audit.groups.length, truncated: s.audit.truncated.findings } : null,
       lint: s.lint ? { summary: s.lint.summary, findings: s.lint.findings.length, groups: s.lint.groups.length, skipped: s.lint.skipped } : null,
       diff: s.diff
         ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }

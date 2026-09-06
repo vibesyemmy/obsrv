@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, type LintPanel } from '../../src/cli/lint'
+import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, slimGroups, type LintPanel } from '../../src/cli/lint'
 import { effectiveContrast } from '../../src/shared/contrast'
 import type { LintEdge, LintImage, LintReport, LintText } from '../../src/shared/lint'
 import { profileToParams } from '../../src/shared/panelSim'
@@ -184,9 +184,45 @@ describe('groups', () => {
     expect(base.groups.map(g => [g.rule, g.key])).toEqual([
       ['thin-text', '300 at 12px'],
       ['contrast', '#999999 on #ffffff'],
-      ['image-upscaled', '100×100 px'],
+      ['image-upscaled', 'no srcset · 2–3×'],
     ])
     expect(groupKey(base.groups[1]!.exemplar)).toBe('#999999 on #ffffff')
     expect(groupFindings([])).toEqual([])
+  })
+})
+
+describe('what is set aside', () => {
+  it('text the same colour as its background is not a contrast failure: counted as invisible, with a warning', () => {
+    const r = report({ text: [text({ color: [0, 0, 0, 1], background: [10, 10, 10, 1], fontSizePx: 192, fontWeight: 700 }), text({ color: [153, 153, 153, 1] })] })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.summary.contrast).toBe(1)
+    expect(res.skipped).toEqual({ textOnImages: 0, invisibleText: 1 })
+    expect(res.warnings.some(w => /same colour as the background/.test(w))).toBe(true)
+  })
+  it('images group by cause, not by asset size: srcset or not, and how many times over', () => {
+    const r = report({
+      images: [
+        image({ element: 'img#a', naturalWidth: 900, naturalHeight: 900 }),
+        image({ element: 'img#b', naturalWidth: 800, naturalHeight: 600 }),
+        image({ element: 'img#c', naturalWidth: 2400, naturalHeight: 1800, srcset: true, candidates: ['2x'] }),
+      ],
+    })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    // Worst first: the 12× one leads, then the two in the same bucket are one group.
+    expect(res.groups.map(g => [g.key, g.count])).toEqual([
+      ['srcset · 10× and over', 1],
+      ['no srcset · 3–5×', 2],
+    ])
+  })
+  it('slimGroups keeps where and what, drops the figures', () => {
+    const r = report({ text: [text({ color: [153, 153, 153, 1] })] })
+    const [g] = slimGroups(lintFindings(r, screen(1), reference, thresholds).groups)
+    expect(g).toEqual({
+      rule: 'contrast',
+      key: '#999999 on #ffffff',
+      count: 1,
+      elements: ['p#t'],
+      exemplar: { element: 'p#t', text: 'some text', rect, message: expect.stringContaining('#999999 on #ffffff is 2.85:1') },
+    })
   })
 })

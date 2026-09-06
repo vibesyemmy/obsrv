@@ -22,6 +22,12 @@ the screen, and the reflow zoom on top of it.
 | `image-upscaled` | A raster image drawn wider, in device px, than its natural width. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
 | `image-oversized` | A raster image whose natural width is more than 2× its drawn device width. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
 
+Text that is the same colour as its background (1:1) is not a contrast
+failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
+and it is counted under `skipped.invisibleText` with a warning rather than
+judged. Images group by cause, not by asset size: whether a `srcset` exists,
+and how many times over (2–3×, 3–5×, 5–10×, 10× and over).
+
 Findings come rule by rule in that order, the worst first within a rule
 (thinnest edge, smallest text, lowest ratio, largest factor), at most 200
 listed and every one counted in `summary`. Text over an image or a
@@ -66,7 +72,9 @@ skipped { textOnImages }, truncated { findings, text, edges, images }, warnings
 ```
 
 `obsrv_lint` adds `mode` (`headless` | `live`), `notes`, and live, the tab
-it judged (`tabId`, `tabIndex`). Exit code 0 and findings are informational:
+it judged (`tabId`, `tabIndex`). Its `groups` carry a slim exemplar (element,
+text, rect, message); `groupsOnly: true` leaves the per-finding list out
+altogether, which on a big page is most of the payload. Exit code 0 and findings are informational:
 thresholds for CI are the caller's.
 
 ## Live

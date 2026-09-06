@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
-import { parseControlStatus } from '../shared/control'
+import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
@@ -358,6 +358,16 @@ const diffOutputShape = {
   findings: z.array(z.string()).describe('Humanised per-band findings. Informational — thresholds are the caller\'s job.'),
 }
 
+const PRESET_GROUP_ALIASES: Record<string, 'laptop' | 'desktop' | 'mobile'> = {
+  laptop: 'laptop',
+  laptops: 'laptop',
+  desktop: 'desktop',
+  desktops: 'desktop',
+  mobile: 'mobile',
+  phones: 'mobile',
+  phone: 'mobile',
+}
+
 const presetsOutputShape = {
   throttles: z
     .array(
@@ -369,10 +379,10 @@ const presetsOutputShape = {
         summary: z.string(),
       }),
     )
-    .describe("The `throttle` values obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report take: Chrome DevTools' presets."),
+    .describe("The `throttle` values obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report take: Chrome DevTools' presets.").optional(),
   orientation: z
     .string()
-    .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation.'),
+    .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation.').optional(),
   presets: z.array(
     z.object({
       id: z.string(),
@@ -396,7 +406,7 @@ const presetsOutputShape = {
       nits: z.number().nullable(),
       summary: z.string(),
     }),
-  ),
+  ).optional(),
 }
 
 const driveInputShape = {
@@ -581,6 +591,12 @@ const driveOutputShape = {
     .enum(['root', 'element'])
     .optional()
     .describe("Only when `scroll` was requested: 'root' if the document scrolled, 'element' if an inner scroll container did."),
+  highlight: z
+    .object({ drawn: z.boolean(), pane: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).optional() })
+    .optional()
+    .describe('When a highlight was asked for: whether it was drawn, and the pane rect it landed on. With a capture in the same call it stays up until the shutter has fired.'),
+  settled: z.boolean().optional().describe("With capture: 'raster', whether the target went paint-quiet for it."),
+  unsettledReason: z.string().optional().describe("With capture: 'raster' and settled false: why (animating, timeout, uncovered)."),
   warnings: z.array(z.string()).optional().describe('Anything worth knowing about the commands that ran (e.g. a scrollSelector that matched nothing).'),
   pngPath: z.string().optional().describe('Only when `capture` was requested: absolute path of the PNG (kept in a per-call temp dir).'),
   width: z
@@ -658,6 +674,9 @@ interface LiveCapture {
   width: number
   height: number
   warnings: string[]
+  /** The capture's own settle verdict, when the command reports one (raster does). */
+  settled?: boolean
+  unsettledReason?: string
 }
 
 /**
@@ -683,7 +702,16 @@ async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane' | 'ras
   const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
   const pngPath = join(dir, 'live.png')
   await writeFile(pngPath, Buffer.from(data, 'base64'))
-  return { pngPath, width, height, warnings }
+  const settled = typeof capture['settled'] === 'boolean' ? capture['settled'] : undefined
+  const unsettledReason = typeof capture['unsettledReason'] === 'string' ? capture['unsettledReason'] : undefined
+  return {
+    pngPath,
+    width,
+    height,
+    warnings,
+    ...(settled !== undefined ? { settled } : {}),
+    ...(unsettledReason !== undefined ? { unsettledReason } : {}),
+  }
 }
 
 /**
@@ -986,6 +1014,14 @@ const auditGroupShape = z.object({
   smallestMm: z.number().nullable(),
 })
 
+const auditGroupRowShape = z.object({
+  kind: z.enum(['small-target', 'small-text']),
+  key: z.string().describe("What the members share: a control's CSS box, or a font size."),
+  count: z.number(),
+  exemplar: z.object({ element: z.string(), text: z.string(), rect: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }), mm: z.number() }),
+  elements: z.array(z.string()).describe('Up to five distinct elements in the group.'),
+})
+
 const auditOutputShape = {
   mode: z.enum(['headless', 'live']),
   url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
@@ -1015,6 +1051,9 @@ const auditOutputShape = {
       }),
     )
     .describe('Smallest first; at most 200 listed, the rest counted in truncated.findings.'),
+  groups: z
+    .array(auditGroupRowShape)
+    .describe('The findings grouped by kind and size over every one counted: forty footer links of one height are one group with count 40. Quote a group, not its members.'),
   truncated: z.object({ findings: z.number(), targets: z.number(), text: z.number() }),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
@@ -1142,6 +1181,10 @@ const lintInputShape = {
     .min(0)
     .optional()
     .describe(`Text lighter than regular (weight under 400) below this many device pixels of font size is flagged. Default ${DEFAULT_THIN_PX} (provisional).`),
+  groupsOnly: z
+    .boolean()
+    .optional()
+    .describe('Leave the per-finding list out and answer with the groups alone: a fraction of the payload, and the summary still counts everything.'),
   waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
   timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
@@ -1208,14 +1251,18 @@ const lintOutputShape = {
         rule: z.enum([...LINT_RULES] as [string, ...string[]]),
         key: z.string().describe('What the members share: a colour pair, a weight and size, an edge kind and thickness, an image asset size.'),
         count: z.number(),
-        exemplar: lintFindingShape.describe('The worst member, as listed.'),
+        exemplar: z
+          .object({ element: z.string(), text: z.string(), rect: lintRectShape, message: z.string() })
+          .describe('The worst member: where it is and what it says. Its full figures are in `findings` when listed.'),
         elements: z.array(z.string()).describe('Up to five distinct elements in the group.'),
       }),
     )
     .describe(
       'The findings grouped by what they share, over every finding counted (listed or not): a page with 270 identical contrast failures is one group with count 270. Quote a group, not its members.',
     ),
-  skipped: z.object({ textOnImages: z.number() }).describe('Text over an image or gradient: no colour to measure, so no contrast verdict.'),
+  skipped: z
+    .object({ textOnImages: z.number(), invisibleText: z.number() })
+    .describe('Text that got no contrast verdict: over an image or gradient, or the same colour as its background (hidden by design, or broken).'),
   truncated: z.object({ findings: z.number(), text: z.number(), edges: z.number(), images: z.number() }),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
@@ -1245,7 +1292,7 @@ server.registerTool(
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+  async (input: Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
@@ -1279,6 +1326,7 @@ server.registerTool(
             ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
             ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
             ...judged,
+            ...(input.groupsOnly ? { findings: [] } : {}),
             notes,
           }
           return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
@@ -1303,7 +1351,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('lint', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, notes }
+    const structured = { mode: 'headless', ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1385,6 +1433,8 @@ const inspectOutputShape = {
   mode: z.enum(['headless', 'live']),
   url: z.string().describe('The page inspected: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().optional().describe("Headless: preset id or 'custom'. Live: the app's preset."),
+  tabId: z.string().optional().describe('Live: the tab that was inspected.'),
+  tabIndex: z.number().optional(),
   profile: z.string().describe('The panel the onPanel contrast was measured on.'),
   cssWidth: z.number().optional(),
   cssHeight: z.number().optional(),
@@ -1443,7 +1493,7 @@ const reportOutputShape = {
       unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       audit: z
-        .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), truncated: z.number() })
+        .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), groups: z.number(), truncated: z.number() })
         .nullable(),
       lint: z
         .object({
@@ -1457,7 +1507,7 @@ const reportOutputShape = {
           }),
           findings: z.number(),
           groups: z.number().describe('Findings grouped by what they share; the HTML lists the groups.'),
-          skipped: z.object({ textOnImages: z.number() }),
+          skipped: z.object({ textOnImages: z.number(), invisibleText: z.number() }),
         })
         .nullable()
         .describe('The lint on the same loaded page, judged on the report profile; null when the page did not answer.'),
@@ -1663,7 +1713,19 @@ server.registerTool(
           await sleep(CLICK_SETTLE_POLL_MS)
         }
       }
-      if (input.highlight !== undefined) await controlCall(live.info, 'highlight', input.highlight, LIVE_APPLY_TIMEOUT_MS)
+      let highlight: { drawn: boolean; pane?: unknown } | null = null
+      if (input.highlight !== undefined) {
+        // A capture in the same call waits for the page to settle, up to
+        // several seconds on an animating page — longer than the default
+        // highlight lives. Keep it up until the shutter has fired.
+        const payload =
+          input.capture !== undefined
+            ? { ...input.highlight, durationMs: Math.max(input.highlight.durationMs ?? HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS) }
+            : input.highlight
+        const h = await controlCall(live.info, 'highlight', payload, LIVE_APPLY_TIMEOUT_MS)
+        highlight = { drawn: h['drawn'] === true, ...(h['pane'] !== undefined ? { pane: h['pane'] } : {}) }
+        if (Array.isArray(h['warnings'])) for (const w of h['warnings']) if (typeof w === 'string') warnings.push(w)
+      }
 
       // Capture last, so the PNG shows everything the commands above did.
       // Nothing here navigates, so a scroll or pan applied in this same call
@@ -1682,7 +1744,11 @@ server.registerTool(
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
+        ...(highlight !== null ? { highlight } : {}),
         ...(capture !== null ? { pngPath: capture.pngPath, width: capture.width, height: capture.height } : {}),
+        ...(capture !== null && capture.settled !== undefined
+          ? { settled: capture.settled, ...(capture.unsettledReason !== undefined ? { unsettledReason: capture.unsettledReason } : {}) }
+          : {}),
       }
       const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(structured, null, 2) }]
       if (capture !== null) {
@@ -1745,6 +1811,8 @@ server.registerTool(
             mode: 'live',
             url: status.url,
             preset: status.presetId,
+            tabId: status.tabId,
+            tabIndex: status.tabIndex,
             profile: status.profileId,
             cssWidth: status.cssWidth,
             cssHeight: status.cssHeight,
@@ -1791,16 +1859,21 @@ server.registerTool(
       `\`orientation\` note in the result.`,
     inputSchema: {
       group: z
-        .enum(['laptop', 'desktop', 'mobile'])
+        .enum(['laptop', 'desktop', 'mobile', 'laptops', 'desktops', 'phones', 'phone'])
         .optional()
-        .describe('Only the screen presets of this group; the profiles and throttles come regardless. Omit for every preset.'),
+        .describe(
+          'Only the screen presets of this group (phones is an alias of mobile), and only them: the throttles, profiles and orientation note are left out. Omit for the whole catalog.',
+        ),
     },
     outputSchema: presetsOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
-  async (input: { group?: 'laptop' | 'desktop' | 'mobile' }): Promise<CallToolResult> => {
+  async (input: { group?: 'laptop' | 'desktop' | 'mobile' | 'laptops' | 'desktops' | 'phones' | 'phone' }): Promise<CallToolResult> => {
     const all = listCatalog()
-    const catalog = input.group === undefined ? all : { ...all, presets: all.presets.filter(p => p.group === input.group) }
+    // A group answers with the presets alone: an agent that only needs ids
+    // was paying for the throttle and profile tables every time.
+    const group = input.group === undefined ? undefined : PRESET_GROUP_ALIASES[input.group]
+    const catalog = group === undefined ? all : { presets: all.presets.filter(p => p.group === group) }
     return {
       content: [{ type: 'text', text: JSON.stringify(catalog, null, 2) }],
       structuredContent: { ...catalog },

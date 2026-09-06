@@ -34,6 +34,15 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
         mm: 6.07,
       },
     ],
+    groups: [
+      {
+        kind: 'small-target',
+        key: '24×24 px',
+        count: 4,
+        exemplar: { element: 'button#tiny', text: '<script>alert("x")</script> & "quotes"', rect: { x: 16, y: 76, width: 24, height: 24 }, mm: 6.07 },
+        elements: ['button#tiny', 'button#tiny2'],
+      },
+    ],
     truncated: { findings: 3, targets: 0, text: 0 },
     warnings: [],
   },
@@ -97,6 +106,9 @@ describe('reportHtml', () => {
     expect(html).toContain('100 ppi')
     expect(html).toContain('button#tiny')
     expect(html).toContain('6.07 mm')
+    // The audit table is grouped: one row for the four 24×24 controls.
+    expect(html).toContain('and 3 more')
+    expect(html).toContain('24×24 px')
     expect(html).toContain('3 more finding(s) not listed')
     expect(html).toContain('3.10%')
     expect(html).toContain('band 3: hairline lost at 1x')
@@ -153,7 +165,7 @@ describe('reportHtml', () => {
         summary: { hairline: 0, 'thin-text': 0, contrast: 270, 'contrast-on-panel': 10, 'image-upscaled': 0, 'image-oversized': 0 },
         findings: [finding],
         groups: [{ rule: 'contrast', key: '#828282 on #f6f6ef', count: 270, exemplar: finding, elements: ['span.rank', 'span.sitebit', 'span.sitestr'] }],
-        skipped: { textOnImages: 3 },
+        skipped: { textOnImages: 3, invisibleText: 2 },
         truncated: { findings: 70, text: 0, edges: 0, images: 0 },
         warnings: ['70 more findings past the 200 listed; the summary counts them all'],
       },
@@ -164,6 +176,7 @@ describe('reportHtml', () => {
     expect(html).toContain('#828282 on #f6f6ef')
     expect(html).toContain('and 269 more')
     expect(html).toContain('3 text element(s) sit on an image')
+    expect(html).toContain('2 text element(s) are the same colour as their background')
     expect(html).toContain('70 more findings past the 200 listed')
     expect(reportHtml(data([screen({ lint: null })]))).toContain('The page did not answer the lint')
   })
