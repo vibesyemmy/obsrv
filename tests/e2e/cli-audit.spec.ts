@@ -73,7 +73,7 @@ test('on a 24" 1080p the 24px button is the one finding, and the counts skip wha
   expect(r.truncated).toEqual({ findings: 0, targets: 0, text: 0 })
   expect(r.warnings).toEqual([])
   // Grouped by kind and size, over every finding: the one small button is its own group.
-  expect(r.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '24×24 px', count: 1, elements: ['button#tiny'] })])
+  expect(r.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '24 px tall', count: 1, elements: ['button#tiny'] })])
 })
 
 test('on a 6.5" phone the caption and the tiny button\'s glyph are under 2 mm, smallest first', async () => {

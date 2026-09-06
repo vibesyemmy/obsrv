@@ -85,8 +85,8 @@ alone.
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
 findings grouped by what they share — a colour pair, a weight and size, an
-edge kind, a `srcset`-or-not and a factor bucket for images; a control's CSS
-box or a font size for the audit — over every finding counted, each with a
+edge kind, a `srcset`-or-not and a factor bucket for images; a control's
+short side or a font size for the audit — over every finding counted, each with a
 count, the worst member as exemplar and a few of the elements. A page with
 270 identical contrast failures is one group with count 270. Read the
 summary, then the groups; ask `obsrv_lint { groupsOnly: true }` when the list

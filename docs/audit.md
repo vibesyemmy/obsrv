@@ -117,7 +117,8 @@ other than 1 was applied.
 ## Groups
 
 Every result also carries `groups`: the findings grouped by kind and size —
-a control's CSS box, or a font size — over every finding counted, not the
+a control's short side (the one the millimetres measure: `19 px tall`), or a
+font size — over every finding counted, not the
 listed cap, each with a count, the smallest member as exemplar, and up to
 five of the elements. Forty footer links of one height are one group with
 count 40. The report's audit table lists the groups. Quote a group, not its

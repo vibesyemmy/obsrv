@@ -79,8 +79,15 @@ export interface AuditGroup {
 }
 export const AUDIT_GROUP_ELEMENTS = 5
 
+/**
+ * What a group's members share. A target's key is its *short* side — the
+ * side the millimetres measure — not its CSS box: a row of footer links is
+ * one height and as many widths as it has words, and grouping by box split
+ * thirteen identical links into nine groups on the first real page audited.
+ */
 export function auditGroupKey(f: AuditFinding): string {
-  return f.kind === 'small-target' ? `${Math.round(f.cssWidth)}×${Math.round(f.cssHeight)} px` : `${round(f.fontSizePx, 1)} px`
+  if (f.kind !== 'small-target') return `${round(f.fontSizePx, 1)} px`
+  return f.cssHeight <= f.cssWidth ? `${Math.round(f.cssHeight)} px tall` : `${Math.round(f.cssWidth)} px wide`
 }
 
 export function groupAudit(findings: AuditFinding[]): AuditGroup[] {
@@ -105,7 +112,7 @@ export interface AuditResult {
   thresholds: AuditThresholds
   summary: { targets: AuditGroupSummary; text: AuditGroupSummary }
   findings: AuditFinding[]
-  /** The same findings grouped by kind and size, over every one counted; see `groupAudit`. */
+  /** The same findings grouped by kind and size (a target's short side, a font size), over every one counted; see `groupAudit`. */
   groups: AuditGroup[]
   truncated: { findings: number; targets: number; text: number }
   warnings: string[]
