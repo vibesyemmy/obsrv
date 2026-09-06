@@ -160,16 +160,20 @@ test('--profile applies to the render shown; the diff is measured without it', a
   expect(html).toContain('without the panel profile')
 })
 
-test('a report on an app shell says why it could locate nothing, instead of dropping the section silently', async () => {
+test('a report on an app shell locates its findings, because the capture reaches them', async () => {
   const out = join(outDir, 'shell-report.html')
   const r = await runCli(['report', fixture('app-shell-findings.html'), '--matrix', 'laptop-768', '--out', out])
   expect(r.code, r.stderr).toBe(0)
-  const summary = JSON.parse(r.stdout) as { screens: Array<{ problems?: unknown; warnings: string[] }> }
+  const summary = JSON.parse(r.stdout) as { screens: Array<{ problems?: { featured: number; belowCapture: number }; warnings: string[] }> }
   const screen = summary.screens[0]!
-  // Nothing can be pinned: every finding is below a capture that is one screen.
-  expect(screen.problems).toBeUndefined()
-  const warned = screen.warnings.join(' ')
-  // The full-page render's own warnings used to be discarded on this path.
-  expect(warned).toMatch(/full page: .*does not scroll/)
-  expect(warned).toMatch(/lie below what the full-page capture could reach/)
+  // Both findings sit deep in the inner scroller. Before the capture followed
+  // that scroller they were all below it, and the section was dropped in
+  // silence; now they are pinned on it.
+  expect(screen.problems).toMatchObject({ belowCapture: 0 })
+  expect(screen.problems!.featured).toBeGreaterThanOrEqual(2)
+  expect(screen.warnings.join(' ')).not.toMatch(/lie below what the full-page capture could reach/)
+
+  const html = readFileSync(out, 'utf8')
+  expect(html).toContain('button#deep-button')
+  expect(html).toContain('p#deep-text')
 })
