@@ -39,8 +39,12 @@ const REPORT_OVERVIEW_WIDTH = 800
 const REPORT_CROP_PAD = 16
 /** The overview is also kept under this many device px tall; a long page becomes a map, the crops carry the detail. */
 const REPORT_OVERVIEW_MAX_HEIGHT = 3200
-/** A tiled full-page capture stops after this many bands; the report counts what lies past them. */
-const MAX_TILE_BANDS = 8
+/**
+ * A tiled full-page capture stops after this many bands — each one screenful,
+ * so 9,600 CSS px on a phone, 9,216 on the 768 laptop; the report counts what
+ * lies past them.
+ */
+const MAX_TILE_BANDS = 12
 
 /** One line under a lint group's crop: the rule, what the group shares, how many. */
 function lintDetail(g: LintGroup): string {
@@ -134,11 +138,12 @@ interface RenderResult {
 interface RenderOptions {
   fullPage: boolean
   /**
-   * With `fullPage`: a page taller than the device-pixel cap is captured in
-   * bands — the viewport held at the cap, the page scrolled a band at a time,
-   * each band captured quiescent and stitched into one raster — instead of
-   * being clamped. The report asks for this so its findings can be located
-   * anywhere on the page; `snap --full-page` keeps its documented cap.
+   * With `fullPage`: a page taller than the screen is captured a screenful
+   * at a time — the viewport kept the screen's own, the page scrolled a band
+   * at a time, each band captured quiescent and stitched into one raster —
+   * instead of being clamped at one surface. The report asks for this so its
+   * findings can be located anywhere on the page; `snap --full-page --tiled`
+   * is the same capture on request.
    */
   tiled?: boolean
   waitMs: number
@@ -255,15 +260,18 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       const surfaceHeight = Math.ceil(scrollHeight * spec.textScale)
       if (surfaceHeight > cssHeight) {
         const limit = maxCssViewport(spec.deviceScaleFactor)
-        if (surfaceHeight > limit && options.tiled) {
-          // Taller than one surface: hold the viewport at the cap and capture
-          // the page a band at a time, scrolling between captures. Each band
-          // is its own quiescent capture, so an animating page pays its early
-          // exit per band. A sticky header repeats at the top of every band —
-          // which is what scrolling shows a person, too.
-          target.setViewport(applied.width, limit, spec.deviceScaleFactor, spec.mobile)
-          cssHeight = limit
-          const bandPage = limit / spec.textScale
+        if (options.tiled) {
+          // Taller than the screen: keep the viewport the screen's own and
+          // capture the page a screenful at a time, scrolling between
+          // captures. Not a taller viewport: a page laid out for one is a
+          // different page — `100vh` sections grow with it (measured: a hero
+          // 800 px tall on the phone came out 2048 when the viewport was held
+          // at the cap), and the audit and lint walks that follow would
+          // measure that page, not the screen's. Each band is its own
+          // quiescent capture, so an animating page pays its early exit per
+          // band. A sticky header repeats at the top of every band — which is
+          // what scrolling shows a person, too.
+          const bandPage = applied.height / spec.textScale
           const bandsWanted = Math.ceil(scrollHeight / bandPage)
           const bandCount = Math.min(bandsWanted, MAX_TILE_BANDS)
           const bands: CaptureBand[] = []
@@ -292,11 +300,11 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           bandsCaptured = bands.length
           if (bandsWanted > bandCount) {
             warn(
-              `warning: full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${limit} CSS px ` +
+              `warning: full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${applied.height} CSS px ` +
                 `(${MAX_TILE_BANDS} at most) — what lies past them is not in the raster`,
             )
           } else {
-            human(`full page is ${surfaceHeight} CSS px tall; captured in ${bands.length} band(s) of ${limit} CSS px`)
+            human(`full page is ${surfaceHeight} CSS px tall; captured in ${bands.length} band(s) of ${applied.height} CSS px, the screen's own height`)
           }
         } else {
           const wanted = Math.min(surfaceHeight, limit)

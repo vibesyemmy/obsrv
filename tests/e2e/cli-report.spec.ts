@@ -102,7 +102,7 @@ test('a page taller than the capture cap is captured in bands, so a finding at t
   expect(laptop.audit.summary.targets).toMatchObject({ count: 3, under: 2 })
   expect(laptop.problems).toMatchObject({ featured: 2, belowCapture: 0 })
   // The bands, not a clamp: the human line says so and no clamp warning is raised.
-  expect(r.stderr).toMatch(/captured in 3 band\(s\) of 4096 CSS px/)
+  expect(r.stderr).toMatch(/captured in 12 band\(s\) of 768 CSS px/)
   expect(laptop.warnings.join(' ')).not.toMatch(/clamped to/)
   const html = readFileSync(out, 'utf8')
   expect((html.match(/class="pin"/g) ?? []).length).toBe(2)

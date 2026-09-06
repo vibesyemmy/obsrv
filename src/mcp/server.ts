@@ -200,7 +200,7 @@ const snapInputShape = {
   tiled: z
     .boolean()
     .optional()
-    .describe('With fullPage: a page taller than one surface is captured in bands (up to eight) instead of clamped; a sticky header repeats at the top of each band. Headless only.'),
+    .describe('With fullPage: a page taller than the screen is captured a screenful at a time (up to twelve bands) and stitched, instead of clamped at one surface. The viewport stays the screen\'s, so 100vh sections keep their size; a sticky header repeats at the top of each band. Headless only.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
   timeoutMs: z
     .number()

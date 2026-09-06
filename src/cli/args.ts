@@ -199,8 +199,10 @@ snap flags:
   --out <file>         Output PNG (default ./obsrv-<preset>.png). Under --matrix: an
                        output directory, or a pattern containing {preset}.
   --full-page          Capture the full page height (device pixels capped at 4096).
-  --tiled              With --full-page: a page taller than one surface is captured in bands, up to
-                       eight, instead of clamped; a sticky header repeats at the top of each band.
+  --tiled              With --full-page: a page taller than the screen is captured a screenful at a
+                       time (up to twelve) and stitched, instead of clamped at one surface. The
+                       viewport stays the screen's, so 100vh sections keep their size; a sticky header
+                       repeats at the top of each band.
   --matrix <id,id,…>   Render each listed preset in one run.
 
 diff flags:

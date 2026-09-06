@@ -38,12 +38,18 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   reader sees not just that a control is 5 mm but where it sits and what it
   looks like. A page taller than one capture surface (4096 device px, so
   4096 CSS px at 1x, 2048 at 2x, 1365 at 3x) is captured in bands: the
-  viewport is held at the cap, the page scrolled a band at a time with an
-  instant scroll, each band captured quiescent and stitched into one raster,
-  up to eight bands. Two things follow from that. A sticky header repeats at
-  the top of every band, as it does when a person scrolls. And an animating
-  page pays its early exit once per band, so a long animated page costs a
-  few seconds more. Past eight bands the report says how many findings lie
+  viewport stays the screen's own, the page is scrolled a screenful at a
+  time with an instant scroll, each band captured quiescent and stitched
+  into one raster, up to twelve bands. The viewport is not grown or held at
+  the cap for it: a page laid out for a taller viewport is a different page
+  (`100vh` sections grow with it — measured, a hero 800 px tall on the phone
+  came out 2048 when the viewport was held at the cap), and the audit and
+  lint walks that follow measure the page as captured, so they measure the
+  screen's layout. Two things follow from banding. A sticky header repeats
+  at the top of every band, as it does when a person scrolls. And an
+  animating page pays its early exit once per band, so a long animated page
+  costs a few seconds more. Past twelve bands the report says how many
+  findings lie
   beyond what was captured. The overview is downsampled to about 800 device
   px wide and at most 3200 tall, so a long page becomes a map and the crops
   carry the detail; it is embedded as a JPEG for the same reason, while every
