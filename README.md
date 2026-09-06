@@ -66,8 +66,8 @@ claude plugin install obsrv@obsrv
 
 That gives an agent the `obsrv-screens` skill and the seven-plus tools in one
 step; `obsrv install-skill` remains for the skill alone. The marketplace entry
-points at the release tag, so what installs is a release, never main between
-releases. `marketplace add` does not refresh a marketplace you already have,
+points at the release tag over https, so what installs is a release, never main
+between releases, and cloning it needs no git credentials. `marketplace add` does not refresh a marketplace you already have,
 so to move to a newer release:
 
 ```bash

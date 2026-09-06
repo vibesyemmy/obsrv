@@ -8,12 +8,19 @@
 // tag resolves to the release, and only that. The tag is the one `npm
 // version` creates next; it exists on the remote once the release procedure
 // pushes it.
+//
+// A `url` source with an explicit https:// clone URL, not a `github` one:
+// Claude Code clones a github source over SSH (`git@github.com:`), which
+// fails outright on a machine with no key for it — measured, the first
+// `claude plugin update` after this pin was introduced died with
+// "Permission denied (publickey)". The repository is public, and an
+// anonymous HTTPS clone of the tag needs no credentials at all.
 const { readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const root = join(__dirname, '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const version = pkg.version
-const repo = 'vibesyemmy/obsrv'
+const cloneUrl = 'https://github.com/vibesyemmy/obsrv.git'
 for (const rel of ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json']) {
   const file = join(root, rel)
   const json = JSON.parse(readFileSync(file, 'utf8'))
@@ -21,7 +28,7 @@ for (const rel of ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.jso
   if (Array.isArray(json.plugins)) {
     for (const p of json.plugins) {
       p.version = version
-      p.source = { source: 'github', repo, ref: `v${version}` }
+      p.source = { source: 'url', url: cloneUrl, ref: `v${version}` }
     }
   }
   writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`)

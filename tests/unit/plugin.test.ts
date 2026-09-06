@@ -29,11 +29,14 @@ describe('the Claude Code plugin', () => {
     expect(market.plugins).toHaveLength(1)
     // A tag, not `./`: a relative source hands out whatever the marketplace
     // clone is at, which between releases is main. The tag is the release.
+    // And an https:// url source, not a github one: Claude Code clones a
+    // github source over SSH, which fails on a machine with no key for it.
     expect(market.plugins[0]).toMatchObject({
       name: 'obsrv',
       version: pkg.version,
-      source: { source: 'github', repo: 'vibesyemmy/obsrv', ref: `v${pkg.version}` },
+      source: { source: 'url', url: 'https://github.com/vibesyemmy/obsrv.git', ref: `v${pkg.version}` },
     })
+    expect(JSON.stringify(market)).not.toContain('git@github.com')
   })
   it('the manifests ship in the npm package', () => {
     const files: string[] = read('package.json').files
