@@ -158,6 +158,13 @@ export interface ObsrvApi {
   setOnionSkin(on: boolean): Promise<boolean>
   /** Frames of that render, on their own channel; the first subscriber opens delivery. */
   onReferenceFrame(cb: (m: FrameMessage) => void): () => void
+  /**
+   * Main is about to photograph the window and needs the canvas current: draw
+   * the uploaded frame now rather than on the next animation frame, then call
+   * `drewNow`. An occluded window gets no animation frames at all.
+   */
+  onDrawNow(cb: () => void): () => void
+  drewNow(): void
   onUrlChanged(cb: (e: TabReport & { url: string }) => void): () => void
   /**
    * Chromium's page title for one tab — the strip's first choice of label,

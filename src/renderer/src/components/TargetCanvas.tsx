@@ -218,6 +218,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     let gl: GlRenderer | null = null
     let offFrame: (() => void) | null = null
     let offReference: (() => void) | null = null
+    let offDrawNow: (() => void) | null = null
     let raf = 0
     // The pending recovery step after a context loss, if any.
     let recovery = 0
@@ -290,6 +291,19 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         gl.uploadReferenceSlice(m.frame)
         schedule()
       })
+      // Main asks for a draw before it photographs the window. The batched
+      // paint above runs on an animation frame, and Chromium fires none at all
+      // while the window is hidden or fully occluded — so the frame would be
+      // uploaded and never drawn, and the capture would show the frame before
+      // it. Draw straight away instead, and say so.
+      offDrawNow = window.obsrv.onDrawNow(() => {
+        if (raf !== 0) {
+          cancelAnimationFrame(raf)
+          raf = 0
+        }
+        paint()
+        window.obsrv.drewNow()
+      })
       return true
     }
     const stop = (): void => {
@@ -297,6 +311,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
       offFrame = null
       offReference?.()
       offReference = null
+      offDrawNow?.()
+      offDrawNow = null
       if (raf !== 0) cancelAnimationFrame(raf)
       raf = 0
       gl?.dispose()

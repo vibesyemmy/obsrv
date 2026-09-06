@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
+import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
 
 /**
  * Drives the agent-control server over real loopback HTTP against the real
@@ -697,6 +698,46 @@ test('the native pane is in the window capture, not a black hole where an OS-lev
   expect(red).toBeGreaterThan(200)
   expect(green).toBeLessThan(80)
   expect(blue).toBeLessThan(80)
+})
+
+test('a capture of a hidden window shows the page now, not the frame before it went away', async () => {
+  // The renderer draws on an animation frame and Chromium fires none while the
+  // window is hidden, so the frame main ships arrives, is uploaded, and is
+  // never drawn: the capture used to photograph the previous page. Measured
+  // against a real occluded window before the fix — a window capture three
+  // navigations behind, while the target's own raster was current.
+  //
+  // Hiding has to be real for that to be exercised, and on some desks macOS
+  // delivers no occlusion transition at all (docs/e2e-flakes.md), which would
+  // leave rasterisation paused for every test after this one.
+  test.skip(skipWithoutHideEvents(await hideEventsFire(app)), DESK_STATE_REASON)
+  // The pane layout is left as it was found: a later test asserts the target
+  // crop is narrower than the window, which only holds with both panes up.
+  await call('navigate', { url: SOLID_RED })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(SOLID_RED)
+  // Red is on the canvas before the window goes away.
+  const before = await call('captureTarget')
+  expect(before.status).toBe(200)
+  const shown = decodePng(Buffer.from((before.body as { data: string }).data, 'base64'))
+  expect(pixelAt(shown, Math.round(shown.width / 2), Math.round(shown.height / 2))[0]).toBeGreaterThan(200)
+
+  await app.evaluate(() => (globalThis as any).__obsrv.win.hide())
+  try {
+    await call('navigate', { url: FIXTURE })
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(FIXTURE)
+    const r = await call('captureTarget')
+    expect(r.status).toBe(200)
+    const png = decodePng(Buffer.from((r.body as { data: string }).data, 'base64'))
+    const [red, green, blue] = pixelAt(png, Math.round(png.width / 2), Math.round(png.height / 2))
+    // The fixture is a white page; the frame before the hide was solid red.
+    expect(green, `still the frame from before the hide: rgb(${red},${green},${blue})`).toBeGreaterThan(150)
+    expect(blue).toBeGreaterThan(150)
+  } finally {
+    // Rasterisation resumes on the window's own show event; hand the next test
+    // a target that is painting rather than one still paused.
+    await app.evaluate(() => (globalThis as any).__obsrv.win.show())
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.session.painting)).toBe(true)
+  }
 })
 
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {

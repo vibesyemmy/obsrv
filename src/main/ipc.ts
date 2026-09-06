@@ -1239,6 +1239,35 @@ export function registerIpc(ctx: AppContext): () => void {
     void runUpdateCheck()
   }
 
+  /**
+   * The renderer batches its canvas draw into an animation frame, and Chromium
+   * fires none while the window is hidden or fully occluded: the frame arrives
+   * and is uploaded, but nothing draws it, so `capturePage` photographs the
+   * one before. Measured against a real occluded window: `captureVisible` came
+   * back showing a page three navigations old while the target's own raster
+   * was current. Ask for the draw and wait for the acknowledgement, bounded so
+   * a renderer that cannot answer delays the shutter rather than hanging it.
+   */
+  const DRAW_FLUSH_MS = 400
+  const flushRendererDraw = (): Promise<void> =>
+    new Promise(resolve => {
+      if (win.isDestroyed()) {
+        resolve()
+        return
+      }
+      const timer = setTimeout(done, DRAW_FLUSH_MS)
+      function done(): void {
+        clearTimeout(timer)
+        ipcMain.off(IPC.drewNow, onDrew)
+        resolve()
+      }
+      const onDrew = (e: IpcMainEvent): void => {
+        if (!win.isDestroyed() && e.sender === win.webContents) done()
+      }
+      ipcMain.on(IPC.drewNow, onDrew)
+      win.webContents.send(IPC.drawNow)
+    })
+
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     status: () => {
       let url = ''
@@ -1321,6 +1350,7 @@ export function registerIpc(ctx: AppContext): () => void {
       try {
         await awaitViewportStable()
         const settled = await settleTarget()
+        await flushRendererDraw()
         const image = await withNativePane(await win.webContents.capturePage())
         const size = image.getSize()
         return { data: image.toPNG().toString('base64'), width: size.width, height: size.height, ...settleFields(settled) }
@@ -1339,6 +1369,7 @@ export function registerIpc(ctx: AppContext): () => void {
         // comes back as a small phone inside a large empty rectangle.
         const bounds = canvasBounds ?? targetBounds
         const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
+        await flushRendererDraw()
         const image = await win.webContents.capturePage(known ? roundRect(bounds) : undefined)
         const size = image.getSize()
         const warnings: string[] = []
