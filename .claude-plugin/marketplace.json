@@ -10,10 +10,10 @@
       "source": {
         "source": "github",
         "repo": "vibesyemmy/obsrv",
-        "ref": "v0.36.0"
+        "ref": "v0.37.0"
       },
       "description": "See your pages the way 1x screens and cheap panels show them: true-density renders, millimetre audits, a lint that names the elements that break, and a report that locates them. Ships the obsrv-screens skill and the obsrv MCP server.",
-      "version": "0.36.0"
+      "version": "0.37.0"
     }
   ]
 }
