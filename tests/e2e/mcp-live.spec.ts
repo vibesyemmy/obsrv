@@ -141,6 +141,19 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
   await expect(page.locator('.agent-highlight')).toHaveCount(1)
 })
 
+test('obsrv_drive scroll page: the review loop needs no arithmetic', async () => {
+  await call('obsrv_drive', { url: fixture('tall.html'), preset: 'laptop-768', scroll: { page: 'top' } })
+  let steps = 0
+  for (;;) {
+    const s = (await call('obsrv_drive', { scroll: { page: 'next' }, capture: 'pane' })).structuredContent as { atEnd?: boolean; pngPath: string }
+    expect(s.pngPath).toMatch(/\.png$/)
+    steps++
+    if (s.atEnd || steps > 20) break
+  }
+  expect(steps).toBeGreaterThan(1)
+  expect(steps).toBeLessThan(20)
+})
+
 test('a scroll in the same call as a preset waits for the resize', async () => {
   // A preset change reloads the page at a new viewport. Scrolling before that
   // lands finds the pre-reflow document: on an app shell that is the root

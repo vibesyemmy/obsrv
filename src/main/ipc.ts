@@ -613,6 +613,7 @@ export function registerIpc(ctx: AppContext): () => void {
     await awaitViewportStable(s)
     const base: ScrollRequest = { x: req.x, y: req.y }
     if (req.selector !== undefined) base.selector = req.selector
+    if (req.page !== undefined) base.page = req.page
     if (!s.native.webContents.isDestroyed()) s.native.webContents.send(IPC.applyScroll, base)
     const wc = s.target.webContents
     if (wc.isDestroyed()) return null

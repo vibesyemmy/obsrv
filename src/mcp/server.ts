@@ -522,8 +522,9 @@ const driveInputShape = {
   forward: z.boolean().optional().describe('true: history forward (native pane history; the target mirrors it).'),
   scroll: z
     .object({
-      x: z.number().min(0),
-      y: z.number().min(0),
+      x: z.number().min(0).optional(),
+      y: z.number().min(0).optional(),
+      page: z.enum(['next', 'prev', 'top', 'bottom']).optional(),
       scrollSelector: z
         .string()
         .min(1)
@@ -538,10 +539,12 @@ const driveInputShape = {
     })
     .optional()
     .describe(
-      'Scroll both panes to this absolute page offset in CSS px. Pages whose root cannot scroll (app shells with ' +
+      'Either { x, y } (absolute page CSS px) or { page: "next" | "prev" | "top" | "bottom" } (one screenful of ' +
+        'the scroller, or an end) — not both. Pages whose root cannot scroll (app shells with ' +
         '`html, body { overflow: hidden }` and an inner `overflow-y: auto` container) are handled: the largest ' +
-        'visible inner scroller is found and scrolled instead. Check `scrolled` in the result for the offset ' +
-        'actually reached — that is how you tell a real scroll from one that clamped.',
+        'visible inner scroller is found and scrolled instead. Check `scrolled` and `atEnd` in the result: ' +
+        '`scrolled` is the offset actually reached — that is how you tell a real scroll from one that clamped — ' +
+        'and `atEnd` true is where a screenful-by-screenful review stops.',
     ),
   panTo: z
     .object({ x: z.number().min(0), y: z.number().min(0) })
@@ -639,6 +642,7 @@ const driveOutputShape = {
     .enum(['root', 'element'])
     .optional()
     .describe("Only when `scroll` was requested: 'root' if the document scrolled, 'element' if an inner scroll container did."),
+  atEnd: z.boolean().optional().describe('Only when `scroll` was requested: the scroller can go no further down.'),
   highlight: z
     .object({ drawn: z.boolean(), pane: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).optional() })
     .optional()
@@ -1688,7 +1692,9 @@ server.registerTool(
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
       `\`scrolled\` with what you asked for rather than trusting the call's success, and use \`scroll.scrollSelector\` ` +
-      `when the automatic scroll-host detection picks the wrong container.\n\n` +
+      `when the automatic scroll-host detection picks the wrong container. Pass \`scroll.page\` ("next" | "prev" | ` +
+      `"top" | "bottom") instead of \`{ x, y }\` to walk the page a screenful at a time with no arithmetic — \`atEnd\` ` +
+      `is true once the scroller can go no further down.\n\n` +
       `Coordinates: click takes CSS-viewport px of the page (the valid range is 0 up to but not including the ` +
       `viewport size); panTo and highlight take target-pane pixels (device px of the render — identical to CSS px ` +
       `on 1x presets); scroll takes page CSS px.\n\n` +
@@ -1724,7 +1730,7 @@ server.registerTool(
     reload?: boolean
     back?: boolean
     forward?: boolean
-    scroll?: { x: number; y: number; scrollSelector?: string }
+    scroll?: { x?: number; y?: number; page?: 'next' | 'prev' | 'top' | 'bottom'; scrollSelector?: string }
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
     highlight?: { x: number; y: number; width: number; height: number; durationMs?: number; space?: 'pane' | 'page' }
@@ -1806,6 +1812,7 @@ server.registerTool(
       // pane reached, which is the only way to tell a scroll from a clamp.
       let scrolled: { x: number; y: number } | null | undefined
       let scroller: 'root' | 'element' | undefined
+      let atEnd: boolean | undefined
       const warnings: string[] = []
       if (input.scroll !== undefined) {
         const r = await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
@@ -1815,6 +1822,7 @@ server.registerTool(
             ? { x: (at as { x: number }).x, y: (at as { y: number }).y }
             : null
         if (r['scroller'] === 'root' || r['scroller'] === 'element') scroller = r['scroller']
+        atEnd = r['atEnd'] === true
         if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') warnings.push(w)
       }
       if (input.panTo !== undefined) await controlCall(live.info, 'panTo', input.panTo, LIVE_APPLY_TIMEOUT_MS)
@@ -1875,6 +1883,7 @@ server.registerTool(
         ...(resolved.launched ? { launched: true } : {}),
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
+        ...(atEnd !== undefined ? { atEnd } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
         ...(highlight !== null ? { highlight } : {}),
         ...(capture !== null ? { pngPath: capture.pngPath, width: capture.width, height: capture.height } : {}),

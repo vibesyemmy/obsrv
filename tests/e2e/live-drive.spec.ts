@@ -370,7 +370,7 @@ test('scroll drives the page offset of both panes and reports the offset reached
   expect(r.status).toBe(200)
   // A normal long page still scrolls the document root, and the round-trip
   // answers with what it actually reached rather than a bare ok.
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root' })
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root', atEnd: false })
   await expect.poll(() => paneScrollY('target'), { timeout: 5_000 }).toBe(1200)
   await expect.poll(() => paneScrollY('native'), { timeout: 5_000 }).toBe(1200)
 })
@@ -412,6 +412,27 @@ test('back / forward / reload keep the Task-11 semantics over HTTP', async () =>
   await expect.poll(markers, { timeout: 5_000 }).toEqual({ native: 'undefined', target: 'undefined' })
 })
 
+test('scroll page: next walks a screenful at a time and says when it is at the end', async () => {
+  await call('navigate', { url: TALL })
+  await call('setPreset', { id: 'laptop-768' })
+  await call('scroll', { page: 'top' })
+  const seen: number[] = []
+  for (let i = 0; i < 20; i++) {
+    const r = await call('scroll', { page: 'next' })
+    expect(r.status).toBe(200)
+    const y = (r.body.scrolled as { y: number }).y
+    seen.push(y)
+    if (r.body.atEnd === true) break
+  }
+  expect(seen.length).toBeGreaterThan(1)
+  expect(seen.length).toBeLessThan(20)
+  // Each step is a screenful (768) until the clamp.
+  expect(seen[1]! - seen[0]!).toBeGreaterThanOrEqual(700)
+  const back = await call('scroll', { page: 'prev' })
+  expect((back.body.scrolled as { y: number }).y).toBeLessThan(seen[seen.length - 1]!)
+  expect((await call('scroll', { page: 'next', x: 1, y: 1 })).status).toBe(400)
+})
+
 /** `scrollTop` of a named element in a pane's page, straight from its webContents. */
 function paneElementScrollTop(pane: 'native' | 'target', selector: string): Promise<number> {
   return app.evaluate(
@@ -431,7 +452,7 @@ test('scroll finds the inner scroller on an app shell whose root cannot scroll',
 
   const r = await call('scroll', { x: 0, y: 1500 })
   expect(r.status).toBe(200)
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element' })
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element', atEnd: false })
 
   // The reported offset is not the whole claim: the inner scroller really
   // moved, in both panes, while the window itself never left the top.
@@ -460,6 +481,8 @@ test('scroll clamps honestly: the reported offset is the one reached, not the on
   expect(reached.y).toBeGreaterThan(1500)
   expect(reached.y).toBeLessThan(999_999)
   expect(await paneElementScrollTop('target', '#scroller')).toBe(reached.y)
+  // Clamped to the true max: nothing further down for a page-wise walk to find.
+  expect(r.body.atEnd).toBe(true)
 })
 
 test('scrollSelector targets a named container, and says so when it matches nothing', async () => {
@@ -468,7 +491,7 @@ test('scrollSelector targets a named container, and says so when it matches noth
 
   const named = await call('scroll', { x: 0, y: 900, scrollSelector: '#scroller' })
   expect(named.status).toBe(200)
-  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element' })
+  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element', atEnd: false })
   expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
 
   // A selector that matches nothing must report the mismatch, not quietly

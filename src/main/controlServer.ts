@@ -451,6 +451,7 @@ export class ControlServer {
           ok: true,
           scrolled: { x: result.x, y: result.y },
           scroller: result.scroller,
+          atEnd: result.atEnd,
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
         })
       }

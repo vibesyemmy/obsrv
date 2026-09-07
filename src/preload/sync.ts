@@ -127,10 +127,34 @@ function applyTo(el: Element | null, pos: ScrollPos): ScrollPos {
 }
 
 ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
-  const pos = { x: req.x, y: req.y }
+  /** The screenful for a page-wise request, against whichever scroller will take it. */
+  const pageTarget = (el: Element | null): ScrollPos => {
+    const cur = el ? { x: el.scrollLeft, y: el.scrollTop } : { x: window.scrollX, y: window.scrollY }
+    const view = el ? el.clientHeight : window.innerHeight
+    const max = Math.max(0, (el ? el.scrollHeight : document.documentElement.scrollHeight) - view)
+    switch (req.page) {
+      case 'next':
+        return { x: cur.x, y: Math.min(cur.y + view, max) }
+      case 'prev':
+        return { x: cur.x, y: Math.max(cur.y - view, 0) }
+      case 'top':
+        return { x: cur.x, y: 0 }
+      case 'bottom':
+        return { x: cur.x, y: max }
+      default:
+        return cur
+    }
+  }
+  const atEndOf = (el: Element | null, reached: ScrollPos): boolean => {
+    const view = el ? el.clientHeight : window.innerHeight
+    const max = Math.max(0, (el ? el.scrollHeight : document.documentElement.scrollHeight) - view)
+    return reached.y >= max - 1
+  }
+
   const warnings: string[] = []
   let scroller: ScrollerKind = 'root'
   let reached: ScrollPos
+  let scrollerEl: Element | null = null
 
   if (typeof req.selector === 'string') {
     // The escape hatch: scroll exactly what the caller named, and never
@@ -142,6 +166,8 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
     } catch {
       warnings.push(`scrollSelector ${JSON.stringify(req.selector)} is not a valid CSS selector; nothing was scrolled`)
     }
+    const pos = req.page ? pageTarget(el) : { x: req.x, y: req.y }
+    scrollerEl = el
     if (el) {
       scroller = 'element'
       reached = applyTo(el, pos)
@@ -159,6 +185,8 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
     }
   } else {
     const el = resolveScroller()
+    const pos = req.page ? pageTarget(el) : { x: req.x, y: req.y }
+    scrollerEl = el
     scroller = el ? 'element' : 'root'
     // Only a root apply can echo back through the window `scroll` listener, so
     // only a root apply arms the suppression window. An element scroll fires no
@@ -173,7 +201,14 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
   }
 
   if (typeof req.id === 'number') {
-    ipcRenderer.send(SCROLL_RESULT, { id: req.id, x: reached.x, y: reached.y, scroller, warnings } satisfies ScrollReport)
+    ipcRenderer.send(SCROLL_RESULT, {
+      id: req.id,
+      x: reached.x,
+      y: reached.y,
+      scroller,
+      warnings,
+      atEnd: atEndOf(scrollerEl, reached),
+    } satisfies ScrollReport)
   }
 })
 
