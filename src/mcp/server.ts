@@ -200,7 +200,7 @@ const snapInputShape = {
     .boolean()
     .optional()
     .describe(
-      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. A sticky header repeats per band, as it does when you scroll. Headless only.',
+      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. A sticky header repeats per band — an artefact of stitching, not what scrolling shows. Headless only.',
     ),
   singleSurface: z
     .boolean()

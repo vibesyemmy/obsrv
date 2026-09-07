@@ -207,7 +207,7 @@ snap flags:
   --full-page          Capture the whole page: the viewport stays the screen's own and the page is
                        captured a screenful at a time (up to twelve) and stitched. A page that scrolls
                        an inner container rather than the window is captured by scrolling that. A
-                       sticky header repeats at the top of each band, as it does when you scroll.
+                       sticky header repeats at the top of each band (an artefact of stitching).
   --single-surface     With --full-page: the old behaviour, one viewport as tall as the page (device
                        pixels capped at 4096). Faster and never repeats a sticky header, but a page
                        sized against the viewport lays out differently on a surface that tall, and a

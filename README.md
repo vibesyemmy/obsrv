@@ -313,10 +313,15 @@ belongs to an unrelated package.
   side never sees them. Dragging the page itself still syncs both ways.
 - A **full-page capture repeats sticky chrome.** `--full-page` captures the page a
   screenful at a time at the screen's own viewport and stitches the bands, so a sticky
-  header appears at the top of each one, exactly as it does when you scroll. That is the
-  price of a faithful layout: the alternative, one viewport as tall as the page, changes
-  how a page sized against the viewport lays out and cannot follow an inner scroller at
-  all. `--single-surface` asks for it anyway, and says when the layout moved.
+  header appears at the top of each one. That is *not* what scrolling shows — stuck chrome
+  stays put there — so it is an artefact of stitching, and on a page that has such chrome
+  it is one copy per band (measured: five identical headers down a six-band capture of
+  tailwindcss.com/docs at laptop-768; a page without it, like Wikipedia, has none). It is
+  the price of a faithful layout: the alternative, one viewport as tall as the page,
+  changes how a page sized against the viewport lays out and cannot follow an inner
+  scroller at all. `--single-surface` asks for it anyway, and says when the layout moved.
+  Hiding stuck chrome for every band after the first would fix it and has not been done:
+  it means mutating the page mid-capture, which wants more care than it has had.
 - Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
   shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
   (`document.querySelector` doesn't cross either boundary), so a web-component app that
