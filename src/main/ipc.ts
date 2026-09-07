@@ -1598,8 +1598,17 @@ export function registerIpc(ctx: AppContext): () => void {
       if (!win.isDestroyed()) win.webContents.send(IPC.agentActivity)
     },
   })
+  // Whether `hooks.secondInstance` actually asked the question this channel's
+  // answer would apply to. `agentConsent` means "the user answered" — a
+  // `true` with nothing outstanding isn't an answer to anything, so it must
+  // not be honoured (see the handler below).
+  let consentPending = false
   const applyAgentControl = (enabled: boolean): void => {
     if (enabled) {
+      // Agent control is on now by whatever route got here (this channel,
+      // the settings toggle, boot). Any question that was outstanding is
+      // moot; a later stray `true` must not be read as a fresh answer to it.
+      consentPending = false
       control.start().catch((e: unknown) => {
         log.error('agent-control server failed to start', e)
       })
@@ -1612,6 +1621,7 @@ export function registerIpc(ctx: AppContext): () => void {
   // Only while control is off: with it on, the knock has nothing to add.
   hooks.secondInstance = () => {
     if (control.running || win.isDestroyed()) return
+    consentPending = true
     win.webContents.send(IPC.agentConsentRequest)
   }
   // Fire-and-forget, like every other chrome -> main channel here: a foreign
@@ -1619,6 +1629,13 @@ export function registerIpc(ctx: AppContext): () => void {
   // `fromRenderer`/`assertRenderer` at the top of this function).
   on(IPC.agentConsent, (e, allow: unknown) => {
     if (!fromRenderer(e)) return
+    if (!consentPending) {
+      // No question outstanding: a `true` here isn't an answer, it's just a
+      // claim. Ignore it rather than opening the control server on say-so.
+      if (allow === true) log.warn('agentConsent(true) received with no consent request outstanding; ignored')
+      return
+    }
+    consentPending = false
     if (allow !== true) {
       // Not now: the stance is already disabled on disk; nothing to write.
       return

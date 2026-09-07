@@ -36,12 +36,26 @@ test('control off: the app writes a disabled stance, and no bar shows until some
   await expect(page.locator('.consent-bar')).toHaveCount(0)
 })
 
+test('agentConsent(true) with nothing outstanding is ignored: this channel answers a question, not a claim', async () => {
+  // No `hooks.secondInstance()` here — the bar has never shown. A renderer
+  // calling the API directly (buggy or otherwise) must not be able to grant
+  // itself agent control just by saying so.
+  await page.evaluate(() => window.obsrv.agentConsent(true))
+  await expect(page.locator('.consent-bar')).toHaveCount(0)
+  expect(stance()).toBe('declined')
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.settings().agentControl)).toBe(false)
+})
+
 test('a knock shows the bar with the agreed copy; a second knock does not stack a second bar', async () => {
+  // The bar is a plain in-flow <div>, never focused: confirm it doesn't
+  // steal focus rather than just asserting that from the markup.
+  const activeBefore = await page.evaluate(() => document.activeElement?.tagName ?? null)
   await knock()
   await expect(page.locator('.consent-bar')).toBeVisible()
   await expect(page.locator('.consent-bar')).toContainText('An agent wants to drive Obsrv.')
   await expect(page.locator('.consent-bar button', { hasText: 'Allow for this session' })).toBeVisible()
   await expect(page.locator('.consent-bar button', { hasText: 'Not now' })).toBeVisible()
+  expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).toBe(activeBefore)
   await knock()
   await expect(page.locator('.consent-bar')).toHaveCount(1)
 })
