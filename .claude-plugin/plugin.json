@@ -1,0 +1,20 @@
+{
+  "name": "obsrv",
+  "description": "See your pages the way 1x screens and cheap panels show them: true-density renders, millimetre audits, a lint that names the elements that break, and a report that locates them. Ships the obsrv-screens skill and the obsrv MCP server.",
+  "version": "0.40.0",
+  "author": {
+    "name": "Opeyemi Ajagbe"
+  },
+  "homepage": "https://github.com/vibesyemmy/obsrv",
+  "repository": "https://github.com/vibesyemmy/obsrv",
+  "license": "MIT",
+  "keywords": [
+    "screens",
+    "rendering",
+    "accessibility",
+    "contrast",
+    "lint",
+    "audit",
+    "mcp"
+  ]
+}

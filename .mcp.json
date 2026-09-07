@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "obsrv": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "getobsrv",
+        "mcp"
+      ]
+    }
+  }
+}
