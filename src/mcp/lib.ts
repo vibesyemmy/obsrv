@@ -369,22 +369,39 @@ export const PANE_CAPTURE_HEADLESS_NOTE =
   "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored."
 
 /**
- * Whether a window could appear at all. A launch attempt where it could not
- * would hang on a lock or a missing display and burn the whole timeout to
- * learn nothing. `OBSRV_TEST=1` is here on purpose: under the e2e harness the
- * MCP must never launch a real Obsrv against the developer's profile.
+ * Whether a launch attempt could ever put a window on screen. This gates
+ * *launching* an app that is not already running — never driving one that
+ * is already up and reachable. A launch where no window could appear would
+ * hang on a missing display and burn the whole timeout to learn nothing.
+ * `OBSRV_TEST=1` belongs here for a second, independent reason: under the
+ * e2e harness the MCP must never launch a real Obsrv against the
+ * developer's own profile, even on a machine where a window could
+ * technically appear.
+ *
+ * Consulted only by `ensureLive` (Task 5), and only on the branch where it
+ * is about to launch — never by `planLive`, which must not refuse an
+ * already-reachable, already-visible app just because the calling shell
+ * happens to be over SSH or running under the test harness.
  */
-export function noDisplayReason(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
-  if (env.OBSRV_HEADLESS === '1') return 'OBSRV_HEADLESS=1 is set'
-  if (env.OBSRV_TEST === '1') return 'OBSRV_TEST=1 is set (the e2e harness)'
+export function cannotLaunchReason(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  if (env.OBSRV_TEST === '1') return 'OBSRV_TEST=1 is set (the e2e harness must never launch a real Obsrv)'
   if (env.SSH_CONNECTION !== undefined && env.SSH_CONNECTION !== '') return 'this is an SSH session'
   if (platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) return 'neither DISPLAY nor WAYLAND_DISPLAY is set'
   return null
 }
 
 /**
- * The four reasons not to try the live path, in order (spec §1). Pure: the
- * runtime reasons — declined, launch-timeout — come from `ensureLive`.
+ * The reasons not to try the live path that are knowable up front, checked
+ * in order: an explicit request for headless, an operation that cannot be
+ * done live at all, and `OBSRV_HEADLESS=1` — the user's own "never touch
+ * the app" opt-out, which must win before anything discovers whether the
+ * app is reachable. `HeadlessWhy` has five members in total; `declined` and
+ * `launch-timeout` are runtime outcomes only `ensureLive` can produce, once
+ * it has actually tried to reach or launch the app, so this pure function
+ * never returns them. Conditions that only say "a window cannot be
+ * *launched* here" (SSH, no DISPLAY/WAYLAND_DISPLAY, OBSRV_TEST) live in
+ * `cannotLaunchReason` instead, so they never block driving an app that is
+ * already open and reachable.
  */
 export function planLive(
   mode: SnapMode,
@@ -395,8 +412,9 @@ export function planLive(
 ): LivePlan | HeadlessPlan {
   if (mode === 'headless') return { path: 'headless', why: 'requested', notes: [] }
   if (headlessOnly.length > 0) return { path: 'headless', why: 'headless-only', notes: headlessOnly }
-  const noDisplay = noDisplayReason(env, platform)
-  if (noDisplay !== null) return { path: 'headless', why: 'no-display', notes: [`no display: ${noDisplay}; rendered headlessly.`] }
+  if (env.OBSRV_HEADLESS === '1') {
+    return { path: 'headless', why: 'no-display', notes: ['no display: OBSRV_HEADLESS=1 is set; rendered headlessly.'] }
+  }
   return { path: 'live', notes: liveNotes }
 }
 

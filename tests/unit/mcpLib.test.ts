@@ -12,7 +12,7 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
-  noDisplayReason,
+  cannotLaunchReason,
   planLive,
   planSnapPath,
   shouldInlineImage,
@@ -175,15 +175,14 @@ describe('stderrTail', () => {
 
 const DESKTOP = { HOME: '/Users/x' } as NodeJS.ProcessEnv
 
-describe('noDisplayReason', () => {
-  it('names the condition, or null when a window could appear', () => {
-    expect(noDisplayReason(DESKTOP, 'darwin')).toBeNull()
-    expect(noDisplayReason({ ...DESKTOP, OBSRV_HEADLESS: '1' }, 'darwin')).toMatch(/OBSRV_HEADLESS/)
-    expect(noDisplayReason({ ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toMatch(/SSH/)
-    expect(noDisplayReason({ ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toMatch(/OBSRV_TEST/)
-    expect(noDisplayReason({ ...DESKTOP }, 'linux')).toMatch(/DISPLAY/)
-    expect(noDisplayReason({ ...DESKTOP, DISPLAY: ':0' }, 'linux')).toBeNull()
-    expect(noDisplayReason({ ...DESKTOP, WAYLAND_DISPLAY: 'wayland-0' }, 'linux')).toBeNull()
+describe('cannotLaunchReason', () => {
+  it('names the condition, or null when a launch could put a window on screen', () => {
+    expect(cannotLaunchReason(DESKTOP, 'darwin')).toBeNull()
+    expect(cannotLaunchReason({ ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toMatch(/SSH/)
+    expect(cannotLaunchReason({ ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toMatch(/OBSRV_TEST/)
+    expect(cannotLaunchReason({ ...DESKTOP }, 'linux')).toMatch(/DISPLAY/)
+    expect(cannotLaunchReason({ ...DESKTOP, DISPLAY: ':0' }, 'linux')).toBeNull()
+    expect(cannotLaunchReason({ ...DESKTOP, WAYLAND_DISPLAY: 'wayland-0' }, 'linux')).toBeNull()
   })
 })
 
@@ -200,10 +199,20 @@ describe('planLive', () => {
     // Even under mode: live — the operation cannot be done live at all.
     expect(planLive('live', ['fullPage is headless-only'], [], DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
   })
-  it('no display: headless, naming the condition in the notes', () => {
-    const p = planLive('auto', [], [], { ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')
+  it('OBSRV_HEADLESS=1 wins before discovery, named no-display', () => {
+    const p = planLive('auto', [], [], { ...DESKTOP, OBSRV_HEADLESS: '1' }, 'darwin')
     expect(p).toMatchObject({ path: 'headless', why: 'no-display' })
-    expect(p.notes.join(' ')).toMatch(/OBSRV_TEST/)
+    expect(p.notes.join(' ')).toMatch(/OBSRV_HEADLESS/)
+  })
+  it('an SSH session, a missing DISPLAY, or OBSRV_TEST do not refuse an already-reachable app', () => {
+    // These describe whether a launch could put a window on screen, not whether an
+    // already-open, already-reachable app can be driven — so planLive stays live.
+    // (Critical fix: previously these were checked here and forced headless too early.)
+    expect(planLive('auto', [], [], { ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toEqual({ path: 'live', notes: [] })
+    expect(planLive('auto', [], [], { ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toEqual({ path: 'live', notes: [] })
+    expect(planLive('auto', [], [], DESKTOP, 'linux')).toEqual({ path: 'live', notes: [] })
+    // Even under an explicit mode: "live" request, none of these are refused.
+    expect(planLive('live', [], [], { ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toEqual({ path: 'live', notes: [] })
   })
   it('otherwise live, carrying the live-only notes', () => {
     expect(planLive('auto', [], ['waitMs is ignored in live mode'], DESKTOP, 'darwin')).toEqual({ path: 'live', notes: ['waitMs is ignored in live mode'] })
