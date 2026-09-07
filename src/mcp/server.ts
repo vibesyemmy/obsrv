@@ -1181,9 +1181,10 @@ server.registerTool(
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
       `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all.\n\n` +
       `auto mode audits a running Obsrv with agent control on — the page the user is looking at, on the screen and ` +
-      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — and falls ` +
-      `back to a headless load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. A live ` +
-      `audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
+      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — launching ` +
+      `the app if it is not running (\`launched: true\` on that call), and falling back to a headless load of ` +
+      `\`url\` when the live app is not available (\`why\` names the reason). 'live' requires the app; 'headless' ` +
+      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
     inputSchema: auditInputShape,
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1403,9 +1404,10 @@ server.registerTool(
       `screen's density, so it names elements. What it cannot see — a weight that survives the rules but still ` +
       `looks grey, a gradient that bands — is what reading the obsrv_snap PNG is for.\n\n` +
       `auto mode lints a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
-      `text scale and panel in force, in whatever state it has been driven into — and falls back to a headless ` +
-      `load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. Findings are ` +
-      `informational — apply your own thresholds.`,
+      `text scale and panel in force, in whatever state it has been driven into — launching the app if it is not ` +
+      `running (\`launched: true\` on that call), and falling back to a headless load of \`url\` when the live app ` +
+      `is not available (\`why\` names the reason). 'live' requires the app; 'headless' never touches it. Findings ` +
+      `are informational — apply your own thresholds.`,
     inputSchema: lintInputShape,
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1646,7 +1648,8 @@ server.registerTool(
       `page, same CSS, a different answer per screen.\n\n` +
       `Returns the file path plus a per-screen summary (audit counts, diff metrics, warnings) — the HTML is not ` +
       `inlined. Each screen costs one render, plus a 2x reference render for 1x screens; budget time accordingly ` +
-      `(the default matrix is four screens, six renders). Headless-only: never drives the visible app.`,
+      `(the default matrix is four screens, six renders). Headless-only: never drives the visible app.\n\n` +
+      `Always headless: this is an artefact for delivery, not a live review — use obsrv_drive to review in the window.`,
     inputSchema: reportInputShape,
     outputSchema: reportOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1953,8 +1956,10 @@ server.registerTool(
       `threshold that applies to text that size (4.5:1, or 3:1 for large text). A pair that clears 4.5:1 on the ` +
       `display a page was designed on can fall under 3:1 on a budget TN panel; the second number says so.\n\n` +
       `auto mode inspects a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
-      `panel and vision setting in force — and falls back to a headless load of \`url\` otherwise. Headless takes ` +
-      `the same screen options as obsrv_snap. \`found: false\` means nothing was there; it is not an error.`,
+      `panel and vision setting in force — launching the app if it is not running (\`launched: true\` on that ` +
+      `call), and falling back to a headless load of \`url\` when the live app is not available (\`why\` names the ` +
+      `reason). Headless takes the same screen options as obsrv_snap. \`found: false\` means nothing was there; it ` +
+      `is not an error.`,
     inputSchema: inspectInputShape,
     outputSchema: inspectOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },

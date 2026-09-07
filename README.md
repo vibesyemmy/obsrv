@@ -201,12 +201,13 @@ raster density — the PNG comes back as an inline image up to 1.5 MiB),
 (a whole matrix of screens as one HTML page) and `obsrv_presets` (every
 preset and panel profile, no render).
 
-If the desktop app is open with the toolbar's **Agent control** toggle on,
-`obsrv_snap` drives the *visible* window instead: you watch the URL load and
-the preset flip, and the agent gets back a capture of the app exactly as you
-see it (plus `obsrv_drive` to flip URL/preset/profile/panes directly — `panes:
-'target'` gives the target render the whole window, which is usually what you
-want before a capture). Agents can
+The MCP tools launch the app when it is not running; if it is open with agent
+control off, the app asks — Allow for this session, or Not now. Once it is
+live, `obsrv_snap` drives the *visible* window instead: you watch the URL load
+and the preset flip, and the agent gets back a capture of the app exactly as
+you see it (plus `obsrv_drive` to flip URL/preset/profile/panes directly —
+`panes: 'target'` gives the target render the whole window, which is usually
+what you want before a capture). Agents can
 also scroll, click, pan and highlight while you watch — a drive session works
 as a guided demo. A `scroll` reports the offset it actually reached
 (`scrolled` / `scroller`), finds the inner scroll container on pages whose
@@ -214,8 +215,8 @@ root cannot scroll, and takes a `scrollSelector` when you need to name the
 container yourself. `obsrv_inspect`, `obsrv_audit` and `obsrv_lint` follow the
 app the same way: they measure the page in front, on the screen, text scale
 and panel in force, after whatever the drive did to it; `obsrv_report` is the exception and stays
-headless, being a batch over a matrix of screens. With no app running,
-everything falls back to the headless render automatically.
+headless, being a batch over a matrix of screens. With no app running, `mode: 'auto'` (the
+default) launches one; `mode: 'headless'` never touches it.
 
 To photograph a scrolled or panned state, pass `capture: 'window' | 'pane'` to
 `obsrv_drive`: it captures after its commands run, and nothing in that tool
@@ -231,7 +232,8 @@ until the drive ended. Both report `tabId` and `tabIndex`, so an agent that
 cares can compare them across calls and notice you switched tabs under it. While
 Agent control is on, the driven tab carries a neutral rule on its leading edge
 that brightens for ~3 s on each command, so it is visible which session is being
-driven. An agent cannot open, close or switch tabs; that stays yours.
+driven. An agent opens, fronts, switches and closes tabs itself, through
+`obsrv_drive`'s `tab` and `closeTab`.
 
 A headless `snap` returns `settled: true` when the page went paint-quiet and
 every pixel painted. `settled: false` is still a usable capture, not a
@@ -336,8 +338,8 @@ belongs to an unrelated package.
   with dirty rects it has not been needed.
 - Tabs are a first cut. They cannot be reordered, dragged out into another window, or
   reopened after closing (no `Cmd+Shift+T`), and there is no tab overflow menu — a strip
-  longer than the window scrolls. An agent can only reach the tab in front: there is no
-  way to name another tab in `obsrv_drive`, and no way for an agent to open, close or
-  switch tabs at all. The URL bar's visited-URL suggestions are one window-wide list
-  rather than one per tab (back/forward *are* per tab), and a restored tab comes back at
-  the top of its page — the scroll position is not persisted.
+  longer than the window scrolls. An agent opens, fronts and closes tabs through
+  `obsrv_drive` (`tab`, `closeTab`) and reads them from `tabs`. The URL bar's
+  visited-URL suggestions are one window-wide list rather than one per tab (back/forward
+  *are* per tab), and a restored tab comes back at the top of its page — the scroll
+  position is not persisted.
