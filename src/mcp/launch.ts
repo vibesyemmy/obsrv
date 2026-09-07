@@ -45,8 +45,24 @@ export function resolveLaunchTarget(
   }
 }
 
+/**
+ * What a launch attempt hands back so a caller can notice the spawned
+ * process ending, without keeping this process alive to watch it (the child
+ * stays `unref`'d regardless).
+ */
+export interface LaunchHandle {
+  /**
+   * Resolves once the spawned process has exited or failed to start at all —
+   * never rejects. A process that loses Obsrv's single-instance lock always
+   * exits almost immediately; `ensureLive` (src/mcp/control.ts) uses that to
+   * stop waiting on a launch that will never come up, rather than burning
+   * the whole timeout (final-review fix for Finding 2).
+   */
+  exited: Promise<void>
+}
+
 /** Spawns the app, detached, with agent control force-enabled for the session. */
-export function launchApp(target: LaunchTarget, env: NodeJS.ProcessEnv, spawn: typeof nodeSpawn = nodeSpawn): void {
+export function launchApp(target: LaunchTarget, env: NodeJS.ProcessEnv, spawn: typeof nodeSpawn = nodeSpawn): LaunchHandle {
   // Belt and braces with `cannotLaunchReason` (src/mcp/lib.ts): a launch from
   // inside the e2e harness would start a real Obsrv against the developer's
   // profile.
@@ -56,7 +72,12 @@ export function launchApp(target: LaunchTarget, env: NodeJS.ProcessEnv, spawn: t
   delete childEnv.ELECTRON_RUN_AS_NODE
   const [command, args] = target.kind === 'bundle' ? [target.executable, []] : [target.electron, [target.entry]]
   const child = spawn(command, args, { detached: true, stdio: 'ignore', env: childEnv })
+  const exited = new Promise<void>(resolve => {
+    child.once('exit', () => resolve())
+    child.once('error', () => resolve())
+  })
   child.unref()
+  return { exited }
 }
 
 /** The default resolution against the real filesystem and the package's own Electron. */

@@ -110,6 +110,30 @@ test('obsrv_snap mode: live under the harness is an error naming the reason', as
   expect(JSON.stringify(r.content)).toMatch(/no-display.*OBSRV_TEST/)
 })
 
+test('obsrv_snap mode: live with a headless-only operation blames the operation, not the app (Finding 4)', async () => {
+  // fullPage cannot run live at all — the app may be perfectly reachable, so
+  // the old wording ("the live app is not available") blamed the wrong
+  // thing. Reachability is exactly what the test above already covers.
+  const r = await call('obsrv_snap', { url: fixture('tall.html'), mode: 'live', fullPage: true })
+  expect(r.isError).toBe(true)
+  const text = JSON.stringify(r.content)
+  expect(text).toMatch(/cannot run this call/)
+  expect(text).not.toMatch(/live app is not available/)
+  expect(text).toMatch(/fullPage is headless-only/)
+})
+
+test('obsrv_audit/lint/inspect mode: live with custom dimensions blame the operation too (Finding 4 twins)', async () => {
+  const a = await call('obsrv_audit', { url: fixture('audit.html'), mode: 'live', width: 800, height: 600 })
+  const l = await call('obsrv_lint', { url: fixture('lint.html'), mode: 'live', width: 800, height: 600 })
+  const i = await call('obsrv_inspect', { url: fixture('audit.html'), selector: 'button', mode: 'live', width: 800, height: 600 })
+  for (const r of [a, l, i]) {
+    expect(r.isError).toBe(true)
+    const text = JSON.stringify(r.content)
+    expect(text).toMatch(/cannot run this call/)
+    expect(text).not.toMatch(/live app is not available/)
+  }
+})
+
 test('audit, lint and inspect name why they ran headless, like snap', async () => {
   const a = (await call('obsrv_audit', { url: fixture('audit.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
   const l = (await call('obsrv_lint', { url: fixture('lint.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }

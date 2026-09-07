@@ -29,6 +29,7 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  liveModeError,
   planLive,
   planSnapPath,
   shouldInlineImage,
@@ -927,7 +928,7 @@ server.registerTool(
     const plan = planSnapPath(input, requestedMode, process.env, process.platform)
     const resolved = await ensureLive(plan)
     if (resolved.path === 'live') return liveSnap(resolved.app, input, resolved.notes, resolved.launched)
-    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const liveNotes = resolved.notes
     const why = resolved.why
 
@@ -1205,7 +1206,7 @@ server.registerTool(
     )
     const resolved = await ensureLive(plan)
     if (resolved.path === 'live') return liveAudit(resolved.app, input, resolved.notes, resolved.launched)
-    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
@@ -1428,7 +1429,7 @@ server.registerTool(
     )
     const resolved = await ensureLive(plan)
     if (resolved.path === 'live') return liveLint(resolved.app, input, resolved.notes, resolved.launched)
-    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
@@ -1982,7 +1983,7 @@ server.registerTool(
     )
     const resolved = await ensureLive(plan)
     if (resolved.path === 'live') return liveInspect(resolved.app, input, resolved.notes, resolved.launched)
-    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
     let args: string[]

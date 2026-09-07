@@ -206,10 +206,28 @@ export class ControlServer {
     writeFileSync(this.file, JSON.stringify({ port, token: this.token, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
   }
 
-  /** The running app's stance while control is off: discoverable, not callable. */
+  /**
+   * The running app's stance while control is off and nobody has been asked
+   * anything: discoverable, not callable. Written at boot (the default),
+   * and by the chip's Stop and the settings toggle — all of them turn
+   * control off without answering any consent bar, so a later launch
+   * attempt must still be free to knock (§2c) rather than being silently
+   * refused as though the user had said "Not now" (see `writeDeclined`).
+   */
   writeDisabled(): void {
     rmSync(this.file, { force: true })
     writeFileSync(this.file, JSON.stringify({ enabled: false, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
+  }
+
+  /**
+   * The running app's stance once the user has actually answered a consent
+   * bar with "Not now" (spec §2c/§2d). Distinct from `writeDisabled`: only
+   * this stance tells `ensureLive` (src/mcp/control.ts) to stop launching
+   * and stop re-asking until control is turned back on or the app quits.
+   */
+  writeDeclined(): void {
+    rmSync(this.file, { force: true })
+    writeFileSync(this.file, JSON.stringify({ enabled: false, pid: process.pid, startedAt: STARTED_AT, declined: true }), { mode: 0o600 })
   }
 
   /**

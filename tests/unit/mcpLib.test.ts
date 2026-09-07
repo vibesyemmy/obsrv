@@ -13,6 +13,7 @@ import {
   killBudgetMs,
   listCatalog,
   cannotLaunchReason,
+  liveModeError,
   planLive,
   planSnapPath,
   shouldInlineImage,
@@ -231,6 +232,23 @@ describe('planSnapPath', () => {
     const p = planSnapPath({ capture: 'pane' }, 'headless', DESKTOP, 'darwin')
     expect(p).toMatchObject({ path: 'headless', why: 'requested' })
     expect(p.notes).toContain(PANE_CAPTURE_HEADLESS_NOTE)
+  })
+})
+
+// Finding 4 (final review): `mode: "live"` errors must blame the operation,
+// not the app, when the app was never the problem — a `fullPage` snap or a
+// custom-dimensions call is `headless-only` regardless of whether the app is
+// running at all.
+describe('liveModeError', () => {
+  it('a headless-only operation says the call cannot run live, not that the app is unavailable', () => {
+    const msg = liveModeError('headless-only', ['fullPage is headless-only; rendered headlessly instead of driving the app.'])
+    expect(msg).toMatch(/^mode: "live" cannot run this call:/)
+    expect(msg).not.toMatch(/live app is not available/)
+    expect(msg).toContain('fullPage is headless-only')
+  })
+  it.each(['requested', 'no-display', 'declined', 'launch-timeout'] as const)('%s still blames the app being unavailable', why => {
+    const msg = liveModeError(why, ['some note'])
+    expect(msg).toBe(`mode: "live" but the live app is not available (${why}): some note`)
   })
 })
 

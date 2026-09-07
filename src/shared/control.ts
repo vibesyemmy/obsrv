@@ -52,11 +52,32 @@ export interface ControlInfo {
  * "running, and the user said no" from "not running" — the first is asked
  * in the app (§2c of the live-first spec), the second is launched. No port
  * and no token: there is nothing to call.
+ *
+ * `declined` distinguishes *why* control is off, which matters because only
+ * one of the two answers should ever stop the MCP from trying again:
+ *
+ * - Absent (or `false`): nobody has been asked anything. This is the default
+ *   at boot, and what `writeDisabled` (the chip's Stop, the settings toggle)
+ *   writes — an older app that predates this field writes the same shape by
+ *   omitting it entirely, so absence is deliberately treated the same as
+ *   `false` rather than as "unknown." A reader must still try to reach the
+ *   app: launching it is what hits the single-instance lock and raises the
+ *   consent bar in the first place (§2c).
+ * - `true`: the user answered an actual consent bar with "Not now"
+ *   (`writeDeclined`). Only this is the sticky refusal of §2d — a reader
+ *   stops launching and stops re-asking until the user turns control on or
+ *   quits the app.
+ *
+ * Before this distinction existed, every "control is off" write looked like
+ * a genuine decline, so §2c's consent bar was unreachable by construction —
+ * see the final-review fix for Finding 1 in
+ * .superpowers/sdd/2026-09-07-live-first-agent-drive/progress.md.
  */
 export interface ControlStance {
   enabled: false
   pid: number
   startedAt?: string
+  declined?: boolean
 }
 
 /** What the discovery file holds: a live server, or a running app's stance. */
@@ -64,6 +85,11 @@ export type ControlFile = ControlInfo | ControlStance
 
 export function isDisabledStance(f: ControlFile): f is ControlStance {
   return !('port' in f)
+}
+
+/** A stance the user has actually answered "Not now" to — see `ControlStance.declined`. */
+export function isDeclinedStance(f: ControlFile): boolean {
+  return isDisabledStance(f) && f.declined === true
 }
 
 /** How the target pane shows the render — mirrors the renderer store's ViewMode. */
@@ -276,18 +302,29 @@ export function parseControlFile(raw: string): ControlFile | null {
     return null
   }
   if (!isRecord(parsed)) return null
-  const { enabled, pid, startedAt } = parsed
+  const { enabled, pid, startedAt, declined } = parsed
   if (enabled !== undefined && typeof enabled !== 'boolean') return null
   // The owner stamp is optional on a live file (an older app writes none) but,
   // when present, must be well-formed: a stamp that cannot be trusted is worse
   // than no stamp, since a reader would act on it.
   if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
   if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
+  // Optional on a disabled stance, meaningless on a live one; an older app
+  // that predates the field writes neither, which must keep parsing.
+  if (declined !== undefined && typeof declined !== 'boolean') return null
   if (enabled === false) {
     // A stance without an owner is indistinguishable from a crashed run's
     // leftover, and a reader that trusted it would never launch the app.
     if (pid === undefined) return null
-    return { enabled: false, pid, ...(startedAt !== undefined ? { startedAt } : {}) }
+    return {
+      enabled: false,
+      pid,
+      ...(startedAt !== undefined ? { startedAt } : {}),
+      // `false` and absent both mean "not asked" — normalised away like
+      // `enabled: true` above, so a caller only ever sees the marker when it
+      // is actually true.
+      ...(declined === true ? { declined: true } : {}),
+    }
   }
   const { port, token } = parsed
   if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return null

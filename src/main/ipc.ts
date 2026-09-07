@@ -1674,7 +1674,11 @@ export function registerIpc(ctx: AppContext): () => void {
     }
     consentPending = false
     if (allow !== true) {
-      // Not now: the stance is already disabled on disk; nothing to write.
+      // Not now: record the actual decline, distinct from the plain
+      // "control is off, nobody has asked" stance already on disk — only
+      // this marker tells a waiting MCP to stop launching and stop
+      // re-asking (spec §2c/§2d; see the final-review fix for Finding 1).
+      control.writeDeclined()
       return
     }
     // For this session, exactly as OBSRV_AGENT_CONTROL=1: in memory only, so

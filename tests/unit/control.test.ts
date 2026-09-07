@@ -8,6 +8,7 @@ import {
   controlFileModeOk,
   defaultControlFilePath,
   isControlCommand,
+  isDeclinedStance,
   isDisabledStance,
   parseClick,
   parseControlFile,
@@ -78,9 +79,30 @@ describe('parseControlFile', () => {
   it('enabled must be a boolean when present', () => {
     expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, enabled: 'yes' }))).toBeNull()
   })
-  it('isDisabledStance tells the two apart', () => {
+  // Finding 1 (final review): a disabled stance must say *why* control is
+  // off, since only an actual "Not now" answer may stop the MCP from trying
+  // again — see ControlStance's doc comment.
+  it('reads the declined marker: the user answered a consent bar "Not now"', () => {
+    const raw = JSON.stringify({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z', declined: true })
+    expect(parseControlFile(raw)).toEqual({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z', declined: true })
+  })
+  it('declined: false is the same as no declined at all — nobody has been asked', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242, declined: false }))).toEqual({ enabled: false, pid: 4242 })
+  })
+  it('an older app that predates the field writes none, and still parses as not-declined', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242 }))).toEqual({ enabled: false, pid: 4242 })
+  })
+  it('declined must be a boolean when present', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242, declined: 'yes' }))).toBeNull()
+  })
+  it('isDisabledStance tells the two shapes apart', () => {
     expect(isDisabledStance({ enabled: false, pid: 1 })).toBe(true)
     expect(isDisabledStance({ port: 49152, token: TOKEN })).toBe(false)
+  })
+  it('isDeclinedStance is true only for an actual decline', () => {
+    expect(isDeclinedStance({ enabled: false, pid: 1 })).toBe(false)
+    expect(isDeclinedStance({ enabled: false, pid: 1, declined: true })).toBe(true)
+    expect(isDeclinedStance({ port: 49152, token: TOKEN })).toBe(false)
   })
 })
 

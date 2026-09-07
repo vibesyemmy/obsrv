@@ -365,6 +365,21 @@ export const PANE_CAPTURE_HEADLESS_NOTE =
   "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored."
 
 /**
+ * The error for an explicit `mode: "live"` that did not run live. `headless-
+ * only` means the *operation* — `fullPage`, custom dimensions — cannot be
+ * done live at all, regardless of the app; saying "the live app is not
+ * available" there blames the wrong thing (Finding 4, final review). Every
+ * other `why` really is about the app being unreachable, and keeps that
+ * wording.
+ */
+export function liveModeError(why: HeadlessWhy, notes: string[]): string {
+  const detail = notes.join(' ')
+  return why === 'headless-only'
+    ? `mode: "live" cannot run this call: ${detail}`
+    : `mode: "live" but the live app is not available (${why}): ${detail}`
+}
+
+/**
  * Whether a launch attempt could ever put a window on screen. This gates
  * *launching* an app that is not already running — never driving one that
  * is already up and reachable. A launch where no window could appear would

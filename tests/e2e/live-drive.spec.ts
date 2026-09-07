@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDeclinedStance, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
@@ -901,6 +901,11 @@ test('turning agent control off leaves a disabled stance, not an absent file', a
     return f && isDisabledStance(f) ? f.pid : null
   }).toBe(await app.evaluate(() => process.pid))
   expect(statSync(controlFile).mode & 0o777).toBe(0o600)
+  // The settings toggle turns control off without ever asking a consent
+  // question, so it must write the plain "not asked" stance, never
+  // `declined` (Finding 1, final review) — otherwise a later launch attempt
+  // would be silently refused instead of knocking again.
+  expect(isDeclinedStance(parseControlFile(readFileSync(controlFile, 'utf8'))!)).toBe(false)
   // The server is gone: the old port refuses.
   await expect(call('status')).rejects.toThrow()
   // Back on for the tests that follow.
@@ -929,6 +934,13 @@ test('the AGENT chip is a Stop button: one click turns control off', async () =>
     return f !== null && isDisabledStance(f)
   }).toBe(true)
   await expect(page.locator('button.agent-activity')).toHaveCount(0)
+  // Stop persists (spec §2a, corrected — Finding 5) but is not an answer to
+  // any consent question, so it writes the same "not asked" stance the
+  // settings toggle does, not `declined` (Finding 1).
+  expect(isDeclinedStance(parseControlFile(readFileSync(controlFile, 'utf8'))!)).toBe(false)
+  // And it really does persist — a durable choice, not the session-scoped
+  // one the spec used to (wrongly) describe it as.
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.persistedSettings().agentControl)).toBe(false)
   await openSettings(page, 'agent')
   await page.locator('.settings-modal .agent-toggle input').click()
   await closeSettings(page)

@@ -67,16 +67,34 @@ developer's profile. Under the harness, the MCP never launches.
 
 Four states, one file. `control.json` in the app's userData dir is today
 `{ port, token, pid, startedAt }` and exists only while the control server
-listens. It becomes the single record of the app's stance:
+listens. It becomes the single record of the app's stance — and it must
+distinguish *why* control is off, because only one reason may ever stop the
+MCP from trying again:
 
 ```
-{ port, token, pid, startedAt, enabled: true }    // server listening
-{ pid, startedAt, enabled: false }                // app running, control off
+{ port, token, pid, startedAt, enabled: true }                // server listening
+{ pid, startedAt, enabled: false }                            // running, control off, nobody has asked
+{ pid, startedAt, enabled: false, declined: true }            // running, control off, the user said "Not now"
 ```
 
 The file is written whenever the app runs, removed on quit. `enabled: false`
 carries no port or token — there is nothing to call. A file whose `pid` is
-dead is treated as absent, as now.
+dead, or whose `startedAt` predates the machine's last boot (the cheapest
+sound proxy available for "this pid has since been recycled onto an
+unrelated process" — see `discover()`'s doc comment in `src/mcp/control.ts`),
+is treated as absent.
+
+The plain `enabled: false` shape is what boot writes by default, and what the
+chip's Stop and the settings toggle write when the user turns control off
+without ever being asked a question — none of those routes may write
+`declined`. Only an actual "Not now" answer to the consent bar does (§2c);
+that is the sole state §2d's stand-down applies to. Getting this wrong is
+exactly the bug the final whole-branch review found: if every "control is
+off" write looked like a genuine decline, §2's own §2d would make §2c's
+consent bar unreachable by construction, since `ensureLive` would never even
+attempt the launch that raises it. See
+`.superpowers/sdd/2026-09-07-live-first-agent-drive/progress.md` for the
+ruling.
 
 ### 2a. Not running → launch
 
@@ -102,9 +120,14 @@ dead is treated as absent, as now.
    `launched: true`, so the agent can say "I opened Obsrv" once.
 
 The launched instance shows the existing AGENT chip lit. The chip gains a
-**Stop** affordance (one click, no dialog): it sets `enabled: false` for the
-session and stops the server. That is the user's off switch, always visible
-while an agent is driving.
+**Stop** affordance (one click, no dialog): it persists `agentControl: false`
+— the same write the Settings toggle makes, not a session-scoped one — and
+stops the server, writing the plain `enabled: false` stance rather than
+`declined` (§2), so a later launch attempt still knocks instead of being
+silently refused. A user clicking a button labelled Stop is making a durable
+choice, unlike *Allow for this session* below, which is deliberately
+scoped to the session; that is the user's off switch, always visible while an
+agent is driving.
 
 ### 2b. Running, control on → drive
 
@@ -122,22 +145,32 @@ showing, shows a **consent bar** under the toolbar:
 - *Allow* → control on for the session (same path as `OBSRV_AGENT_CONTROL=1`,
   saved setting untouched), file rewritten `enabled: true` with port and
   token. The waiting MCP sees it and proceeds.
-- *Not now* → file rewritten `enabled: false`; the bar dismisses. The MCP sees
-  it and goes headless with `why: "declined"`.
+- *Not now* → file rewritten `enabled: false, declined: true`; the bar
+  dismisses. The MCP sees the `declined` marker and goes headless with
+  `why: "declined"`.
 - *No answer* within `LAUNCH_TIMEOUT_MS` → the MCP goes headless with
-  `why: "launch-timeout"`; the bar stays, so a later answer still takes
-  effect for the next call.
+  `why: "launch-timeout"` and a note that Obsrv asked and has not heard back
+  yet; the bar stays, so a later answer still takes effect for the next call.
 
 The consent bar is the only new UI. It is non-modal, it does not steal focus
 from the page, and its copy names that an *agent* is asking — not Obsrv.
 
 ### 2d. Declined → stay declined
 
-While a file says `enabled: false` for a live pid, the MCP does not launch,
-does not re-trigger `second-instance`, and does not re-ask. Every `auto` call
-goes headless with `why: "declined"` and a note: *the user turned agent
-control off in Obsrv; ask them to enable it if you need the live app.* The
-state ends when the user enables control (chip or settings) or quits the app.
+Only once the file says `enabled: false, declined: true` for a live pid does
+the MCP stop trying: it does not launch, does not re-trigger `second-instance`,
+and does not re-ask. Every `auto` call goes headless with `why: "declined"`
+and a note: *the user turned agent control off in Obsrv; ask them to enable it
+if you need the live app.*
+
+A plain `enabled: false` with no `declined` marker — the state boot writes by
+default, and that Stop and the settings toggle write (§2a) — is not this
+state. The MCP treats it exactly like "not running" (§2a): it launches, which
+is what lets §2c's knock happen at all. Conflating the two was the bug: it
+made every "control is off" write look declined, so the consent bar could
+never be reached except by a human double-launching Obsrv by hand. The
+declined state itself ends when the user enables control (chip or settings)
+or quits the app.
 
 ## 3. Tabs as an agent surface
 
