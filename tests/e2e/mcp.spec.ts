@@ -110,11 +110,20 @@ test('obsrv_snap mode: live under the harness is an error naming the reason', as
   expect(JSON.stringify(r.content)).toMatch(/no-display.*OBSRV_TEST/)
 })
 
+test('audit, lint and inspect name why they ran headless, like snap', async () => {
+  const a = (await call('obsrv_audit', { url: fixture('audit.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
+  const l = (await call('obsrv_lint', { url: fixture('lint.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
+  const i = (await call('obsrv_inspect', { url: fixture('audit.html'), preset: 'laptop-768', selector: 'button' })).structuredContent as { mode: string; why?: string }
+  for (const s of [a, l, i]) expect(s).toMatchObject({ mode: 'headless', why: 'no-display' })
+})
+
 test('obsrv_audit: the fixture measured in millimetres on a 6.5" phone', async () => {
   const r = await call('obsrv_audit', { url: fixture('audit.html'), preset: 'android-65' })
   expect(r.isError).toBeFalsy()
-  // No app in this suite: auto mode is a headless load, and says so.
-  expect(r.structuredContent).toMatchObject({ mode: 'headless', notes: [] })
+  // No app in this suite: auto mode is a headless load, and says why.
+  const s = r.structuredContent as { mode: string; why?: string; notes: string[] }
+  expect(s).toMatchObject({ mode: 'headless', why: 'no-display' })
+  expect(s.notes.join(' ')).toMatch(/OBSRV_TEST/)
   const result = r.structuredContent as {
     ppi: number
     thresholds: { tapMm: number; textMm: number }
@@ -133,12 +142,14 @@ test('obsrv_lint: the fixture judged on a 24" 1080p, headless, with the panel', 
   expect(r.isError).toBeFalsy()
   const m = r.structuredContent as {
     mode: string
+    why?: string
     profile: string
     summary: Record<string, number>
     findings: { rule: string; element: string; rect: { width: number } }[]
     notes: string[]
   }
-  expect(m).toMatchObject({ mode: 'headless', profile: 'budget-tn', notes: [] })
+  expect(m).toMatchObject({ mode: 'headless', why: 'no-display', profile: 'budget-tn' })
+  expect(m.notes.join(' ')).toMatch(/OBSRV_TEST/)
   expect(m.summary).toEqual({ hairline: 2, 'thin-text': 1, contrast: 1, 'contrast-on-panel': 1, 'image-upscaled': 1, 'image-oversized': 1 })
   expect(m.findings.map(f => f.rule)).toEqual(['hairline', 'hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized'])
   expect(m.findings.find(f => f.rule === 'contrast-on-panel')!.element).toBe('p#grey')
@@ -291,7 +302,9 @@ test('obsrv_inspect (headless, no app): the grey caption by selector, in millime
   expect((neither.content[0] as { text: string }).text).toMatch(/exactly one of `at`/)
   const live = await call('obsrv_inspect', { selector: 'p', mode: 'live' })
   expect(live.isError).toBe(true)
-  expect((live.content[0] as { text: string }).text).toMatch(/Agent control/)
+  const liveText = (live.content[0] as { text: string }).text
+  expect(liveText).toMatch(/no-display/)
+  expect(liveText).toMatch(/OBSRV_TEST/)
 })
 
 test('obsrv_presets: a group answers with those presets alone, and phones is a name for mobile', async () => {

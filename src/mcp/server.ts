@@ -30,6 +30,7 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  planLive,
   planSnapPath,
   shouldInlineImage,
   stderrTail,
@@ -1057,6 +1058,15 @@ const auditGroupRowShape = z.object({
 
 const auditOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was measured.'),
@@ -1092,6 +1102,46 @@ const auditOutputShape = {
   notes: z.array(z.string()),
 }
 
+type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }
+
+async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = {
+      ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
+      ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
+    }
+    const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    // The app answers with the CLI's own result plus the screen it
+    // measured on. `textScale` and `throttle` keep the headless contract:
+    // present only when something other than the default was in force.
+    const { ok: _ok, textScale, ...measured } = answer
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+      ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+      ...measured,
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the audit: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_audit',
   {
@@ -1117,55 +1167,25 @@ server.registerTool(
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+  async (input: AuditHandlerInput): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = {
-            ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
-            ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
-          }
-          const answer = await controlCall(live.info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          // The app answers with the CLI's own result plus the screen it
-          // measured on. `textScale` and `throttle` keep the headless contract:
-          // present only when something other than the default was in force.
-          const { ok: _ok, textScale, ...measured } = answer
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
-            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
-            ...measured,
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the audit: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveAudit(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const why = resolved.why
+    const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
@@ -1182,7 +1202,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1251,6 +1271,15 @@ const lintFindingShape = z.object({
 
 const lintOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was judged.'),
@@ -1301,6 +1330,41 @@ const lintOutputShape = {
   notes: z.array(z.string()),
 }
 
+type LintHandlerInput = Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }
+
+async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
+    const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    const { ok: _ok, textScale, ...judged } = answer
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+      ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+      ...judged,
+      ...(input.groupsOnly ? { findings: [] } : {}),
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the lint: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_lint',
   {
@@ -1325,50 +1389,25 @@ server.registerTool(
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }): Promise<CallToolResult> => {
+  async (input: LintHandlerInput): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
-          const answer = await controlCall(live.info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          const { ok: _ok, textScale, ...judged } = answer
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
-            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
-            ...judged,
-            ...(input.groupsOnly ? { findings: [] } : {}),
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the lint: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveLint(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const why = resolved.why
+    const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
@@ -1384,7 +1423,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('lint', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
+    const structured = { mode: 'headless', why, ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1464,6 +1503,15 @@ const readoutShape = z
 
 const inspectOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page inspected: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().optional().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was inspected.'),
@@ -1798,6 +1846,43 @@ server.registerTool(
   },
 )
 
+type InspectHandlerInput = InspectToolInput & { mode?: 'auto' | 'headless' | 'live' }
+
+async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
+    const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      profile: status.profileId,
+      cssWidth: status.cssWidth,
+      cssHeight: status.cssHeight,
+      textScale: status.textScale,
+      throttle: status.throttle,
+      found: answer.found === true,
+      readout: answer.readout ?? null,
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the inspect: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_inspect',
   {
@@ -1816,7 +1901,7 @@ server.registerTool(
     outputSchema: inspectOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: InspectToolInput & { mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+  async (input: InspectHandlerInput): Promise<CallToolResult> => {
     const where = inspectWhereError(input)
     if (where) return toolError(where)
     if (input.url !== undefined) {
@@ -1824,46 +1909,19 @@ server.registerTool(
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
-          const answer = await controlCall(live.info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            profile: status.profileId,
-            cssWidth: status.cssWidth,
-            cssHeight: status.cssHeight,
-            textScale: status.textScale,
-            throttle: status.throttle,
-            found: answer.found === true,
-            readout: answer.readout ?? null,
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the inspect: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveInspect(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const why = resolved.why
+    const notes = resolved.notes
     let args: string[]
     try {
       args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
@@ -1876,7 +1934,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
