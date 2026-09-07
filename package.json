@@ -23,6 +23,7 @@
     "prepack": "node scripts/electron-dep.js to-prod",
     "postpack": "node scripts/electron-dep.js to-dev",
     "release:pack": "npm run build && npm pack",
+    "plugin:branch": "node scripts/build-plugin-branch.js",
     "version": "node scripts/sync-plugin-version.js && git add .claude-plugin"
   },
   "dependencies": {
