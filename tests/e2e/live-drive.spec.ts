@@ -915,3 +915,44 @@ test('the AGENT chip is a Stop button: one click turns control off', async () =>
   }).toBe(true)
   info = parseControlFile(readFileSync(controlFile, 'utf8')) as ControlInfo
 })
+
+test('tabs: list, open, activate, close — and the last tab is refused', async () => {
+  const before = await call('tabs')
+  expect(before.status).toBe(200)
+  const first = (before.body.tabs as Array<{ id: string; active: boolean }>)
+  expect(first).toHaveLength(1)
+  expect(first[0]!.active).toBe(true)
+
+  const opened = await call('openTab', { url: FIXTURE, preset: 'laptop-768' })
+  expect(opened.status).toBe(200)
+  const id = opened.body.id as string
+  await expect.poll(async () => ((await call('status')).body as { tabId: string }).tabId).toBe(id)
+  expect((await call('status')).body).toMatchObject({ presetId: 'laptop-768' })
+  await expect(page.locator('.tab')).toHaveCount(2)
+
+  const back = await call('activateTab', { id: first[0]!.id })
+  expect(back.status).toBe(200)
+  await expect.poll(async () => ((await call('status')).body as { tabId: string }).tabId).toBe(first[0]!.id)
+
+  expect((await call('activateTab', { id: 'no-such' })).status).toBe(404)
+
+  const closed = await call('closeTab', { id })
+  expect(closed.status).toBe(200)
+  await expect(page.locator('.tab')).toHaveCount(1)
+  const last = await call('closeTab', { id: first[0]!.id })
+  expect(last.status).toBe(409)
+  expect(String(last.body.error)).toMatch(/last tab/)
+})
+
+test('openTab refuses an unsupported URL scheme, and leaves no tab behind', async () => {
+  // Mirrors the existing `navigate` scheme-check test: `parseOpenTab` itself
+  // does not judge the scheme (shared/control.ts must not import the mcp lib
+  // `urlSchemeError` lives in), so this is the layer that actually proves it —
+  // the control server applies the same allowlist before the new tab can load.
+  const before = await call('tabs')
+  const countBefore = (before.body.tabs as unknown[]).length
+  const bad = await call('openTab', { url: 'javascript:alert(1)' })
+  expect(bad.status).toBe(400)
+  expect(String(bad.body.error)).toContain('unsupported URL scheme')
+  expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+})

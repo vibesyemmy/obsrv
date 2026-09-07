@@ -12,6 +12,8 @@ import {
   parseClick,
   parseControlFile,
   parseControlStatus,
+  parseOpenTab,
+  parseTabId,
   orientationApplyError,
   panesApplyError,
   textScaleApplyError,
@@ -124,20 +126,23 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty-six commands', () => {
+  it('knows exactly the thirty commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
+      'activateTab',
       'audit',
       'back',
       'captureRaster',
       'captureTarget',
       'captureVisible',
       'click',
+      'closeTab',
       'focusWindow',
       'forward',
       'highlight',
       'inspect',
       'lint',
       'navigate',
+      'openTab',
       'panTo',
       'reload',
       'scroll',
@@ -152,6 +157,7 @@ describe('command validation', () => {
       'setViewMode',
       'setVision',
       'status',
+      'tabs',
     ])
     expect(isControlCommand('status')).toBe(true)
     expect(isControlCommand('click')).toBe(true)
@@ -311,6 +317,7 @@ describe('parseControlStatus', () => {
     tabIndex: 2,
     visionType: 'none',
     visionSeverity: 1,
+    tabs: [],
   }
   it('accepts a full status', () => {
     expect(parseControlStatus(good)).toEqual(good)
@@ -564,5 +571,35 @@ describe('parseControlStatus loading', () => {
     expect(parseControlStatus(base)?.loading).toBe(false)
     expect(parseControlStatus({ ...base, loading: true })?.loading).toBe(true)
     expect(parseControlStatus({ ...base, loading: 'yes' })).toBeNull()
+  })
+})
+
+describe('tab commands', () => {
+  it('are control commands', () => {
+    for (const c of ['tabs', 'openTab', 'activateTab', 'closeTab']) expect(isControlCommand(c)).toBe(true)
+  })
+  it('parseOpenTab: optional url and preset, both checked', () => {
+    expect(parseOpenTab({})).toEqual({})
+    expect(parseOpenTab({ url: ' https://x.test ' })).toEqual({ url: 'https://x.test' })
+    expect(parseOpenTab({ preset: 'laptop-768' })).toEqual({ preset: 'laptop-768' })
+    expect(parseOpenTab({ preset: 'nope' })).toMatch(/preset/)
+    // The URL scheme allowlist is not this function's job: `shared/control.ts`
+    // must not depend on the mcp lib the check lives in, so `controlServer.ts`
+    // applies `urlSchemeError` itself after this returns — see the e2e test
+    // 'openTab refuses an unsupported URL scheme' in live-drive.spec.ts, which
+    // mirrors how `navigate`'s own scheme check is tested at that layer.
+    expect(parseOpenTab({ url: 'javascript:alert(1)' })).toEqual({ url: 'javascript:alert(1)' })
+  })
+  it('parseTabId: a non-empty string, or an error naming the shape', () => {
+    expect(parseTabId({ id: 'tab-3' })).toEqual({ id: 'tab-3' })
+    expect(parseTabId({})).toMatch(/id/)
+    expect(parseTabId({ id: '' })).toMatch(/id/)
+  })
+  it('parseControlStatus carries tabs, and defaults to none for an older app', () => {
+    const base = { version: '1', url: 'https://x.test', presetId: 'p', profileId: 'r', viewMode: 'fit', mode: 'url' }
+    expect(parseControlStatus(base)?.tabs).toEqual([])
+    const tabs = [{ id: 'a', url: 'https://x.test', title: 'X', presetId: 'p', active: true }]
+    expect(parseControlStatus({ ...base, tabs })?.tabs).toEqual(tabs)
+    expect(parseControlStatus({ ...base, tabs: [{ id: 1 }] })).toBeNull()
   })
 })

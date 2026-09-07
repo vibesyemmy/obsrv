@@ -159,6 +159,20 @@ export interface ControlStatus extends AgentUiState {
    * without the preset table.
    */
   screenShape: Orientation
+  /**
+   * The strip as the user sees it: every open tab, in order. `[]` from an app
+   * older than the field — see `parseControlStatus`.
+   */
+  tabs: ControlTab[]
+}
+
+/** One tab as `status` and `tabs` list it. */
+export interface ControlTab {
+  id: string
+  url: string
+  title: string
+  presetId: string
+  active: boolean
 }
 
 /** A validated `highlight` payload: a target-pixel rect plus its lifetime. */
@@ -233,6 +247,11 @@ export const CONTROL_COMMANDS = [
   'lint',
   // v0.25 — throttling on the live target.
   'setThrottle',
+  // live-first: tabs as an agent surface.
+  'tabs',
+  'openTab',
+  'activateTab',
+  'closeTab',
 ] as const
 
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number]
@@ -418,6 +437,42 @@ export function parseClick(raw: unknown, viewport: { width: number; height: numb
   return { x, y, button }
 }
 
+/**
+ * Validates an `openTab` payload: an optional starting URL and preset, both
+ * checked against the same tables `navigate` and `setPreset` use. The URL
+ * scheme allowlist is deliberately not applied here — `urlSchemeError` lives
+ * in `src/mcp/lib.ts`, and this module is shared with the renderer, which
+ * must not pull in the mcp lib — so `controlServer.ts` runs that check itself
+ * on the url this returns, exactly as it already does for `navigate`.
+ */
+export function parseOpenTab(raw: unknown): { url?: string; preset?: string } | string {
+  if (!isRecord(raw)) return 'openTab payload must be an object'
+  const out: { url?: string; preset?: string } = {}
+  if (raw.url !== undefined) {
+    if (typeof raw.url !== 'string' || raw.url.trim() === '') return 'openTab url must be a non-empty string'
+    out.url = raw.url.trim()
+  }
+  if (raw.preset !== undefined) {
+    const bad = presetApplyError(raw.preset)
+    if (bad) return bad
+    out.preset = raw.preset as string
+  }
+  return out
+}
+
+/**
+ * Validates an `activateTab`/`closeTab` payload: `{ id: string }` naming a
+ * tab from `tabs`. Returns the id wrapped in an object rather than the bare
+ * string, so the server can tell "here is the id" from "here is the error
+ * message" without any string ever needing to look like a tab id.
+ */
+export function parseTabId(raw: unknown): { id: string } | string {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id === '') {
+    return 'payload must be { id: string } naming a tab from `tabs`'
+  }
+  return { id: raw.id }
+}
+
 /** How long a highlight overlay stays up when the payload does not say. */
 export const HIGHLIGHT_DURATION_DEFAULT_MS = 2_000
 /** Shorter would flash imperceptibly; the payload is clamped, not refused. */
@@ -565,6 +620,19 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (!isVisionType(visionType)) return null
   const visionSeverity = raw.visionSeverity ?? 1
   if (typeof visionSeverity !== 'number' || !(visionSeverity >= 0 && visionSeverity <= 1)) return null
+  // And once more for tabs: an app that predates the strip as an agent
+  // surface has no list to report, so `[]` describes it truthfully.
+  const tabsRaw = raw.tabs ?? []
+  if (!Array.isArray(tabsRaw)) return null
+  const tabs: ControlTab[] = []
+  for (const t of tabsRaw) {
+    if (!isRecord(t)) return null
+    const { id, url, title, presetId, active } = t
+    if (typeof id !== 'string' || typeof url !== 'string' || typeof title !== 'string' || typeof presetId !== 'string' || typeof active !== 'boolean') {
+      return null
+    }
+    tabs.push({ id, url, title, presetId, active })
+  }
   return {
     version,
     url,
@@ -585,5 +653,6 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     cssHeight,
     loading,
     screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),
+    tabs,
   }
 }

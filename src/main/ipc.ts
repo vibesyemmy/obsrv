@@ -1594,6 +1594,42 @@ export function registerIpc(ctx: AppContext): () => void {
       app.focus({ steal: true })
       win.focus()
     },
+    // The strip an agent sees: main's own mirror, the same one `getTabs`
+    // answers and `tabsChanged` publishes — never the renderer's uiState
+    // mirror, which only ever describes the tab in front.
+    tabs: () => {
+      const snap = tabs.snapshot()
+      return {
+        maxTabs: tabs.maxTabs,
+        tabs: snap.tabs.map(t => ({ id: t.id, url: t.url, title: t.title, presetId: t.presetId, active: t.id === snap.activeId })),
+      }
+    },
+    // Add *and* activate, exactly like the strip's own "new tab" button
+    // (`IPC.addTab` above): `add` alone leaves the session in the background,
+    // which is right for a restore but wrong for a tab an agent just asked
+    // for — it should be the one commands land on next.
+    openTab: () => {
+      const s = tabs.add()
+      if (!s) return null
+      tabs.activate(s.id)
+      return s.id
+    },
+    activateTab: id => {
+      if (!tabs.snapshot().tabs.some(t => t.id === id)) return false
+      tabs.activate(id)
+      return true
+    },
+    closeTab: id => {
+      const snap = tabs.snapshot()
+      if (!snap.tabs.some(t => t.id === id)) return { ok: false, error: `no tab ${id}; see \`tabs\`` }
+      // The manager itself opens a fresh blank tab rather than ever holding
+      // zero — right for a user closing their last tab by hand, wrong for an
+      // agent, who would see its close silently swapped for a blank page it
+      // never asked for. Refused here instead, before the manager ever sees it.
+      if (snap.tabs.length === 1) return { ok: false, error: 'the last tab cannot be closed; open another first' }
+      tabs.close(id)
+      return { ok: true, activeId: tabs.activeId }
+    },
     activity: () => {
       if (!win.isDestroyed()) win.webContents.send(IPC.agentActivity)
     },

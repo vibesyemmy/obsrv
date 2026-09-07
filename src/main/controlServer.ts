@@ -13,6 +13,8 @@ import {
   isControlCommand,
   parseClick,
   parseHighlight,
+  parseOpenTab,
+  parseTabId,
   pixelExactApplyError,
   presetApplyError,
   profileApplyError,
@@ -27,6 +29,7 @@ import {
   type AgentApplyPatch,
   type AgentClick,
   type ControlStatus,
+  type ControlTab,
   pageRectToPane,
   type TargetView,
 } from '../shared/control'
@@ -64,9 +67,16 @@ const MAX_BODY_BYTES = 64 * 1024
 const APPLY_WAIT_MS = 2_000
 const APPLY_POLL_MS = 25
 
+/**
+ * What `status` reports minus the tab list — `tabs()` below is that list's
+ * one source of truth (the `tabs` command reuses it verbatim), so `status`'s
+ * own dep does not build it a second time; `route` appends it when replying.
+ */
+type StatusReport = Omit<ControlStatus, 'tabs'>
+
 export interface ControlDeps {
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
-  status(): ControlStatus
+  status(): StatusReport
   /** The same both-panes load `IPC.navigate` performs; resolves with the applied URL. */
   navigate(url: string): Promise<string>
   /** Forwards a validated patch to the renderer store (toolbar-equivalent apply). */
@@ -118,6 +128,14 @@ export interface ControlDeps {
    * `obsrv lint` judges a headless load. Null when the page did not answer.
    */
   lint(req: LintRequest): Promise<LiveLint | null>
+  /** The strip as the user sees it, and the cap. */
+  tabs(): { tabs: ControlTab[]; maxTabs: number }
+  /** Opens a tab and brings it to the front; null at the cap. */
+  openTab(): string | null
+  /** Brings a tab to the front; false when no tab has that id. */
+  activateTab(id: string): boolean
+  /** Closes a tab; refuses the last one. */
+  closeTab(id: string): { ok: true; activeId: string } | { ok: false; error: string }
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
 }
@@ -271,7 +289,44 @@ export class ControlServer {
 
     switch (command) {
       case 'status':
-        return reply(200, { ok: true, ...this.deps.status() })
+        return reply(200, { ok: true, ...this.deps.status(), tabs: this.deps.tabs().tabs })
+
+      case 'tabs':
+        return reply(200, { ok: true, ...this.deps.tabs() })
+
+      case 'openTab': {
+        const req = parseOpenTab(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        // The same allowlist `navigate` applies: `parseOpenTab` cannot check it
+        // itself (shared/control.ts must not depend on the mcp lib the check
+        // lives in), so it is applied here on the url it validated.
+        if (req.url !== undefined) {
+          const bad = urlSchemeError(req.url)
+          if (bad) return reply(400, { error: bad })
+        }
+        const id = this.deps.openTab()
+        if (id === null) return reply(409, { error: `the app is at its tab limit (${this.deps.tabs().maxTabs}); close one first` })
+        // The new tab is in front now, so the ordinary apply/navigate paths
+        // land on it exactly as they would for a command with no payload.
+        if (req.preset !== undefined) this.deps.apply({ presetId: req.preset })
+        if (req.url !== undefined) await this.deps.navigate(req.url)
+        return reply(200, { ok: true, id })
+      }
+
+      case 'activateTab': {
+        const req = parseTabId(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        if (!this.deps.activateTab(req.id)) return reply(404, { error: `no tab ${req.id}; see \`tabs\`` })
+        return reply(200, { ok: true, id: req.id })
+      }
+
+      case 'closeTab': {
+        const req = parseTabId(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        const r = this.deps.closeTab(req.id)
+        if (!r.ok) return reply(409, { error: r.error })
+        return reply(200, { ok: true, closed: req.id, active: r.activeId })
+      }
 
       case 'navigate': {
         const url = payload.url
@@ -494,12 +549,12 @@ export class ControlServer {
    * a page, confirm that it is back or on its way too; the apply budget
    * bounds the wait as before.
    */
-  private pageBack(): (s: ControlStatus) => boolean {
+  private pageBack(): (s: StatusReport) => boolean {
     const had = this.deps.status().url !== ''
     return s => !had || s.url !== '' || s.loading
   }
 
-  private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: ControlStatus) => boolean): Promise<Reply> {
+  private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: StatusReport) => boolean): Promise<Reply> {
     this.deps.apply(patch)
     const deadline = Date.now() + APPLY_WAIT_MS
     let applied = confirmed(this.deps.status())
