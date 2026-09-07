@@ -1536,9 +1536,11 @@ const reportOutputShape = {
         .describe('1x screens only; null with diffSkipped saying why.'),
       diffSkipped: z.string().nullable(),
       problems: z
-        .object({ featured: z.number(), belowCapture: z.number() })
+        .object({ featured: z.number(), belowCapture: z.number(), inPanel: z.number() })
         .optional()
-        .describe('Present when findings were located on the full-page overview: how many were pinned and cropped, and how many sit below the captured height. The images are in the HTML, not here.'),
+        .describe(
+          'Present when findings were located on the full-page overview: how many were pinned and cropped, how many sit below the captured height, and how many sit inside a panel with its own scrollbar (a sidebar, a list) that a capture of the page never shows however far it reaches. The images are in the HTML, not here.',
+        ),
       warnings: z.array(z.string()),
     }),
   ),

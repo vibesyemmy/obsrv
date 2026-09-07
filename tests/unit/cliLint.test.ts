@@ -208,6 +208,29 @@ describe('groups', () => {
     expect(groupKey(base.groups[1]!.exemplar)).toBe('#999999 on light backgrounds')
     expect(groupFindings([])).toEqual([])
   })
+  it('hands the exemplar to a member the report can locate, when the worst one is inside a panel', () => {
+    // The exemplar is what gets cropped and pinned. A group whose worst member
+    // sits in a sidebar with its own scrollbar is nowhere on a capture of the
+    // page, and used to cost the whole group its pin.
+    const inPanel = { ...rect, clipped: true as const }
+    const r = report({
+      text: [
+        text({ element: 'a#nav', color: [153, 153, 153, 1], rect: inPanel }),
+        text({ element: 'p#body', color: [153, 153, 153, 1] }),
+      ],
+    })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.groups[0]!.count).toBe(2)
+    expect(res.groups[0]!.exemplar.element).toBe('p#body')
+    expect(res.groups[0]!.exemplar.rect.clipped).toBeUndefined()
+  })
+  it('keeps the worst one when every member is inside a panel', () => {
+    const inPanel = { ...rect, clipped: true as const }
+    const r = report({ text: [text({ element: 'a#one', color: [153, 153, 153, 1], rect: inPanel }), text({ element: 'a#two', color: [153, 153, 153, 1], rect: inPanel })] })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.groups[0]!.exemplar.element).toBe('a#one')
+    expect(res.groups[0]!.exemplar.rect.clipped).toBe(true)
+  })
 })
 
 describe('what is set aside', () => {

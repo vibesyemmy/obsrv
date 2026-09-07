@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets
 import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import type { LoadError } from '../shared/types'
-import type { AuditReport } from '../shared/audit'
+import type { AuditRect, AuditReport } from '../shared/audit'
 import type { LintReport } from '../shared/lint'
 import {
   ArgError,
@@ -30,7 +30,7 @@ import { lintFindings, slimGroups, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
-import { reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
+import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
 const REPORT_CROP_LIMIT = 6
@@ -859,8 +859,9 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       // whatever the density and text scale did to it.
       const k = fullImg.width / r.cssWidth
       const capturedCssHeight = fullImg.height / k
-      type Candidate = { rect: { x: number; y: number; width: number; height: number }; element: string; detail: string }
-      const within = (c: Candidate): boolean => c.rect.y + c.rect.height / 2 <= capturedCssHeight
+      type Candidate = { rect: AuditRect; element: string; detail: string }
+      const place = (c: Candidate): FindingPlace => findingPlace(c.rect, capturedCssHeight)
+      const within = (c: Candidate): boolean => place(c) === 'page'
       const fromAudit: Candidate[] = (audit?.findings ?? []).map(f => ({
         rect: f.rect,
         element: f.element,
@@ -871,7 +872,13 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       }))
       const fromLint: Candidate[] = lintGroups.map(g => ({ rect: g.exemplar.rect, element: g.exemplar.element, detail: lintDetail(g) }))
       const featured = [...fromAudit.filter(within).slice(0, REPORT_CROP_LIMIT), ...fromLint.filter(within).slice(0, REPORT_CROP_LIMIT)]
-      const belowCapture = fromAudit.filter(c => !within(c)).length + fromLint.filter(c => !within(c)).length
+      // Two ways a finding cannot be pinned, kept apart because the reader
+      // acts on them differently. `below` is the page outrunning the capture;
+      // `panel` is a finding inside a scroller the capture never drives, which
+      // no amount of extra bands would reach.
+      const candidates = [...fromAudit, ...fromLint]
+      const belowCapture = candidates.filter(c => place(c) === 'below').length
+      const inPanel = candidates.filter(c => place(c) === 'panel').length
       if (featured.length > 0) {
         const overviewFactor = Math.max(1, Math.round(fullImg.width / REPORT_OVERVIEW_WIDTH), Math.ceil(fullImg.height / REPORT_OVERVIEW_MAX_HEIGHT))
         const overview = boxDownsample(fullImg, overviewFactor)
@@ -892,6 +899,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
           overview: toImage(encodeJpeg(overview, REPORT_OVERVIEW_JPEG_QUALITY), overview.width, overview.height, 'image/jpeg'),
           features,
           belowCapture,
+          inPanel,
         }
       }
       // Outside the branch above on purpose: when nothing could be located,
@@ -899,10 +907,17 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       // here, so an app shell — whose findings all sit below a capture that
       // is one screen — produced no located section and said nothing at all.
       warnings.push(...full.warnings.map(w => `full page: ${w}`))
-      if (featured.length === 0 && belowCapture > 0) {
+      if (featured.length === 0 && belowCapture + inPanel > 0) {
+        const where =
+          inPanel === 0
+            ? 'lie below what the full-page capture could reach'
+            : belowCapture === 0
+              ? 'sit inside a panel with its own scrollbar, which a capture of the page never shows'
+              : `lie below what the full-page capture could reach (${belowCapture}) or inside a panel with its own scrollbar (${inPanel})`
+        const n = belowCapture + inPanel
         warnings.push(
-          `the ${belowCapture} finding${belowCapture === 1 ? '' : 's'} worth featuring all lie below what the full-page ` +
-            `capture could reach, so this screen has no "where the problems are" section; the findings themselves are listed above`,
+          `the ${n} finding${n === 1 ? '' : 's'} worth featuring all ${where}, so this screen has no ` +
+            `"where the problems are" section; the findings themselves are listed above`,
         )
       }
     }
@@ -1013,7 +1028,9 @@ async function runReport(cmd: ReportCommand): Promise<void> {
         ? { settled: s.diff.metrics.settled, inkCoverage: s.diff.metrics.inkCoverage, rows: s.diff.metrics.rows, findings: s.diff.metrics.findings }
         : null,
       diffSkipped: s.diffSkipped,
-      ...(s.problems ? { problems: { featured: s.problems.features.length, belowCapture: s.problems.belowCapture } } : {}),
+      ...(s.problems
+        ? { problems: { featured: s.problems.features.length, belowCapture: s.problems.belowCapture, inPanel: s.problems.inPanel } }
+        : {}),
       warnings: s.warnings,
     })),
   })

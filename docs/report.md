@@ -59,7 +59,7 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   carry the detail; it is embedded as a JPEG for the same reason, while every
   image that is rasterisation evidence — the render, the 1x-vs-2x pair, the
   crops — stays a lossless PNG. The machine output and `obsrv_report` carry
-  `problems: { featured, belowCapture }` per screen; the images are in the
+  `problems: { featured, belowCapture, inPanel }` per screen; the images are in the
   HTML, not the JSON. `snap --full-page` keeps its single-surface cap unless `--tiled` is given; the
   bands are the report's, and `snap --full-page` bands the same way.
 - The panel profile applies to the render shown. The 1x-vs-2x comparison is

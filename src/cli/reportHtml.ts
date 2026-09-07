@@ -42,15 +42,39 @@ export interface ReportProblemFeature {
 }
 
 /**
+ * Where a finding is, relative to the full-page capture. `page` can be pinned;
+ * the other two cannot, for different reasons a reader needs told apart.
+ * `panel` is a finding inside a scroll container the capture never drives (a
+ * docs sidebar, a virtualised list) — nowhere in a capture of the page, however
+ * far the capture reaches. `below` is the page itself running past what the
+ * bands could cover.
+ */
+export type FindingPlace = 'page' | 'panel' | 'below'
+
+/**
+ * Which of the three a finding's rect is. Everything with a `clipped` rect is
+ * `panel` regardless of its y: those coordinates are the element's own, not a
+ * position on the page (see `AuditRect.clipped`), and comparing them against
+ * the captured height is what once put 48 sidebar links "below" a capture that
+ * covered the page whole.
+ */
+export function findingPlace(rect: { y: number; height: number; clipped?: true }, capturedCssHeight: number): FindingPlace {
+  if (rect.clipped) return 'panel'
+  return rect.y + rect.height / 2 <= capturedCssHeight ? 'page' : 'below'
+}
+
+/**
  * The full-page render with the worst findings located on it: an overview
  * image, pins in page-fraction coordinates, and a crop of each. Present only
  * when the screen has findings to show. `belowCapture` counts findings past
- * the captured height (a page taller than the device-pixel capture cap).
+ * the captured height (a page taller than the capture could reach);
+ * `inPanel` counts those the capture could never show at all.
  */
 export interface ReportProblems {
   overview: ReportImage
   features: ReportProblemFeature[]
   belowCapture: number
+  inPanel: number
 }
 
 export interface ReportScreen {
@@ -194,9 +218,14 @@ function problemsSection(s: ReportScreen): string {
     )
     .join('')
   const below =
-    p.belowCapture > 0
+    (p.belowCapture > 0
       ? `<p class="muted">${p.belowCapture} more finding(s) sit below the captured area — the page is taller than the capture can reach on this screen.</p>`
-      : ''
+      : '') +
+    (p.inPanel > 0
+      ? `<p class="muted">${p.inPanel} more finding(s) sit inside a panel with its own scrollbar — a sidebar, a list, a drawer. ` +
+        `A capture of the page scrolls the page, so those never appear in it however far it reaches; they are listed above and ` +
+        `you reach them by scrolling the panel itself.</p>`
+      : '')
   const many = p.features.length === 1 ? 'the smallest finding, located on the page' : `the ${p.features.length} smallest findings, located on the page`
   return (
     `<h3>Where the problems are — ${many}</h3>` +

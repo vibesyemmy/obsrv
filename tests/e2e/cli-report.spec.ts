@@ -164,7 +164,7 @@ test('a report on an app shell locates its findings, because the capture reaches
   const out = join(outDir, 'shell-report.html')
   const r = await runCli(['report', fixture('app-shell-findings.html'), '--matrix', 'laptop-768', '--out', out])
   expect(r.code, r.stderr).toBe(0)
-  const summary = JSON.parse(r.stdout) as { screens: Array<{ problems?: { featured: number; belowCapture: number }; warnings: string[] }> }
+  const summary = JSON.parse(r.stdout) as { screens: Array<{ problems?: { featured: number; belowCapture: number; inPanel: number }; warnings: string[] }> }
   const screen = summary.screens[0]!
   // Both findings sit deep in the inner scroller. Before the capture followed
   // that scroller they were all below it, and the section was dropped in
@@ -176,4 +176,27 @@ test('a report on an app shell locates its findings, because the capture reaches
   const html = readFileSync(out, 'utf8')
   expect(html).toContain('button#deep-button')
   expect(html).toContain('p#deep-text')
+})
+
+test('a sidebar that scrolls itself is a panel, not something below the capture', async () => {
+  const out = join(outDir, 'sidebar-report.html')
+  const r = await runCli(['report', fixture('sidebar-panel.html'), '--matrix', 'laptop-768', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const summary = JSON.parse(r.stdout) as {
+    screens: Array<{ problems?: { featured: number; belowCapture: number; inPanel: number }; warnings: string[] }>
+  }
+  const screen = summary.screens[0]!
+  // The document is a few thousand px tall and the capture covers it whole, so
+  // nothing is below it. The sidebar's links run far past that in page
+  // coordinates — which is exactly what used to be counted as "below".
+  expect(screen.problems!.belowCapture).toBe(0)
+  expect(screen.problems!.inPanel).toBeGreaterThan(50)
+  expect(screen.problems!.featured).toBeGreaterThanOrEqual(1)
+  expect(screen.warnings.join(' ')).not.toMatch(/lie below what the full-page capture could reach/)
+
+  const html = readFileSync(out, 'utf8')
+  expect(html).toContain('sit inside a panel with its own scrollbar')
+  expect(html).not.toContain('more finding(s) sit below the captured area')
+  // The page's own findings are still pinned; only the panel's are held back.
+  expect(html).toContain('button#doc-button')
 })

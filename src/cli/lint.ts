@@ -165,6 +165,14 @@ export function groupKey(f: LintFinding): string {
  * order, worst first), so a group's exemplar is its worst member. Over every
  * finding, not the listed cap: a page with 270 identical contrast failures
  * is one group with count 270.
+ *
+ * One exception to "worst member": the exemplar exists to be *shown* — the
+ * report crops it and pins it on the full-page overview — and a rect inside a
+ * panel with its own scrollbar is nowhere on that page (see `AuditRect`).
+ * A group whose worst member happens to sit in a sidebar would lose its pin
+ * for every member, so the first member that can be located takes over. A
+ * group with nothing but clipped members keeps its worst one and is reported
+ * as a panel finding.
  */
 export function groupFindings(findings: LintFinding[]): LintGroup[] {
   const groups = new Map<string, LintGroup>()
@@ -174,6 +182,7 @@ export function groupFindings(findings: LintFinding[]): LintGroup[] {
     const g = groups.get(id)
     if (g) {
       g.count++
+      if (g.exemplar.rect.clipped && !f.rect.clipped) g.exemplar = f
       if (g.elements.length < LINT_GROUP_ELEMENTS && !g.elements.includes(f.element)) g.elements.push(f.element)
     } else if (groups.size < LINT_MAX_GROUPS) {
       groups.set(id, { rule: f.rule, key, count: 1, exemplar: f, elements: [f.element] })

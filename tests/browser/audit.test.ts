@@ -105,3 +105,52 @@ describe('auditPage', () => {
     expect(fromSource(2000, 3000)).toEqual(auditPage(2000, 3000))
   })
 })
+
+/**
+ * A page the document scrolls, beside a panel that scrolls itself: the shape
+ * that made 48 sidebar links look like they sat below a capture covering the
+ * whole page. See `clipTest` in shared/scrollHost.ts.
+ */
+describe('a panel with its own scrollbar', () => {
+  let page: HTMLDivElement
+
+  beforeEach(() => {
+    page = document.createElement('div')
+    page.innerHTML = `
+      <style>
+        #panel { position: absolute; left: 0; top: 0; width: 200px; height: 120px; overflow-y: auto; }
+        #panel a { display: block; height: 20px; font-size: 11px; }
+        #tall { margin-left: 220px; height: 3000px; }
+        #in-page { display: block; width: 24px; height: 24px; padding: 0; font-size: 10px; }
+      </style>
+      <nav id="panel">${Array.from({ length: 250 }, (_, i) => `<a id="p${i}" href="#i${i}">Item ${i}</a>`).join('')}</nav>
+      <div id="tall"><button id="in-page" type="button">x</button></div>
+    `
+    document.body.append(page)
+  })
+  afterEach(() => page.remove())
+
+  const byId = (r: ReturnType<typeof auditPage>, id: string) => r.targets.find(t => t.element.startsWith(`a#${id}`) || t.element.startsWith(`button#${id}`))
+
+  it('marks what the panel holds out of view, and leaves what it shows alone', () => {
+    const r = auditPage(2000, 3000)
+    // Six 20px rows fit the 120px panel; the rest are outside its box.
+    expect(byId(r, 'p0')?.rect.clipped).toBeUndefined()
+    expect(byId(r, 'p249')?.rect.clipped).toBe(true)
+    expect(r.targets.filter(t => t.rect.clipped).length).toBeGreaterThan(20)
+  })
+
+  it('leaves the page\'s own elements unclipped, however far down they sit', () => {
+    const r = auditPage(2000, 3000)
+    expect(byId(r, 'in-page')?.rect.clipped).toBeUndefined()
+  })
+
+  it('keeps pageHeight to the page, not to how far the panel\'s content runs', () => {
+    const r = auditPage(2000, 3000)
+    const deepest = Math.max(...r.targets.filter(t => t.rect.clipped).map(t => t.rect.y + t.rect.height))
+    // The panel's 250 links run 5,000 px, well past a 3,000 px document.
+    expect(deepest).toBeGreaterThan(4000)
+    expect(r.pageHeight).toBeLessThan(deepest)
+    expect(r.pageHeight).toBeGreaterThanOrEqual(3000)
+  })
+})

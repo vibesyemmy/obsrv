@@ -1,14 +1,17 @@
 import type { RGBA } from './inspect'
 
+
+import { clipTest, findScroller, rootScrolls, SCROLL_HOST_SCRIPT } from './scrollHost'
+
 /**
  * The lint's page walk: one pass over the rendered DOM that brings back
  * everything the rules in `cli/lint.ts` judge — text with the colours it is
  * actually drawn in, edges thin enough to be in question on the screen in
  * force, and raster images with their natural and drawn sizes. The walk
  * collects; the rules decide, outside the page, where the screen's density
- * and the panel profile are known. Self-contained on purpose, like the
- * audit's and the inspector's: it is shipped as source into an isolated
- * world of the target, so nothing here may reach outside the function.
+ * and the panel profile are known. Shipped as source into an isolated world
+ * of the target, like the audit's and the inspector's, so the walk may reach
+ * only page globals and the scroll-host helpers `LINT_SCRIPT` puts beside it.
  */
 
 export interface LintRect {
@@ -16,6 +19,8 @@ export interface LintRect {
   y: number
   width: number
   height: number
+  /** See `AuditRect.clipped`: page coordinates that are not a place on the page. */
+  clipped?: true
 }
 
 export interface LintText {
@@ -108,7 +113,16 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     cs.visibility !== 'hidden' &&
     cs.display !== 'none' &&
     cs.opacity !== '0'
-  const pageRect = (r: DOMRect): LintRect => ({ x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height })
+  // See audit.ts: a box a scroller the capture never drives holds out of view
+  // has coordinates that are the element's, not a place on the page.
+  const clipped = clipTest(rootScrolls() ? null : findScroller())
+  const pageRect = (r: DOMRect, el: Element): LintRect => ({
+    x: r.left + scrollX,
+    y: r.top + scrollY,
+    width: r.width,
+    height: r.height,
+    ...(clipped(r, el) ? { clipped: true as const } : {}),
+  })
 
   const parseColor = (s: string): RGBA | null => {
     const m = /rgba?\(([^)]+)\)/.exec(s)
@@ -170,7 +184,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
     if (!shown(cs, r)) continue
-    const rect = pageRect(r)
+    const rect = pageRect(r, el)
 
     // Text of the element's own.
     let own = ''
@@ -345,9 +359,11 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
       Math.max(
         document.documentElement.scrollHeight,
         document.body ? document.body.scrollHeight : 0,
-        ...text.map(t => t.rect.y + t.rect.height),
-        ...edges.map(e => e.rect.y + e.rect.height),
-        ...images.map(i => i.rect.y + i.rect.height),
+        // Clipped rects sit out: they say how far a panel's own content runs,
+        // not how tall the page is (see audit.ts).
+        ...text.filter(t => !t.rect.clipped).map(t => t.rect.y + t.rect.height),
+        ...edges.filter(e => !e.rect.clipped).map(e => e.rect.y + e.rect.height),
+        ...images.filter(i => !i.rect.clipped).map(i => i.rect.y + i.rect.height),
       ),
     ),
     text,
@@ -358,4 +374,4 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
 }
 
 /** `lintPage` as source, for `executeJavaScriptInIsolatedWorld`. */
-export const LINT_SCRIPT = `(${lintPage.toString()})`
+export const LINT_SCRIPT = `(() => {\n${SCROLL_HOST_SCRIPT}\n return (${lintPage.toString()})\n})()`

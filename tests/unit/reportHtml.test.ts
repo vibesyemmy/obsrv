@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { escapeHtml, reportHtml, type ReportData, type ReportScreen } from '../../src/cli/reportHtml'
+import { escapeHtml, findingPlace, reportHtml, type ReportData, type ReportScreen } from '../../src/cli/reportHtml'
 
 const png = { base64: 'iVBORw0KGgo=', width: 1366, height: 768 }
 
@@ -123,6 +123,7 @@ describe('reportHtml', () => {
           { n: 2, xFrac: 0.1, yFrac: 0.4, crop: { base64: 'Q1JPUDI=', width: 120, height: 40 }, element: 'p#caption', detail: '10 px · 1.90 mm' },
         ],
         belowCapture: 5,
+        inPanel: 0,
       },
     })
     const html = reportHtml(data([withProblems]))
@@ -187,6 +188,7 @@ describe('reportHtml', () => {
         overview: { base64: 'SlBFRw==', width: 400, height: 1200, mime: 'image/jpeg' },
         features: [{ n: 1, xFrac: 0.5, yFrac: 0.1, crop: { base64: 'Q1JPUA==', width: 40, height: 40 }, element: 'button#tiny', detail: '24×24 px · 6.07 mm' }],
         belowCapture: 0,
+        inPanel: 0,
       },
     })
     const html = reportHtml(data([withJpeg]))
@@ -248,5 +250,33 @@ describe('reportHtml', () => {
     expect(html).toContain('href="#laptop-768"')
     expect(html).toContain('href="#iphone-61"')
     expect(html).toContain('<section id="iphone-61">')
+  })
+})
+
+describe('where a finding sits relative to the capture', () => {
+  it('pins what the capture covers, and calls the rest below it', () => {
+    expect(findingPlace({ y: 100, height: 20 }, 4568)).toBe('page')
+    expect(findingPlace({ y: 4550, height: 20 }, 4568)).toBe('page')
+    expect(findingPlace({ y: 5000, height: 20 }, 4568)).toBe('below')
+  })
+
+  it('calls a clipped rect a panel finding however small its y', () => {
+    // The bug: a sidebar link's page-space y is not a place on the page, so
+    // comparing it against the captured height called 48 of them "below" a
+    // capture that covered the page whole.
+    expect(findingPlace({ y: 7385, height: 24, clipped: true }, 4568)).toBe('panel')
+    expect(findingPlace({ y: 40, height: 24, clipped: true }, 4568)).toBe('panel')
+  })
+
+  it('tells the two apart in the report, because a reader acts on them differently', () => {
+    const p = {
+      overview: { base64: 'T1Y=', width: 400, height: 1200 },
+      features: [{ n: 1, xFrac: 0.5, yFrac: 0.1, crop: { base64: 'Qw==', width: 40, height: 40 }, element: 'button#tiny', detail: '24×24 px' }],
+      belowCapture: 3,
+      inPanel: 48,
+    }
+    const html = reportHtml(data([screen({ problems: p })]))
+    expect(html).toContain('3 more finding(s) sit below the captured area')
+    expect(html).toContain('48 more finding(s) sit inside a panel with its own scrollbar')
   })
 })

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Docs page with a sidebar that scrolls itself</title>
+    <!--
+      The shape that broke the report's pins: a page the *document* scrolls,
+      beside a sticky sidebar that scrolls its own long nav. Measured on
+      tailwindcss.com/docs — a document 2,591 CSS px tall next to a sidebar
+      663 px tall over 7,708 px of links.
+
+      Every link past the sidebar's fold has a page-space y of thousands, so
+      the walks used to report them far below a full-page capture that covered
+      the document whole, and the report called them "below the captured area".
+      They are not below anything: the page cannot scroll to them at all.
+
+      The page's own content carries findings that CAN be pinned (#doc-button,
+      #doc-text), so the test can tell "pinned what it could" from "pinned
+      nothing".
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 16px/1.5 system-ui, sans-serif; display: flex; gap: 24px; }
+      #sidebar {
+        position: sticky; top: 0; align-self: flex-start;
+        flex: 0 0 240px; height: 100vh; overflow-y: auto;
+        border-right: 1px solid #e5e7eb; padding: 12px;
+      }
+      /* Under 7 mm on every preset, so every one of them is a finding. */
+      #sidebar a { display: block; height: 22px; font-size: 11px; text-decoration: none; color: #2563eb; }
+      main { flex: 1 1 auto; padding: 24px 24px 0; }
+      .block { height: 400px; }
+      #doc-button { width: 24px; height: 24px; padding: 0; font-size: 10px; }
+      #doc-text { color: #999999; background: #ffffff; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <nav id="sidebar"></nav>
+    <main>
+      <div class="block"><h1>Docs</h1></div>
+      <div class="block"><button id="doc-button">x</button></div>
+      <div class="block"><p id="doc-text">Grey body text in the page itself.</p></div>
+      <div class="block">The document ends here.</div>
+    </main>
+    <script>
+      // 200 nav links: far more than the sidebar's own height holds, so most
+      // of them sit outside its box and nowhere on the page.
+      const nav = document.getElementById('sidebar')
+      for (let i = 1; i <= 200; i++) {
+        const a = document.createElement('a')
+        a.href = '#item-' + i
+        a.textContent = 'Utility ' + i
+        nav.append(a)
+      }
+    </script>
+  </body>
+</html>

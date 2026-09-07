@@ -3,6 +3,8 @@
 // walk is written here so the CLI can ship it as source; nothing in this
 // file runs outside the target page except the string.
 
+import { clipTest, findScroller, rootScrolls, SCROLL_HOST_SCRIPT } from './scrollHost'
+
 /**
  * The physical-units audit's raw material: every interactive element and
  * every element with text of its own, with their boxes and font sizes as
@@ -17,6 +19,15 @@ export interface AuditRect {
   y: number
   width: number
   height: number
+  /**
+   * Set when a scroll container the page's own scroll does not drive holds
+   * this element out of view (`clipTest` in scrollHost.ts). The coordinates
+   * above are then still the element's, but they are not a place on the
+   * captured page: a sidebar with its own 7,700 px of links puts its later
+   * items thousands of px below a document a few thousand tall. The finding
+   * is real and stays in the list; nothing may pin by it.
+   */
+  clipped?: true
 }
 
 export interface AuditTarget {
@@ -47,10 +58,11 @@ export const AUDIT_MAX_TARGETS = 2000
 export const AUDIT_MAX_TEXT = 3000
 
 /**
- * Runs inside the target page. Self-contained on purpose — shipped as source
- * (`AUDIT_SCRIPT`) and evaluated there — so it references nothing from this
- * module. The page is not trusted, its layout merely measured; the parser on
- * the other side checks every field.
+ * Runs inside the target page. Shipped as source (`AUDIT_SCRIPT`) and
+ * evaluated there, so it may reference only page globals and the scroll-host
+ * helpers `AUDIT_SCRIPT` puts beside it — nothing else from this module. The
+ * page is not trusted, its layout merely measured; the parser on the other
+ * side checks every field.
  *
  * Targets are the elements a finger is meant to land on: links, form
  * controls, `summary`, the interactive ARIA roles, and anything focusable by
@@ -80,7 +92,17 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     cs.visibility !== 'hidden' &&
     cs.display !== 'none' &&
     cs.opacity !== '0'
-  const pageRect = (r: DOMRect): AuditRect => ({ x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height })
+  // The element the capture scrolls — the shell's scroller, or the document
+  // when the document is what scrolls. Boxes held out of view by any *other*
+  // scroller are marked: their page coordinates are not a place on the page.
+  const clipped = clipTest(rootScrolls() ? null : findScroller())
+  const pageRect = (r: DOMRect, el: Element): AuditRect => ({
+    x: r.left + scrollX,
+    y: r.top + scrollY,
+    width: r.width,
+    height: r.height,
+    ...(clipped(r, el) ? { clipped: true as const } : {}),
+  })
 
   const TARGETS =
     'a[href],button,input:not([type="hidden"]),select,textarea,summary,' +
@@ -102,7 +124,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       continue
     }
     const value = el instanceof HTMLInputElement ? el.value : ''
-    targets.push({ element: label(el), text: snippet(el.textContent || value || el.getAttribute('aria-label') || ''), rect: pageRect(r) })
+    targets.push({ element: label(el), text: snippet(el.textContent || value || el.getAttribute('aria-label') || ''), rect: pageRect(r, el) })
   }
 
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE', 'HEAD', 'META', 'LINK'])
@@ -125,7 +147,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       textOver++
       continue
     }
-    text.push({ element: label(el), text: snippet(own), fontSizePx, rect: pageRect(r) })
+    text.push({ element: label(el), text: snippet(own), fontSizePx, rect: pageRect(r, el) })
   }
 
   return {
@@ -136,8 +158,11 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       Math.max(
         document.documentElement.scrollHeight,
         document.body ? document.body.scrollHeight : 0,
-        ...targets.map(t => t.rect.y + t.rect.height),
-        ...text.map(t => t.rect.y + t.rect.height),
+        // Clipped rects are excluded on purpose: they measure how far a
+        // panel's content runs, not how tall the page is, and letting them in
+        // made `pageHeight` 7,741 on a tailwindcss.com/docs page 2,591 tall.
+        ...targets.filter(t => !t.rect.clipped).map(t => t.rect.y + t.rect.height),
+        ...text.filter(t => !t.rect.clipped).map(t => t.rect.y + t.rect.height),
       ),
     ),
     targets,
@@ -147,4 +172,4 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
 }
 
 /** `auditPage` as source, for `executeJavaScriptInIsolatedWorld`. */
-export const AUDIT_SCRIPT = `(${auditPage.toString()})`
+export const AUDIT_SCRIPT = `(() => {\n${SCROLL_HOST_SCRIPT}\n return (${auditPage.toString()})\n})()`

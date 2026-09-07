@@ -119,6 +119,62 @@ export function findScroller(root: Element | null = document.body): Element | nu
 
 
 /**
+ * Whether a scroll container the capture never drives is holding this element
+ * out of view.
+ *
+ * A walk records every box in page coordinates (`rect.top + scrollY`), which
+ * is a position on the captured page only for elements the page's own scroll
+ * reaches. An element inside *another* scroller — a docs sidebar `sticky` at
+ * 663 px tall over its own 7,708 px of links, measured on tailwindcss.com/docs
+ * — keeps growing that offset for every item past the sidebar's fold, so its
+ * page coordinates run far below a document that is 2,591 px tall. Those
+ * findings are real; their coordinates are not a place on the page, and a
+ * report that pins by them puts them off the bottom of a capture that covers
+ * the page whole.
+ *
+ * `host` is the element the capture scrolls — the shell scroller, or null when
+ * the document itself scrolls. Whatever that one holds *is* reachable, so it
+ * is skipped; everything else clips. Only `overflow: auto | scroll` counts
+ * (`canScroll`), the same test the capture picks its host with: an
+ * `overflow: hidden` wrapper clips too, but that is a different claim and
+ * wants its own evidence.
+ *
+ * Returns a predicate rather than a function of both, because a walk asks it
+ * about hundreds of siblings that share ancestors, and the ancestor's own
+ * `canScroll` (a `getComputedStyle` call) is the expensive half. Cached per
+ * element, the cost is one style read per container on the page.
+ */
+export function clipTest(host: Element | null): (r: DOMRect, el: Element) => boolean {
+  const boxes = new Map<Element, DOMRect | null>()
+  const clipperBox = (el: Element): DOMRect | null => {
+    const seen = boxes.get(el)
+    if (seen !== undefined) return seen
+    const box = el !== host && canScroll(el) ? el.getBoundingClientRect() : null
+    boxes.set(el, box)
+    return box
+  }
+  return (r: DOMRect, el: Element): boolean => {
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      const box = clipperBox(a)
+      if (!box) continue
+      // Fully outside the container's box on either axis: not a pixel of it is
+      // drawn where the page's own scroll could show it. Partly out is left
+      // alone — the top of a half-scrolled row is on screen, and its rect is
+      // where the capture will find it.
+      if (
+        r.bottom <= box.top + SCROLL_EPSILON ||
+        r.top >= box.bottom - SCROLL_EPSILON ||
+        r.right <= box.left + SCROLL_EPSILON ||
+        r.left >= box.right - SCROLL_EPSILON
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+}
+
+/**
  * The functions above, serialised for `executeJavaScript` in a page the
  * preload is not loaded into — the headless render. Composed from their own
  * source rather than written twice, so the capture and the live scroll can
@@ -131,4 +187,5 @@ export const SCROLL_HOST_SCRIPT = [
   canScroll.toString(),
   isVisible.toString(),
   findScroller.toString(),
+  clipTest.toString(),
 ].join('\n')
