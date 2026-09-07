@@ -1,0 +1,13 @@
+# src/shared/ipcPayloads.ts and tests/unit/ipcPayloads.test.ts each embed a raw
+# control byte (a literal NUL, and in ipcPayloads.ts a literal 0x1F too) as part
+# of deliberately validating/testing for control characters in untrusted input.
+# Without help, git's binary-content heuristic classifies both files as binary
+# and prints "Binary files ... differ" for any diff that touches them — silently
+# omitting their content from code review. That is especially dangerous for
+# ipcPayloads.ts, which validates every untrusted payload from the renderer and
+# from target pages: a reviewer reading a generated diff has no signal that a
+# change there was skipped. The `diff` attribute (not `text`) forces a textual
+# diff without enabling end-of-line normalisation, so it cannot rewrite any
+# file's contents on checkout — it only changes how git displays changes.
+*.ts diff
+*.tsx diff
