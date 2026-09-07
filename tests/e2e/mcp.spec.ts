@@ -34,7 +34,7 @@ test.beforeAll(async () => {
       command: process.execPath,
       args: [MCP_BIN],
       cwd: ROOT,
-      env: { ...env, OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json') },
+      env: { ...env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json') },
     }),
   )
 })
@@ -85,6 +85,29 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   )
   // Layout, not pixels: no panel profile.
   expect(Object.keys(audit.inputSchema.properties ?? {})).not.toContain('profile')
+})
+
+test('obsrv_snap under the harness is headless for a named reason, and never launches', async () => {
+  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: 'laptop-768' })
+  expect(r.isError).toBeFalsy()
+  const s = r.structuredContent as { mode: string; why?: string; launched?: boolean; warnings: string[] }
+  expect(s.mode).toBe('headless')
+  expect(s.why).toBe('no-display')
+  expect(s.launched).toBeUndefined()
+  expect(s.warnings.join(' ')).toMatch(/OBSRV_TEST/)
+})
+
+test('obsrv_snap mode: headless says requested; fullPage says headless-only', async () => {
+  const a = (await call('obsrv_snap', { url: fixture('solid-red.html'), mode: 'headless' })).structuredContent as { why?: string }
+  expect(a.why).toBe('requested')
+  const b = (await call('obsrv_snap', { url: fixture('tall.html'), fullPage: true })).structuredContent as { why?: string }
+  expect(b.why).toBe('headless-only')
+})
+
+test('obsrv_snap mode: live under the harness is an error naming the reason', async () => {
+  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), mode: 'live' })
+  expect(r.isError).toBe(true)
+  expect(JSON.stringify(r.content)).toMatch(/no-display.*OBSRV_TEST/)
 })
 
 test('obsrv_audit: the fixture measured in millimetres on a 6.5" phone', async () => {
@@ -148,16 +171,18 @@ test('obsrv_snap: laptop-768 render returns metadata and an inline PNG', async (
 
   const meta = r.structuredContent as Record<string, unknown>
   expect(meta).toMatchObject({
-    // No app is reachable, so the default auto mode reports headless.
+    // No app is reachable, and OBSRV_TEST=1 forbids launching one, so the
+    // default auto mode reports headless and says why.
     mode: 'headless',
+    why: 'no-display',
     preset: 'laptop-768',
     cssWidth: 1366,
     cssHeight: 768,
     deviceScaleFactor: 1,
     profile: 'reference',
     settled: true,
-    warnings: [],
   })
+  expect((meta.warnings as string[]).join(' ')).toMatch(/OBSRV_TEST/)
   expect(typeof meta.pngPath).toBe('string')
   expect(existsSync(meta.pngPath as string)).toBe(true)
 
@@ -206,11 +231,19 @@ test('obsrv_snap: preset plus custom dims is a usage error with the fix', async 
   expect((r.content[0] as { text: string }).text).toMatch(/mutually exclusive/)
 })
 
-test('live drive without a running app: snap mode:"live" and obsrv_drive error actionably', async () => {
+test('live drive without a running app: snap mode:"live" names why, obsrv_drive errors actionably', async () => {
+  // obsrv_snap now resolves through ensureLive, which under this harness
+  // (OBSRV_TEST=1, no reachable app) reports headless with a reason rather
+  // than the old generic "not reachable" text — see the dedicated
+  // "mode: live under the harness" test above for the exact wording.
   const snap = await call('obsrv_snap', { url: fixture('hairline.html'), mode: 'live' })
   expect(snap.isError).toBe(true)
-  expect((snap.content[0] as { text: string }).text).toMatch(/Agent control/)
+  const snapText = (snap.content[0] as { text: string }).text
+  expect(snapText).toMatch(/no-display/)
+  expect(snapText).toMatch(/OBSRV_TEST/)
 
+  // obsrv_drive is untouched by this task: it still requires an already-live
+  // app and reports the old actionable message.
   const drive = await call('obsrv_drive', { preset: 'laptop-768' })
   expect(drive.isError).toBe(true)
   expect((drive.content[0] as { text: string }).text).toMatch(/Agent control/)

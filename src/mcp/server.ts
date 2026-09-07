@@ -14,11 +14,10 @@ import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_M
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
-import { controlCall, discoverControl, type LiveApp } from './control'
+import { controlCall, discoverControl, ensureLive, type LiveApp } from './control'
 import {
   APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
-  PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
   buildLintArgs,
@@ -226,8 +225,10 @@ const snapInputShape = {
     .enum(['auto', 'headless', 'live'])
     .optional()
     .describe(
-      'auto (default): drive the visible Obsrv app when it is open with Agent control on, else render headlessly. ' +
-        'live: require the app (error if unreachable). headless: never touch the app.',
+      'auto (default): drive the visible Obsrv app, launching it if it is not running; headless only when asked, ' +
+        'when the operation needs it (fullPage, custom dims), when there is no display, or when the user has turned ' +
+        'agent control off in the app — the result says which (`why`). live: require the app (error naming the reason). ' +
+        'headless: never touch the app.',
     ),
   capture: z
     .enum(['window', 'pane', 'raster'])
@@ -249,6 +250,15 @@ const snapOutputShape = {
   mode: z
     .enum(['headless', 'live'])
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (fullPage / custom dims), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   out: z.string().optional().describe('Headless only: PNG path the CLI wrote (same file as pngPath).'),
   preset: z.string().optional().describe('Headless only: preset id, or "custom" for width/height runs.'),
   cssWidth: z
@@ -748,7 +758,7 @@ async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane' | 'ras
  * reloading here would make `obsrv_drive { scroll }` followed by a snap of the
  * same page always capture the top. `navigated: false` says which happened.
  */
-async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Promise<CallToolResult> {
+async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   const warnings = [...notes]
   const before = app.status.url
@@ -833,6 +843,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     navigated,
     warnings,
     pngPath,
+    ...(launched ? { launched: true } : {}),
   }
   return {
     content: [
@@ -861,13 +872,14 @@ server.registerTool(
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap; larger ` +
       `captures (typically fullPage) stay on disk with a note.\n\n` +
-      `Live drive: when the Obsrv desktop app is open with its "Agent control" toolbar toggle on, \`mode: "auto"\` ` +
-      `(the default) drives the *visible* app instead — the user watches the URL load and the preset flip, and the ` +
-      `returned PNG is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` ` +
-      `otherwise). \`capture: "pane"\` crops a live capture to just the target pane (headless renders ignore it ` +
-      `with a note). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
-      `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
-      `touches it. Note: although this tool is annotated read-only (it renders and captures), a live snap steers ` +
+      `Live drive: \`mode: "auto"\` (the default) drives the *visible* app — the user watches the URL load and the ` +
+      `preset flip — and launches the app if it is not running (\`launched: true\` on that call). The returned PNG ` +
+      `is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` otherwise, with ` +
+      `\`why\` naming the reason). \`capture: "pane"\` crops a live capture to just the target pane (headless ` +
+      `renders ignore it with a note). Custom width/height and \`fullPage\` always render headlessly (with a ` +
+      `note); \`waitMs\` is ignored in live mode. \`mode: "live"\` errors when the app is not reachable, naming ` +
+      `why; \`mode: "headless"\` never touches it. Note: although this tool is annotated read-only (it renders and ` +
+      `captures), a live snap steers ` +
       `the open app window — navigating it and flipping its preset in front of the user — as its means of ` +
       `capture; that visible steering is the point of live mode.\n\n` +
       `A live snap only navigates when the app is showing a different URL; the result's \`navigated\` says which ` +
@@ -885,23 +897,17 @@ server.registerTool(
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
 
-    // The live path first (spec §14 "Live drive"): a reachable control-enabled
-    // app wins under auto, is required under live, and is never probed under
-    // headless. planSnapPath documents the fallback rules.
+    // The live path first (spec §14 "Live drive"): drives a reachable app,
+    // launches an absent one under auto/live, and is never attempted under
+    // headless. planSnapPath decides whether to try; ensureLive reconciles
+    // that against reality (an already-live app, a decline, or a launch).
     const requestedMode = input.mode ?? 'auto'
-    let liveNotes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const plan = planSnapPath(input, requestedMode, process.env, process.platform)
-      // planSnapPath is pure and does not know whether an app actually
-      // answered discovery; reconcile that here. Interim until Task 6 wires
-      // ensureLive (launch + declined/launch-timeout) through this path.
-      if (plan.path === 'live' && live !== null) return liveSnap(live, input, plan.notes)
-      if (plan.path === 'live' && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-      liveNotes = plan.notes
-    } else if (input.capture === 'pane') {
-      liveNotes = [PANE_CAPTURE_HEADLESS_NOTE]
-    }
+    const plan = planSnapPath(input, requestedMode, process.env, process.platform)
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveSnap(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(`mode: "live" but the live app is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const liveNotes = resolved.notes
+    const why = resolved.why
 
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
@@ -920,7 +926,7 @@ server.registerTool(
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const cliWarnings = Array.isArray(meta['warnings']) ? (meta['warnings'] as string[]) : []
-    const structured = { ...meta, mode: 'headless', warnings: [...cliWarnings, ...liveNotes], pngPath }
+    const structured = { ...meta, mode: 'headless', why, warnings: [...cliWarnings, ...liveNotes], pngPath }
     return {
       content: [
         { type: 'text', text: JSON.stringify(structured, null, 2) },
