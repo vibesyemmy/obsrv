@@ -215,6 +215,20 @@ export interface ObsrvApi {
   onAgentApply(cb: (patch: AgentApplyPatch) => void): () => void
   /** An authenticated agent-control command arrived; the toolbar shows its AGENT indicator. */
   onAgentActivity(cb: () => void): () => void
+  /**
+   * A second launch knocked while agent control is off (spec §2c): the one
+   * moment the app can ask, because an MCP tool cannot. The chrome shows the
+   * consent bar; `agentConsent` carries the user's answer back.
+   */
+  onAgentConsentRequest(cb: () => void): () => void
+  /** The user's answer to the consent bar: `true` to allow for this session. */
+  agentConsent(allow: boolean): void
+  /**
+   * Main's settings changed on its own (e.g. "Allow for this session", which
+   * writes nothing to disk but does flip the in-memory copy) — the store
+   * replaces its copy so the toolbar agrees with main without a round trip.
+   */
+  onSettingsChanged(cb: (s: Settings) => void): () => void
   /** The current update state. Seeded with the running version before any check. */
   getUpdate(): Promise<UpdateState>
   /** Check now, ignoring the daily throttle. Resolves with the new state. */

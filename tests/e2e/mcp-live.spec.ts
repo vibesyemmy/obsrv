@@ -19,6 +19,7 @@ import { launchApp, rendererWindow } from './launch'
 const ROOT = resolve(__dirname, '../..')
 const MCP_BIN = resolve(ROOT, 'bin/obsrv-mcp.js')
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
+const fixture = (name: string): string => pathToFileURL(resolve(__dirname, `../fixtures/${name}`)).href
 
 // A headless-override render boots a full Electron; same budgets as mcp.spec.
 const CALL_TIMEOUT_MS = 150_000
@@ -138,6 +139,19 @@ test('one obsrv_drive call combines preset + scroll + highlight and returns the 
   await expect.poll(() => scrollY('native'), { timeout: 5_000 }).toBe(800)
   const page = await rendererWindow(app)
   await expect(page.locator('.agent-highlight')).toHaveCount(1)
+})
+
+test('obsrv_drive scroll page: the review loop needs no arithmetic', async () => {
+  await call('obsrv_drive', { url: fixture('tall.html'), preset: 'laptop-768', scroll: { page: 'top' } })
+  let steps = 0
+  for (;;) {
+    const s = (await call('obsrv_drive', { scroll: { page: 'next' }, capture: 'pane' })).structuredContent as { atEnd?: boolean; pngPath: string }
+    expect(s.pngPath).toMatch(/\.png$/)
+    steps++
+    if (s.atEnd || steps > 20) break
+  }
+  expect(steps).toBeGreaterThan(1)
+  expect(steps).toBeLessThan(20)
 })
 
 test('a scroll in the same call as a preset waits for the resize', async () => {
@@ -435,4 +449,62 @@ test('obsrv_drive sets a throttle on the live target; status and the footer repo
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getThrottle().id)).toBe('none')
   const bad = await call('obsrv_drive', { throttle: 'edge' })
   expect(bad.isError).toBe(true)
+})
+
+test('obsrv_drive: tab "new" opens and fronts a tab with the url and preset; closeTab "current" closes it last', async () => {
+  const opened = (await call('obsrv_drive', { tab: 'new', url: fixture('tall.html'), preset: 'laptop-768', capture: 'pane' })).structuredContent as {
+    tabId: string
+    presetId: string
+    tabs: Array<{ id: string; active: boolean }>
+    pngPath: string
+  }
+  expect(opened.tabs).toHaveLength(2)
+  expect(opened.tabs.find(t => t.active)!.id).toBe(opened.tabId)
+  expect(opened.presetId).toBe('laptop-768')
+  expect(opened.pngPath).toMatch(/\.png$/)
+
+  const closed = (await call('obsrv_drive', { closeTab: 'current' })).structuredContent as { tabs: unknown[]; tabId: string }
+  expect(closed.tabs).toHaveLength(1)
+  expect(closed.tabId).not.toBe(opened.tabId)
+})
+
+test('obsrv_drive: tab <id> activates before anything else runs', async () => {
+  const a = (await call('obsrv_drive', { tab: 'new', url: fixture('solid-red.html') })).structuredContent as { tabId: string; tabs: Array<{ id: string }> }
+  const other = a.tabs.find(t => t.id !== a.tabId)!.id
+  const b = (await call('obsrv_drive', { tab: other, capture: 'pane' })).structuredContent as { tabId: string }
+  expect(b.tabId).toBe(other)
+  await call('obsrv_drive', { closeTab: a.tabId })
+})
+
+test('obsrv_drive: capture and closeTab "current" in one call photograph the tab before closing it', async () => {
+  // Open a second (doomed) tab so the close never touches the last one, and
+  // give it a distinctive portrait preset so the capture can be tied to
+  // *this* tab specifically, not to whatever tab is left after the close —
+  // that tab is landscape, like every other fixture in this file.
+  const opened = (await call('obsrv_drive', { tab: 'new', url: fixture('solid-red.html'), preset: 'iphone-61' })).structuredContent as {
+    tabId: string
+    tabs: Array<{ id: string }>
+  }
+  expect(opened.tabs).toHaveLength(2)
+  const before = opened.tabs.length
+
+  const r = await call('obsrv_drive', { capture: 'pane', closeTab: 'current' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { pngPath: string; width: number; height: number; tabs: Array<{ id: string }>; tabId: string }
+
+  // Half one: a real capture came back, of the doomed tab specifically. If
+  // closeTab ran first, this would either error (capturing a closed tab) or
+  // show the surviving tab's landscape screen instead of this one's portrait
+  // iphone-61 shape — either way the assertions below catch it.
+  expect(existsSync(m.pngPath)).toBe(true)
+  const png = readFileSync(m.pngPath)
+  expect(png.length).toBeGreaterThan(0)
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(m.width).toBeLessThan(m.height)
+  expect(m.width / m.height).toBeCloseTo(393 / 852, 1)
+
+  // Half two: the tab is actually gone afterwards.
+  expect(m.tabs).toHaveLength(before - 1)
+  expect(m.tabs.some(t => t.id === opened.tabId)).toBe(false)
+  expect(m.tabId).not.toBe(opened.tabId)
 })

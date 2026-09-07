@@ -141,6 +141,10 @@ export type ScrollerKind = 'root' | 'element'
 /** Longest `scrollSelector` accepted; a CSS selector far beyond any real one. */
 export const MAX_SCROLL_SELECTOR = 512
 
+/** A page-wise scroll: a screenful of the scroller in this direction, or an end. */
+export type ScrollPage = 'next' | 'prev' | 'top' | 'bottom'
+export const SCROLL_PAGES: readonly ScrollPage[] = ['next', 'prev', 'top', 'bottom']
+
 /**
  * What main sends a pane over `IPC.applyScroll`. `id` is the correlation id an
  * agent-driven scroll uses to await the offset actually reached; the pane-sync
@@ -150,6 +154,8 @@ export const MAX_SCROLL_SELECTOR = 512
 export interface ScrollRequest extends ScrollPos {
   id?: number
   selector?: string
+  /** A screenful of the scroller in this direction, or an end. `x`/`y` are placeholders when set. */
+  page?: ScrollPage
 }
 
 /** A pane's `IPC.scrollResult` reply: the offset reached, read back after the write. */
@@ -159,6 +165,8 @@ export interface ScrollReport {
   y: number
   scroller: ScrollerKind
   warnings: string[]
+  /** The scroller can go no further down: the loop that walks a page stops here. */
+  atEnd: boolean
 }
 
 export type UpdateStatus = 'current' | 'available' | 'error'

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDeclinedStance, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
@@ -370,7 +370,7 @@ test('scroll drives the page offset of both panes and reports the offset reached
   expect(r.status).toBe(200)
   // A normal long page still scrolls the document root, and the round-trip
   // answers with what it actually reached rather than a bare ok.
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root' })
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root', atEnd: false })
   await expect.poll(() => paneScrollY('target'), { timeout: 5_000 }).toBe(1200)
   await expect.poll(() => paneScrollY('native'), { timeout: 5_000 }).toBe(1200)
 })
@@ -412,6 +412,27 @@ test('back / forward / reload keep the Task-11 semantics over HTTP', async () =>
   await expect.poll(markers, { timeout: 5_000 }).toEqual({ native: 'undefined', target: 'undefined' })
 })
 
+test('scroll page: next walks a screenful at a time and says when it is at the end', async () => {
+  await call('navigate', { url: TALL })
+  await call('setPreset', { id: 'laptop-768' })
+  await call('scroll', { page: 'top' })
+  const seen: number[] = []
+  for (let i = 0; i < 20; i++) {
+    const r = await call('scroll', { page: 'next' })
+    expect(r.status).toBe(200)
+    const y = (r.body.scrolled as { y: number }).y
+    seen.push(y)
+    if (r.body.atEnd === true) break
+  }
+  expect(seen.length).toBeGreaterThan(1)
+  expect(seen.length).toBeLessThan(20)
+  // Each step is a screenful (768) until the clamp.
+  expect(seen[1]! - seen[0]!).toBeGreaterThanOrEqual(700)
+  const back = await call('scroll', { page: 'prev' })
+  expect((back.body.scrolled as { y: number }).y).toBeLessThan(seen[seen.length - 1]!)
+  expect((await call('scroll', { page: 'next', x: 1, y: 1 })).status).toBe(400)
+})
+
 /** `scrollTop` of a named element in a pane's page, straight from its webContents. */
 function paneElementScrollTop(pane: 'native' | 'target', selector: string): Promise<number> {
   return app.evaluate(
@@ -431,7 +452,7 @@ test('scroll finds the inner scroller on an app shell whose root cannot scroll',
 
   const r = await call('scroll', { x: 0, y: 1500 })
   expect(r.status).toBe(200)
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element' })
+  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element', atEnd: false })
 
   // The reported offset is not the whole claim: the inner scroller really
   // moved, in both panes, while the window itself never left the top.
@@ -460,6 +481,8 @@ test('scroll clamps honestly: the reported offset is the one reached, not the on
   expect(reached.y).toBeGreaterThan(1500)
   expect(reached.y).toBeLessThan(999_999)
   expect(await paneElementScrollTop('target', '#scroller')).toBe(reached.y)
+  // Clamped to the true max: nothing further down for a page-wise walk to find.
+  expect(r.body.atEnd).toBe(true)
 })
 
 test('scrollSelector targets a named container, and says so when it matches nothing', async () => {
@@ -468,7 +491,7 @@ test('scrollSelector targets a named container, and says so when it matches noth
 
   const named = await call('scroll', { x: 0, y: 900, scrollSelector: '#scroller' })
   expect(named.status).toBe(200)
-  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element' })
+  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element', atEnd: false })
   expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
 
   // A selector that matches nothing must report the mismatch, not quietly
@@ -869,13 +892,139 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
 })
 
-test('toggling agent control off stops the server and removes the discovery file', async () => {
-  // The real user flow: the toolbar toggle persists agentControl: false and
-  // main stops the server.
+test('turning agent control off leaves a disabled stance, not an absent file', async () => {
   await openSettings(page, 'agent')
-  await page.click('.settings-modal .agent-toggle')
-  await expect(page.locator('.settings-modal .agent-toggle input')).not.toBeChecked()
+  await page.locator('.settings-modal .agent-toggle input').click()
   await closeSettings(page)
-  await expect.poll(() => existsSync(controlFile)).toBe(false)
-  await expect(call('status')).rejects.toThrow(/ECONNREFUSED/)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && isDisabledStance(f) ? f.pid : null
+  }).toBe(await app.evaluate(() => process.pid))
+  expect(statSync(controlFile).mode & 0o777).toBe(0o600)
+  // The settings toggle turns control off without ever asking a consent
+  // question, so it must write the plain "not asked" stance, never
+  // `declined` (Finding 1, final review) — otherwise a later launch attempt
+  // would be silently refused instead of knocking again.
+  expect(isDeclinedStance(parseControlFile(readFileSync(controlFile, 'utf8'))!)).toBe(false)
+  // The server is gone: the old port refuses.
+  await expect(call('status')).rejects.toThrow()
+  // Back on for the tests that follow.
+  await openSettings(page, 'agent')
+  await page.locator('.settings-modal .agent-toggle input').click()
+  await closeSettings(page)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && !isDisabledStance(f)
+  }).toBe(true)
+  info = parseControlFile(readFileSync(controlFile, 'utf8')) as ControlInfo
+})
+
+test('the AGENT chip is a Stop button: one click turns control off', async () => {
+  await expect(page.locator('button.agent-activity')).toBeVisible()
+  // `.agent-activity` sets `font-size: 10px` but used to also set the
+  // shorthand `font: inherit` after it, which reset font-size back to the
+  // inherited ~13px — the button rendered bigger than the span it replaced.
+  // Guard the actual rendered size, not just the rule's presence.
+  expect(
+    await page.locator('button.agent-activity').evaluate(el => getComputedStyle(el).fontSize)
+  ).toBe('10px')
+  await page.locator('button.agent-activity').click()
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f !== null && isDisabledStance(f)
+  }).toBe(true)
+  await expect(page.locator('button.agent-activity')).toHaveCount(0)
+  // Stop persists (spec §2a, corrected — Finding 5) but is not an answer to
+  // any consent question, so it writes the same "not asked" stance the
+  // settings toggle does, not `declined` (Finding 1).
+  expect(isDeclinedStance(parseControlFile(readFileSync(controlFile, 'utf8'))!)).toBe(false)
+  // And it really does persist — a durable choice, not the session-scoped
+  // one the spec used to (wrongly) describe it as.
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.persistedSettings().agentControl)).toBe(false)
+  await openSettings(page, 'agent')
+  await page.locator('.settings-modal .agent-toggle input').click()
+  await closeSettings(page)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && !isDisabledStance(f)
+  }).toBe(true)
+  info = parseControlFile(readFileSync(controlFile, 'utf8')) as ControlInfo
+})
+
+test('tabs: list, open, activate, close — and the last tab is refused', async () => {
+  const before = await call('tabs')
+  expect(before.status).toBe(200)
+  const first = (before.body.tabs as Array<{ id: string; active: boolean }>)
+  expect(first).toHaveLength(1)
+  expect(first[0]!.active).toBe(true)
+
+  const opened = await call('openTab', { url: FIXTURE, preset: 'laptop-768' })
+  expect(opened.status).toBe(200)
+  const id = opened.body.id as string
+  await expect.poll(async () => ((await call('status')).body as { tabId: string }).tabId).toBe(id)
+  expect((await call('status')).body).toMatchObject({ presetId: 'laptop-768' })
+  await expect(page.locator('.tab')).toHaveCount(2)
+
+  const back = await call('activateTab', { id: first[0]!.id })
+  expect(back.status).toBe(200)
+  await expect.poll(async () => ((await call('status')).body as { tabId: string }).tabId).toBe(first[0]!.id)
+
+  expect((await call('activateTab', { id: 'no-such' })).status).toBe(404)
+
+  const closed = await call('closeTab', { id })
+  expect(closed.status).toBe(200)
+  await expect(page.locator('.tab')).toHaveCount(1)
+  const last = await call('closeTab', { id: first[0]!.id })
+  expect(last.status).toBe(409)
+  expect(String(last.body.error)).toMatch(/last tab/)
+})
+
+test('openTab refuses an unsupported URL scheme, and leaves no tab behind', async () => {
+  // Mirrors the existing `navigate` scheme-check test: `parseOpenTab` itself
+  // does not judge the scheme — `navigate`'s own scheme check already lives
+  // in the control server, so `openTab` is checked the same way in the same
+  // place — so this is the layer that actually proves it: the control server
+  // applies the same allowlist before the new tab can load.
+  const before = await call('tabs')
+  const countBefore = (before.body.tabs as unknown[]).length
+  const bad = await call('openTab', { url: 'javascript:alert(1)' })
+  expect(bad.status).toBe(400)
+  expect(String(bad.body.error)).toContain('unsupported URL scheme')
+  expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+})
+
+test('closeTab with an unknown id returns 409', async () => {
+  const countBefore = ((await call('tabs')).body.tabs as unknown[]).length
+  const res = await call('closeTab', { id: 'no-such-tab' })
+  expect(res.status).toBe(409)
+  expect(String(res.body.error)).toMatch(/no tab/)
+  expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+})
+
+test('openTab at the maxTabs cap returns 409, and leaves the strip unchanged', async () => {
+  // Opening enough tabs to actually hit the default cap (12) would be the
+  // slow, honest way to reach this path; lowering the cap to the strip's
+  // current size is the cheap, equally honest one — `maxTabs` is a plain,
+  // writable field on the same `TabManager` `openTab` already calls through.
+  const countBefore = ((await call('tabs')).body.tabs as unknown[]).length
+  const savedMaxTabs = await app.evaluate(() => (globalThis as any).__obsrv.tabs.maxTabs as number)
+  await app.evaluate(
+    (_electron, n: number) => {
+      ;(globalThis as any).__obsrv.tabs.maxTabs = n
+    },
+    countBefore,
+  )
+  try {
+    const atCap = await call('openTab', { url: FIXTURE })
+    expect(atCap.status).toBe(409)
+    expect(String(atCap.body.error)).toMatch(/tab limit/)
+    expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+  } finally {
+    await app.evaluate(
+      (_electron, n: number) => {
+        ;(globalThis as any).__obsrv.tabs.maxTabs = n
+      },
+      savedMaxTabs,
+    )
+  }
 })

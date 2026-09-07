@@ -47,6 +47,51 @@ export interface ControlInfo {
   startedAt?: string
 }
 
+/**
+ * The app is running with agent control off. Written so a client can tell
+ * "running, and the user said no" from "not running" — the first is asked
+ * in the app (§2c of the live-first spec), the second is launched. No port
+ * and no token: there is nothing to call.
+ *
+ * `declined` distinguishes *why* control is off, which matters because only
+ * one of the two answers should ever stop the MCP from trying again:
+ *
+ * - Absent (or `false`): nobody has been asked anything. This is the default
+ *   at boot, and what `writeDisabled` (the chip's Stop, the settings toggle)
+ *   writes — an older app that predates this field writes the same shape by
+ *   omitting it entirely, so absence is deliberately treated the same as
+ *   `false` rather than as "unknown." A reader must still try to reach the
+ *   app: launching it is what hits the single-instance lock and raises the
+ *   consent bar in the first place (§2c).
+ * - `true`: the user answered an actual consent bar with "Not now"
+ *   (`writeDeclined`). Only this is the sticky refusal of §2d — a reader
+ *   stops launching and stops re-asking until the user turns control on or
+ *   quits the app.
+ *
+ * Before this distinction existed, every "control is off" write looked like
+ * a genuine decline, so §2c's consent bar was unreachable by construction —
+ * see the final-review fix for Finding 1 in
+ * .superpowers/sdd/2026-09-07-live-first-agent-drive/progress.md.
+ */
+export interface ControlStance {
+  enabled: false
+  pid: number
+  startedAt?: string
+  declined?: boolean
+}
+
+/** What the discovery file holds: a live server, or a running app's stance. */
+export type ControlFile = ControlInfo | ControlStance
+
+export function isDisabledStance(f: ControlFile): f is ControlStance {
+  return !('port' in f)
+}
+
+/** A stance the user has actually answered "Not now" to — see `ControlStance.declined`. */
+export function isDeclinedStance(f: ControlFile): boolean {
+  return isDisabledStance(f) && f.declined === true
+}
+
 /** How the target pane shows the render — mirrors the renderer store's ViewMode. */
 export type AgentViewMode = '1:1' | 'fit'
 
@@ -140,6 +185,20 @@ export interface ControlStatus extends AgentUiState {
    * without the preset table.
    */
   screenShape: Orientation
+  /**
+   * The strip as the user sees it: every open tab, in order. `[]` from an app
+   * older than the field — see `parseControlStatus`.
+   */
+  tabs: ControlTab[]
+}
+
+/** One tab as `status` and `tabs` list it. */
+export interface ControlTab {
+  id: string
+  url: string
+  title: string
+  presetId: string
+  active: boolean
 }
 
 /** A validated `highlight` payload: a target-pixel rect plus its lifetime. */
@@ -214,6 +273,11 @@ export const CONTROL_COMMANDS = [
   'lint',
   // v0.25 — throttling on the live target.
   'setThrottle',
+  // live-first: tabs as an agent surface.
+  'tabs',
+  'openTab',
+  'activateTab',
+  'closeTab',
 ] as const
 
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number]
@@ -230,7 +294,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * client must treat the app as not reachable rather than send credentials
  * derived from a file something else may have written.
  */
-export function parseControlFile(raw: string): ControlInfo | null {
+export function parseControlFile(raw: string): ControlFile | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -238,15 +302,33 @@ export function parseControlFile(raw: string): ControlInfo | null {
     return null
   }
   if (!isRecord(parsed)) return null
+  const { enabled, pid, startedAt, declined } = parsed
+  if (enabled !== undefined && typeof enabled !== 'boolean') return null
+  // The owner stamp is optional on a live file (an older app writes none) but,
+  // when present, must be well-formed: a stamp that cannot be trusted is worse
+  // than no stamp, since a reader would act on it.
+  if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
+  if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
+  // Optional on a disabled stance, meaningless on a live one; an older app
+  // that predates the field writes neither, which must keep parsing.
+  if (declined !== undefined && typeof declined !== 'boolean') return null
+  if (enabled === false) {
+    // A stance without an owner is indistinguishable from a crashed run's
+    // leftover, and a reader that trusted it would never launch the app.
+    if (pid === undefined) return null
+    return {
+      enabled: false,
+      pid,
+      ...(startedAt !== undefined ? { startedAt } : {}),
+      // `false` and absent both mean "not asked" — normalised away like
+      // `enabled: true` above, so a caller only ever sees the marker when it
+      // is actually true.
+      ...(declined === true ? { declined: true } : {}),
+    }
+  }
   const { port, token } = parsed
   if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return null
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null
-  // The owner stamp is optional (an older app writes none) but, when
-  // present, must be well-formed: a stamp that cannot be trusted is worse
-  // than no stamp, since a reader would act on it.
-  const { pid, startedAt } = parsed
-  if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
-  if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
   return { port, token, ...(pid !== undefined ? { pid } : {}), ...(startedAt !== undefined ? { startedAt } : {}) }
 }
 
@@ -390,6 +472,42 @@ export function parseClick(raw: unknown, viewport: { width: number; height: numb
     return 'click button must be left, middle or right'
   }
   return { x, y, button }
+}
+
+/**
+ * Validates an `openTab` payload: an optional starting URL and preset, both
+ * checked against the same tables `navigate` and `setPreset` use. The URL
+ * scheme allowlist is deliberately not applied here — `navigate`'s own scheme
+ * check already lives in `controlServer.ts`, so `openTab` validates the same
+ * way in the same place rather than growing a second pattern for it; that
+ * server runs the check itself on the url this returns.
+ */
+export function parseOpenTab(raw: unknown): { url?: string; preset?: string } | string {
+  if (!isRecord(raw)) return 'openTab payload must be an object'
+  const out: { url?: string; preset?: string } = {}
+  if (raw.url !== undefined) {
+    if (typeof raw.url !== 'string' || raw.url.trim() === '') return 'openTab url must be a non-empty string'
+    out.url = raw.url.trim()
+  }
+  if (raw.preset !== undefined) {
+    const bad = presetApplyError(raw.preset)
+    if (bad) return bad
+    out.preset = raw.preset as string
+  }
+  return out
+}
+
+/**
+ * Validates an `activateTab`/`closeTab` payload: `{ id: string }` naming a
+ * tab from `tabs`. Returns the id wrapped in an object rather than the bare
+ * string, so the server can tell "here is the id" from "here is the error
+ * message" without any string ever needing to look like a tab id.
+ */
+export function parseTabId(raw: unknown): { id: string } | string {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || raw.id === '') {
+    return 'payload must be { id: string } naming a tab from `tabs`'
+  }
+  return { id: raw.id }
 }
 
 /** How long a highlight overlay stays up when the payload does not say. */
@@ -539,6 +657,19 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (!isVisionType(visionType)) return null
   const visionSeverity = raw.visionSeverity ?? 1
   if (typeof visionSeverity !== 'number' || !(visionSeverity >= 0 && visionSeverity <= 1)) return null
+  // And once more for tabs: an app that predates the strip as an agent
+  // surface has no list to report, so `[]` describes it truthfully.
+  const tabsRaw = raw.tabs ?? []
+  if (!Array.isArray(tabsRaw)) return null
+  const tabs: ControlTab[] = []
+  for (const t of tabsRaw) {
+    if (!isRecord(t)) return null
+    const { id, url, title, presetId, active } = t
+    if (typeof id !== 'string' || typeof url !== 'string' || typeof title !== 'string' || typeof presetId !== 'string' || typeof active !== 'boolean') {
+      return null
+    }
+    tabs.push({ id, url, title, presetId, active })
+  }
   return {
     version,
     url,
@@ -559,5 +690,6 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     cssHeight,
     loading,
     screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),
+    tabs,
   }
 }

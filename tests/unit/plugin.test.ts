@@ -101,3 +101,18 @@ describe('CI gates the release on the plugin tag', () => {
     expect(ci).toContain('needs: [test, plugin-tag]')
   })
 })
+
+describe('the skill teaches the live review loop', () => {
+  const skill = readFileSync(join(root, 'skills/obsrv-screens/SKILL.md'), 'utf8')
+  it('names the two paths and the loop', () => {
+    expect(skill).toMatch(/## Review \(live\)/)
+    expect(skill).toMatch(/## Deliver \(headless\)/)
+    expect(skill).toMatch(/page: "next"/)
+    expect(skill).toMatch(/atEnd/)
+    expect(skill).toMatch(/tab: "new"/)
+  })
+  it('explains every headless reason an agent can be handed', () => {
+    for (const why of ['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout']) expect(skill).toContain(why)
+    expect(skill).toContain('launched')
+  })
+})

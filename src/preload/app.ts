@@ -6,7 +6,7 @@ import type { AgentApplyPatch } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { HistoryEntry } from '../shared/history'
 import type { TabSnapshot } from '../shared/tabList'
-import type { HostInfo, LoadError, UpdateState } from '../shared/types'
+import type { HostInfo, LoadError, Settings, UpdateState } from '../shared/types'
 
 /** Wraps `ipcRenderer.on` so every subscriber gets an unsubscribe function. */
 function subscribe<T>(channel: string, cb: (v: T) => void): () => void {
@@ -122,6 +122,15 @@ const api: ObsrvApi = {
       ipcRenderer.removeListener(IPC.agentActivity, listener)
     }
   },
+  onAgentConsentRequest: cb => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.agentConsentRequest, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.agentConsentRequest, listener)
+    }
+  },
+  agentConsent: allow => ipcRenderer.send(IPC.agentConsent, allow === true),
+  onSettingsChanged: cb => subscribe<Settings>(IPC.settingsChanged, cb),
   getUpdate: () => ipcRenderer.invoke(IPC.getUpdate),
   checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
   openRelease: () => ipcRenderer.invoke(IPC.openRelease),

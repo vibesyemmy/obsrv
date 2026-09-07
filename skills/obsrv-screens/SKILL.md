@@ -112,50 +112,37 @@ the PR rather than a folder of PNGs; it returns the path and a per-screen
 summary. It stays headless: a batch over a matrix should not commandeer the
 window.
 
-## Driving the visible app
+## Review (live)
 
-If the Obsrv desktop app is open with "Agent control" on (toolbar toggle),
-the tools follow it: `obsrv_snap` drives the visible window and the user
-watches; `obsrv_audit`, `obsrv_lint` and `obsrv_inspect` measure the page in
-front, on the screen, text scale and panel in force, in whatever state you
-drove it into (scrolled, a menu open, text at 150%) — `mode: 'headless'`
-forces a fresh load instead. `obsrv_drive` flips URL/preset/profile/panes,
-scrolls, clicks, pans, throttles, blends the onion skin, and highlights, so
-you can walk the user through what you found. No app means the usual
-headless render. One Obsrv runs per profile: a second launch hands over to
+The user installed a window to watch. Review in it.
+
+1. **One tab per screen.** `obsrv_drive { tab: "new", url, preset: "laptop-768", capture: "pane" }` — the app launches if it is not running (`launched: true` on that call; say so once). Repeat with `android-65`, `1080p-24`, whatever the question is about. Leave the tabs open; the user flips through them afterwards.
+2. **Walk each page a screenful at a time.** `obsrv_drive { scroll: { page: "next" }, capture: "pane" }` until the result says `atEnd: true`. Look at each capture as it comes. No arithmetic, no page height.
+3. **Point at what you mean.** `obsrv_drive { highlight: { …rect, space: "page" } }` with an `obsrv_audit` finding's rect or `obsrv_inspect`'s `pageRect`, while you talk about it. A rect below the fold needs a scroll first, in the same call — `{ scroll: { x: 0, y: rect.y - 200 }, highlight: { ...rect, space: "page" }, capture: "pane" }` — the marker stays up until the shutter fires, so it lands in the PNG. `obsrv_audit`, `obsrv_lint`, `obsrv_inspect` in `mode: "auto"` measure the tab in front.
+4. **Switch with `tab: <id>`** (ids from any result's `tabs`); `closeTab: "current"` when a tab has served.
+
+Captures: `capture: "window"` is the whole app as the user sees it; `"pane"`
+is just the target pane, cropped (what steps 1-3 above use); `"raster"` is
+the target's own frame at device pixels with no scaling — the one for
+judging type. Each answers `settled` and, when false, `unsettledReason` (see
+Caveats). One Obsrv runs per profile: a second launch hands the window to
 the first, so what you drive is what the user sees.
 
-To see anything below the fold, scroll and capture in the **same**
-`obsrv_drive` call — `{ scroll: { x: 0, y: 1500 }, capture: 'pane' }`. That
-tool never navigates unless you pass `url`, so the scroll is still in place
-when the PNG is taken. Reaching for `obsrv_snap` after a scroll works only
-when the app is already on that exact URL (it answers `navigated: false`);
-snapping a different URL is a fresh load and lands back at the top.
+If a result says `mode: "headless"`, read `why` and tell the user in plain words:
+- `requested` — you asked for headless.
+- `headless-only` — `fullPage` (obsrv_snap only) or custom width/height: things the live app cannot do.
+- `no-display` — nowhere for a window (SSH, CI, `OBSRV_HEADLESS=1`).
+- `declined` — the user turned agent control off in the app (the AGENT chip, or Settings → Agent control). Ask them; do not retry.
+- `launch-timeout` — the app was launched and did not answer in time. It may still be starting; the next call usually finds it.
 
-To point the user at a finding, pass its `rect` to `highlight` as it came,
-with `space: 'page'` — `{ scroll: { x: 0, y: finding.rect.y - 200 },
-highlight: { ...finding.rect, space: 'page' }, capture: 'pane' }` — and the
-app maps it through the scroll, text scale and density. The result says
-`highlight: { drawn, pane }`; with a capture in the same call the marker
-stays up until the shutter has fired, so it is in the PNG. `obsrv_inspect`
-answers with `pageRect` in the same space.
+`obsrv_report` and `obsrv_diff` are headless always — they never drive the app, and their output has no `mode` or `why` field at all, so there is nothing to check on them.
 
-Captures: `'window'` is the app as the user sees it, both panes; `'pane'` is
-the target pane as shown (minified in Fit); `'raster'` is the target's own
-frame at device pixels without changing the view — the one for judging type.
-Each answers `settled` and, when false, `unsettledReason`: `animating` means
-the page keeps painting steadily and the capture was taken after about two
-seconds rather than the full wait; waiting longer would not help. On an
-animating page the onion skin blends two frames, and the result says so.
-`status.loading` says whether a load is still in flight; `reload` answers
-once it has finished.
+## Deliver (headless)
 
-The app can hold several sessions open as tabs, and every tool acts on the
-one in **front** — resolved per command, so the user can move it under you.
-Each live result names the tab (`tabId`, `tabIndex`); if you drive over
-several calls and the state has to hold, check that `tabId` did not change
-rather than assuming it. You cannot open, close or switch tabs — ask the
-user.
+`obsrv_report` is the artefact: a matrix of screens, full-page bands, audit
+and lint, one HTML page. It never drives the window — deliver it, do not
+narrate it. `obsrv_snap { fullPage: true }` for a whole-page raster;
+`obsrv_diff` for the 1x-vs-2x numbers. All headless by design.
 
 ## The loop that catches real regressions
 

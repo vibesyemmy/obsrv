@@ -700,8 +700,39 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   font-size: 10px;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  background: transparent;
+  /* `font: inherit` would win over `font-size: 10px` above (it's a shorthand,
+     declared later, and resets font-size to inherit too) — undoing the one
+     thing this rule is for. Only stop the UA's button font: family and
+     weight. Line-height also needs restoring — a <button> gets the UA form-
+     control `line-height: normal`, which a <span> never had, and that alone
+     changes the chip's height (verified: `normal` renders 18px tall here vs.
+     14px/20px total with the inherited 1.4 line-height, matching the old
+     span). `text-align` and `margin` differ from a <span>'s too, but this
+     button's width always hugs its text, so neither one is visible. */
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  cursor: pointer;
 }
 .agent-activity.active { color: var(--chrome-0); background: var(--warn); border-color: var(--warn); }
+.agent-activity:hover { text-decoration: line-through; }
+
+/* The consent bar (Task 8): a second launch knocked while agent control is
+   off, and only the app can ask. Non-modal — it sits in flow under the
+   toolbar rather than over the panes, so it never steals focus from the page
+   underneath it. */
+.consent-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--warn-bg, rgba(255, 180, 0, 0.12));
+  border-bottom: 1px solid var(--warn);
+  font-size: 12px;
+}
+.consent-bar button { font: inherit; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--warn); background: transparent; cursor: pointer; }
+.consent-bar .consent-allow { background: var(--warn); color: var(--chrome-0); }
 
 /* Drawers sit beside the panes, never over them: the native WebContentsView is
    an OS-level overlay and would cover anything painted on top of it. */

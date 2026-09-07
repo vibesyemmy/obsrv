@@ -8,9 +8,13 @@ import {
   controlFileModeOk,
   defaultControlFilePath,
   isControlCommand,
+  isDeclinedStance,
+  isDisabledStance,
   parseClick,
   parseControlFile,
   parseControlStatus,
+  parseOpenTab,
+  parseTabId,
   orientationApplyError,
   panesApplyError,
   textScaleApplyError,
@@ -61,6 +65,45 @@ describe('parseControlFile', () => {
   ])('rejects %s', (_name, raw) => {
     expect(parseControlFile(raw)).toBeNull()
   })
+  it('reads a disabled stance: the app is running, control is off, there is nothing to call', () => {
+    const raw = JSON.stringify({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z' })
+    expect(parseControlFile(raw)).toEqual({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z' })
+  })
+  it('a disabled stance must name its process; without a pid nobody can tell it from a leftover', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false }))).toBeNull()
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 0 }))).toBeNull()
+  })
+  it('enabled: true is the same as no enabled at all — an older app writes none', () => {
+    expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, enabled: true }))).toEqual({ port: 49152, token: TOKEN })
+  })
+  it('enabled must be a boolean when present', () => {
+    expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, enabled: 'yes' }))).toBeNull()
+  })
+  // Finding 1 (final review): a disabled stance must say *why* control is
+  // off, since only an actual "Not now" answer may stop the MCP from trying
+  // again — see ControlStance's doc comment.
+  it('reads the declined marker: the user answered a consent bar "Not now"', () => {
+    const raw = JSON.stringify({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z', declined: true })
+    expect(parseControlFile(raw)).toEqual({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z', declined: true })
+  })
+  it('declined: false is the same as no declined at all — nobody has been asked', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242, declined: false }))).toEqual({ enabled: false, pid: 4242 })
+  })
+  it('an older app that predates the field writes none, and still parses as not-declined', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242 }))).toEqual({ enabled: false, pid: 4242 })
+  })
+  it('declined must be a boolean when present', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 4242, declined: 'yes' }))).toBeNull()
+  })
+  it('isDisabledStance tells the two shapes apart', () => {
+    expect(isDisabledStance({ enabled: false, pid: 1 })).toBe(true)
+    expect(isDisabledStance({ port: 49152, token: TOKEN })).toBe(false)
+  })
+  it('isDeclinedStance is true only for an actual decline', () => {
+    expect(isDeclinedStance({ enabled: false, pid: 1 })).toBe(false)
+    expect(isDeclinedStance({ enabled: false, pid: 1, declined: true })).toBe(true)
+    expect(isDeclinedStance({ port: 49152, token: TOKEN })).toBe(false)
+  })
 })
 
 describe('controlFileModeOk', () => {
@@ -105,20 +148,23 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the twenty-six commands', () => {
+  it('knows exactly the thirty commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
+      'activateTab',
       'audit',
       'back',
       'captureRaster',
       'captureTarget',
       'captureVisible',
       'click',
+      'closeTab',
       'focusWindow',
       'forward',
       'highlight',
       'inspect',
       'lint',
       'navigate',
+      'openTab',
       'panTo',
       'reload',
       'scroll',
@@ -133,6 +179,7 @@ describe('command validation', () => {
       'setViewMode',
       'setVision',
       'status',
+      'tabs',
     ])
     expect(isControlCommand('status')).toBe(true)
     expect(isControlCommand('click')).toBe(true)
@@ -292,6 +339,7 @@ describe('parseControlStatus', () => {
     tabIndex: 2,
     visionType: 'none',
     visionSeverity: 1,
+    tabs: [],
   }
   it('accepts a full status', () => {
     expect(parseControlStatus(good)).toEqual(good)
@@ -545,5 +593,36 @@ describe('parseControlStatus loading', () => {
     expect(parseControlStatus(base)?.loading).toBe(false)
     expect(parseControlStatus({ ...base, loading: true })?.loading).toBe(true)
     expect(parseControlStatus({ ...base, loading: 'yes' })).toBeNull()
+  })
+})
+
+describe('tab commands', () => {
+  it('are control commands', () => {
+    for (const c of ['tabs', 'openTab', 'activateTab', 'closeTab']) expect(isControlCommand(c)).toBe(true)
+  })
+  it('parseOpenTab: optional url and preset, both checked', () => {
+    expect(parseOpenTab({})).toEqual({})
+    expect(parseOpenTab({ url: ' https://x.test ' })).toEqual({ url: 'https://x.test' })
+    expect(parseOpenTab({ preset: 'laptop-768' })).toEqual({ preset: 'laptop-768' })
+    expect(parseOpenTab({ preset: 'nope' })).toMatch(/preset/)
+    // The URL scheme allowlist is not this function's job: `navigate`'s own
+    // scheme check already lives in `controlServer.ts`, so `openTab` is
+    // checked the same way in the same place rather than a second pattern.
+    // `controlServer.ts` applies `urlSchemeError` itself after this returns —
+    // see the e2e test 'openTab refuses an unsupported URL scheme' in
+    // live-drive.spec.ts, which mirrors how `navigate`'s check is tested.
+    expect(parseOpenTab({ url: 'javascript:alert(1)' })).toEqual({ url: 'javascript:alert(1)' })
+  })
+  it('parseTabId: a non-empty string, or an error naming the shape', () => {
+    expect(parseTabId({ id: 'tab-3' })).toEqual({ id: 'tab-3' })
+    expect(parseTabId({})).toMatch(/id/)
+    expect(parseTabId({ id: '' })).toMatch(/id/)
+  })
+  it('parseControlStatus carries tabs, and defaults to none for an older app', () => {
+    const base = { version: '1', url: 'https://x.test', presetId: 'p', profileId: 'r', viewMode: 'fit', mode: 'url' }
+    expect(parseControlStatus(base)?.tabs).toEqual([])
+    const tabs = [{ id: 'a', url: 'https://x.test', title: 'X', presetId: 'p', active: true }]
+    expect(parseControlStatus({ ...base, tabs })?.tabs).toEqual(tabs)
+    expect(parseControlStatus({ ...base, tabs: [{ id: 1 }] })).toBeNull()
   })
 })

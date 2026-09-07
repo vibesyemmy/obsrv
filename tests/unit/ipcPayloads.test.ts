@@ -378,6 +378,7 @@ describe('parseScrollReport', () => {
       y: 1500,
       scroller: 'element',
       warnings: ['hm'],
+      atEnd: false,
     })
   })
   it('defaults missing warnings to an empty list and drops non-strings', () => {
@@ -391,6 +392,24 @@ describe('parseScrollReport', () => {
     ['an unknown scroller kind', { id: 1, x: 0, y: 0, scroller: 'window' }],
   ])('rejects %s', (_name, raw) => {
     expect(parseScrollReport(raw)).toBeNull()
+  })
+})
+
+describe('parseScrollRequest: page form', () => {
+  it('accepts page alone, with placeholder offsets', () => {
+    expect(parseScrollRequest({ page: 'next' })).toEqual({ x: 0, y: 0, page: 'next' })
+    expect(parseScrollRequest({ page: 'bottom', scrollSelector: 'main' })).toEqual({ x: 0, y: 0, page: 'bottom', selector: 'main' })
+  })
+  it('rejects an unknown page and a page beside offsets', () => {
+    expect(parseScrollRequest({ page: 'up' })).toMatch(/page/)
+    expect(parseScrollRequest({ page: 'next', x: 10, y: 10 })).toMatch(/either/)
+  })
+})
+
+describe('parseScrollReport: atEnd', () => {
+  it('reads atEnd, defaulting to false for an older preload', () => {
+    expect(parseScrollReport({ id: 1, x: 0, y: 700, scroller: 'root', warnings: [], atEnd: true })).toMatchObject({ atEnd: true })
+    expect(parseScrollReport({ id: 1, x: 0, y: 700, scroller: 'root', warnings: [] })).toMatchObject({ atEnd: false })
   })
 })
 

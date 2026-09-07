@@ -26,7 +26,7 @@ import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMes
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
-import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
+import type { HostInfo, Orientation, ScrollReport, ScrollRequest, Settings, UpdateState } from '../shared/types'
 import { SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
@@ -35,6 +35,36 @@ import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
+
+/**
+ * Hooks `index.ts` calls into this module's setup closure. `second-instance`
+ * is registered in `index.ts` before the window exists, and the control
+ * server (which decides whether there is anything to ask) lives in here —
+ * so `index.ts` calls through this rather than reaching into the closure
+ * itself. Reassigned once `registerIpc` has a `control` and a `win` to ask.
+ */
+export const hooks = {
+  secondInstance: (): void => {},
+}
+
+/**
+ * Test-only accessors, published on `__obsrv` by `testHooks.ts` under
+ * `OBSRV_TEST=1` (see `src/main/testHooks.ts`). `settings()` mirrors this
+ * module's in-memory copy; `persistedSettings()` re-reads the settings file
+ * straight off disk with the same loader the app boots with — the point of
+ * the consent spec is proving that "Allow for this session" writes nothing
+ * there, so it must not answer from memory. Both throw until `registerIpc`
+ * has a `settingsFile` to read, which happens before any test can observe
+ * them (registerIpc runs before `exposeForTests` in `index.ts`).
+ */
+export const testState = {
+  settings: (): Settings => {
+    throw new Error('testState.settings read before registerIpc initialised it')
+  },
+  persistedSettings: (): Settings => {
+    throw new Error('testState.persistedSettings read before registerIpc initialised it')
+  },
+}
 
 /** How long a driver's reload waits for the target's load to finish before answering anyway. */
 const RELOAD_WAIT_MS = 15_000
@@ -116,6 +146,11 @@ export function registerIpc(ctx: AppContext): () => void {
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
   tabs.maxTabs = settings.maxTabs
+  // See `testState`'s own comment: `persistedSettings` re-reads the file with
+  // the same loader rather than trusting the `settings` variable, which is
+  // exactly the thing a "nothing persisted" assertion must not trust either.
+  testState.settings = () => settings
+  testState.persistedSettings = () => loadSettings(settingsFile)
 
   // Only the app's own renderer may drive these channels. The native pane and
   // the target load third-party pages; neither has a preload that reaches
@@ -578,6 +613,7 @@ export function registerIpc(ctx: AppContext): () => void {
     await awaitViewportStable(s)
     const base: ScrollRequest = { x: req.x, y: req.y }
     if (req.selector !== undefined) base.selector = req.selector
+    if (req.page !== undefined) base.page = req.page
     if (!s.native.webContents.isDestroyed()) s.native.webContents.send(IPC.applyScroll, base)
     const wc = s.target.webContents
     if (wc.isDestroyed()) return null
@@ -1559,12 +1595,57 @@ export function registerIpc(ctx: AppContext): () => void {
       app.focus({ steal: true })
       win.focus()
     },
+    // The strip an agent sees: main's own mirror, the same one `getTabs`
+    // answers and `tabsChanged` publishes — never the renderer's uiState
+    // mirror, which only ever describes the tab in front.
+    tabs: () => {
+      const snap = tabs.snapshot()
+      return {
+        maxTabs: tabs.maxTabs,
+        tabs: snap.tabs.map(t => ({ id: t.id, url: t.url, title: t.title, presetId: t.presetId, active: t.id === snap.activeId })),
+      }
+    },
+    // Add *and* activate, exactly like the strip's own "new tab" button
+    // (`IPC.addTab` above): `add` alone leaves the session in the background,
+    // which is right for a restore but wrong for a tab an agent just asked
+    // for — it should be the one commands land on next.
+    openTab: () => {
+      const s = tabs.add()
+      if (!s) return null
+      tabs.activate(s.id)
+      return s.id
+    },
+    activateTab: id => {
+      if (!tabs.snapshot().tabs.some(t => t.id === id)) return false
+      tabs.activate(id)
+      return true
+    },
+    closeTab: id => {
+      const snap = tabs.snapshot()
+      if (!snap.tabs.some(t => t.id === id)) return { ok: false, error: `no tab ${id}; see \`tabs\`` }
+      // The manager itself opens a fresh blank tab rather than ever holding
+      // zero — right for a user closing their last tab by hand, wrong for an
+      // agent, who would see its close silently swapped for a blank page it
+      // never asked for. Refused here instead, before the manager ever sees it.
+      if (snap.tabs.length === 1) return { ok: false, error: 'the last tab cannot be closed; open another first' }
+      tabs.close(id)
+      return { ok: true, activeId: tabs.activeId }
+    },
     activity: () => {
       if (!win.isDestroyed()) win.webContents.send(IPC.agentActivity)
     },
   })
+  // Whether `hooks.secondInstance` actually asked the question this channel's
+  // answer would apply to. `agentConsent` means "the user answered" — a
+  // `true` with nothing outstanding isn't an answer to anything, so it must
+  // not be honoured (see the handler below).
+  let consentPending = false
   const applyAgentControl = (enabled: boolean): void => {
     if (enabled) {
+      // Agent control is on now by whatever route got here (this channel,
+      // the settings toggle, boot). Any question that was outstanding is
+      // moot; a later stray `true` must not be read as a fresh answer to it.
+      consentPending = false
       control.start().catch((e: unknown) => {
         log.error('agent-control server failed to start', e)
       })
@@ -1572,15 +1653,51 @@ export function registerIpc(ctx: AppContext): () => void {
       control.stop()
     }
   }
+  // A second launch — the MCP server trying to start the app because it found
+  // no live control — is the one moment the app can ask the user (spec §2c).
+  // Only while control is off: with it on, the knock has nothing to add.
+  hooks.secondInstance = () => {
+    if (control.running || win.isDestroyed()) return
+    consentPending = true
+    win.webContents.send(IPC.agentConsentRequest)
+  }
+  // Fire-and-forget, like every other chrome -> main channel here: a foreign
+  // sender is ignored rather than thrown at (see the sender-check note above
+  // `fromRenderer`/`assertRenderer` at the top of this function).
+  on(IPC.agentConsent, (e, allow: unknown) => {
+    if (!fromRenderer(e)) return
+    if (!consentPending) {
+      // No question outstanding: a `true` here isn't an answer, it's just a
+      // claim. Ignore it rather than opening the control server on say-so.
+      if (allow === true) log.warn('agentConsent(true) received with no consent request outstanding; ignored')
+      return
+    }
+    consentPending = false
+    if (allow !== true) {
+      // Not now: record the actual decline, distinct from the plain
+      // "control is off, nobody has asked" stance already on disk — only
+      // this marker tells a waiting MCP to stop launching and stop
+      // re-asking (spec §2c/§2d; see the final-review fix for Finding 1).
+      control.writeDeclined()
+      return
+    }
+    // For this session, exactly as OBSRV_AGENT_CONTROL=1: in memory only, so
+    // the toolbar reflects it and toggling off later works normally; nothing
+    // persists until the next settings write.
+    settings = { ...settings, agentControl: true }
+    applyAgentControl(true)
+    if (!win.isDestroyed()) win.webContents.send(IPC.settingsChanged, settings)
+  })
   // OBSRV_AGENT_CONTROL=1 force-enables the server for this session (the
   // e2e harness uses it). It flips the in-memory setting so the toolbar
   // toggle reflects reality and toggling off works normally; nothing is
   // persisted until the next settings write.
   if (process.env.OBSRV_AGENT_CONTROL === '1') settings = { ...settings, agentControl: true }
   if (settings.agentControl) applyAgentControl(true)
-  // The discovery file must not outlive the process; `stop` removes it
+  else control.writeDisabled()
+  // The discovery file must not outlive the process; `shutdown` removes it
   // synchronously before quit proceeds.
-  app.on('will-quit', () => control.stop())
+  app.on('will-quit', () => control.shutdown())
 
   // --- image mode -----------------------------------------------------------
   // The only file read main does for the renderer: a design export dropped on

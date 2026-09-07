@@ -162,6 +162,15 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
   // strip's driven-tab marker, which lights on the same beat.
   const agentActive = useAgentActivity()
 
+  // The chip doubles as the off switch: one click turns agent control off,
+  // the same write the settings toggle makes.
+  const stopAgentControl = (): void => {
+    const current = useStore.getState().settings
+    const next = { ...current, agentControl: false }
+    useStore.getState().setSettings(next)
+    void window.obsrv.setSettings(next)
+  }
+
   // The toggle owns the whole flip: optimistic store update so the button
   // answers immediately, rolled back if main refuses the write (mirrors the
   // SettingsPanel commit path, minus its queue — a boolean cannot interleave).
@@ -476,7 +485,17 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
         {/* Agent control opens a loopback server, so it is never silently on:
             the chip persists while enabled and brightens for ~3s of activity. */}
         <span className="screen-tail">
-          {agentControl && <span className={`agent-activity${agentActive ? ' active' : ''}`}>AGENT</span>}
+          {agentControl && (
+            <button
+              type="button"
+              className={`agent-activity${agentActive ? ' active' : ''}`}
+              title="An agent can drive this window. Click to stop."
+              aria-label="Stop agent control"
+              onClick={stopAgentControl}
+            >
+              AGENT
+            </button>
+          )}
           {/* The drawer's toggle, beside the drawer it opens: the right edge
               of the row is where the panel appears. */}
           <button

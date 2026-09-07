@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
+  PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
   buildDiffArgs,
@@ -12,6 +12,9 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  cannotLaunchReason,
+  liveModeError,
+  planLive,
   planSnapPath,
   shouldInlineImage,
   stderrTail,
@@ -171,58 +174,81 @@ describe('stderrTail', () => {
   })
 })
 
+const DESKTOP = { HOME: '/Users/x' } as NodeJS.ProcessEnv
+
+describe('cannotLaunchReason', () => {
+  it('names the condition, or null when a launch could put a window on screen', () => {
+    expect(cannotLaunchReason(DESKTOP, 'darwin')).toBeNull()
+    expect(cannotLaunchReason({ ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toMatch(/SSH/)
+    expect(cannotLaunchReason({ ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toMatch(/OBSRV_TEST/)
+    expect(cannotLaunchReason({ ...DESKTOP }, 'linux')).toMatch(/DISPLAY/)
+    expect(cannotLaunchReason({ ...DESKTOP, DISPLAY: ':0' }, 'linux')).toBeNull()
+    expect(cannotLaunchReason({ ...DESKTOP, WAYLAND_DISPLAY: 'wayland-0' }, 'linux')).toBeNull()
+  })
+})
+
+describe('planLive', () => {
+  it('the caller asked: headless, requested', () => {
+    expect(planLive('headless', [], [], DESKTOP, 'darwin')).toEqual({ path: 'headless', why: 'requested', notes: [] })
+  })
+  it('a headless-only operation wins over everything but a request', () => {
+    expect(planLive('auto', ['fullPage is headless-only'], ['x'], DESKTOP, 'darwin')).toEqual({
+      path: 'headless',
+      why: 'headless-only',
+      notes: ['fullPage is headless-only'],
+    })
+    // Even under mode: live — the operation cannot be done live at all.
+    expect(planLive('live', ['fullPage is headless-only'], [], DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
+  })
+  it('OBSRV_HEADLESS=1 wins before discovery, named no-display', () => {
+    const p = planLive('auto', [], [], { ...DESKTOP, OBSRV_HEADLESS: '1' }, 'darwin')
+    expect(p).toMatchObject({ path: 'headless', why: 'no-display' })
+    expect(p.notes.join(' ')).toMatch(/OBSRV_HEADLESS/)
+  })
+  it('an SSH session, a missing DISPLAY, or OBSRV_TEST do not refuse an already-reachable app', () => {
+    // These describe whether a launch could put a window on screen, not whether an
+    // already-open, already-reachable app can be driven — so planLive stays live.
+    // (Critical fix: previously these were checked here and forced headless too early.)
+    expect(planLive('auto', [], [], { ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toEqual({ path: 'live', notes: [] })
+    expect(planLive('auto', [], [], { ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toEqual({ path: 'live', notes: [] })
+    expect(planLive('auto', [], [], DESKTOP, 'linux')).toEqual({ path: 'live', notes: [] })
+    // Even under an explicit mode: "live" request, none of these are refused.
+    expect(planLive('live', [], [], { ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toEqual({ path: 'live', notes: [] })
+  })
+  it('otherwise live, carrying the live-only notes', () => {
+    expect(planLive('auto', [], ['waitMs is ignored in live mode'], DESKTOP, 'darwin')).toEqual({ path: 'live', notes: ['waitMs is ignored in live mode'] })
+  })
+})
+
 describe('planSnapPath', () => {
-  it('headless mode never probes and carries no notes', () => {
-    expect(planSnapPath({}, 'headless', true)).toEqual({ path: 'headless', notes: [] })
-    expect(planSnapPath({ fullPage: true }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
+  it('custom dims and fullPage are headless-only, with the reason named', () => {
+    expect(planSnapPath({ fullPage: true }, 'auto', DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
+    expect(planSnapPath({ width: 800, height: 600 }, 'auto', DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
   })
-  it('auto without a reachable app is a silent headless fallback', () => {
-    expect(planSnapPath({}, 'auto', false)).toEqual({ path: 'headless', notes: [] })
+  it('a plain preset snap is live, and waitMs is noted as ignored', () => {
+    expect(planSnapPath({ waitMs: 500 }, 'auto', DESKTOP, 'darwin')).toEqual({ path: 'live', notes: ['waitMs is headless-only and was ignored in live mode.'] })
   })
-  it('auto with a reachable app goes live', () => {
-    expect(planSnapPath({}, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  it('capture: pane on a headless path is noted', () => {
+    const p = planSnapPath({ capture: 'pane' }, 'headless', DESKTOP, 'darwin')
+    expect(p).toMatchObject({ path: 'headless', why: 'requested' })
+    expect(p.notes).toContain(PANE_CAPTURE_HEADLESS_NOTE)
   })
-  it('live without a reachable app is an actionable error, never a fallback', () => {
-    const r = planSnapPath({}, 'live', false)
-    expect(r).toHaveProperty('error')
-    expect((r as { error: string }).error).toBe(APP_NOT_REACHABLE)
-    expect(APP_NOT_REACHABLE).toMatch(/Agent control/)
+})
+
+// Finding 4 (final review): `mode: "live"` errors must blame the operation,
+// not the app, when the app was never the problem — a `fullPage` snap or a
+// custom-dimensions call is `headless-only` regardless of whether the app is
+// running at all.
+describe('liveModeError', () => {
+  it('a headless-only operation says the call cannot run live, not that the app is unavailable', () => {
+    const msg = liveModeError('headless-only', ['fullPage is headless-only; rendered headlessly instead of driving the app.'])
+    expect(msg).toMatch(/^mode: "live" cannot run this call:/)
+    expect(msg).not.toMatch(/live app is not available/)
+    expect(msg).toContain('fullPage is headless-only')
   })
-  it('custom dims fall back to headless with a note, even under explicit live', () => {
-    for (const input of [{ width: 800, height: 600 }, { deviceScaleFactor: 2 }, { diagonalInches: 14 }]) {
-      for (const mode of ['auto', 'live'] as const) {
-        const r = planSnapPath(input, mode, true)
-        expect(r).toMatchObject({ path: 'headless' })
-        expect((r as { notes: string[] }).notes.join(' ')).toMatch(/custom dimensions/)
-      }
-    }
-  })
-  it('fullPage falls back to headless with a note', () => {
-    const r = planSnapPath({ fullPage: true }, 'auto', true)
-    expect(r).toMatchObject({ path: 'headless' })
-    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/fullPage/)
-  })
-  it('waitMs stays live but is noted as ignored', () => {
-    const r = planSnapPath({ waitMs: 500 }, 'auto', true)
-    expect(r).toMatchObject({ path: 'live' })
-    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/waitMs/)
-  })
-  it("capture: 'pane' rides the live path silently", () => {
-    expect(planSnapPath({ capture: 'pane' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
-  })
-  it("capture: 'pane' is noted as ignored on every headless path", () => {
-    for (const r of [
-      planSnapPath({ capture: 'pane' }, 'headless', true),
-      planSnapPath({ capture: 'pane' }, 'auto', false),
-      planSnapPath({ capture: 'pane', fullPage: true }, 'auto', true),
-    ]) {
-      expect(r).toMatchObject({ path: 'headless' })
-      expect((r as { notes: string[] }).notes.join(' ')).toMatch(/capture/)
-    }
-  })
-  it("capture: 'window' adds no note anywhere", () => {
-    expect(planSnapPath({ capture: 'window' }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
-    expect(planSnapPath({ capture: 'window' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  it.each(['requested', 'no-display', 'declined', 'launch-timeout'] as const)('%s still blames the app being unavailable', why => {
+    const msg = liveModeError(why, ['some note'])
+    expect(msg).toBe(`mode: "live" but the live app is not available (${why}): some note`)
   })
 })
 

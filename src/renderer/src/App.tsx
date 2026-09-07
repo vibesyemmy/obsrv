@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../shared/api'
 import { isBlankUrl } from '../../shared/url'
+import { ConsentBar } from './components/ConsentBar'
 import { DropZone } from './components/DropZone'
 import { Fatal } from './components/Fatal'
 import { ImagePane } from './components/ImagePane'
@@ -143,6 +144,13 @@ export function App() {
       window.obsrv.onTabsChanged(syncTabs),
       window.obsrv.onUpdateStatus(setUpdate),
       window.obsrv.onHistoryChanged(setHistory),
+      // Main's settings changed without a renderer-initiated write — today
+      // that is only the consent bar's "Allow for this session", which flips
+      // `agentControl` in memory and reports it here rather than trusting the
+      // renderer's own optimistic update to ever land (a second knock's bar
+      // was raced by main directly, with no renderer write to be optimistic
+      // about).
+      window.obsrv.onSettingsChanged(setSettings),
     ]
     return () => {
       for (const off of offs) off()
@@ -406,6 +414,7 @@ export function App() {
       style={{ '--split': split, '--pane-min': `${MIN_PANE_PX}px` } as CSSProperties}
     >
       <Toolbar drawer={drawer} onTogglePanel={toggle('panel')} onToggleSettings={toggle('settings')} />
+      <ConsentBar />
       <DropZone onImage={onImage} />
       <div className="body">
         {/* The split reaches the layout as a custom property rather than a

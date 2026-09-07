@@ -341,23 +341,99 @@ export { ALLOWED_URL_SCHEMES, urlSchemeError } from '../shared/url'
 
 export type SnapMode = 'auto' | 'headless' | 'live'
 
-export interface SnapPathPlan {
-  path: 'live' | 'headless'
-  /** Human notes about inputs that changed the path or were ignored on it. */
+/** Why a call went headless. Named in every result so an agent can say so. */
+export type HeadlessWhy = 'requested' | 'headless-only' | 'no-display' | 'declined' | 'launch-timeout'
+
+export interface LivePlan {
+  path: 'live'
+  /** Inputs that are ignored on the live path, one note each. */
+  notes: string[]
+}
+export interface HeadlessPlan {
+  path: 'headless'
+  why: HeadlessWhy
   notes: string[]
 }
 
-export const APP_NOT_REACHABLE =
-  'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
-  '(or pass mode: "headless" to render without it).'
+/** How long a launched app gets to come up before the call goes headless. */
+export const LAUNCH_TIMEOUT_MS = 12_000
+
+export const DECLINED_NOTE =
+  'the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT chip or Settings → Agent control) if you need the live app.'
 
 export const PANE_CAPTURE_HEADLESS_NOTE =
   "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored."
 
 /**
+ * The error for an explicit `mode: "live"` that did not run live. `headless-
+ * only` means the *operation* — `fullPage`, custom dimensions — cannot be
+ * done live at all, regardless of the app; saying "the live app is not
+ * available" there blames the wrong thing (Finding 4, final review). Every
+ * other `why` really is about the app being unreachable, and keeps that
+ * wording.
+ */
+export function liveModeError(why: HeadlessWhy, notes: string[]): string {
+  const detail = notes.join(' ')
+  return why === 'headless-only'
+    ? `mode: "live" cannot run this call: ${detail}`
+    : `mode: "live" but the live app is not available (${why}): ${detail}`
+}
+
+/**
+ * Whether a launch attempt could ever put a window on screen. This gates
+ * *launching* an app that is not already running — never driving one that
+ * is already up and reachable. A launch where no window could appear would
+ * hang on a missing display and burn the whole timeout to learn nothing.
+ * `OBSRV_TEST=1` belongs here for a second, independent reason: under the
+ * e2e harness the MCP must never launch a real Obsrv against the
+ * developer's own profile, even on a machine where a window could
+ * technically appear.
+ *
+ * Consulted only by `ensureLive` (Task 5), and only on the branch where it
+ * is about to launch — never by `planLive`, which must not refuse an
+ * already-reachable, already-visible app just because the calling shell
+ * happens to be over SSH or running under the test harness.
+ */
+export function cannotLaunchReason(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  if (env.OBSRV_TEST === '1') return 'OBSRV_TEST=1 is set (the e2e harness must never launch a real Obsrv)'
+  if (env.SSH_CONNECTION !== undefined && env.SSH_CONNECTION !== '') return 'this is an SSH session'
+  if (platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) return 'neither DISPLAY nor WAYLAND_DISPLAY is set'
+  return null
+}
+
+/**
+ * The reasons not to try the live path that are knowable up front, checked
+ * in order: an explicit request for headless, an operation that cannot be
+ * done live at all, and `OBSRV_HEADLESS=1` — the user's own "never touch
+ * the app" opt-out, which must win before anything discovers whether the
+ * app is reachable. `HeadlessWhy` has five members in total; `declined` and
+ * `launch-timeout` are runtime outcomes only `ensureLive` can produce, once
+ * it has actually tried to reach or launch the app, so this pure function
+ * never returns them. Conditions that only say "a window cannot be
+ * *launched* here" (SSH, no DISPLAY/WAYLAND_DISPLAY, OBSRV_TEST) live in
+ * `cannotLaunchReason` instead, so they never block driving an app that is
+ * already open and reachable.
+ */
+export function planLive(
+  mode: SnapMode,
+  headlessOnly: string[],
+  liveNotes: string[],
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): LivePlan | HeadlessPlan {
+  if (mode === 'headless') return { path: 'headless', why: 'requested', notes: [] }
+  if (headlessOnly.length > 0) return { path: 'headless', why: 'headless-only', notes: headlessOnly }
+  if (env.OBSRV_HEADLESS === '1') {
+    return { path: 'headless', why: 'no-display', notes: ['no display: OBSRV_HEADLESS=1 is set; rendered headlessly.'] }
+  }
+  return { path: 'live', notes: liveNotes }
+}
+
+/**
  * Decides whether an `obsrv_snap` call drives the visible app or renders
- * headlessly (spec §14 "Live drive"), given whether a control-enabled app
- * answered discovery. Documented calls, exercised in tests/unit/mcpLib.test.ts:
+ * headlessly (spec §14 "Live drive"). Pure — it does not know whether an app
+ * is actually reachable; the caller reconciles `path: 'live'` against that.
+ * Documented calls, exercised in tests/unit/mcpLib.test.ts:
  *
  * - custom dims (width/height/dsf/diagonal) always render headlessly — the
  *   live path drives the app's preset table only — with a note, even under
@@ -368,31 +444,25 @@ export const PANE_CAPTURE_HEADLESS_NOTE =
  *   note (the live capture settles on the app's own committed navigation).
  * - `capture: 'pane'` shapes the live capture only; any headless outcome
  *   notes that it was ignored.
- * - `mode: 'live'` with no reachable app is an error, never a silent
- *   headless fallback — the caller asked to watch.
  */
 export function planSnapPath(
   input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs' | 'capture'>,
   mode: SnapMode,
-  liveReachable: boolean,
-): SnapPathPlan | { error: string } {
-  const paneNote = input.capture === 'pane' ? [PANE_CAPTURE_HEADLESS_NOTE] : []
-  if (mode === 'headless') return { path: 'headless', notes: paneNote }
-  if (!liveReachable) {
-    if (mode === 'live') return { error: APP_NOT_REACHABLE }
-    return { path: 'headless', notes: paneNote }
-  }
-  const notes: string[] = []
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): LivePlan | HeadlessPlan {
+  const headlessOnly: string[] = []
   const custom =
     input.width !== undefined ||
     input.height !== undefined ||
     input.deviceScaleFactor !== undefined ||
     input.diagonalInches !== undefined
-  if (custom) notes.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
-  if (input.fullPage) notes.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
-  if (notes.length > 0) return { path: 'headless', notes: [...notes, ...paneNote] }
-  if (input.waitMs !== undefined) notes.push('waitMs is headless-only and was ignored in live mode.')
-  return { path: 'live', notes }
+  if (custom) headlessOnly.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
+  if (input.fullPage) headlessOnly.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
+  const liveNotes = input.waitMs !== undefined ? ['waitMs is headless-only and was ignored in live mode.'] : []
+  const plan = planLive(mode, headlessOnly, liveNotes, env, platform)
+  if (plan.path === 'headless' && input.capture === 'pane') plan.notes.push(PANE_CAPTURE_HEADLESS_NOTE)
+  return plan
 }
 
 /**

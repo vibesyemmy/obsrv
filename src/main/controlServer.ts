@@ -13,6 +13,8 @@ import {
   isControlCommand,
   parseClick,
   parseHighlight,
+  parseOpenTab,
+  parseTabId,
   pixelExactApplyError,
   presetApplyError,
   profileApplyError,
@@ -27,6 +29,7 @@ import {
   type AgentApplyPatch,
   type AgentClick,
   type ControlStatus,
+  type ControlTab,
   pageRectToPane,
   type TargetView,
 } from '../shared/control'
@@ -64,9 +67,16 @@ const MAX_BODY_BYTES = 64 * 1024
 const APPLY_WAIT_MS = 2_000
 const APPLY_POLL_MS = 25
 
+/**
+ * What `status` reports minus the tab list — `tabs()` below is that list's
+ * one source of truth (the `tabs` command reuses it verbatim), so `status`'s
+ * own dep does not build it a second time; `route` appends it when replying.
+ */
+type StatusReport = Omit<ControlStatus, 'tabs'>
+
 export interface ControlDeps {
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
-  status(): ControlStatus
+  status(): StatusReport
   /** The same both-panes load `IPC.navigate` performs; resolves with the applied URL. */
   navigate(url: string): Promise<string>
   /** Forwards a validated patch to the renderer store (toolbar-equivalent apply). */
@@ -118,6 +128,14 @@ export interface ControlDeps {
    * `obsrv lint` judges a headless load. Null when the page did not answer.
    */
   lint(req: LintRequest): Promise<LiveLint | null>
+  /** The strip as the user sees it, and the cap. */
+  tabs(): { tabs: ControlTab[]; maxTabs: number }
+  /** Opens a tab and brings it to the front; null at the cap. */
+  openTab(): string | null
+  /** Brings a tab to the front; false when no tab has that id. */
+  activateTab(id: string): boolean
+  /** Closes a tab; refuses the last one. */
+  closeTab(id: string): { ok: true; activeId: string } | { ok: false; error: string }
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
 }
@@ -189,11 +207,48 @@ export class ControlServer {
   }
 
   /**
-   * Stops the server and removes the discovery file. Synchronous on purpose:
-   * the quit path must not race the process teardown, and the file — the
-   * part that outlives the process — goes first.
+   * The running app's stance while control is off and nobody has been asked
+   * anything: discoverable, not callable. Written at boot (the default),
+   * and by the chip's Stop and the settings toggle — all of them turn
+   * control off without answering any consent bar, so a later launch
+   * attempt must still be free to knock (§2c) rather than being silently
+   * refused as though the user had said "Not now" (see `writeDeclined`).
+   */
+  writeDisabled(): void {
+    rmSync(this.file, { force: true })
+    writeFileSync(this.file, JSON.stringify({ enabled: false, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
+  }
+
+  /**
+   * The running app's stance once the user has actually answered a consent
+   * bar with "Not now" (spec §2c/§2d). Distinct from `writeDisabled`: only
+   * this stance tells `ensureLive` (src/mcp/control.ts) to stop launching
+   * and stop re-asking until control is turned back on or the app quits.
+   */
+  writeDeclined(): void {
+    rmSync(this.file, { force: true })
+    writeFileSync(this.file, JSON.stringify({ enabled: false, pid: process.pid, startedAt: STARTED_AT, declined: true }), { mode: 0o600 })
+  }
+
+  /**
+   * Stops the server. The file is not removed but rewritten as a disabled
+   * stance: a client that finds it knows the app is up and the user turned
+   * control off, and asks in the app rather than launching a second one.
+   * Synchronous on purpose, like `shutdown`.
    */
   stop(): void {
+    const server = this.server
+    this.server = null
+    this.token = ''
+    if (server) {
+      server.closeAllConnections()
+      server.close()
+    }
+    this.writeDisabled()
+  }
+
+  /** Quit: the file must not outlive the process. */
+  shutdown(): void {
     const server = this.server
     this.server = null
     this.token = ''
@@ -252,7 +307,45 @@ export class ControlServer {
 
     switch (command) {
       case 'status':
-        return reply(200, { ok: true, ...this.deps.status() })
+        return reply(200, { ok: true, ...this.deps.status(), tabs: this.deps.tabs().tabs })
+
+      case 'tabs':
+        return reply(200, { ok: true, ...this.deps.tabs() })
+
+      case 'openTab': {
+        const req = parseOpenTab(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        // The same allowlist `navigate` applies, checked the same way in the
+        // same place: `navigate`'s scheme check already lives here, so
+        // `openTab` reuses that pattern instead of a second one, applying it
+        // here on the url `parseOpenTab` already validated for shape.
+        if (req.url !== undefined) {
+          const bad = urlSchemeError(req.url)
+          if (bad) return reply(400, { error: bad })
+        }
+        const id = this.deps.openTab()
+        if (id === null) return reply(409, { error: `the app is at its tab limit (${this.deps.tabs().maxTabs}); close one first` })
+        // The new tab is in front now, so the ordinary apply/navigate paths
+        // land on it exactly as they would for a command with no payload.
+        if (req.preset !== undefined) this.deps.apply({ presetId: req.preset })
+        if (req.url !== undefined) await this.deps.navigate(req.url)
+        return reply(200, { ok: true, id })
+      }
+
+      case 'activateTab': {
+        const req = parseTabId(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        if (!this.deps.activateTab(req.id)) return reply(404, { error: `no tab ${req.id}; see \`tabs\`` })
+        return reply(200, { ok: true, id: req.id })
+      }
+
+      case 'closeTab': {
+        const req = parseTabId(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        const r = this.deps.closeTab(req.id)
+        if (!r.ok) return reply(409, { error: r.error })
+        return reply(200, { ok: true, closed: req.id, active: r.activeId })
+      }
 
       case 'navigate': {
         const url = payload.url
@@ -376,6 +469,7 @@ export class ControlServer {
           ok: true,
           scrolled: { x: result.x, y: result.y },
           scroller: result.scroller,
+          atEnd: result.atEnd,
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
         })
       }
@@ -475,12 +569,12 @@ export class ControlServer {
    * a page, confirm that it is back or on its way too; the apply budget
    * bounds the wait as before.
    */
-  private pageBack(): (s: ControlStatus) => boolean {
+  private pageBack(): (s: StatusReport) => boolean {
     const had = this.deps.status().url !== ''
     return s => !had || s.url !== '' || s.loading
   }
 
-  private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: ControlStatus) => boolean): Promise<Reply> {
+  private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: StatusReport) => boolean): Promise<Reply> {
     this.deps.apply(patch)
     const deadline = Date.now() + APPLY_WAIT_MS
     let applied = confirmed(this.deps.status())

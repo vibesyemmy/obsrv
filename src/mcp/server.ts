@@ -14,11 +14,9 @@ import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_M
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
-import { controlCall, discoverControl, type LiveApp } from './control'
+import { controlCall, ensureLive, type LiveApp } from './control'
 import {
-  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
-  PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
   buildLintArgs,
@@ -31,6 +29,8 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  liveModeError,
+  planLive,
   planSnapPath,
   shouldInlineImage,
   stderrTail,
@@ -226,8 +226,10 @@ const snapInputShape = {
     .enum(['auto', 'headless', 'live'])
     .optional()
     .describe(
-      'auto (default): drive the visible Obsrv app when it is open with Agent control on, else render headlessly. ' +
-        'live: require the app (error if unreachable). headless: never touch the app.',
+      'auto (default): drive the visible Obsrv app, launching it if it is not running; headless only when asked, ' +
+        'when the operation needs it (fullPage, custom dims), when there is no display, or when the user has turned ' +
+        'agent control off in the app — the result says which (`why`). live: require the app (error naming the reason). ' +
+        'headless: never touch the app.',
     ),
   capture: z
     .enum(['window', 'pane', 'raster'])
@@ -249,6 +251,15 @@ const snapOutputShape = {
   mode: z
     .enum(['headless', 'live'])
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (fullPage / custom dims), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   out: z.string().optional().describe('Headless only: PNG path the CLI wrote (same file as pngPath).'),
   preset: z.string().optional().describe('Headless only: preset id, or "custom" for width/height runs.'),
   cssWidth: z
@@ -434,6 +445,13 @@ const presetsOutputShape = {
 }
 
 const driveInputShape = {
+  tab: z
+    .string()
+    .optional()
+    .describe(
+      'Runs first. "new" opens a tab (with `url` and `preset` from this call, if given) and brings it to the front; a tab id ' +
+        'from `tabs` brings that tab to the front. Either way the user is looking at the tab everything else in this call acts on.',
+    ),
   url: z
     .string()
     .min(1)
@@ -505,8 +523,9 @@ const driveInputShape = {
   forward: z.boolean().optional().describe('true: history forward (native pane history; the target mirrors it).'),
   scroll: z
     .object({
-      x: z.number().min(0),
-      y: z.number().min(0),
+      x: z.number().min(0).optional(),
+      y: z.number().min(0).optional(),
+      page: z.enum(['next', 'prev', 'top', 'bottom']).optional(),
       scrollSelector: z
         .string()
         .min(1)
@@ -521,10 +540,12 @@ const driveInputShape = {
     })
     .optional()
     .describe(
-      'Scroll both panes to this absolute page offset in CSS px. Pages whose root cannot scroll (app shells with ' +
+      'Either { x, y } (absolute page CSS px) or { page: "next" | "prev" | "top" | "bottom" } (one screenful of ' +
+        'the scroller, or an end) — not both. Pages whose root cannot scroll (app shells with ' +
         '`html, body { overflow: hidden }` and an inner `overflow-y: auto` container) are handled: the largest ' +
-        'visible inner scroller is found and scrolled instead. Check `scrolled` in the result for the offset ' +
-        'actually reached — that is how you tell a real scroll from one that clamped.',
+        'visible inner scroller is found and scrolled instead. Check `scrolled` and `atEnd` in the result: ' +
+        '`scrolled` is the offset actually reached — that is how you tell a real scroll from one that clamped — ' +
+        'and `atEnd` true is where a screenful-by-screenful review stops.',
     ),
   panTo: z
     .object({ x: z.number().min(0), y: z.number().min(0) })
@@ -564,6 +585,13 @@ const driveInputShape = {
         'window. The capture waits for a preset resize to finish first, so the PNG matches the status beside it. ' +
         'This is how you see a scrolled or panned state — unlike obsrv_snap, nothing is navigated, so the scroll ' +
         'position survives. The PNG comes back inline when it is within the 1.5 MiB cap, and always as pngPath.',
+    ),
+  closeTab: z
+    .string()
+    .optional()
+    .describe(
+      'Runs last, after `capture`: "current" closes the tab in front, an id closes that one. The last tab is refused. ' +
+        'Photograph and close in one call.',
     ),
 }
 
@@ -615,6 +643,7 @@ const driveOutputShape = {
     .enum(['root', 'element'])
     .optional()
     .describe("Only when `scroll` was requested: 'root' if the document scrolled, 'element' if an inner scroll container did."),
+  atEnd: z.boolean().optional().describe('Only when `scroll` was requested: the scroller can go no further down.'),
   highlight: z
     .object({ drawn: z.boolean(), pane: z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).optional() })
     .optional()
@@ -631,6 +660,10 @@ const driveOutputShape = {
     .number()
     .optional()
     .describe('Only when `capture` was requested: captured height in device-independent px.'),
+  tabs: z
+    .array(z.object({ id: z.string(), url: z.string(), title: z.string(), presetId: z.string(), active: z.boolean() }))
+    .describe('Every open tab, and which is in front. Empty from an app older than tabs.'),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app.'),
 }
 
 // --- live drive --------------------------------------------------------------
@@ -748,7 +781,7 @@ async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane' | 'ras
  * reloading here would make `obsrv_drive { scroll }` followed by a snap of the
  * same page always capture the top. `navigated: false` says which happened.
  */
-async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Promise<CallToolResult> {
+async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   const warnings = [...notes]
   const before = app.status.url
@@ -833,6 +866,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[]): Pr
     navigated,
     warnings,
     pngPath,
+    ...(launched ? { launched: true } : {}),
   }
   return {
     content: [
@@ -861,22 +895,23 @@ server.registerTool(
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap; larger ` +
       `captures (typically fullPage) stay on disk with a note.\n\n` +
-      `Live drive: when the Obsrv desktop app is open with its "Agent control" toolbar toggle on, \`mode: "auto"\` ` +
-      `(the default) drives the *visible* app instead — the user watches the URL load and the preset flip, and the ` +
-      `returned PNG is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` ` +
-      `otherwise). \`capture: "pane"\` crops a live capture to just the target pane (headless renders ignore it ` +
-      `with a note). Custom width/height and \`fullPage\` always render headlessly (with a note); \`waitMs\` is ` +
-      `ignored in live mode. \`mode: "live"\` errors when the app is not reachable; \`mode: "headless"\` never ` +
-      `touches it. Note: although this tool is annotated read-only (it renders and captures), a live snap steers ` +
+      `Live drive: \`mode: "auto"\` (the default) drives the *visible* app — the user watches the URL load and the ` +
+      `preset flip — and launches the app if it is not running (\`launched: true\` on that call). The returned PNG ` +
+      `is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` otherwise, with ` +
+      `\`why\` naming the reason). \`capture: "pane"\` crops a live capture to just the target pane (headless ` +
+      `renders ignore it with a note). Custom width/height and \`fullPage\` always render headlessly (with a ` +
+      `note); \`waitMs\` is ignored in live mode. \`mode: "live"\` errors when the app is not reachable, naming ` +
+      `why; \`mode: "headless"\` never touches it. Note: although this tool is annotated read-only (it renders and ` +
+      `captures), a live snap steers ` +
       `the open app window — navigating it and flipping its preset in front of the user — as its means of ` +
       `capture; that visible steering is the point of live mode.\n\n` +
       `A live snap only navigates when the app is showing a different URL; the result's \`navigated\` says which ` +
       `happened. Navigating is a fresh load, so it starts at the top of the page — to photograph a scrolled or ` +
       `panned state, use obsrv_drive with \`capture\` instead, which never navigates unless you ask it to.\n\n` +
-      `Tabs: the app can hold several sessions open as tabs, and a live snap acts on the one in front — which the ` +
-      `user can change at any moment. The result names it (\`tabId\`, \`tabIndex\`); compare across calls if you ` +
-      `need to know it did not move. There is no way to name a different tab, and no way to open, close or ` +
-      `switch tabs — those are the user's.`,
+      `Tabs: the app can hold several sessions open as tabs, and a live snap always acts on the one in front — this ` +
+      `tool takes no parameter to pick a different one, and the user can change it at any moment. The result names ` +
+      `it (\`tabId\`, \`tabIndex\`); compare across calls if you need to know it did not move. Use obsrv_drive to ` +
+      `open, front or close tabs (its \`tab\` and \`closeTab\` inputs).`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -885,20 +920,17 @@ server.registerTool(
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
 
-    // The live path first (spec §14 "Live drive"): a reachable control-enabled
-    // app wins under auto, is required under live, and is never probed under
-    // headless. planSnapPath documents the fallback rules.
+    // The live path first (spec §14 "Live drive"): drives a reachable app,
+    // launches an absent one under auto/live, and is never attempted under
+    // headless. planSnapPath decides whether to try; ensureLive reconciles
+    // that against reality (an already-live app, a decline, or a launch).
     const requestedMode = input.mode ?? 'auto'
-    let liveNotes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const plan = planSnapPath(input, requestedMode, live !== null)
-      if ('error' in plan) return toolError(plan.error)
-      if (plan.path === 'live' && live) return liveSnap(live, input, plan.notes)
-      liveNotes = plan.notes
-    } else if (input.capture === 'pane') {
-      liveNotes = [PANE_CAPTURE_HEADLESS_NOTE]
-    }
+    const plan = planSnapPath(input, requestedMode, process.env, process.platform)
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveSnap(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    const liveNotes = resolved.notes
+    const why = resolved.why
 
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
@@ -917,7 +949,7 @@ server.registerTool(
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const cliWarnings = Array.isArray(meta['warnings']) ? (meta['warnings'] as string[]) : []
-    const structured = { ...meta, mode: 'headless', warnings: [...cliWarnings, ...liveNotes], pngPath }
+    const structured = { ...meta, mode: 'headless', why, warnings: [...cliWarnings, ...liveNotes], pngPath }
     return {
       content: [
         { type: 'text', text: JSON.stringify(structured, null, 2) },
@@ -1048,6 +1080,15 @@ const auditGroupRowShape = z.object({
 
 const auditOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was measured.'),
@@ -1083,6 +1124,46 @@ const auditOutputShape = {
   notes: z.array(z.string()),
 }
 
+type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }
+
+async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = {
+      ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
+      ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
+    }
+    const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    // The app answers with the CLI's own result plus the screen it
+    // measured on. `textScale` and `throttle` keep the headless contract:
+    // present only when something other than the default was in force.
+    const { ok: _ok, textScale, ...measured } = answer
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+      ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+      ...measured,
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the audit: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_audit',
   {
@@ -1101,62 +1182,33 @@ server.registerTool(
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
       `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all.\n\n` +
       `auto mode audits a running Obsrv with agent control on — the page the user is looking at, on the screen and ` +
-      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — and falls ` +
-      `back to a headless load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. A live ` +
-      `audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
+      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — launching ` +
+      `the app if it is not running (\`launched: true\` on that call), and falling back to a headless load of ` +
+      `\`url\` when the live app is not available (\`why\` names the reason). 'live' requires the app; 'headless' ` +
+      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
     inputSchema: auditInputShape,
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+  async (input: AuditHandlerInput): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = {
-            ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
-            ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
-          }
-          const answer = await controlCall(live.info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          // The app answers with the CLI's own result plus the screen it
-          // measured on. `textScale` and `throttle` keep the headless contract:
-          // present only when something other than the default was in force.
-          const { ok: _ok, textScale, ...measured } = answer
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
-            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
-            ...measured,
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the audit: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveAudit(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    const why = resolved.why
+    const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
@@ -1173,7 +1225,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1242,6 +1294,15 @@ const lintFindingShape = z.object({
 
 const lintOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was judged.'),
@@ -1292,6 +1353,41 @@ const lintOutputShape = {
   notes: z.array(z.string()),
 }
 
+type LintHandlerInput = Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }
+
+async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
+    const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    const { ok: _ok, textScale, ...judged } = answer
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
+      ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
+      ...judged,
+      ...(input.groupsOnly ? { findings: [] } : {}),
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the lint: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_lint',
   {
@@ -1309,57 +1405,33 @@ server.registerTool(
       `screen's density, so it names elements. What it cannot see — a weight that survives the rules but still ` +
       `looks grey, a gradient that bands — is what reading the obsrv_snap PNG is for.\n\n` +
       `auto mode lints a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
-      `text scale and panel in force, in whatever state it has been driven into — and falls back to a headless ` +
-      `load of \`url\` otherwise. 'live' requires the app; 'headless' never touches it. Findings are ` +
-      `informational — apply your own thresholds.`,
+      `text scale and panel in force, in whatever state it has been driven into — launching the app if it is not ` +
+      `running (\`launched: true\` on that call), and falling back to a headless load of \`url\` when the live app ` +
+      `is not available (\`why\` names the reason). 'live' requires the app; 'headless' never touches it. Findings ` +
+      `are informational — apply your own thresholds.`,
     inputSchema: lintInputShape,
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }): Promise<CallToolResult> => {
+  async (input: LintHandlerInput): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
-          const answer = await controlCall(live.info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          const { ok: _ok, textScale, ...judged } = answer
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
-            ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
-            ...judged,
-            ...(input.groupsOnly ? { findings: [] } : {}),
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the lint: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveLint(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    const why = resolved.why
+    const notes = resolved.notes
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
@@ -1375,7 +1447,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('lint', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
+    const structured = { mode: 'headless', why, ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1455,6 +1527,15 @@ const readoutShape = z
 
 const inspectOutputShape = {
   mode: z.enum(['headless', 'live']),
+  why: z
+    .enum(['requested', 'headless-only', 'no-display', 'declined', 'launch-timeout'])
+    .optional()
+    .describe(
+      'Only when mode is headless: why. requested (you asked), headless-only (custom dimensions), no-display ' +
+        '(nowhere for a window), declined (the user turned agent control off in the app — ask them), launch-timeout ' +
+        '(the app was launched but did not answer in time; the next call will likely find it).',
+    ),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   url: z.string().describe('The page inspected: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().optional().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was inspected.'),
@@ -1568,7 +1649,8 @@ server.registerTool(
       `page, same CSS, a different answer per screen.\n\n` +
       `Returns the file path plus a per-screen summary (audit counts, diff metrics, warnings) — the HTML is not ` +
       `inlined. Each screen costs one render, plus a 2x reference render for 1x screens; budget time accordingly ` +
-      `(the default matrix is four screens, six renders). Headless-only: never drives the visible app.`,
+      `(the default matrix is four screens, six renders). Headless-only: never drives the visible app.\n\n` +
+      `Always headless: this is an artefact for delivery, not a live review — use obsrv_drive to review in the window.`,
     inputSchema: reportInputShape,
     outputSchema: reportOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1607,14 +1689,16 @@ server.registerTool(
       `— and steer the session like a guided demo: focus the window, step history (back/forward/reload), scroll ` +
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
-      `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
+      `Only the supplied inputs run (none = just read the current state), in this fixed order: tab → focus → url → ` +
       `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
-      `capture. ` +
+      `capture → closeTab. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
       `\`scrolled\` with what you asked for rather than trusting the call's success, and use \`scroll.scrollSelector\` ` +
-      `when the automatic scroll-host detection picks the wrong container.\n\n` +
+      `when the automatic scroll-host detection picks the wrong container. Pass \`scroll.page\` ("next" | "prev" | ` +
+      `"top" | "bottom") instead of \`{ x, y }\` to walk the page a screenful at a time with no arithmetic — \`atEnd\` ` +
+      `is true once the scroller can go no further down.\n\n` +
       `Coordinates: click takes CSS-viewport px of the page (the valid range is 0 up to but not including the ` +
       `viewport size); panTo and highlight take target-pane pixels (device px of the render — identical to CSS px ` +
       `on 1x presets); scroll takes page CSS px.\n\n` +
@@ -1622,20 +1706,18 @@ server.registerTool(
       `pass \`url\`, so this is how you photograph a scrolled or panned state: scroll, then capture, in one call. ` +
       `obsrv_snap is the other way round — it points the app at a URL first, and pointing it somewhere new is a ` +
       `fresh load that starts at the top.\n\n` +
-      `Tabs: the app can hold several sessions open as tabs, each with its own URL, screen preset and page state. ` +
-      `Every command here acts on whichever tab is in front *when that command arrives* — nothing is bound to a ` +
-      `tab for the length of the call — and the returned status names it (\`tabId\`, \`tabIndex\`). A \`tabId\` ` +
-      `that changed between two calls means the user switched tabs under you; re-read the state before trusting ` +
-      `what you knew. You cannot name a different tab, nor open, close or switch tabs — those are the user's. An ` +
-      `empty \`tabId\` means an app older than tabs, which has only the one.\n\n` +
-      `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
-      `mutates visible app state (it changes what the user's window shows, and a click can act on the live page).`,
+      `Tabs: the app holds several sessions as tabs, each with its own URL, screen and page state. Commands act on the ` +
+      `tab in front; \`tab\` brings one there first ("new" opens it), \`closeTab\` closes one last, and the result's \`tabs\` ` +
+      `lists them all. One tab per screen, left open for the user to flip through, is the natural shape of a review.\n\n` +
+      `The app is launched if it is not running. If the user has turned agent control off (the AGENT chip, or Settings), ` +
+      `this errors with why: "declined" — ask them, do not retry.`,
     inputSchema: driveInputShape,
     outputSchema: driveOutputShape,
     // Honest annotation: this changes what the user's window is showing.
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   },
   async (input: {
+    tab?: string
     url?: string
     preset?: string
     orientation?: 'portrait' | 'landscape'
@@ -1652,26 +1734,48 @@ server.registerTool(
     reload?: boolean
     back?: boolean
     forward?: boolean
-    scroll?: { x: number; y: number; scrollSelector?: string }
+    scroll?: { x?: number; y?: number; page?: 'next' | 'prev' | 'top' | 'bottom'; scrollSelector?: string }
     panTo?: { x: number; y: number }
     click?: { x: number; y: number }
     highlight?: { x: number; y: number; width: number; height: number; durationMs?: number; space?: 'pane' | 'page' }
     capture?: 'window' | 'pane' | 'raster'
+    closeTab?: string
   }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
-    const live = await discoverControl()
-    if (!live) return toolError(APP_NOT_REACHABLE)
+    const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
+    if (resolved.path === 'headless') return toolError(`obsrv_drive needs the live app and it is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const live = resolved.app
     try {
+      // Tab first, before even `focus`: "new" opens a tab (with `url`/`preset`
+      // from this call, if given — guarded below so they are not applied a
+      // second time) and fronts it; an id fronts an existing one. Either way
+      // the user is looking at the tab everything else in this call acts on.
+      let openedWithUrl = false
+      let openedWithPreset = false
+      if (input.tab === 'new') {
+        const payload: Record<string, unknown> = {}
+        if (input.url !== undefined) {
+          payload.url = input.url.trim()
+          openedWithUrl = true
+        }
+        if (input.preset !== undefined) {
+          payload.preset = input.preset
+          openedWithPreset = true
+        }
+        await controlCall(live.info, 'openTab', payload, DEFAULT_TIMEOUT_MS + 10_000)
+      } else if (input.tab !== undefined) {
+        await controlCall(live.info, 'activateTab', { id: input.tab }, LIVE_APPLY_TIMEOUT_MS)
+      }
       // The documented execution order: window attention first, then what is
       // showing, then how it is shown, then the in-page steering.
       if (input.focus) await controlCall(live.info, 'focusWindow', {}, LIVE_APPLY_TIMEOUT_MS)
-      if (input.url !== undefined) {
+      if (input.url !== undefined && !openedWithUrl) {
         await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
       }
-      if (input.preset !== undefined) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+      if (input.preset !== undefined && !openedWithPreset) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
       // After the preset, before everything else: rotation is applied on top of
       // whichever screen is in force, so a call carrying both has to land in
       // that order or the rotation would be spent on the outgoing preset.
@@ -1712,6 +1816,7 @@ server.registerTool(
       // pane reached, which is the only way to tell a scroll from a clamp.
       let scrolled: { x: number; y: number } | null | undefined
       let scroller: 'root' | 'element' | undefined
+      let atEnd: boolean | undefined
       const warnings: string[] = []
       if (input.scroll !== undefined) {
         const r = await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
@@ -1721,6 +1826,7 @@ server.registerTool(
             ? { x: (at as { x: number }).x, y: (at as { y: number }).y }
             : null
         if (r['scroller'] === 'root' || r['scroller'] === 'element') scroller = r['scroller']
+        atEnd = r['atEnd'] === true
         if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') warnings.push(w)
       }
       if (input.panTo !== undefined) await controlCall(live.info, 'panTo', input.panTo, LIVE_APPLY_TIMEOUT_MS)
@@ -1763,12 +1869,25 @@ server.registerTool(
         warnings.push(...capture.warnings)
       }
 
+      // closeTab last, after capture: that is what lets one call photograph a
+      // tab and then close it.
+      if (input.closeTab !== undefined) {
+        const id =
+          input.closeTab === 'current'
+            ? (parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))?.tabId ?? '')
+            : input.closeTab
+        if (id === '') return toolError('closeTab: the app did not name its tab')
+        await controlCall(live.info, 'closeTab', { id }, LIVE_APPLY_TIMEOUT_MS)
+      }
+
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
       const structured = {
         ...status,
+        ...(resolved.launched ? { launched: true } : {}),
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
+        ...(atEnd !== undefined ? { atEnd } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
         ...(highlight !== null ? { highlight } : {}),
         ...(capture !== null ? { pngPath: capture.pngPath, width: capture.width, height: capture.height } : {}),
@@ -1789,6 +1908,43 @@ server.registerTool(
   },
 )
 
+type InspectHandlerInput = InspectToolInput & { mode?: 'auto' | 'headless' | 'live' }
+
+async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
+  const { info } = app
+  try {
+    if (input.url !== undefined) {
+      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
+    const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+    const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
+    if (!status) return toolError('the running app answered `status` with something this server could not parse')
+    for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    }
+    const structured = {
+      mode: 'live',
+      url: status.url,
+      preset: status.presetId,
+      tabId: status.tabId,
+      tabIndex: status.tabIndex,
+      profile: status.profileId,
+      cssWidth: status.cssWidth,
+      cssHeight: status.cssHeight,
+      textScale: status.textScale,
+      throttle: status.throttle,
+      found: answer.found === true,
+      readout: answer.readout ?? null,
+      notes,
+      ...(launched ? { launched: true } : {}),
+    }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
+  } catch (e) {
+    return toolError(`the running app refused the inspect: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 server.registerTool(
   'obsrv_inspect',
   {
@@ -1801,13 +1957,15 @@ server.registerTool(
       `threshold that applies to text that size (4.5:1, or 3:1 for large text). A pair that clears 4.5:1 on the ` +
       `display a page was designed on can fall under 3:1 on a budget TN panel; the second number says so.\n\n` +
       `auto mode inspects a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
-      `panel and vision setting in force — and falls back to a headless load of \`url\` otherwise. Headless takes ` +
-      `the same screen options as obsrv_snap. \`found: false\` means nothing was there; it is not an error.`,
+      `panel and vision setting in force — launching the app if it is not running (\`launched: true\` on that ` +
+      `call), and falling back to a headless load of \`url\` when the live app is not available (\`why\` names the ` +
+      `reason). Headless takes the same screen options as obsrv_snap. \`found: false\` means nothing was there; it ` +
+      `is not an error.`,
     inputSchema: inspectInputShape,
     outputSchema: inspectOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
   },
-  async (input: InspectToolInput & { mode?: 'auto' | 'headless' | 'live' }): Promise<CallToolResult> => {
+  async (input: InspectHandlerInput): Promise<CallToolResult> => {
     const where = inspectWhereError(input)
     if (where) return toolError(where)
     if (input.url !== undefined) {
@@ -1815,46 +1973,19 @@ server.registerTool(
       if (badScheme) return toolError(badScheme)
     }
     const requestedMode = input.mode ?? 'auto'
-    const notes: string[] = []
-    if (requestedMode !== 'headless') {
-      const live = await discoverControl()
-      const custom =
-        input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
-      if (live && custom) notes.push('custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.')
-      if (live && !custom) {
-        try {
-          if (input.url !== undefined) {
-            await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
-          }
-          const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
-          const answer = await controlCall(live.info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
-          const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
-          if (!status) return toolError('the running app answered `status` with something this server could not parse')
-          for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-            if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
-          }
-          const structured = {
-            mode: 'live',
-            url: status.url,
-            preset: status.presetId,
-            tabId: status.tabId,
-            tabIndex: status.tabIndex,
-            profile: status.profileId,
-            cssWidth: status.cssWidth,
-            cssHeight: status.cssHeight,
-            textScale: status.textScale,
-            throttle: status.throttle,
-            found: answer.found === true,
-            readout: answer.readout ?? null,
-            notes,
-          }
-          return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
-        } catch (e) {
-          return toolError(`the running app refused the inspect: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-      if (!live && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
-    }
+    const custom = input.width !== undefined || input.height !== undefined || input.deviceScaleFactor !== undefined || input.diagonalInches !== undefined
+    const plan = planLive(
+      requestedMode,
+      custom ? ['custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.'] : [],
+      [],
+      process.env,
+      process.platform,
+    )
+    const resolved = await ensureLive(plan)
+    if (resolved.path === 'live') return liveInspect(resolved.app, input, resolved.notes, resolved.launched)
+    if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    const why = resolved.why
+    const notes = resolved.notes
     let args: string[]
     try {
       args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
@@ -1867,7 +1998,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
