@@ -79,3 +79,25 @@ describe('the plugin branch', () => {
     expect(readme).toContain('github.com/vibesyemmy/obsrv')
   })
 })
+
+describe('CI gates the release on the plugin tag', () => {
+  const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+
+  it('runs the check on version tags', () => {
+    expect(ci).toContain('node scripts/build-plugin-branch.js --check')
+    // Tags only: main between releases is legitimately ahead of the branch.
+    const job = ci.slice(ci.indexOf('plugin-tag:'))
+    expect(job.slice(0, job.indexOf('steps:'))).toContain("if: startsWith(github.ref, 'refs/tags/v')")
+  })
+
+  it('fetches history, since the check compares against a tag', () => {
+    const job = ci.slice(ci.indexOf('plugin-tag:'))
+    expect(job.slice(0, job.indexOf('- name:'))).toContain('fetch-depth: 0')
+  })
+
+  it('holds the DMG release until the check passes', () => {
+    // Otherwise a cut that forgot `npm run plugin:branch` publishes a release
+    // whose marketplace entry points at a ref nobody can clone.
+    expect(ci).toContain('needs: [test, plugin-tag]')
+  })
+})

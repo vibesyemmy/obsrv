@@ -1,5 +1,6 @@
 # Obsrv CI — the full verification the repo runs locally, on every push/PR,
-# plus unsigned DMG artefacts on version tags.
+# plus unsigned DMG artefacts on version tags. A tag also checks that the
+# generated `plugin` branch was rebuilt for it, and the release waits on that.
 #
 # Everything runs on macOS: the e2e suite drives the real Electron app
 # (offscreen 1x rendering is the product), and macOS runners provide the
@@ -58,9 +59,32 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # Tags only: `main` between releases is legitimately ahead of the plugin
+  # branch, so this would fail on every ordinary push. On a `v*` tag the two
+  # must agree, because the marketplace entry that ships in that release pins
+  # `plugin-v<version>` — a cut that skipped `npm run plugin:branch` points
+  # every `claude plugin install` at a ref that cannot be cloned. Cheap enough
+  # (no npm ci, the script is node builtins and git) to gate the release on.
+  plugin-tag:
+    name: The plugin tag matches the tree it claims to build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the check compares against plugin-v<version>, so tags must be here
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Compare plugin-v<version> against scripts/build-plugin-branch.js
+        run: node scripts/build-plugin-branch.js --check
+
   release:
     name: Publish DMGs to a GitHub Release
-    needs: test
+    needs: [test, plugin-tag]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-14
     timeout-minutes: 30

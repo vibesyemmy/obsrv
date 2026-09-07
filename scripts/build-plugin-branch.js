@@ -33,6 +33,14 @@
 // The marketplace entry on `main` is what `claude plugin marketplace add`
 // reads, and `sync-plugin-version.js` pins its source to `plugin-v<version>`
 // — so that tag must be pushed, exactly as the release tag must be.
+//
+// `--check` builds the same tree and compares it against the tag instead of
+// writing anything, exit 1 if the tag is missing or its contents differ. CI
+// runs it on every `v*` tag and the release job waits on it, so a cut that
+// forgot this step fails before the DMGs publish rather than after someone's
+// `claude plugin install` cannot find the ref. It is deliberately the *same*
+// function that builds the branch: a check with its own copy of the file list
+// is a check that passes while the branch is wrong.
 
 const { execFileSync } = require('node:child_process')
 const { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } = require('node:fs')
@@ -49,6 +57,14 @@ const DIRS = ['skills']
 
 const git = (args, env) =>
   execFileSync('git', args, { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } }).trim()
+
+/**
+ * As above, but git's own stderr is swallowed. For probes whose failure is an
+ * expected answer — "is there a branch yet", "does this tag exist" — where a
+ * bare `fatal: Needed a single revision` above our own explanation is noise
+ * that reads like the real error.
+ */
+const gitQuiet = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
 
 /** Every file in `dir`, repo-relative, in a stable order. */
 function walk(dir) {
@@ -94,13 +110,13 @@ function pluginTree(version) {
   return entries.sort((a, b) => (a.path < b.path ? -1 : 1))
 }
 
-function main() {
-  const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
-  const tag = `plugin-v${version}`
-  const entries = pluginTree(version)
-
-  // A temporary index, so the real one — which may hold a release in progress
-  // — is never touched.
+/**
+ * Writes the entries as blobs and returns the tree sha. Against a temporary
+ * index, so the real one — which may hold a release in progress — is never
+ * touched. Blobs are written to the object store either way; unreferenced ones
+ * are what `git gc` is for.
+ */
+function writeTree(entries) {
   const dir = mkdtempSync(join(tmpdir(), 'obsrv-plugin-branch-'))
   const env = { GIT_INDEX_FILE: join(dir, 'index') }
   try {
@@ -108,34 +124,93 @@ function main() {
       const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: root, input: entry.content, encoding: 'utf8' }).trim()
       git(['update-index', '--add', '--cacheinfo', `${entry.mode},${blob},${entry.path}`], env)
     }
-    const tree = git(['write-tree'], env)
-
-    let parent = null
-    try {
-      parent = git(['rev-parse', '--verify', `refs/heads/${BRANCH}`])
-    } catch {
-      // No branch yet: this commit is its root.
-    }
-    // Nothing changed since the last release's tree — commit anyway would add
-    // an empty commit per version, so move the tag and stop.
-    const unchanged = parent !== null && git(['rev-parse', `${parent}^{tree}`]) === tree
-    const commit = unchanged
-      ? parent
-      : git(['commit-tree', tree, ...(parent ? ['-p', parent] : []), '-m', `plugin ${version}`])
-
-    git(['update-ref', `refs/heads/${BRANCH}`, commit])
-    git(['tag', '-f', tag, commit])
-    const bytes = entries.reduce((n, e) => n + e.content.length, 0)
-    console.log(
-      `${BRANCH} branch at ${commit.slice(0, 7)}${unchanged ? ' (tree unchanged)' : ''}, tagged ${tag}: ` +
-        `${entries.length} files, ${(bytes / 1024).toFixed(0)} KB`,
-    )
-    console.log(`push it with the release tag: git push origin main ${tag} v${version}`)
+    return git(['write-tree'], env)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
 }
 
+/** `path -> blob sha` for a tree-ish, for naming exactly what differs. */
+function treeFiles(ref) {
+  const out = new Map()
+  for (const line of git(['ls-tree', '-r', ref]).split('\n')) {
+    if (!line) continue
+    const [meta, path] = line.split('\t')
+    out.set(path, meta.split(' ')[2])
+  }
+  return out
+}
+
+/**
+ * Compares the tree this repo would build against the one the tag holds.
+ * Returns a list of human-readable differences; empty means they match.
+ */
+function differences(expectedTree, tag) {
+  if (git(['rev-parse', `${tag}^{tree}`]) === expectedTree) return []
+  const theirs = treeFiles(tag)
+  const ours = treeFiles(expectedTree)
+  const diffs = []
+  for (const [path, sha] of ours) {
+    if (!theirs.has(path)) diffs.push(`missing from the tag: ${path}`)
+    else if (theirs.get(path) !== sha) diffs.push(`differs: ${path}`)
+  }
+  for (const path of theirs.keys()) if (!ours.has(path)) diffs.push(`on the tag but not built: ${path}`)
+  // Same file list, same contents, different tree sha: modes.
+  return diffs.length > 0 ? diffs : ['the file modes differ']
+}
+
+function check() {
+  const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+  const tag = `plugin-v${version}`
+  const tree = writeTree(pluginTree(version))
+  try {
+    gitQuiet(['rev-parse', '--verify', `${tag}^{commit}`])
+  } catch {
+    console.error(
+      `${tag} does not exist. The marketplace entry points at it, so a release without it hands ` +
+        `every \`claude plugin install\` a ref that cannot be cloned.\n` +
+        `Fix: npm run plugin:branch && git push origin plugin ${tag}`,
+    )
+    process.exit(1)
+  }
+  const diffs = differences(tree, tag)
+  if (diffs.length > 0) {
+    console.error(`${tag} does not match what this tree builds:\n  ${diffs.join('\n  ')}\n` + `Fix: npm run plugin:branch && git push origin plugin --force-with-lease ${tag}`)
+    process.exit(1)
+  }
+  console.log(`${tag} matches the plugin tree this repo builds (${git(['rev-parse', `${tag}^{tree}`]).slice(0, 7)})`)
+}
+
+function main() {
+  const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+  const tag = `plugin-v${version}`
+  const entries = pluginTree(version)
+  const tree = writeTree(entries)
+
+  let parent = null
+  try {
+    parent = gitQuiet(['rev-parse', '--verify', `refs/heads/${BRANCH}`])
+  } catch {
+    // No branch yet: this commit is its root.
+  }
+  // Nothing changed since the last release's tree — committing anyway would
+  // add an empty commit per version, so move the tag and stop.
+  const unchanged = parent !== null && git(['rev-parse', `${parent}^{tree}`]) === tree
+  const commit = unchanged ? parent : git(['commit-tree', tree, ...(parent ? ['-p', parent] : []), '-m', `plugin ${version}`])
+
+  git(['update-ref', `refs/heads/${BRANCH}`, commit])
+  git(['tag', '-f', tag, commit])
+  const bytes = entries.reduce((n, e) => n + e.content.length, 0)
+  console.log(
+    `${BRANCH} branch at ${commit.slice(0, 7)}${unchanged ? ' (tree unchanged)' : ''}, tagged ${tag}: ` +
+      `${entries.length} files, ${(bytes / 1024).toFixed(0)} KB`,
+  )
+  console.log(`push it with the release tag: git push origin ${BRANCH} ${tag} v${version}`)
+}
+
 module.exports = { pluginTree, BRANCH }
 
-if (require.main === module) main()
+if (require.main === module) {
+  if (process.argv.includes('--check')) check()
+  else main()
+}
