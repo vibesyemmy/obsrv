@@ -8,6 +8,7 @@ import {
   controlFileModeOk,
   defaultControlFilePath,
   isControlCommand,
+  isDisabledStance,
   parseClick,
   parseControlFile,
   parseControlStatus,
@@ -60,6 +61,24 @@ describe('parseControlFile', () => {
     ['missing token', JSON.stringify({ port: 8080 })],
   ])('rejects %s', (_name, raw) => {
     expect(parseControlFile(raw)).toBeNull()
+  })
+  it('reads a disabled stance: the app is running, control is off, there is nothing to call', () => {
+    const raw = JSON.stringify({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z' })
+    expect(parseControlFile(raw)).toEqual({ enabled: false, pid: 4242, startedAt: '2026-09-07T09:00:00.000Z' })
+  })
+  it('a disabled stance must name its process; without a pid nobody can tell it from a leftover', () => {
+    expect(parseControlFile(JSON.stringify({ enabled: false }))).toBeNull()
+    expect(parseControlFile(JSON.stringify({ enabled: false, pid: 0 }))).toBeNull()
+  })
+  it('enabled: true is the same as no enabled at all — an older app writes none', () => {
+    expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, enabled: true }))).toEqual({ port: 49152, token: TOKEN })
+  })
+  it('enabled must be a boolean when present', () => {
+    expect(parseControlFile(JSON.stringify({ port: 49152, token: TOKEN, enabled: 'yes' }))).toBeNull()
+  })
+  it('isDisabledStance tells the two apart', () => {
+    expect(isDisabledStance({ enabled: false, pid: 1 })).toBe(true)
+    expect(isDisabledStance({ port: 49152, token: TOKEN })).toBe(false)
   })
 })
 

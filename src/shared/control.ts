@@ -47,6 +47,25 @@ export interface ControlInfo {
   startedAt?: string
 }
 
+/**
+ * The app is running with agent control off. Written so a client can tell
+ * "running, and the user said no" from "not running" — the first is asked
+ * in the app (§2c of the live-first spec), the second is launched. No port
+ * and no token: there is nothing to call.
+ */
+export interface ControlStance {
+  enabled: false
+  pid: number
+  startedAt?: string
+}
+
+/** What the discovery file holds: a live server, or a running app's stance. */
+export type ControlFile = ControlInfo | ControlStance
+
+export function isDisabledStance(f: ControlFile): f is ControlStance {
+  return !('port' in f)
+}
+
 /** How the target pane shows the render — mirrors the renderer store's ViewMode. */
 export type AgentViewMode = '1:1' | 'fit'
 
@@ -230,7 +249,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * client must treat the app as not reachable rather than send credentials
  * derived from a file something else may have written.
  */
-export function parseControlFile(raw: string): ControlInfo | null {
+export function parseControlFile(raw: string): ControlFile | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -238,15 +257,22 @@ export function parseControlFile(raw: string): ControlInfo | null {
     return null
   }
   if (!isRecord(parsed)) return null
+  const { enabled, pid, startedAt } = parsed
+  if (enabled !== undefined && typeof enabled !== 'boolean') return null
+  // The owner stamp is optional on a live file (an older app writes none) but,
+  // when present, must be well-formed: a stamp that cannot be trusted is worse
+  // than no stamp, since a reader would act on it.
+  if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
+  if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
+  if (enabled === false) {
+    // A stance without an owner is indistinguishable from a crashed run's
+    // leftover, and a reader that trusted it would never launch the app.
+    if (pid === undefined) return null
+    return { enabled: false, pid, ...(startedAt !== undefined ? { startedAt } : {}) }
+  }
   const { port, token } = parsed
   if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return null
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null
-  // The owner stamp is optional (an older app writes none) but, when
-  // present, must be well-formed: a stamp that cannot be trusted is worse
-  // than no stamp, since a reader would act on it.
-  const { pid, startedAt } = parsed
-  if (pid !== undefined && (typeof pid !== 'number' || !Number.isInteger(pid) || pid < 1)) return null
-  if (startedAt !== undefined && (typeof startedAt !== 'string' || Number.isNaN(Date.parse(startedAt)))) return null
   return { port, token, ...(pid !== undefined ? { pid } : {}), ...(startedAt !== undefined ? { startedAt } : {}) }
 }
 

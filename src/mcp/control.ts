@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import {
   controlFileModeOk,
   defaultControlFilePath,
+  isDisabledStance,
   parseControlFile,
   parseControlStatus,
   type ControlInfo,
@@ -109,7 +110,7 @@ export async function discoverControl(timeoutMs = 500): Promise<LiveApp | null> 
     return null
   }
   const info = parseControlFile(raw)
-  if (!info) return null
+  if (!info || isDisabledStance(info)) return null
   // A stamped file whose writer is gone is a crashed run's leftover, not an
   // app: say so without knocking on a port nobody listens to. EPERM means
   // the process exists but belongs to someone else, which is still alive.
