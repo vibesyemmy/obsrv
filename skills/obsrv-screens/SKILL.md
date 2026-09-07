@@ -130,10 +130,12 @@ the first, so what you drive is what the user sees.
 
 If a result says `mode: "headless"`, read `why` and tell the user in plain words:
 - `requested` — you asked for headless.
-- `headless-only` — `fullPage`, custom dims, `report`, `diff`: things the live app cannot do.
+- `headless-only` — `fullPage` (obsrv_snap only) or custom width/height: things the live app cannot do.
 - `no-display` — nowhere for a window (SSH, CI, `OBSRV_HEADLESS=1`).
 - `declined` — the user turned agent control off in the app (the AGENT chip, or Settings → Agent control). Ask them; do not retry.
 - `launch-timeout` — the app was launched and did not answer in time. It may still be starting; the next call usually finds it.
+
+`obsrv_report` and `obsrv_diff` are headless always — they never drive the app, and their output has no `mode` or `why` field at all, so there is nothing to check on them.
 
 ## Deliver (headless)
 

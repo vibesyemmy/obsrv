@@ -907,10 +907,10 @@ server.registerTool(
       `A live snap only navigates when the app is showing a different URL; the result's \`navigated\` says which ` +
       `happened. Navigating is a fresh load, so it starts at the top of the page — to photograph a scrolled or ` +
       `panned state, use obsrv_drive with \`capture\` instead, which never navigates unless you ask it to.\n\n` +
-      `Tabs: the app can hold several sessions open as tabs, and a live snap acts on the one in front — which the ` +
-      `user can change at any moment. The result names it (\`tabId\`, \`tabIndex\`); compare across calls if you ` +
-      `need to know it did not move. There is no way to name a different tab, and no way to open, close or ` +
-      `switch tabs — those are the user's.`,
+      `Tabs: the app can hold several sessions open as tabs, and a live snap always acts on the one in front — this ` +
+      `tool takes no parameter to pick a different one, and the user can change it at any moment. The result names ` +
+      `it (\`tabId\`, \`tabIndex\`); compare across calls if you need to know it did not move. Use obsrv_drive to ` +
+      `open, front or close tabs (its \`tab\` and \`closeTab\` inputs).`,
     inputSchema: snapInputShape,
     outputSchema: snapOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
