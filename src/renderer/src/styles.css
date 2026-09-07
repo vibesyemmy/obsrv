@@ -701,7 +701,18 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   letter-spacing: 0.08em;
   white-space: nowrap;
   background: transparent;
-  font: inherit;
+  /* `font: inherit` would win over `font-size: 10px` above (it's a shorthand,
+     declared later, and resets font-size to inherit too) — undoing the one
+     thing this rule is for. Only stop the UA's button font: family and
+     weight. Line-height also needs restoring — a <button> gets the UA form-
+     control `line-height: normal`, which a <span> never had, and that alone
+     changes the chip's height (verified: `normal` renders 18px tall here vs.
+     14px/20px total with the inherited 1.4 line-height, matching the old
+     span). `text-align` and `margin` differ from a <span>'s too, but this
+     button's width always hugs its text, so neither one is visible. */
+  font-family: inherit;
+  font-weight: inherit;
+  line-height: inherit;
   cursor: pointer;
 }
 .agent-activity.active { color: var(--chrome-0); background: var(--warn); border-color: var(--warn); }

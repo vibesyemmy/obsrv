@@ -893,6 +893,13 @@ test('turning agent control off leaves a disabled stance, not an absent file', a
 
 test('the AGENT chip is a Stop button: one click turns control off', async () => {
   await expect(page.locator('button.agent-activity')).toBeVisible()
+  // `.agent-activity` sets `font-size: 10px` but used to also set the
+  // shorthand `font: inherit` after it, which reset font-size back to the
+  // inherited ~13px — the button rendered bigger than the span it replaced.
+  // Guard the actual rendered size, not just the rule's presence.
+  expect(
+    await page.locator('button.agent-activity').evaluate(el => getComputedStyle(el).fontSize)
+  ).toBe('10px')
   await page.locator('button.agent-activity').click()
   await expect.poll(() => {
     const f = parseControlFile(readFileSync(controlFile, 'utf8'))
