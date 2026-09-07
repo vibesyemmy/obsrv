@@ -462,3 +462,36 @@ test('obsrv_drive: tab <id> activates before anything else runs', async () => {
   expect(b.tabId).toBe(other)
   await call('obsrv_drive', { closeTab: a.tabId })
 })
+
+test('obsrv_drive: capture and closeTab "current" in one call photograph the tab before closing it', async () => {
+  // Open a second (doomed) tab so the close never touches the last one, and
+  // give it a distinctive portrait preset so the capture can be tied to
+  // *this* tab specifically, not to whatever tab is left after the close —
+  // that tab is landscape, like every other fixture in this file.
+  const opened = (await call('obsrv_drive', { tab: 'new', url: fixture('solid-red.html'), preset: 'iphone-61' })).structuredContent as {
+    tabId: string
+    tabs: Array<{ id: string }>
+  }
+  expect(opened.tabs).toHaveLength(2)
+  const before = opened.tabs.length
+
+  const r = await call('obsrv_drive', { capture: 'pane', closeTab: 'current' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { pngPath: string; width: number; height: number; tabs: Array<{ id: string }>; tabId: string }
+
+  // Half one: a real capture came back, of the doomed tab specifically. If
+  // closeTab ran first, this would either error (capturing a closed tab) or
+  // show the surviving tab's landscape screen instead of this one's portrait
+  // iphone-61 shape — either way the assertions below catch it.
+  expect(existsSync(m.pngPath)).toBe(true)
+  const png = readFileSync(m.pngPath)
+  expect(png.length).toBeGreaterThan(0)
+  expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  expect(m.width).toBeLessThan(m.height)
+  expect(m.width / m.height).toBeCloseTo(393 / 852, 1)
+
+  // Half two: the tab is actually gone afterwards.
+  expect(m.tabs).toHaveLength(before - 1)
+  expect(m.tabs.some(t => t.id === opened.tabId)).toBe(false)
+  expect(m.tabId).not.toBe(opened.tabId)
+})
