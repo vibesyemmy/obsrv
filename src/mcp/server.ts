@@ -892,9 +892,12 @@ server.registerTool(
     let liveNotes: string[] = []
     if (requestedMode !== 'headless') {
       const live = await discoverControl()
-      const plan = planSnapPath(input, requestedMode, live !== null)
-      if ('error' in plan) return toolError(plan.error)
-      if (plan.path === 'live' && live) return liveSnap(live, input, plan.notes)
+      const plan = planSnapPath(input, requestedMode, process.env, process.platform)
+      // planSnapPath is pure and does not know whether an app actually
+      // answered discovery; reconcile that here. Interim until Task 6 wires
+      // ensureLive (launch + declined/launch-timeout) through this path.
+      if (plan.path === 'live' && live !== null) return liveSnap(live, input, plan.notes)
+      if (plan.path === 'live' && requestedMode === 'live') return toolError(APP_NOT_REACHABLE)
       liveNotes = plan.notes
     } else if (input.capture === 'pane') {
       liveNotes = [PANE_CAPTURE_HEADLESS_NOTE]

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
+  PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
   buildDiffArgs,
@@ -12,6 +12,8 @@ import {
   extractTrailingJson,
   killBudgetMs,
   listCatalog,
+  noDisplayReason,
+  planLive,
   planSnapPath,
   shouldInlineImage,
   stderrTail,
@@ -171,58 +173,55 @@ describe('stderrTail', () => {
   })
 })
 
+const DESKTOP = { HOME: '/Users/x' } as NodeJS.ProcessEnv
+
+describe('noDisplayReason', () => {
+  it('names the condition, or null when a window could appear', () => {
+    expect(noDisplayReason(DESKTOP, 'darwin')).toBeNull()
+    expect(noDisplayReason({ ...DESKTOP, OBSRV_HEADLESS: '1' }, 'darwin')).toMatch(/OBSRV_HEADLESS/)
+    expect(noDisplayReason({ ...DESKTOP, SSH_CONNECTION: '1.2.3.4 22' }, 'darwin')).toMatch(/SSH/)
+    expect(noDisplayReason({ ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')).toMatch(/OBSRV_TEST/)
+    expect(noDisplayReason({ ...DESKTOP }, 'linux')).toMatch(/DISPLAY/)
+    expect(noDisplayReason({ ...DESKTOP, DISPLAY: ':0' }, 'linux')).toBeNull()
+    expect(noDisplayReason({ ...DESKTOP, WAYLAND_DISPLAY: 'wayland-0' }, 'linux')).toBeNull()
+  })
+})
+
+describe('planLive', () => {
+  it('the caller asked: headless, requested', () => {
+    expect(planLive('headless', [], [], DESKTOP, 'darwin')).toEqual({ path: 'headless', why: 'requested', notes: [] })
+  })
+  it('a headless-only operation wins over everything but a request', () => {
+    expect(planLive('auto', ['fullPage is headless-only'], ['x'], DESKTOP, 'darwin')).toEqual({
+      path: 'headless',
+      why: 'headless-only',
+      notes: ['fullPage is headless-only'],
+    })
+    // Even under mode: live — the operation cannot be done live at all.
+    expect(planLive('live', ['fullPage is headless-only'], [], DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
+  })
+  it('no display: headless, naming the condition in the notes', () => {
+    const p = planLive('auto', [], [], { ...DESKTOP, OBSRV_TEST: '1' }, 'darwin')
+    expect(p).toMatchObject({ path: 'headless', why: 'no-display' })
+    expect(p.notes.join(' ')).toMatch(/OBSRV_TEST/)
+  })
+  it('otherwise live, carrying the live-only notes', () => {
+    expect(planLive('auto', [], ['waitMs is ignored in live mode'], DESKTOP, 'darwin')).toEqual({ path: 'live', notes: ['waitMs is ignored in live mode'] })
+  })
+})
+
 describe('planSnapPath', () => {
-  it('headless mode never probes and carries no notes', () => {
-    expect(planSnapPath({}, 'headless', true)).toEqual({ path: 'headless', notes: [] })
-    expect(planSnapPath({ fullPage: true }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
+  it('custom dims and fullPage are headless-only, with the reason named', () => {
+    expect(planSnapPath({ fullPage: true }, 'auto', DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
+    expect(planSnapPath({ width: 800, height: 600 }, 'auto', DESKTOP, 'darwin')).toMatchObject({ path: 'headless', why: 'headless-only' })
   })
-  it('auto without a reachable app is a silent headless fallback', () => {
-    expect(planSnapPath({}, 'auto', false)).toEqual({ path: 'headless', notes: [] })
+  it('a plain preset snap is live, and waitMs is noted as ignored', () => {
+    expect(planSnapPath({ waitMs: 500 }, 'auto', DESKTOP, 'darwin')).toEqual({ path: 'live', notes: ['waitMs is headless-only and was ignored in live mode.'] })
   })
-  it('auto with a reachable app goes live', () => {
-    expect(planSnapPath({}, 'auto', true)).toEqual({ path: 'live', notes: [] })
-  })
-  it('live without a reachable app is an actionable error, never a fallback', () => {
-    const r = planSnapPath({}, 'live', false)
-    expect(r).toHaveProperty('error')
-    expect((r as { error: string }).error).toBe(APP_NOT_REACHABLE)
-    expect(APP_NOT_REACHABLE).toMatch(/Agent control/)
-  })
-  it('custom dims fall back to headless with a note, even under explicit live', () => {
-    for (const input of [{ width: 800, height: 600 }, { deviceScaleFactor: 2 }, { diagonalInches: 14 }]) {
-      for (const mode of ['auto', 'live'] as const) {
-        const r = planSnapPath(input, mode, true)
-        expect(r).toMatchObject({ path: 'headless' })
-        expect((r as { notes: string[] }).notes.join(' ')).toMatch(/custom dimensions/)
-      }
-    }
-  })
-  it('fullPage falls back to headless with a note', () => {
-    const r = planSnapPath({ fullPage: true }, 'auto', true)
-    expect(r).toMatchObject({ path: 'headless' })
-    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/fullPage/)
-  })
-  it('waitMs stays live but is noted as ignored', () => {
-    const r = planSnapPath({ waitMs: 500 }, 'auto', true)
-    expect(r).toMatchObject({ path: 'live' })
-    expect((r as { notes: string[] }).notes.join(' ')).toMatch(/waitMs/)
-  })
-  it("capture: 'pane' rides the live path silently", () => {
-    expect(planSnapPath({ capture: 'pane' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
-  })
-  it("capture: 'pane' is noted as ignored on every headless path", () => {
-    for (const r of [
-      planSnapPath({ capture: 'pane' }, 'headless', true),
-      planSnapPath({ capture: 'pane' }, 'auto', false),
-      planSnapPath({ capture: 'pane', fullPage: true }, 'auto', true),
-    ]) {
-      expect(r).toMatchObject({ path: 'headless' })
-      expect((r as { notes: string[] }).notes.join(' ')).toMatch(/capture/)
-    }
-  })
-  it("capture: 'window' adds no note anywhere", () => {
-    expect(planSnapPath({ capture: 'window' }, 'headless', false)).toEqual({ path: 'headless', notes: [] })
-    expect(planSnapPath({ capture: 'window' }, 'auto', true)).toEqual({ path: 'live', notes: [] })
+  it('capture: pane on a headless path is noted', () => {
+    const p = planSnapPath({ capture: 'pane' }, 'headless', DESKTOP, 'darwin')
+    expect(p).toMatchObject({ path: 'headless', why: 'requested' })
+    expect(p.notes).toContain(PANE_CAPTURE_HEADLESS_NOTE)
   })
 })
 

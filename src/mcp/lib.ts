@@ -341,23 +341,70 @@ export { ALLOWED_URL_SCHEMES, urlSchemeError } from '../shared/url'
 
 export type SnapMode = 'auto' | 'headless' | 'live'
 
-export interface SnapPathPlan {
-  path: 'live' | 'headless'
-  /** Human notes about inputs that changed the path or were ignored on it. */
+/** Why a call went headless. Named in every result so an agent can say so. */
+export type HeadlessWhy = 'requested' | 'headless-only' | 'no-display' | 'declined' | 'launch-timeout'
+
+export interface LivePlan {
+  path: 'live'
+  /** Inputs that are ignored on the live path, one note each. */
   notes: string[]
 }
+export interface HeadlessPlan {
+  path: 'headless'
+  why: HeadlessWhy
+  notes: string[]
+}
+
+/** How long a launched app gets to come up before the call goes headless. */
+export const LAUNCH_TIMEOUT_MS = 12_000
 
 export const APP_NOT_REACHABLE =
   'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
   '(or pass mode: "headless" to render without it).'
 
+export const DECLINED_NOTE =
+  'the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT chip or Settings → Agent control) if you need the live app.'
+
 export const PANE_CAPTURE_HEADLESS_NOTE =
   "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored."
 
 /**
+ * Whether a window could appear at all. A launch attempt where it could not
+ * would hang on a lock or a missing display and burn the whole timeout to
+ * learn nothing. `OBSRV_TEST=1` is here on purpose: under the e2e harness the
+ * MCP must never launch a real Obsrv against the developer's profile.
+ */
+export function noDisplayReason(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  if (env.OBSRV_HEADLESS === '1') return 'OBSRV_HEADLESS=1 is set'
+  if (env.OBSRV_TEST === '1') return 'OBSRV_TEST=1 is set (the e2e harness)'
+  if (env.SSH_CONNECTION !== undefined && env.SSH_CONNECTION !== '') return 'this is an SSH session'
+  if (platform === 'linux' && !env.DISPLAY && !env.WAYLAND_DISPLAY) return 'neither DISPLAY nor WAYLAND_DISPLAY is set'
+  return null
+}
+
+/**
+ * The four reasons not to try the live path, in order (spec §1). Pure: the
+ * runtime reasons — declined, launch-timeout — come from `ensureLive`.
+ */
+export function planLive(
+  mode: SnapMode,
+  headlessOnly: string[],
+  liveNotes: string[],
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): LivePlan | HeadlessPlan {
+  if (mode === 'headless') return { path: 'headless', why: 'requested', notes: [] }
+  if (headlessOnly.length > 0) return { path: 'headless', why: 'headless-only', notes: headlessOnly }
+  const noDisplay = noDisplayReason(env, platform)
+  if (noDisplay !== null) return { path: 'headless', why: 'no-display', notes: [`no display: ${noDisplay}; rendered headlessly.`] }
+  return { path: 'live', notes: liveNotes }
+}
+
+/**
  * Decides whether an `obsrv_snap` call drives the visible app or renders
- * headlessly (spec §14 "Live drive"), given whether a control-enabled app
- * answered discovery. Documented calls, exercised in tests/unit/mcpLib.test.ts:
+ * headlessly (spec §14 "Live drive"). Pure — it does not know whether an app
+ * is actually reachable; the caller reconciles `path: 'live'` against that.
+ * Documented calls, exercised in tests/unit/mcpLib.test.ts:
  *
  * - custom dims (width/height/dsf/diagonal) always render headlessly — the
  *   live path drives the app's preset table only — with a note, even under
@@ -368,31 +415,25 @@ export const PANE_CAPTURE_HEADLESS_NOTE =
  *   note (the live capture settles on the app's own committed navigation).
  * - `capture: 'pane'` shapes the live capture only; any headless outcome
  *   notes that it was ignored.
- * - `mode: 'live'` with no reachable app is an error, never a silent
- *   headless fallback — the caller asked to watch.
  */
 export function planSnapPath(
   input: Pick<SnapToolInput, 'width' | 'height' | 'deviceScaleFactor' | 'diagonalInches' | 'fullPage' | 'waitMs' | 'capture'>,
   mode: SnapMode,
-  liveReachable: boolean,
-): SnapPathPlan | { error: string } {
-  const paneNote = input.capture === 'pane' ? [PANE_CAPTURE_HEADLESS_NOTE] : []
-  if (mode === 'headless') return { path: 'headless', notes: paneNote }
-  if (!liveReachable) {
-    if (mode === 'live') return { error: APP_NOT_REACHABLE }
-    return { path: 'headless', notes: paneNote }
-  }
-  const notes: string[] = []
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): LivePlan | HeadlessPlan {
+  const headlessOnly: string[] = []
   const custom =
     input.width !== undefined ||
     input.height !== undefined ||
     input.deviceScaleFactor !== undefined ||
     input.diagonalInches !== undefined
-  if (custom) notes.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
-  if (input.fullPage) notes.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
-  if (notes.length > 0) return { path: 'headless', notes: [...notes, ...paneNote] }
-  if (input.waitMs !== undefined) notes.push('waitMs is headless-only and was ignored in live mode.')
-  return { path: 'live', notes }
+  if (custom) headlessOnly.push('custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.')
+  if (input.fullPage) headlessOnly.push('fullPage is headless-only; rendered headlessly instead of driving the app.')
+  const liveNotes = input.waitMs !== undefined ? ['waitMs is headless-only and was ignored in live mode.'] : []
+  const plan = planLive(mode, headlessOnly, liveNotes, env, platform)
+  if (plan.path === 'headless' && input.capture === 'pane') plan.notes.push(PANE_CAPTURE_HEADLESS_NOTE)
+  return plan
 }
 
 /**
