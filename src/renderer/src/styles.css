@@ -700,8 +700,12 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
   font-size: 10px;
   letter-spacing: 0.08em;
   white-space: nowrap;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 .agent-activity.active { color: var(--chrome-0); background: var(--warn); border-color: var(--warn); }
+.agent-activity:hover { text-decoration: line-through; }
 
 /* Drawers sit beside the panes, never over them: the native WebContentsView is
    an OS-level overlay and would cover anything painted on top of it. */

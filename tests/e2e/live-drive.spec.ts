@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
@@ -869,13 +869,42 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
 })
 
-test('toggling agent control off stops the server and removes the discovery file', async () => {
-  // The real user flow: the toolbar toggle persists agentControl: false and
-  // main stops the server.
+test('turning agent control off leaves a disabled stance, not an absent file', async () => {
   await openSettings(page, 'agent')
-  await page.click('.settings-modal .agent-toggle')
-  await expect(page.locator('.settings-modal .agent-toggle input')).not.toBeChecked()
+  await page.locator('.settings-modal .agent-toggle input').click()
   await closeSettings(page)
-  await expect.poll(() => existsSync(controlFile)).toBe(false)
-  await expect(call('status')).rejects.toThrow(/ECONNREFUSED/)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && isDisabledStance(f) ? f.pid : null
+  }).toBe(await app.evaluate(() => process.pid))
+  expect(statSync(controlFile).mode & 0o777).toBe(0o600)
+  // The server is gone: the old port refuses.
+  await expect(call('status')).rejects.toThrow()
+  // Back on for the tests that follow.
+  await openSettings(page, 'agent')
+  await page.locator('.settings-modal .agent-toggle input').click()
+  await closeSettings(page)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && !isDisabledStance(f)
+  }).toBe(true)
+  info = parseControlFile(readFileSync(controlFile, 'utf8')) as ControlInfo
+})
+
+test('the AGENT chip is a Stop button: one click turns control off', async () => {
+  await expect(page.locator('button.agent-activity')).toBeVisible()
+  await page.locator('button.agent-activity').click()
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f !== null && isDisabledStance(f)
+  }).toBe(true)
+  await expect(page.locator('button.agent-activity')).toHaveCount(0)
+  await openSettings(page, 'agent')
+  await page.locator('.settings-modal .agent-toggle input').click()
+  await closeSettings(page)
+  await expect.poll(() => {
+    const f = parseControlFile(readFileSync(controlFile, 'utf8'))
+    return f && !isDisabledStance(f)
+  }).toBe(true)
+  info = parseControlFile(readFileSync(controlFile, 'utf8')) as ControlInfo
 })

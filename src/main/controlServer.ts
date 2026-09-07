@@ -188,12 +188,31 @@ export class ControlServer {
     writeFileSync(this.file, JSON.stringify({ port, token: this.token, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
   }
 
+  /** The running app's stance while control is off: discoverable, not callable. */
+  writeDisabled(): void {
+    rmSync(this.file, { force: true })
+    writeFileSync(this.file, JSON.stringify({ enabled: false, pid: process.pid, startedAt: STARTED_AT }), { mode: 0o600 })
+  }
+
   /**
-   * Stops the server and removes the discovery file. Synchronous on purpose:
-   * the quit path must not race the process teardown, and the file — the
-   * part that outlives the process — goes first.
+   * Stops the server. The file is not removed but rewritten as a disabled
+   * stance: a client that finds it knows the app is up and the user turned
+   * control off, and asks in the app rather than launching a second one.
+   * Synchronous on purpose, like `shutdown`.
    */
   stop(): void {
+    const server = this.server
+    this.server = null
+    this.token = ''
+    if (server) {
+      server.closeAllConnections()
+      server.close()
+    }
+    this.writeDisabled()
+  }
+
+  /** Quit: the file must not outlive the process. */
+  shutdown(): void {
     const server = this.server
     this.server = null
     this.token = ''

@@ -1578,9 +1578,10 @@ export function registerIpc(ctx: AppContext): () => void {
   // persisted until the next settings write.
   if (process.env.OBSRV_AGENT_CONTROL === '1') settings = { ...settings, agentControl: true }
   if (settings.agentControl) applyAgentControl(true)
-  // The discovery file must not outlive the process; `stop` removes it
+  else control.writeDisabled()
+  // The discovery file must not outlive the process; `shutdown` removes it
   // synchronously before quit proceeds.
-  app.on('will-quit', () => control.stop())
+  app.on('will-quit', () => control.shutdown())
 
   // --- image mode -----------------------------------------------------------
   // The only file read main does for the renderer: a design export dropped on
