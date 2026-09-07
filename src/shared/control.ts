@@ -440,10 +440,10 @@ export function parseClick(raw: unknown, viewport: { width: number; height: numb
 /**
  * Validates an `openTab` payload: an optional starting URL and preset, both
  * checked against the same tables `navigate` and `setPreset` use. The URL
- * scheme allowlist is deliberately not applied here — `urlSchemeError` lives
- * in `src/mcp/lib.ts`, and this module is shared with the renderer, which
- * must not pull in the mcp lib — so `controlServer.ts` runs that check itself
- * on the url this returns, exactly as it already does for `navigate`.
+ * scheme allowlist is deliberately not applied here — `navigate`'s own scheme
+ * check already lives in `controlServer.ts`, so `openTab` validates the same
+ * way in the same place rather than growing a second pattern for it; that
+ * server runs the check itself on the url this returns.
  */
 export function parseOpenTab(raw: unknown): { url?: string; preset?: string } | string {
   if (!isRecord(raw)) return 'openTab payload must be an object'

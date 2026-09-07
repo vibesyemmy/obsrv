@@ -946,13 +946,50 @@ test('tabs: list, open, activate, close — and the last tab is refused', async 
 
 test('openTab refuses an unsupported URL scheme, and leaves no tab behind', async () => {
   // Mirrors the existing `navigate` scheme-check test: `parseOpenTab` itself
-  // does not judge the scheme (shared/control.ts must not import the mcp lib
-  // `urlSchemeError` lives in), so this is the layer that actually proves it —
-  // the control server applies the same allowlist before the new tab can load.
+  // does not judge the scheme — `navigate`'s own scheme check already lives
+  // in the control server, so `openTab` is checked the same way in the same
+  // place — so this is the layer that actually proves it: the control server
+  // applies the same allowlist before the new tab can load.
   const before = await call('tabs')
   const countBefore = (before.body.tabs as unknown[]).length
   const bad = await call('openTab', { url: 'javascript:alert(1)' })
   expect(bad.status).toBe(400)
   expect(String(bad.body.error)).toContain('unsupported URL scheme')
   expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+})
+
+test('closeTab with an unknown id returns 409', async () => {
+  const countBefore = ((await call('tabs')).body.tabs as unknown[]).length
+  const res = await call('closeTab', { id: 'no-such-tab' })
+  expect(res.status).toBe(409)
+  expect(String(res.body.error)).toMatch(/no tab/)
+  expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+})
+
+test('openTab at the maxTabs cap returns 409, and leaves the strip unchanged', async () => {
+  // Opening enough tabs to actually hit the default cap (12) would be the
+  // slow, honest way to reach this path; lowering the cap to the strip's
+  // current size is the cheap, equally honest one — `maxTabs` is a plain,
+  // writable field on the same `TabManager` `openTab` already calls through.
+  const countBefore = ((await call('tabs')).body.tabs as unknown[]).length
+  const savedMaxTabs = await app.evaluate(() => (globalThis as any).__obsrv.tabs.maxTabs as number)
+  await app.evaluate(
+    (_electron, n: number) => {
+      ;(globalThis as any).__obsrv.tabs.maxTabs = n
+    },
+    countBefore,
+  )
+  try {
+    const atCap = await call('openTab', { url: FIXTURE })
+    expect(atCap.status).toBe(409)
+    expect(String(atCap.body.error)).toMatch(/tab limit/)
+    expect((await call('tabs')).body.tabs).toHaveLength(countBefore)
+  } finally {
+    await app.evaluate(
+      (_electron, n: number) => {
+        ;(globalThis as any).__obsrv.tabs.maxTabs = n
+      },
+      savedMaxTabs,
+    )
+  }
 })

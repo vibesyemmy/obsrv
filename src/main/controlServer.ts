@@ -297,9 +297,10 @@ export class ControlServer {
       case 'openTab': {
         const req = parseOpenTab(payload)
         if (typeof req === 'string') return reply(400, { error: req })
-        // The same allowlist `navigate` applies: `parseOpenTab` cannot check it
-        // itself (shared/control.ts must not depend on the mcp lib the check
-        // lives in), so it is applied here on the url it validated.
+        // The same allowlist `navigate` applies, checked the same way in the
+        // same place: `navigate`'s scheme check already lives here, so
+        // `openTab` reuses that pattern instead of a second one, applying it
+        // here on the url `parseOpenTab` already validated for shape.
         if (req.url !== undefined) {
           const bad = urlSchemeError(req.url)
           if (bad) return reply(400, { error: bad })

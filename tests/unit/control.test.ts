@@ -583,11 +583,12 @@ describe('tab commands', () => {
     expect(parseOpenTab({ url: ' https://x.test ' })).toEqual({ url: 'https://x.test' })
     expect(parseOpenTab({ preset: 'laptop-768' })).toEqual({ preset: 'laptop-768' })
     expect(parseOpenTab({ preset: 'nope' })).toMatch(/preset/)
-    // The URL scheme allowlist is not this function's job: `shared/control.ts`
-    // must not depend on the mcp lib the check lives in, so `controlServer.ts`
-    // applies `urlSchemeError` itself after this returns — see the e2e test
-    // 'openTab refuses an unsupported URL scheme' in live-drive.spec.ts, which
-    // mirrors how `navigate`'s own scheme check is tested at that layer.
+    // The URL scheme allowlist is not this function's job: `navigate`'s own
+    // scheme check already lives in `controlServer.ts`, so `openTab` is
+    // checked the same way in the same place rather than a second pattern.
+    // `controlServer.ts` applies `urlSchemeError` itself after this returns —
+    // see the e2e test 'openTab refuses an unsupported URL scheme' in
+    // live-drive.spec.ts, which mirrors how `navigate`'s check is tested.
     expect(parseOpenTab({ url: 'javascript:alert(1)' })).toEqual({ url: 'javascript:alert(1)' })
   })
   it('parseTabId: a non-empty string, or an error naming the shape', () => {
