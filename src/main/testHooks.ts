@@ -1,6 +1,8 @@
 import type { AppContext } from './context'
+import { hooks, testState } from './ipc'
 import type { NativePane } from './nativePane'
 import type { SyncBus } from './syncBus'
+import type { Settings } from '../shared/types'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 
@@ -15,6 +17,12 @@ export interface TestHandle extends AppContext {
   readonly native: NativePane
   readonly target: TargetSource
   readonly sync: SyncBus
+  /** `ipc.ts`'s hooks index.ts calls into, e.g. a synthetic `second-instance` (consent.spec.ts). */
+  readonly hooks: typeof hooks
+  /** `ipc.ts`'s in-memory settings — what the toolbar and the control server see right now. */
+  settings(): Settings
+  /** The settings file straight off disk, ignoring the in-memory copy — proves a session-only change persisted nothing. */
+  persistedSettings(): Settings
 }
 
 declare global {
@@ -39,5 +47,8 @@ export function exposeForTests(ctx: AppContext): void {
     get sync() {
       return ctx.tabs.active().sync
     },
+    hooks,
+    settings: () => testState.settings(),
+    persistedSettings: () => testState.persistedSettings(),
   }
 }

@@ -26,7 +26,7 @@ import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMes
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
-import type { HostInfo, Orientation, ScrollReport, ScrollRequest, UpdateState } from '../shared/types'
+import type { HostInfo, Orientation, ScrollReport, ScrollRequest, Settings, UpdateState } from '../shared/types'
 import { SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
@@ -35,6 +35,36 @@ import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
+
+/**
+ * Hooks `index.ts` calls into this module's setup closure. `second-instance`
+ * is registered in `index.ts` before the window exists, and the control
+ * server (which decides whether there is anything to ask) lives in here —
+ * so `index.ts` calls through this rather than reaching into the closure
+ * itself. Reassigned once `registerIpc` has a `control` and a `win` to ask.
+ */
+export const hooks = {
+  secondInstance: (): void => {},
+}
+
+/**
+ * Test-only accessors, published on `__obsrv` by `testHooks.ts` under
+ * `OBSRV_TEST=1` (see `src/main/testHooks.ts`). `settings()` mirrors this
+ * module's in-memory copy; `persistedSettings()` re-reads the settings file
+ * straight off disk with the same loader the app boots with — the point of
+ * the consent spec is proving that "Allow for this session" writes nothing
+ * there, so it must not answer from memory. Both throw until `registerIpc`
+ * has a `settingsFile` to read, which happens before any test can observe
+ * them (registerIpc runs before `exposeForTests` in `index.ts`).
+ */
+export const testState = {
+  settings: (): Settings => {
+    throw new Error('testState.settings read before registerIpc initialised it')
+  },
+  persistedSettings: (): Settings => {
+    throw new Error('testState.persistedSettings read before registerIpc initialised it')
+  },
+}
 
 /** How long a driver's reload waits for the target's load to finish before answering anyway. */
 const RELOAD_WAIT_MS = 15_000
@@ -116,6 +146,11 @@ export function registerIpc(ctx: AppContext): () => void {
   const settingsFile = join(app.getPath('userData'), 'settings.json')
   let settings = loadSettings(settingsFile)
   tabs.maxTabs = settings.maxTabs
+  // See `testState`'s own comment: `persistedSettings` re-reads the file with
+  // the same loader rather than trusting the `settings` variable, which is
+  // exactly the thing a "nothing persisted" assertion must not trust either.
+  testState.settings = () => settings
+  testState.persistedSettings = () => loadSettings(settingsFile)
 
   // Only the app's own renderer may drive these channels. The native pane and
   // the target load third-party pages; neither has a preload that reaches
@@ -1572,6 +1607,29 @@ export function registerIpc(ctx: AppContext): () => void {
       control.stop()
     }
   }
+  // A second launch — the MCP server trying to start the app because it found
+  // no live control — is the one moment the app can ask the user (spec §2c).
+  // Only while control is off: with it on, the knock has nothing to add.
+  hooks.secondInstance = () => {
+    if (control.running || win.isDestroyed()) return
+    win.webContents.send(IPC.agentConsentRequest)
+  }
+  // Fire-and-forget, like every other chrome -> main channel here: a foreign
+  // sender is ignored rather than thrown at (see the sender-check note above
+  // `fromRenderer`/`assertRenderer` at the top of this function).
+  on(IPC.agentConsent, (e, allow: unknown) => {
+    if (!fromRenderer(e)) return
+    if (allow !== true) {
+      // Not now: the stance is already disabled on disk; nothing to write.
+      return
+    }
+    // For this session, exactly as OBSRV_AGENT_CONTROL=1: in memory only, so
+    // the toolbar reflects it and toggling off later works normally; nothing
+    // persists until the next settings write.
+    settings = { ...settings, agentControl: true }
+    applyAgentControl(true)
+    if (!win.isDestroyed()) win.webContents.send(IPC.settingsChanged, settings)
+  })
   // OBSRV_AGENT_CONTROL=1 force-enables the server for this session (the
   // e2e harness uses it). It flips the in-memory setting so the toolbar
   // toggle reflects reality and toggling off works normally; nothing is

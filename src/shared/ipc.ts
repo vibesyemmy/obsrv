@@ -80,6 +80,12 @@ export const IPC = {
   uiState: 'obsrv:ui-state',
   agentApply: 'obsrv:agent-apply',
   agentActivity: 'obsrv:agent-activity',
+  /** Main -> chrome: a second launch knocked while agent control is off; ask the user. */
+  agentConsentRequest: 'obsrv:agent-consent-request',
+  /** Chrome -> main: the user's answer, `true` to allow for this session. */
+  agentConsent: 'obsrv:agent-consent',
+  /** Main -> chrome: the whole Settings object changed on main's side (e.g. "Allow for this session"); the store replaces its copy. */
+  settingsChanged: 'obsrv:settings-changed',
   getUpdate: 'obsrv:get-update',
   checkUpdate: 'obsrv:check-update',
   openRelease: 'obsrv:open-release',

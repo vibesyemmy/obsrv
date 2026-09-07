@@ -1,7 +1,7 @@
 import { app, type BrowserWindow } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
-import { readAppVersion, registerIpc, TOOLBAR_H } from './ipc'
+import { hooks, readAppVersion, registerIpc, TOOLBAR_H } from './ipc'
 import { initLog, log } from './log'
 import { installMenu } from './menu'
 import { Overlay } from './overlay'
@@ -145,6 +145,9 @@ if (!app.requestSingleInstanceLock()) {
     secondInstances++
     if (process.env.OBSRV_TEST === '1') (globalThis as { __obsrvSecondInstances?: number }).__obsrvSecondInstances = secondInstances
     log.info('a second launch was refused; bringing this window to the front')
+    // The one moment the app can ask the user about agent control (spec
+    // §2c): a no-op while control is on, or before `boot()` has wired it.
+    hooks.secondInstance()
     const win = mainWin
     if (!win || win.isDestroyed()) return
     if (win.isMinimized()) win.restore()

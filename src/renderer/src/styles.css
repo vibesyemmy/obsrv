@@ -718,6 +718,22 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .agent-activity.active { color: var(--chrome-0); background: var(--warn); border-color: var(--warn); }
 .agent-activity:hover { text-decoration: line-through; }
 
+/* The consent bar (Task 8): a second launch knocked while agent control is
+   off, and only the app can ask. Non-modal — it sits in flow under the
+   toolbar rather than over the panes, so it never steals focus from the page
+   underneath it. */
+.consent-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--warn-bg, rgba(255, 180, 0, 0.12));
+  border-bottom: 1px solid var(--warn);
+  font-size: 12px;
+}
+.consent-bar button { font: inherit; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--warn); background: transparent; cursor: pointer; }
+.consent-bar .consent-allow { background: var(--warn); color: var(--chrome-0); }
+
 /* Drawers sit beside the panes, never over them: the native WebContentsView is
    an OS-level overlay and would cover anything painted on top of it. */
 .body { flex: 1 1 auto; display: flex; min-height: 0; }
