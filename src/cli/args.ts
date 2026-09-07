@@ -121,6 +121,8 @@ export interface SnapCommand {
   tiled: boolean
   /** `--single-surface`: the old full-page behaviour, one tall viewport. */
   singleSurface: boolean
+  /** `--keep-stuck-chrome`: leave viewport-stuck chrome in every band, repeats and all. */
+  keepStuckChrome: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -206,12 +208,15 @@ snap flags:
                        output directory, or a pattern containing {preset}.
   --full-page          Capture the whole page: the viewport stays the screen's own and the page is
                        captured a screenful at a time (up to twelve) and stitched. A page that scrolls
-                       an inner container rather than the window is captured by scrolling that. A
-                       sticky header repeats at the top of each band (an artefact of stitching).
+                       an inner container rather than the window is captured by scrolling that.
+                       Chrome stuck to the viewport (a fixed or sticky header, a cookie bar) is
+                       hidden for the bands after the first, so it appears once and the page rows
+                       behind it are not lost.
   --single-surface     With --full-page: the old behaviour, one viewport as tall as the page (device
                        pixels capped at 4096). Faster and never repeats a sticky header, but a page
                        sized against the viewport lays out differently on a surface that tall, and a
                        page that scrolls an inner container is captured as one screen.
+  --keep-stuck-chrome  With --full-page: leave stuck chrome in every band, as the capture used to.
   --tiled              Accepted and ignored: banding is what --full-page does now.
   --matrix <id,id,…>   Render each listed preset in one run.
 
@@ -258,7 +263,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'json'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
@@ -270,7 +275,7 @@ const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeo
  * `--out` given to diff is "a snap flag" even though report takes it too.
  */
 const EXTRA_FLAGS: Record<Command, Set<string>> = {
-  snap: new Set(['out', 'full-page', 'tiled', 'single-surface', 'matrix']),
+  snap: new Set(['out', 'full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'matrix']),
   diff: new Set(['out-dir', 'json']),
   audit: new Set(['tap-mm', 'text-mm']),
   // Order matters for a shared flag's named owner: the command that owns the
@@ -480,10 +485,14 @@ export function parseArgs(argv: string[]): CliCommand {
     const fullPage = flags.has('full-page')
     const tiled = flags.has('tiled')
     const singleSurface = flags.has('single-surface')
+    const keepStuckChrome = flags.has('keep-stuck-chrome')
     if (tiled && !fullPage) throw new ArgError('--tiled goes with --full-page (and is now its default, so it does nothing)')
     if (singleSurface && !fullPage) throw new ArgError('--single-surface goes with --full-page: it is how the whole page is captured')
     if (singleSurface && tiled) throw new ArgError('--single-surface and --tiled ask for opposite things; --tiled is the default and can be dropped')
-    return { command, url, specs, profileId, out, matrix, fullPage, tiled, singleSurface, waitMs, timeoutMs }
+    if (keepStuckChrome && !fullPage) throw new ArgError('--keep-stuck-chrome goes with --full-page: only a banded capture hides anything')
+    if (keepStuckChrome && singleSurface)
+      throw new ArgError('--keep-stuck-chrome has nothing to do on one surface: a single-surface capture has no bands to repeat chrome in')
+    return { command, url, specs, profileId, out, matrix, fullPage, tiled, singleSurface, keepStuckChrome, waitMs, timeoutMs }
   }
 
   if (command === 'audit') {

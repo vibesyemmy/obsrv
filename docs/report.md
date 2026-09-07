@@ -45,14 +45,15 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   (`100vh` sections grow with it — measured, a hero 800 px tall on the phone
   came out 2048 when the viewport was held at the cap), and the audit and
   lint walks that follow measure the page as captured, so they measure the
-  screen's layout. Two things follow from banding. A sticky header repeats
-  at the top of every band — once per band, which is not what scrolling shows:
-  stuck chrome stays in one place there. It is an artefact of stitching, and
-  measured on tailwindcss.com/docs at laptop-768 it is five identical copies
-  of the header down a six-band capture. A page without sticky chrome has
-  none (Wikipedia, eleven bands, zero repeats). And an
-  animating page pays its early exit once per band, so a long animated page
-  costs a few seconds more. Past twelve bands the report says how many
+  screen's layout. Two things follow from banding. Chrome stuck to the
+  viewport is painted into every band, which both repeats it down the raster
+  and hides the page rows behind it in every band but the first; full-bleed
+  chrome is therefore hidden from the second band on, so it appears once and
+  those rows are captured (measured on tailwindcss.com/docs at laptop-768: a
+  57 px `fixed` header over three later bands). A stuck side rail is left
+  alone — it covers no page content, and hiding it would leave a blank column.
+  And an animating page pays its early exit once per band, so a long animated
+  page costs a few seconds more. Past twelve bands the report says how many
   findings lie
   beyond what was captured. The overview is downsampled to about 800 device
   px wide and at most 3200 tall, so a long page becomes a map and the crops

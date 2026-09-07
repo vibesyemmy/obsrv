@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
 import { SCROLL_HOST_SCRIPT } from '../shared/scrollHost'
+import { STUCK_CHROME_SCRIPT, type StuckBar } from '../shared/stuckChrome'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
 import { inspectReadout } from '../shared/inspectReadout'
@@ -46,6 +47,13 @@ const REPORT_OVERVIEW_MAX_HEIGHT = 3200
  * lies past them.
  */
 const MAX_TILE_BANDS = 12
+/**
+ * After scrolling the probe, how long stuck chrome gets to settle before it is
+ * measured. Sticky repositioning is synchronous, but a header that animates
+ * itself in or out on scroll is not, and measuring it mid-transition would
+ * call it moving when it is about to stop.
+ */
+const STUCK_PROBE_SETTLE_MS = 200
 
 /** One line under a lint group's crop: the rule, what the group shares, how many. */
 function lintDetail(g: LintGroup): string {
@@ -128,6 +136,8 @@ interface RenderResult {
   lintReport?: LintReport | null
   /** With `tiled`: how many bands the page was captured in; absent when one surface held it. */
   bands?: number
+  /** Chrome hidden for the bands after the first; absent when one surface held the page. */
+  stuckChrome?: StuckBar[]
   /**
    * Time from the start of navigation to the page going paint-quiet, with
    * `--wait` taken back out; null when it never settled within the budget.
@@ -147,6 +157,12 @@ interface RenderOptions {
    * is the same capture on request.
    */
   tiled?: boolean
+  /**
+   * Keeps chrome stuck to the viewport in every band. Off by default: a stuck
+   * bar is painted into each band, which both repeats it down the stitched
+   * raster and hides the page rows behind it in every band but the first.
+   */
+  keepStuckChrome?: boolean
   /** Opts out of banding: one viewport as tall as the page, as `--full-page` used to be. */
   singleSurface?: boolean
   waitMs: number
@@ -213,6 +229,45 @@ async function loadWithin(
   }
 }
 
+/**
+ * Which chrome is stuck to the viewport, measured rather than read off
+ * `position`: both `fixed` and `sticky` do this on real pages (tailwindcss.com
+ * uses one, developer.mozilla.org the other), and an element that stays put
+ * between two scroll offsets is stuck whichever put it there.
+ *
+ * Both offsets are past the first band on purpose. A `sticky` element sits at
+ * its natural place at the top of the page and only stops once the page has
+ * scrolled under it, so comparing scroll 0 against a later band shows it
+ * moving and misses it — measured on MDN, whose header and both rails are
+ * sticky. Two scrolls, two probes, no captures.
+ *
+ * Returns an empty list rather than guessing whenever the two offsets cannot
+ * be told apart: a page whose scroll clamps to the same place twice offers no
+ * evidence, and "everything looked identical" would hide the whole page.
+ */
+async function findStuckChrome(
+  target: TargetSource,
+  scrollTo: (y: number) => Promise<number>,
+  bandPage: number,
+  warn: (message: string) => void,
+): Promise<StuckBar[]> {
+  try {
+    await target.webContents.executeJavaScript(STUCK_CHROME_SCRIPT)
+    const first = await scrollTo(Math.round(bandPage))
+    await sleep(STUCK_PROBE_SETTLE_MS)
+    await target.webContents.executeJavaScript('window.__obsrvChrome.mark(), 0')
+    const second = await scrollTo(Math.round(bandPage * 2))
+    await sleep(STUCK_PROBE_SETTLE_MS)
+    if (Math.abs(second - first) < 1) return []
+    return (await target.webContents.executeJavaScript('window.__obsrvChrome.settle()')) as StuckBar[]
+  } catch (e) {
+    // A page that refuses the probe still gets captured; the bands just keep
+    // their chrome, which is what they did before this existed.
+    warn(`warning: could not measure chrome stuck to the viewport, so the bands keep it: ${e instanceof Error ? e.message : String(e)}`)
+    return []
+  }
+}
+
 async function render(url: string, spec: RenderSpec, options: RenderOptions): Promise<RenderResult> {
   const target = new TargetSource(30, { mobileEmulation: options.mobileEmulation ?? true })
   try {
@@ -243,6 +298,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     let cssHeight = applied.height
     let frame: CapturedFrame | null = null
     let bandsCaptured: number | undefined
+    let stuckChrome: StuckBar[] | undefined
     // Under a throttle the quiet moment is the measurement (`settledMs`), and
     // a page loading over 3G paints steadily too: no early exit there.
     const quiescent = (): Promise<CapturedFrame> =>
@@ -395,30 +451,52 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           // at the cap), and the audit and lint walks that follow would
           // measure that page, not the screen's. Each band is its own
           // quiescent capture, so an animating page pays its early exit per
-          // band. A sticky header repeats at the top of every band — which is
-          // what scrolling shows a person, too.
+          // band. Chrome stuck to the viewport is painted into every band, so
+          // it is hidden for the bands after the first (`hideStuckChrome`
+          // below); `--keep-stuck-chrome` leaves it.
           const bandPage = applied.height / spec.textScale
           const bandsWanted = Math.ceil(scrollHeight / bandPage)
           const bandCount = Math.min(bandsWanted, MAX_TILE_BANDS)
           const bands: CaptureBand[] = []
           let settled = true
           let unsettledReason: UnsettledReason | undefined
-          for (let i = 0; i < bandCount; i++) {
-            const wantY = Math.round(i * bandPage)
-            const y = Math.round(
+          const scrollBandTo = async (y: number): Promise<number> =>
+            Math.round(
               (await target.webContents.executeJavaScript(
-                `window.scrollTo({ top: ${wantY}, left: 0, behavior: 'instant' }); window.scrollY`,
+                `window.scrollTo({ top: ${y}, left: 0, behavior: 'instant' }); window.scrollY`,
               )) as number,
             )
-            const f = await quiescent()
-            if (!f.settled) {
-              settled = false
-              if (unsettledReason === undefined) unsettledReason = f.unsettledReason
+          const stuck =
+            bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome(target, scrollBandTo, bandPage, warn) : []
+          try {
+            for (let i = 0; i < bandCount; i++) {
+              const wantY = Math.round(i * bandPage)
+              const y = await scrollBandTo(wantY)
+              // Hidden from the second band on: the first is the page as it
+              // first shows, chrome and all.
+              if (i === 1 && stuck.length > 0) await target.webContents.executeJavaScript('window.__obsrvChrome.hide(), 0')
+              const f = await quiescent()
+              if (!f.settled) {
+                settled = false
+                if (unsettledReason === undefined) unsettledReason = f.unsettledReason
+              }
+              bands.push({ y: Math.round(y * spec.textScale * spec.deviceScaleFactor), width: f.width, height: f.height, bgra: f.bgra })
+              // The scroll clamped short of where the next band would start:
+              // that was the bottom, and the band already covers it.
+              if (y < wantY) break
             }
-            bands.push({ y: Math.round(y * spec.textScale * spec.deviceScaleFactor), width: f.width, height: f.height, bgra: f.bgra })
-            // The scroll clamped short of where the next band would start:
-            // that was the bottom, and the band already covers it.
-            if (y < wantY) break
+          } finally {
+            // The walks run on this page after the capture, and an agent
+            // driving the app keeps looking at it: whatever was hidden goes
+            // back even if a band threw.
+            if (stuck.length > 0) {
+              await target.webContents.executeJavaScript('window.__obsrvChrome.restore(), 0').catch(() => undefined)
+            }
+          }
+          if (stuck.length > 0) {
+            stuckChrome = stuck
+            const what = stuck.map(b => `${b.element} (${b.position}, ${b.height} px)`).join(', ')
+            human(`hid chrome stuck to the viewport for the bands after the first: ${what}`)
           }
           const width = bands[0]!.width
           const height = Math.max(...bands.map(b => b.y + b.height))
@@ -476,6 +554,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       ...(auditReport !== undefined ? { auditReport } : {}),
       ...(lintReport !== undefined ? { lintReport } : {}),
       ...(bandsCaptured !== undefined ? { bands: bandsCaptured } : {}),
+      ...(stuckChrome !== undefined ? { stuckChrome } : {}),
     }
   } finally {
     target.destroy()
@@ -522,7 +601,7 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // Only under --full-page: the flagless JSON is a contract. `tiled` says
       // the page was captured in bands, which is now the default, so it is
       // false only when --single-surface asked for one viewport.
-      ...(cmd.fullPage ? { tiled: !cmd.singleSurface, bands: r.bands ?? 1 } : {}),
+      ...(cmd.fullPage ? { tiled: !cmd.singleSurface, bands: r.bands ?? 1, stuckChrome: r.stuckChrome ?? [] } : {}),
       // Only when one was applied: at ×1 this object is the contract every
       // consumer already parses, and a run that asked for a scale is new code.
       ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),

@@ -211,18 +211,20 @@ happened on the matrix snaps.
   never painted. Use `--wait` for content that settles late.
 - The report's full-page capture takes a tall page in bands of one
   screenful each (the viewport stays the screen's, so `100vh` sections keep
-  their size), so a sticky header repeats at the top of each band — an
-  artefact of stitching, not what scrolling shows, and one copy per band on a
-  page that has such chrome.
+  their size). Chrome stuck to the viewport would be painted into every band,
+  so a full-bleed header or cookie bar is hidden from the second band on: it
+  appears once, and the page rows behind it are captured rather than lost. A
+  stuck side rail stays, since it covers no page content.
 - `--full-page` captures the page a screenful at a time and stitches it, at
-  the screen's own viewport, so `100vh` sections keep their size and a sticky
-  header repeats per band, which is an artefact of stitching rather than what
-  scrolling shows. An **app shell** —
+  the screen's own viewport, so `100vh` sections keep their size; full-bleed
+  chrome stuck to the viewport is hidden for the bands after the first
+  (`keepStuckChrome` / `--keep-stuck-chrome` leaves it), and the JSON's
+  `stuckChrome` names what was hidden. An **app shell** —
   `html, body { overflow: hidden }` with an inner `overflow-y: auto`
   container, most web apps — is followed by scrolling that container, so its
   content is captured and the report pins findings on it. `singleSurface`
   (`--single-surface`) asks for one viewport as tall as the page instead,
-  which is faster and never repeats chrome, but lays a viewport-sized page out
+  which is faster and has no bands at all, but lays a viewport-sized page out
   differently and gets one screen of an app shell; it says so when it does.
   `snap --full-page` keeps its single-surface cap unless you add `--tiled`
   (`tiled: true` on `obsrv_snap`). On one surface the viewport is as tall as

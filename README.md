@@ -311,17 +311,19 @@ belongs to an unrelated package.
   reached — but scrolling a nested container **by hand** in the native pane is not
   mirrored to the target: element scroll events don't bubble to `window`, so the report
   side never sees them. Dragging the page itself still syncs both ways.
-- A **full-page capture repeats sticky chrome.** `--full-page` captures the page a
-  screenful at a time at the screen's own viewport and stitches the bands, so a sticky
-  header appears at the top of each one. That is *not* what scrolling shows — stuck chrome
-  stays put there — so it is an artefact of stitching, and on a page that has such chrome
-  it is one copy per band (measured: five identical headers down a six-band capture of
-  tailwindcss.com/docs at laptop-768; a page without it, like Wikipedia, has none). It is
-  the price of a faithful layout: the alternative, one viewport as tall as the page,
-  changes how a page sized against the viewport lays out and cannot follow an inner
-  scroller at all. `--single-surface` asks for it anyway, and says when the layout moved.
-  Hiding stuck chrome for every band after the first would fix it and has not been done:
-  it means mutating the page mid-capture, which wants more care than it has had.
+- **A stuck side rail still repeats in a full-page capture.** `--full-page` captures the
+  page a screenful at a time at the screen's own viewport and stitches the bands, so
+  anything stuck to the viewport is painted into every one. Full-bleed chrome — a header,
+  a cookie bar — is now hidden for the bands after the first, so it appears once and the
+  page rows behind it are not lost (measured: tailwindcss.com/docs at laptop-768 stuck its
+  57 px header with `position: fixed`, developer.mozilla.org sticks its 98 px header and
+  both side rails with `position: sticky`, so detection is by measurement — an element
+  whose viewport rect is unchanged between two scroll offsets — rather than by reading
+  `position`). A *rail* is left alone: it covers no page content, so hiding it would only
+  leave a blank column down every band but the first. `--keep-stuck-chrome` leaves all of
+  it, as the capture used to; `--single-surface` avoids bands entirely, at the price of a
+  page sized against the viewport laying out differently and an inner scroller not being
+  followed at all.
 - Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
   shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
   (`document.querySelector` doesn't cross either boundary), so a web-component app that

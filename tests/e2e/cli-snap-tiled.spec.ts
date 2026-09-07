@@ -166,3 +166,61 @@ test('an app shell whose content the walk cannot reach says so, and an ordinary 
   expect(short.code, short.stderr).toBe(0)
   expect((JSON.parse(short.stdout).warnings as string[]).join(' ')).not.toMatch(/scrolls nothing the capture can reach/)
 })
+
+test('chrome stuck to the viewport is hidden for the bands after the first, and named in the JSON', async () => {
+  const out = join(outDir, 'stuck.png')
+  const r = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const j = JSON.parse(r.stdout) as {
+    bands: number
+    stuckChrome: Array<{ element: string; position: string; top: number; height: number }>
+  }
+  expect(j.bands).toBeGreaterThan(1)
+  // Both ways a page sticks chrome, found by measurement rather than by
+  // reading `position` — which is why the fixture uses one of each.
+  const found = j.stuckChrome.map(b => `${b.element}:${b.position}`).sort()
+  expect(found).toEqual(['div#sticky-bar:sticky', 'header#fixed-bar:fixed'])
+  // The rail is stuck too and stays: it covers no page content, and hiding it
+  // would leave a blank column down every band after the first.
+  expect(found.join(' ')).not.toContain('rail')
+  expect(r.stderr).toContain('hid chrome stuck to the viewport')
+})
+
+test('--keep-stuck-chrome leaves every band as the capture used to take it', async () => {
+  const out = join(outDir, 'stuck-kept.png')
+  const r = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--keep-stuck-chrome', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  expect((JSON.parse(r.stdout) as { stuckChrome: unknown[] }).stuckChrome).toEqual([])
+  expect(r.stderr).not.toContain('hid chrome stuck to the viewport')
+})
+
+test('the two captures are the same size and differ only where the chrome was', async () => {
+  // The reason hiding is `visibility` and not `display: none`: the page must
+  // be laid out identically, so the bands still stitch to the same raster.
+  const hidden = join(outDir, 'cmp-hidden.png')
+  const kept = join(outDir, 'cmp-kept.png')
+  const a = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--out', hidden])
+  const b = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--keep-stuck-chrome', '--out', kept])
+  expect(a.code, a.stderr).toBe(0)
+  expect(b.code, b.stderr).toBe(0)
+  const dims = (out: string): { width: number; height: number } => {
+    const { width, height } = JSON.parse(out) as { width: number; height: number }
+    return { width, height }
+  }
+  expect(dims(a.stdout)).toEqual(dims(b.stdout))
+  expect(readFileSync(hidden).equals(readFileSync(kept))).toBe(false)
+})
+
+test('a page with no stuck chrome hides nothing and says nothing', async () => {
+  const out = join(outDir, 'plain.png')
+  const r = await runCli(['snap', fixture('tall-audit.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  expect((JSON.parse(r.stdout) as { stuckChrome: unknown[] }).stuckChrome).toEqual([])
+  expect(r.stderr).not.toContain('hid chrome stuck to the viewport')
+})
+
+test('--keep-stuck-chrome without --full-page is a usage error saying what it goes with', async () => {
+  const r = await runCli(['snap', fixture('stuck-chrome.html'), '--keep-stuck-chrome'])
+  expect(r.code).not.toBe(0)
+  expect(r.stderr).toContain('--keep-stuck-chrome goes with --full-page')
+})

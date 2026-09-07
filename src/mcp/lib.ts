@@ -37,6 +37,7 @@ export interface SnapToolInput {
   tiled?: boolean | undefined
   /** With fullPage: one viewport as tall as the page, instead of bands. */
   singleSurface?: boolean | undefined
+  keepStuckChrome?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
   /** Live mode only: capture the whole app window (default) or just the target pane. */
@@ -286,8 +287,11 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.tiled && !input.fullPage) throw new UsageError('`tiled` goes with `fullPage` (and is now its default, so it does nothing).')
   if (input.singleSurface && !input.fullPage) throw new UsageError('`singleSurface` goes with `fullPage`: it is how the whole page is captured.')
+  if (input.keepStuckChrome && !input.fullPage)
+    throw new UsageError('`keepStuckChrome` goes with `fullPage`: only a banded capture hides anything.')
   if (input.fullPage) args.push('--full-page')
   if (input.singleSurface) args.push('--single-surface')
+  if (input.keepStuckChrome) args.push('--keep-stuck-chrome')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   args.push('--out', outPath)

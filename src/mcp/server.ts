@@ -200,13 +200,19 @@ const snapInputShape = {
     .boolean()
     .optional()
     .describe(
-      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. A sticky header repeats per band — an artefact of stitching, not what scrolling shows. Headless only.',
+      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. Chrome stuck to the viewport (a fixed or sticky header, a cookie bar) is hidden for the bands after the first, so it appears once and the page rows behind it are not lost. Headless only.',
     ),
   singleSurface: z
     .boolean()
     .optional()
     .describe(
       'With fullPage: one viewport as tall as the page instead (device px capped at 4096). Faster and never repeats a sticky header, but a page sized against the viewport lays out differently on a surface that tall, and a page that scrolls an inner container comes back as one screen.',
+    ),
+  keepStuckChrome: z
+    .boolean()
+    .optional()
+    .describe(
+      'With fullPage: leave chrome stuck to the viewport in every band, as the capture used to. Use it to see what a scroller sees at every depth; the default hides it, which shows the page once and recovers the rows behind it.',
     ),
   tiled: z.boolean().optional().describe('Accepted and ignored: banding is what fullPage does now.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late-settling content. Default 0.'),
@@ -236,6 +242,10 @@ const snapInputShape = {
 const snapOutputShape = {
   tiled: z.boolean().optional().describe('Only with `fullPage`: whether the page was captured in bands (false only under `singleSurface`).'),
   bands: z.number().optional().describe('Only with `fullPage`: how many bands the page was captured in.'),
+  stuckChrome: z
+    .array(z.object({ element: z.string(), position: z.string(), top: z.number(), height: z.number() }))
+    .optional()
+    .describe('Only with `fullPage`: chrome hidden for the bands after the first, each with the selector, its `position` and its box. Empty when the page has none, or under `keepStuckChrome`.'),
   mode: z
     .enum(['headless', 'live'])
     .describe('How the snap was produced: a headless render, or a capture of the visible Obsrv app window (live drive).'),
