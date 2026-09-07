@@ -25,3 +25,6 @@ tests/browser/__screenshots__/
 # that recurring.
 /CLAUDE.md
 /.claude/
+
+# Subagent-driven-development scratch: ledgers, briefs, review packages.
+.superpowers/
