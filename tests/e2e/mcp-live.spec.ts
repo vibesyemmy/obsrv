@@ -19,6 +19,7 @@ import { launchApp, rendererWindow } from './launch'
 const ROOT = resolve(__dirname, '../..')
 const MCP_BIN = resolve(ROOT, 'bin/obsrv-mcp.js')
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
+const fixture = (name: string): string => pathToFileURL(resolve(__dirname, `../fixtures/${name}`)).href
 
 // A headless-override render boots a full Electron; same budgets as mcp.spec.
 const CALL_TIMEOUT_MS = 150_000
@@ -435,4 +436,29 @@ test('obsrv_drive sets a throttle on the live target; status and the footer repo
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getThrottle().id)).toBe('none')
   const bad = await call('obsrv_drive', { throttle: 'edge' })
   expect(bad.isError).toBe(true)
+})
+
+test('obsrv_drive: tab "new" opens and fronts a tab with the url and preset; closeTab "current" closes it last', async () => {
+  const opened = (await call('obsrv_drive', { tab: 'new', url: fixture('tall.html'), preset: 'laptop-768', capture: 'pane' })).structuredContent as {
+    tabId: string
+    presetId: string
+    tabs: Array<{ id: string; active: boolean }>
+    pngPath: string
+  }
+  expect(opened.tabs).toHaveLength(2)
+  expect(opened.tabs.find(t => t.active)!.id).toBe(opened.tabId)
+  expect(opened.presetId).toBe('laptop-768')
+  expect(opened.pngPath).toMatch(/\.png$/)
+
+  const closed = (await call('obsrv_drive', { closeTab: 'current' })).structuredContent as { tabs: unknown[]; tabId: string }
+  expect(closed.tabs).toHaveLength(1)
+  expect(closed.tabId).not.toBe(opened.tabId)
+})
+
+test('obsrv_drive: tab <id> activates before anything else runs', async () => {
+  const a = (await call('obsrv_drive', { tab: 'new', url: fixture('solid-red.html') })).structuredContent as { tabId: string; tabs: Array<{ id: string }> }
+  const other = a.tabs.find(t => t.id !== a.tabId)!.id
+  const b = (await call('obsrv_drive', { tab: other, capture: 'pane' })).structuredContent as { tabId: string }
+  expect(b.tabId).toBe(other)
+  await call('obsrv_drive', { closeTab: a.tabId })
 })

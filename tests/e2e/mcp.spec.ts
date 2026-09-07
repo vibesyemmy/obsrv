@@ -242,7 +242,7 @@ test('obsrv_snap: preset plus custom dims is a usage error with the fix', async 
   expect((r.content[0] as { text: string }).text).toMatch(/mutually exclusive/)
 })
 
-test('live drive without a running app: snap mode:"live" names why, obsrv_drive errors actionably', async () => {
+test('live drive without a running app: snap mode:"live" and obsrv_drive both name why', async () => {
   // obsrv_snap now resolves through ensureLive, which under this harness
   // (OBSRV_TEST=1, no reachable app) reports headless with a reason rather
   // than the old generic "not reachable" text — see the dedicated
@@ -253,11 +253,13 @@ test('live drive without a running app: snap mode:"live" names why, obsrv_drive 
   expect(snapText).toMatch(/no-display/)
   expect(snapText).toMatch(/OBSRV_TEST/)
 
-  // obsrv_drive is untouched by this task: it still requires an already-live
-  // app and reports the old actionable message.
+  // obsrv_drive (Task 10) also resolves through ensureLive now, rather than
+  // discoverControl directly, so it reports the same kind of reason.
   const drive = await call('obsrv_drive', { preset: 'laptop-768' })
   expect(drive.isError).toBe(true)
-  expect((drive.content[0] as { text: string }).text).toMatch(/Agent control/)
+  const driveText = (drive.content[0] as { text: string }).text
+  expect(driveText).toMatch(/no-display/)
+  expect(driveText).toMatch(/OBSRV_TEST/)
 })
 
 test('obsrv_report: one screen, rendered, audited and diffed, as a file plus a summary', async () => {

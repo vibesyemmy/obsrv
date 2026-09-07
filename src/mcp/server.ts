@@ -14,9 +14,8 @@ import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_M
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
-import { controlCall, discoverControl, ensureLive, type LiveApp } from './control'
+import { controlCall, ensureLive, type LiveApp } from './control'
 import {
-  APP_NOT_REACHABLE,
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
   buildAuditArgs,
@@ -445,6 +444,13 @@ const presetsOutputShape = {
 }
 
 const driveInputShape = {
+  tab: z
+    .string()
+    .optional()
+    .describe(
+      'Runs first. "new" opens a tab (with `url` and `preset` from this call, if given) and brings it to the front; a tab id ' +
+        'from `tabs` brings that tab to the front. Either way the user is looking at the tab everything else in this call acts on.',
+    ),
   url: z
     .string()
     .min(1)
@@ -576,6 +582,13 @@ const driveInputShape = {
         'This is how you see a scrolled or panned state — unlike obsrv_snap, nothing is navigated, so the scroll ' +
         'position survives. The PNG comes back inline when it is within the 1.5 MiB cap, and always as pngPath.',
     ),
+  closeTab: z
+    .string()
+    .optional()
+    .describe(
+      'Runs last, after `capture`: "current" closes the tab in front, an id closes that one. The last tab is refused. ' +
+        'Photograph and close in one call.',
+    ),
 }
 
 const driveOutputShape = {
@@ -642,6 +655,10 @@ const driveOutputShape = {
     .number()
     .optional()
     .describe('Only when `capture` was requested: captured height in device-independent px.'),
+  tabs: z
+    .array(z.object({ id: z.string(), url: z.string(), title: z.string(), presetId: z.string(), active: z.boolean() }))
+    .describe('Every open tab, and which is in front. Empty from an app older than tabs.'),
+  launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app.'),
 }
 
 // --- live drive --------------------------------------------------------------
@@ -1664,9 +1681,9 @@ server.registerTool(
       `— and steer the session like a guided demo: focus the window, step history (back/forward/reload), scroll ` +
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
       `neutral marker, all while the user watches.\n\n` +
-      `Only the supplied inputs run (none = just read the current state), in this fixed order: focus → url → ` +
+      `Only the supplied inputs run (none = just read the current state), in this fixed order: tab → focus → url → ` +
       `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
-      `capture. ` +
+      `capture → closeTab. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
@@ -1679,20 +1696,18 @@ server.registerTool(
       `pass \`url\`, so this is how you photograph a scrolled or panned state: scroll, then capture, in one call. ` +
       `obsrv_snap is the other way round — it points the app at a URL first, and pointing it somewhere new is a ` +
       `fresh load that starts at the top.\n\n` +
-      `Tabs: the app can hold several sessions open as tabs, each with its own URL, screen preset and page state. ` +
-      `Every command here acts on whichever tab is in front *when that command arrives* — nothing is bound to a ` +
-      `tab for the length of the call — and the returned status names it (\`tabId\`, \`tabIndex\`). A \`tabId\` ` +
-      `that changed between two calls means the user switched tabs under you; re-read the state before trusting ` +
-      `what you knew. You cannot name a different tab, nor open, close or switch tabs — those are the user's. An ` +
-      `empty \`tabId\` means an app older than tabs, which has only the one.\n\n` +
-      `Requires the app to be open with its "Agent control" toolbar toggle on; errors otherwise. This tool ` +
-      `mutates visible app state (it changes what the user's window shows, and a click can act on the live page).`,
+      `Tabs: the app holds several sessions as tabs, each with its own URL, screen and page state. Commands act on the ` +
+      `tab in front; \`tab\` brings one there first ("new" opens it), \`closeTab\` closes one last, and the result's \`tabs\` ` +
+      `lists them all. One tab per screen, left open for the user to flip through, is the natural shape of a review.\n\n` +
+      `The app is launched if it is not running. If the user has turned agent control off (the AGENT chip, or Settings), ` +
+      `this errors with why: "declined" — ask them, do not retry.`,
     inputSchema: driveInputShape,
     outputSchema: driveOutputShape,
     // Honest annotation: this changes what the user's window is showing.
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   },
   async (input: {
+    tab?: string
     url?: string
     preset?: string
     orientation?: 'portrait' | 'landscape'
@@ -1714,21 +1729,43 @@ server.registerTool(
     click?: { x: number; y: number }
     highlight?: { x: number; y: number; width: number; height: number; durationMs?: number; space?: 'pane' | 'page' }
     capture?: 'window' | 'pane' | 'raster'
+    closeTab?: string
   }): Promise<CallToolResult> => {
     if (input.url !== undefined) {
       const badScheme = urlSchemeError(input.url)
       if (badScheme) return toolError(badScheme)
     }
-    const live = await discoverControl()
-    if (!live) return toolError(APP_NOT_REACHABLE)
+    const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
+    if (resolved.path === 'headless') return toolError(`obsrv_drive needs the live app and it is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    const live = resolved.app
     try {
+      // Tab first, before even `focus`: "new" opens a tab (with `url`/`preset`
+      // from this call, if given — guarded below so they are not applied a
+      // second time) and fronts it; an id fronts an existing one. Either way
+      // the user is looking at the tab everything else in this call acts on.
+      let openedWithUrl = false
+      let openedWithPreset = false
+      if (input.tab === 'new') {
+        const payload: Record<string, unknown> = {}
+        if (input.url !== undefined) {
+          payload.url = input.url.trim()
+          openedWithUrl = true
+        }
+        if (input.preset !== undefined) {
+          payload.preset = input.preset
+          openedWithPreset = true
+        }
+        await controlCall(live.info, 'openTab', payload, DEFAULT_TIMEOUT_MS + 10_000)
+      } else if (input.tab !== undefined) {
+        await controlCall(live.info, 'activateTab', { id: input.tab }, LIVE_APPLY_TIMEOUT_MS)
+      }
       // The documented execution order: window attention first, then what is
       // showing, then how it is shown, then the in-page steering.
       if (input.focus) await controlCall(live.info, 'focusWindow', {}, LIVE_APPLY_TIMEOUT_MS)
-      if (input.url !== undefined) {
+      if (input.url !== undefined && !openedWithUrl) {
         await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
       }
-      if (input.preset !== undefined) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
+      if (input.preset !== undefined && !openedWithPreset) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
       // After the preset, before everything else: rotation is applied on top of
       // whichever screen is in force, so a call carrying both has to land in
       // that order or the rotation would be spent on the outgoing preset.
@@ -1820,10 +1857,22 @@ server.registerTool(
         warnings.push(...capture.warnings)
       }
 
+      // closeTab last, after capture: that is what lets one call photograph a
+      // tab and then close it.
+      if (input.closeTab !== undefined) {
+        const id =
+          input.closeTab === 'current'
+            ? (parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))?.tabId ?? '')
+            : input.closeTab
+        if (id === '') return toolError('closeTab: the app did not name its tab')
+        await controlCall(live.info, 'closeTab', { id }, LIVE_APPLY_TIMEOUT_MS)
+      }
+
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
       const structured = {
         ...status,
+        ...(resolved.launched ? { launched: true } : {}),
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),

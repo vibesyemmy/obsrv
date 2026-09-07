@@ -358,10 +358,6 @@ export interface HeadlessPlan {
 /** How long a launched app gets to come up before the call goes headless. */
 export const LAUNCH_TIMEOUT_MS = 12_000
 
-export const APP_NOT_REACHABLE =
-  'The Obsrv app is not reachable. Open the Obsrv desktop app and enable "Agent control" in the toolbar ' +
-  '(or pass mode: "headless" to render without it).'
-
 export const DECLINED_NOTE =
   'the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT chip or Settings → Agent control) if you need the live app.'
 
