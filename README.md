@@ -319,11 +319,15 @@ belongs to an unrelated package.
   57 px header with `position: fixed`, developer.mozilla.org sticks its 98 px header and
   both side rails with `position: sticky`, so detection is by measurement — an element
   whose viewport rect is unchanged between two scroll offsets — rather than by reading
-  `position`). A *rail* is left alone: it covers no page content, so hiding it would only
-  leave a blank column down every band but the first. `--keep-stuck-chrome` leaves all of
-  it, as the capture used to; `--single-surface` avoids bands entirely, at the price of a
-  page sized against the viewport laying out differently and an inner scroller not being
-  followed at all.
+  `position`). An **app shell** gets the same treatment against its own scroller: the
+  chrome around the scroller is sliced out of those bands already, so what repeats there
+  is a sticky toolbar or table header *inside* it, and a bar spanning a scroller inset
+  from the window is not full-bleed against the viewport at all — the frame for the whole
+  measurement is the element the capture scrolls. A *rail* is left alone in both, page or
+  panel: it covers no page content, so hiding it would only leave a blank column down
+  every band but the first. `--keep-stuck-chrome` leaves all of it, as the capture used
+  to; `--single-surface` avoids bands entirely, at the price of a page sized against the
+  viewport laying out differently and an inner scroller not being followed at all.
 - Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
   shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
   (`document.querySelector` doesn't cross either boundary), so a web-component app that

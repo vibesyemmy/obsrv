@@ -213,8 +213,10 @@ happened on the matrix snaps.
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size). Chrome stuck to the viewport would be painted into every band,
   so a full-bleed header or cookie bar is hidden from the second band on: it
-  appears once, and the page rows behind it are captured rather than lost. A
-  stuck side rail stays, since it covers no page content.
+  appears once, and the page rows behind it are captured rather than lost. An
+  app shell gets the same against its own scroller — a sticky toolbar inside it
+  is hidden, the chrome around it was never in those bands. A stuck side rail
+  stays, since it covers no page content.
 - `--full-page` captures the page a screenful at a time and stitches it, at
   the screen's own viewport, so `100vh` sections keep their size; full-bleed
   chrome stuck to the viewport is hidden for the bands after the first
@@ -222,7 +224,8 @@ happened on the matrix snaps.
   `stuckChrome` names what was hidden. An **app shell** —
   `html, body { overflow: hidden }` with an inner `overflow-y: auto`
   container, most web apps — is followed by scrolling that container, so its
-  content is captured and the report pins findings on it. `singleSurface`
+  content is captured and the report pins findings on it, with chrome stuck
+  inside that container hidden for the bands after the first. `singleSurface`
   (`--single-surface`) asks for one viewport as tall as the page instead,
   which is faster and has no bands at all, but lays a viewport-sized page out
   differently and gets one screen of an app shell; it says so when it does.

@@ -224,3 +224,43 @@ test('--keep-stuck-chrome without --full-page is a usage error saying what it go
   expect(r.code).not.toBe(0)
   expect(r.stderr).toContain('--keep-stuck-chrome goes with --full-page')
 })
+
+test("an app shell's own sticky toolbar is hidden too, and its surrounding chrome is left alone", async () => {
+  const out = join(outDir, 'shell-sticky.png')
+  const r = await runCli(['snap', fixture('app-shell-sticky.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const j = JSON.parse(r.stdout) as { bands: number; stuckChrome: Array<{ element: string; position: string }> }
+  expect(j.bands).toBeGreaterThan(1)
+  // The toolbar spans the scroller (1,166 of 1,366 CSS px), so it is only
+  // full-bleed once the frame is the scroller rather than the viewport.
+  expect(j.stuckChrome.map(b => b.element)).toEqual(['div#toolbar'])
+  expect(r.stderr).toContain('hid chrome stuck inside the scroller')
+  // Everything else about that page must survive the mutation: the header and
+  // the nav are outside the scroller and sliced out of these bands already,
+  // the rail is a column, and #app is fixed, full-bleed and holds the
+  // scroller — hiding it would blank the capture.
+  const named = JSON.stringify(j.stuckChrome)
+  for (const safe of ['app-header', 'app-nav', 'rail', 'div#app"']) expect(named).not.toContain(safe)
+})
+
+test('an app shell with no stuck chrome inside its scroller hides nothing', async () => {
+  const out = join(outDir, 'shell-plain.png')
+  const r = await runCli(['snap', fixture('app-shell-findings.html'), '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  expect((JSON.parse(r.stdout) as { stuckChrome: unknown[] }).stuckChrome).toEqual([])
+})
+
+test("the shell's two captures are the same size and differ only where the toolbar was", async () => {
+  const hidden = join(outDir, 'shell-cmp-hidden.png')
+  const kept = join(outDir, 'shell-cmp-kept.png')
+  const a = await runCli(['snap', fixture('app-shell-sticky.html'), '--preset', 'laptop-768', '--full-page', '--out', hidden])
+  const b = await runCli(['snap', fixture('app-shell-sticky.html'), '--preset', 'laptop-768', '--full-page', '--keep-stuck-chrome', '--out', kept])
+  expect(a.code, a.stderr).toBe(0)
+  expect(b.code, b.stderr).toBe(0)
+  const dims = (out: string): { width: number; height: number } => {
+    const { width, height } = JSON.parse(out) as { width: number; height: number }
+    return { width, height }
+  }
+  expect(dims(a.stdout)).toEqual(dims(b.stdout))
+  expect(readFileSync(hidden).equals(readFileSync(kept))).toBe(false)
+})

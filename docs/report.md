@@ -50,8 +50,11 @@ laptops-and-desktops, two phones. `--preset` covers one screen; custom
   and hides the page rows behind it in every band but the first; full-bleed
   chrome is therefore hidden from the second band on, so it appears once and
   those rows are captured (measured on tailwindcss.com/docs at laptop-768: a
-  57 px `fixed` header over three later bands). A stuck side rail is left
-  alone — it covers no page content, and hiding it would leave a blank column.
+  57 px `fixed` header over three later bands). An app shell bands by scrolling
+  its own container, so the same is done there against that container: its
+  sticky toolbar is hidden, while the chrome around it is sliced out of those
+  bands already. A stuck side rail is left alone in either — it covers no page
+  content, and hiding it would leave a blank column.
   And an animating page pays its early exit once per band, so a long animated
   page costs a few seconds more. Past twelve bands the report says how many
   findings lie

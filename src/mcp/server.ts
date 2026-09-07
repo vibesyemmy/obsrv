@@ -200,7 +200,7 @@ const snapInputShape = {
     .boolean()
     .optional()
     .describe(
-      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. Chrome stuck to the viewport (a fixed or sticky header, a cookie bar) is hidden for the bands after the first, so it appears once and the page rows behind it are not lost. Headless only.',
+      'Capture the whole page: the viewport stays the screen\'s and the page is captured a screenful at a time (up to twelve) and stitched, including a page that scrolls an inner container rather than the window. Chrome stuck to the viewport (a fixed or sticky header, a cookie bar) is hidden for the bands after the first, so it appears once and the page rows behind it are not lost; on a page that scrolls an inner container the same is done for chrome stuck inside that container. Headless only.',
     ),
   singleSurface: z
     .boolean()

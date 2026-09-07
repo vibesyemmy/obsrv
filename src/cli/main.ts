@@ -369,37 +369,59 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         let settled = true
         let unsettledReason: UnsettledReason | undefined
         const k = spec.deviceScaleFactor * spec.textScale
-        for (let i = 0; i < bandCount; i++) {
-          const wantTop = i * step
-          const top = Math.round(
+        const scrollShellTo = async (top: number): Promise<number> =>
+          Math.round(
             (await target.webContents.executeJavaScript(
-              `(() => { const el = window.__obsrvScrollHost; if (!el) return 0; el.scrollTop = ${wantTop}; return el.scrollTop })()`,
+              `(() => { const el = window.__obsrvScrollHost; if (!el) return 0; el.scrollTop = ${top}; return el.scrollTop })()`,
             )) as number,
           )
-          const f = await quiescent()
-          if (!f.settled) {
-            settled = false
-            if (unsettledReason === undefined) unsettledReason = f.unsettledReason
-          }
-          if (i === 0) {
-            bands.push({ y: 0, width: f.width, height: f.height, bgra: f.bgra })
-          } else {
-            // Just the scroller's rows out of the viewport capture. Bands are
-            // full width, so this is a contiguous slice.
-            const from = Math.max(0, Math.round(shell.top * k))
-            const to = Math.min(f.height, Math.round((shell.top + shell.height) * k))
-            if (to > from) {
-              bands.push({
-                y: Math.round((shell.top + top) * k),
-                width: f.width,
-                height: to - from,
-                bgra: f.bgra.subarray(from * f.width * 4, to * f.width * 4),
-              })
+        // The scroller's own stuck chrome — a sticky toolbar or table header
+        // inside it — repeats exactly as a page's header does, and hides the
+        // rows behind it in every band but the first. The app's chrome outside
+        // the scroller needs no help: the slice below already leaves it out.
+        // `installStuckChrome` frames all of this against `__obsrvScrollHost`,
+        // which the shell probe above has already left on the page.
+        const stuck =
+          bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome(target, scrollShellTo, step, warn) : []
+        try {
+          for (let i = 0; i < bandCount; i++) {
+            const wantTop = i * step
+            const top = await scrollShellTo(wantTop)
+            if (i === 1 && stuck.length > 0) await target.webContents.executeJavaScript('window.__obsrvChrome.hide(), 0')
+            const f = await quiescent()
+            if (!f.settled) {
+              settled = false
+              if (unsettledReason === undefined) unsettledReason = f.unsettledReason
             }
+            if (i === 0) {
+              bands.push({ y: 0, width: f.width, height: f.height, bgra: f.bgra })
+            } else {
+              // Just the scroller's rows out of the viewport capture. Bands are
+              // full width, so this is a contiguous slice.
+              const from = Math.max(0, Math.round(shell.top * k))
+              const to = Math.min(f.height, Math.round((shell.top + shell.height) * k))
+              if (to > from) {
+                bands.push({
+                  y: Math.round((shell.top + top) * k),
+                  width: f.width,
+                  height: to - from,
+                  bgra: f.bgra.subarray(from * f.width * 4, to * f.width * 4),
+                })
+              }
+            }
+            // The scroll clamped short of where the next band would start: that
+            // was the bottom, and this band already covers it.
+            if (top < wantTop) break
           }
-          // The scroll clamped short of where the next band would start: that
-          // was the bottom, and this band already covers it.
-          if (top < wantTop) break
+        } finally {
+          if (stuck.length > 0) {
+            await target.webContents.executeJavaScript('window.__obsrvChrome.restore(), 0').catch(() => undefined)
+          }
+        }
+        if (stuck.length > 0) {
+          stuckChrome = stuck
+          const what = stuck.map(b => `${b.element} (${b.position}, ${b.height} px)`).join(', ')
+          human(`hid chrome stuck inside the scroller for the bands after the first: ${what}`)
         }
         // Put the page back where the walks expect it: their rects are
         // measured against a scroller at the top, and audit and lint run after

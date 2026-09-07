@@ -27,11 +27,19 @@
  * scrolled under it, so comparing scroll 0 against band 2 finds nothing on MDN
  * — measured, and the reason the probe scrolls twice rather than reusing the
  * band-1 capture.
+ *
+ * An app shell bands the same way with the scroller in place of the window,
+ * and everything above is then said of *the scroller*: its own sticky toolbar
+ * or table header is what repeats, the app's chrome outside it is sliced out
+ * of those bands already, and a bar spanning a scroller inset from the window
+ * is nowhere near full-bleed against the viewport. So the frame the whole
+ * measurement is taken in is the scroll host's box when there is one, and the
+ * viewport when the window is what scrolls.
  */
 
-/** Fraction of the viewport width at which a stuck element counts as a bar. */
+/** Fraction of the frame's width at which a stuck element counts as a bar. */
 export const STUCK_BAR_MIN_WIDTH = 0.9
-/** A bar is not the whole screen: past this fraction of viewport height it is an overlay, not chrome. */
+/** A bar is not the whole frame: past this fraction of its height it is an overlay, not chrome. */
 export const STUCK_BAR_MAX_HEIGHT = 0.5
 /**
  * Elements the scan may visit. A page with a pathological DOM must not stall
@@ -68,12 +76,16 @@ export interface StuckChrome {
  * rects and the saved inline styles between them, which is the whole reason
  * it is a closure rather than four loose functions.
  *
+ * `host` is the element the capture scrolls, or null when the window is. It is
+ * the frame every measurement is taken in — what counts as full-bleed, and
+ * what is near enough the bands to matter at all.
+ *
  * Hiding is `visibility: hidden`, never `display: none`: `visibility` takes an
  * element out of the paint and leaves the layout untouched, so every band is
  * laid out exactly as it would have been. `display: none` would reflow the
  * page mid-capture and the bands would no longer stitch.
  */
-export function installStuckChrome(minWidth: number, maxHeight: number, maxScanned: number): StuckChrome {
+export function installStuckChrome(minWidth: number, maxHeight: number, maxScanned: number, host: Element | null): StuckChrome {
   const label = (el: Element): string => {
     const id = el.id ? `#${el.id}` : ''
     const cls = (el.getAttribute('class') ?? '').split(/\s+/).find(c => c.length > 0)
@@ -107,16 +119,39 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
         Math.abs(a.left - b.left) < STUCK_EPSILON &&
         Math.abs(a.width - b.width) < STUCK_EPSILON &&
         Math.abs(a.height - b.height) < STUCK_EPSILON
+      // The frame: the scroll host's box, or the viewport. Its client size is
+      // what "full-bleed" is measured against, so a scrollbar or a border does
+      // not push a bar spanning a panel under the threshold.
+      const box = host ? host.getBoundingClientRect() : new DOMRect(0, 0, innerWidth, innerHeight)
+      const frameWidth = host ? host.clientWidth : innerWidth
+      const frameHeight = host ? host.clientHeight : innerHeight
+      // Whatever holds the content the bands show must never be hidden:
+      // hiding an ancestor of the scroller hides the scroller, and with it the
+      // whole capture. An app shell rooted in a `position: fixed` wrapper is
+      // exactly that shape, and it is stuck by every other test here.
+      const anchor: Element | null = host ?? document.scrollingElement
       const found: Element[] = []
       for (const [el, now] of candidates()) {
         const before = marked.get(el)
         if (!before || !same(before, now)) continue
+        if (anchor && (el === anchor || el.contains(anchor))) continue
+        // Outside the frame it is not in the bands to begin with: an app
+        // shell's header sits above the scroller, and every band after the
+        // first is sliced down to the scroller's own rows.
+        if (
+          now.right <= box.left + STUCK_EPSILON ||
+          now.left >= box.right - STUCK_EPSILON ||
+          now.bottom <= box.top + STUCK_EPSILON ||
+          now.top >= box.bottom - STUCK_EPSILON
+        ) {
+          continue
+        }
         // A bar, not a rail and not an overlay: a rail covers no page content,
         // and hiding one would leave a blank column down every band after the
         // first (MDN has two, 20% wide). Full-bleed chrome is what paints over
         // the page.
-        if (now.width < innerWidth * minWidth) continue
-        if (now.height > innerHeight * maxHeight) continue
+        if (now.width < frameWidth * minWidth) continue
+        if (now.height > frameHeight * maxHeight) continue
         found.push(el)
       }
       // A bar inside a bar is hidden by its ancestor; listing both would
@@ -158,6 +193,9 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
 export const STUCK_CHROME_SCRIPT = [
   `const STUCK_EPSILON = ${STUCK_EPSILON}`,
   installStuckChrome.toString(),
-  `window.__obsrvChrome = installStuckChrome(${STUCK_BAR_MIN_WIDTH}, ${STUCK_BAR_MAX_HEIGHT}, ${STUCK_MAX_SCANNED})`,
+  // `__obsrvScrollHost` is what the full-page capture already left on the
+  // page: the element it scrolls, or null when the window is. One script
+  // serves both band loops because that one value is the whole difference.
+  `window.__obsrvChrome = installStuckChrome(${STUCK_BAR_MIN_WIDTH}, ${STUCK_BAR_MAX_HEIGHT}, ${STUCK_MAX_SCANNED}, window.__obsrvScrollHost || null)`,
   '0',
 ].join('\n')
