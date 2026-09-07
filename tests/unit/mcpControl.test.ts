@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { ensureLive, type Discovery, type EnsureDeps } from '../../src/mcp/control'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { CONTROL_FILE_ENV, discover, ensureLive, type Discovery, type EnsureDeps } from '../../src/mcp/control'
 import { DECLINED_NOTE, LAUNCH_TIMEOUT_MS, type LivePlan } from '../../src/mcp/lib'
 import type { LiveApp } from '../../src/mcp/control'
 
@@ -16,6 +19,15 @@ function deps(sequence: Discovery[], launch: EnsureDeps['launch'] = () => undefi
       t += ms
     }),
     now: () => t,
+    // Hermetic default: a test that does not care about the launch gate must
+    // never fall through to the real `cannotLaunchReason(process.env,
+    // process.platform)` check, or it would fail under an ambient SSH
+    // session or `OBSRV_TEST=1` for a reason that has nothing to do with the
+    // behavior it tests (see tests/unit/mcpLib.test.ts's `DESKTOP` fixture
+    // for the same discipline against `cannotLaunchReason` directly). A test
+    // that wants the real check back (see 'the launch gate' below) can
+    // `delete d.cannotLaunch`, since `EnsureDeps.cannotLaunch` is optional.
+    cannotLaunch: (): string | null => null,
   }
   return d
 }
@@ -76,6 +88,10 @@ describe('ensureLive', () => {
     it('OBSRV_TEST=1 with the real cannotLaunch (no override): headless/no-display, launch is never called', async () => {
       vi.stubEnv('OBSRV_TEST', '1')
       const d = deps([{ kind: 'absent' }])
+      // Opt back into the real cannotLaunchReason(process.env, process.platform)
+      // check this test exists to prove — deps() otherwise defaults every test
+      // to a hermetic no-op so it is insulated from the ambient environment.
+      delete d.cannotLaunch
       const r = await ensureLive(LIVE, d)
       expect(r).toMatchObject({ path: 'headless', why: 'no-display' })
       expect(r.notes.join(' ')).toMatch(/OBSRV_TEST/)
@@ -114,4 +130,42 @@ describe('ensureLive', () => {
       expect(r).toEqual({ path: 'live', app, launched: true, notes: ['n'] })
     })
   })
+})
+
+// discover() reads the real control file from disk, so these use the same
+// mkdtemp-per-test + rmSync-in-afterEach convention already established by
+// tests/unit/tabsFile.test.ts and tests/unit/logFile.test.ts, pointed at the
+// fixture via OBSRV_CONTROL_FILE (the same env override the e2e harness uses
+// — see control.ts's doc comment on CONTROL_FILE_ENV — so this never touches
+// a real Obsrv the developer has open).
+describe('discover', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'obsrv-mcp-control-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+    vi.unstubAllEnvs()
+  })
+
+  it('an app running with agent control off reads as declined, carrying its pid', async () => {
+    const file = join(dir, 'control.json')
+    // 0600: controlFileModeOk refuses a file with any group/other bits.
+    writeFileSync(file, JSON.stringify({ enabled: false, pid: process.pid }), { mode: 0o600 })
+    vi.stubEnv(CONTROL_FILE_ENV, file)
+    // process.pid (this very test process) is guaranteed alive, so the
+    // liveness check inside discover() passes through to the stance check.
+    expect(await discover()).toEqual({ kind: 'declined', pid: process.pid })
+  })
+
+  // NOTE: the dead-pid branch (a stamped file whose owning process has
+  // exited, `process.kill` throwing ESRCH) is not covered here. Producing a
+  // pid that is guaranteed absent from the process table, rather than merely
+  // out of range, requires spawning a real subprocess and waiting for it to
+  // exit — machinery no unit test in this repo uses (child_process appears
+  // only in the Playwright e2e specs); a made-up large pid risks EINVAL
+  // instead of ESRCH on some platforms, which discover() does not treat as
+  // absent. Building that harness for this Minor finding was judged not
+  // worth it; the branch stays covered by reading, as the original review
+  // noted.
 })
