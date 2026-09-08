@@ -194,6 +194,11 @@ happened on the matrix snaps.
   render carries *more* ink than the 2x reference, and the size of the
   difference tracks the text's colour rather than its stroke (the figures
   are in `src/cli/metrics.ts`). Ask `lint` which elements, and read the PNG.
+- The MCP server runs at most two headless renders at once
+  (`OBSRV_MCP_CONCURRENCY` raises it): each is its own Electron, and nine in
+  parallel starved two of them past their load budget. More calls queue in
+  order, and one that waited over a second says so in its warnings or notes;
+  a long wait can hit the client's own request timeout, so fan out in twos.
 - Animating pages never go paint-quiet. A covered frame that keeps painting
   steadily is captured after ~2 s — headless and live alike — with
   `settled: false` and `unsettledReason: "animating"`; waiting longer would

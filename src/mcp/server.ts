@@ -18,6 +18,9 @@ import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import {
   inlineNote,
+  concurrencyLimit,
+  createGate,
+  queueNote,
   UsageError,
   buildAuditArgs,
   buildLintArgs,
@@ -71,6 +74,23 @@ interface CliRun {
   stdout: string
   stderr: string
   killed: boolean
+  /** How long the run waited for a render slot before it was spawned. */
+  queuedMs: number
+}
+
+/**
+ * At most this many CLI runs at once (see `concurrencyLimit`): each is its
+ * own Electron, and nine in parallel starved two of them past their load
+ * budget. The rest wait in order; the kill budget starts when a run spawns,
+ * not when it was asked for.
+ */
+const RENDER_LIMIT = concurrencyLimit()
+const renderGate = createGate(RENDER_LIMIT)
+
+/** The queue's sentence for a run that waited, for the result's warnings or notes; nothing under a second. */
+const queued = (run: CliRun): string[] => {
+  const note = queueNote(run.queuedMs, RENDER_LIMIT)
+  return note === null ? [] : [note]
 }
 
 /** Grace between SIGTERM and SIGKILL for a run that ignores the former. */
@@ -82,30 +102,34 @@ const SIGKILL_GRACE_MS = 10_000
  * SIGKILL_GRACE_MS more.
  */
 function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
-  return new Promise((done, fail) => {
-    const child = spawn(process.execPath, [CLI_BIN, ...args], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let stderr = ''
-    let killed = false
-    let killTimer: ReturnType<typeof setTimeout> | undefined
-    const timer = setTimeout(() => {
-      killed = true
-      child.kill('SIGTERM')
-      killTimer = setTimeout(() => child.kill('SIGKILL'), SIGKILL_GRACE_MS)
-    }, killAfterMs)
-    child.stdout.on('data', d => (stdout += String(d)))
-    child.stderr.on('data', d => (stderr += String(d)))
-    child.on('error', err => {
-      clearTimeout(timer)
-      clearTimeout(killTimer)
-      fail(err)
-    })
-    child.on('close', code => {
-      clearTimeout(timer)
-      clearTimeout(killTimer)
-      done({ code, stdout, stderr, killed })
-    })
-  })
+  return renderGate.run(
+    () =>
+      new Promise((done, fail) => {
+        const queuedMs = renderGate.lastQueuedMs
+        const child = spawn(process.execPath, [CLI_BIN, ...args], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] })
+        let stdout = ''
+        let stderr = ''
+        let killed = false
+        let killTimer: ReturnType<typeof setTimeout> | undefined
+        const timer = setTimeout(() => {
+          killed = true
+          child.kill('SIGTERM')
+          killTimer = setTimeout(() => child.kill('SIGKILL'), SIGKILL_GRACE_MS)
+        }, killAfterMs)
+        child.stdout.on('data', d => (stdout += String(d)))
+        child.stderr.on('data', d => (stderr += String(d)))
+        child.on('error', err => {
+          clearTimeout(timer)
+          clearTimeout(killTimer)
+          fail(err)
+        })
+        child.on('close', code => {
+          clearTimeout(timer)
+          clearTimeout(killTimer)
+          done({ code, stdout, stderr, killed, queuedMs })
+        })
+      }),
+  )
 }
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
@@ -372,6 +396,7 @@ const diffInputShape = {
 }
 
 const diffOutputShape = {
+  notes: z.array(z.string()).optional().describe('Only when there is something to say about the call itself, such as a wait for a render slot.'),
   settled: z
     .boolean()
     .describe(
@@ -1011,7 +1036,7 @@ server.registerTool(
       mode: 'headless',
       why,
       inlined: image.inlined,
-      warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note])],
+      warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note]), ...queued(run)],
       pngPath,
     }
     return {
@@ -1069,7 +1094,9 @@ server.registerTool(
       content.push({ type: 'text', text: 'reference.png (the 2x render downsampled onto the 1x grid):' })
       content.push((await inlineImage(files.reference, 'reference.png', '')).block)
     }
-    return { content, structuredContent: metrics }
+    const structured = { ...metrics, ...(queued(run).length > 0 ? { notes: queued(run) } : {}) }
+    content[0] = { type: 'text', text: JSON.stringify(structured, null, 2) }
+    return { content, structuredContent: structured }
   },
 )
 
@@ -1301,7 +1328,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1547,7 +1574,7 @@ server.registerTool(
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
     // `groupsOnly` went to the CLI as --groups-only, which leaves the list out
     // at the source, and with it the sentence about the list's cap.
-    const structured = { mode: 'headless', why, ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1679,6 +1706,7 @@ const reportInputShape = {
 }
 
 const reportOutputShape = {
+  notes: z.array(z.string()).optional().describe('Only when there is something to say about the call itself, such as a wait for a render slot.'),
   url: z.string(),
   out: z.string().describe('The HTML file, self-contained, in a per-call temp dir. Attach it or open it; do not inline it.'),
   htmlBytes: z.number(),
@@ -1775,7 +1803,8 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('report', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv report exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result }
+    const structured = { ...result, ...(queued(run).length > 0 ? { notes: queued(run) } : {}) }
+    return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
 
@@ -2101,7 +2130,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )

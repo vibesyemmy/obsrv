@@ -319,6 +319,77 @@ export function buildDiffArgs(input: DiffToolInput, outDir: string): string[] {
   return args
 }
 
+/**
+ * How many headless renders the server runs at once. Every CLI call is its
+ * own Electron, and nine at once starved two apple.com loads past their 30 s
+ * budget where each alone passed — the page got the blame. Two by default:
+ * a laptop's worth. `OBSRV_MCP_CONCURRENCY` raises it on a machine that can
+ * take more; never below one.
+ */
+export const DEFAULT_MCP_CONCURRENCY = 2
+export function concurrencyLimit(env: Record<string, string | undefined> = process.env): number {
+  const raw = env['OBSRV_MCP_CONCURRENCY']
+  const n = raw === undefined ? NaN : Number.parseInt(raw, 10)
+  if (!Number.isFinite(n)) return DEFAULT_MCP_CONCURRENCY
+  return Math.max(1, n)
+}
+
+export interface Gate {
+  /** Runs `job` once a slot is free; slots are handed out in the order asked. */
+  run<T>(job: () => Promise<T>): Promise<T>
+  readonly active: number
+  readonly waiting: number
+  /** How long the most recently started job waited for its slot, ms. */
+  readonly lastQueuedMs: number
+}
+
+/** A FIFO semaphore: `limit` jobs at once, the rest in order. */
+export function createGate(limit: number): Gate {
+  const queue: Array<() => void> = []
+  let active = 0
+  let lastQueuedMs = 0
+  const next = (): void => {
+    const go = queue.shift()
+    if (go) go()
+  }
+  return {
+    get active() {
+      return active
+    },
+    get waiting() {
+      return queue.length
+    },
+    get lastQueuedMs() {
+      return lastQueuedMs
+    },
+    async run<T>(job: () => Promise<T>): Promise<T> {
+      const asked = Date.now()
+      if (active >= limit) await new Promise<void>(resolve => queue.push(resolve))
+      active++
+      lastQueuedMs = Date.now() - asked
+      try {
+        return await job()
+      } finally {
+        active--
+        next()
+      }
+    },
+  }
+}
+
+/** A wait under this is not worth a sentence. */
+export const QUEUE_NOTE_MS = 1_000
+
+/** The sentence for a call that waited its turn, for its warnings or notes. Null under a second. */
+export function queueNote(queuedMs: number, limit: number): string | null {
+  if (queuedMs < QUEUE_NOTE_MS) return null
+  return (
+    `this call waited ${(queuedMs / 1000).toFixed(1)} s for a render slot: the server runs at most ${limit} headless ` +
+    `render${limit === 1 ? '' : 's'} at once (OBSRV_MCP_CONCURRENCY), so parallel calls queue, and one that waits long ` +
+    `can hit the client's own request timeout`
+  )
+}
+
 /** Whether a PNG of this size goes into the response as an inline image block. */
 export function shouldInlineImage(byteLength: number): boolean {
   return byteLength <= MAX_INLINE_IMAGE_BYTES

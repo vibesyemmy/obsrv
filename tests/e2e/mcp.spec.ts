@@ -379,3 +379,15 @@ test('a PNG over the inline cap says so in the JSON, not only in a text block', 
   expect(s.warnings.join(' ')).not.toMatch(/inline cap/)
   expect(small.content.some(c => c.type === 'image')).toBe(true)
 })
+
+test('parallel calls queue behind a render cap instead of starving each other', async () => {
+  // Nine at once used to be nine Electrons, and two apple.com loads died at
+  // their 30 s budget while alone each passed. The cap is two (OBSRV_MCP_CONCURRENCY);
+  // the rest wait their turn, and a call that waited says so.
+  const calls = Array.from({ length: 5 }, () => call('obsrv_snap', { url: fixture('solid-red.html'), preset: 'laptop-768', mode: 'headless' }))
+  const results = await Promise.all(calls)
+  for (const r of results) expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const waited = results.filter(r => ((r.structuredContent as { warnings: string[] }).warnings ?? []).some(w => /waited .* for a render slot/.test(w)))
+  expect(waited.length).toBeGreaterThanOrEqual(1)
+  expect(waited.length).toBeLessThanOrEqual(3)
+})
