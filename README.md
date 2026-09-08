@@ -194,7 +194,7 @@ fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/S
 
 The same CLI is also wrapped as an MCP server (stdio, stateless) so MCP
 clients get the tools natively: `obsrv_snap` (render a URL at a preset's true
-raster density — the PNG comes back as an inline image up to 1.5 MiB),
+raster density — the PNG comes back as an inline image up to 1.5 MiB; `inlined` says whether it did, and past the cap a warning names the path),
 `obsrv_diff` (the 1x-vs-2x metrics as structured output), `obsrv_audit` and
 `obsrv_inspect` (millimetres and contrast on a chosen screen), `obsrv_lint`
 (the elements a 1x screen and a cheap panel break, named), `obsrv_report`

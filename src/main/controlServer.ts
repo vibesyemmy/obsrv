@@ -564,14 +564,17 @@ export class ControlServer {
   /**
    * A preset or a rotation recreates the offscreen target and reloads its
    * page, and the renderer confirms the change before the new target has a
-   * page: a status read in that beat says `url: ''`, `loading: false` — no
-   * page and none coming (measured on every preset change). When the tab had
-   * a page, confirm that it is back or on its way too; the apply budget
-   * bounds the wait as before.
+   * page: a status read in that beat says `url: ''` — or `about:blank`, the
+   * new target's own first page — with `loading: false`: no page and none
+   * coming (measured on every preset change; the blank variant on a live
+   * snap that flipped HN to a phone and reported `url: "about:blank"`). When
+   * the tab had a page, confirm that it is back or on its way too; the apply
+   * budget bounds the wait as before.
    */
   private pageBack(): (s: StatusReport) => boolean {
-    const had = this.deps.status().url !== ''
-    return s => !had || s.url !== '' || s.loading
+    const before = this.deps.status().url
+    const had = before !== '' && before !== 'about:blank'
+    return s => !had || (s.url !== '' && s.url !== 'about:blank') || s.loading
   }
 
   private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: StatusReport) => boolean): Promise<Reply> {

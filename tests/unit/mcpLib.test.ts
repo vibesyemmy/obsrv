@@ -18,6 +18,7 @@ import {
   planLive,
   planSnapPath,
   shouldInlineImage,
+  inlineNote,
   stderrTail,
   urlSchemeError,
 } from '../../src/mcp/lib'
@@ -148,6 +149,11 @@ describe('shouldInlineImage', () => {
     expect(shouldInlineImage(0)).toBe(true)
     expect(shouldInlineImage(MAX_INLINE_IMAGE_BYTES)).toBe(true)
     expect(shouldInlineImage(MAX_INLINE_IMAGE_BYTES + 1)).toBe(false)
+  })
+  it('past the cap, the note names the size, the cap and the file, for the JSON as well as the text block', () => {
+    expect(inlineNote(MAX_INLINE_IMAGE_BYTES, '/t/snap.png')).toBeNull()
+    expect(inlineNote(4_823_040, '/t/snap.png')).toBe('the PNG is 4.6 MiB, over the 1.5 MiB inline cap, so it is not inlined; read the file at /t/snap.png')
+    expect(inlineNote(MAX_INLINE_IMAGE_BYTES + 1, '/t/snap.png', 'retry with a smaller preset')).toMatch(/inline cap.*\/t\/snap\.png, or retry with a smaller preset$/)
   })
 })
 

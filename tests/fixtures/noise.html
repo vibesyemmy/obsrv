@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>noise-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      canvas { display: block; }
+    </style>
+  </head>
+  <body>
+    <!-- Random pixels do not compress: a 1920×1080 frame of them is a PNG of
+         several MiB, well past the MCP's 1.5 MiB inline cap, whatever the
+         encoder does. Painted once, at load, so the page settles. -->
+    <canvas id="c" width="1920" height="1080"></canvas>
+    <script>
+      const c = document.getElementById('c')
+      const ctx = c.getContext('2d')
+      const img = ctx.createImageData(c.width, c.height)
+      const d = img.data
+      // A fast xorshift, seeded, so every run is the same noise.
+      let x = 2463534242
+      for (let i = 0; i < d.length; i += 4) {
+        x ^= x << 13
+        x ^= x >>> 17
+        x ^= x << 5
+        d[i] = x & 255
+        d[i + 1] = (x >>> 8) & 255
+        d[i + 2] = (x >>> 16) & 255
+        d[i + 3] = 255
+      }
+      ctx.putImageData(img, 0, 0)
+    </script>
+  </body>
+</html>

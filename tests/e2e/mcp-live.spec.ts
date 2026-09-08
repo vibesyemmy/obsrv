@@ -552,3 +552,16 @@ test('a headless audit walks too: `walked` is in the answer, and walk: false lea
   const quiet = (await call('obsrv_audit', { url: fixture('tall.html'), mode: 'headless', walk: false })).structuredContent as { walked?: unknown }
   expect(quiet.walked).toBeUndefined()
 })
+
+test('a live snap that flips to a phone preset reports the page it captured, not about:blank', async () => {
+  // A phone preset changes the UA, so the app reloads the tab; a status read
+  // between about:blank and the commit used to be what the result reported
+  // (measured: HN, `url: "about:blank"`, `loading: false`, capture fine).
+  await call('obsrv_drive', { url: FIXTURE, preset: '1080p-24' })
+  for (const preset of ['android-65', '1080p-24', 'iphone-61']) {
+    const r = await call('obsrv_snap', { url: FIXTURE, preset, capture: 'pane' })
+    expect(r.isError).toBeFalsy()
+    const m = r.structuredContent as Record<string, unknown>
+    expect(m, preset).toMatchObject({ mode: 'live', url: FIXTURE, presetId: preset, loading: false, navigated: false })
+  }
+})

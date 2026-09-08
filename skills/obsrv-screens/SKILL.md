@@ -85,7 +85,7 @@ measures the page as it first shows.
 If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 `obsrv_audit`, `obsrv_lint`, `obsrv_inspect`, `obsrv_report`, `obsrv_drive`,
 `obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
-comes back inline. `obsrv_presets { group: 'phones' }` lists just the phones
+comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
 

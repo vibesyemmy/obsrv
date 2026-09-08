@@ -17,7 +17,7 @@ import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import {
-  MAX_INLINE_IMAGE_BYTES,
+  inlineNote,
   UsageError,
   buildAuditArgs,
   buildLintArgs,
@@ -121,18 +121,21 @@ function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
 }
 
-/** An inline image block for a PNG within the cap, else a text block saying why not. */
-async function imageOrNote(pngPath: string, label: string, suggestion: string): Promise<CallToolResult['content'][number]> {
+/**
+ * The PNG as an inline image block when it is within the cap; past it, a text
+ * block saying why not — and the same sentence as `note`, for the caller to
+ * put in the JSON's warnings beside `inlined: false`, so a reader of the
+ * structured result alone is told too.
+ */
+async function inlineImage(
+  pngPath: string,
+  label: string,
+  suggestion: string,
+): Promise<{ block: CallToolResult['content'][number]; inlined: boolean; note: string | null }> {
   const png = await readFile(pngPath)
-  if (shouldInlineImage(png.byteLength)) {
-    return { type: 'image', data: png.toString('base64'), mimeType: 'image/png' }
-  }
-  return {
-    type: 'text',
-    text:
-      `${label} is ${png.byteLength} bytes — over the ${MAX_INLINE_IMAGE_BYTES}-byte inline cap, so it is not ` +
-      `inlined. Read the file at ${pngPath} instead${suggestion ? `, or ${suggestion}` : ''}.`,
-  }
+  const note = inlineNote(png.byteLength, pngPath, suggestion)
+  if (note === null) return { block: { type: 'image', data: png.toString('base64'), mimeType: 'image/png' }, inlined: true, note }
+  return { block: { type: 'text', text: `${label}: ${note}.` }, inlined: false, note }
 }
 
 // --- schemas -----------------------------------------------------------------
@@ -300,8 +303,8 @@ const snapOutputShape = {
     .describe(
       'Headless: the page went paint-quiet and every pixel painted. False is still a usable capture — a page that ' +
         'kept animating, or one whose repaint never completed, is returned as-is with a warning saying what was ' +
-        'missing. Live: the app confirmed the navigation before the capture (trivially true when the app was ' +
-        'already showing the URL and nothing was navigated).',
+        'missing. Live: the app confirmed the navigation before the capture — or, with nothing navigated, that ' +
+        'the tab was neither blank nor loading (a preset flip reloads the page).',
     ),
   navigated: z
     .boolean()
@@ -321,7 +324,10 @@ const snapOutputShape = {
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
-  url: z.string().optional().describe('Live only: the URL the app reports showing.'),
+  inlined: z
+    .boolean()
+    .describe('Whether the PNG came back as an inline image block. False past the 1.5 MiB cap (typically fullPage); a warning says so and names the path.'),
+  url: z.string().optional().describe('Live only: the URL the app reports showing, read after the capture.'),
   presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
@@ -653,6 +659,7 @@ const driveOutputShape = {
   unsettledReason: z.string().optional().describe("With capture: 'raster' and settled false: why (animating, timeout, uncovered)."),
   warnings: z.array(z.string()).optional().describe('Anything worth knowing about the commands that ran (e.g. a scrollSelector that matched nothing).'),
   pngPath: z.string().optional().describe('Only when `capture` was requested: absolute path of the PNG (kept in a per-call temp dir).'),
+  inlined: z.boolean().optional().describe('Only when `capture` was requested: whether the PNG came back inline; false past the 1.5 MiB cap, with a warning naming the path.'),
   width: z
     .number()
     .optional()
@@ -840,17 +847,20 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
 
   // The app settles when it reports the applied URL — or, after a redirect,
   // any committed non-blank URL that is no longer the pre-navigation one.
-  // Nothing to settle when no navigation was issued; one status read still
-  // refreshes the preset/profile/view the result reports.
+  // With nothing navigated, a preset or rotation may still have recreated
+  // the target and reloaded its page (the control confirms once that is
+  // under way, not done): settle when the tab is neither blank nor loading.
   let status = app.status
-  let settled = !navigated
+  let settled = false
   const deadline = Date.now() + LIVE_SETTLE_MS
   for (;;) {
     try {
       const s = parseControlStatus(await controlCall(info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (s) {
         status = s
-        if (navigated) settled = s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
+        settled = navigated
+          ? s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
+          : !s.loading && s.url !== 'about:blank'
       }
     } catch (e) {
       return toolError(liveFailure(e))
@@ -858,7 +868,13 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     if (settled || Date.now() >= deadline) break
     await sleep(250)
   }
-  if (!settled) warnings.push('the app did not confirm the navigation before capture; the PNG may show the previous page.')
+  if (!settled) {
+    warnings.push(
+      navigated
+        ? 'the app did not confirm the navigation before capture; the PNG may show the previous page.'
+        : 'the app was still loading the page when the settle budget ran out; the PNG may show a transitional frame.',
+    )
+  }
 
   await sleep(LIVE_CAPTURE_GRACE_MS)
 
@@ -870,6 +886,19 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
   }
   warnings.push(...capture.warnings)
   const { pngPath, width, height } = capture
+
+  // The status the PNG is reported with is read after the capture, which
+  // waited for the page: read before it, between about:blank and the commit
+  // of a preset flip's reload, `url` said about:blank while the PNG showed
+  // the page (measured on HN, android-65).
+  try {
+    const after = parseControlStatus(await controlCall(info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
+    if (after) status = after
+  } catch (e) {
+    return toolError(liveFailure(e))
+  }
+  const image = await inlineImage(pngPath, 'The captured app window', '')
+  if (image.note !== null) warnings.push(image.note)
 
   const structured = {
     mode: 'live',
@@ -892,15 +921,13 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     height,
     settled,
     navigated,
+    inlined: image.inlined,
     warnings,
     pngPath,
     ...(launched ? { launched: true } : {}),
   }
   return {
-    content: [
-      { type: 'text', text: JSON.stringify(structured, null, 2) },
-      await imageOrNote(pngPath, 'The captured app window', 'read the file at pngPath'),
-    ],
+    content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }, image.block],
     structuredContent: structured,
   }
 }
@@ -921,8 +948,9 @@ server.registerTool(
       `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both; either can be ` +
       `rotated with \`orientation: "landscape"\`, which is how you check a phone's landscape layout. ` +
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
-      `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap; larger ` +
-      `captures (typically fullPage) stay on disk with a note.\n\n` +
+      `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap ` +
+      `(\`inlined: true\`); larger captures (typically fullPage) stay on disk, with \`inlined: false\` and a ` +
+      `warning naming the path.\n\n` +
       `Live drive: \`mode: "auto"\` (the default) drives the *visible* app — the user watches the URL load and the ` +
       `preset flip — and launches the app if it is not running (\`launched: true\` on that call). The returned PNG ` +
       `is the app window as they see it (\`mode: "live"\` in the result; \`mode: "headless"\` otherwise, with ` +
@@ -977,12 +1005,17 @@ server.registerTool(
     if (!meta) return toolError(`obsrv snap exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
 
     const cliWarnings = Array.isArray(meta['warnings']) ? (meta['warnings'] as string[]) : []
-    const structured = { ...meta, mode: 'headless', why, warnings: [...cliWarnings, ...liveNotes], pngPath }
+    const image = await inlineImage(pngPath, 'The captured PNG', 'retry without fullPage / with a smaller preset for an inline image')
+    const structured = {
+      ...meta,
+      mode: 'headless',
+      why,
+      inlined: image.inlined,
+      warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note])],
+      pngPath,
+    }
     return {
-      content: [
-        { type: 'text', text: JSON.stringify(structured, null, 2) },
-        await imageOrNote(pngPath, 'The captured PNG', 'retry without fullPage / with a smaller preset for an inline image'),
-      ],
+      content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }, image.block],
       structuredContent: structured,
     }
   },
@@ -1032,9 +1065,9 @@ server.registerTool(
     if (input.includeImages) {
       const files = metrics['files'] as { target: string; reference: string }
       content.push({ type: 'text', text: 'target.png (the 1x render, profile applied):' })
-      content.push(await imageOrNote(files.target, 'target.png', ''))
+      content.push((await inlineImage(files.target, 'target.png', '')).block)
       content.push({ type: 'text', text: 'reference.png (the 2x render downsampled onto the 1x grid):' })
-      content.push(await imageOrNote(files.reference, 'reference.png', ''))
+      content.push((await inlineImage(files.reference, 'reference.png', '')).block)
     }
     return { content, structuredContent: metrics }
   },
@@ -1931,10 +1964,15 @@ server.registerTool(
       // Nothing here navigates, so a scroll or pan applied in this same call
       // is still in place when the shutter fires.
       let capture: LiveCapture | null = null
+      let image: Awaited<ReturnType<typeof inlineImage>> | null = null
       if (input.capture !== undefined) {
         await sleep(LIVE_CAPTURE_GRACE_MS)
         capture = await liveCapture(live.info, input.capture)
         warnings.push(...capture.warnings)
+        const label =
+          input.capture === 'pane' ? 'The captured target pane' : input.capture === 'raster' ? "The target's own raster" : 'The captured app window'
+        image = await inlineImage(capture.pngPath, label, '')
+        if (image.note !== null) warnings.push(image.note)
       }
 
       // closeTab last, after capture: that is what lets one call photograph a
@@ -1959,16 +1997,13 @@ server.registerTool(
         ...(warnings.length > 0 ? { warnings } : {}),
         ...(highlight !== null ? { highlight } : {}),
         ...(capture !== null ? { pngPath: capture.pngPath, width: capture.width, height: capture.height } : {}),
+        ...(image !== null ? { inlined: image.inlined } : {}),
         ...(capture !== null && capture.settled !== undefined
           ? { settled: capture.settled, ...(capture.unsettledReason !== undefined ? { unsettledReason: capture.unsettledReason } : {}) }
           : {}),
       }
       const content: CallToolResult['content'] = [{ type: 'text', text: JSON.stringify(structured, null, 2) }]
-      if (capture !== null) {
-        const label =
-          input.capture === 'pane' ? 'The captured target pane' : input.capture === 'raster' ? "The target's own raster" : 'The captured app window'
-        content.push(await imageOrNote(capture.pngPath, label, 'read the file at pngPath'))
-      }
+      if (image !== null) content.push(image.block)
       return { content, structuredContent: structured }
     } catch (e) {
       return toolError(liveFailure(e))
