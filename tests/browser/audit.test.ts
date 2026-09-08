@@ -219,7 +219,10 @@ describe('an app shell whose inner scroller has been scrolled', () => {
   it('leaves what is outside the scroller where the window puts it', () => {
     const atTop = measure(0)
     const down = measure(600)
-    // The shell's own chrome, and #host from the file-level fixture: neither moves with the inner scroller.
+    // The shell's own chrome, and button#big from the file-level `#host` fixture
+    // (an unrelated top-level fixture that happens to share the id "host" — not
+    // the scroll host `#scroller` this describe operates on): both are outside
+    // the scroller entirely, so neither moves with it.
     expect(targetY(down, 'menu')).toBeCloseTo(targetY(atTop, 'menu')!, 0)
     expect(targetY(down, 'big')).toBeCloseTo(targetY(atTop, 'big')!, 0)
   })
