@@ -15,6 +15,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
+import { WALK_HEADLESS_NOTE, walkPage, type WalkDeps, type Walked } from './walk'
 import {
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
@@ -698,6 +699,32 @@ function liveFailure(e: unknown): string {
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
+/** The walk's control calls, bound to the live app: every scroll gets the apply budget. */
+const walkDeps = (info: LiveApp['info']): WalkDeps => ({
+  call: (command, payload) => controlCall(info, command, payload, LIVE_APPLY_TIMEOUT_MS),
+  sleep,
+  now: Date.now,
+})
+
+const walkField = z
+  .boolean()
+  .optional()
+  .describe(
+    'Live only. Default true: before measuring, the page is scrolled a screenful at a time to the end and back to ' +
+      'the top, so the user watching the window sees the whole page pass (and lazy sections mount). false: measure ' +
+      'without moving — for re-measuring after a fix. Ignored in headless mode, with a note.',
+  )
+
+const walkedField = z
+  .object({ screenfuls: z.number(), atEnd: z.boolean(), ms: z.number() })
+  .optional()
+  .describe(
+    'Live only, when the page was walked before measuring: screenfuls scrolled, whether the end was reached ' +
+      '(false with 12 screenfuls: the cap stopped it) and the time it took. Absent when the walk did not run — ' +
+      'walk: false, headless, or an app older than 0.41.0 (a note says which). Two runs that disagree on a ' +
+      'lazy-loading page differ here.',
+  )
+
 /**
  * One short grace before a live capture: the renderer repaints the pane a
  * frame or two after the store confirms, and a capture racing that would show
@@ -1059,6 +1086,7 @@ const auditInputShape = {
     .min(0)
     .optional()
     .describe(`Flag text whose font size is under this many mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
+  walk: walkField,
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late layout. Default 0.'),
   timeoutMs: z.number().int().min(1).optional().describe(`Load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
@@ -1089,6 +1117,7 @@ const auditOutputShape = {
         '(the app was launched but did not answer in time; the next call will likely find it).',
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
+  walked: walkedField,
   url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was measured.'),
@@ -1124,13 +1153,21 @@ const auditOutputShape = {
   notes: z.array(z.string()),
 }
 
-type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live' }
+type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean }
 
 async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   try {
     if (input.url !== undefined) {
       await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    // The person watching sees the page pass before the number arrives; on a
+    // page that mounts sections on scroll, the number is of the whole page.
+    let walked: Walked | undefined
+    if (input.walk !== false) {
+      const w = await walkPage(walkDeps(info))
+      walked = w.walked
+      notes.push(...w.notes)
     }
     const payload = {
       ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
@@ -1152,6 +1189,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       preset: status.presetId,
       tabId: status.tabId,
       tabIndex: status.tabIndex,
+      ...(walked !== undefined ? { walked } : {}),
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
@@ -1185,7 +1223,9 @@ server.registerTool(
       `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — launching ` +
       `the app if it is not running (\`launched: true\` on that call), and falling back to a headless load of ` +
       `\`url\` when the live app is not available (\`why\` names the reason). 'live' requires the app; 'headless' ` +
-      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`).`,
+      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`). Live, it walks the page a ` +
+      `screenful at a time to the end and back before measuring, so the user sees it look and lazy sections mount ` +
+      `(\`walked\` in the result); \`walk: false\` measures without moving.`,
     inputSchema: auditInputShape,
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1209,6 +1249,7 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
+    if (input.walk !== undefined) notes.push(WALK_HEADLESS_NOTE)
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
@@ -1257,6 +1298,7 @@ const lintInputShape = {
     .min(0)
     .optional()
     .describe(`Text lighter than regular (weight under 400) below this many device pixels of font size is flagged. Default ${DEFAULT_THIN_PX} (provisional).`),
+  walk: walkField,
   groupsOnly: z
     .boolean()
     .optional()
@@ -1303,6 +1345,7 @@ const lintOutputShape = {
         '(the app was launched but did not answer in time; the next call will likely find it).',
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
+  walked: walkedField,
   url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was judged.'),
@@ -1353,13 +1396,21 @@ const lintOutputShape = {
   notes: z.array(z.string()),
 }
 
-type LintHandlerInput = Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean }
+type LintHandlerInput = Omit<LintToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; groupsOnly?: boolean; walk?: boolean }
 
 async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   try {
     if (input.url !== undefined) {
       await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+    }
+    // The person watching sees the page pass before the number arrives; on a
+    // page that mounts sections on scroll, the number is of the whole page.
+    let walked: Walked | undefined
+    if (input.walk !== false) {
+      const w = await walkPage(walkDeps(info))
+      walked = w.walked
+      notes.push(...w.notes)
     }
     const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
@@ -1375,6 +1426,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       preset: status.presetId,
       tabId: status.tabId,
       tabIndex: status.tabIndex,
+      ...(walked !== undefined ? { walked } : {}),
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
@@ -1408,7 +1460,9 @@ server.registerTool(
       `text scale and panel in force, in whatever state it has been driven into — launching the app if it is not ` +
       `running (\`launched: true\` on that call), and falling back to a headless load of \`url\` when the live app ` +
       `is not available (\`why\` names the reason). 'live' requires the app; 'headless' never touches it. Findings ` +
-      `are informational — apply your own thresholds.`,
+      `are informational — apply your own thresholds. Live, it walks the page a screenful at a time to the end ` +
+      `and back before measuring, so the user sees it look and lazy sections mount (\`walked\` in the result); ` +
+      `\`walk: false\` measures without moving.`,
     inputSchema: lintInputShape,
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1432,6 +1486,7 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
+    if (input.walk !== undefined) notes.push(WALK_HEADLESS_NOTE)
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }

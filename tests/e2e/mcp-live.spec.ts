@@ -508,3 +508,44 @@ test('obsrv_drive: capture and closeTab "current" in one call photograph the tab
   expect(m.tabs.some(t => t.id === opened.tabId)).toBe(false)
   expect(m.tabId).not.toBe(opened.tabId)
 })
+
+test('obsrv_audit walks the page before measuring: walked in the result, the page back at the top, the numbers unchanged', async () => {
+  await call('obsrv_drive', { preset: 'laptop-768', textScale: 1 })
+  const walked = await call('obsrv_audit', { url: fixture('tall.html') })
+  expect(walked.isError).toBeFalsy()
+  const w = walked.structuredContent as { walked?: { screenfuls: number; atEnd: boolean; ms: number }; summary: unknown; notes: string[] }
+  expect(w.walked).toBeDefined()
+  // tall.html is ~5,000 px: several screenfuls at 768, well under the cap.
+  expect(w.walked!.screenfuls).toBeGreaterThan(1)
+  expect(w.walked!.screenfuls).toBeLessThan(12)
+  expect(w.walked!.atEnd).toBe(true)
+  expect(w.walked!.ms).toBeGreaterThan(0)
+  expect(w.notes).toEqual([])
+  // The walk ends at the top: a highlight that follows maps through the current scroll.
+  const scrollY = await app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('window.scrollY') as Promise<number>)
+  expect(scrollY).toBe(0)
+
+  // walk: false measures without moving, and reports no walk — same numbers.
+  const quiet = await call('obsrv_audit', { walk: false })
+  const q = quiet.structuredContent as { walked?: unknown; summary: unknown; notes: string[] }
+  expect(q.walked).toBeUndefined()
+  expect(q.summary).toEqual(w.summary)
+  expect(q.notes).toEqual([])
+})
+
+test('obsrv_lint walks too, and walk: false does not', async () => {
+  const walked = (await call('obsrv_lint', { url: fixture('tall.html') })).structuredContent as { walked?: { atEnd: boolean }; summary: unknown }
+  expect(walked.walked?.atEnd).toBe(true)
+  const quiet = (await call('obsrv_lint', { walk: false })).structuredContent as { walked?: unknown; summary: unknown }
+  expect(quiet.walked).toBeUndefined()
+  expect(quiet.summary).toEqual(walked.summary)
+})
+
+test('walk is ignored in headless mode, with a note', async () => {
+  const r = await call('obsrv_audit', { url: fixture('tall.html'), mode: 'headless', walk: true })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { mode: string; walked?: unknown; notes: string[] }
+  expect(m.mode).toBe('headless')
+  expect(m.walked).toBeUndefined()
+  expect(m.notes.join(' ')).toContain('`walk` is live-only')
+})

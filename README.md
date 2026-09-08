@@ -214,7 +214,8 @@ as a guided demo. A `scroll` reports the offset it actually reached
 root cannot scroll, and takes a `scrollSelector` when you need to name the
 container yourself. `obsrv_inspect`, `obsrv_audit` and `obsrv_lint` follow the
 app the same way: they measure the page in front, on the screen, text scale
-and panel in force, after whatever the drive did to it; `obsrv_report` is the exception and stays
+and panel in force, after whatever the drive did to it; `obsrv_audit` and `obsrv_lint` walk the
+page to the end and back first, so you see it looked at; `obsrv_report` is the exception and stays
 headless, being a batch over a matrix of screens. With no app running, `mode: 'auto'` (the
 default) launches one; `mode: 'headless'` never touches it.
 
