@@ -70,6 +70,11 @@ $OBSRV lint http://localhost:5173 --preset 1080p-24 --profile budget-tn
 $OBSRV report http://localhost:5173 --out obsrv-report.html
 ```
 
+`audit`, `lint` and `report` walk the page a screenful at a time to the end
+and back before measuring, so lazy images are judged by the file that arrived
+and sections that mount on scroll exist (`walked` in the JSON); `--no-walk`
+measures the page as it first shows.
+
 `$OBSRV --help` lists every preset (`1080p-24`, `laptop-768`,
 `android-65`, `iphone-61`, …), profile (`reference`, `office-ips`,
 `budget-tn`, `old-laptop`), and flag (`--width/--height/--dsf`, `--text-scale`,
@@ -80,7 +85,7 @@ $OBSRV report http://localhost:5173 --out obsrv-report.html
 If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 `obsrv_audit`, `obsrv_lint`, `obsrv_inspect`, `obsrv_report`, `obsrv_drive`,
 `obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
-comes back inline. `obsrv_presets { group: 'phones' }` lists just the phones
+comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
 
@@ -118,7 +123,7 @@ The user installed a window to watch. Review in it.
 
 1. **One tab per screen.** `obsrv_drive { tab: "new", url, preset: "laptop-768", capture: "pane" }` — the app launches if it is not running (`launched: true` on that call; say so once). Repeat with `android-65`, `1080p-24`, whatever the question is about. Leave the tabs open; the user flips through them afterwards.
 2. **Walk each page a screenful at a time.** `obsrv_drive { scroll: { page: "next" }, capture: "pane" }` until the result says `atEnd: true`. Look at each capture as it comes. No arithmetic, no page height.
-3. **Point at what you mean.** `obsrv_drive { highlight: { …rect, space: "page" } }` with an `obsrv_audit` finding's rect or `obsrv_inspect`'s `pageRect`, while you talk about it. A rect below the fold needs a scroll first, in the same call — `{ scroll: { x: 0, y: rect.y - 200 }, highlight: { ...rect, space: "page" }, capture: "pane" }` — the marker stays up until the shutter fires, so it lands in the PNG. `obsrv_audit`, `obsrv_lint`, `obsrv_inspect` in `mode: "auto"` measure the tab in front. `obsrv_audit` and `obsrv_lint` walk the page a screenful at a time before measuring, so the user sees it look (`walked` in the result); pass `walk: false` to re-measure quietly after a fix, or to measure a scrolled position or an open menu as it stands — the walk returns the page to the top.
+3. **Point at what you mean.** `obsrv_drive { highlight: { …rect, space: "page" } }` with an `obsrv_audit` finding's rect or `obsrv_inspect`'s `pageRect`, while you talk about it. A rect below the fold needs a scroll first, in the same call — `{ scroll: { x: 0, y: rect.y - 200 }, highlight: { ...rect, space: "page" }, capture: "pane" }` — the marker stays up until the shutter fires, so it lands in the PNG. `obsrv_audit`, `obsrv_lint`, `obsrv_inspect` in `mode: "auto"` measure the tab in front. `obsrv_audit` and `obsrv_lint` walk the page a screenful at a time before measuring — live so the user sees it look, headless too so lazy images are judged by the file that arrived and late sections exist (`walked` in the result either way); pass `walk: false` to re-measure quietly after a fix, or to measure a scrolled position or an open menu as it stands — the walk returns the page to the top.
 4. **Switch with `tab: <id>`** (ids from any result's `tabs`); `closeTab: "current"` when a tab has served.
 
 Captures: `capture: "window"` is the whole app as the user sees it; `"pane"`
@@ -189,6 +194,11 @@ happened on the matrix snaps.
   render carries *more* ink than the 2x reference, and the size of the
   difference tracks the text's colour rather than its stroke (the figures
   are in `src/cli/metrics.ts`). Ask `lint` which elements, and read the PNG.
+- The MCP server runs at most two headless renders at once
+  (`OBSRV_MCP_CONCURRENCY` raises it): each is its own Electron, and nine in
+  parallel starved two of them past their load budget. More calls queue in
+  order, and one that waited over a second says so in its warnings or notes;
+  a long wait can hit the client's own request timeout, so fan out in twos.
 - Animating pages never go paint-quiet. A covered frame that keeps painting
   steadily is captured after ~2 s — headless and live alike — with
   `settled: false` and `unsettledReason: "animating"`; waiting longer would
