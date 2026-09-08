@@ -12,7 +12,7 @@ import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
 import { inspectReadout } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
-import type { LoadError } from '../shared/types'
+import type { LoadError, Walked } from '../shared/types'
 import type { AuditRect, AuditReport } from '../shared/audit'
 import type { LintReport } from '../shared/lint'
 import {
@@ -31,6 +31,7 @@ import { lintFindings, slimGroups, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
+import { walkHeadless } from './walk'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
@@ -144,6 +145,8 @@ interface RenderResult {
    * How the page *feels* on the screen, under `--throttle` or without.
    */
   settledMs: number | null
+  /** The walk before the audit and lint, when they were asked for and `walk` was not false (see cli/walk.ts). */
+  walked?: Walked
 }
 
 interface RenderOptions {
@@ -173,6 +176,8 @@ interface RenderOptions {
   audit?: boolean
   /** Also run the lint walk on the loaded page. */
   lint?: boolean
+  /** Walk the page a screenful at a time before the audit and lint (default true); false measures it as it first shows. */
+  walk?: boolean
 }
 
 /**
@@ -565,6 +570,15 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
 
     if (frame === null) frame = await quiescent()
     const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
+    // The measurements see the page a user who scrolled it would: walked to
+    // the end and back first, so lazy images have loaded and late sections
+    // mounted (cli/walk.ts). `--no-walk` measures it as it first shows.
+    let walked: Walked | undefined
+    if ((options.audit || options.lint) && options.walk !== false) {
+      const w = await walkHeadless(target)
+      for (const n of w.notes) warn(`warning: ${n}`)
+      walked = w.walked
+    }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
     return {
@@ -575,6 +589,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       settledMs,
       ...(auditReport !== undefined ? { auditReport } : {}),
       ...(lintReport !== undefined ? { lintReport } : {}),
+      ...(walked !== undefined ? { walked } : {}),
       ...(bandsCaptured !== undefined ? { bands: bandsCaptured } : {}),
       ...(stuckChrome !== undefined ? { stuckChrome } : {}),
     }
@@ -790,6 +805,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, cmd, watch)
+    const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
+    for (const n of walk.notes) human(`warning: ${n}`)
     const report = await target.auditPage()
     if (!report) {
       const err = watch.failed()
@@ -829,7 +846,9 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       pageHeight: report.pageHeight,
+      ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
+      ...(walk.notes.length > 0 ? { warnings: [...result.warnings, ...walk.notes] } : {}),
     })
   } finally {
     target.destroy()
@@ -848,6 +867,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, cmd, watch)
+    const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
+    for (const n of walk.notes) human(`warning: ${n}`)
     // One device pixel on this screen, in the page's CSS px: the walk
     // brings back only the edges thinner than that.
     const report = await target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale))
@@ -883,8 +904,10 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       pageHeight: report.pageHeight,
+      ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
       groups: slimGroups(result.groups),
+      ...(walk.notes.length > 0 ? { warnings: [...result.warnings, ...walk.notes] } : {}),
     })
   } finally {
     target.destroy()
@@ -921,7 +944,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
   const referenceMax = maxCssViewport(2)
 
   for (const spec of cmd.specs) {
-    const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true, lint: true })
+    const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true, lint: true, walk: cmd.walk })
     const raw = bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height)
     const profiled = profile.id !== 'reference'
     const img = profiled ? applyPanelProfile(raw, profile) : raw
@@ -1073,6 +1096,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       settled: r.frame.settled,
       unsettledReason: r.frame.unsettledReason,
       settledMs: r.settledMs,
+      ...(r.walked !== undefined ? { walked: r.walked } : {}),
       audit,
       lint,
       diff,
@@ -1123,6 +1147,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
       settled: s.settled,
       ...(s.settled ? {} : { unsettledReason: s.unsettledReason }),
       ...(throttleId !== null ? { settledMs: s.settledMs } : {}),
+      ...(s.walked !== undefined ? { walked: s.walked } : {}),
       audit: s.audit ? { summary: s.audit.summary, findings: s.audit.findings.length, groups: s.audit.groups.length, truncated: s.audit.truncated.findings } : null,
       lint: s.lint ? { summary: s.lint.summary, findings: s.lint.findings.length, groups: s.lint.groups.length, skipped: s.lint.skipped } : null,
       diff: s.diff

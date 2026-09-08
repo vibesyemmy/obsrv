@@ -89,6 +89,22 @@ text, rect, message); `groupsOnly: true` leaves the per-finding list out
 altogether, which on a big page is most of the payload. Exit code 0 and findings are informational:
 thresholds for CI are the caller's.
 
+## Walked first
+
+The page is measured as a user who scrolled it sees it, not as it first
+shows. Headless, `obsrv lint` (and `audit`, and every screen of `report`)
+walks it a screenful at a time to the end and back before running the rules
+(`src/cli/walk.ts`, over the live scroll's own arithmetic, `walkStep` in
+`src/shared/scrollHost.ts`), dwelling briefly on each so observers fire and
+loaders swap their sources, then waits for the images those swaps started.
+Measured on apple.com at 1080p-24 before this existed: nineteen "upscaled"
+findings, every one a 1×1 placeholder GIF judged against a 1250 px box; the
+same page linted live, where the walk had run, had none. The JSON's `walked`
+says how far it went (`screenfuls`, `atEnd`, `ms`; capped at twelve
+screenfuls and fifteen seconds, like the live walk and the full-page
+capture); `--no-walk` (`walk: false` on the MCP) measures the page as it
+first shows.
+
 ## Live
 
 With the app open and Agent control on, `obsrv_lint` judges the page in

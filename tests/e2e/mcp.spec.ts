@@ -292,12 +292,21 @@ test('obsrv_report: one screen, rendered, audited and diffed, as a file plus a s
   const result = r.structuredContent as {
     out: string
     htmlBytes: number
-    screens: { preset: string; audit: { findings: number } | null; diff: { settled: boolean } | null; diffSkipped: string | null }[]
+    screens: {
+      preset: string
+      walked?: { screenfuls: number; atEnd: boolean; ms: number }
+      audit: { findings: number } | null
+      diff: { settled: boolean } | null
+      diffSkipped: string | null
+    }[]
   }
   expect(result.out).toMatch(/obsrv-mcp-.*\/report\.html$/)
   expect(result.htmlBytes).toBeGreaterThan(10_000)
   expect(result.screens).toHaveLength(1)
   expect(result.screens[0]).toMatchObject({ preset: 'laptop-768', diffSkipped: null })
+  // Each screen was walked before its audit and lint; the output schema must
+  // admit the field, or the whole answer is refused as "additional properties".
+  expect(result.screens[0]!.walked).toMatchObject({ atEnd: true })
   expect(result.screens[0]!.audit?.findings).toBeGreaterThanOrEqual(1)
   expect(result.screens[0]!.diff).not.toBeNull()
 })

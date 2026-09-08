@@ -215,8 +215,10 @@ root cannot scroll, and takes a `scrollSelector` when you need to name the
 container yourself. `obsrv_inspect`, `obsrv_audit` and `obsrv_lint` follow the
 app the same way: they measure the page in front, on the screen, text scale
 and panel in force, after whatever the drive did to it; `obsrv_audit` and `obsrv_lint` walk the
-page to the end and back first, so you see it looked at; `obsrv_report` is the exception and stays
-headless, being a batch over a matrix of screens. With no app running, `mode: 'auto'` (the
+page to the end and back first, so you see it looked at — and so do the headless audit, lint and
+report, so lazy images are judged by the file that arrived rather than its placeholder (`--no-walk`
+or `walk: false` measures the page as it first shows); `obsrv_report` is the exception to the live
+part and stays headless, being a batch over a matrix of screens. With no app running, `mode: 'auto'` (the
 default) launches one; `mode: 'headless'` never touches it.
 
 To photograph a scrolled or panned state, pass `capture: 'window' | 'pane'` to

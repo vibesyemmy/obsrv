@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lazy-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font-family: Arial, sans-serif; color: #111; }
+      body { padding: 16px; }
+      p { font-size: 16px; }
+      /* Three screenfuls on a 1080p, five on the 768 laptop: the images and the
+         late button sit past the second screen, where only a scroll reaches. */
+      #spacer { height: 2400px; background: linear-gradient(#fff, #f3f3f3); }
+      img { display: block; margin: 8px 0; }
+      #late { display: block; width: 24px; height: 24px; padding: 0; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <p>A page that loads its images and mounts a control only when they scroll into view.</p>
+    <div id="spacer"></div>
+    <section id="lazy">
+      <!-- A 1×1 GIF stands in for each image until the section is seen; the
+           real files are a 200 px PNG drawn at 200 (fine) and a 100 px PNG
+           drawn at 200 (upscaled 2× on a 1x screen). -->
+      <img id="lazy-fit" width="200" height="200" alt="" src="data:image/gif;base64,R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" data-src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAABeElEQVR42u3SMQ0AAAgEsZeDRCQiCxMMDE2q4HKpHjgXCTAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIyFsVTAWBgLY4GxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbEwFsYCY2EsjAXGwlgYC4yFsTAWGAtjYSwwFsbCWGAsjIWxwFgYC2OBsTAWxgJjYSyMBcbCWBgLjIWxMBYYC2NhLDAWxsJYYCyMhbHAWBgLY4GxMBbGAmNhLIwFxsJYGAtjqYCxMBbGAmNhLIwFxsJYGAuMhbEwFhgLY2EsMBbGwlhgLIyFscBYGAtjgbH4ZgHEq8bWeCIoOgAAAABJRU5ErkJggg==" />
+      <img id="lazy-up" width="200" height="200" alt="" src="data:image/gif;base64,R0lGODlhAQABAHAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" data-src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAAvElEQVR42u3YsQ0AIAhFQcZxJidmK1xAE6k5Y0l11cuPery18/on3wcsWLBgwYIFC1YDC8r/PSxYsGDBggULVgcLioKHBQsWLFiwYNmzFDwsWLBgwYIFy56l4GHBggULFixYsKAoeFiwYMGCBQuWPUvBw4IFCxYsWLDsWQoeFixYsGDBggULioKHBQsWLFiwYNmzFDwsWLBgwYIFy56l4GHBggULFixYsKAoeFiwYMGCBQuWPUvBw4I1HusAn1GdLiJik0wAAAAASUVORK5CYII=" />
+      <div id="late-host"></div>
+    </section>
+    <script>
+      const io = new IntersectionObserver(entries => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue
+          for (const img of e.target.querySelectorAll('img[data-src]')) {
+            img.src = img.dataset.src
+            delete img.dataset.src
+          }
+          if (!document.getElementById('late')) {
+            const b = document.createElement('button')
+            b.id = 'late'
+            b.type = 'button'
+            b.setAttribute('aria-label', 'Late')
+            b.textContent = '+'
+            document.getElementById('late-host').appendChild(b)
+          }
+          io.unobserve(e.target)
+        }
+      })
+      io.observe(document.getElementById('lazy'))
+    </script>
+  </body>
+</html>

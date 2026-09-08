@@ -66,6 +66,8 @@ export interface AuditToolInput {
   throttle?: string | undefined
   tapMm?: number | undefined
   textMm?: number | undefined
+  /** False maps to `--no-walk`; true is the CLI's default and adds nothing. */
+  walk?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
 }
@@ -83,6 +85,8 @@ export interface LintToolInput {
   /** The panel the contrast-on-panel rule is judged on. */
   profile?: string | undefined
   thinPx?: number | undefined
+  /** False maps to `--no-walk`; true is the CLI's default and adds nothing. */
+  walk?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
 }
@@ -211,6 +215,7 @@ export function buildLintArgs(input: LintToolInput): string[] {
   if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.thinPx !== undefined) args.push('--thin-px', String(input.thinPx))
+  if (input.walk === false) args.push('--no-walk')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   return args
@@ -244,6 +249,7 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
   if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
+  if (input.walk === false) args.push('--no-walk')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   return args

@@ -15,7 +15,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
-import { WALK_HEADLESS_NOTE, walkPage, type WalkDeps, type Walked } from './walk'
+import { walkPage, type WalkDeps, type Walked } from './walk'
 import {
   MAX_INLINE_IMAGE_BYTES,
   UsageError,
@@ -710,20 +710,20 @@ const walkField = z
   .boolean()
   .optional()
   .describe(
-    'Live only. Default true: before measuring, the page is scrolled a screenful at a time to the end and back to ' +
-      'the top, so the user watching the window sees the whole page pass (and lazy sections mount). false: measure ' +
-      'without moving — for re-measuring after a fix. false also measures a driven state — a scroll position, an ' +
-      'open menu — as it stands. Ignored in headless mode, with a note.',
+    'Default true: before measuring, the page is scrolled a screenful at a time to the end and back to the top — ' +
+      'live, so the user watching the window sees the whole page pass; live and headless alike, so lazy images ' +
+      'load and late sections mount before they are judged. false: measure the page as it stands — for ' +
+      're-measuring after a fix, or (live) a driven state: a scroll position, an open menu.',
   )
 
 const walkedField = z
   .object({ screenfuls: z.number(), atEnd: z.boolean(), ms: z.number() })
   .optional()
   .describe(
-    'Live only, when the page was walked before measuring: screenfuls scrolled, whether the end was reached ' +
-      '(false with 12 screenfuls: the cap stopped it) and the time it took. Absent when the walk did not run — ' +
-      'walk: false, headless, or an app older than 0.41.0 (a note says which). Two runs that disagree on a ' +
-      'lazy-loading page differ here.',
+    'When the page was walked before measuring: screenfuls scrolled, whether the end was reached (false with ' +
+      '12 screenfuls: the cap stopped it) and the time it took. Absent when the walk did not run — walk: false, ' +
+      'or (live) an app older than 0.41.0 (a note says which). Two runs that disagree on a lazy-loading page ' +
+      'differ here.',
   )
 
 /**
@@ -1226,9 +1226,9 @@ server.registerTool(
       `position or an open menu as it stands — launching the app if it is not running (\`launched: true\` on that ` +
       `call), and falling back to a headless load of ` +
       `\`url\` when the live app is not available (\`why\` names the reason). 'live' requires the app; 'headless' ` +
-      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`). Live, it walks the page a ` +
-      `screenful at a time to the end and back before measuring, so the user sees it look and lazy sections mount ` +
-      `(\`walked\` in the result); \`walk: false\` measures without moving.`,
+      `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`). Live or headless, it walks ` +
+      `the page a screenful at a time to the end and back before measuring — live so the user sees it look, both so ` +
+      `lazy images load and late sections mount (\`walked\` in the result); \`walk: false\` measures without moving.`,
     inputSchema: auditInputShape,
     outputSchema: auditOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1252,7 +1252,6 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
-    if (input.walk !== undefined) notes.push(WALK_HEADLESS_NOTE)
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
@@ -1465,9 +1464,9 @@ server.registerTool(
       `scroll position or an open menu as it stands — launching the app if it is not running (\`launched: true\` ` +
       `on that call), and falling back to a headless load of \`url\` when the live app ` +
       `is not available (\`why\` names the reason). 'live' requires the app; 'headless' never touches it. Findings ` +
-      `are informational — apply your own thresholds. Live, it walks the page a screenful at a time to the end ` +
-      `and back before measuring, so the user sees it look and lazy sections mount (\`walked\` in the result); ` +
-      `\`walk: false\` measures without moving.`,
+      `are informational — apply your own thresholds. Live or headless, it walks the page a screenful at a time to ` +
+      `the end and back before measuring — live so the user sees it look, both so lazy images load and are judged ` +
+      `by the file that arrived rather than a placeholder (\`walked\` in the result); \`walk: false\` measures without moving.`,
     inputSchema: lintInputShape,
     outputSchema: lintOutputShape,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
@@ -1491,7 +1490,6 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
-    if (input.walk !== undefined) notes.push(WALK_HEADLESS_NOTE)
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
@@ -1657,6 +1655,7 @@ const reportOutputShape = {
       settled: z.boolean(),
       unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
+      walked: walkedField,
       audit: z
         .object({ summary: z.object({ targets: auditGroupShape, text: auditGroupShape }), findings: z.number(), groups: z.number(), truncated: z.number() })
         .nullable(),

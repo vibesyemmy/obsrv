@@ -141,6 +141,18 @@ export type ScrollerKind = 'root' | 'element'
 /** Longest `scrollSelector` accepted; a CSS selector far beyond any real one. */
 export const MAX_SCROLL_SELECTOR = 512
 
+/**
+ * A page walked a screenful at a time to the end and back before it was
+ * measured — live through the app, headless in the CLI — as the audit and
+ * lint report it.
+ */
+export interface Walked {
+  screenfuls: number
+  /** False with `screenfuls` at the cap (12) means the cap stopped it. */
+  atEnd: boolean
+  ms: number
+}
+
 /** A page-wise scroll: a screenful of the scroller in this direction, or an end. */
 export type ScrollPage = 'next' | 'prev' | 'top' | 'bottom'
 export const SCROLL_PAGES: readonly ScrollPage[] = ['next', 'prev', 'top', 'bottom']
