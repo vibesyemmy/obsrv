@@ -87,6 +87,8 @@ export interface LintToolInput {
   thinPx?: number | undefined
   /** False maps to `--no-walk`; true is the CLI's default and adds nothing. */
   walk?: boolean | undefined
+  /** `--groups-only`: the CLI leaves the list out itself, and with it the sentence about the list's cap. */
+  groupsOnly?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
 }
@@ -216,6 +218,7 @@ export function buildLintArgs(input: LintToolInput): string[] {
   if (input.profile !== undefined) args.push('--profile', input.profile)
   if (input.thinPx !== undefined) args.push('--thin-px', String(input.thinPx))
   if (input.walk === false) args.push('--no-walk')
+  if (input.groupsOnly === true) args.push('--groups-only')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   return args

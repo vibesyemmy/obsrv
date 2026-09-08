@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>animated-tall-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* animated.html, four screenfuls tall: a full-page capture takes it in
+         bands, and each band meets the same animation. */
+      .spin {
+        width: 400px;
+        height: 400px;
+        margin: 100px;
+        background: #000;
+        animation: spin 900ms linear infinite;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      #spacer { height: 2600px; background: linear-gradient(#fff, #eee); }
+    </style>
+  </head>
+  <body>
+    <div class="spin"></div>
+    <div id="spacer"></div>
+    <div class="spin"></div>
+  </body>
+</html>

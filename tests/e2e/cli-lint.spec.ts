@@ -122,3 +122,14 @@ test("another command's flag is refused with its owner, exit code 2", async () =
   expect(r.code).toBe(2)
   expect(r.stderr).toContain('--tap-mm is an audit flag')
 })
+
+test('--groups-only: the groups and the summary, an empty list, and nothing said about a list', async () => {
+  const m = await lint('--preset', '1080p-24', '--groups-only')
+  expect(m.findings).toEqual([])
+  expect(m.groups.length).toBeGreaterThan(0)
+  expect(m.summary.hairline).toBeGreaterThan(0)
+  expect(m.warnings.join(' ')).not.toMatch(/past the 200 listed/)
+  const listed = await lint('--preset', '1080p-24')
+  expect(listed.findings.length).toBeGreaterThan(0)
+  expect(listed.groups).toEqual(m.groups)
+})

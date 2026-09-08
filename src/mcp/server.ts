@@ -43,7 +43,7 @@ import {
   type SnapMode,
   type SnapToolInput,
 } from './lib'
-import { DEFAULT_THIN_PX, LINT_RULES } from '../cli/lint'
+import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote } from '../cli/lint'
 
 /**
  * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
@@ -1422,6 +1422,12 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
     }
     const { ok: _ok, textScale, ...judged } = answer
+    // The app's result says nothing about its capped list (cli/lint.ts): this
+    // server prints the list, so it adds the sentence — unless it is leaving
+    // the list out, when there is nothing to say.
+    const truncatedFindings = (judged as { truncated?: { findings?: unknown } }).truncated?.findings
+    const listed = input.groupsOnly ? null : listTruncationNote(typeof truncatedFindings === 'number' ? truncatedFindings : 0)
+    const liveWarnings = Array.isArray((judged as { warnings?: unknown }).warnings) ? ((judged as { warnings: unknown[] }).warnings as unknown[]) : []
     const structured = {
       mode: 'live',
       url: status.url,
@@ -1433,6 +1439,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
       ...(input.groupsOnly ? { findings: [] } : {}),
+      ...(listed === null ? {} : { warnings: [...liveWarnings, listed] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1505,7 +1512,9 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('lint', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, ...(input.groupsOnly ? { findings: [] } : {}), notes }
+    // `groupsOnly` went to the CLI as --groups-only, which leaves the list out
+    // at the source, and with it the sentence about the list's cap.
+    const structured = { mode: 'headless', why, ...result, notes }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
