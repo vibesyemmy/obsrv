@@ -8,5 +8,5 @@ The source, the app and the CLI live on [`main`](https://github.com/vibesyemmy/o
 The MCP server it registers is the `getobsrv` package on npm, fetched with `npx`;
 nothing here is the implementation.
 
-Built from `v0.44.0` by `scripts/build-plugin-branch.js`. Do not commit to this
+Built from `v0.45.0` by `scripts/build-plugin-branch.js`. Do not commit to this
 branch by hand — the next release overwrites it.
