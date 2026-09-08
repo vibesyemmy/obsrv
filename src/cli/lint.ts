@@ -38,6 +38,24 @@ export function listTruncationNote(truncated: number): string | null {
   return `${truncated} more finding${truncated === 1 ? '' : 's'} past the ${LINT_MAX_FINDINGS} listed; the summary counts them all`
 }
 
+/**
+ * When the walk before the lint stopped short of the end (its budget ran
+ * out), the images below the height it reached were never scrolled into
+ * view, and a lazy loader never swapped their placeholders: an "upscaled"
+ * finding down there may be a 1×1 GIF judged against a real box. Counts the
+ * image findings past that height, for the warnings. Null when there are
+ * none — or when the walk reached the end, since then there is no such
+ * height.
+ */
+export function unwalkedImageNote(findings: LintFinding[], walkedHeightPx: number): string | null {
+  const n = findings.filter(f => (f.rule === 'image-upscaled' || f.rule === 'image-oversized') && f.rect.y >= walkedHeightPx).length
+  if (n === 0) return null
+  return (
+    `${n} image finding${n === 1 ? '' : 's'} sit${n === 1 ? 's' : ''} below the ${Math.round(walkedHeightPx)} CSS px the walk reached ` +
+    `before its budget ran out, and may be placeholders the page never loaded`
+  )
+}
+
 export type LintRule = 'hairline' | 'thin-text' | 'contrast' | 'contrast-on-panel' | 'image-upscaled' | 'image-oversized'
 export const LINT_RULES: readonly LintRule[] = ['hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized']
 

@@ -27,7 +27,7 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings, listTruncationNote, slimGroups, type LintGroup } from './lint'
+import { lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -208,23 +208,54 @@ function watchFailures(target: TargetSource): { failed: () => Error | null; load
  * single sleep, because a renderer crash mid-wait must fail now, not after
  * the wait plus a doomed capture.
  */
+/**
+ * The sentence for a load that outran the budget. Under a throttle a slow
+ * load is the point, and bbc.com under budget-phone settles at 70 s: the old
+ * "load did not finish within 30000 ms" named neither the throttle nor the
+ * flag that would have let it finish.
+ */
+function loadTimeoutMessage(timeoutMs: number, throttle: string | null, url: string): string {
+  return (
+    `load did not finish within ${timeoutMs} ms` +
+    `${throttle !== null ? ` under --throttle ${throttle} (a slow load is what a throttle is for)` : ''}: ${url} — raise --timeout for the full load`
+  )
+}
+
+/**
+ * After a load the budget cut short, how long the capture gives the page to
+ * go quiet before taking the frame as it stands. Short: the budget is spent,
+ * and the frame is what a user on that connection was looking at.
+ */
+const CUT_LOAD_CAPTURE_MS = 2_000
+
 async function loadWithin(
   target: TargetSource,
   url: string,
-  options: { waitMs: number; timeoutMs: number },
+  options: { waitMs: number; timeoutMs: number; throttle?: string | null },
   watch: ReturnType<typeof watchFailures>,
-): Promise<void> {
+  /**
+   * A render takes the page as it stands when the load outruns the budget —
+   * settled false, a warning — since the frame is still what the screen
+   * showed; a measurement cannot use a half-loaded page and errors instead.
+   */
+  rescue = false,
+): Promise<{ loaded: boolean }> {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`load did not finish within ${options.timeoutMs} ms: ${url}`)), options.timeoutMs)
+  const timeout = new Promise<false>(resolve => {
+    timer = setTimeout(() => resolve(false), options.timeoutMs)
   })
+  let loaded: boolean
   try {
-    await Promise.race([target.load(url), timeout])
+    loaded = await Promise.race([target.load(url).then(() => true), timeout])
   } finally {
     clearTimeout(timer)
   }
   const error = watch.loadError()
   if (error) throw new Error(`load failed: ${error.description} (code ${error.code}) — ${error.url}`)
+  if (!loaded) {
+    if (!rescue) throw new Error(loadTimeoutMessage(options.timeoutMs, options.throttle ?? null, url))
+    return { loaded: false }
+  }
   if (options.waitMs > 0) {
     const until = Date.now() + options.waitMs
     while (Date.now() < until) {
@@ -233,6 +264,7 @@ async function loadWithin(
       await sleep(Math.min(50, until - Date.now()))
     }
   }
+  return { loaded: true }
 }
 
 /**
@@ -296,16 +328,27 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       if (refused) warn(`warning: ${refused}`)
     }
     const startedAt = Date.now()
-    await loadWithin(target, url, options, watch)
+    const load = await loadWithin(target, url, { ...options, throttle: spec.throttle }, watch, true)
+    if (!load.loaded) {
+      warn(`warning: ${loadTimeoutMessage(options.timeoutMs, spec.throttle, url)}; capturing the page as it stands — settled false, settledMs null`)
+    }
 
     let cssHeight = applied.height
     let frame: CapturedFrame | null = null
     let bandsCaptured: number | undefined
     let stuckChrome: StuckBar[] | undefined
     // Under a throttle the quiet moment is the measurement (`settledMs`), and
-    // a page loading over 3G paints steadily too: no early exit there.
+    // a page loading over 3G paints steadily too: no early exit there. After
+    // a load the budget cut short, the capture gets a short budget of its own
+    // and takes the frame as it stands; its "kept painting (animation?)" line
+    // would explain what the load warning above already has.
     const quiescent = (): Promise<CapturedFrame> =>
-      captureQuiescent(target, { timeoutMs: options.timeoutMs, onWarn: warn, failure: failed, animationExit: spec.throttle === null })
+      captureQuiescent(target, {
+        timeoutMs: load.loaded ? options.timeoutMs : CUT_LOAD_CAPTURE_MS,
+        onWarn: load.loaded ? warn : m => (/kept painting/.test(m) ? undefined : warn(m)),
+        failure: failed,
+        animationExit: spec.throttle === null,
+      })
     if (options.fullPage) {
       // Layout is final at did-finish-load (+ --wait for late movers), so the
       // page height needs no pixels: resize *before* the one and only capture
@@ -567,6 +610,11 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
 
     if (frame === null) frame = await quiescent()
+    // A frame taken after a cut load can be paint-quiet — a page waiting on
+    // its network is — but it is not the settled page: measured on bbc.com
+    // under budget-phone, the capture said settled with settledMs 30,413
+    // beside the warning that said the load never finished.
+    if (!load.loaded) frame = { ...frame, settled: false, unsettledReason: 'loading' }
     const settledMs = frame.settled ? Math.max(0, Date.now() - startedAt - options.waitMs) : null
     // The measurements see the page a user who scrolled it would: walked to
     // the end and back first, so lazy images have loaded and late sections
@@ -747,7 +795,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, cmd, watch)
+    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     const report = cmd.selector !== null ? await target.inspectSelector(cmd.selector) : await target.inspectAt(cmd.at!.x, cmd.at!.y)
     if (report === null) {
       const err = watch.failed()
@@ -802,7 +850,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, cmd, watch)
+    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
     for (const n of walk.notes) human(`warning: ${n}`)
     const report = await target.auditPage()
@@ -864,7 +912,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, cmd, watch)
+    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
     for (const n of walk.notes) human(`warning: ${n}`)
     // One device pixel on this screen, in the page's CSS px: the walk
@@ -886,6 +934,13 @@ async function runLint(cmd: LintCommand): Promise<void> {
     // this output's to add — and neither goes out under --groups-only.
     const listed = cmd.groupsOnly ? null : listTruncationNote(result.truncated.findings)
     if (listed !== null) human(`warning: ${listed}`)
+    // A walk that ran out of budget leaves the page below its last screenful
+    // as it first shipped; an image finding down there may be a placeholder.
+    const unwalked =
+      walk.walked !== undefined && !walk.walked.atEnd
+        ? unwalkedImageNote(result.findings, (walk.walked.screenfuls + 1) * (applied.height / cmd.spec.textScale))
+        : null
+    if (unwalked !== null) human(`warning: ${unwalked}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)
     human(
@@ -910,7 +965,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...result,
       findings: cmd.groupsOnly ? [] : result.findings,
       groups: slimGroups(result.groups),
-      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed])],
+      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])],
     })
   } finally {
     target.destroy()
@@ -970,6 +1025,10 @@ async function runReport(cmd: ReportCommand): Promise<void> {
             { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) },
             { thinPx: cmd.thinPx },
           )
+    if (lint && r.walked !== undefined && !r.walked.atEnd) {
+      const unwalked = unwalkedImageNote(lint.findings, (r.walked.screenfuls + 1) * (r.cssHeight / spec.textScale))
+      if (unwalked !== null) lint.warnings.push(unwalked)
+    }
 
     // The full page with the worst findings located on it: one extra render,
     // taken only when there is something to point at. Candidates come from

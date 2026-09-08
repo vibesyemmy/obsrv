@@ -96,3 +96,16 @@ test('--no-walk belongs to audit, lint and report; snap refuses it by name', asy
   expect(r.code).toBe(2)
   expect(r.stderr).toContain('--no-walk is an audit flag')
 })
+
+test('the walk has no screenful cap: a lazy image fourteen screenfuls down is judged by the file that arrived', async () => {
+  // bbc.com on a phone is twenty-two screenfuls; a walk capped at twelve
+  // measured the rest as it first shipped, placeholders and all.
+  const r = await runCli(['lint', fixture('lazy-tall.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked).toMatchObject({ atEnd: true })
+  expect(m.walked.screenfuls).toBeGreaterThanOrEqual(13)
+  expect(m.summary['image-upscaled']).toBe(1)
+  expect(byRule(m, 'image-upscaled')).toEqual(['img#lazy-up'])
+  expect(m.warnings.join(' ')).not.toMatch(/screenfuls without reaching|may be placeholders/)
+})

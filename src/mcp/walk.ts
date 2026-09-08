@@ -17,8 +17,6 @@ export type { Walked }
  * docs/superpowers/specs/2026-09-08-walk-before-measuring-design.md.
  */
 
-/** Most screenfuls a walk takes — the same cap the full-page capture has (`MAX_TILE_BANDS`). */
-export const WALK_MAX_SCREENFULS = 12
 /**
  * Pause on each screenful, on top of the scroll's own confirmation, so an eye
  * can land on it. Measured: nine screenfuls in 2,843 ms on usekolo.app, the
@@ -26,11 +24,15 @@ export const WALK_MAX_SCREENFULS = 12
  */
 export const WALK_DWELL_MS = 350
 /**
- * Wall-clock budget for a whole walk: the top scroll, up to
- * `WALK_MAX_SCREENFULS` "next" scrolls, and the final top scroll — fourteen
- * calls, each with its own 5 s apply timeout — put a pathological page's
- * worst case around 70 s. Unbounded, that would run a live audit (this walk,
- * then a 20 s audit call) past the MCP SDK's 60 s default client request
+ * Wall-clock budget for a whole walk, and its only bound on length. There
+ * used to be a screenful cap too — twelve, the band capture's, where each
+ * screenful is a render — and everything past it was measured as the page
+ * first shipped: bbc.com on a phone is twenty-two screenfuls, and the lint
+ * reported the lazy placeholders below the twelfth as upscaled images, the
+ * 0.42.0 finding again. A walk costs a dwell, not a render; the budget is
+ * enough. Checked between steps, so a pathological page's worst case is the
+ * budget plus one scroll's 5 s apply timeout, which keeps a live audit (this
+ * walk, then a 20 s audit call) inside the MCP SDK's 60 s client request
  * timeout. Typical cost is ~4 s (measured, spec §2). Past the budget the
  * walk stops, `atEnd` stays false, and a note says so.
  */
@@ -82,7 +84,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
   let lastY: number | null = 0
   try {
-    while (screenfuls < WALK_MAX_SCREENFULS) {
+    for (;;) {
       if (deps.now() - started >= WALK_BUDGET_MS) {
         notes.push(
           `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${WALK_BUDGET_MS / 1000} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
@@ -117,9 +119,6 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
     )
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - started }, notes } : { notes }
-  }
-  if (!atEnd && screenfuls >= WALK_MAX_SCREENFULS) {
-    notes.push(`the walk stopped after ${WALK_MAX_SCREENFULS} screenfuls without reaching the end of the page; the measurement covers the whole page regardless.`)
   }
   await backToTop()
   return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes }

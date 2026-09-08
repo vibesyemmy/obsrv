@@ -46,7 +46,7 @@ import {
   type SnapMode,
   type SnapToolInput,
 } from './lib'
-import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote } from '../cli/lint'
+import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote, unwalkedImageNote, type LintFinding } from '../cli/lint'
 
 /**
  * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
@@ -339,12 +339,13 @@ const snapOutputShape = {
         'a fresh load, which starts at the top of the page.',
     ),
   unsettledReason: z
-    .enum(['animating', 'timeout', 'uncovered'])
+    .enum(['animating', 'timeout', 'uncovered', 'loading'])
     .optional()
     .describe(
       "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
         "early (~2 s) rather than at the budget and waiting longer would not have helped; 'timeout' — still painting at the budget; " +
-        "'uncovered' — part of the frame never painted within the budget.",
+        "'uncovered' — part of the frame never painted within the budget; 'loading' — the load outran timeoutMs (under a " +
+        "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load.",
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
@@ -752,8 +753,9 @@ const walkedField = z
   .object({ screenfuls: z.number(), atEnd: z.boolean(), ms: z.number() })
   .optional()
   .describe(
-    'When the page was walked before measuring: screenfuls scrolled, whether the end was reached (false with ' +
-      '12 screenfuls: the cap stopped it) and the time it took. Absent when the walk did not run — walk: false, ' +
+    'When the page was walked before measuring: screenfuls scrolled, whether the end was reached (false when ' +
+      'the 15 s budget ran out, or the page would not move — a warning says which, and lint counts the image ' +
+      'findings below the height reached) and the time it took. Absent when the walk did not run — walk: false, ' +
       'or (live) an app older than 0.41.0 (a note says which). Two runs that disagree on a lazy-loading page ' +
       'differ here.',
   )
@@ -1488,6 +1490,15 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const truncatedFindings = (judged as { truncated?: { findings?: unknown } }).truncated?.findings
     const listed = input.groupsOnly ? null : listTruncationNote(typeof truncatedFindings === 'number' ? truncatedFindings : 0)
     const liveWarnings = Array.isArray((judged as { warnings?: unknown }).warnings) ? ((judged as { warnings: unknown[] }).warnings as unknown[]) : []
+    // A walk that ran out of budget left the page below its last screenful
+    // as it first shipped: an image finding down there may be a placeholder.
+    const liveFindings = Array.isArray((judged as { findings?: unknown }).findings) ? ((judged as { findings: LintFinding[] }).findings) : []
+    const liveTextScale = typeof textScale === 'number' ? textScale : 1
+    const unwalked =
+      walked !== undefined && !walked.atEnd
+        ? unwalkedImageNote(liveFindings, (walked.screenfuls + 1) * (status.cssHeight / liveTextScale))
+        : null
+    const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])]
     const structured = {
       mode: 'live',
       url: status.url,
@@ -1499,7 +1510,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
       ...(input.groupsOnly ? { findings: [] } : {}),
-      ...(listed === null ? {} : { warnings: [...liveWarnings, listed] }),
+      ...(added.length === 0 ? {} : { warnings: [...liveWarnings, ...added] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1723,7 +1734,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
-      unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
+      unsettledReason: z.enum(['animating', 'timeout', 'uncovered', 'loading']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       walked: walkedField,
       audit: z

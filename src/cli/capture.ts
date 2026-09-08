@@ -21,7 +21,13 @@ export interface FrameEmitter {
  * than at the budget; `timeout` — covered, still painting at the budget;
  * `uncovered` — the budget ran out with pixels never painted.
  */
-export type UnsettledReason = 'animating' | 'timeout' | 'uncovered'
+/**
+ * Why a capture is not settled. `loading` is not this module's finding but
+ * the render's: the page load outran the budget (under a throttle, a slow
+ * load is the point), and the frame is what had painted by then — quiet or
+ * not, it is not the settled page, and `settledMs` is null.
+ */
+export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'loading'
 
 export interface CapturedFrame {
   /** Device pixels (CSS viewport × deviceScaleFactor). */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ControlCallError } from '../../src/mcp/control'
-import { WALK_BUDGET_MS, WALK_DWELL_MS, WALK_MAX_SCREENFULS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
+import { WALK_BUDGET_MS, WALK_DWELL_MS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
 
 /**
  * The walk over an injected control call. `answers` is what each successive
@@ -48,12 +48,16 @@ describe('walkPage', () => {
     expect(d.slept).toEqual([WALK_DWELL_MS, WALK_DWELL_MS, WALK_DWELL_MS])
   })
 
-  it('stops at the cap and says so; atEnd is false', async () => {
-    const d = deps(Array.from({ length: WALK_MAX_SCREENFULS + 5 }, (_, i) => step((i + 1) * 768)))
+  it('has no screenful cap: forty screenfuls inside the budget walk to the end', async () => {
+    // The cap was the band capture's, where each screenful is a render; a
+    // walk costs a dwell. bbc.com on a phone is twenty-two screenfuls, and
+    // everything past a cap of twelve was measured as it first shipped —
+    // lazy placeholders as "upscaled" images, the 0.42.0 finding again.
+    const d = deps([...Array.from({ length: 39 }, (_, i) => step((i + 1) * 768)), step(40 * 768, true)])
     const r = await walkPage(d)
-    expect(r.walked).toEqual({ screenfuls: WALK_MAX_SCREENFULS, atEnd: false, ms: WALK_MAX_SCREENFULS * WALK_DWELL_MS })
-    expect(r.notes.join(' ')).toContain(`${WALK_MAX_SCREENFULS} screenfuls`)
-    expect(d.commands.filter(c => c.payload['page'] === 'next')).toHaveLength(WALK_MAX_SCREENFULS)
+    expect(r.walked).toEqual({ screenfuls: 40, atEnd: true, ms: 40 * WALK_DWELL_MS })
+    expect(r.notes).toEqual([])
+    expect(d.commands.filter(c => c.payload['page'] === 'next')).toHaveLength(40)
     expect(d.commands.at(-1)?.payload['page']).toBe('top')
   })
 
@@ -99,7 +103,7 @@ describe('walkPage', () => {
   })
 
   it('stops at its time budget, says so, and still returns to the top', async () => {
-    const d = deps(Array.from({ length: WALK_MAX_SCREENFULS + 5 }, (_, i) => step((i + 1) * 768)))
+    const d = deps(Array.from({ length: 40 }, (_, i) => step((i + 1) * 768)))
     d.sleep = vi.fn(async () => {
       d.clock += 6_000
     })
