@@ -27,7 +27,7 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings, slimGroups, type LintGroup } from './lint'
+import { lintFindings, listTruncationNote, slimGroups, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -884,6 +884,10 @@ async function runLint(cmd: LintCommand): Promise<void> {
       { thinPx: cmd.thinPx },
     )
     for (const w of result.warnings) human(`warning: ${w}`)
+    // The list is this output's to print, so the sentence about its cap is
+    // this output's to add — and neither goes out under --groups-only.
+    const listed = cmd.groupsOnly ? null : listTruncationNote(result.truncated.findings)
+    if (listed !== null) human(`warning: ${listed}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)
     human(
@@ -906,8 +910,9 @@ async function runLint(cmd: LintCommand): Promise<void> {
       pageHeight: report.pageHeight,
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
+      findings: cmd.groupsOnly ? [] : result.findings,
       groups: slimGroups(result.groups),
-      ...(walk.notes.length > 0 ? { warnings: [...result.warnings, ...walk.notes] } : {}),
+      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed])],
     })
   } finally {
     target.destroy()

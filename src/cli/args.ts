@@ -74,6 +74,8 @@ export interface LintCommand {
   thinPx: number
   /** Walk the page a screenful at a time before measuring (the default); `--no-walk` measures it as it first shows. */
   walk: boolean
+  /** `--groups-only`: the summary and the groups, an empty `findings` list, and no sentence about the list. */
+  groupsOnly: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -254,6 +256,8 @@ lint flags:
                        density times the text scale; --profile names the panel the contrast-on-panel
                        rule is judged on. One preset per run.
   --no-walk            As for audit: judge the page as it first shows, lazy placeholders and all.
+  --groups-only        The summary and the groups without the per-finding list (up to 200): what an
+                       agent reads first. The groups cover every finding counted either way.
 
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
@@ -274,7 +278,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk', 'groups-only'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
@@ -292,7 +296,7 @@ const EXTRA_FLAGS: Record<Command, Set<string>> = {
   // Order matters for a shared flag's named owner: the command that owns the
   // concept comes first (audit before report for --tap-mm, lint before report
   // for --thin-px, audit before lint and report for --no-walk).
-  lint: new Set(['thin-px', 'no-walk']),
+  lint: new Set(['thin-px', 'no-walk', 'groups-only']),
   report: new Set(['out', 'matrix', 'tap-mm', 'text-mm', 'thin-px', 'no-walk']),
   inspect: new Set(['at', 'selector']),
 }
@@ -515,7 +519,17 @@ export function parseArgs(argv: string[]): CliCommand {
 
   if (command === 'lint') {
     if (matrix) throw new ArgError('`obsrv lint` judges one screen per run; --matrix is a snap flag')
-    return { command, url, spec: specs[0]!, profileId, thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0), walk: !flags.has('no-walk'), waitMs, timeoutMs }
+    return {
+      command,
+      url,
+      spec: specs[0]!,
+      profileId,
+      thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0),
+      walk: !flags.has('no-walk'),
+      groupsOnly: flags.has('groups-only'),
+      waitMs,
+      timeoutMs,
+    }
   }
 
   if (command === 'report') {

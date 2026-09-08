@@ -310,6 +310,10 @@ describe('buildAuditArgs', () => {
     expect(buildLintArgs({ url: URL, walk: false })).toEqual(['lint', URL, '--no-walk'])
     expect(buildLintArgs({ url: URL, walk: true, thinPx: 12 })).toEqual(['lint', URL, '--thin-px', '12'])
   })
+  it('groupsOnly is the CLI\'s --groups-only, so the list and the sentence about it are dropped at the source', () => {
+    expect(buildLintArgs({ url: URL, groupsOnly: true })).toEqual(['lint', URL, '--groups-only'])
+    expect(buildLintArgs({ url: URL, groupsOnly: false })).toEqual(['lint', URL])
+  })
 })
 
 describe('buildReportArgs', () => {

@@ -26,6 +26,18 @@ export const IMAGE_UPSCALED_TOLERANCE = 0.98
 /** Findings past this are counted, not listed; the worst come first. */
 export const LINT_MAX_FINDINGS = 200
 
+/**
+ * The sentence about the capped list, for whoever prints the list: the CLI's
+ * JSON, the MCP unless `groupsOnly`. Not the report, which shows groups and
+ * never the list — a line there about "the 200 listed" was about something
+ * the reader could not see — and not `lintFindings` itself, which does not
+ * know who is reading. Null when nothing was left out.
+ */
+export function listTruncationNote(truncated: number): string | null {
+  if (truncated <= 0) return null
+  return `${truncated} more finding${truncated === 1 ? '' : 's'} past the ${LINT_MAX_FINDINGS} listed; the summary counts them all`
+}
+
 export type LintRule = 'hairline' | 'thin-text' | 'contrast' | 'contrast-on-panel' | 'image-upscaled' | 'image-oversized'
 export const LINT_RULES: readonly LintRule[] = ['hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized']
 
@@ -393,9 +405,8 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
       `the page has more elements than one report carries: ${over.text} text elements, ${over.edges} edges and ${over.images} images were counted but not measured`,
     )
   }
-  if (all.length > findings.length) {
-    warnings.push(`${all.length - findings.length} more finding${all.length - findings.length === 1 ? '' : 's'} past the ${LINT_MAX_FINDINGS} listed; the summary counts them all`)
-  }
+  // No sentence here about the capped list: `truncated.findings` carries the
+  // count, and whoever prints the list says it (`listTruncationNote`).
 
   return {
     profile: panel.profileId,

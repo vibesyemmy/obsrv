@@ -168,7 +168,7 @@ describe('reportHtml', () => {
         groups: [{ rule: 'contrast', key: '#828282 on #f6f6ef', count: 270, exemplar: finding, elements: ['span.rank', 'span.sitebit', 'span.sitestr'] }],
         skipped: { textOnImages: 3, invisibleText: 2 },
         truncated: { findings: 70, text: 0, edges: 0, images: 0 },
-        warnings: ['70 more findings past the 200 listed; the summary counts them all'],
+        warnings: ['the page has more elements than one report carries: 12 text elements, 0 edges and 0 images were counted but not measured'],
       },
     })
     const html = reportHtml(data([withLint]))
@@ -178,7 +178,10 @@ describe('reportHtml', () => {
     expect(html).toContain('and 269 more')
     expect(html).toContain('3 text element(s) sit on an image')
     expect(html).toContain('2 text element(s) are the same colour as their background')
-    expect(html).toContain('70 more findings past the 200 listed')
+    expect(html).toContain('the page has more elements than one report carries')
+    // The report shows groups, never the capped list, so a line about that
+    // list would be about something the reader cannot see.
+    expect(html).not.toContain('past the 200 listed')
     expect(reportHtml(data([screen({ lint: null })]))).toContain('The page did not answer the lint')
   })
 

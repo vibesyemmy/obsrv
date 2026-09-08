@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, slimGroups, type LintPanel } from '../../src/cli/lint'
+import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, listTruncationNote, slimGroups, type LintPanel } from '../../src/cli/lint'
 import { effectiveContrast } from '../../src/shared/contrast'
 import type { LintEdge, LintImage, LintReport, LintText } from '../../src/shared/lint'
 import { profileToParams } from '../../src/shared/panelSim'
@@ -161,7 +161,13 @@ describe('the list', () => {
     expect(res.findings).toHaveLength(LINT_MAX_FINDINGS)
     expect(res.findings.every(f => f.rule === 'hairline')).toBe(true)
     expect(res.truncated.findings).toBe(32)
-    expect(res.warnings.at(-1)).toMatch(/32 more findings past the 200 listed/)
+    // The cap is a fact about the list, and only whoever prints the list can
+    // say it: the CLI does, the MCP does unless groupsOnly, the report never
+    // (it shows groups). So it is not a warning of the result itself.
+    expect(res.warnings.join(' ')).not.toMatch(/past the 200 listed/)
+    expect(listTruncationNote(res.truncated.findings)).toBe('32 more findings past the 200 listed; the summary counts them all')
+    expect(listTruncationNote(1)).toBe('1 more finding past the 200 listed; the summary counts them all')
+    expect(listTruncationNote(0)).toBeNull()
     expect(LINT_RULES).toEqual(['hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized'])
   })
   it('a page past the walk\'s caps is said so', () => {
