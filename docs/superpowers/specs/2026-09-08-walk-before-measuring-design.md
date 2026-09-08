@@ -65,8 +65,8 @@ work). Page coordinates for an element inside that host add the host's
 numbers. Then a measurement is correct at any scroll position, live or
 headless, and the headless reset becomes belt and braces rather than the only
 thing standing between a user and a wrong answer. This is a correctness fix
-that stands alone — it ships whether or not the walk does, and is worth a
-patch release on its own.
+that stands alone — it depends on nothing else here — and is Task 0 of the
+plan, shipping in the same release as the walk.
 
 The walk in this spec returns to the top before measuring (§2), which would
 mask the bug. That is not a reason to leave it: an agent's own `scroll`
@@ -85,9 +85,9 @@ to watch.
 - Walking in headless mode. Nothing is watching; `walk` is ignored with a note.
 - Walking for `obsrv_inspect` (a point query — scrolling to measure one element
   would be strange) or `obsrv_snap` (one screen, by definition).
-- Changing what the audit or lint *measure*. The walks are untouched; the walk
-  happens before them and the page is returned to where a measurement expects
-  it.
+- Changing what the audit or lint *measure*. §0 corrects the walks'
+  coordinates, which is a bug fix; the walk of this spec happens before them
+  and changes nothing they report.
 - A new control command. This is orchestration of `scroll { page: "next" }`,
   which the app has had since 0.41.0.
 
