@@ -220,6 +220,8 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
     let offReference: (() => void) | null = null
     let offDrawNow: (() => void) | null = null
     let raf = 0
+    /** The `seq` of the last frame uploaded to the canvas; undefined before any. */
+    let lastSeq: number | undefined
     // The pending recovery step after a context loss, if any.
     let recovery = 0
 
@@ -280,6 +282,9 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
         // viewport are still in flight for a moment after a resize.
         gl.resizeSource(m.frameWidth, m.frameHeight)
         gl.uploadSlice(m.frame)
+        // Which frame the canvas now holds: the draw acknowledgement below
+        // names it, so a capture can tell an older frame from the latest.
+        if (typeof m.seq === 'number') lastSeq = m.seq
         schedule()
       })
       // The reference render's frames, when a skin is on: the same shape,
@@ -302,7 +307,7 @@ export function TargetCanvas({ onFatal, imageFrame }: TargetCanvasProps) {
           raf = 0
         }
         paint()
-        window.obsrv.drewNow()
+        window.obsrv.drewNow(lastSeq)
       })
       return true
     }

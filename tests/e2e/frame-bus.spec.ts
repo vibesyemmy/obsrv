@@ -31,6 +31,7 @@ async function collect(p: Page): Promise<void> {
         first4: Array.from(m.frame.data.slice(0, 4)),
         frameWidth: m.frameWidth,
         frameHeight: m.frameHeight,
+        seq: m.seq,
       })
     })
   })
@@ -58,6 +59,13 @@ test('frames reach the renderer with intact BGRA bytes', async () => {
   expect(last.bytes).toBe(last.width * last.height * 4)
   // #0000ff in BGRA order.
   expect(last.first4).toEqual([255, 0, 0, 255])
+  // Every frame the bus sends is numbered, in order: the draw acknowledgement
+  // names the last one uploaded, and a capture compares (main/frameCheck.ts).
+  const seqs = (await page.evaluate(() => (window as any).__frames.map((f: any) => f.seq))) as number[]
+  expect(seqs.length).toBeGreaterThan(0)
+  expect(seqs.every(n => typeof n === 'number' && n > 0)).toBe(true)
+  expect(seqs).toEqual([...seqs].sort((a, b) => a - b))
+  expect(new Set(seqs).size).toBe(seqs.length)
 })
 
 test('subscribing after the renderer has loaded still yields a frame (no manual invalidate)', async () => {

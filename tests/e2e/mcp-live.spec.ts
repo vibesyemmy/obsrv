@@ -219,6 +219,11 @@ test('obsrv_snap live capture:"pane" returns a PNG smaller than the window captu
   // The pane is a crop of the window: strictly smaller on both axes.
   expect(paneMeta.width as number).toBeLessThan(wholeMeta.width as number)
   expect(paneMeta.height as number).toBeLessThan(wholeMeta.height as number)
+  // The frame-identity check is wired through: in the ordinary case the
+  // renderer drew the frame main last sent, and the capture says nothing.
+  for (const meta of [wholeMeta, paneMeta]) {
+    expect(((meta.warnings as string[] | undefined) ?? []).join(' ')).not.toMatch(/older frame|not being delivered|which frame it drew/)
+  }
 })
 
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href

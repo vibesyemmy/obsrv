@@ -18,6 +18,7 @@ import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
 import { loadHistory, saveHistory } from '../shared/historyFile'
 import { IPC } from '../shared/ipc'
+import { frameIdentityWarning } from './frameCheck'
 import { log } from './log'
 import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseSelectOpen,
   parsePickerEvent,
@@ -1285,24 +1286,33 @@ export function registerIpc(ctx: AppContext): () => void {
    * a renderer that cannot answer delays the shutter rather than hanging it.
    */
   const DRAW_FLUSH_MS = 400
-  const flushRendererDraw = (): Promise<void> =>
+  /**
+   * Resolves with the `seq` of the frame the renderer says it drew (see
+   * frameBus.ts), or null when it did not answer in time or did not say.
+   */
+  const flushRendererDraw = (): Promise<number | null> =>
     new Promise(resolve => {
       if (win.isDestroyed()) {
-        resolve()
+        resolve(null)
         return
       }
-      const timer = setTimeout(done, DRAW_FLUSH_MS)
-      function done(): void {
+      const timer = setTimeout(() => done(null), DRAW_FLUSH_MS)
+      function done(seq: number | null): void {
         clearTimeout(timer)
         ipcMain.off(IPC.drewNow, onDrew)
-        resolve()
+        resolve(seq)
       }
-      const onDrew = (e: IpcMainEvent): void => {
-        if (!win.isDestroyed() && e.sender === win.webContents) done()
+      const onDrew = (e: IpcMainEvent, seq: unknown): void => {
+        if (!win.isDestroyed() && e.sender === win.webContents) done(typeof seq === 'number' && Number.isFinite(seq) ? seq : null)
       }
       ipcMain.on(IPC.drewNow, onDrew)
       win.webContents.send(IPC.drawNow)
     })
+  /** The frame-identity check for a capture: what the pane drew against what was sent to it. */
+  const frameWarning = (acked: number | null): string | null => {
+    const sent = tabs.frameSent()
+    return frameIdentityWarning(acked, sent.lastSeq, sent.ready)
+  }
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     status: () => {
@@ -1386,10 +1396,17 @@ export function registerIpc(ctx: AppContext): () => void {
       try {
         await awaitViewportStable()
         const settled = await settleTarget()
-        await flushRendererDraw()
+        const drew = await flushRendererDraw()
         const image = await withNativePane(await win.webContents.capturePage())
         const size = image.getSize()
-        return { data: image.toPNG().toString('base64'), width: size.width, height: size.height, ...settleFields(settled) }
+        const stale = frameWarning(drew)
+        return {
+          data: image.toPNG().toString('base64'),
+          width: size.width,
+          height: size.height,
+          ...settleFields(settled),
+          warnings: stale === null ? [] : [stale],
+        }
       } finally {
         release()
       }
@@ -1405,10 +1422,15 @@ export function registerIpc(ctx: AppContext): () => void {
         // comes back as a small phone inside a large empty rectangle.
         const bounds = canvasBounds ?? targetBounds
         const known = bounds !== null && bounds.width >= 1 && bounds.height >= 1
-        await flushRendererDraw()
+        const drew = await flushRendererDraw()
         const image = await win.webContents.capturePage(known ? roundRect(bounds) : undefined)
         const size = image.getSize()
         const warnings: string[] = []
+        // Seen once, on the first live call after a launch: the pane showed the
+        // previous page while main, which had seen its own frames, called the
+        // capture settled. Now the capture says when the pane drew an older frame.
+        const stale = frameWarning(drew)
+        if (stale !== null) warnings.push(stale)
         if (!known) warnings.push('the renderer has not reported the pane bounds yet; captured the full window instead')
         else if (canvasBounds === null) warnings.push('the renderer has not reported the render bounds yet; captured the whole pane instead')
         if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
