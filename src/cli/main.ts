@@ -27,7 +27,7 @@ import {
   type SnapCommand,
 } from './args'
 import { auditFindings } from './audit'
-import { lintFindings, listTruncationNote, slimGroups, type LintGroup } from './lint'
+import { lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
@@ -886,6 +886,13 @@ async function runLint(cmd: LintCommand): Promise<void> {
     // this output's to add — and neither goes out under --groups-only.
     const listed = cmd.groupsOnly ? null : listTruncationNote(result.truncated.findings)
     if (listed !== null) human(`warning: ${listed}`)
+    // A walk that ran out of budget leaves the page below its last screenful
+    // as it first shipped; an image finding down there may be a placeholder.
+    const unwalked =
+      walk.walked !== undefined && !walk.walked.atEnd
+        ? unwalkedImageNote(result.findings, (walk.walked.screenfuls + 1) * (applied.height / cmd.spec.textScale))
+        : null
+    if (unwalked !== null) human(`warning: ${unwalked}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)
     human(
@@ -910,7 +917,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...result,
       findings: cmd.groupsOnly ? [] : result.findings,
       groups: slimGroups(result.groups),
-      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed])],
+      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])],
     })
   } finally {
     target.destroy()
@@ -970,6 +977,10 @@ async function runReport(cmd: ReportCommand): Promise<void> {
             { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) },
             { thinPx: cmd.thinPx },
           )
+    if (lint && r.walked !== undefined && !r.walked.atEnd) {
+      const unwalked = unwalkedImageNote(lint.findings, (r.walked.screenfuls + 1) * (r.cssHeight / spec.textScale))
+      if (unwalked !== null) lint.warnings.push(unwalked)
+    }
 
     // The full page with the worst findings located on it: one extra render,
     // taken only when there is something to point at. Candidates come from

@@ -103,10 +103,16 @@ loaders swap their sources, then waits for the images those swaps started.
 Measured on apple.com at 1080p-24 before this existed: nineteen "upscaled"
 findings, every one a 1×1 placeholder GIF judged against a 1250 px box; the
 same page linted live, where the walk had run, had none. The JSON's `walked`
-says how far it went (`screenfuls`, `atEnd`, `ms`; capped at twelve
-screenfuls and fifteen seconds, like the live walk and the full-page
-capture); `--no-walk` (`walk: false` on the MCP) measures the page as it
-first shows.
+says how far it went (`screenfuls`, `atEnd`, `ms`). Its only bound is a
+fifteen-second budget, like the live walk's: there used to be a cap of twelve
+screenfuls too, borrowed from the full-page capture where each screenful is a
+render, and everything below it was measured as it first shipped — bbc.com on
+a phone is twenty-two screenfuls, and the lint reported 41 placeholder GIFs
+below the twelfth as upscaled (62 with no walk at all). A walk costs a dwell,
+so the budget covers about a hundred screenfuls. When it does run out, the
+warnings say so and count the image findings below the height it reached,
+which may be placeholders. `--no-walk` (`walk: false` on the MCP) measures the
+page as it first shows.
 
 ## Live
 

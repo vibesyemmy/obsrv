@@ -46,7 +46,7 @@ import {
   type SnapMode,
   type SnapToolInput,
 } from './lib'
-import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote } from '../cli/lint'
+import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote, unwalkedImageNote, type LintFinding } from '../cli/lint'
 
 /**
  * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
@@ -752,8 +752,9 @@ const walkedField = z
   .object({ screenfuls: z.number(), atEnd: z.boolean(), ms: z.number() })
   .optional()
   .describe(
-    'When the page was walked before measuring: screenfuls scrolled, whether the end was reached (false with ' +
-      '12 screenfuls: the cap stopped it) and the time it took. Absent when the walk did not run — walk: false, ' +
+    'When the page was walked before measuring: screenfuls scrolled, whether the end was reached (false when ' +
+      'the 15 s budget ran out, or the page would not move — a warning says which, and lint counts the image ' +
+      'findings below the height reached) and the time it took. Absent when the walk did not run — walk: false, ' +
       'or (live) an app older than 0.41.0 (a note says which). Two runs that disagree on a lazy-loading page ' +
       'differ here.',
   )
@@ -1488,6 +1489,15 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const truncatedFindings = (judged as { truncated?: { findings?: unknown } }).truncated?.findings
     const listed = input.groupsOnly ? null : listTruncationNote(typeof truncatedFindings === 'number' ? truncatedFindings : 0)
     const liveWarnings = Array.isArray((judged as { warnings?: unknown }).warnings) ? ((judged as { warnings: unknown[] }).warnings as unknown[]) : []
+    // A walk that ran out of budget left the page below its last screenful
+    // as it first shipped: an image finding down there may be a placeholder.
+    const liveFindings = Array.isArray((judged as { findings?: unknown }).findings) ? ((judged as { findings: LintFinding[] }).findings) : []
+    const liveTextScale = typeof textScale === 'number' ? textScale : 1
+    const unwalked =
+      walked !== undefined && !walked.atEnd
+        ? unwalkedImageNote(liveFindings, (walked.screenfuls + 1) * (status.cssHeight / liveTextScale))
+        : null
+    const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])]
     const structured = {
       mode: 'live',
       url: status.url,
@@ -1499,7 +1509,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
       ...(input.groupsOnly ? { findings: [] } : {}),
-      ...(listed === null ? {} : { warnings: [...liveWarnings, listed] }),
+      ...(added.length === 0 ? {} : { warnings: [...liveWarnings, ...added] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }

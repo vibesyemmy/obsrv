@@ -21,8 +21,6 @@ import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
  * precedes, so every failure is a note.
  */
 
-/** Most screenfuls a walk takes — the live walk's cap, and the full-page capture's. */
-export const HEADLESS_WALK_MAX_SCREENFULS = 12
 /**
  * Pause on each screenful. No eye to please here, only observers and loaders:
  * an IntersectionObserver callback needs a frame, and a loader that polls the
@@ -30,7 +28,13 @@ export const HEADLESS_WALK_MAX_SCREENFULS = 12
  * apple.com — see the branch's notes.
  */
 export const HEADLESS_WALK_DWELL_MS = 150
-/** Wall-clock budget for the whole walk, top to top. */
+/**
+ * Wall-clock budget for the whole walk, top to top, and its only bound on
+ * length: at 150 ms a screenful it covers a hundred before it runs out. A
+ * screenful cap of twelve, borrowed from the band capture, left bbc.com's
+ * lower ten screenfuls measured as they shipped — placeholders as upscaled
+ * images, the 0.42.0 finding again (41 with the capped walk, 62 without).
+ */
 export const HEADLESS_WALK_BUDGET_MS = 15_000
 /** How long to wait, after the walk, for the images it set loading. */
 export const HEADLESS_WALK_IMAGES_MS = 2_000
@@ -69,7 +73,7 @@ export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOu
   let atEnd = false
   let lastY = 0
   try {
-    while (screenfuls < HEADLESS_WALK_MAX_SCREENFULS) {
+    for (;;) {
       if (Date.now() - started >= HEADLESS_WALK_BUDGET_MS) {
         notes.push(
           `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${HEADLESS_WALK_BUDGET_MS / 1000} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
@@ -101,9 +105,6 @@ export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOu
     )
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
-  }
-  if (!atEnd && screenfuls >= HEADLESS_WALK_MAX_SCREENFULS) {
-    notes.push(`the walk stopped after ${HEADLESS_WALK_MAX_SCREENFULS} screenfuls without reaching the end of the page; the measurement covers the whole page regardless.`)
   }
   await backToTop()
   await settleImages(target)

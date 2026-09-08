@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, listTruncationNote, slimGroups, type LintPanel } from '../../src/cli/lint'
+import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintPanel } from '../../src/cli/lint'
 import { effectiveContrast } from '../../src/shared/contrast'
 import type { LintEdge, LintImage, LintReport, LintText } from '../../src/shared/lint'
 import { profileToParams } from '../../src/shared/panelSim'
@@ -169,6 +169,22 @@ describe('the list', () => {
     expect(listTruncationNote(1)).toBe('1 more finding past the 200 listed; the summary counts them all')
     expect(listTruncationNote(0)).toBeNull()
     expect(LINT_RULES).toEqual(['hairline', 'thin-text', 'contrast', 'contrast-on-panel', 'image-upscaled', 'image-oversized'])
+  })
+  it('image findings below the height a walk reached are counted as possibly placeholders', () => {
+    const r = report({
+      images: [
+        image({ element: 'img#above', naturalWidth: 100, naturalHeight: 100, rect: { x: 0, y: 500, width: 200, height: 200 } }),
+        image({ element: 'img#below', naturalWidth: 1, naturalHeight: 1, rect: { x: 0, y: 12_000, width: 200, height: 200 } }),
+        image({ element: 'img#lower', naturalWidth: 1, naturalHeight: 1, rect: { x: 0, y: 14_000, width: 200, height: 200 } }),
+      ],
+    })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.summary['image-upscaled']).toBe(3)
+    expect(unwalkedImageNote(res.findings, 10_224)).toBe(
+      '2 image findings sit below the 10224 CSS px the walk reached before its budget ran out, and may be placeholders the page never loaded',
+    )
+    expect(unwalkedImageNote(res.findings, 20_000)).toBeNull()
+    expect(unwalkedImageNote([], 10)).toBeNull()
   })
   it('a page past the walk\'s caps is said so', () => {
     const res = lintFindings(report({ truncated: { text: 3, edges: 0, images: 1 } }), screen(1), reference, thresholds)
