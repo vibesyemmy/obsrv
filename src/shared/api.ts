@@ -10,6 +10,14 @@ export interface FrameMessage {
   frame: FrameSlice
   frameWidth: number
   frameHeight: number
+  /**
+   * The bus's running count of frames sent to this renderer, stamped on the
+   * way out. The renderer's draw acknowledgement carries the last one it
+   * uploaded, so a capture can tell whether the pane drew the frame main
+   * settled on (see main/frameCheck.ts). Absent on a frame the bus did not
+   * send.
+   */
+  seq?: number
 }
 
 /**
@@ -164,7 +172,8 @@ export interface ObsrvApi {
    * `drewNow`. An occluded window gets no animation frames at all.
    */
   onDrawNow(cb: () => void): () => void
-  drewNow(): void
+  /** Acknowledges a draw, naming the `seq` of the last frame uploaded (undefined before any). */
+  drewNow(seq?: number): void
   onUrlChanged(cb: (e: TabReport & { url: string }) => void): () => void
   /**
    * Chromium's page title for one tab — the strip's first choice of label,

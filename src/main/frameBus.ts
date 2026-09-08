@@ -11,6 +11,10 @@ import type { TargetSource } from './targetSource'
 
 export interface FrameBus {
   detach(): void
+  /** The `seq` stamped on the last frame sent to the renderer; 0 before any. */
+  lastSeq(): number
+  /** Whether the renderer has subscribed, so frames are being delivered at all. */
+  ready(): boolean
   /** Image mode stops target frames from overwriting the canvas texture. */
   setEnabled(enabled: boolean): void
   /**
@@ -68,9 +72,13 @@ export function attachFrameBus(
 
   const gone = (): boolean => win.isDestroyed() || win.webContents.isDestroyed()
 
+  // Every frame sent is numbered, so the renderer's draw acknowledgement can
+  // name the one it holds and a capture can compare (main/frameCheck.ts).
+  let seq = 0
   const onFrame = (msg: FrameMessage): void => {
     if (!ready || !enabled || gone()) return
-    win.webContents.send(channels.frame, msg)
+    seq++
+    win.webContents.send(channels.frame, { ...msg, seq })
   }
 
   const onSubscribe = (e: IpcMainEvent): void => {
@@ -94,6 +102,8 @@ export function attachFrameBus(
   win.webContents.on('did-start-navigation', onRendererGone)
 
   return {
+    lastSeq: () => seq,
+    ready: () => ready,
     detach(): void {
       ready = false
       source?.off('frame', onFrame)

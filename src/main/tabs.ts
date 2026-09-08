@@ -119,6 +119,11 @@ export class TabManager {
     ipcMain.on(IPC.syncScroll, this.route)
   }
 
+  /** What the target bus last sent the renderer, and whether it is delivering at all — for a capture's frame check. */
+  frameSent(): { lastSeq: number; ready: boolean } {
+    return { lastSeq: this.bus.lastSeq(), ready: this.bus.ready() }
+  }
+
   /**
    * Turns a tab's onion-skin reference on or off (see `TabSession.setReference`)
    * and, for the tab in front, points the reference bus at the result.
