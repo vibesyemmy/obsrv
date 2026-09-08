@@ -274,7 +274,11 @@ Exit code 0 on success — diff findings are informational, never a failure.
 snap's "settled" is true when the page went paint-quiet and every pixel
 painted. False is a rescued capture, not a failure: a page that kept animating
 (or whose repaint never completed) is written as-is, exit code 0, with a
-warning naming what was missing. Only a render that painted nothing errors.`
+warning naming what was missing. Only a render that painted nothing errors. A load
+that outruns --timeout — under a throttle, the point — is captured as it stands
+(settled false, settledMs null) with a warning naming the throttle; raise --timeout
+for the full load. audit, lint and inspect cannot measure a half-loaded page and
+error instead, naming the same.`
 }
 
 /** Flags that take no value. */

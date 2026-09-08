@@ -37,7 +37,13 @@ screen is the worst realistic case a page will meet.
 painting (the same paint-quiet detection every capture uses, quiet window
 included), with `--wait` taken back out since that is time the caller
 added. Null when the page never settled within `--timeout`, and `settled`
-is false then too. It is a wall-clock number on the machine running
+is false then too. A load that outruns `--timeout` — under a throttle, the
+point — is not an error: the render captures the page as it stands,
+`settled: false` with `unsettledReason: "loading"`, `settledMs` null, and a
+warning naming the throttle; raise `--timeout` for the full load (bbc.com
+under `budget-phone` settles at about 70 s). `audit`, `lint` and `inspect`
+cannot measure a half-loaded page and error instead, naming the same. It is a
+wall-clock number on the machine running
 Obsrv: compare it against a `--throttle none` run of the same page on
 the same machine, not against a number from somewhere else.
 

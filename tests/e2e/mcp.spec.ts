@@ -391,3 +391,16 @@ test('parallel calls queue behind a render cap instead of starving each other', 
   expect(waited.length).toBeGreaterThanOrEqual(1)
   expect(waited.length).toBeLessThanOrEqual(3)
 })
+
+test('every unsettled reason the CLI can produce is admitted by the snap and report output schemas', async () => {
+  // A reason the schema does not list makes the whole answer an "Output
+  // validation error" — the branch build of the cut-load fix refused its own
+  // `loading` on obsrv_snap while the report schema, edited the same day,
+  // took it.
+  const { tools } = await client.listTools()
+  const reasons = ['animating', 'timeout', 'uncovered', 'loading']
+  const snap = tools.find(t => t.name === 'obsrv_snap')!.outputSchema as { properties: Record<string, { enum?: string[] }> }
+  expect(snap.properties.unsettledReason?.enum).toEqual(reasons)
+  const report = tools.find(t => t.name === 'obsrv_report')!.outputSchema as { properties: { screens: { items: { properties: Record<string, { enum?: string[] }> } } } }
+  expect(report.properties.screens.items.properties.unsettledReason?.enum).toEqual(reasons)
+})

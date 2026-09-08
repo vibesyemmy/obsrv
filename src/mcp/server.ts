@@ -339,12 +339,13 @@ const snapOutputShape = {
         'a fresh load, which starts at the top of the page.',
     ),
   unsettledReason: z
-    .enum(['animating', 'timeout', 'uncovered'])
+    .enum(['animating', 'timeout', 'uncovered', 'loading'])
     .optional()
     .describe(
       "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
         "early (~2 s) rather than at the budget and waiting longer would not have helped; 'timeout' — still painting at the budget; " +
-        "'uncovered' — part of the frame never painted within the budget.",
+        "'uncovered' — part of the frame never painted within the budget; 'loading' — the load outran timeoutMs (under a " +
+        "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load.",
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
@@ -1733,7 +1734,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
-      unsettledReason: z.enum(['animating', 'timeout', 'uncovered']).optional(),
+      unsettledReason: z.enum(['animating', 'timeout', 'uncovered', 'loading']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       walked: walkedField,
       audit: z

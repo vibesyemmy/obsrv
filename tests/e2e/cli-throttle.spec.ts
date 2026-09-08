@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -130,4 +130,28 @@ test('audit and report carry the throttle; an unknown id is a usage error naming
   const bad = await runCli(['snap', `${base}/`, '--throttle', 'edge'])
   expect(bad.code).toBe(2)
   expect(bad.stderr).toMatch(/--throttle: expected one of none, fast-4g, slow-4g, 3g/)
+})
+
+test('a load that outruns --timeout under a throttle is captured as it stands, not an error', async () => {
+  // 250 KB over 3G is about 5 s; a 1.5 s budget runs out mid-load. bbc.com
+  // under budget-phone settles at 70 s and used to die at the 30 s default
+  // with "load did not finish", nothing captured, the throttle unnamed.
+  const r = await runCli(['snap', `${base}/`, '--preset', 'laptop-768', '--throttle', '3g', '--timeout', '1500', '--out', join(outDir, 'cut.png')])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.throttle).toBe('3g')
+  expect(m.settled).toBe(false)
+  expect(m.unsettledReason).toBe('loading')
+  expect(m.settledMs).toBeNull()
+  expect(m.warnings.join(' ')).toMatch(/load did not finish within 1500 ms under --throttle 3g/)
+  expect(m.warnings.join(' ')).toMatch(/raise --timeout/)
+  expect(m.warnings.join(' ')).not.toMatch(/animation\?/)
+  expect(existsSync(join(outDir, 'cut.png'))).toBe(true)
+})
+
+test('a measurement cannot use a half-loaded page: audit under a throttle past --timeout errors, naming both', async () => {
+  const r = await runCli(['audit', `${base}/`, '--preset', 'laptop-768', '--throttle', '3g', '--timeout', '1500'])
+  expect(r.code).toBe(1)
+  expect(r.stderr).toMatch(/load did not finish within 1500 ms under --throttle 3g/)
+  expect(r.stderr).toMatch(/raise --timeout/)
 })

@@ -205,7 +205,9 @@ happened on the matrix snaps.
   not help, so don't raise `--timeout` for it. `"timeout"` means still
   painting at the budget (under a throttle the early exit is off, since
   `settledMs` is the measurement); `"uncovered"` means part of the frame
-  never painted. Use `--wait` for content that settles late.
+  never painted; `"loading"` means the load itself outran `--timeout` (under a
+  throttle, a slow load is the point): the PNG is what had painted, `settledMs`
+  is null, and `--timeout` is the answer. Use `--wait` for content that settles late.
 - The report's full-page capture takes a tall page in bands of one
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size). Chrome stuck to the viewport would be painted into every band,
