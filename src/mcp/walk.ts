@@ -26,7 +26,7 @@ export const WALK_DWELL_MS = 350
  * Wall-clock budget for a whole walk: the top scroll, up to
  * `WALK_MAX_SCREENFULS` "next" scrolls, and the final top scroll — fourteen
  * calls, each with its own 5 s apply timeout — put a pathological page's
- * worst case around 74 s. Unbounded, that would run a live audit (this walk,
+ * worst case around 70 s. Unbounded, that would run a live audit (this walk,
  * then a 20 s audit call) past the MCP SDK's 60 s default client request
  * timeout. Typical cost is ~4 s (measured, spec §2). Past the budget the
  * walk stops, `atEnd` stays false, and a note says so.
