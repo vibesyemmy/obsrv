@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
 import { SCROLL_HOST_SCRIPT } from '../shared/scrollHost'
-import { STUCK_CHROME_SCRIPT, type StuckBar } from '../shared/stuckChrome'
+import type { StuckBar } from '../shared/stuckChrome'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
 import { inspectReadout } from '../shared/inspectReadout'
@@ -32,6 +32,7 @@ import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type Cap
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { walkHeadless } from './walk'
+import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
@@ -49,13 +50,6 @@ const REPORT_OVERVIEW_MAX_HEIGHT = 3200
  * lies past them.
  */
 const MAX_TILE_BANDS = 12
-/**
- * After scrolling the probe, how long stuck chrome gets to settle before it is
- * measured. Sticky repositioning is synchronous, but a header that animates
- * itself in or out on scroll is not, and measuring it mid-transition would
- * call it moving when it is about to stop.
- */
-const STUCK_PROBE_SETTLE_MS = 200
 
 /** One line under a lint group's crop: the rule, what the group shares, how many. */
 function lintDetail(g: LintGroup): string {
@@ -267,45 +261,6 @@ async function loadWithin(
   return { loaded: true }
 }
 
-/**
- * Which chrome is stuck to the viewport, measured rather than read off
- * `position`: both `fixed` and `sticky` do this on real pages (tailwindcss.com
- * uses one, developer.mozilla.org the other), and an element that stays put
- * between two scroll offsets is stuck whichever put it there.
- *
- * Both offsets are past the first band on purpose. A `sticky` element sits at
- * its natural place at the top of the page and only stops once the page has
- * scrolled under it, so comparing scroll 0 against a later band shows it
- * moving and misses it — measured on MDN, whose header and both rails are
- * sticky. Two scrolls, two probes, no captures.
- *
- * Returns an empty list rather than guessing whenever the two offsets cannot
- * be told apart: a page whose scroll clamps to the same place twice offers no
- * evidence, and "everything looked identical" would hide the whole page.
- */
-async function findStuckChrome(
-  target: TargetSource,
-  scrollTo: (y: number) => Promise<number>,
-  bandPage: number,
-  warn: (message: string) => void,
-): Promise<StuckBar[]> {
-  try {
-    await target.webContents.executeJavaScript(STUCK_CHROME_SCRIPT)
-    const first = await scrollTo(Math.round(bandPage))
-    await sleep(STUCK_PROBE_SETTLE_MS)
-    await target.webContents.executeJavaScript('window.__obsrvChrome.mark(), 0')
-    const second = await scrollTo(Math.round(bandPage * 2))
-    await sleep(STUCK_PROBE_SETTLE_MS)
-    if (Math.abs(second - first) < 1) return []
-    return (await target.webContents.executeJavaScript('window.__obsrvChrome.settle()')) as StuckBar[]
-  } catch (e) {
-    // A page that refuses the probe still gets captured; the bands just keep
-    // their chrome, which is what they did before this existed.
-    warn(`warning: could not measure chrome stuck to the viewport, so the bands keep it: ${e instanceof Error ? e.message : String(e)}`)
-    return []
-  }
-}
-
 async function render(url: string, spec: RenderSpec, options: RenderOptions): Promise<RenderResult> {
   const target = new TargetSource(30, { mobileEmulation: options.mobileEmulation ?? true })
   try {
@@ -313,6 +268,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     const failed = watch.failed
     // Said once each: a banded capture meets the same animation on every band.
     const { warnings, warn } = warningSink(human)
+    const exec = (code: string): Promise<unknown> => target.webContents.executeJavaScript(code)
     // `mobile` is the preset's, not the density's: a phone preset gets the
     // mobile UA and viewport semantics the app gives it, a Retina laptop does
     // not. (Dropped by mistake at 0.18.1, when the fourth argument arrived.)
@@ -428,12 +384,12 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         // `installStuckChrome` frames all of this against `__obsrvScrollHost`,
         // which the shell probe above has already left on the page.
         const stuck =
-          bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome(target, scrollShellTo, step, warn) : []
+          bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome({ exec, scrollTo: scrollShellTo, sleep }, step, warn) : []
         try {
           for (let i = 0; i < bandCount; i++) {
             const wantTop = i * step
             const top = await scrollShellTo(wantTop)
-            if (i === 1 && stuck.length > 0) await target.webContents.executeJavaScript('window.__obsrvChrome.hide(), 0')
+            if (i === 1 && stuck.length > 0) await callChrome(exec, 'hide')
             const f = await quiescent()
             if (!f.settled) {
               settled = false
@@ -461,7 +417,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           }
         } finally {
           if (stuck.length > 0) {
-            await target.webContents.executeJavaScript('window.__obsrvChrome.restore(), 0').catch(() => undefined)
+            await callChrome(exec, 'restore').catch(() => undefined)
           }
         }
         if (stuck.length > 0) {
@@ -535,14 +491,14 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
               )) as number,
             )
           const stuck =
-            bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome(target, scrollBandTo, bandPage, warn) : []
+            bandCount > 1 && !options.keepStuckChrome ? await findStuckChrome({ exec, scrollTo: scrollBandTo, sleep }, bandPage, warn) : []
           try {
             for (let i = 0; i < bandCount; i++) {
               const wantY = Math.round(i * bandPage)
               const y = await scrollBandTo(wantY)
               // Hidden from the second band on: the first is the page as it
               // first shows, chrome and all.
-              if (i === 1 && stuck.length > 0) await target.webContents.executeJavaScript('window.__obsrvChrome.hide(), 0')
+              if (i === 1 && stuck.length > 0) await callChrome(exec, 'hide')
               const f = await quiescent()
               if (!f.settled) {
                 settled = false
@@ -558,7 +514,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
             // driving the app keeps looking at it: whatever was hidden goes
             // back even if a band threw.
             if (stuck.length > 0) {
-              await target.webContents.executeJavaScript('window.__obsrvChrome.restore(), 0').catch(() => undefined)
+              await callChrome(exec, 'restore').catch(() => undefined)
             }
           }
           if (stuck.length > 0) {
