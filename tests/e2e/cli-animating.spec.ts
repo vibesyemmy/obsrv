@@ -62,3 +62,15 @@ test('a settled snap carries no reason: the flagless object is unchanged', async
   expect(meta.settled).toBe(true)
   expect(meta).not.toHaveProperty('unsettledReason')
 })
+
+const ANIMATED_TALL = pathToFileURL(resolve(__dirname, '../fixtures/animated-tall.html')).href
+
+test('a full-page capture of a tall animating page warns once, not once per band', async () => {
+  const r = await runCli(['snap', ANIMATED_TALL, '--preset', 'laptop-768', '--full-page', '--out', join(outDir, 'tall.png')])
+  expect(r.code, r.stderr).toBe(0)
+  const meta = JSON.parse(r.stdout)
+  expect(meta.bands).toBeGreaterThan(1)
+  const painting = (meta.warnings as string[]).filter(w => /painting steadily/.test(w))
+  expect(painting).toHaveLength(1)
+  expect(new Set(meta.warnings).size).toBe(meta.warnings.length)
+})

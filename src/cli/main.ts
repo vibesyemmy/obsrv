@@ -32,6 +32,7 @@ import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type Cap
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { walkHeadless } from './walk'
+import { warningSink } from './warnings'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
@@ -278,11 +279,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
   try {
     const watch = watchFailures(target)
     const failed = watch.failed
-    const warnings: string[] = []
-    const warn = (message: string): void => {
-      warnings.push(message)
-      human(message)
-    }
+    // Said once each: a banded capture meets the same animation on every band.
+    const { warnings, warn } = warningSink(human)
     // `mobile` is the preset's, not the density's: a phone preset gets the
     // mobile UA and viewport semantics the app gives it, a Retina laptop does
     // not. (Dropped by mistake at 0.18.1, when the fourth argument arrived.)
