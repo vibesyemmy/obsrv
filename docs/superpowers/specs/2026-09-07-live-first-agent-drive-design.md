@@ -282,7 +282,37 @@ the only impure part and is small.
   reaching the app, detachment surviving MCP exit. Not automated: it spawns a
   real GUI.
 
-## 8. Risks, to be measured before they are relied on
+## 8. Risks — measured 2026-09-08
+
+All five were measured on the author's Mac against the installed
+`/Applications/Obsrv.app` (0.40.1) with the merged MCP server. Numbers, not
+estimates; the method is Task 13 of the plan.
+
+1. **Cold start: 1,281 ms**, against a `LAUNCH_TIMEOUT_MS` of 12,000 — a 9×
+   margin on an idle machine. The bound stays as it is: it exists for a loaded
+   machine, and the measurement says nothing about that case.
+2. **The environment reaches the app.** `OBSRV_AGENT_CONTROL=1` was read back
+   out of the launched process's own environment (`ps eww`), so spawning the
+   bundle's executable directly does forward it. `open -a` was never needed.
+   The discovery file came back `{port, token, pid, startedAt}` at mode 0600.
+3. **Detachment holds.** The launching node process exited; the app stayed up
+   and was reparented to launchd (ppid 1).
+4. **A released app with control off no longer stalls.** This is the version-skew
+   case: 0.40.1 writes no discovery file, so the server launches, the child loses
+   the single-instance lock and exits at once. Before the child-exit guard that
+   burned the full 12 s and stole window focus on *every* call. Measured after:
+   **261 ms** to `why: "launch-timeout"`, with a note naming the real cause. No
+   stray second instance survived.
+5. **Version skew works in the direction that matters.** The merged server drove
+   the released 0.40.1 app throughout: `discover()` returned `live`, `status`
+   parsed, and `tabs` defaulted to `[]` for an app that predates the field.
+
+Not measured, because the installed bundle predates them: the consent bar, the
+Stop chip and the declined marker are not in 0.40.1. They are covered by
+`tests/e2e/consent.spec.ts` and `tests/e2e/live-drive.spec.ts` against a real
+Electron instance, and will first meet a real bundle after the next release.
+
+## 8b. Original risk list (superseded by the measurements above)
 
 1. **Cold start vs the bound.** Electron on a loaded machine may exceed 12 s.
    Measure on this Mac with the DMG and the npm path; set the bound from the
