@@ -176,7 +176,7 @@ describe('loadTabs orientation', () => {
 })
 
 describe('loadTabs textScale', () => {
-  const file = (): string => join(mkdtempSync(join(tmpdir(), 'obsrv-tabs-scale-')), 'tabs.json')
+  const file = (): string => join(dir(), 'tabs.json')
   it('round-trips a scale', () => {
     const f = file()
     saveTabs(f, {
