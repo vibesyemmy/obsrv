@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest'
 import { MAX_VISITED, findScroller, resolveScroller } from '../../src/preload/sync'
+import { scrollOffset } from '../../src/shared/scrollHost'
 
 /**
  * `findScroller` is the riskiest new logic in the scroll round-trip and it
@@ -214,5 +215,44 @@ describe('resolveScroller cache', () => {
 
     document.documentElement.style.cssText = 'height:100%;overflow:hidden'
     document.body.style.cssText = 'height:100%;overflow:hidden;margin:0'
+  })
+})
+
+/**
+ * `scrollOffset`'s guard (`host !== el && host.contains(el)`) explicitly
+ * excludes the host from its own offset. Node.contains is true for the node
+ * itself, so a guard simplified to bare `host.contains(el)` would silently
+ * add the host's own scrollTop/scrollLeft to its own rect — this is the
+ * direct test that would catch it.
+ */
+describe('scrollOffset', () => {
+  it('adds the host\'s own scroll only to what it holds, leaving the host itself and anything outside it at the window\'s offset', () => {
+    mount(`
+      <div id="container" style="${scrollerStyle(200, 100)}">
+        <div id="child" style="height:10px">child</div>
+        ${FILLER}
+      </div>
+      <div id="outside">outside</div>
+    `)
+    const container = document.getElementById('container')!
+    const child = document.getElementById('child')!
+    const outside = document.getElementById('outside')!
+
+    container.scrollTop = 50
+    expect(container.scrollTop).toBe(50) // the fixture really scrolls; otherwise this proves nothing
+
+    const offset = scrollOffset(container)
+    // The host itself: window.scrollX/Y only, not host.scrollLeft/Top.
+    expect(offset(container)).toEqual({ x: window.scrollX, y: window.scrollY })
+    // What the host holds: the window's offset plus the host's own scroll.
+    expect(offset(child)).toEqual({ x: window.scrollX + container.scrollLeft, y: window.scrollY + container.scrollTop })
+    // Outside the host entirely: window.scrollX/Y only.
+    expect(offset(outside)).toEqual({ x: window.scrollX, y: window.scrollY })
+  })
+
+  it('falls back to the window\'s own offset when there is no host', () => {
+    mount(`<div id="solo">solo</div>`)
+    const solo = document.getElementById('solo')!
+    expect(scrollOffset(null)(solo)).toEqual({ x: window.scrollX, y: window.scrollY })
   })
 })

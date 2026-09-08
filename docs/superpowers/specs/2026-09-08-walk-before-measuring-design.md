@@ -124,9 +124,11 @@ measure
   watching it (§6).
 - The walk ends at the top. With §0 fixed, measuring at any position is
   correct, so this is for the person watching: a `highlight` that follows
-  maps through the current scroll, and "the page is where you left it" is the
-  least surprising place to leave it. An agent that wants to talk about a
-  footer finding drives `scroll` there itself, as it does today.
+  maps through the current scroll, and "the page is where you left it" holds
+  only when it was left at the top: a walk returns the page there and may
+  close a menu, so an agent that wants to measure a driven scroll position or
+  an open menu as it stands passes `walk: false` (§3), and one that wants to
+  talk about a footer finding drives `scroll` there itself, as it does today.
 
 ## 3. The flag
 
@@ -165,6 +167,15 @@ one run walked and the other did not.
   The `status` after the walk names a different URL than before; the
   measurement is of whatever is there now, and the result says the URL moved.
   This already happens today without a walk and is not made worse by one.
+- **The budget.** A walk is at most `WALK_BUDGET_MS = 15_000` of wall clock:
+  each scroll has a 5 s apply timeout and there are up to fourteen, which
+  unbounded would put a live audit past the MCP client's 60 s default. Past
+  the budget the walk stops, `atEnd` is false, and the note says so.
+- **The page will not move.** A `next` that lands where the page already was,
+  when the app does not say `atEnd`, is a locked scroll (a modal, a menu) or
+  a page that scrolls by other means: the walk stops, `atEnd` is false, and
+  the note says the page stopped moving. When the app does say `atEnd` it is
+  a one-screen page: zero screenfuls, at the end, no note.
 
 ## 6. Risks, to be measured
 
@@ -203,3 +214,25 @@ one run walked and the other did not.
   the walk changes what is seen, not what is measured.
 - **Skill**: one sentence in the review loop: audits walk the page before
   measuring, so the user sees it; pass `walk: false` to re-measure quietly.
+
+## 8. Measured
+
+Watched on 2026-09-08 against the branch build (unpackaged, its own
+profile), driven by the built MCP server, preset 1080p-24, the default
+`walk`:
+
+| page | walked | per screenful | measured after |
+|---|---|---|---|
+| usekolo.app | 9 screenfuls, at the end, 3,207 ms; the whole call 6,096 ms | ≈356 ms | 39 targets · 177 text · 10 findings · pageHeight 10,178 |
+| ojustudio.com | 5 screenfuls, at the end, 1,789 ms; the whole call 3,390 ms | ≈358 ms | 35 targets · 122 text · 18 findings · pageHeight 5,983 |
+
+Two of §6's risks are answered. The dwell is nearly the whole cost of a
+screenful: a scroll round-trip is a few milliseconds over the 350 ms, on
+the page that animates continuously as much as on the one that does not —
+so `scroll` does not pay a full settle per screenful (§6.2). ojustudio's
+numbers are the ones a top-only audit gave in §"The problem", which is the
+guarantee the walk changes what is seen and not what is measured; usekolo's
+are the walked ones, on a taller viewport. Neither walk came near the
+twelve-screenful cap or the 15 s budget (§5), and no note was raised.
+Whether 350 ms reads as watching or as flicker (§6.1) is the person's call
+who watched it; the constant stays until they say.

@@ -3,7 +3,7 @@
 // walk is written here so the CLI can ship it as source; nothing in this
 // file runs outside the target page except the string.
 
-import { clipTest, findScroller, rootScrolls, SCROLL_HOST_SCRIPT } from './scrollHost'
+import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT } from './scrollHost'
 
 /**
  * The physical-units audit's raw material: every interactive element and
@@ -78,31 +78,42 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ''}`
   }
   const snippet = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 40)
+  // The element the capture scrolls — the shell's scroller, or the document
+  // when the document is what scrolls. Boxes held out of view by any *other*
+  // scroller are marked: their page coordinates are not a place on the page.
+  const host = rootScrolls() ? null : findScroller()
+  const clipped = clipTest(host)
+  // Page coordinates: see `scrollOffset` in scrollHost.ts for why this is not
+  // just `window.scrollX`/`scrollY` on an app shell.
+  const offset = scrollOffset(host)
   // Rendered, and somewhere a finger or an eye could reach: not a zero box,
   // not hidden, not the 1×1 clipped box of the "visually hidden" pattern
   // (screen-reader text, and controls made accessible that way — measured
   // on real pages, those were the 0.2 mm "targets"), and not parked off the
   // page at a negative offset.
-  const shown = (cs: CSSStyleDeclaration, r: DOMRect): boolean =>
-    r.width > 0 &&
-    r.height > 0 &&
-    !(r.width <= 1 && r.height <= 1) &&
-    r.right + scrollX > 0 &&
-    r.bottom + scrollY > 0 &&
-    cs.visibility !== 'hidden' &&
-    cs.display !== 'none' &&
-    cs.opacity !== '0'
-  // The element the capture scrolls — the shell's scroller, or the document
-  // when the document is what scrolls. Boxes held out of view by any *other*
-  // scroller are marked: their page coordinates are not a place on the page.
-  const clipped = clipTest(rootScrolls() ? null : findScroller())
-  const pageRect = (r: DOMRect, el: Element): AuditRect => ({
-    x: r.left + scrollX,
-    y: r.top + scrollY,
-    width: r.width,
-    height: r.height,
-    ...(clipped(r, el) ? { clipped: true as const } : {}),
-  })
+  const shown = (cs: CSSStyleDeclaration, r: DOMRect, el: Element): boolean => {
+    const o = offset(el)
+    return (
+      r.width > 0 &&
+      r.height > 0 &&
+      !(r.width <= 1 && r.height <= 1) &&
+      r.right + o.x > 0 &&
+      r.bottom + o.y > 0 &&
+      cs.visibility !== 'hidden' &&
+      cs.display !== 'none' &&
+      cs.opacity !== '0'
+    )
+  }
+  const pageRect = (r: DOMRect, el: Element): AuditRect => {
+    const o = offset(el)
+    return {
+      x: r.left + o.x,
+      y: r.top + o.y,
+      width: r.width,
+      height: r.height,
+      ...(clipped(r, el) ? { clipped: true as const } : {}),
+    }
+  }
 
   const TARGETS =
     'a[href],button,input:not([type="hidden"]),select,textarea,summary,' +
@@ -113,7 +124,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
   for (const el of Array.from(document.querySelectorAll(TARGETS))) {
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
-    if (!shown(cs, r)) continue
+    if (!shown(cs, r, el)) continue
     // A link inside running text is as tall as its line and flagged on every
     // page there is; WCAG 2.5.8 exempts inline links for that reason, and so
     // does this. A link styled as a control (block, inline-block, flex) is
@@ -140,7 +151,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     if (own.trim().length === 0) continue
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
-    if (!shown(cs, r)) continue
+    if (!shown(cs, r, el)) continue
     const fontSizePx = parseFloat(cs.fontSize)
     if (!(fontSizePx > 0)) continue
     if (text.length >= maxText) {
