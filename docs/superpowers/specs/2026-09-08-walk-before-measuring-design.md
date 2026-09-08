@@ -124,9 +124,11 @@ measure
   watching it (§6).
 - The walk ends at the top. With §0 fixed, measuring at any position is
   correct, so this is for the person watching: a `highlight` that follows
-  maps through the current scroll, and "the page is where you left it" is the
-  least surprising place to leave it. An agent that wants to talk about a
-  footer finding drives `scroll` there itself, as it does today.
+  maps through the current scroll, and "the page is where you left it" holds
+  only when it was left at the top: a walk returns the page there and may
+  close a menu, so an agent that wants to measure a driven scroll position or
+  an open menu as it stands passes `walk: false` (§3), and one that wants to
+  talk about a footer finding drives `scroll` there itself, as it does today.
 
 ## 3. The flag
 
@@ -165,6 +167,15 @@ one run walked and the other did not.
   The `status` after the walk names a different URL than before; the
   measurement is of whatever is there now, and the result says the URL moved.
   This already happens today without a walk and is not made worse by one.
+- **The budget.** A walk is at most `WALK_BUDGET_MS = 15_000` of wall clock:
+  each scroll has a 5 s apply timeout and there are up to fourteen, which
+  unbounded would put a live audit past the MCP client's 60 s default. Past
+  the budget the walk stops, `atEnd` is false, and the note says so.
+- **The page will not move.** A `next` that lands where the page already was,
+  when the app does not say `atEnd`, is a locked scroll (a modal, a menu) or
+  a page that scrolls by other means: the walk stops, `atEnd` is false, and
+  the note says the page stopped moving. When the app does say `atEnd` it is
+  a one-screen page: zero screenfuls, at the end, no note.
 
 ## 6. Risks, to be measured
 

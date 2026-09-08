@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ControlCallError } from '../../src/mcp/control'
-import { WALK_DWELL_MS, WALK_MAX_SCREENFULS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
+import { WALK_BUDGET_MS, WALK_DWELL_MS, WALK_MAX_SCREENFULS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
 
 /**
  * The walk over an injected control call. `answers` is what each successive
@@ -57,10 +57,19 @@ describe('walkPage', () => {
     expect(d.commands.at(-1)?.payload['page']).toBe('top')
   })
 
-  it('a page with nothing to scroll: the first next lands where the page already was — zero screenfuls, at the end, no dwell', async () => {
-    const d = deps([step(0), step(0), step(0)])
+  it('a page with nothing to scroll: the first next lands where the page already was and the app says atEnd — zero screenfuls, at the end, no dwell', async () => {
+    const d = deps([step(0, true)])
     const r = await walkPage(d)
     expect(r).toEqual({ walked: { screenfuls: 0, atEnd: true, ms: 0 }, notes: [] })
+    expect(d.commands.map(c => c.payload['page'])).toEqual(['top', 'next', 'top'])
+    expect(d.slept).toEqual([])
+  })
+
+  it('a page that will not move and is not at its end: atEnd false, and a note', async () => {
+    const d = deps([step(0)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 0, atEnd: false, ms: 0 })
+    expect(r.notes.join(' ')).toMatch(/stopped moving/)
     expect(d.commands.map(c => c.payload['page'])).toEqual(['top', 'next', 'top'])
     expect(d.slept).toEqual([])
   })
@@ -81,12 +90,24 @@ describe('walkPage', () => {
     expect(d.slept).toEqual([])
   })
 
-  it('any other failure mid-walk is a note, not an error, and the page is still sent back to the top', async () => {
+  it('any other failure mid-walk is a note, not an error, reports the partial walk, and the page is still sent back to the top', async () => {
     const d = deps([step(768), new Error('socket hang up')])
     const r = await walkPage(d)
-    expect(r.walked).toBeUndefined()
-    expect(r.notes.join(' ')).toMatch(/cut short.*socket hang up/)
+    expect(r.walked).toEqual({ screenfuls: 1, atEnd: false, ms: WALK_DWELL_MS })
+    expect(r.notes.join(' ')).toMatch(/cut short.*socket hang up.*partial walk/)
     expect(d.commands.at(-1)?.payload['page']).toBe('top')
+  })
+
+  it('stops at its time budget, says so, and still returns to the top', async () => {
+    const d = deps(Array.from({ length: WALK_MAX_SCREENFULS + 5 }, (_, i) => step((i + 1) * 768)))
+    d.sleep = vi.fn(async () => {
+      d.clock += 6_000
+    })
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 3, atEnd: false, ms: 18_000 })
+    expect(r.notes.join(' ')).toMatch(/15 s budget/)
+    expect(d.commands.at(-1)?.payload['page']).toBe('top')
+    expect(r.walked!.ms).toBeGreaterThanOrEqual(WALK_BUDGET_MS)
   })
 
   it('a failure on the final return to the top is swallowed: the measurement must still happen', async () => {

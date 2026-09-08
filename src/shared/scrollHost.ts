@@ -196,7 +196,7 @@ export function scrollOffset(host: Element | null): (el: Element) => { x: number
  * The functions above, serialised for `executeJavaScript` in a page the
  * preload is not loaded into — the headless render. Composed from their own
  * source rather than written twice, so the capture and the live scroll can
- * never drift apart. Evaluating it leaves `findScrollHost` and `scrollOffset`
+ * never drift apart. Evaluating it leaves `findScroller` and `scrollOffset`
  * on the page.
  */
 export const SCROLL_HOST_SCRIPT = [

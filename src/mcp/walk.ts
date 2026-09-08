@@ -22,6 +22,16 @@ export const WALK_MAX_SCREENFULS = 12
  * dwell nearly the whole of it.
  */
 export const WALK_DWELL_MS = 350
+/**
+ * Wall-clock budget for a whole walk: the top scroll, up to
+ * `WALK_MAX_SCREENFULS` "next" scrolls, and the final top scroll — fourteen
+ * calls, each with its own 5 s apply timeout — put a pathological page's
+ * worst case around 74 s. Unbounded, that would run a live audit (this walk,
+ * then a 20 s audit call) past the MCP SDK's 60 s default client request
+ * timeout. Typical cost is ~4 s (measured, spec §2). Past the budget the
+ * walk stops, `atEnd` stays false, and a note says so.
+ */
+export const WALK_BUDGET_MS = 15_000
 export const WALK_OLDER_APP_NOTE = 'the app predates page-wise scrolling (0.41.0); measured without walking.'
 export const WALK_HEADLESS_NOTE = '`walk` is live-only; there is nothing to watch in a headless render.'
 
@@ -78,6 +88,12 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   let lastY: number | null = 0
   try {
     while (screenfuls < WALK_MAX_SCREENFULS) {
+      if (deps.now() - started >= WALK_BUDGET_MS) {
+        notes.push(
+          `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${WALK_BUDGET_MS / 1000} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
+        )
+        break
+      }
       const r = await scroll('next')
       const at = r['scrolled']
       if (at === null || at === undefined) {
@@ -86,7 +102,8 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       }
       const y = typeof (at as { y?: unknown }).y === 'number' ? (at as { y: number }).y : null
       if (y !== null && y === lastY) {
-        atEnd = true
+        if (r['atEnd'] === true) atEnd = true
+        else notes.push('the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the page, or a page that scrolls by other means); measured from where it stood.')
         break
       }
       lastY = y
@@ -98,9 +115,13 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       }
     }
   } catch (e) {
-    notes.push(`the walk was cut short after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} (${message(e)}); measured without walking.`)
+    const partial = screenfuls > 0
+    notes.push(
+      `the walk was cut short after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} (${message(e)}); ` +
+        (partial ? 'measured after a partial walk.' : 'measured without walking.'),
+    )
     await backToTop()
-    return { notes }
+    return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - started }, notes } : { notes }
   }
   if (!atEnd && screenfuls >= WALK_MAX_SCREENFULS) {
     notes.push(`the walk stopped after ${WALK_MAX_SCREENFULS} screenfuls without reaching the end of the page; the measurement covers the whole page regardless.`)

@@ -712,7 +712,8 @@ const walkField = z
   .describe(
     'Live only. Default true: before measuring, the page is scrolled a screenful at a time to the end and back to ' +
       'the top, so the user watching the window sees the whole page pass (and lazy sections mount). false: measure ' +
-      'without moving — for re-measuring after a fix. Ignored in headless mode, with a note.',
+      'without moving — for re-measuring after a fix. false also measures a driven state — a scroll position, an ' +
+      'open menu — as it stands. Ignored in headless mode, with a note.',
   )
 
 const walkedField = z
@@ -1220,8 +1221,10 @@ server.registerTool(
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
       `Custom \`width\`/\`height\` need \`diagonalInches\` for any millimetres at all.\n\n` +
       `auto mode audits a running Obsrv with agent control on — the page the user is looking at, on the screen and ` +
-      `text scale in force, in whatever state it has been driven into (scrolled, clicked, a menu open) — launching ` +
-      `the app if it is not running (\`launched: true\` on that call), and falling back to a headless load of ` +
+      `text scale in force, in whatever state it has been driven into (clicked, a menu open) — though the walk ` +
+      `returns the page to the top and may close a menu, so pass \`walk: false\` to measure a driven scroll ` +
+      `position or an open menu as it stands — launching the app if it is not running (\`launched: true\` on that ` +
+      `call), and falling back to a headless load of ` +
       `\`url\` when the live app is not available (\`why\` names the reason). 'live' requires the app; 'headless' ` +
       `never touches it. A live audit names the tab it measured (\`tabId\`, \`tabIndex\`). Live, it walks the page a ` +
       `screenful at a time to the end and back before measuring, so the user sees it look and lazy sections mount ` +
@@ -1457,8 +1460,10 @@ server.registerTool(
       `screen's density, so it names elements. What it cannot see — a weight that survives the rules but still ` +
       `looks grey, a gradient that bands — is what reading the obsrv_snap PNG is for.\n\n` +
       `auto mode lints a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +
-      `text scale and panel in force, in whatever state it has been driven into — launching the app if it is not ` +
-      `running (\`launched: true\` on that call), and falling back to a headless load of \`url\` when the live app ` +
+      `text scale and panel in force, in whatever state it has been driven into (clicked, a menu open) — though ` +
+      `the walk returns the page to the top and may close a menu, so pass \`walk: false\` to measure a driven ` +
+      `scroll position or an open menu as it stands — launching the app if it is not running (\`launched: true\` ` +
+      `on that call), and falling back to a headless load of \`url\` when the live app ` +
       `is not available (\`why\` names the reason). 'live' requires the app; 'headless' never touches it. Findings ` +
       `are informational — apply your own thresholds. Live, it walks the page a screenful at a time to the end ` +
       `and back before measuring, so the user sees it look and lazy sections mount (\`walked\` in the result); ` +
