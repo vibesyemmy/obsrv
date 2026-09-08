@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { afterEach, describe, it, expect } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -12,7 +12,19 @@ import {
 } from '../../src/shared/history'
 import { loadHistory, saveHistory } from '../../src/shared/historyFile'
 
-const dir = () => mkdtempSync(join(tmpdir(), 'obsrv-history-'))
+// Every temp dir is tracked and removed after each test: a run through a
+// sandbox whose TMPDIR is the repo root (the agent tooling's) leaked one
+// directory per call into the working tree, and an OS temp dir fills up just
+// as surely. Same pattern as tabsFile.test.ts.
+const dirs: string[] = []
+const dir = (): string => {
+  const d = mkdtempSync(join(tmpdir(), 'obsrv-history-'))
+  dirs.push(d)
+  return d
+}
+afterEach(() => {
+  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true })
+})
 const entry = (url: string, visits: number, lastVisit: number): HistoryEntry => ({ url, visits, lastVisit })
 
 describe('recordVisit', () => {

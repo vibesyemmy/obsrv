@@ -1,11 +1,23 @@
-import { describe, it, expect } from 'vitest'
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
+import { afterEach, describe, it, expect } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadSettings, saveSettings } from '../../src/shared/settings'
 import { DEFAULT_SETTINGS } from '../../src/shared/presets'
 
-const dir = () => mkdtempSync(join(tmpdir(), 'obsrv-'))
+// Every temp dir is tracked and removed after each test: a run through a
+// sandbox whose TMPDIR is the repo root (the agent tooling's) leaked one
+// directory per call into the working tree, and an OS temp dir fills up just
+// as surely. Same pattern as tabsFile.test.ts.
+const dirs: string[] = []
+const dir = (): string => {
+  const d = mkdtempSync(join(tmpdir(), 'obsrv-'))
+  dirs.push(d)
+  return d
+}
+afterEach(() => {
+  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true })
+})
 
 describe('settings', () => {
   it('returns defaults when file is missing', () => {

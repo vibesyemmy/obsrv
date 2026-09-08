@@ -28,3 +28,8 @@ tests/browser/__screenshots__/
 
 # Subagent-driven-development scratch: ledgers, briefs, review packages.
 .superpowers/
+
+# Temp dirs a test run leaves in the working tree when TMPDIR points here
+# (the agent sandbox sets it to the repo root); the unit tests clean up after
+# themselves, so anything left is a crashed run's.
+obsrv-*/
