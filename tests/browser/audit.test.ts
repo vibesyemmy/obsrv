@@ -31,6 +31,9 @@ beforeEach(() => {
       /* HN's upvote: an inline anchor with no text, around a 10×10 block icon. */
       #vote { font-size: 10px; }
       #arrow { display: block; width: 10px; height: 10px; background: #999; }
+      /* The same control on a layout that makes the anchor block (HN's phone layout). */
+      #vote-block { display: block; width: 24px; height: 24px; }
+      #arrow-block { display: block; width: 10px; height: 10px; background: #999; }
       /* The visually-hidden pattern: present for screen readers, 1×1 and clipped for everyone else. */
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     </style>
@@ -48,6 +51,7 @@ beforeEach(() => {
     <input id="hid" type="hidden" value="secret" />
     <a id="skip" href="#main">Skip to content</a>
     <a id="vote" href="#vote"><div id="arrow" title="upvote"></div></a>
+    <a id="vote-block" href="#vote-block"><div id="arrow-block" title="upvote block"></div></a>
     <label id="sr" class="sr-only" for="field">Screen-reader label</label>
     <input id="sr-check" class="sr-only" type="checkbox" />
   `
@@ -79,6 +83,13 @@ describe('auditPage', () => {
     expect(vote.rect.width).toBe(10)
     expect(vote.rect.height).toBe(10)
     expect(vote.text).toBe('upvote')
+    // A block anchor around the same icon is a target by the ordinary rule,
+    // and gets the same name: the fallback is for any target with no text
+    // of its own, not only the inline ones (live on HN's phone layout the
+    // upvotes were named "").
+    const block = r.targets.find(t => t.element === 'a#vote-block')!
+    expect(block.rect.width).toBe(24)
+    expect(block.text).toBe('upvote block')
   })
   it('lists elements with text of their own, at the font size the glyphs take', () => {
     const r = auditPage(2000, 3000)

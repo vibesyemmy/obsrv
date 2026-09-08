@@ -172,7 +172,10 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     const value = el instanceof HTMLInputElement ? el.value : ''
     targets.push({
       element: label(el),
-      text: snippet(el.textContent || value || el.getAttribute('aria-label') || (iconOnly ? iconName(el) : '') || ''),
+      // Any target with no text of its own is named by its icon's title, label
+      // or alt — not only the icon-only inline ones: HN's upvote on the phone
+      // layout is a block anchor around the same arrow, and was named "".
+      text: snippet(el.textContent || value || iconName(el) || ''),
       rect: pageRect(r, el),
     })
   }

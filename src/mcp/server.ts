@@ -16,6 +16,7 @@ import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
+import { settlePage } from './settle'
 import {
   inlineNote,
   concurrencyLimit,
@@ -1959,6 +1960,28 @@ server.registerTool(
       let scroller: 'root' | 'element' | undefined
       let atEnd: boolean | undefined
       const warnings: string[] = []
+      // A preset or a rotation recreates the target and reloads its page, and
+      // the control confirms once a page is back or on its way. Read straight
+      // after, the status once said about:blank with loading false for a
+      // heavy page whose reload outlasted the apply budget (bbc.com after a
+      // phone flip). Wait for a tab that is neither blank nor loading before
+      // anything below steers or photographs it, as the snap has since 0.43.0.
+      if (input.preset !== undefined || input.orientation !== undefined) {
+        const s = await settlePage(
+          {
+            status: async () => {
+              const st = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
+              return st ? { url: st.url, loading: st.loading } : null
+            },
+            sleep,
+            now: Date.now,
+          },
+          LIVE_SETTLE_MS,
+        )
+        if (!s.settled) {
+          warnings.push('the tab was still loading after the preset change when the settle budget ran out; the status, and any capture, may show a transitional page.')
+        }
+      }
       if (input.scroll !== undefined) {
         const r = await controlCall(live.info, 'scroll', input.scroll, LIVE_APPLY_TIMEOUT_MS)
         const at = r['scrolled']
