@@ -214,3 +214,25 @@ one run walked and the other did not.
   the walk changes what is seen, not what is measured.
 - **Skill**: one sentence in the review loop: audits walk the page before
   measuring, so the user sees it; pass `walk: false` to re-measure quietly.
+
+## 8. Measured
+
+Watched on 2026-09-08 against the branch build (unpackaged, its own
+profile), driven by the built MCP server, preset 1080p-24, the default
+`walk`:
+
+| page | walked | per screenful | measured after |
+|---|---|---|---|
+| usekolo.app | 9 screenfuls, at the end, 3,207 ms; the whole call 6,096 ms | ≈356 ms | 39 targets · 177 text · 10 findings · pageHeight 10,178 |
+| ojustudio.com | 5 screenfuls, at the end, 1,789 ms; the whole call 3,390 ms | ≈358 ms | 35 targets · 122 text · 18 findings · pageHeight 5,983 |
+
+Two of §6's risks are answered. The dwell is nearly the whole cost of a
+screenful: a scroll round-trip is a few milliseconds over the 350 ms, on
+the page that animates continuously as much as on the one that does not —
+so `scroll` does not pay a full settle per screenful (§6.2). ojustudio's
+numbers are the ones a top-only audit gave in §"The problem", which is the
+guarantee the walk changes what is seen and not what is measured; usekolo's
+are the walked ones, on a taller viewport. Neither walk came near the
+twelve-screenful cap or the 15 s budget (§5), and no note was raised.
+Whether 350 ms reads as watching or as flicker (§6.1) is the person's call
+who watched it; the constant stays until they say.
