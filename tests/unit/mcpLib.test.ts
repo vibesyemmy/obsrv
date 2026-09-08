@@ -19,6 +19,9 @@ import {
   planSnapPath,
   shouldInlineImage,
   inlineNote,
+  createGate,
+  concurrencyLimit,
+  queueNote,
   stderrTail,
   urlSchemeError,
 } from '../../src/mcp/lib'
@@ -154,6 +157,73 @@ describe('shouldInlineImage', () => {
     expect(inlineNote(MAX_INLINE_IMAGE_BYTES, '/t/snap.png')).toBeNull()
     expect(inlineNote(4_823_040, '/t/snap.png')).toBe('the PNG is 4.6 MiB, over the 1.5 MiB inline cap, so it is not inlined; read the file at /t/snap.png')
     expect(inlineNote(MAX_INLINE_IMAGE_BYTES + 1, '/t/snap.png', 'retry with a smaller preset')).toMatch(/inline cap.*\/t\/snap\.png, or retry with a smaller preset$/)
+  })
+})
+
+describe('the render gate', () => {
+  const tick = (): Promise<void> => new Promise(r => setTimeout(r, 0))
+
+  it('runs at most `limit` at once, the rest in the order they came', async () => {
+    const gate = createGate(2)
+    const started: string[] = []
+    const release: Record<string, () => void> = {}
+    const job = (name: string): Promise<string> =>
+      gate.run(async () => {
+        started.push(name)
+        await new Promise<void>(r => (release[name] = r))
+        return name
+      })
+    const all = Promise.all([job('a'), job('b'), job('c'), job('d')])
+    await tick()
+    expect(started).toEqual(['a', 'b'])
+    expect(gate.active).toBe(2)
+    expect(gate.waiting).toBe(2)
+    release['a']!()
+    await tick()
+    expect(started).toEqual(['a', 'b', 'c'])
+    release['c']!()
+    release['b']!()
+    await tick()
+    expect(started).toEqual(['a', 'b', 'c', 'd'])
+    release['d']!()
+    expect(await all).toEqual(['a', 'b', 'c', 'd'])
+    expect(gate.active).toBe(0)
+    expect(gate.waiting).toBe(0)
+  })
+
+  it('a job that throws still frees its slot', async () => {
+    const gate = createGate(1)
+    await expect(gate.run(async () => { throw new Error('boom') })).rejects.toThrow('boom')
+    expect(gate.active).toBe(0)
+    expect(await gate.run(async () => 'next')).toBe('next')
+  })
+
+  it('says how long a job waited, from the moment it was asked to the moment it ran', async () => {
+    const gate = createGate(1)
+    let free = (): void => {}
+    const first = gate.run(() => new Promise<void>(r => (free = r)))
+    const second = gate.run(async () => 'ran')
+    await new Promise(r => setTimeout(r, 30))
+    free()
+    await first
+    const { value, queuedMs } = await second.then(v => ({ value: v, queuedMs: gate.lastQueuedMs }))
+    expect(value).toBe('ran')
+    expect(queuedMs).toBeGreaterThanOrEqual(25)
+  })
+
+  it('the limit is OBSRV_MCP_CONCURRENCY, at least 1, default 2', () => {
+    expect(concurrencyLimit({})).toBe(2)
+    expect(concurrencyLimit({ OBSRV_MCP_CONCURRENCY: '4' })).toBe(4)
+    expect(concurrencyLimit({ OBSRV_MCP_CONCURRENCY: '0' })).toBe(1)
+    expect(concurrencyLimit({ OBSRV_MCP_CONCURRENCY: 'many' })).toBe(2)
+  })
+
+  it('a wait under a second is not worth a sentence; a longer one names the cap and the variable', () => {
+    expect(queueNote(400, 2)).toBeNull()
+    expect(queueNote(3_200, 2)).toBe(
+      'this call waited 3.2 s for a render slot: the server runs at most 2 headless renders at once ' +
+        '(OBSRV_MCP_CONCURRENCY), so parallel calls queue, and one that waits long can hit the client\'s own request timeout',
+    )
   })
 })
 

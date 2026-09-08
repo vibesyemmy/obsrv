@@ -121,21 +121,60 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     '[tabindex]:not([tabindex="-1"])'
   const targets: AuditTarget[] = []
   let targetsOver = 0
+  // An icon-only link is measured over the icon: the union of its sized
+  // children. Its own box is the wrong thing twice over — a block child
+  // inside an inline is laid out in an anonymous block that spans the
+  // container (measured: 568 px wide for a 10 px arrow in a 600 px box), and
+  // with nothing sized inside it can be nothing at all. The finger aims at
+  // what is drawn. The anchor's own box stands in only when no child has one.
+  const iconBox = (el: Element): DOMRect => {
+    let box: DOMRect | null = null
+    for (const child of Array.from(el.children)) {
+      const c = child.getBoundingClientRect()
+      if (!(c.width > 0 && c.height > 0)) continue
+      box =
+        box === null
+          ? c
+          : new DOMRect(
+              Math.min(box.left, c.left),
+              Math.min(box.top, c.top),
+              Math.max(box.right, c.right) - Math.min(box.left, c.left),
+              Math.max(box.bottom, c.bottom) - Math.min(box.top, c.top),
+            )
+    }
+    return box ?? el.getBoundingClientRect()
+  }
+  /** What an icon-only control is called: its own label, or the icon's title, label or alt. */
+  const iconName = (el: Element): string => {
+    const own = el.getAttribute('aria-label') || el.getAttribute('title')
+    if (own) return own
+    const named = el.querySelector('[aria-label],[title],img[alt]')
+    return named ? named.getAttribute('aria-label') || named.getAttribute('title') || named.getAttribute('alt') || '' : ''
+  }
   for (const el of Array.from(document.querySelectorAll(TARGETS))) {
     const cs = getComputedStyle(el)
-    const r = el.getBoundingClientRect()
-    if (!shown(cs, r, el)) continue
     // A link inside running text is as tall as its line and flagged on every
     // page there is; WCAG 2.5.8 exempts inline links for that reason, and so
-    // does this. A link styled as a control (block, inline-block, flex) is
-    // a target like any other.
-    if (el.tagName === 'A' && cs.display === 'inline') continue
+    // does this — when the link *is* text. An inline anchor with no text of
+    // its own around a sized child (HN's upvote: a 10×10 block arrow inside
+    // an inline `a`) is a control drawn as an icon, and is measured as one.
+    // A link styled as a control (block, inline-block, flex) is a target like
+    // any other.
+    const inlineLink = el.tagName === 'A' && cs.display === 'inline'
+    const iconOnly = inlineLink && (el.textContent ?? '').trim().length === 0
+    if (inlineLink && !iconOnly) continue
+    const r = iconOnly ? iconBox(el) : el.getBoundingClientRect()
+    if (!shown(cs, r, el)) continue
     if (targets.length >= maxTargets) {
       targetsOver++
       continue
     }
     const value = el instanceof HTMLInputElement ? el.value : ''
-    targets.push({ element: label(el), text: snippet(el.textContent || value || el.getAttribute('aria-label') || ''), rect: pageRect(r, el) })
+    targets.push({
+      element: label(el),
+      text: snippet(el.textContent || value || el.getAttribute('aria-label') || (iconOnly ? iconName(el) : '') || ''),
+      rect: pageRect(r, el),
+    })
   }
 
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE', 'HEAD', 'META', 'LINK'])

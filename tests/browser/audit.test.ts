@@ -28,6 +28,9 @@ beforeEach(() => {
       #zero span { font-size: 16px; }
       #ghost { opacity: 0; width: 10px; height: 10px; }
       #skip { position: absolute; left: -9999px; }
+      /* HN's upvote: an inline anchor with no text, around a 10×10 block icon. */
+      #vote { font-size: 10px; }
+      #arrow { display: block; width: 10px; height: 10px; background: #999; }
       /* The visually-hidden pattern: present for screen readers, 1×1 and clipped for everyone else. */
       .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     </style>
@@ -44,6 +47,7 @@ beforeEach(() => {
     <input id="field" type="text" value="typed" />
     <input id="hid" type="hidden" value="secret" />
     <a id="skip" href="#main">Skip to content</a>
+    <a id="vote" href="#vote"><div id="arrow" title="upvote"></div></a>
     <label id="sr" class="sr-only" for="field">Screen-reader label</label>
     <input id="sr-check" class="sr-only" type="checkbox" />
   `
@@ -67,6 +71,14 @@ describe('auditPage', () => {
     expect(tiny.rect.height).toBe(24)
     expect(tiny.text).toBe('×')
     expect(r.targets.find(t => t.element === 'input#field')!.text).toBe('typed')
+    // An inline anchor with no text of its own around a sized child is a
+    // control drawn as an icon, not a link in running text: measured at the
+    // icon's box, named by the icon's title.
+    const vote = r.targets.find(t => t.element === 'a#vote')!
+    expect(vote).toBeDefined()
+    expect(vote.rect.width).toBe(10)
+    expect(vote.rect.height).toBe(10)
+    expect(vote.text).toBe('upvote')
   })
   it('lists elements with text of their own, at the font size the glyphs take', () => {
     const r = auditPage(2000, 3000)
