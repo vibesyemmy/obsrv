@@ -1,0 +1,133 @@
+import type { TargetSource } from '../main/targetSource'
+import type { Walked } from '../shared/types'
+import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
+
+/**
+ * Walking the page before measuring it, headlessly.
+ *
+ * A page measured as it first shows is not the page a user sees: images
+ * behind a lazy loader are still their 1×1 placeholders, and sections that
+ * mount on scroll do not exist. Measured on apple.com at 1080p-24: nineteen
+ * "upscaled" findings headless, every one a placeholder GIF judged against a
+ * 1250 px box; zero once the page had been walked in the live app, whose
+ * audit and lint have walked first since 0.42.0. So the headless audit, lint
+ * and report walk too — a screenful at a time to the end, a short dwell on
+ * each so observers fire and loaders swap their sources, back to the top,
+ * then a bounded wait for the images those swaps started.
+ *
+ * The step is the live `scroll { page }`'s arithmetic, run in the page
+ * (`walkStep` in `src/shared/scrollHost.ts`); the loop and its limits are the live walk's
+ * (`src/mcp/walk.ts`). Never throws: a walk must not fail the measurement it
+ * precedes, so every failure is a note.
+ */
+
+/** Most screenfuls a walk takes — the live walk's cap, and the full-page capture's. */
+export const HEADLESS_WALK_MAX_SCREENFULS = 12
+/**
+ * Pause on each screenful. No eye to please here, only observers and loaders:
+ * an IntersectionObserver callback needs a frame, and a loader that polls the
+ * scroll (lazysizes checks every 125 ms) needs a little more. Measured on
+ * apple.com — see the branch's notes.
+ */
+export const HEADLESS_WALK_DWELL_MS = 150
+/** Wall-clock budget for the whole walk, top to top. */
+export const HEADLESS_WALK_BUDGET_MS = 15_000
+/** How long to wait, after the walk, for the images it set loading. */
+export const HEADLESS_WALK_IMAGES_MS = 2_000
+const IMAGES_POLL_MS = 100
+
+export interface HeadlessWalkOutcome {
+  /** Absent when the walk did not run to a measurement — the notes say why. */
+  walked?: Walked
+  notes: string[]
+}
+
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
+
+export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOutcome> {
+  const notes: string[] = []
+  const started = Date.now()
+  const step = async (page: 'top' | 'next'): Promise<WalkStepResult> =>
+    (await target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`)) as WalkStepResult
+  const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+  const backToTop = async (): Promise<void> => {
+    try {
+      await step('top')
+    } catch (e) {
+      notes.push(`the walk could not return to the top afterwards (${message(e)}); measured where it stopped.`)
+    }
+  }
+
+  try {
+    await step('top')
+  } catch (e) {
+    notes.push(`the walk was cut short before it began (${message(e)}); measured without walking.`)
+    return { notes }
+  }
+
+  let screenfuls = 0
+  let atEnd = false
+  let lastY = 0
+  try {
+    while (screenfuls < HEADLESS_WALK_MAX_SCREENFULS) {
+      if (Date.now() - started >= HEADLESS_WALK_BUDGET_MS) {
+        notes.push(
+          `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${HEADLESS_WALK_BUDGET_MS / 1000} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
+        )
+        break
+      }
+      const r = await step('next')
+      // A `next` that lands where the page already was has no more page to
+      // show — the end, whatever `atEnd` says — so a one-screen page is zero
+      // screenfuls, not twelve dwells at offset 0.
+      if (r.y === lastY) {
+        if (r.atEnd) atEnd = true
+        else notes.push('the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other means); measured from where it stood.')
+        break
+      }
+      lastY = r.y
+      screenfuls++
+      await sleep(HEADLESS_WALK_DWELL_MS)
+      if (r.atEnd) {
+        atEnd = true
+        break
+      }
+    }
+  } catch (e) {
+    const partial = screenfuls > 0
+    notes.push(
+      `the walk was cut short after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} (${message(e)}); ` +
+        (partial ? 'measured after a partial walk.' : 'measured without walking.'),
+    )
+    await backToTop()
+    return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
+  }
+  if (!atEnd && screenfuls >= HEADLESS_WALK_MAX_SCREENFULS) {
+    notes.push(`the walk stopped after ${HEADLESS_WALK_MAX_SCREENFULS} screenfuls without reaching the end of the page; the measurement covers the whole page regardless.`)
+  }
+  await backToTop()
+  await settleImages(target)
+  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes }
+}
+
+/**
+ * The walk sets images loading; the lint reads their natural sizes. Waits for
+ * every `<img>` on the page to finish (loaded or failed — `complete` is true
+ * either way), up to a bound: a page that never stops adding images is not
+ * this function's to wait for.
+ */
+async function settleImages(target: TargetSource): Promise<void> {
+  const deadline = Date.now() + HEADLESS_WALK_IMAGES_MS
+  while (Date.now() < deadline) {
+    let pending: number
+    try {
+      pending = (await target.webContents.executeJavaScript(
+        'Array.from(document.images).filter(i => !i.complete).length',
+      )) as number
+    } catch {
+      return
+    }
+    if (pending === 0) return
+    await sleep(IMAGES_POLL_MS)
+  }
+}

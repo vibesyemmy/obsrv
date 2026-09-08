@@ -2,6 +2,7 @@ import type { AuditResult, AuditThresholds } from './audit'
 import { LINT_RULES, type LintResult, type LintRule } from './lint'
 import type { UnsettledReason } from './capture'
 import { formatTextScale } from '../shared/textScale'
+import type { Walked } from '../shared/types'
 import type { DiffMetrics } from './metrics'
 
 /**
@@ -98,6 +99,8 @@ export interface ReportScreen {
   unsettledReason?: UnsettledReason
   /** Time to paint-quiet from navigation, ms; null when it never settled. Shown when a throttle was named. */
   settledMs?: number | null
+  /** The walk before the audit and lint: screenfuls scrolled, and whether it reached the end. Absent under --no-walk. */
+  walked?: Walked
   /** Null when the page did not answer the audit. */
   audit: AuditResult | null
   /** Null when the page did not answer the lint. */
@@ -305,7 +308,8 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.orientation)}` +
     `${s.textScale !== 1 ? ` · text <b>${escapeHtml(formatTextScale(s.textScale))}</b>` : ''}` +
     `${s.settledMs === undefined ? '' : s.settledMs === null ? ' · <span class="bad">never settled</span>' : ` · settled in <b>${num(s.settledMs / 1000, 1)} s</b>`}` +
-    `${s.settled ? '' : ' · <span class="bad">not settled</span>'}</p>` +
+    `${s.settled ? '' : ' · <span class="bad">not settled</span>'}` +
+    `${s.walked ? ` · walked <b>${s.walked.screenfuls}</b> screenful${s.walked.screenfuls === 1 ? '' : 's'}${s.walked.atEnd ? '' : ' <span class="bad">(not to the end)</span>'} before measuring` : ''}</p>` +
     // The screen's own figure: always for a screen with no comparison, and
     // for a compared screen only when the profile made it a different image
     // from the one the comparison shows.

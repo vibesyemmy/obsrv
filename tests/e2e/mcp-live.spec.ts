@@ -541,11 +541,14 @@ test('obsrv_lint walks too, and walk: false does not', async () => {
   expect(quiet.summary).toEqual(walked.summary)
 })
 
-test('walk is ignored in headless mode, with a note', async () => {
+test('a headless audit walks too: `walked` is in the answer, and walk: false leaves it out', async () => {
   const r = await call('obsrv_audit', { url: fixture('tall.html'), mode: 'headless', walk: true })
   expect(r.isError).toBeFalsy()
-  const m = r.structuredContent as { mode: string; walked?: unknown; notes: string[] }
+  const m = r.structuredContent as { mode: string; walked?: { screenfuls: number; atEnd: boolean }; notes: string[] }
   expect(m.mode).toBe('headless')
-  expect(m.walked).toBeUndefined()
-  expect(m.notes.join(' ')).toContain('`walk` is live-only')
+  expect(m.walked).toMatchObject({ atEnd: true })
+  expect(m.walked!.screenfuls).toBeGreaterThanOrEqual(1)
+  expect(m.notes.join(' ')).not.toContain('live-only')
+  const quiet = (await call('obsrv_audit', { url: fixture('tall.html'), mode: 'headless', walk: false })).structuredContent as { walked?: unknown }
+  expect(quiet.walked).toBeUndefined()
 })

@@ -4,6 +4,7 @@ import {
   PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
   buildAuditArgs,
+  buildLintArgs,
   buildDiffArgs,
   buildInspectArgs,
   buildReportArgs,
@@ -302,6 +303,12 @@ describe('buildAuditArgs', () => {
   it('refuses preset with custom dims, and custom dims without both sides', () => {
     expect(() => buildAuditArgs({ url: URL, preset: 'laptop-768', width: 100 })).toThrow(UsageError)
     expect(() => buildAuditArgs({ url: URL, width: 100 })).toThrow(UsageError)
+  })
+  it('walk: false is --no-walk; true (the default) adds nothing, since walking is what the CLI does', () => {
+    expect(buildAuditArgs({ url: URL, walk: false })).toEqual(['audit', URL, '--no-walk'])
+    expect(buildAuditArgs({ url: URL, walk: true })).toEqual(['audit', URL])
+    expect(buildLintArgs({ url: URL, walk: false })).toEqual(['lint', URL, '--no-walk'])
+    expect(buildLintArgs({ url: URL, walk: true, thinPx: 12 })).toEqual(['lint', URL, '--thin-px', '12'])
   })
 })
 

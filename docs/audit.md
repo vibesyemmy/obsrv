@@ -104,6 +104,12 @@ way back (`parseAuditReport`), then `cli/audit.ts` — pure, no Electron — tur
 CSS pixels into millimetres from the preset's diagonal and applies the
 thresholds. `obsrv_audit` maps its input to the same argv.
 
+Before the walk measures, the page is scrolled a screenful at a time to the
+end and back (`src/cli/walk.ts`), headless as well as live, so sections that
+mount on scroll exist to be measured — usekolo.app gains six targets that
+way. The JSON's `walked` says how far it went; `--no-walk` measures the page
+as it first shows.
+
 ## Under a text scale
 
 `--text-scale 1.5` (or `textScale` on `obsrv_audit`) renders the page as a

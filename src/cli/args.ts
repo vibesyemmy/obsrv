@@ -58,6 +58,8 @@ export interface AuditCommand {
   /** Findings thresholds, in millimetres on the target screen. */
   tapMm: number
   textMm: number
+  /** Walk the page a screenful at a time before measuring (the default); `--no-walk` measures it as it first shows. */
+  walk: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -70,6 +72,8 @@ export interface LintCommand {
   profileId: string
   /** Text lighter than regular below this many device pixels of font size is flagged. */
   thinPx: number
+  /** Walk the page a screenful at a time before measuring (the default); `--no-walk` measures it as it first shows. */
+  walk: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -99,6 +103,8 @@ export interface ReportCommand {
   textMm: number
   /** The lint's light-text threshold, device px. */
   thinPx: number
+  /** Walk each screen's page before its audit and lint (the default); `--no-walk` measures it as it first shows. */
+  walk: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -230,6 +236,9 @@ audit flags:
                        Both are provisional and stated in the output. Millimetres come from the
                        screen's diagonal, so custom dimensions need --diagonal to get any.
                        Measures layout, not pixels: --profile does not apply, and one preset per run.
+  --no-walk            Measure the page as it first shows. By default it is walked a screenful at
+                       a time to the end and back first (as the live audit is), so lazy images load
+                       and sections that mount on scroll exist; the JSON's \`walked\` says how far.
 
 inspect flags:
   --at <x,y>           A point in CSS px of the target screen: what is drawn there.
@@ -244,6 +253,7 @@ lint flags:
                        device pixel and images by natural against drawn size, both at the screen's
                        density times the text scale; --profile names the panel the contrast-on-panel
                        rule is judged on. One preset per run.
+  --no-walk            As for audit: judge the page as it first shows, lazy placeholders and all.
 
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
@@ -252,6 +262,7 @@ report flags:
   --tap-mm / --text-mm As for audit. --profile applies to the renders shown; the 1x-vs-2x
                        comparison is measured without it (it is about rasterisation, not the panel).
                        Each screen costs one render plus, for 1x screens, a 2x reference render.
+  --no-walk            As for audit: measure each screen's page as it first shows.
 
 Repeated flags: the last occurrence wins.
 Machine output (JSON) goes to stdout; everything human goes to stderr.
@@ -263,7 +274,7 @@ warning naming what was missing. Only a render that painted nothing errors.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
@@ -277,12 +288,12 @@ const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeo
 const EXTRA_FLAGS: Record<Command, Set<string>> = {
   snap: new Set(['out', 'full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'matrix']),
   diff: new Set(['out-dir', 'json']),
-  audit: new Set(['tap-mm', 'text-mm']),
+  audit: new Set(['tap-mm', 'text-mm', 'no-walk']),
   // Order matters for a shared flag's named owner: the command that owns the
   // concept comes first (audit before report for --tap-mm, lint before report
-  // for --thin-px).
-  lint: new Set(['thin-px']),
-  report: new Set(['out', 'matrix', 'tap-mm', 'text-mm', 'thin-px']),
+  // for --thin-px, audit before lint and report for --no-walk).
+  lint: new Set(['thin-px', 'no-walk']),
+  report: new Set(['out', 'matrix', 'tap-mm', 'text-mm', 'thin-px', 'no-walk']),
   inspect: new Set(['at', 'selector']),
 }
 
@@ -499,12 +510,12 @@ export function parseArgs(argv: string[]): CliCommand {
     if (matrix) throw new ArgError('`obsrv audit` measures one screen per run; --matrix is a snap flag')
     const tapMm = float(flags, 'tap-mm', DEFAULT_TAP_MM, 0)
     const textMm = float(flags, 'text-mm', DEFAULT_TEXT_MM, 0)
-    return { command, url, spec: specs[0]!, tapMm, textMm, waitMs, timeoutMs }
+    return { command, url, spec: specs[0]!, tapMm, textMm, walk: !flags.has('no-walk'), waitMs, timeoutMs }
   }
 
   if (command === 'lint') {
     if (matrix) throw new ArgError('`obsrv lint` judges one screen per run; --matrix is a snap flag')
-    return { command, url, spec: specs[0]!, profileId, thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0), waitMs, timeoutMs }
+    return { command, url, spec: specs[0]!, profileId, thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0), walk: !flags.has('no-walk'), waitMs, timeoutMs }
   }
 
   if (command === 'report') {
@@ -524,6 +535,7 @@ export function parseArgs(argv: string[]): CliCommand {
       tapMm: float(flags, 'tap-mm', DEFAULT_TAP_MM, 0),
       textMm: float(flags, 'text-mm', DEFAULT_TEXT_MM, 0),
       thinPx: float(flags, 'thin-px', DEFAULT_THIN_PX, 0),
+      walk: !flags.has('no-walk'),
       waitMs,
       timeoutMs,
     }

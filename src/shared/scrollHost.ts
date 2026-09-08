@@ -209,3 +209,43 @@ export const SCROLL_HOST_SCRIPT = [
   clipTest.toString(),
   scrollOffset.toString(),
 ].join('\n')
+
+export interface WalkStepResult {
+  /** The offset actually reached, in the scroller's own CSS px. */
+  y: number
+  /** No more page below this offset. */
+  atEnd: boolean
+  scroller: 'root' | 'element'
+}
+
+/**
+ * One move of the headless walk (`src/cli/walk.ts`): a screenful of whatever
+ * the page scrolls — the root, or the inner container of an app shell — with
+ * the arithmetic the live `scroll { page }` uses (src/preload/sync.ts):
+ * `next` is the scroller's own client height, clamped to what is left, and
+ * `atEnd` is an offset that can go no further. Called as
+ * `WALK_STEP_SCRIPT('next')` until it says so, then `'top'`.
+ *
+ * Lives in this module, not its own: the bundler keeps a function beside the
+ * helpers it calls under their bare names, which is what its serialised form
+ * needs. In a module of its own it landed in cli.js and called
+ * `capture.rootScrolls()` — a namespace no page has (measured: every walk
+ * "cut short before it began").
+ */
+export function walkStep(page: 'top' | 'next'): WalkStepResult {
+  const el = rootScrolls() ? null : findScroller()
+  const view = el ? el.clientHeight : window.innerHeight
+  const height = el ? el.scrollHeight : document.documentElement.scrollHeight
+  const max = Math.max(0, height - view)
+  const cur = el ? el.scrollTop : window.scrollY
+  const want = page === 'top' ? 0 : Math.min(cur + view, max)
+  // `instant` defeats a page's `scroll-behavior: smooth`, which would animate
+  // the move and leave the read-back short of it.
+  if (el) el.scrollTo({ top: want, left: el.scrollLeft, behavior: 'instant' })
+  else window.scrollTo({ top: want, left: window.scrollX, behavior: 'instant' })
+  const y = el ? el.scrollTop : window.scrollY
+  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root' }
+}
+
+/** `walkStep` as source, self-contained, for `executeJavaScript` in a page the preload is not loaded into. */
+export const WALK_STEP_SCRIPT = `(() => {\n${SCROLL_HOST_SCRIPT}\n return (${walkStep.toString()})\n})()`

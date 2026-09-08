@@ -1,4 +1,7 @@
+import type { Walked } from '../shared/types'
 import { ControlCallError } from './control'
+
+export type { Walked }
 
 /**
  * Walking the page before measuring it.
@@ -33,14 +36,6 @@ export const WALK_DWELL_MS = 350
  */
 export const WALK_BUDGET_MS = 15_000
 export const WALK_OLDER_APP_NOTE = 'the app predates page-wise scrolling (0.41.0); measured without walking.'
-export const WALK_HEADLESS_NOTE = '`walk` is live-only; there is nothing to watch in a headless render.'
-
-export interface Walked {
-  screenfuls: number
-  /** False with `screenfuls === WALK_MAX_SCREENFULS` means the cap stopped it. */
-  atEnd: boolean
-  ms: number
-}
 
 export interface WalkDeps {
   /** One control command against the live app; `controlCall` bound to its info in production. */
