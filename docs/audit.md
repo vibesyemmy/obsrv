@@ -69,7 +69,12 @@ the interactive ARIA roles (button, link, checkbox, radio, tab, menuitem,
 switch), and anything focusable by `tabindex`. **Inline links in running text
 are exempt**, as in WCAG 2.5.8: a link is as tall as its line, and flagging
 every one would drown the rest. A link styled as a control (block,
-inline-block, flex) is a target like any other.
+inline-block, flex) is a target like any other — and so is an inline anchor
+with no text of its own around a sized child, which is a control drawn as an
+icon (HN's upvote: a 10×10 block arrow inside an inline `a`; the laptop
+audit counted one target on that page and the phone layout, which makes the
+anchor block, thirty-one). It is measured over its own box and its
+children's together, and named by the icon's title, label or alt.
 
 **Text:** any element with a non-blank text node of its own — the element
 whose font size the glyphs actually take.
