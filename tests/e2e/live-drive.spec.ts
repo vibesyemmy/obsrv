@@ -24,6 +24,7 @@ const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')
 const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
 const LINT = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
 const SOLID_RED = pathToFileURL(resolve(__dirname, '../fixtures/solid-red.html')).href
+const APP_SHELL_FINDINGS = pathToFileURL(resolve(__dirname, '../fixtures/app-shell-findings.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -1027,4 +1028,46 @@ test('openTab at the maxTabs cap returns 409, and leaves the strip unchanged', a
       savedMaxTabs,
     )
   }
+})
+
+test('audit and lint measure an app shell the same wherever its scroller has been left', async () => {
+  // Measured on usekolo.app scrolled to the bottom: 11 targets and a
+  // pageHeight of 768 on a 7,445 px page. The walks added window.scrollY,
+  // which is 0 on an app shell however far its inner scroller has gone, so
+  // everything above the fold was dropped as parked off the page. The
+  // headless capture resets the scroller first (src/cli/main.ts); a live
+  // measurement follows whatever the user or an agent scrolled.
+  await call('navigate', { url: APP_SHELL_FINDINGS })
+  await expect.poll(async () => (await call('status')).body.url).toBe(APP_SHELL_FINDINGS)
+  await call('setPreset', { id: 'laptop-768' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1366)
+
+  const auditTop = await call('audit')
+  const lintTop = await call('lint')
+  expect(auditTop.status).toBe(200)
+  expect(lintTop.status).toBe(200)
+
+  const moved = await call('scroll', { page: 'bottom' })
+  expect(moved.status).toBe(200)
+  expect(moved.body).toMatchObject({ ok: true, scroller: 'element', atEnd: true })
+  expect((moved.body.scrolled as { y: number }).y).toBeGreaterThan(500)
+
+  const auditDown = await call('audit')
+  const lintDown = await call('lint')
+
+  type Finding = { kind?: string; rule?: string; element: string; rect: { y: number } }
+  const key = (f: Finding) => `${f.kind ?? f.rule}:${f.element}:${Math.round(f.rect.y)}`
+
+  expect(auditTop.body.pageHeight as number).toBeGreaterThan(768)
+  expect(auditDown.body.pageHeight).toBe(auditTop.body.pageHeight)
+  expect(auditDown.body.summary).toEqual(auditTop.body.summary)
+  expect((auditDown.body.findings as Finding[]).map(key)).toEqual((auditTop.body.findings as Finding[]).map(key))
+  expect((auditTop.body.findings as Finding[]).some(f => f.element === 'button#deep-button')).toBe(true)
+
+  expect(lintDown.body.pageHeight).toBe(lintTop.body.pageHeight)
+  expect(lintDown.body.summary).toEqual(lintTop.body.summary)
+  expect((lintDown.body.findings as Finding[]).map(key)).toEqual((lintTop.body.findings as Finding[]).map(key))
+  expect((lintTop.body.findings as Finding[]).some(f => f.rule === 'contrast' && f.element === 'p#deep-text')).toBe(true)
+
+  await call('scroll', { page: 'top' })
 })

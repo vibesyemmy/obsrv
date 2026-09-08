@@ -175,10 +175,29 @@ export function clipTest(host: Element | null): (r: DOMRect, el: Element) => boo
 }
 
 /**
+ * Page coordinates for an element: its viewport rect plus what the page's
+ * own scroller has scrolled away. `host` is the element the capture scrolls
+ * (the shell's scroller), or null when the document itself scrolls. On an
+ * app shell the window never moves — `window.scrollY` is 0 however far the
+ * host's content has gone — so an element the host holds adds the host's
+ * offset; anything outside it (the shell's fixed chrome) moves with the
+ * window alone. Measured on usekolo.app scrolled to the bottom before this
+ * existed: every element above the fold had a negative top, was dropped as
+ * parked off the page, and pageHeight collapsed to the viewport.
+ */
+export function scrollOffset(host: Element | null): (el: Element) => { x: number; y: number } {
+  return (el: Element) =>
+    host !== null && host !== el && host.contains(el)
+      ? { x: window.scrollX + host.scrollLeft, y: window.scrollY + host.scrollTop }
+      : { x: window.scrollX, y: window.scrollY }
+}
+
+/**
  * The functions above, serialised for `executeJavaScript` in a page the
  * preload is not loaded into — the headless render. Composed from their own
  * source rather than written twice, so the capture and the live scroll can
- * never drift apart. Evaluating it leaves `findScrollHost` on the page.
+ * never drift apart. Evaluating it leaves `findScrollHost` and `scrollOffset`
+ * on the page.
  */
 export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
@@ -188,4 +207,5 @@ export const SCROLL_HOST_SCRIPT = [
   isVisible.toString(),
   findScroller.toString(),
   clipTest.toString(),
+  scrollOffset.toString(),
 ].join('\n')

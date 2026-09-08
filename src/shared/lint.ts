@@ -1,7 +1,7 @@
 import type { RGBA } from './inspect'
 
 
-import { clipTest, findScroller, rootScrolls, SCROLL_HOST_SCRIPT } from './scrollHost'
+import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT } from './scrollHost'
 
 /**
  * The lint's page walk: one pass over the rendered DOM that brings back
@@ -103,26 +103,37 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     return `${el.tagName.toLowerCase()}${id}${cls ? `.${cls}` : ''}`
   }
   const snippet = (s: string): string => s.replace(/\s+/g, ' ').trim().slice(0, 40)
+  // See audit.ts: the element the capture scrolls, and boxes some *other*
+  // scroller holds out of view have coordinates that are the element's, not
+  // a place on the page.
+  const host = rootScrolls() ? null : findScroller()
+  const clipped = clipTest(host)
+  // Page coordinates: see `scrollOffset` in scrollHost.ts.
+  const offset = scrollOffset(host)
   // Rendered and somewhere an eye could reach: the audit's rule, kept in step.
-  const shown = (cs: CSSStyleDeclaration, r: DOMRect): boolean =>
-    r.width > 0 &&
-    r.height > 0 &&
-    !(r.width <= 1 && r.height <= 1) &&
-    r.right + scrollX > 0 &&
-    r.bottom + scrollY > 0 &&
-    cs.visibility !== 'hidden' &&
-    cs.display !== 'none' &&
-    cs.opacity !== '0'
-  // See audit.ts: a box a scroller the capture never drives holds out of view
-  // has coordinates that are the element's, not a place on the page.
-  const clipped = clipTest(rootScrolls() ? null : findScroller())
-  const pageRect = (r: DOMRect, el: Element): LintRect => ({
-    x: r.left + scrollX,
-    y: r.top + scrollY,
-    width: r.width,
-    height: r.height,
-    ...(clipped(r, el) ? { clipped: true as const } : {}),
-  })
+  const shown = (cs: CSSStyleDeclaration, r: DOMRect, el: Element): boolean => {
+    const o = offset(el)
+    return (
+      r.width > 0 &&
+      r.height > 0 &&
+      !(r.width <= 1 && r.height <= 1) &&
+      r.right + o.x > 0 &&
+      r.bottom + o.y > 0 &&
+      cs.visibility !== 'hidden' &&
+      cs.display !== 'none' &&
+      cs.opacity !== '0'
+    )
+  }
+  const pageRect = (r: DOMRect, el: Element): LintRect => {
+    const o = offset(el)
+    return {
+      x: r.left + o.x,
+      y: r.top + o.y,
+      width: r.width,
+      height: r.height,
+      ...(clipped(r, el) ? { clipped: true as const } : {}),
+    }
+  }
 
   const parseColor = (s: string): RGBA | null => {
     const m = /rgba?\(([^)]+)\)/.exec(s)
@@ -183,7 +194,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     if (SKIP.has(el.tagName)) continue
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
-    if (!shown(cs, r)) continue
+    if (!shown(cs, r, el)) continue
     const rect = pageRect(r, el)
 
     // Text of the element's own.
