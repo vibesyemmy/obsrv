@@ -362,3 +362,20 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(Object.keys(m.groups[0]!.exemplar).sort()).toEqual(['element', 'message', 'rect', 'text'])
   expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0 })
 })
+
+test('a PNG over the inline cap says so in the JSON, not only in a text block', async () => {
+  // 1920×1080 of seeded noise: a PNG of several MiB whatever the encoder does.
+  const big = await call('obsrv_snap', { url: fixture('noise.html'), preset: '1080p-24', mode: 'headless' })
+  expect(big.isError).toBeFalsy()
+  const m = big.structuredContent as { inlined: boolean; warnings: string[]; pngPath: string }
+  expect(m.inlined).toBe(false)
+  expect(m.warnings.join(' ')).toMatch(/over the 1\.5 MiB inline cap/)
+  expect(m.warnings.join(' ')).toContain(m.pngPath)
+  expect(big.content.some(c => c.type === 'image')).toBe(false)
+
+  const small = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: 'laptop-768', mode: 'headless' })
+  const s = small.structuredContent as { inlined: boolean; warnings: string[] }
+  expect(s.inlined).toBe(true)
+  expect(s.warnings.join(' ')).not.toMatch(/inline cap/)
+  expect(small.content.some(c => c.type === 'image')).toBe(true)
+})

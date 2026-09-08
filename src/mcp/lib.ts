@@ -325,6 +325,22 @@ export function shouldInlineImage(byteLength: number): boolean {
 }
 
 /**
+ * Why a PNG is not coming back inline — for the JSON as well as the content
+ * block. The text block alone was not enough: an agent reading
+ * `structuredContent` saw a `pngPath`, no image, and nothing saying which
+ * (measured: a 4.6 MB apple.com full page, "no note" in the run report).
+ * Null within the cap.
+ */
+export function inlineNote(byteLength: number, pngPath: string, suggestion = ''): string | null {
+  if (shouldInlineImage(byteLength)) return null
+  const mib = (n: number): string => `${(n / 1_048_576).toFixed(1)} MiB`
+  return (
+    `the PNG is ${mib(byteLength)}, over the ${mib(MAX_INLINE_IMAGE_BYTES)} inline cap, so it is not inlined; ` +
+    `read the file at ${pngPath}${suggestion ? `, or ${suggestion}` : ''}`
+  )
+}
+
+/**
  * Outer kill budget for one CLI invocation: the CLI polices each render with
  * its own --timeout, so the server only guards against a wedged Electron —
  * (per-render budget + settle wait) × renders, plus boot/encode headroom.
