@@ -1,6 +1,7 @@
 import type { AuditRect, AuditReport } from '../shared/audit'
 import { ppi as ppiOf } from '../shared/calibration'
 import { cssPxToMm } from '../shared/contrast'
+import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
 
 /**
  * The physical-units audit: what on this page is too small *on this screen*,
@@ -109,6 +110,13 @@ export function groupAudit(findings: AuditFinding[]): AuditGroup[] {
 export interface AuditResult {
   /** Device pixels per inch of the screen, or null without a diagonal. */
   ppi: number | null
+  /**
+   * How much smaller the page is drawn than it is laid out (`shared/layoutScale`):
+   * 1 for a page that fits its screen, 360/980 for one with no viewport meta
+   * on a 360 px phone. The millimetres are of the page as drawn; the rects are
+   * in the page's own layout px, which are 1/scale times larger.
+   */
+  layoutScale: number
   thresholds: AuditThresholds
   summary: { targets: AuditGroupSummary; text: AuditGroupSummary }
   findings: AuditFinding[]
@@ -132,7 +140,13 @@ export function auditFindings(report: AuditReport, screen: AuditScreen, threshol
   if (ppi === null) {
     warnings.push('no screen diagonal, so no millimetres: pass --diagonal <inches> with custom dimensions, or use a preset')
   }
-  const mm = (px: number): number | null => (ppi === null ? null : cssPxToMm(px, screen.deviceScaleFactor * (screen.textScale ?? 1), ppi))
+  // The page's lengths are in its own layout px; a page drawn scaled to fit
+  // (no viewport meta on a phone) is smaller on the glass than it measures.
+  const textScale = screen.textScale ?? 1
+  const scale = layoutScale(screen.cssWidth, textScale, report.viewport.width)
+  const scaleNote = layoutScaleNote(scale, report.viewport.width, screen.cssWidth / textScale)
+  if (scaleNote) warnings.push(scaleNote)
+  const mm = (px: number): number | null => (ppi === null ? null : cssPxToMm(px * scale, screen.deviceScaleFactor * textScale, ppi))
 
   const findings: AuditFinding[] = []
   let smallestTargetPx: number | null = null
@@ -186,6 +200,7 @@ export function auditFindings(report: AuditReport, screen: AuditScreen, threshol
 
   return {
     ppi: ppi === null ? null : round(ppi, 1),
+    layoutScale: round(scale, 4),
     thresholds,
     summary: {
       targets: group(report.targets.length, underTargets, smallestTargetPx),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fitsFrame, isFullFrame } from '../../src/shared/paint'
+import { blankWarning, fitsFrame, flatColourHex, isFlatFrame, isFullFrame } from '../../src/shared/paint'
 
 /**
  * Pins the dirty-rect → coverage conversion. The numbers are the ones measured
@@ -57,5 +57,41 @@ describe('fitsFrame', () => {
     ['an empty rect', { x: 0, y: 0, width: 0, height: 10 }],
   ])('rejects %s', (_name, rect) => {
     expect(fitsFrame(rect, 800, 600)).toBe(false)
+  })
+})
+
+/**
+ * The blank-frame check behind the `blank` unsettled reason: espn.com's
+ * white frame, quiet for longer than the settle window, was a settled capture
+ * on every surface until this said what it was.
+ */
+describe('isFlatFrame', () => {
+  const frame = (w: number, h: number, fill: number): Uint8Array => new Uint8Array(w * h * 4).fill(fill)
+  it('is true for a frame of one colour', () => {
+    expect(isFlatFrame(frame(64, 32, 255), 64, 32)).toBe(true)
+    expect(isFlatFrame(frame(9, 9, 0), 9, 9)).toBe(true)
+  })
+  it('is false as soon as a sampled pixel differs in any channel', () => {
+    const f = frame(64, 32, 255)
+    f[(16 * 64 + 20) * 4 + 1] = 0
+    expect(isFlatFrame(f, 64, 32)).toBe(false)
+    const g = frame(64, 32, 255)
+    g[(28 * 64 + 60) * 4 + 3] = 0
+    expect(isFlatFrame(g, 64, 32)).toBe(false)
+  })
+  it('samples a grid: the step is the resolution', () => {
+    const f = frame(64, 32, 255)
+    f[(1 * 64 + 1) * 4] = 0
+    expect(isFlatFrame(f, 64, 32, 4)).toBe(true)
+    expect(isFlatFrame(f, 64, 32, 1)).toBe(false)
+  })
+  it('is false for a frame it cannot read', () => {
+    expect(isFlatFrame(new Uint8Array(0), 0, 0)).toBe(false)
+    expect(isFlatFrame(frame(2, 2, 1), 4, 4)).toBe(false)
+  })
+  it('names the colour of a BGRA frame as #rrggbb', () => {
+    expect(flatColourHex(new Uint8Array([255, 255, 255, 255]))).toBe('#ffffff')
+    expect(flatColourHex(new Uint8Array([0x33, 0x22, 0x11, 255]))).toBe('#112233')
+    expect(blankWarning(new Uint8Array([255, 255, 255, 255]), 3000)).toMatch(/one colour end to end \(#ffffff\) and stayed that way for 3000 ms/)
   })
 })

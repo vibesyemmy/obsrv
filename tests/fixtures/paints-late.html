@@ -1,0 +1,20 @@
+<!doctype html>
+<title>paints white, then its content later</title>
+<style>
+  html, body { margin: 0; height: 100% }
+  #veil { position: fixed; inset: 0; background: #fff; z-index: 9 }
+  #c { display: none; height: 2400px; padding: 40px; background: linear-gradient(#123, #abc); color: #fff; font: 48px sans-serif }
+</style>
+<div id="veil"></div>
+<div id="c">CONTENT</div>
+<script>
+  // One full paint of the veil straight away, so the frame is covered and one
+  // colour; the content two and a half seconds later, past any settle window.
+  requestAnimationFrame(() => { document.getElementById('veil').style.background = '#fefefe' })
+  // `?delay=` in ms; 2500 without one.
+  const delay = Number(new URLSearchParams(location.search).get('delay')) || 2500
+  setTimeout(() => {
+    document.getElementById('veil').remove()
+    document.getElementById('c').style.display = 'block'
+  }, delay)
+</script>

@@ -13,7 +13,8 @@ which is the point of the app, applied to layout.
 ## Output
 
 Machine JSON on stdout (humans on stderr): the applied screen, its density
-(`ppi`), the thresholds used, per-group summaries (count, how many are under,
+(`ppi`), the layout scale (`layoutScale`: 1 unless the page is drawn scaled to
+fit — see below), the thresholds used, per-group summaries (count, how many are under,
 the smallest in px and mm), and `findings`, smallest first:
 
 ```json
@@ -124,6 +125,21 @@ on the 15.6" laptop at ×1 is 9.1 mm at ×1.5 and stops being a finding.
 `rect`s and `pageHeight` stay in the page's own CSS px; `cssWidth` and
 `cssHeight` are the screen's, and the JSON says the `textScale` when one
 other than 1 was applied.
+
+## Under a page that does not fit its screen
+
+A page with no `<meta name="viewport">` under a phone preset is laid out at
+Chromium's fallback width, 980 CSS px, and drawn scaled to fit the screen:
+on a 360 px phone, at 360/980. Every length the page reports is in its own
+layout px, so a 16 px font measures 16 and is drawn at 5.9. The audit
+converts to millimetres through that scale — `layoutScale` in the output, 1
+for a page that fits — so the figures are of the page as drawn, and a
+warning names the widths and the factor. The rects and `pageHeight` stay in
+the page's own px, which is what a highlight in page space and the scroller
+work in; the walk-coverage note compares heights in the screen's px, so a
+one-screen page laid out 980 wide is one screenful, not three.
+berkshirehathaway.com's 10 px dates are 0.69 mm on that phone, not the
+1.88 mm the unscaled figure said, and text that small is a finding.
 
 ## Groups
 

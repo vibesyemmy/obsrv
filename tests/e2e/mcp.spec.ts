@@ -398,7 +398,7 @@ test('every unsettled reason the CLI can produce is admitted by the snap and rep
   // `loading` on obsrv_snap while the report schema, edited the same day,
   // took it.
   const { tools } = await client.listTools()
-  const reasons = ['animating', 'timeout', 'uncovered', 'loading']
+  const reasons = ['animating', 'timeout', 'uncovered', 'blank', 'loading']
   const snap = tools.find(t => t.name === 'obsrv_snap')!.outputSchema as { properties: Record<string, { enum?: string[] }> }
   expect(snap.properties.unsettledReason?.enum).toEqual(reasons)
   const report = tools.find(t => t.name === 'obsrv_report')!.outputSchema as { properties: { screens: { items: { properties: Record<string, { enum?: string[] }> } } } }

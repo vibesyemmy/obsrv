@@ -1,6 +1,7 @@
 import { ppi as ppiOf } from './calibration'
 import { cssPxToMm, effectiveContrast, hex } from './contrast'
 import type { InspectReport } from './inspect'
+import { layoutScale, layoutScaleNote } from './layoutScale'
 import type { PanelParams } from './types'
 import type { Matrix3 } from './vision'
 
@@ -73,6 +74,15 @@ export interface InspectReadout {
   contrast: InspectContrast | null
   /** Device pixels per inch of the screen; null without a diagonal. */
   ppi: number | null
+  /**
+   * How much smaller the page is drawn than it is laid out (`shared/layoutScale`):
+   * 1 for a page that fits its screen, 360/980 for one with no viewport meta
+   * on a 360 px phone. The millimetres are of the element as drawn; `rect`,
+   * `pageRect` and `font.px` are in the page's own layout px.
+   */
+  layoutScale: number
+  /** What the reader should know about the figures: the layout scale, when it is not 1. */
+  notes: string[]
 }
 
 const round = (v: number, places: number): number => Math.round(v * 10 ** places) / 10 ** places
@@ -91,10 +101,15 @@ export function inspectReadout(
     screen.diagonalInches === null
       ? null
       : ppiOf(screen.cssWidth * screen.deviceScaleFactor, screen.cssHeight * screen.deviceScaleFactor, screen.diagonalInches)
-  // The box is in the screen's CSS px already; the font size is the page's
-  // own, which under a text scale is that many times larger on the glass.
-  const boxMm = (px: number): number | null => (ppi === null ? null : round(cssPxToMm(px, screen.deviceScaleFactor, ppi), 2))
-  const fontMm = ppi === null ? null : round(cssPxToMm(report.fontSizePx, screen.deviceScaleFactor * screen.textScale, ppi), 2)
+  // The box is in the page's CSS px, which are the screen's unless the page
+  // is drawn scaled to fit (no viewport meta on a phone); the font size is
+  // the page's own, which under a text scale is that many times larger on
+  // the glass.
+  const layoutWidth = report.viewportWidth ?? 0
+  const scale = layoutScale(screen.cssWidth, screen.textScale, layoutWidth)
+  const scaleNote = layoutScaleNote(scale, layoutWidth, screen.cssWidth / screen.textScale)
+  const boxMm = (px: number): number | null => (ppi === null ? null : round(cssPxToMm(px * scale, screen.deviceScaleFactor, ppi), 2))
+  const fontMm = ppi === null ? null : round(cssPxToMm(report.fontSizePx * scale, screen.deviceScaleFactor * screen.textScale, ppi), 2)
 
   const firstClass = report.classes.split(/\s+/).find(c => c.length > 0)
   const element = `${report.tag}${report.id ? `#${report.id}` : ''}${firstClass ? `.${firstClass}` : ''}`
@@ -141,5 +156,7 @@ export function inspectReadout(
     backgroundNote: report.backgroundNote,
     contrast,
     ppi: ppi === null ? null : Math.round(ppi),
+    layoutScale: round(scale, 4),
+    notes: scaleNote === null ? [] : [scaleNote],
   }
 }

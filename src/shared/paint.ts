@@ -102,3 +102,58 @@ export function clipToExtent(
   if (rect.x >= x1 || rect.y >= y1) return null
   return { x: rect.x, y: rect.y, width: x1 - rect.x, height: y1 - rect.y }
 }
+
+/**
+ * Whether a frame is one colour end to end — what a page shows between
+ * painting its background and painting its content. espn.com paints white,
+ * goes quiet for longer than the settle window, and paints the page a second
+ * later; both capture paths took the white and called it settled. Sampled on
+ * a grid rather than read whole: a page with anything on it differs from its
+ * first pixel within a few rows, so the scan ends almost at once on a real
+ * frame, and only a truly flat one is read to the end. Four bytes a pixel,
+ * BGRA or RGBA alike; the step is the resolution, and a stray line thinner
+ * than it between samples is not seen — a page with nothing but that on it
+ * is blank for any purpose a capture serves.
+ */
+export const FLAT_SAMPLE_STEP = 4
+
+export function isFlatFrame(pixels: Uint8Array, width: number, height: number, step = FLAT_SAMPLE_STEP): boolean {
+  if (!(width > 0) || !(height > 0) || !(step > 0) || pixels.length < width * height * 4) return false
+  const c0 = pixels[0]
+  const c1 = pixels[1]
+  const c2 = pixels[2]
+  const c3 = pixels[3]
+  const stride = width * 4
+  for (let y = 0; y < height; y += step) {
+    let p = y * stride
+    for (let x = 0; x < width; x += step, p += step * 4) {
+      if (pixels[p] !== c0 || pixels[p + 1] !== c1 || pixels[p + 2] !== c2 || pixels[p + 3] !== c3) return false
+    }
+  }
+  return true
+}
+
+/** The one colour of a flat BGRA frame as `#rrggbb`, for the warning that names it. */
+export function flatColourHex(bgra: Uint8Array): string {
+  const h = (v: number): string => v.toString(16).padStart(2, '0')
+  return `#${h(bgra[2] ?? 0)}${h(bgra[1] ?? 0)}${h(bgra[0] ?? 0)}`
+}
+
+/**
+ * How much longer a covered, quiet, one-colour frame is given to paint
+ * something before it is returned as the capture, unsettled and named
+ * blank. Three seconds is well past the gap espn.com leaves between its
+ * background and its page (0.5–1 s) and short enough that a page which
+ * really is one colour costs little. Both capture paths cite it, like
+ * `SETTLE_QUIET_MS`.
+ */
+export const BLANK_GRACE_MS = 3_000
+
+/** The warning a blank frame comes back with: what the frame is, and the two things that can mean. */
+export function blankWarning(bgra: Uint8Array, quietMs: number): string {
+  return (
+    `the frame is one colour end to end (${flatColourHex(bgra)}) and stayed that way for ${quietMs} ms: the page painted its ` +
+    `background and nothing else in that time, or the page really is empty; capturing it as it stands (settled: false, blank) — ` +
+    `raise --wait for a page that paints late`
+  )
+}

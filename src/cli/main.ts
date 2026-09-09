@@ -35,6 +35,7 @@ import { walkHeadless } from './walk'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote } from '../shared/walkCoverage'
+import { layoutScale } from '../shared/layoutScale'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
@@ -586,7 +587,10 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
     // The walk may have seen the end of a page it never crossed — a consent
     // layer that fixes the body, a page that grew after the walk: say so.
-    const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0))
+    // Both heights in the screen's px: a page laid out wider than the screen
+    // and drawn to fit reports its height in its own, larger, px.
+    const scale = layoutScale(applied.width, spec.textScale, auditReport?.viewport.width ?? lintReport?.viewport.width ?? 0)
+    const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) * scale)
     if (coverage !== null) warn(`warning: ${coverage}`)
     return {
       frame,
@@ -795,6 +799,8 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       found: readout !== null,
       readout,
+      // The readout's own notes (the layout scale, when it is not 1), where a reader looks first.
+      notes: readout === null ? [] : readout.notes,
     })
   } finally {
     target.destroy()
@@ -832,7 +838,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       { tapMm: cmd.tapMm, textMm: cmd.textMm },
     )
     for (const w of result.warnings) human(`warning: ${w}`)
-    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight)
+    // The page's height is in its own px; the screen's are what the walk counted in.
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale)
     if (coverage !== null) human(`warning: ${coverage}`)
     const t = result.summary.targets
     const x = result.summary.text
@@ -904,7 +911,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
         ? unwalkedImageNote(result.findings, (walk.walked.screenfuls + 1) * (applied.height / cmd.spec.textScale))
         : null
     if (unwalked !== null) human(`warning: ${unwalked}`)
-    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight)
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale)
     if (coverage !== null) human(`warning: ${coverage}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)

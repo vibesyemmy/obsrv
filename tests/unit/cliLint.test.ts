@@ -57,9 +57,10 @@ describe('hairline', () => {
     expect(lintFindings(r, screen(2), reference, thresholds).summary.hairline).toBe(0)
   })
   it('text scale multiplies the density: 0.5px at ×1.5 on 1x is 0.75, still under; at ×2 it is whole', () => {
-    const r = report({ edges: [edge({ px: 0.5 })] })
-    expect(lintFindings(r, screen(1, 1.5), reference, thresholds).findings[0]).toMatchObject({ devicePx: 0.75 })
-    expect(lintFindings(r, screen(1, 2), reference, thresholds).summary.hairline).toBe(0)
+    // The page lays out in 1/textScale of the screen, and its viewport says so.
+    const at = (textScale: number): LintReport => report({ viewport: { width: 1920 / textScale, height: 1080 / textScale }, edges: [edge({ px: 0.5 })] })
+    expect(lintFindings(at(1.5), screen(1, 1.5), reference, thresholds).findings[0]).toMatchObject({ devicePx: 0.75 })
+    expect(lintFindings(at(2), screen(1, 2), reference, thresholds).summary.hairline).toBe(0)
   })
   it('thinnest first', () => {
     const r = report({ edges: [edge({ px: 0.75, element: 'a' }), edge({ px: 0.25, element: 'b', kind: 'height' }), edge({ px: 0.5, element: 'c', kind: 'box-shadow' })] })
@@ -288,5 +289,43 @@ describe('what is set aside', () => {
       elements: ['p#t'],
       exemplar: { element: 'p#t', text: 'some text', rect, message: expect.stringContaining('#999999 on #ffffff is 2.85:1') },
     })
+  })
+})
+
+/**
+ * A page with no viewport meta tag under a phone preset lays out 980 CSS px
+ * wide and is drawn scaled to fit; every rule here judges device pixels, so
+ * the density takes that scale. It changes verdicts: berkshirehathaway.com's
+ * 75 px logo, drawn at 75 layout px, covers 55 device pixels on a 360 px
+ * phone, not 150 — not "upscaled 2×" — and a 0.5 px rule is 0.37 of a device
+ * pixel there, a hairline the unscaled figure called a whole one.
+ */
+describe('lintFindings on a page drawn scaled to fit (no viewport meta)', () => {
+  const phone = { cssWidth: 360, cssHeight: 800, deviceScaleFactor: 2 }
+  const wide = (parts: Partial<LintReport>): LintReport => report({ viewport: { width: 980, height: 2178 }, pageHeight: 2178, ...parts })
+  const fits = (parts: Partial<LintReport>): LintReport => report({ viewport: { width: 360, height: 800 }, pageHeight: 800, ...parts })
+  const logo = image({ rect: { x: 0, y: 0, width: 75, height: 15 }, naturalWidth: 75, naturalHeight: 15 })
+  it('the logo is not upscaled once the drawn size is the screen\'s, and the same file over the fitted twin is', () => {
+    const scaled = lintFindings(wide({ images: [logo] }), phone, panel('reference'), thresholds)
+    expect(scaled.layoutScale).toBeCloseTo(360 / 980, 4)
+    expect(scaled.summary['image-upscaled']).toBe(0)
+    expect(scaled.summary['image-oversized']).toBe(0)
+    const twin = lintFindings(fits({ images: [logo] }), phone, panel('reference'), thresholds)
+    expect(twin.layoutScale).toBe(1)
+    expect(twin.summary['image-upscaled']).toBe(1)
+    expect(twin.findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 2, drawnDevicePx: { width: 150, height: 30 } })
+  })
+  it('a half-pixel rule is a hairline on the scaled page and a whole device pixel on the twin', () => {
+    const rule = edge({ kind: 'height', px: 0.5 })
+    const scaled = lintFindings(wide({ edges: [rule] }), phone, panel('reference'), thresholds)
+    expect(scaled.summary.hairline).toBe(1)
+    expect(scaled.findings[0]).toMatchObject({ rule: 'hairline', devicePx: 0.37 })
+    expect(lintFindings(fits({ edges: [rule] }), phone, panel('reference'), thresholds).summary.hairline).toBe(0)
+  })
+  it('says what the page did, once, ahead of the other warnings', () => {
+    const r = lintFindings(wide({}), phone, panel('reference'), thresholds)
+    expect(r.warnings).toHaveLength(1)
+    expect(r.warnings[0]).toMatch(/lays out 980 CSS px wide where the screen gives it 360 and is drawn at 0\.37× to fit/)
+    expect(lintFindings(fits({}), phone, panel('reference'), thresholds).warnings).toEqual([])
   })
 })

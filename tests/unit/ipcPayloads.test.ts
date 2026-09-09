@@ -572,3 +572,27 @@ describe('parseUiState onion skin', () => {
     for (const bad of [2, -1, '0.5', {}]) expect(parseUiState({ ...good, onionSkin: bad })).toBeNull()
   })
 })
+
+describe('parseInspectReport and the layout viewport width', () => {
+  const report = {
+    tag: 'button',
+    id: 'b',
+    classes: '',
+    text: 'OK',
+    rect: { x: 16, y: 54, width: 44, height: 44 },
+    fontSizePx: 16,
+    fontWeight: 400,
+    fontFamily: 'Arial',
+    color: [0, 0, 0, 1],
+    background: [239, 239, 239, 1],
+    backgroundNote: 'computed',
+  }
+  it('carries the width the page laid out at — the readout needs it for a page drawn scaled to fit', () => {
+    expect(parseInspectReport({ ...report, viewportWidth: 980 })?.viewportWidth).toBe(980)
+  })
+  it('reads a report without one, or with nonsense, as a page that fits', () => {
+    expect(parseInspectReport(report)?.viewportWidth).toBeUndefined()
+    expect(parseInspectReport({ ...report, viewportWidth: -1 })?.viewportWidth).toBeUndefined()
+    expect(parseInspectReport({ ...report, viewportWidth: 'wide' })?.viewportWidth).toBeUndefined()
+  })
+})

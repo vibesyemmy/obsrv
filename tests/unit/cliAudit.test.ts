@@ -8,6 +8,11 @@ const screenOf = (id: string): AuditScreen => {
   return { cssWidth: p.width, cssHeight: p.height, deviceScaleFactor: p.deviceScaleFactor, diagonalInches: p.diagonalInches }
 }
 const rect = (width: number, height: number) => ({ x: 0, y: 0, width, height })
+/** The report as a page that fits `id` gives it: its layout viewport is the screen's, over the text scale. */
+const on = (id: string, textScale = 1, r: AuditReport = report): AuditReport => {
+  const p = findPreset(id)
+  return { ...r, viewport: { width: p.width / textScale, height: p.height / textScale } }
+}
 const thresholds = { tapMm: DEFAULT_TAP_MM, textMm: DEFAULT_TEXT_MM }
 
 const report: AuditReport = {
@@ -36,19 +41,19 @@ describe('auditFindings', () => {
     expect(r.summary.text.smallestMm).toBeCloseTo(2.77, 1)
   })
   it('on a 6.5" phone at 2x the same page has both findings, smallest first', () => {
-    const r = auditFindings(report, screenOf('android-65'), thresholds)
+    const r = auditFindings(on('android-65'), screenOf('android-65'), thresholds)
     expect(r.ppi).toBeCloseTo(269.8, 0)
     expect(r.findings.map(f => f.kind)).toEqual(['small-text', 'small-target'])
     expect(r.findings[0]!.mm).toBeCloseTo(1.88, 1)
     expect(r.findings[1]!.mm).toBeCloseTo(4.52, 1)
   })
   it('thresholds are the caller\'s: at 4 mm the 24px control passes', () => {
-    const r = auditFindings(report, screenOf('android-65'), { tapMm: 4, textMm: 1 })
+    const r = auditFindings(on('android-65'), screenOf('android-65'), { tapMm: 4, textMm: 1 })
     expect(r.findings).toEqual([])
     expect(r.thresholds).toEqual({ tapMm: 4, textMm: 1 })
   })
   it('without a diagonal there are no millimetres, and it says so', () => {
-    const r = auditFindings(report, { cssWidth: 1366, cssHeight: 768, deviceScaleFactor: 1, diagonalInches: null }, thresholds)
+    const r = auditFindings(on('laptop-768'), { cssWidth: 1366, cssHeight: 768, deviceScaleFactor: 1, diagonalInches: null }, thresholds)
     expect(r.ppi).toBeNull()
     expect(r.findings).toEqual([])
     expect(r.summary.targets).toEqual({ count: 2, under: null, smallestPx: 24, smallestMm: null })
@@ -60,7 +65,7 @@ describe('auditFindings', () => {
       targets: Array.from({ length: MAX_FINDINGS + 50 }, (_, i) => ({ element: `a#n${i}`, text: '', rect: rect(10 + i * 0.01, 10) })),
       text: [],
     }
-    const r = auditFindings(many, screenOf('android-65'), thresholds)
+    const r = auditFindings(on('android-65', 1, many), screenOf('android-65'), thresholds)
     expect(r.findings).toHaveLength(MAX_FINDINGS)
     expect(r.truncated.findings).toBe(50)
     expect(r.findings[0]!.element).toBe('a#n0')
@@ -75,7 +80,7 @@ describe('auditFindings', () => {
 
 describe('auditFindings under a text scale', () => {
   it('×1.5 on the 24" 1080p: the 24px control is 9.96 mm and no longer small; nothing else changes', () => {
-    const r = auditFindings(report, { ...screenOf('1080p-24'), textScale: 1.5 }, thresholds)
+    const r = auditFindings(on('1080p-24', 1.5), { ...screenOf('1080p-24'), textScale: 1.5 }, thresholds)
     expect(r.ppi).toBeCloseTo(91.8, 1)
     expect(r.findings).toEqual([])
     expect(r.summary.targets).toEqual({ count: 2, under: 0, smallestPx: 24, smallestMm: 9.96 })
@@ -118,5 +123,52 @@ describe('audit groups', () => {
     expect(res.findings).toHaveLength(200)
     expect(res.groups).toEqual([expect.objectContaining({ kind: 'small-target', key: '22 px tall', count: 250 })])
     expect(res.groups[0]!.elements).toHaveLength(5)
+  })
+})
+
+/**
+ * A page with no viewport meta tag under a phone preset lays out 980 CSS px
+ * wide and is drawn scaled to fit; its lengths are in its own layout px.
+ * berkshirehathaway.com's 10 px dates came back 1.88 mm on a 360 px phone
+ * when they are drawn at 0.69, under the threshold and unreported.
+ */
+describe('auditFindings on a page drawn scaled to fit (no viewport meta)', () => {
+  const laidOutWide: AuditReport = { ...report, viewport: { width: 980, height: 2178 }, pageHeight: 2178 }
+  it('converts through the layout scale, so the millimetres are of the page as drawn', () => {
+    const r = auditFindings(laidOutWide, screenOf('android-65'), thresholds)
+    expect(r.layoutScale).toBeCloseTo(360 / 980, 4)
+    // 10 px drawn at 3.67 CSS px: 0.69 mm; 16 px at 5.9: 1.11 mm; 24 px at 8.8: 1.66 mm; even the 48 px
+    // side of the generous button is 3.32 mm here — everything on this page is under.
+    expect(r.findings.map(f => `${f.kind} ${f.element}`)).toEqual([
+      'small-text p#caption',
+      'small-text p#body',
+      'small-target button#tiny',
+      'small-target button#big',
+    ])
+    expect(r.findings[0]!.mm).toBeCloseTo(0.69, 2)
+    expect(r.findings[2]!.mm).toBeCloseTo(1.66, 2)
+    expect(r.summary.text.smallestMm).toBeCloseTo(0.69, 2)
+    // The page's own px are untouched: the rect is still 24 × 24.
+    const tiny = r.findings[2]!
+    expect(tiny.kind === 'small-target' && tiny.cssWidth).toBe(24)
+  })
+  it('says what the page did and which figures are in which units', () => {
+    const r = auditFindings(laidOutWide, screenOf('android-65'), thresholds)
+    expect(r.warnings).toHaveLength(1)
+    expect(r.warnings[0]).toMatch(/lays out 980 CSS px wide where the screen gives it 360 and is drawn at 0\.37× to fit/)
+    expect(r.warnings[0]).toMatch(/no viewport meta tag/)
+    expect(r.warnings[0]).toMatch(/2\.72× larger than they are on the glass/)
+  })
+  it('is scale 1, silent, and unchanged for a page that fits — and under a text scale', () => {
+    expect(auditFindings(on('android-65'), screenOf('android-65'), thresholds).layoutScale).toBe(1)
+    expect(auditFindings(on('android-65'), screenOf('android-65'), thresholds).warnings).toEqual([])
+    expect(auditFindings(on('1080p-24', 1.5), { ...screenOf('1080p-24'), textScale: 1.5 }, thresholds).layoutScale).toBe(1)
+  })
+  it('a wide layout under a text scale is scaled against the layout width the screen gives at that scale', () => {
+    // 360 / 1.5 = 240 given, 980 laid out.
+    const r = auditFindings(laidOutWide, { ...screenOf('android-65'), textScale: 1.5 }, thresholds)
+    expect(r.layoutScale).toBeCloseTo(240 / 980, 4)
+    // 24 px × (240/980) × 1.5 text scale = 8.8 CSS px on the glass: the same 1.66 mm.
+    expect(r.findings.find(f => f.element === 'button#tiny')!.mm).toBeCloseTo(1.66, 2)
   })
 })

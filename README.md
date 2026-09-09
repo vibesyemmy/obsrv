@@ -243,9 +243,12 @@ every pixel painted. `settled: false` is still a usable capture, not a
 failure — a page that kept animating, or one whose repaint never completed,
 comes back as-is (exit code 0) with a warning saying what was missing and an
 `unsettledReason`: `animating` (captured after ~2 s of steady painting;
-waiting longer would not help), `timeout` (still painting at the budget) or
-`uncovered` (part of the frame never painted). Only a render that painted
-nothing at all is an error.
+waiting longer would not help), `timeout` (still painting at the budget),
+`uncovered` (part of the frame never painted) or `blank` (the frame went
+quiet one colour end to end and stayed that way for 3 s: the page's
+background with nothing on it yet, or a page that really is empty — pass
+`--wait` for a page that paints late). Only a render that painted nothing
+at all is an error.
 
 Build first, then register:
 

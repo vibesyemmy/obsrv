@@ -77,7 +77,7 @@ says so.
 
 ```
 url, preset, cssWidth, cssHeight, deviceScaleFactor, textScale?, throttle?,
-profile, pageHeight, thresholds { thinPx },
+profile, pageHeight, layoutScale, thresholds { thinPx },
 summary { hairline, thin-text, contrast, contrast-on-panel, image-upscaled, image-oversized },
 findings [ { rule, element, text, rect, message, …per-rule figures } ],
 skipped { textOnImages }, truncated { findings, text, edges, images }, warnings
@@ -113,6 +113,19 @@ so the budget covers about a hundred screenfuls. When it does run out, the
 warnings say so and count the image findings below the height it reached,
 which may be placeholders. `--no-walk` (`walk: false` on the MCP) measures the
 page as it first shows.
+
+## Under a page that does not fit its screen
+
+A page with no `<meta name="viewport">` under a phone preset is laid out at
+Chromium's fallback width, 980 CSS px, and drawn scaled to fit the screen:
+on a 360 px phone, at 360/980. The page reports its lengths in its own
+layout px, and every rule here judges device pixels, so the density is
+multiplied by that scale — `layoutScale` in the output, 1 for a page that
+fits — and a warning says so. It changes verdicts, not just figures: a
+75 px logo drawn at 75 layout px covers 55 device pixels on that phone, not
+150, so it is not "upscaled 2×"; a 0.5 px rule is 0.37 of a device pixel,
+a hairline, where the unscaled figure made it a whole one. The rects and
+`pageHeight` stay in the page's own px.
 
 ## Live
 

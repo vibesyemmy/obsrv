@@ -25,6 +25,7 @@ const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
 const LINT = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
 const SOLID_RED = pathToFileURL(resolve(__dirname, '../fixtures/solid-red.html')).href
 const APP_SHELL_FINDINGS = pathToFileURL(resolve(__dirname, '../fixtures/app-shell-findings.html')).href
+const PAINTS_LATE = pathToFileURL(resolve(__dirname, '../fixtures/paints-late.html')).href
 
 let app: ElectronApplication
 let page: Page
@@ -891,6 +892,37 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   // The window capture carries the same verdict.
   const whole = await call('captureVisible')
   expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
+})
+
+test('a page that paints its background and nothing else is captured as blank, not settled', async () => {
+  // espn.com's shape: white, quiet, the page a second later. Photographed
+  // white and called settled on every surface, this pane included: the
+  // renderer had seen a full frame and silence, which is all it looked for.
+  // A quiet one-colour frame now gets the grace the headless capture gives
+  // it, and the same name when it stays that way.
+  const nav = await call('navigate', { url: `${PAINTS_LATE}?delay=8000` })
+  expect(nav.status).toBe(200)
+  const started = Date.now()
+  const r = await call('captureTarget')
+  const elapsed = Date.now() - started
+  expect(r.status).toBe(200)
+  const body = r.body as { ok: boolean; warnings: string[]; settled: boolean; unsettledReason?: string }
+  expect(body.ok).toBe(true)
+  expect(body).toMatchObject({ settled: false, unsettledReason: 'blank' })
+  expect(body.warnings.some(w => w.includes('one colour end to end'))).toBe(true)
+  expect(elapsed).toBeGreaterThan(2_500)
+  expect(elapsed).toBeLessThan(9_000)
+  // The window capture carries the same verdict.
+  const whole = await call('captureVisible')
+  expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'blank' })
+
+  // The same page painting inside the grace is captured with the page on it,
+  // settled and unremarked — what espn.com now gets.
+  const soon = await call('navigate', { url: `${PAINTS_LATE}?delay=1200` })
+  expect(soon.status).toBe(200)
+  const again = await call('captureTarget')
+  expect(again.body).toMatchObject({ settled: true })
+  expect((again.body as { warnings: string[] }).warnings.some(w => w.includes('one colour'))).toBe(false)
 })
 
 test('turning agent control off leaves a disabled stance, not an absent file', async () => {

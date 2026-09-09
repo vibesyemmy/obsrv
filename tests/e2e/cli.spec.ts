@@ -54,16 +54,24 @@ test('snap: solid red at laptop-768 — dims, JSON contract, true RGB red', asyn
   expect(r.code).toBe(0)
 
   const json = JSON.parse(r.stdout)
-  expect(json).toEqual({
+  // A page that is one colour end to end is, to a capture, indistinguishable
+  // from a page that has painted its background and nothing else yet; since
+  // espn.com came back white and settled, such a frame is held for a grace
+  // and then returned unsettled, named blank, with the colour in the warning.
+  // Every field but that verdict is the contract.
+  expect(json).toMatchObject({
     out,
     preset: 'laptop-768',
     cssWidth: 1366,
     cssHeight: 768,
     deviceScaleFactor: 1,
     profile: 'reference',
-    settled: true,
-    warnings: [],
+    settled: false,
+    unsettledReason: 'blank',
   })
+  expect(Object.keys(json).sort()).toEqual(['cssHeight', 'cssWidth', 'deviceScaleFactor', 'out', 'preset', 'profile', 'settled', 'unsettledReason', 'warnings'])
+  expect(json.warnings).toHaveLength(1)
+  expect(json.warnings[0]).toMatch(/one colour end to end \(#ff0000\)/)
   expect(r.stderr).toContain('1366×768 device px')
 
   const png = decodePng(readFileSync(out))

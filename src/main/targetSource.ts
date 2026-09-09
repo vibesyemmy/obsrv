@@ -11,6 +11,7 @@ import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { layoutScale } from '../shared/layoutScale'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport, parseLintReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
@@ -726,8 +727,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     if (!Number.isFinite(edgeBelowPx) || edgeBelowPx <= 0) return null
     try {
-      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${LINT_SCRIPT}(${edgeBelowPx}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})` },
+      const wc = this.win.webContents
+      // A page laid out wider than the screen and drawn to fit (no viewport
+      // meta on a phone) has smaller CSS px than the screen's, so one device
+      // pixel is more of them: ask how wide the page laid out and widen the
+      // threshold by the same factor. `cli/lint.ts` judges every edge that
+      // comes back in device px, so a wider net costs nothing but report size.
+      const laidOut: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [{ code: 'innerWidth' }])
+      const scale = layoutScale(this.viewport.width, this.getTextScale(), typeof laidOut === 'number' ? laidOut : 0)
+      const below = edgeBelowPx / scale
+      const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
+        { code: `${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})` },
       ])
       return parseLintReport(raw)
     } catch {

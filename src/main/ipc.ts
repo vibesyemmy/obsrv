@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CONTROL_FILE_NAME, type AgentApplyPatch, type AgentUiState, type AgentViewMode } from '../shared/control'
-import type { Rect } from '../shared/api'
+import type { FrameMessage, Rect } from '../shared/api'
 import { IMAGE_EXTENSIONS } from '../shared/fileNav'
 import { screenShape } from '../shared/calibration'
 import { recordVisit, type HistoryEntry } from '../shared/history'
@@ -28,7 +28,7 @@ import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, Orientation, ScrollReport, ScrollRequest, Settings, UpdateState } from '../shared/types'
-import { SETTLE_QUIET_MS } from '../shared/paint'
+import { BLANK_GRACE_MS, isFlatFrame, SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
 import type { AppContext } from './context'
@@ -911,7 +911,7 @@ export function registerIpc(ctx: AppContext): () => void {
    * poll cannot see: hydration repaints the page without ever changing the
    * viewport, so the size reads identically either side of it.
    */
-  const quiesce = (t: TargetSource, budgetMs: number, animationExit: boolean): Promise<'quiet' | 'animating' | 'painting'> =>
+  const quiesce = (t: TargetSource, budgetMs: number, animationExit: boolean): Promise<'quiet' | 'animating' | 'painting' | 'blank'> =>
     new Promise(resolve => {
       // Same reasoning as `nextFrame`: a suspended source emits nothing, so
       // waiting for silence from it would always spend the whole budget.
@@ -920,7 +920,7 @@ export function registerIpc(ctx: AppContext): () => void {
         return
       }
       let quiet: ReturnType<typeof setTimeout>
-      const done = (outcome: 'quiet' | 'animating' | 'painting'): void => {
+      const done = (outcome: 'quiet' | 'animating' | 'painting' | 'blank'): void => {
         clearTimeout(quiet)
         clearTimeout(cap)
         t.off('frame', onFrame)
@@ -933,18 +933,53 @@ export function registerIpc(ctx: AppContext): () => void {
       // under a throttle, where a page loading slowly paints steadily as well.
       const startedAt = Date.now()
       let frames = 0
-      const onFrame = (): void => {
+      // The one colour of the picture, as far as the frames say, or null when
+      // it has more than one: a full frame decides it, a partial paint of
+      // anything else unsets it. espn.com's live pane was photographed white
+      // and called settled just as the headless capture was — the page paints
+      // its background, goes quiet past the settle window, and paints its
+      // content a second later — so a quiet one-colour frame gets the same
+      // grace here, and the same name when it stays that way.
+      let flatColour: Uint8Array | null = null
+      let blankSince = 0
+      const onQuiet = (): void => {
+        if (flatColour === null) {
+          done('quiet')
+          return
+        }
+        if (blankSince === 0) blankSince = Date.now()
+        const left = BLANK_GRACE_MS - (Date.now() - blankSince)
+        if (left <= 0) {
+          done('blank')
+          return
+        }
+        quiet = setTimeout(onQuiet, left)
+      }
+      const onFrame = (m: FrameMessage): void => {
         clearTimeout(quiet)
         frames++
+        const f = m.frame
+        const flat = isFlatFrame(f.data, f.width, f.height)
+        if (f.x === 0 && f.y === 0 && f.width === m.frameWidth && f.height === m.frameHeight) {
+          flatColour = flat ? f.data.slice(0, 4) : null
+        } else if (flatColour !== null) {
+          const same = flat && f.data[0] === flatColour[0] && f.data[1] === flatColour[1] && f.data[2] === flatColour[2] && f.data[3] === flatColour[3]
+          if (!same) flatColour = null
+        }
         if (animationExit && frames >= ANIMATING_MIN_PAINTS && Date.now() - startedAt >= ANIMATING_AFTER_MS) {
           done('animating')
           return
         }
-        quiet = setTimeout(() => done('quiet'), SETTLE_QUIET_MS)
+        quiet = setTimeout(onQuiet, SETTLE_QUIET_MS)
       }
-      const cap = setTimeout(() => done('painting'), budgetMs)
+      const cap = setTimeout(() => done(flatColour === null ? 'painting' : 'blank'), budgetMs)
       t.on('frame', onFrame)
-      quiet = setTimeout(() => done('quiet'), SETTLE_QUIET_MS)
+      quiet = setTimeout(onQuiet, SETTLE_QUIET_MS)
+      // Ask for a full frame of our own, as the headless capture does: the
+      // one `nextFrame` forced was consumed there, and a page that has
+      // already painted its background and stopped sends nothing more — which
+      // is exactly the frame the blank check has to see.
+      t.invalidate()
     })
 
   /**
@@ -953,11 +988,17 @@ export function registerIpc(ctx: AppContext): () => void {
    * warnings, and "still resizing" was being reported for a page that had
    * finished resizing long ago and was simply still painting.
    */
-  type Settle = 'settled' | 'resizing' | 'painting' | 'animating'
+  type Settle = 'settled' | 'resizing' | 'painting' | 'animating' | 'blank'
 
   /** The verdict as reply fields, the shape a headless snap reports: `settled`, and why not. */
-  const settleFields = (v: Settle): { settled: boolean; unsettledReason?: 'animating' | 'timeout' | 'resizing' } =>
+  const settleFields = (v: Settle): { settled: boolean; unsettledReason?: 'animating' | 'timeout' | 'resizing' | 'blank' } =>
     v === 'settled' ? { settled: true } : { settled: false, unsettledReason: v === 'painting' ? 'timeout' : v }
+
+  /** The warning a blank live frame comes back with, worded as the headless capture words it. */
+  const BLANK_LIVE_WARNING =
+    `the frame is one colour end to end and stayed that way for the capture's ${SETTLE_QUIET_BUDGET_MS} ms: the page painted its ` +
+    'background and nothing else in that time, or the page really is empty; this is the pane as it stands (settled: false, blank) — ' +
+    'wait and capture again for a page that paints late'
 
   /** Never throws; the worst it does is report what it could not wait out. */
   const settleTarget = async (t: TargetSource = tab().target): Promise<Settle> => {
@@ -1433,7 +1474,7 @@ export function registerIpc(ctx: AppContext): () => void {
           width: size.width,
           height: size.height,
           ...settleFields(settled),
-          warnings: stale === null ? [] : [stale],
+          warnings: [...(stale === null ? [] : [stale]), ...(settled === 'blank' ? [BLANK_LIVE_WARNING] : [])],
         }
       } finally {
         release()
@@ -1464,6 +1505,7 @@ export function registerIpc(ctx: AppContext): () => void {
         if (settled === 'resizing') warnings.push('the target was still resizing when the capture budget ran out; the PNG may show a transitional frame')
         else if (settled === 'painting') warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished')
         else if (settled === 'animating') warnings.push('the page keeps painting steadily (animation or video); this is one frame of it, taken after two seconds rather than the full wait')
+        else if (settled === 'blank') warnings.push(BLANK_LIVE_WARNING)
         if ((settled === 'painting' || settled === 'animating') && tab().onionSkin > 0) {
           warnings.push('the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation, not the raster')
         }
@@ -1497,7 +1539,9 @@ export function registerIpc(ctx: AppContext): () => void {
           warnings.push(
             frame.unsettledReason === 'animating'
               ? 'the page keeps painting (animation or video); this is one frame of it'
-              : 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
+              : frame.unsettledReason === 'blank'
+                ? BLANK_LIVE_WARNING
+                : 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
           )
         }
         if (s.onionSkin > 0) warnings.push("the raster is the target's own frame; the onion skin is not blended into it")
