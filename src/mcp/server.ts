@@ -716,6 +716,9 @@ const LIVE_AUDIT_TIMEOUT_MS = 20_000
 const LIVE_LINT_TIMEOUT_MS = 20_000
 /** How long a live snap waits for `status.url` to reflect the navigation. */
 const LIVE_SETTLE_MS = 5_000
+/** The app answered a navigate with `loading: true`: its budget ran out before both panes finished. */
+const NAVIGATE_CUT_NOTE =
+  "the page was still loading when the app's navigate budget (30 s) ran out; the status, and any capture, show it as it stands"
 /**
  * How long an `obsrv_drive` click waits for a navigation it may have caused,
  * so the returned status reflects it. Deliberately short: most clicks do not
@@ -858,6 +861,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
       // carries the same per-render budget the headless path polices.
       const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, (input.timeoutMs ?? DEFAULT_TIMEOUT_MS) + 10_000)
       applied = typeof nav['url'] === 'string' ? nav['url'] : ''
+      if (nav['loading'] === true) warnings.push(NAVIGATE_CUT_NOTE)
     }
     if (input.preset !== undefined) await controlCall(info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
     if (input.orientation !== undefined) {
@@ -1224,7 +1228,8 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
   const { info } = app
   try {
     if (input.url !== undefined) {
-      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      if (nav['loading'] === true) notes.push(NAVIGATE_CUT_NOTE)
     }
     // The person watching sees the page pass before the number arrives; on a
     // page that mounts sections on scroll, the number is of the whole page.
@@ -1478,7 +1483,8 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
   const { info } = app
   try {
     if (input.url !== undefined) {
-      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      if (nav['loading'] === true) notes.push(NAVIGATE_CUT_NOTE)
     }
     // The person watching sees the page pass before the number arrives; on a
     // page that mounts sections on scroll, the number is of the whole page.
@@ -1911,6 +1917,7 @@ server.registerTool(
       // from this call, if given — guarded below so they are not applied a
       // second time) and fronts it; an id fronts an existing one. Either way
       // the user is looking at the tab everything else in this call acts on.
+      let navigateCut = false
       let openedWithUrl = false
       let openedWithPreset = false
       if (input.tab === 'new') {
@@ -1923,7 +1930,8 @@ server.registerTool(
           payload.preset = input.preset
           openedWithPreset = true
         }
-        await controlCall(live.info, 'openTab', payload, DEFAULT_TIMEOUT_MS + 10_000)
+        const opened = await controlCall(live.info, 'openTab', payload, DEFAULT_TIMEOUT_MS + 10_000)
+        if (opened['loading'] === true) navigateCut = true
       } else if (input.tab !== undefined) {
         await controlCall(live.info, 'activateTab', { id: input.tab }, LIVE_APPLY_TIMEOUT_MS)
       }
@@ -1931,7 +1939,8 @@ server.registerTool(
       // showing, then how it is shown, then the in-page steering.
       if (input.focus) await controlCall(live.info, 'focusWindow', {}, LIVE_APPLY_TIMEOUT_MS)
       if (input.url !== undefined && !openedWithUrl) {
-        await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+        const nav = await controlCall(live.info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+        if (nav['loading'] === true) navigateCut = true
       }
       if (input.preset !== undefined && !openedWithPreset) await controlCall(live.info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
       // After the preset, before everything else: rotation is applied on top of
@@ -1976,6 +1985,7 @@ server.registerTool(
       let scroller: 'root' | 'element' | undefined
       let atEnd: boolean | undefined
       const warnings: string[] = []
+      if (navigateCut) warnings.push(NAVIGATE_CUT_NOTE)
       // A preset or a rotation recreates the target and reloads its page, and
       // the control confirms once a page is back or on its way. Read straight
       // after, the status once said about:blank with loading false for a
@@ -2096,7 +2106,8 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
   const { info } = app
   try {
     if (input.url !== undefined) {
-      await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      const nav = await controlCall(info, 'navigate', { url: input.url.trim() }, DEFAULT_TIMEOUT_MS + 10_000)
+      if (nav['loading'] === true) notes.push(NAVIGATE_CUT_NOTE)
     }
     const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
     const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
