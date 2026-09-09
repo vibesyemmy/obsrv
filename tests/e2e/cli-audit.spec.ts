@@ -127,3 +127,14 @@ test('a phone preset renders with phone fidelity: the page sees a mobile user ag
   expect(centre(phone).slice(0, 3)).toEqual([255, 0, 0])
   expect(centre(laptop).slice(0, 3)).toEqual([0, 0, 255])
 })
+
+test('--groups-only: the summary and the groups, an empty list, and nothing said about a list', async () => {
+  const m = await audit('--preset', '1080p-24', '--groups-only')
+  expect(m.findings).toEqual([])
+  expect(m.groups.length).toBeGreaterThan(0)
+  expect(m.summary.targets.under).toBe(1)
+  expect(m.warnings.join(' ')).not.toMatch(/past the 200 listed/)
+  const listed = await audit('--preset', '1080p-24')
+  expect(listed.findings.length).toBeGreaterThan(0)
+  expect(listed.groups).toEqual(m.groups)
+})

@@ -392,6 +392,13 @@ describe('buildAuditArgs', () => {
   })
 })
 
+describe('buildAuditArgs and groupsOnly', () => {
+  it("is the CLI's --groups-only, as for lint: the list and the sentence about it are dropped at the source", () => {
+    expect(buildAuditArgs({ url: URL, groupsOnly: true })).toEqual(['audit', URL, '--groups-only'])
+    expect(buildAuditArgs({ url: URL, groupsOnly: false })).toEqual(['audit', URL])
+  })
+})
+
 describe('buildReportArgs', () => {
   it('always writes the HTML via --out, and lists presets as --matrix', () => {
     expect(buildReportArgs({ url: URL }, '/tmp/r/report.html')).toEqual(['report', URL, '--out', '/tmp/r/report.html'])

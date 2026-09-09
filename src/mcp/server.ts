@@ -49,6 +49,7 @@ import {
   type SnapToolInput,
 } from './lib'
 import { DEFAULT_THIN_PX, LINT_RULES, listTruncationNote, unwalkedImageNote, type LintFinding } from '../cli/lint'
+import { auditListTruncationNote } from '../cli/audit'
 
 /**
  * Obsrv MCP server (stdio, stateless): read-only tools wrapping the headless
@@ -1164,6 +1165,10 @@ const auditInputShape = {
     .optional()
     .describe(`Flag text whose font size is under this many mm. Default ${DEFAULT_TEXT_MM} (provisional).`),
   walk: walkField,
+  groupsOnly: z
+    .boolean()
+    .optional()
+    .describe('Leave the per-finding list out and answer with the summary and the groups alone: on a retail page at a phone preset the list is most of the payload, and the summary and groups count everything either way.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late layout. Default 0.'),
   timeoutMs: z.number().int().min(1).optional().describe(`Load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
@@ -1238,7 +1243,7 @@ const auditOutputShape = {
   notes: z.array(z.string()),
 }
 
-type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean }
+type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean; groupsOnly?: boolean }
 
 async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
@@ -1281,6 +1286,11 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
         (typeof measured['layoutScale'] === 'number' && measured['layoutScale'] > 0 ? measured['layoutScale'] : 1),
     )
     const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
+    // The list's cap is said by whoever prints the list — here, unless
+    // `groupsOnly` leaves the list out, in which case nothing is cut.
+    const auditTruncated = (measured['truncated'] as { findings?: unknown } | undefined)?.findings
+    const auditListed = input.groupsOnly ? null : auditListTruncationNote(typeof auditTruncated === 'number' ? auditTruncated : 0)
+    const auditAdded = [...(auditListed === null ? [] : [auditListed]), ...(auditCoverage === null ? [] : [auditCoverage])]
     const structured = {
       mode: 'live',
       url: status.url,
@@ -1291,7 +1301,8 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
-      ...(auditCoverage === null ? {} : { warnings: [...measuredWarnings, auditCoverage] }),
+      ...(input.groupsOnly ? { findings: [] } : {}),
+      ...(auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...auditAdded] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1313,7 +1324,7 @@ server.registerTool(
       `Returns per-group counts and smallest sizes, plus findings under the thresholds (\`tapMm\`, default 7 — ` +
       `between Apple's 44pt and WCAG 2.5.8's 24 CSS px — and \`textMm\`, default 2 — roughly 11px on a phone, 7px ` +
       `on a 1080p monitor; both provisional and stated in the output), smallest first. Inline links in running ` +
-      `text are exempt from the target rule, as in WCAG 2.5.8. Layout is measured, not pixels: no panel profile ` +
+      `text are exempt from the target rule, as in WCAG 2. groupsOnly: true answers with the summary and the groups alone, which on a real page at a phone preset is the difference between an answer that fits and one that does not.5.8. Layout is measured, not pixels: no panel profile ` +
       `applies, hidden and zero-size elements are skipped, and text over images is measured like any other. ` +
       `Findings are informational — apply your own thresholds.\n\n` +
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +

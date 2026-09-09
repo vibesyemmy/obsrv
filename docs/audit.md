@@ -25,9 +25,13 @@ the smallest in px and mm), and `findings`, smallest first:
   "rect": { … }, "fontSizePx": 10, "mm": 1.88 }
 ```
 
-At most 200 findings are listed; the rest are counted in `truncated`.
-Findings are informational and exit 0 — thresholds for CI are the caller's,
-as with `diff`. The MCP tool is `obsrv_audit`, same inputs.
+At most 200 findings are listed; the rest are counted in `truncated` and
+said in a warning. `--groups-only` (`groupsOnly: true` on `obsrv_audit`)
+leaves the list out altogether — on a retail page at a phone preset it is
+most of the payload — and with it the sentence about the cap; the summary
+and the groups count everything either way. Findings are informational and
+exit 0 — thresholds for CI are the caller's, as with `diff`. The MCP tool
+is `obsrv_audit`, same inputs.
 
 ## The thresholds, and why they are provisional
 
@@ -149,4 +153,5 @@ font size — over every finding counted, not the
 listed cap, each with a count, the smallest member as exemplar, and up to
 five of the elements. Forty footer links of one height are one group with
 count 40. The report's audit table lists the groups. Quote a group, not its
-members.
+members, and ask for the groups alone (`--groups-only`, `groupsOnly: true`)
+when the list would only be noise.

@@ -24,6 +24,16 @@ export const DEFAULT_TEXT_MM = 2
 /** Findings past this are counted, not listed; the smallest come first. */
 export const MAX_FINDINGS = 200
 
+/**
+ * The sentence whoever prints the list says about its cap — the CLI, the
+ * MCP — and never the report, which shows groups. Null when nothing was cut,
+ * and not said at all with `--groups-only`, which prints no list.
+ */
+export function auditListTruncationNote(truncated: number): string | null {
+  if (truncated <= 0) return null
+  return `${truncated} more finding${truncated === 1 ? '' : 's'} past the ${MAX_FINDINGS} listed; the summary and the groups count them all`
+}
+
 export interface AuditThresholds {
   tapMm: number
   textMm: number
