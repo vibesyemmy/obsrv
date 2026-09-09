@@ -17,6 +17,7 @@ import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import { settlePage } from './settle'
+import { walkCoverageNote } from '../shared/walkCoverage'
 import {
   inlineNote,
   concurrencyLimit,
@@ -1247,6 +1248,15 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     // measured on. `textScale` and `throttle` keep the headless contract:
     // present only when something other than the default was in force.
     const { ok: _ok, textScale, ...measured } = answer
+    // A walk that saw the end of a page it never crossed (a consent layer
+    // holding the body, a page that grew after the walk) is said here, as the
+    // CLI says it: the answer carries the page height it measured.
+    const auditCoverage = walkCoverageNote(
+      walked,
+      status.cssHeight / (typeof textScale === 'number' && textScale > 0 ? textScale : 1),
+      typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0,
+    )
+    const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
     const structured = {
       mode: 'live',
       url: status.url,
@@ -1257,6 +1267,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
+      ...(auditCoverage === null ? {} : { warnings: [...measuredWarnings, auditCoverage] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1499,7 +1510,12 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       walked !== undefined && !walked.atEnd
         ? unwalkedImageNote(liveFindings, (walked.screenfuls + 1) * (status.cssHeight / liveTextScale))
         : null
-    const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])]
+    const lintCoverage = walkCoverageNote(
+      walked,
+      status.cssHeight / liveTextScale,
+      typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? ((judged as { pageHeight: number }).pageHeight) : 0,
+    )
+    const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {
       mode: 'live',
       url: status.url,

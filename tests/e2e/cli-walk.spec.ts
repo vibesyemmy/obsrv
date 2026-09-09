@@ -109,3 +109,19 @@ test('the walk has no screenful cap: a lazy image fourteen screenfuls down is ju
   expect(byRule(m, 'image-upscaled')).toEqual(['img#lazy-up'])
   expect(m.warnings.join(' ')).not.toMatch(/screenfuls without reaching|may be placeholders/)
 })
+
+test('a page held by a consent layer: the walk sees no page to cross, and the measurement says so', async () => {
+  // theguardian.com fixes its body under its consent layer: the walk answers
+  // 0 screenfuls at the end, the audit measures 239 targets on a 20,596 px
+  // page behind the layer, and nothing said a word.
+  const r = await runCli(['audit', fixture('locked.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
+  expect(m.pageHeight).toBeGreaterThan(3000)
+  expect(m.summary.targets.count).toBeGreaterThanOrEqual(3)
+  expect(m.warnings.join(' ')).toMatch(/the walk saw the end after 0 screenfuls .* but the page measures \d+ CSS px .*modal or a locked scroll/)
+  const l = await runCli(['lint', fixture('locked.html'), '--preset', 'laptop-768'])
+  expect(l.code, l.stderr).toBe(0)
+  expect(JSON.parse(l.stdout).warnings.join(' ')).toMatch(/modal or a locked scroll held the page/)
+})
