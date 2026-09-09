@@ -1,0 +1,12 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>renders late</title>
+<!-- Empty at load, as booking.com's mobile page is; script fills it 900 ms later. -->
+<style>body{margin:16px;font:16px sans-serif}button{width:20px;height:20px;padding:0;font-size:10px}</style>
+<div id="app"></div>
+<script>
+  setTimeout(() => {
+    document.getElementById('app').innerHTML =
+      '<h1 id="late-title">Rendered after load</h1><p id="late-copy">The document was empty for the first 900 ms.</p><button id="late-tiny">x</button>'
+  }, 900)
+</script>

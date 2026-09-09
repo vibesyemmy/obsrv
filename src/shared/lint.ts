@@ -163,13 +163,30 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
       1,
     ]
   }
-  // The inspector's walk: up to the first opaque background, compositing
-  // translucent layers back down onto it; an image or gradient on the way
-  // is a stop, and nothing opaque all the way up means the viewport's white.
-  const backgroundOf = (el: Element, cs: CSSStyleDeclaration): { background: RGBA | null; note: 'computed' | 'image' } => {
+  // The inspector's rule (shared/inspect.ts): what is painted under the text
+  // is the stack at a point inside its box, from the element down — the
+  // first opaque background there, with the translucent layers above it
+  // composited on; an image or gradient, or an image element, on the way is
+  // a stop. Ancestors are in the stack, and so is a fixed scrim from another
+  // branch of the tree, which a walk up the ancestors never met. Off the
+  // viewport the stack is empty and the ancestors stand in.
+  const PAINTED = new Set(['IMG', 'VIDEO', 'CANVAS', 'PICTURE', 'SVG', 'IFRAME', 'OBJECT', 'EMBED'])
+  const backgroundOf = (el: Element, cs: CSSStyleDeclaration, r: DOMRect): { background: RGBA | null; note: 'computed' | 'image' } => {
+    let under: Element[] | null = null
+    const x = r.left + r.width / 2
+    const y = r.top + r.height / 2
+    if (r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) {
+      const stack = document.elementsFromPoint(x, y)
+      const at = stack.indexOf(el)
+      if (at >= 0) under = stack.slice(at)
+    }
+    if (under === null) {
+      under = []
+      for (let node: Element | null = el; node; node = node.parentElement) under.push(node)
+    }
     const layers: RGBA[] = []
-    let node: Element | null = el
-    while (node) {
+    for (const node of under) {
+      if (node !== el && PAINTED.has(node.tagName.toUpperCase())) return { background: null, note: 'image' }
       const s = node === el ? cs : getComputedStyle(node)
       if (s.backgroundImage && s.backgroundImage !== 'none') return { background: null, note: 'image' }
       const c = parseColor(s.backgroundColor)
@@ -181,7 +198,6 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
         }
         layers.push(c)
       }
-      node = node.parentElement
     }
     let base: RGBA = [255, 255, 255, 1]
     for (let i = layers.length - 1; i >= 0; i--) base = over(layers[i]!, base)
@@ -217,7 +233,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
         if (text.length >= maxText) {
           textOver++
         } else {
-          const bg = backgroundOf(el, cs)
+          const bg = backgroundOf(el, cs, r)
           text.push({
             element: label(el),
             text: snippet(own),

@@ -157,3 +157,22 @@ test('a list that was cut says so and counts the cut; with --groups-only there i
   expect(g.warnings.join(' ')).not.toMatch(/past the 200 listed/)
   expect(g.groups[0]).toMatchObject({ kind: 'small-target', count: 260 })
 })
+
+test('a document that renders after load is held for and measured; one that stays empty is measured as empty and says so', async () => {
+  // booking.com's mobile page: empty at `load`, filled by script 900 ms later.
+  const late = await runCli(['audit', fixture('renders-late.html'), '--preset', 'android-65'])
+  expect(late.code, late.stderr).toBe(0)
+  const l = JSON.parse(late.stdout)
+  expect(l.summary.targets.count).toBe(1)
+  expect(l.summary.text.count).toBeGreaterThanOrEqual(2)
+  expect(l.warnings.join(' ')).not.toMatch(/nothing to measure/)
+  // Nothing in it, and nothing coming: zeros, held for the grace, and a warning.
+  const started = Date.now()
+  const empty = await runCli(['audit', fixture('empty.html'), '--preset', 'android-65'])
+  expect(empty.code, empty.stderr).toBe(0)
+  const e = JSON.parse(empty.stdout)
+  expect(e.summary.targets.count).toBe(0)
+  expect(e.summary.text.count).toBe(0)
+  expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets 3(\.\d)? s after it loaded/)
+  expect(Date.now() - started).toBeGreaterThanOrEqual(3000)
+})
