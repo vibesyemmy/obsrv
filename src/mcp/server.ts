@@ -1330,7 +1330,7 @@ server.registerTool(
       `Returns per-group counts and smallest sizes, plus findings under the thresholds (\`tapMm\`, default 7 — ` +
       `between Apple's 44pt and WCAG 2.5.8's 24 CSS px — and \`textMm\`, default 2 — roughly 11px on a phone, 7px ` +
       `on a 1080p monitor; both provisional and stated in the output), smallest first. Inline links in running ` +
-      `text are exempt from the target rule, as in WCAG 2. groupsOnly: true answers with the summary and the groups alone, which on a real page at a phone preset is the difference between an answer that fits and one that does not.5.8. Layout is measured, not pixels: no panel profile ` +
+      `text are exempt from the target rule, as in WCAG 2.5.8. groupsOnly: true answers with the summary and the groups alone, which on a real page at a phone preset is the difference between an answer that fits and one that does not. Layout is measured, not pixels: no panel profile ` +
       `applies, hidden and zero-size elements are skipped, and text over images is measured like any other. ` +
       `Findings are informational — apply your own thresholds.\n\n` +
       `Phone presets get the mobile UA and viewport semantics, so a page's mobile layout is what gets measured. ` +
