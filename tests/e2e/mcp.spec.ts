@@ -363,6 +363,18 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0 })
 })
 
+test('obsrv_audit: groupsOnly leaves the list out, as it does for lint', async () => {
+  // A phone audit of a retail page came back as fifteen thousand tokens with
+  // no way to ask for the groups alone; lint had had the flag since 0.32.0.
+  const r = await call('obsrv_audit', { url: fixture('audit.html'), preset: '1080p-24', groupsOnly: true })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { findings: unknown[]; groups: { kind: string; count: number }[]; summary: { targets: { under: number } }; warnings: string[] }
+  expect(m.findings).toEqual([])
+  expect(m.groups.length).toBeGreaterThan(0)
+  expect(m.summary.targets.under).toBe(1)
+  expect(m.warnings.join(' ')).not.toMatch(/past the 200 listed/)
+})
+
 test('a PNG over the inline cap says so in the JSON, not only in a text block', async () => {
   // 1920×1080 of seeded noise: a PNG of several MiB whatever the encoder does.
   const big = await call('obsrv_snap', { url: fixture('noise.html'), preset: '1080p-24', mode: 'headless' })

@@ -388,6 +388,11 @@ test('obsrv_audit (auto) audits the running app on the screen in force, and name
   expect(noted.structuredContent).toMatchObject({ mode: 'live', preset: '1080p-24', thresholds: { tapMm: 6, textMm: 2 } })
   expect((noted.structuredContent as { notes: string[] }).notes.join(' ')).toContain('`preset` is headless-only')
   expect((noted.structuredContent as { summary: { targets: { under: number } } }).summary.targets.under).toBe(0)
+  // groupsOnly leaves the list out of a live answer too; the summary and the groups still count everything.
+  const grouped = await call('obsrv_audit', { groupsOnly: true })
+  expect(grouped.structuredContent).toMatchObject({ mode: 'live', findings: [] })
+  expect((grouped.structuredContent as { groups: unknown[]; summary: { targets: { under: number } } }).groups.length).toBeGreaterThan(0)
+  expect((grouped.structuredContent as { summary: { targets: { under: number } } }).summary.targets.under).toBe(1)
   // mode: 'headless' never touches the app, and needs a url.
   const headless = await call('obsrv_audit', { url: auditPage, preset: 'android-65', mode: 'headless' })
   expect(headless.structuredContent).toMatchObject({ mode: 'headless', preset: 'android-65', cssWidth: 360 })

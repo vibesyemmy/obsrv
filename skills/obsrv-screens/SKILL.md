@@ -97,8 +97,9 @@ edge kind, a `srcset`-or-not and a factor bucket for images; a control's
 short side or a font size for the audit — over every finding counted, each with a
 count, the worst member as exemplar and a few of the elements. A page with
 270 identical contrast failures is one group with count 270. Read the
-summary, then the groups; ask `obsrv_lint { groupsOnly: true }` when the list
-would only be noise. Text the same colour as its background is set aside as
+summary, then the groups; ask `obsrv_audit` or `obsrv_lint` `{ groupsOnly: true }`
+when the list would only be noise — on a retail page at a phone preset the
+audit's list alone is most of the answer. Text the same colour as its background is set aside as
 `skipped.invisibleText`, not reported as a contrast failure; text over an
 image gets no contrast verdict either, and the warnings say how many.
 

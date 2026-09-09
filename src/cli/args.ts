@@ -60,6 +60,8 @@ export interface AuditCommand {
   textMm: number
   /** Walk the page a screenful at a time before measuring (the default); `--no-walk` measures it as it first shows. */
   walk: boolean
+  /** `--groups-only`: the summary and the groups, an empty `findings` list, and no sentence about the list. */
+  groupsOnly: boolean
   waitMs: number
   timeoutMs: number
 }
@@ -241,6 +243,9 @@ audit flags:
   --no-walk            Measure the page as it first shows. By default it is walked a screenful at
                        a time to the end and back first (as the live audit is), so lazy images load
                        and sections that mount on scroll exist; the JSON's \`walked\` says how far.
+  --groups-only        The summary and the groups without the per-finding list (up to 200): what an
+                       agent reads first, and on a retail page at a phone preset most of the
+                       payload. The groups cover every finding counted either way.
 
 inspect flags:
   --at <x,y>           A point in CSS px of the target screen: what is drawn there.
@@ -256,8 +261,7 @@ lint flags:
                        density times the text scale; --profile names the panel the contrast-on-panel
                        rule is judged on. One preset per run.
   --no-walk            As for audit: judge the page as it first shows, lazy placeholders and all.
-  --groups-only        The summary and the groups without the per-finding list (up to 200): what an
-                       agent reads first. The groups cover every finding counted either way.
+  --groups-only        As for audit: the summary and the groups without the per-finding list.
 
 report flags:
   --matrix <id,id,…>   Screens to cover (default ${DEFAULT_REPORT_MATRIX.join(',')}); or --preset for one.
@@ -296,10 +300,11 @@ const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeo
 const EXTRA_FLAGS: Record<Command, Set<string>> = {
   snap: new Set(['out', 'full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'matrix']),
   diff: new Set(['out-dir', 'json']),
-  audit: new Set(['tap-mm', 'text-mm', 'no-walk']),
+  audit: new Set(['tap-mm', 'text-mm', 'no-walk', 'groups-only']),
   // Order matters for a shared flag's named owner: the command that owns the
   // concept comes first (audit before report for --tap-mm, lint before report
-  // for --thin-px, audit before lint and report for --no-walk).
+  // for --thin-px, audit before lint and report for --no-walk, audit before
+  // lint for --groups-only).
   lint: new Set(['thin-px', 'no-walk', 'groups-only']),
   report: new Set(['out', 'matrix', 'tap-mm', 'text-mm', 'thin-px', 'no-walk']),
   inspect: new Set(['at', 'selector']),
@@ -518,7 +523,7 @@ export function parseArgs(argv: string[]): CliCommand {
     if (matrix) throw new ArgError('`obsrv audit` measures one screen per run; --matrix is a snap flag')
     const tapMm = float(flags, 'tap-mm', DEFAULT_TAP_MM, 0)
     const textMm = float(flags, 'text-mm', DEFAULT_TEXT_MM, 0)
-    return { command, url, spec: specs[0]!, tapMm, textMm, walk: !flags.has('no-walk'), waitMs, timeoutMs }
+    return { command, url, spec: specs[0]!, tapMm, textMm, walk: !flags.has('no-walk'), groupsOnly: flags.has('groups-only'), waitMs, timeoutMs }
   }
 
   if (command === 'lint') {

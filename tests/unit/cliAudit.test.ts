@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_TAP_MM, DEFAULT_TEXT_MM, MAX_FINDINGS, auditFindings, type AuditScreen } from '../../src/cli/audit'
+import { DEFAULT_TAP_MM, DEFAULT_TEXT_MM, MAX_FINDINGS, auditFindings, auditListTruncationNote, type AuditScreen } from '../../src/cli/audit'
 import type { AuditReport } from '../../src/shared/audit'
 import { findPreset } from '../../src/shared/presets'
 
@@ -170,5 +170,13 @@ describe('auditFindings on a page drawn scaled to fit (no viewport meta)', () =>
     expect(r.layoutScale).toBeCloseTo(240 / 980, 4)
     // 24 px × (240/980) × 1.5 text scale = 8.8 CSS px on the glass: the same 1.66 mm.
     expect(r.findings.find(f => f.element === 'button#tiny')!.mm).toBeCloseTo(1.66, 2)
+  })
+})
+
+describe('auditListTruncationNote', () => {
+  it('is said only when the list was cut, and counts the rest to the summary and the groups', () => {
+    expect(auditListTruncationNote(0)).toBeNull()
+    expect(auditListTruncationNote(1)).toBe(`1 more finding past the ${MAX_FINDINGS} listed; the summary and the groups count them all`)
+    expect(auditListTruncationNote(39)).toMatch(/^39 more findings past the 200 listed/)
   })
 })

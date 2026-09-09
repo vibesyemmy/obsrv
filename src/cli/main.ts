@@ -26,7 +26,7 @@ import {
   type ReportCommand,
   type SnapCommand,
 } from './args'
-import { auditFindings } from './audit'
+import { auditFindings, auditListTruncationNote } from './audit'
 import { lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintGroup } from './lint'
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
@@ -838,6 +838,9 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       { tapMm: cmd.tapMm, textMm: cmd.textMm },
     )
     for (const w of result.warnings) human(`warning: ${w}`)
+    // The list's cap is said by whoever prints the list; with --groups-only there is none.
+    const listed = cmd.groupsOnly ? null : auditListTruncationNote(result.truncated.findings)
+    if (listed !== null) human(`warning: ${listed}`)
     // The page's height is in its own px; the screen's are what the walk counted in.
     const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale)
     if (coverage !== null) human(`warning: ${coverage}`)
@@ -849,7 +852,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
         `${result.ppi !== null ? `, ${result.ppi} ppi` : ''}): ` +
         `${t.count} targets${t.under !== null ? ` (${t.under} under ${cmd.tapMm} mm)` : ''}, ` +
         `${x.count} text elements${x.under !== null ? ` (${x.under} under ${cmd.textMm} mm)` : ''}, ` +
-        `${result.findings.length} finding(s) listed`,
+        `${cmd.groupsOnly ? `${result.groups.length} group(s), the list left out` : `${result.findings.length} finding(s) listed`}`,
     )
     // Findings are informational — CI thresholds are the caller's job.
     await machine({
@@ -864,7 +867,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       pageHeight: report.pageHeight,
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
-      warnings: [...result.warnings, ...walk.notes, ...(coverage === null ? [] : [coverage])],
+      findings: cmd.groupsOnly ? [] : result.findings,
+      warnings: [...result.warnings, ...(listed === null ? [] : [listed]), ...walk.notes, ...(coverage === null ? [] : [coverage])],
     })
   } finally {
     target.destroy()

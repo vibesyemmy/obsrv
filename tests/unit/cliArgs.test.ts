@@ -379,3 +379,15 @@ describe('parseArgs: inspect', () => {
     expect(() => inspect('--selector', 'p', '--matrix', 'laptop-768,android-65')).toThrow(/--matrix is a snap flag/)
   })
 })
+
+describe('parseArgs: audit --groups-only', () => {
+  it('is an audit flag as it is a lint flag, off by default', () => {
+    const on = parseArgs(['audit', 'https://x.test', '--groups-only']) as AuditCommand
+    expect(on.groupsOnly).toBe(true)
+    const off = parseArgs(['audit', 'https://x.test']) as AuditCommand
+    expect(off.groupsOnly).toBe(false)
+  })
+  it('names audit as its owner when another command is given it', () => {
+    expect(() => parseArgs(['snap', 'https://x.test', '--groups-only'])).toThrow(/--groups-only is an audit flag/)
+  })
+})

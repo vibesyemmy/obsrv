@@ -68,6 +68,8 @@ export interface AuditToolInput {
   textMm?: number | undefined
   /** False maps to `--no-walk`; true is the CLI's default and adds nothing. */
   walk?: boolean | undefined
+  /** `--groups-only`: the CLI leaves the list out itself, and with it the sentence about the list's cap. */
+  groupsOnly?: boolean | undefined
   waitMs?: number | undefined
   timeoutMs?: number | undefined
 }
@@ -253,6 +255,7 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
   if (input.tapMm !== undefined) args.push('--tap-mm', String(input.tapMm))
   if (input.textMm !== undefined) args.push('--text-mm', String(input.textMm))
   if (input.walk === false) args.push('--no-walk')
+  if (input.groupsOnly === true) args.push('--groups-only')
   if (input.waitMs !== undefined) args.push('--wait', String(input.waitMs))
   if (input.timeoutMs !== undefined) args.push('--timeout', String(input.timeoutMs))
   return args
