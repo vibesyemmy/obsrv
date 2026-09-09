@@ -219,6 +219,34 @@ export function registerIpc(ctx: AppContext): () => void {
     assertRenderer(e)
     return navigateBoth(url)
   })
+  /**
+   * How long an agent's `navigate` waits for both panes to finish loading
+   * before answering with the page as it stands. `navigateBoth` waits for
+   * `did-finish-load`, which a page that keeps loading ads never reaches:
+   * theguardian.com in a new tab took the MCP's 40 s guard to a hard error
+   * — "re-open the app" — while the tab was open and the page there a moment
+   * later. Under the guard, so the answer is the app's own: the URL, and
+   * `loaded: false` when the load is still going. Overridable for tests.
+   */
+  const NAVIGATE_WAIT_MS = (() => {
+    const raw = process.env['OBSRV_NAVIGATE_WAIT_MS']
+    const n = raw === undefined ? NaN : Number.parseInt(raw, 10)
+    return Number.isFinite(n) && n > 0 ? n : 30_000
+  })()
+  const navigateWithin = (url: string): Promise<{ url: string; loaded: boolean }> => {
+    let wanted = url
+    try {
+      wanted = normalizeUrl(url)
+    } catch {
+      // Reported by the panes as a LoadError; the budget answer names the input.
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const budget = new Promise<{ url: string; loaded: boolean }>(resolve => {
+      timer = setTimeout(() => resolve({ url: wanted, loaded: false }), NAVIGATE_WAIT_MS)
+    })
+    const load = navigateBoth(url).then(applied => ({ url: applied, loaded: true }))
+    return Promise.race([load, budget]).finally(() => clearTimeout(timer))
+  }
   // The toolbar's history/reload actions, shared verbatim with the
   // agent-control server's back/forward/reload commands.
   /**
@@ -1350,7 +1378,7 @@ export function registerIpc(ctx: AppContext): () => void {
         ...uiState,
       }
     },
-    navigate: navigateBoth,
+    navigate: navigateWithin,
     apply: patch => {
       if (win.isDestroyed()) return
       // A preset *or* a rotation resizes the target; view mode and pixel-exact

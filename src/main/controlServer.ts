@@ -78,7 +78,8 @@ export interface ControlDeps {
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
   status(): StatusReport
   /** The same both-panes load `IPC.navigate` performs; resolves with the applied URL. */
-  navigate(url: string): Promise<string>
+  /** Points both panes at the URL; `loaded: false` when the load outran the app's navigate budget and is still going. */
+  navigate(url: string): Promise<{ url: string; loaded: boolean }>
   /** Forwards a validated patch to the renderer store (toolbar-equivalent apply). */
   apply(patch: AgentApplyPatch): void
   /** The app window exactly as the user sees it, as a base64 PNG. */
@@ -328,8 +329,9 @@ export class ControlServer {
         // The new tab is in front now, so the ordinary apply/navigate paths
         // land on it exactly as they would for a command with no payload.
         if (req.preset !== undefined) this.deps.apply({ presetId: req.preset })
-        if (req.url !== undefined) await this.deps.navigate(req.url)
-        return reply(200, { ok: true, id })
+        let loading = false
+        if (req.url !== undefined) loading = !(await this.deps.navigate(req.url)).loaded
+        return reply(200, { ok: true, id, ...(loading ? { loading: true } : {}) })
       }
 
       case 'activateTab': {
@@ -354,8 +356,11 @@ export class ControlServer {
         // the only surface that can reach another scheme.
         const bad = urlSchemeError(url)
         if (bad) return reply(400, { error: bad })
-        const applied = await this.deps.navigate(url.trim())
-        return reply(200, { ok: true, url: applied })
+        // A page that never finishes loading (ads) is answered as it stands:
+        // the URL, and `loading: true`, rather than the caller's guard firing
+        // and blaming the app.
+        const nav = await this.deps.navigate(url.trim())
+        return reply(200, { ok: true, url: nav.url, ...(nav.loaded ? {} : { loading: true }) })
       }
 
       case 'setPreset': {

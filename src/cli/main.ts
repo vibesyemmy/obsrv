@@ -34,6 +34,7 @@ import { applyPanelProfile } from './panel'
 import { walkHeadless } from './walk'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
+import { walkCoverageNote } from '../shared/walkCoverage'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
@@ -583,6 +584,10 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
+    // The walk may have seen the end of a page it never crossed — a consent
+    // layer that fixes the body, a page that grew after the walk: say so.
+    const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0))
+    if (coverage !== null) warn(`warning: ${coverage}`)
     return {
       frame,
       cssWidth: applied.width,
@@ -827,6 +832,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       { tapMm: cmd.tapMm, textMm: cmd.textMm },
     )
     for (const w of result.warnings) human(`warning: ${w}`)
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight)
+    if (coverage !== null) human(`warning: ${coverage}`)
     const t = result.summary.targets
     const x = result.summary.text
     human(
@@ -850,7 +857,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       pageHeight: report.pageHeight,
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
-      ...(walk.notes.length > 0 ? { warnings: [...result.warnings, ...walk.notes] } : {}),
+      warnings: [...result.warnings, ...walk.notes, ...(coverage === null ? [] : [coverage])],
     })
   } finally {
     target.destroy()
@@ -897,6 +904,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
         ? unwalkedImageNote(result.findings, (walk.walked.screenfuls + 1) * (applied.height / cmd.spec.textScale))
         : null
     if (unwalked !== null) human(`warning: ${unwalked}`)
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight)
+    if (coverage !== null) human(`warning: ${coverage}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)
     human(
@@ -921,7 +930,13 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...result,
       findings: cmd.groupsOnly ? [] : result.findings,
       groups: slimGroups(result.groups),
-      warnings: [...result.warnings, ...walk.notes, ...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked])],
+      warnings: [
+        ...result.warnings,
+        ...walk.notes,
+        ...(listed === null ? [] : [listed]),
+        ...(unwalked === null ? [] : [unwalked]),
+        ...(coverage === null ? [] : [coverage]),
+      ],
     })
   } finally {
     target.destroy()
