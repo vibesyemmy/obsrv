@@ -28,7 +28,8 @@ the smallest in px and mm), and `findings`, smallest first:
 At most 200 findings are listed; the rest are counted in `truncated` and
 said in a warning. `--groups-only` (`groupsOnly: true` on `obsrv_audit`)
 leaves the list out altogether — on a retail page at a phone preset it is
-most of the payload — and with it the sentence about the cap; the summary
+most of the payload — and with it the sentence about the cap and the
+cut it counts (`truncated.findings` is 0: no list, nothing cut); the summary
 and the groups count everything either way. Findings are informational and
 exit 0 — thresholds for CI are the caller's, as with `diff`. The MCP tool
 is `obsrv_audit`, same inputs.

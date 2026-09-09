@@ -610,6 +610,41 @@ test("a page-space highlight is mapped through the scroll, and says so when it i
   await call('scroll', { x: 0, y: 0 })
 })
 
+test('a page drawn to fit: a page-space highlight and an inspect point go through the layout scale', async () => {
+  // berkshirehathaway.com on a phone: laid out 980 wide, drawn at 0.37 to fit
+  // 360. A highlight given the logo's own rect was refused as off a 720 px pane,
+  // and an inspect point in the screen's px hit whatever laid out there.
+  const NO_META = pathToFileURL(resolve(__dirname, '../fixtures/noviewport.html')).href
+  await call('setPreset', { id: 'android-65' })
+  const nav = await call('navigate', { url: NO_META })
+  expect(nav.status).toBe(200)
+  const dsf: number = await app.evaluate(() => (globalThis as any).__obsrv.target.getDeviceScaleFactor())
+  // The button by selector: its box in the page's own px, and the scale it is drawn at.
+  const sel = await call('inspect', { selector: '#b' })
+  expect(sel.status).toBe(200)
+  expect(sel.body).toMatchObject({ ok: true, found: true })
+  const readout = sel.body.readout as { rect: { x: number; y: number; width: number; height: number }; layoutScale: number }
+  expect(readout.layoutScale).toBeCloseTo(0.3673, 3)
+  const r = readout.rect
+  // Its own rect in page space lands on the pane at rect × layoutScale × density.
+  const h = await call('highlight', { ...r, space: 'page', durationMs: 3000 })
+  expect(h.status).toBe(200)
+  expect(h.body).toMatchObject({ ok: true, drawn: true })
+  const pane = h.body.pane as { x: number; y: number; width: number; height: number }
+  const k = readout.layoutScale * dsf
+  expect(Math.abs(pane.x - r.x * k)).toBeLessThanOrEqual(1)
+  expect(Math.abs(pane.y - r.y * k)).toBeLessThanOrEqual(1)
+  expect(Math.abs(pane.width - r.width * k)).toBeLessThanOrEqual(1)
+  await expect(page.locator('.agent-highlight')).toHaveCount(1)
+  // A point in the screen's px at the button's drawn centre finds the button.
+  const centre = { x: Math.round((r.x + r.width / 2) * readout.layoutScale), y: Math.round((r.y + r.height / 2) * readout.layoutScale) }
+  const at = await call('inspect', centre)
+  expect(at.status).toBe(200)
+  expect((at.body.readout as { element: string }).element).toBe('button#b')
+  await call('setPreset', { id: 'laptop-768' })
+  await call('navigate', { url: FIXTURE })
+})
+
 test('reload answers once the target has loaded again, and status says it is not loading', async () => {
   const r = await call('reload')
   expect(r.status).toBe(200)

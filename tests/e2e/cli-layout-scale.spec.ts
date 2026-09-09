@@ -115,3 +115,21 @@ test('inspect: the box and the font in millimetres as drawn, the layout px as th
   expect(t.readout.font.mm).toBeCloseTo(3.01, 1)
   expect(t.readout.notes).toEqual([])
 })
+
+test('inspect --at: a point in the screen\'s px lands on the page as drawn, not on the page as laid out', async () => {
+  // The button lays out at (16, 83) 44×44 in the page's own px; drawn at 0.3673 its
+  // centre is 14 px across and 39 down the 360×800 screen. Asking there used to hit
+  // whatever laid out at (14, 39) of the 980-wide page: the paragraph above it.
+  const r = await runCli(['inspect', NO_META, '--preset', 'android-65', '--at', '14,39'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.found).toBe(true)
+  expect(m.readout.element).toBe('button#b')
+  expect(m.readout.layoutScale).toBeCloseTo(0.3673, 3)
+  // On the twin with the meta tag a screen point is a page point: the button's
+  // own centre, wherever its 360-wide layout put it, finds it with no scale.
+  const twinBox = JSON.parse((await runCli(['inspect', WITH_META, '--preset', 'android-65', '--selector', '#b'])).stdout).readout.rect
+  const centre = `${Math.round(twinBox.x + twinBox.width / 2)},${Math.round(twinBox.y + twinBox.height / 2)}`
+  const twin = await runCli(['inspect', WITH_META, '--preset', 'android-65', '--at', centre])
+  expect(JSON.parse(twin.stdout).readout).toMatchObject({ element: 'button#b', layoutScale: 1 })
+})

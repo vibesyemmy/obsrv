@@ -1245,6 +1245,12 @@ const auditOutputShape = {
 
 type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean; groupsOnly?: boolean }
 
+/** A `truncated` block with its list cut zeroed: under `groupsOnly` no list was printed, so nothing was cut from it. */
+function noListCut(truncated: unknown): Record<string, unknown> {
+  const t = truncated !== null && typeof truncated === 'object' ? (truncated as Record<string, unknown>) : {}
+  return { ...t, findings: 0 }
+}
+
 async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   try {
@@ -1301,7 +1307,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
-      ...(input.groupsOnly ? { findings: [] } : {}),
+      ...(input.groupsOnly ? { findings: [], truncated: noListCut(measured['truncated']) } : {}),
       ...(auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...auditAdded] }),
       notes,
       ...(launched ? { launched: true } : {}),
@@ -1573,7 +1579,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(typeof textScale === 'number' && textScale !== 1 ? { textScale } : {}),
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
-      ...(input.groupsOnly ? { findings: [] } : {}),
+      ...(input.groupsOnly ? { findings: [], truncated: noListCut((judged as { truncated?: unknown }).truncated) } : {}),
       ...(added.length === 0 ? {} : { warnings: [...liveWarnings, ...added] }),
       notes,
       ...(launched ? { launched: true } : {}),
@@ -1685,12 +1691,6 @@ const inspectInputShape = {
   timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
-/** The notes a readout carries about its own figures (the layout scale, when it is not 1); none from an app older than the field. */
-function readoutNotes(readout: unknown): string[] {
-  if (readout === null || typeof readout !== 'object') return []
-  const notes = (readout as { notes?: unknown }).notes
-  return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string') : []
-}
 
 const readoutShape = z
   .object({
@@ -2186,9 +2186,9 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
       throttle: status.throttle,
       found: answer.found === true,
       readout: answer.readout ?? null,
-      // The readout's own notes (the layout scale, when it is not 1) are hoisted
-      // beside the call's, where a reader looks first.
-      notes: [...notes, ...readoutNotes(answer.readout)],
+      // The readout's own notes (the layout scale, when it is not 1) stay in
+      // the readout, said once; these are the call's.
+      notes,
       ...(launched ? { launched: true } : {}),
     }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
@@ -2250,7 +2250,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...readoutNotes((result as { readout?: unknown }).readout), ...queued(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
