@@ -1,6 +1,6 @@
 import { effectiveContrast, hex, relativeLuminance } from '../shared/contrast'
 import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
-import type { LintEdgeKind, LintRect, LintReport } from '../shared/lint'
+import type { LintEdgeKind, LintRect, LintReport, LintObjectFit } from '../shared/lint'
 import type { PanelParams } from '../shared/types'
 import type { Matrix3 } from '../shared/vision'
 
@@ -24,6 +24,44 @@ export const DEFAULT_THIN_PX = 14
 export const IMAGE_OVERSIZED_FACTOR = 2
 /** An image drawn wider than its natural width by more than this is upscaled (a little slack for rounding). */
 export const IMAGE_UPSCALED_TOLERANCE = 0.98
+
+/**
+ * The scale Chromium draws a file at inside its box, per `object-fit`: one
+ * number on each axis. `cover` scales by the larger axis and crops, `contain`
+ * and `scale-down` by the smaller (the latter never above 1), `none` not at
+ * all, and `fill` — the default — stretches each axis on its own, so a
+ * 960×331 file filling a 551×567 box is downsampled 1.7× across and upscaled
+ * 1.7× down at the same time. The width alone, which is what this judged
+ * until 0.48.0, called ebay.co.uk's cover-fit hero "upscaled 1.15×" when its
+ * height was scaled 3.4×, and passed that same file in a cover box on a 1x
+ * screen with no finding at all.
+ */
+export function imageScale(
+  natural: { width: number; height: number },
+  drawn: { width: number; height: number },
+  fit: LintObjectFit = 'fill',
+): { x: number; y: number } {
+  const x = drawn.width / natural.width
+  const y = drawn.height / natural.height
+  switch (fit) {
+    case 'cover': {
+      const s = Math.max(x, y)
+      return { x: s, y: s }
+    }
+    case 'contain': {
+      const s = Math.min(x, y)
+      return { x: s, y: s }
+    }
+    case 'scale-down': {
+      const s = Math.min(1, x, y)
+      return { x: s, y: s }
+    }
+    case 'none':
+      return { x: 1, y: 1 }
+    default:
+      return { x, y }
+  }
+}
 /** Findings past this are counted, not listed; the worst come first. */
 export const LINT_MAX_FINDINGS = 200
 
@@ -106,6 +144,8 @@ export type LintFinding =
   | (FindingBase & {
       rule: 'image-upscaled' | 'image-oversized'
       naturalWidth: number
+      /** How the file is fitted into its box; the axis the factor follows depends on it. */
+      objectFit: LintObjectFit
       naturalHeight: number
       drawnDevicePx: { width: number; height: number }
       factor: number
@@ -372,7 +412,12 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     if (isVector(img.src)) continue
     const drawn = { width: Math.round(img.rect.width * k), height: Math.round(img.rect.height * k) }
     if (drawn.width <= 0 || drawn.height <= 0) continue
-    const ratio = img.naturalWidth / drawn.width
+    const fit = img.objectFit ?? 'fill'
+    const scale = imageScale({ width: img.naturalWidth, height: img.naturalHeight }, drawn, fit)
+    // The most blurred axis decides an upscale, the most softened a downsample;
+    // for the fits that keep the shape the two axes agree.
+    const up = Math.max(scale.x, scale.y)
+    const down = 1 / Math.min(scale.x, scale.y)
     const common = {
       element: img.element,
       text: '',
@@ -380,6 +425,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
       naturalWidth: img.naturalWidth,
       naturalHeight: img.naturalHeight,
       drawnDevicePx: drawn,
+      objectFit: fit,
       srcset: img.srcset,
       candidates: img.candidates,
       ...(img.chosen !== undefined ? { chosen: img.chosen } : {}),
@@ -389,25 +435,44 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     // then knows whether the srcset lacks a larger one or `sizes` undersold
     // the slot.
     const file = `${img.naturalWidth}×${img.naturalHeight} px${img.chosen !== undefined ? ` (the ${img.chosen} candidate)` : ''}`
-    if (ratio < IMAGE_UPSCALED_TOLERANCE) {
-      const factor = round(1 / ratio, 2)
+    const box = `${drawn.width}×${drawn.height} device px`
+    // A fill of a box of another shape stretches: say which axis the factor
+    // is on, since the other is scaled differently, and by how much.
+    const stretched = fit === 'fill' && Math.abs(scale.x - scale.y) > 0.02 * Math.max(scale.x, scale.y)
+    const axis = (v: number): string => (v === scale.y && scale.y !== scale.x ? 'height' : 'width')
+    if (up > 1 / IMAGE_UPSCALED_TOLERANCE) {
+      const factor = round(up, 2)
+      const how =
+        fit === 'cover'
+          ? `covering ${box} (object-fit: cover)`
+          : fit === 'contain'
+            ? `fitted inside ${box} (object-fit: contain)`
+            : stretched
+              ? `stretched over ${box}`
+              : `drawn over ${box}`
+      const onAxis = stretched ? ` on its ${axis(up)} (${round(Math.min(scale.x, scale.y), 2)}× on its ${axis(Math.min(scale.x, scale.y))})` : ''
       groups['image-upscaled'].push({
         rule: 'image-upscaled',
         ...common,
         factor,
-        message:
-          `${file} drawn over ${drawn.width}×${drawn.height} device px: upscaled ${factor}×, ` +
-          `so it is blurred on this screen${img.srcset ? '' : '; no srcset offers a larger candidate'}`,
+        message: `${file} ${how}: upscaled ${factor}×${onAxis}, so it is blurred on this screen${img.srcset ? '' : '; no srcset offers a larger candidate'}`,
       })
-    } else if (ratio > IMAGE_OVERSIZED_FACTOR) {
-      const factor = round(ratio, 2)
+    } else if (down > IMAGE_OVERSIZED_FACTOR) {
+      const factor = round(down, 2)
+      const how =
+        fit === 'cover'
+          ? `covering ${box} (object-fit: cover)`
+          : fit === 'contain' || fit === 'scale-down'
+            ? `fitted inside ${box} (object-fit: ${fit})`
+            : stretched
+              ? `squeezed into ${box}`
+              : `drawn at ${box}`
+      const onAxis = stretched ? ` on its ${axis(1 / down)}` : ''
       groups['image-oversized'].push({
         rule: 'image-oversized',
         ...common,
         factor,
-        message:
-          `${file} drawn at ${drawn.width}×${drawn.height} device px: downsampled ${factor}×, ` +
-          `which softens fine lines and text in it${img.srcset ? '' : '; no srcset offers a candidate near this size'}`,
+        message: `${file} ${how}: downsampled ${factor}×${onAxis}, which softens fine lines and text in it${img.srcset ? '' : '; no srcset offers a candidate near this size'}`,
       })
     }
   }

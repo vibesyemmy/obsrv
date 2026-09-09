@@ -133,3 +133,21 @@ test('--groups-only: the groups and the summary, an empty list, and nothing said
   expect(listed.findings.length).toBeGreaterThan(0)
   expect(listed.groups).toEqual(m.groups)
 })
+
+test('images are judged by the axis object-fit scales: a cover and a fill of a wide file are upscaled, a contain is not', async () => {
+  // The 960×331 file that ebay.co.uk covered a 551×567 box with, which the
+  // width-only rule called "upscaled 1.15×" on the phone and nothing on a 1x screen.
+  const r = await runCli(['lint', fixture('object-fit.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary['image-upscaled']).toBe(2)
+  expect(m.summary['image-oversized']).toBe(1)
+  const by = (id: string) => m.findings.find((f: { element: string }) => f.element === `img#${id}`)
+  expect(by('cover')).toMatchObject({ rule: 'image-upscaled', objectFit: 'cover' })
+  expect(by('cover').factor).toBeCloseTo(1.71, 1)
+  expect(by('fill')).toMatchObject({ rule: 'image-upscaled', objectFit: 'fill' })
+  expect(by('fill').message).toContain('on its height')
+  expect(by('small')).toMatchObject({ rule: 'image-oversized', objectFit: 'contain' })
+  expect(by('small').factor).toBeCloseTo(4.8, 1)
+  for (const id of ['contain', 'none', 'scale-down']) expect(by(id)).toBeUndefined()
+})
