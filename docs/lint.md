@@ -94,7 +94,8 @@ skipped { textOnImages }, truncated { findings, text, edges, images }, warnings
 it judged (`tabId`, `tabIndex`). Its `groups` carry a slim exemplar (element,
 text, rect, message); `groupsOnly: true` (`--groups-only` on the CLI) leaves
 the per-finding list out altogether, which on a big page is most of the
-payload — and with it the sentence about the list's cap, which is only ever
+payload — and with it the cut the cap counts (`truncated.findings` is 0: no
+list, nothing cut) and the sentence about it, which is only ever
 said by whoever prints the list (the CLI, the MCP), never by the report, which
 shows groups. Exit code 0 and findings are informational: thresholds for CI
 are the caller's.

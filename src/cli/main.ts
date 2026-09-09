@@ -868,6 +868,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
       findings: cmd.groupsOnly ? [] : result.findings,
+      // With no list there is nothing cut from it; the summary counts everything.
+      ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
       warnings: [...result.warnings, ...(listed === null ? [] : [listed]), ...walk.notes, ...(coverage === null ? [] : [coverage])],
     })
   } finally {
@@ -940,6 +942,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
       findings: cmd.groupsOnly ? [] : result.findings,
+      ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
       groups: slimGroups(result.groups),
       warnings: [
         ...result.warnings,

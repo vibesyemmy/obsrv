@@ -663,17 +663,41 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // goes in divided and the box comes back multiplied. Font size stays
       // the page's — it is what the stylesheet says — and the footer scales
       // its millimetres by the same factor.
-      const k = this.textScale
+      // A page drawn to fit (no viewport meta on a phone) is smaller again by
+      // its layout scale: a point 14 px across the screen is 38 of that page's
+      // own px. Without this the inspector answered with whatever happened to
+      // lay out at the screen's coordinates — a different element, or none.
+      const k = this.textScale * (await this.layoutScaleNow())
       const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
         { code: `${INSPECT_SCRIPT}('point', ${Number(x) / k}, ${Number(y) / k})` },
       ])
       const report = parseInspectReport(raw)
-      if (report === null || k === 1) return report
+      // The box comes back in the page's own px times the text scale, as
+      // `inspectSelector` reports it: the readout scales millimetres by the
+      // layout scale itself, from the viewport width it carries.
+      const t = this.textScale
+      if (report === null || t === 1) return report
       const r = report.rect
-      return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
+      return { ...report, rect: { x: r.x * t, y: r.y * t, width: r.width * t, height: r.height * t } }
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
       return null
+    }
+  }
+
+  /**
+   * How much smaller the page is drawn than it is laid out, now: the screen's
+   * width over the text scale, divided by the width the page laid out at
+   * (`shared/layoutScale`). 1 for a page that fits, 0.37 for one laid out 980
+   * wide on a 360 px phone, and 1 when the page cannot be asked.
+   */
+  async layoutScaleNow(): Promise<number> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return 1
+    try {
+      const laidOut: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [{ code: 'innerWidth' }])
+      return layoutScale(this.viewport.width, this.getTextScale(), typeof laidOut === 'number' ? laidOut : 0)
+    } catch {
+      return 1
     }
   }
 
@@ -733,9 +757,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // pixel is more of them: ask how wide the page laid out and widen the
       // threshold by the same factor. `cli/lint.ts` judges every edge that
       // comes back in device px, so a wider net costs nothing but report size.
-      const laidOut: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [{ code: 'innerWidth' }])
-      const scale = layoutScale(this.viewport.width, this.getTextScale(), typeof laidOut === 'number' ? laidOut : 0)
-      const below = edgeBelowPx / scale
+      const below = edgeBelowPx / (await this.layoutScaleNow())
       const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
         { code: `${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})` },
       ])

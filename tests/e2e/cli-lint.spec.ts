@@ -126,6 +126,7 @@ test("another command's flag is refused with its owner, exit code 2", async () =
 test('--groups-only: the groups and the summary, an empty list, and nothing said about a list', async () => {
   const m = await lint('--preset', '1080p-24', '--groups-only')
   expect(m.findings).toEqual([])
+  expect(m.truncated.findings).toBe(0)
   expect(m.groups.length).toBeGreaterThan(0)
   expect(m.summary.hairline).toBeGreaterThan(0)
   expect(m.warnings.join(' ')).not.toMatch(/past the 200 listed/)

@@ -570,7 +570,14 @@ describe('parseHighlight space', () => {
 })
 
 describe('pageRectToPane', () => {
-  const view = { scrollX: 0, scrollY: 7228.5, textScale: 1, dsf: 2, paneWidth: 720, paneHeight: 1600 }
+  const view = { scrollX: 0, scrollY: 7228.5, textScale: 1, layoutScale: 1, dsf: 2, paneWidth: 720, paneHeight: 1600 }
+  it('a page drawn to fit is smaller again by its layout scale: the GEICO logo, on screen after all', () => {
+    // berkshirehathaway.com on a 360 px phone lays out 980 wide and is drawn at 0.3673;
+    // its logo's own rect (452.5, 639.5) 75×15 was refused as off a 720 px pane.
+    const fit = { ...view, scrollY: 0, layoutScale: 0.3673 }
+    expect(pageRectToPane({ x: 452.5, y: 639.5, width: 75, height: 15 }, fit)).toEqual({ x: 332, y: 470, width: 56, height: 11 })
+    expect(pageRectToPane({ x: 452.5, y: 639.5, width: 75, height: 15 }, { ...fit, layoutScale: 1 })).toBeNull()
+  })
   it('maps an audit rect through the scroll and the density', () => {
     // The footer link the agent tried to mark: page (24, 7553.85) 30.6×18.75 at scroll 7228.5 on a 2× phone.
     expect(pageRectToPane({ x: 24, y: 7553.85, width: 30.6, height: 18.75 }, view)).toEqual({ x: 48, y: 651, width: 61, height: 37 })

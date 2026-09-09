@@ -138,3 +138,22 @@ test('--groups-only: the summary and the groups, an empty list, and nothing said
   expect(listed.findings.length).toBeGreaterThan(0)
   expect(listed.groups).toEqual(m.groups)
 })
+
+test('a list that was cut says so and counts the cut; with --groups-only there is no list and nothing cut', async () => {
+  // 260 targets under the threshold on any screen, 200 listed.
+  const listed = await runCli(['audit', fixture('many-targets.html'), '--preset', '1080p-24'])
+  expect(listed.code, listed.stderr).toBe(0)
+  const l = JSON.parse(listed.stdout)
+  expect(l.summary.targets).toMatchObject({ count: 260, under: 260 })
+  expect(l.findings).toHaveLength(200)
+  expect(l.truncated.findings).toBe(60)
+  expect(l.warnings.join(' ')).toContain('60 more findings past the 200 listed')
+  // ebay.co.uk with groupsOnly answered `findings: []` and `truncated: { findings: 17 }`.
+  const grouped = await runCli(['audit', fixture('many-targets.html'), '--preset', '1080p-24', '--groups-only'])
+  expect(grouped.code, grouped.stderr).toBe(0)
+  const g = JSON.parse(grouped.stdout)
+  expect(g.findings).toEqual([])
+  expect(g.truncated.findings).toBe(0)
+  expect(g.warnings.join(' ')).not.toMatch(/past the 200 listed/)
+  expect(g.groups[0]).toMatchObject({ kind: 'small-target', count: 260 })
+})

@@ -552,11 +552,18 @@ export function parseHighlight(raw: unknown): (AgentHighlight & { space: Highlig
   }
 }
 
-/** What a page-space rect is mapped through: the target's scroll (page CSS px), text scale and density. */
+/** What a page-space rect is mapped through: the target's scroll (page CSS px), text scale, layout scale and density. */
 export interface TargetView {
   scrollX: number
   scrollY: number
   textScale: number
+  /**
+   * How much smaller the page is drawn than it is laid out (`shared/layoutScale`):
+   * 0.37 for a page with no viewport meta on a 360 px phone, 1 for a page
+   * that fits the screen it was given. An audit finding's rect is in the
+   * page's own px, so it goes through this before the density.
+   */
+  layoutScale: number
   dsf: number
   /** The viewport, in the pane's device pixels. */
   paneWidth: number
@@ -566,14 +573,15 @@ export interface TargetView {
 /**
  * A page rect (CSS px, scroll included) onto the pane's device pixels, cut
  * to the viewport; null when none of it is on screen at the current scroll.
- * A page CSS px is `textScale` surface CSS px (the page lays out in
- * `1/textScale` of the surface), and a surface CSS px is `dsf` device px.
+ * A page CSS px is `layoutScale × textScale` surface CSS px (the page lays
+ * out in `1/textScale` of the surface, and a page drawn to fit is smaller
+ * again by the layout scale), and a surface CSS px is `dsf` device px.
  */
 export function pageRectToPane(
   rect: { x: number; y: number; width: number; height: number },
   view: TargetView,
 ): { x: number; y: number; width: number; height: number } | null {
-  const k = view.textScale * view.dsf
+  const k = view.textScale * view.dsf * view.layoutScale
   const x0 = Math.max(0, Math.round((rect.x - view.scrollX) * k))
   const y0 = Math.max(0, Math.round((rect.y - view.scrollY) * k))
   const x1 = Math.min(view.paneWidth, Math.round((rect.x + rect.width - view.scrollX) * k))

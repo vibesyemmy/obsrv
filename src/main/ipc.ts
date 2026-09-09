@@ -1571,6 +1571,9 @@ export function registerIpc(ctx: AppContext): () => void {
         scrollX: s.targetScroll.x,
         scrollY: s.targetScroll.y,
         textScale: t.getTextScale(),
+        // A page drawn to fit is smaller again by this; asked of the page now,
+        // since it changes with every navigation.
+        layoutScale: await t.layoutScaleNow(),
         dsf,
         paneWidth: Math.round(vp.width * dsf),
         paneHeight: Math.round(vp.height * dsf),

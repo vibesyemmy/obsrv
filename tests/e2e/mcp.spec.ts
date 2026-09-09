@@ -397,6 +397,15 @@ test('obsrv_lint: an image finding carries the object-fit it was judged by, and 
   expect(cover!.message).toContain('object-fit: cover')
 })
 
+test('obsrv_inspect: the layout-scale note is said once, in the readout', async () => {
+  const r = await call('obsrv_inspect', { url: fixture('noviewport.html'), preset: 'android-65', selector: '#b' })
+  expect(r.isError).toBeFalsy()
+  const m = r.structuredContent as { readout: { notes: string[]; layoutScale: number }; notes: string[] }
+  expect(m.readout.layoutScale).toBeCloseTo(0.3673, 3)
+  expect(m.readout.notes.join(' ')).toMatch(/no viewport meta tag/)
+  expect(m.notes.join(' ')).not.toMatch(/no viewport meta tag/)
+})
+
 test('obsrv_audit: groupsOnly leaves the list out, as it does for lint', async () => {
   // A phone audit of a retail page came back as fifteen thousand tokens with
   // no way to ask for the groups alone; lint had had the flag since 0.32.0.
