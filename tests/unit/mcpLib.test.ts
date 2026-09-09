@@ -24,6 +24,7 @@ import {
   queueNote,
   stderrTail,
   urlSchemeError,
+  stripChromiumChatter,
 } from '../../src/mcp/lib'
 
 const URL = 'https://x.test'
@@ -238,7 +239,35 @@ describe('killBudgetMs', () => {
   })
 })
 
+// theverge.com through obsrv_lint on 2026-09-09: what the CLI's stderr held
+// when the load outran the budget, verbatim in shape.
+const VERGE = [
+  '[61144:0909/132317.247917:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)',
+  '[61144:0909/132317.247933:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)',
+  '(node:61144) electron: Failed to load URL: https://tracookiepixel.xyz/log?c_uid=None with error: ERR_BLOCKED_BY_RESPONSE',
+  '(Use `Electron --trace-warnings ...` to show where the warning was created)',
+  '[61583:0909/132615.146742:ERROR:net/socket/ssl_client_socket_impl.cc:963] handshake failed; returned -1, SSL error code 1, net_error -101',
+  'obsrv: load did not finish within 30000 ms: https://www.theverge.com — raise --timeout for the full load',
+].join('\n')
+
+describe('stripChromiumChatter', () => {
+  it("keeps the CLI's own lines and drops Chromium's and Electron's", () => {
+    expect(stripChromiumChatter(VERGE)).toBe('obsrv: load did not finish within 30000 ms: https://www.theverge.com — raise --timeout for the full load')
+    expect(stripChromiumChatter('warning: page kept painting\nobsrv: something\n')).toBe('warning: page kept painting\nobsrv: something')
+  })
+  it('is empty when there was only chatter, so the caller can fall back', () => {
+    expect(stripChromiumChatter(VERGE.split('\n').slice(0, 5).join('\n'))).toBe('')
+  })
+})
+
 describe('stderrTail', () => {
+  it("is the CLI's sentence, not Chromium's log, when both are there", () => {
+    expect(stderrTail(VERGE)).toBe('obsrv: load did not finish within 30000 ms: https://www.theverge.com — raise --timeout for the full load')
+  })
+  it('falls back to the raw tail when chatter is all there is', () => {
+    const only = VERGE.split('\n').slice(0, 2).join('\n')
+    expect(stderrTail(only)).toBe(only)
+  })
   it('passes short output through trimmed', () => {
     expect(stderrTail('obsrv: unknown preset: nope\n')).toBe('obsrv: unknown preset: nope')
   })

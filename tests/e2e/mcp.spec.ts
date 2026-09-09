@@ -363,6 +363,40 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0 })
 })
 
+test("a measurement that refuses a cut load answers with the CLI's sentence, not Chromium's log", async () => {
+  // theverge.com never finished loading and the error was a kilobyte of
+  // task_policy_set lines with the one useful sentence last.
+  const { createServer } = await import('node:http')
+  const server = createServer((req, res) => {
+    if (req.url === '/never.js') return
+    res.setHeader('Content-Type', 'text/html')
+    res.end('<!doctype html><title>hanging</title><p>here</p><script src="/never.js"></script>')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const port = (server.address() as { port: number }).port
+  try {
+    const r = await call('obsrv_lint', { url: `http://127.0.0.1:${port}/`, preset: '1080p-24', timeoutMs: 1500 })
+    expect(r.isError).toBe(true)
+    const text = (r.content as { type: string; text: string }[]).map(c => c.text).join('\n')
+    expect(text).toMatch(/^obsrv lint failed \(exit \d+\): obsrv: load did not finish within 1500 ms/)
+    expect(text).not.toContain('task_policy_set')
+    expect(text).not.toContain('electron:')
+  } finally {
+    server.closeAllConnections?.()
+    await new Promise<void>(r => server.close(() => r()))
+  }
+})
+
+test('obsrv_lint: an image finding carries the object-fit it was judged by, and the schema admits it', async () => {
+  const r = await call('obsrv_lint', { url: fixture('object-fit.html'), preset: '1080p-24' })
+  expect(r.isError, JSON.stringify(r.content)).toBeFalsy()
+  const m = r.structuredContent as { summary: Record<string, number>; findings: { element: string; rule: string; objectFit?: string; factor?: number; message: string }[] }
+  expect(m.summary['image-upscaled']).toBe(2)
+  const cover = m.findings.find(f => f.element === 'img#cover')
+  expect(cover).toMatchObject({ rule: 'image-upscaled', objectFit: 'cover' })
+  expect(cover!.message).toContain('object-fit: cover')
+})
+
 test('obsrv_audit: groupsOnly leaves the list out, as it does for lint', async () => {
   // A phone audit of a retail page came back as fifteen thousand tokens with
   // no way to ask for the groups alone; lint had had the flag since 0.32.0.

@@ -1,0 +1,23 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>object-fit</title>
+<!--
+  One 960×331 file, five ways into a 551×567 box and once into a 200×200 one.
+  On a 1x screen: cover and fill scale the height 1.71× (upscaled), contain
+  and scale-down draw it 551×190 (downsampled 1.74×, under the 2× rule), none
+  draws it 1:1; in the small box, contain draws it 200×69 — downsampled 4.8×.
+-->
+<style>
+  body { margin: 20px; font: 16px sans-serif; color: #111; background: #fff }
+  img { display: block; margin: 0 0 20px; background: #ddd }
+  #cover, #fill, #contain, #none, #scale-down { width: 551px; height: 567px }
+  #cover { object-fit: cover } #contain { object-fit: contain } #none { object-fit: none } #scale-down { object-fit: scale-down }
+  #small { width: 200px; height: 200px; object-fit: contain }
+</style>
+<p>One 960×331 file, fitted six ways.</p>
+<img id="cover" src="wide.png" alt="">
+<img id="fill" src="wide.png" alt="">
+<img id="contain" src="wide.png" alt="">
+<img id="none" src="wide.png" alt="">
+<img id="scale-down" src="wide.png" alt="">
+<img id="small" src="wide.png" alt="">

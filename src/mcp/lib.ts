@@ -425,9 +425,39 @@ export function killBudgetMs(renders: number, timeoutMs: number, waitMs: number 
   return renders * (timeoutMs + waitMs) + 60_000
 }
 
-/** The tail of the CLI's stderr, trimmed and capped for a tool-error message. */
+/**
+ * Chromium and Electron write their own log lines to the CLI's stderr —
+ * `[pid:mmdd/hhmmss.us:ERROR:base/process/process_mac.cc:53] task_policy_set …`
+ * on every macOS launch, `(node:pid) electron: Failed to load URL: …` for a
+ * blocked tracking pixel, the `--trace-warnings` hint under it — and a lint
+ * that refused a cut load came back as a kilobyte of those with the one
+ * sentence that mattered last. These are the shapes seen; the CLI's own
+ * lines never match them.
+ */
+const CHROMIUM_CHATTER = [
+  /^\[\d+:\d{4}\/\d{6}\.\d+:(?:ERROR|WARNING|INFO|VERBOSE\d*|FATAL):[^\]]*\]/,
+  /^\(node:\d+\) (?:electron|\[DEP\d+\]|ExperimentalWarning|Warning): /,
+  /^\(Use `(?:Electron|node|electron) --trace-/,
+  /^objc\[\d+\]: /,
+]
+
+/** `stderr` without the lines Chromium and Electron wrote; empty when there were only those. */
+export function stripChromiumChatter(stderr: string): string {
+  return stderr
+    .split('\n')
+    .filter(line => !CHROMIUM_CHATTER.some(re => re.test(line)))
+    .join('\n')
+    .trim()
+}
+
+/**
+ * The tail of the CLI's stderr, trimmed and capped for a tool-error message,
+ * with Chromium's own log lines left out — unless they are all there is, in
+ * which case the raw tail is better than nothing.
+ */
 export function stderrTail(stderr: string, max: number = STDERR_TAIL_CHARS): string {
-  const trimmed = stderr.trim()
+  const own = stripChromiumChatter(stderr)
+  const trimmed = own.length > 0 ? own : stderr.trim()
   return trimmed.length <= max ? trimmed : `…${trimmed.slice(-max)}`
 }
 

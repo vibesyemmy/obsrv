@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintPanel } from '../../src/cli/lint'
+import { DEFAULT_THIN_PX, LINT_GROUP_ELEMENTS, LINT_MAX_FINDINGS, LINT_RULES, groupFindings, groupKey, isLargeText, lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintPanel, imageScale } from '../../src/cli/lint'
 import { effectiveContrast } from '../../src/shared/contrast'
 import type { LintEdge, LintImage, LintReport, LintText } from '../../src/shared/lint'
 import { profileToParams } from '../../src/shared/panelSim'
@@ -327,5 +327,51 @@ describe('lintFindings on a page drawn scaled to fit (no viewport meta)', () => 
     expect(r.warnings).toHaveLength(1)
     expect(r.warnings[0]).toMatch(/lays out 980 CSS px wide where the screen gives it 360 and is drawn at 0\.37× to fit/)
     expect(lintFindings(fits({}), phone, panel('reference'), thresholds).warnings).toEqual([])
+  })
+})
+
+describe('object-fit', () => {
+  // ebay.co.uk's hero and the run-6 fixture: a 960×331 file in a 551×567 box.
+  const file = { naturalWidth: 960, naturalHeight: 331 }
+  const box = { x: 0, y: 0, width: 551, height: 567 }
+  it('imageScale follows the fit: cover by the larger axis, contain by the smaller, fill by each, none not at all', () => {
+    const n = { width: 960, height: 331 }
+    const d = { width: 551, height: 567 }
+    expect(imageScale(n, d, 'cover').x).toBeCloseTo(1.713, 3)
+    expect(imageScale(n, d, 'contain').x).toBeCloseTo(0.574, 3)
+    expect(imageScale(n, d, 'scale-down')).toEqual(imageScale(n, d, 'contain'))
+    expect(imageScale(n, d, 'fill')).toEqual({ x: 551 / 960, y: 567 / 331 })
+    expect(imageScale(n, d, 'none')).toEqual({ x: 1, y: 1 })
+    expect(imageScale(n, { width: 1920, height: 662 }, 'scale-down')).toEqual({ x: 1, y: 1 })
+  })
+  it('a cover of a box of another shape is upscaled by its height, which the width alone called 1.15× or nothing', () => {
+    const r = report({ images: [image({ ...file, rect: box, objectFit: 'cover' })] })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 1.71, objectFit: 'cover' })
+    expect(res.findings[0]!.message).toContain('covering 551×567 device px (object-fit: cover): upscaled 1.71×')
+    // On the phone the same box is 2× denser: 3.43×, the figure ebay's hero deserved.
+    expect(lintFindings(r, screen(2), reference, thresholds).findings[0]).toMatchObject({ factor: 3.43 })
+  })
+  it('a fill stretches: the factor is the axis scaled most, and the sentence names both', () => {
+    const r = report({ images: [image({ ...file, rect: box, objectFit: 'fill' })] })
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 1.71, objectFit: 'fill' })
+    expect(res.findings[0]!.message).toContain('stretched over 551×567 device px: upscaled 1.71× on its height (0.57× on its width)')
+  })
+  it('contain and scale-down follow the smaller axis: 1.74× down is under the 2× rule, and a small box is oversized', () => {
+    for (const objectFit of ['contain', 'scale-down'] as const) {
+      const r = report({ images: [image({ ...file, rect: box, objectFit })] })
+      expect(lintFindings(r, screen(1), reference, thresholds).findings).toEqual([])
+    }
+    const small = report({ images: [image({ ...file, rect: { x: 0, y: 0, width: 200, height: 200 }, objectFit: 'contain' })] })
+    const res = lintFindings(small, screen(1), reference, thresholds)
+    expect(res.findings[0]).toMatchObject({ rule: 'image-oversized', factor: 4.8, objectFit: 'contain' })
+    expect(res.findings[0]!.message).toContain('fitted inside 200×200 device px (object-fit: contain): downsampled 4.8×')
+  })
+  it('none draws the file 1:1 whatever the box, and an older report without the field reads as fill', () => {
+    expect(lintFindings(report({ images: [image({ ...file, rect: box, objectFit: 'none' })] }), screen(1), reference, thresholds).findings).toEqual([])
+    const legacy = report({ images: [image({ naturalWidth: 100, naturalHeight: 100 })] })
+    expect(lintFindings(legacy, screen(1), reference, thresholds).findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 2, objectFit: 'fill' })
+    expect(lintFindings(legacy, screen(1), reference, thresholds).findings[0]!.message).toContain('drawn over 200×200 device px: upscaled 2×')
   })
 })

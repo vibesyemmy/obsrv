@@ -70,6 +70,23 @@ describe('an app shell whose inner scroller has been scrolled', () => {
     expect(menu(down)).toBeCloseTo(menu(atTop)!, 0)
   })
 
+  it('reports how each image is fitted into its box, so the judge can follow the right axis', async () => {
+    // A 1×1 PNG: naturalWidth 1, so every box is an upscale; only the fit is under test here.
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    const fits = ['cover', 'contain', 'fill', 'none', 'scale-down'] as const
+    const imgs = fits.map(fit => {
+      const img = document.createElement('img')
+      img.id = `fit-${fit}`
+      img.style.cssText = `display:block;width:40px;height:20px;object-fit:${fit}`
+      img.src = png
+      scroller.prepend(img)
+      return img
+    })
+    await Promise.all(imgs.map(i => i.decode()))
+    const r = await lintPage(EDGE_BELOW_PX, 3000, 2000, 500)
+    for (const fit of fits) expect(r.images.find(i => i.element === `img#fit-${fit}`)?.objectFit).toBe(fit)
+  })
+
   it('works as the shipped source, which must be self-contained', async () => {
     scroller.scrollTop = 600
     // eslint-disable-next-line no-new-func

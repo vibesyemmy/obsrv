@@ -73,7 +73,18 @@ export interface LintImage {
   candidates: string[]
   /** The descriptor of the candidate Chromium chose (`'640w'`, `'2x'`), when it can be matched. */
   chosen?: string
+  /**
+   * How the file is fitted into its box (`object-fit`). A file covering a
+   * box of another shape is scaled by its larger axis, one fitted inside by
+   * its smaller, and one filling it is stretched by each axis separately —
+   * so the width alone says nothing about how blurred it is. Absent from an
+   * older app's reply, in which case `fill` is assumed.
+   */
+  objectFit?: LintObjectFit
 }
+
+export type LintObjectFit = 'fill' | 'contain' | 'cover' | 'none' | 'scale-down'
+export const LINT_OBJECT_FITS: readonly LintObjectFit[] = ['fill', 'contain', 'cover', 'none', 'scale-down']
 
 export interface LintReport {
   viewport: { width: number; height: number }
@@ -325,6 +336,10 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
           .slice(0, 12)
         const src = chosenUrl.startsWith('data:') ? chosenUrl.slice(0, Math.min(chosenUrl.indexOf(',') + 1 || 40, 40)) : chosenUrl.slice(0, 200)
         if (sets.length > 0 && chosenUrl.length > 0) probes.push({ at: images.length, url: chosenUrl })
+        // `object-fit` decides which axis the scaling follows; anything but
+        // the five keywords (a page-side alias, an empty string) reads as fill.
+        const fit = cs.objectFit
+        const objectFit = fit === 'contain' || fit === 'cover' || fit === 'none' || fit === 'scale-down' ? fit : 'fill'
         images.push({
           element: label(el),
           rect,
@@ -334,6 +349,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
           srcset: sets.length > 0,
           candidates,
           ...(chosen !== undefined ? { chosen } : {}),
+          objectFit,
         })
       }
     }

@@ -19,8 +19,8 @@ the screen, and the reflow zoom on top of it.
 | `thin-text` | Text lighter than regular (weight under 400) whose font size is under `thinPx` device px (default 14). | Strokes thinner than a device pixel go grey and break up on a 1x screen; 300-weight at 12px is 12 device px on a monitor and 24 on a phone. |
 | `contrast` | Text whose WCAG 2 contrast fails AA as stated: under 4.5:1, or 3:1 for large text (24px, or 18.66px bold). | The plain failure; the same figure `obsrv inspect` reports as "as stated". |
 | `contrast-on-panel` | Text that passes as stated but fails once the panel profile (and, live, the vision setting) is applied. | A budget TN lifts the blacks and pulls the pair together: #767676 on white is 4.54:1 on the display it was designed on and under 4.5:1 on Budget TN. The reference profile never adds one. |
-| `image-upscaled` | A raster image drawn wider, in device px, than the loaded file's own width. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
-| `image-oversized` | A raster image whose file is more than 2× wider than its drawn device width. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
+| `image-upscaled` | A raster image drawn larger, in device px, than the loaded file on either axis, as `object-fit` scales it: a cover by its larger axis, a contain by its smaller, a fill by each axis on its own. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
+| `image-oversized` | A raster image whose file is more than 2× the size it is drawn at, on the axis scaled most, per `object-fit`. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
 
 Text that is the same colour as its background (1:1) is not a contrast
 failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
@@ -39,6 +39,13 @@ read as upscaled 2×. The walk loads the chosen URL as a plain image (from
 cache) for its real pixels, and the finding names the candidate taken
 (`chosen`, e.g. `640w`), so a reader can tell a srcset with nothing larger
 from a `sizes` that undersold the slot.
+
+Both rules follow `object-fit`, because the width alone says nothing about
+how blurred an image is: a 960×331 file covering a 551×567 box is scaled by
+its height, 1.7×, and a fill of that box stretches its height 1.7× while
+squeezing its width — so the factor is the axis scaled most, the finding
+carries `objectFit`, and the sentence says which axis when a fill stretches.
+`contain` and `scale-down` follow the smaller axis; `none` scales nothing.
 
 Findings come rule by rule in that order, the worst first within a rule
 (thinnest edge, smallest text, lowest ratio, largest factor), at most 200
