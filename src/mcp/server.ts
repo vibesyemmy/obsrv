@@ -341,12 +341,14 @@ const snapOutputShape = {
         'a fresh load, which starts at the top of the page.',
     ),
   unsettledReason: z
-    .enum(['animating', 'timeout', 'uncovered', 'loading'])
+    .enum(['animating', 'timeout', 'uncovered', 'blank', 'loading'])
     .optional()
     .describe(
       "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
         "early (~2 s) rather than at the budget and waiting longer would not have helped; 'timeout' — still painting at the budget; " +
-        "'uncovered' — part of the frame never painted within the budget; 'loading' — the load outran timeoutMs (under a " +
+        "'uncovered' — part of the frame never painted within the budget; 'blank' — the frame is one colour end to end and stayed " +
+        "that way for 3 s after going quiet: the page's background with nothing on it yet, or a page that really is empty — the PNG " +
+        "is not a picture of the page, so pass waitMs for a page that paints late; 'loading' — the load outran timeoutMs (under a " +
         "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load.",
     ),
   warnings: z.array(z.string()),
@@ -684,7 +686,13 @@ const driveOutputShape = {
     .optional()
     .describe('When a highlight was asked for: whether it was drawn, and the pane rect it landed on. With a capture in the same call it stays up until the shutter has fired.'),
   settled: z.boolean().optional().describe("With capture: 'raster', whether the target went paint-quiet for it."),
-  unsettledReason: z.string().optional().describe("With capture: 'raster' and settled false: why (animating, timeout, uncovered)."),
+  unsettledReason: z
+    .string()
+    .optional()
+    .describe(
+      "With a capture and settled false: why (animating, timeout, uncovered, blank — one colour end to end after the grace, " +
+        'so not a picture of the page; wait and capture again).',
+    ),
   warnings: z.array(z.string()).optional().describe('Anything worth knowing about the commands that ran (e.g. a scrollSelector that matched nothing).'),
   pngPath: z.string().optional().describe('Only when `capture` was requested: absolute path of the PNG (kept in a per-call temp dir).'),
   inlined: z.boolean().optional().describe('Only when `capture` was requested: whether the PNG came back inline; false past the 1.5 MiB cap, with a warning naming the path.'),
@@ -1198,6 +1206,14 @@ const auditOutputShape = {
   throttle: z.string().optional().describe('Only when `throttle` was given: the conditions the page loaded under.'),
   pageHeight: z.number().describe('The page\'s full height in CSS px; rects are page coordinates, so the audit covers all of it.'),
   ppi: z.number().nullable().describe('Device pixels per inch of the screen; null for custom dims without a diagonal.'),
+  layoutScale: z
+    .number()
+    .optional()
+    .describe(
+      'How much smaller the page is drawn than it is laid out: 1 for a page that fits its screen, 0.37 for one with no viewport meta ' +
+        'tag on a 360 px phone (laid out 980 wide, drawn to fit). The millimetres are of the page as drawn; rects, font sizes and ' +
+        'pageHeight are in the page\'s own layout px, 1/layoutScale times larger. A warning says so when it is not 1. Absent from an app older than the field.',
+    ),
   thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
   summary: z.object({ targets: auditGroupShape, text: auditGroupShape }),
   findings: z
@@ -1256,10 +1272,13 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     // A walk that saw the end of a page it never crossed (a consent layer
     // holding the body, a page that grew after the walk) is said here, as the
     // CLI says it: the answer carries the page height it measured.
+    // The page's height is in its own px; a page laid out wider than the
+    // screen and drawn to fit (no viewport meta) reports a larger one.
     const auditCoverage = walkCoverageNote(
       walked,
       status.cssHeight / (typeof textScale === 'number' && textScale > 0 ? textScale : 1),
-      typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0,
+      (typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0) *
+        (typeof measured['layoutScale'] === 'number' && measured['layoutScale'] > 0 ? measured['layoutScale'] : 1),
     )
     const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
     const structured = {
@@ -1438,6 +1457,14 @@ const lintOutputShape = {
   throttle: z.string().optional().describe('Only when a throttle was in force.'),
   profile: z.string().describe('The panel the contrast-on-panel rule was judged on.'),
   pageHeight: z.number().describe("The page's full height in CSS px; rects are page coordinates, so the lint covers all of it."),
+  layoutScale: z
+    .number()
+    .optional()
+    .describe(
+      'How much smaller the page is drawn than it is laid out: 1 for a page that fits its screen, 0.37 for one with no viewport meta ' +
+        'tag on a 360 px phone. Every device-pixel figure is of the page as drawn; rects and pageHeight are in the page\'s own layout ' +
+        'px, 1/layoutScale times larger. A warning says so when it is not 1. Absent from an app older than the field.',
+    ),
   thresholds: z.object({ thinPx: z.number() }),
   summary: z
     .object({
@@ -1516,10 +1543,12 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       walked !== undefined && !walked.atEnd
         ? unwalkedImageNote(liveFindings, (walked.screenfuls + 1) * (status.cssHeight / liveTextScale))
         : null
+    const judgedScale = (judged as { layoutScale?: unknown }).layoutScale
     const lintCoverage = walkCoverageNote(
       walked,
       status.cssHeight / liveTextScale,
-      typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? ((judged as { pageHeight: number }).pageHeight) : 0,
+      (typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? ((judged as { pageHeight: number }).pageHeight) : 0) *
+        (typeof judgedScale === 'number' && judgedScale > 0 ? judgedScale : 1),
     )
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {
@@ -1644,6 +1673,13 @@ const inspectInputShape = {
   timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
+/** The notes a readout carries about its own figures (the layout scale, when it is not 1); none from an app older than the field. */
+function readoutNotes(readout: unknown): string[] {
+  if (readout === null || typeof readout !== 'object') return []
+  const notes = (readout as { notes?: unknown }).notes
+  return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string') : []
+}
+
 const readoutShape = z
   .object({
     element: z.string().describe('tag#id.first-class'),
@@ -1683,6 +1719,15 @@ const readoutShape = z
       .nullable()
       .describe('Null when the background could not be computed (an image or gradient under the text).'),
     ppi: z.number().nullable(),
+    layoutScale: z
+      .number()
+      .optional()
+      .describe(
+        'How much smaller the page is drawn than it is laid out: 1 for a page that fits its screen, 0.37 for one with no viewport ' +
+          'meta tag on a 360 px phone. The millimetres are of the element as drawn; rect, pageRect and font.px are in the page\'s own ' +
+          'layout px. Absent from an app older than the field.',
+      ),
+    notes: z.array(z.string()).optional().describe('What the reader should know about the figures (the layout scale, when it is not 1); also hoisted into the top-level notes.'),
   })
   .nullable()
 
@@ -1757,7 +1802,7 @@ const reportOutputShape = {
       textScale: z.number().optional().describe('Present only when a scale other than 1 was applied.'),
       ppi: z.number().nullable(),
       settled: z.boolean(),
-      unsettledReason: z.enum(['animating', 'timeout', 'uncovered', 'loading']).optional(),
+      unsettledReason: z.enum(['animating', 'timeout', 'uncovered', 'blank', 'loading']).optional(),
       settledMs: z.number().nullable().optional().describe('Only when `throttle` was given: ms to paint-quiet, null if never.'),
       walked: walkedField,
       audit: z
@@ -2129,7 +2174,9 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
       throttle: status.throttle,
       found: answer.found === true,
       readout: answer.readout ?? null,
-      notes,
+      // The readout's own notes (the layout scale, when it is not 1) are hoisted
+      // beside the call's, where a reader looks first.
+      notes: [...notes, ...readoutNotes(answer.readout)],
       ...(launched ? { launched: true } : {}),
     }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
@@ -2191,7 +2238,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...readoutNotes((result as { readout?: unknown }).readout), ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )

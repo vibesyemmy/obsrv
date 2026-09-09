@@ -18,11 +18,23 @@ const fullFrame = (w: number, h: number, byte: number): FrameMessage => ({
   frameWidth: w,
   frameHeight: h,
 })
+/**
+ * A full frame with something on it: one pixel on the flatness check's sample
+ * grid differs, so the capture does not hold it for the blank grace. The
+ * one-colour frames above are the page's background, and are held.
+ */
+const marked = (w: number, h: number, byte: number): FrameMessage => {
+  const m = fullFrame(w, h, byte)
+  m.frame.data[4 * 4] = byte ^ 0xff
+  return m
+}
+/** Compositing tests use one-colour frames; the grace is not what they test. */
+const noGrace = { blankGraceMs: 0 }
 
 describe('captureQuiescent', () => {
   it('resolves with the composited full frame once paints go quiet', async () => {
     const src = new FakeSource([fullFrame(2, 2, 7)])
-    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000, ...noGrace })
     expect(got.width).toBe(2)
     expect(got.height).toBe(2)
     expect(Array.from(got.bgra)).toEqual(Array(16).fill(7))
@@ -34,7 +46,7 @@ describe('captureQuiescent', () => {
       frameHeight: 2,
     }
     const src = new FakeSource([fullFrame(2, 2, 0), slice])
-    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000, ...noGrace })
     expect(Array.from(got.bgra.subarray(12, 16))).toEqual([9, 9, 9, 9])
     expect(Array.from(got.bgra.subarray(0, 4))).toEqual([0, 0, 0, 0])
   })
@@ -47,7 +59,7 @@ describe('captureQuiescent', () => {
       frameHeight: 2,
     })
     const src = new FakeSource([half(0, 4), half(1, 6)])
-    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000 })
+    const got = await captureQuiescent(src, { settleMs: 30, timeoutMs: 2000, ...noGrace })
     expect(Array.from(got.bgra.subarray(0, 8))).toEqual(Array(8).fill(4))
     expect(Array.from(got.bgra.subarray(8, 16))).toEqual(Array(8).fill(6))
   })
@@ -76,18 +88,20 @@ describe('captureQuiescent', () => {
     await expect(captureQuiescent(new FakeSource([]), { settleMs: 20, timeoutMs: 150 })).rejects.toThrow(/no frame painted/)
   })
   it('reports settled: true for a quiet capture', async () => {
-    const got = await captureQuiescent(new FakeSource([fullFrame(1, 1, 1)]), { settleMs: 20, timeoutMs: 1000 })
+    const got = await captureQuiescent(new FakeSource([marked(8, 8, 1)]), { settleMs: 20, timeoutMs: 1000 })
     expect(got.settled).toBe(true)
   })
   it('a covered but never-quiet page is captured best-effort with settled: false', async () => {
     // Repaints keep arriving faster than the settle window for the whole budget.
-    const src = new FakeSource([fullFrame(1, 1, 8)])
+    const src = new FakeSource([marked(8, 8, 8)])
     const noisy = setInterval(() => src.invalidate(), 10)
     try {
       const warnings: string[] = []
       const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 300, onWarn: m => warnings.push(m) })
       expect(got.settled).toBe(false)
-      expect(Array.from(got.bgra)).toEqual(Array(4).fill(8))
+      expect(got.bgra).toHaveLength(8 * 8 * 4)
+      expect(got.bgra[0]).toBe(8)
+      expect(got.unsettledReason).toBe('timeout')
       expect(warnings.join(' ')).toMatch(/kept painting/)
     } finally {
       clearInterval(noisy)
@@ -113,7 +127,7 @@ describe('captureQuiescent', () => {
   })
 
   it('with the animation exit off, the same page runs to the budget and says timeout', async () => {
-    const src = new FakeSource([fullFrame(1, 1, 9)])
+    const src = new FakeSource([marked(8, 8, 9)])
     const noisy = setInterval(() => src.invalidate(), 20)
     try {
       const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 400, animationExit: false })
@@ -169,5 +183,66 @@ describe('stitchBands', () => {
     const out = stitchBands(2, 1, [wide])
     expect(out.length).toBe(8)
     expect(Array.from(out)).toEqual([9, 9, 9, 9, 9, 9, 9, 9])
+  })
+})
+
+/**
+ * espn.com paints white, goes quiet for longer than the settle window, and
+ * paints its page a second later; the white came back `settled: true` with no
+ * warning on every surface. A quiet frame that is one colour end to end is now
+ * given a grace to paint something, and is named blank when it does not.
+ */
+describe('captureQuiescent on a one-colour frame', () => {
+  // The flatness check samples every fourth pixel, so content must land on the grid.
+  const W = 8
+  const H = 8
+  const at = (x: number, y: number, rgba: number[]): FrameMessage => ({
+    frame: { x, y, width: 1, height: 1, data: new Uint8Array(rgba) },
+    frameWidth: W,
+    frameHeight: H,
+  })
+  it('that stays quiet comes back unsettled, named blank, with its colour in the warning', async () => {
+    const warnings: string[] = []
+    const got = await captureQuiescent(new FakeSource([fullFrame(W, H, 255)]), {
+      settleMs: 20,
+      timeoutMs: 2000,
+      blankGraceMs: 80,
+      onWarn: m => warnings.push(m),
+    })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('blank')
+    expect(warnings.join(' ')).toMatch(/one colour end to end \(#ffffff\) and stayed that way for 80 ms/)
+    expect(warnings.join(' ')).toMatch(/settled: false, blank/)
+    expect(Array.from(got.bgra.subarray(0, 4))).toEqual([255, 255, 255, 255])
+  })
+  it('that paints its content within the grace is settled, as before, with no warning', async () => {
+    const src = new FakeSource([fullFrame(W, H, 255)])
+    setTimeout(() => src.emit('frame', at(4, 4, [0, 0, 0, 255])), 40)
+    const warnings: string[] = []
+    const got = await captureQuiescent(src, { settleMs: 20, timeoutMs: 2000, blankGraceMs: 400, onWarn: m => warnings.push(m) })
+    expect(got.settled).toBe(true)
+    expect(got.unsettledReason).toBeUndefined()
+    expect(warnings).toEqual([])
+    expect(Array.from(got.bgra.subarray((4 * W + 4) * 4, (4 * W + 4) * 4 + 4))).toEqual([0, 0, 0, 255])
+  })
+  it('a frame with anything on it is not held for the grace', async () => {
+    const src = new FakeSource([fullFrame(W, H, 255), at(4, 0, [1, 2, 3, 255])])
+    const t0 = Date.now()
+    const got = await captureQuiescent(src, { settleMs: 20, timeoutMs: 2000, blankGraceMs: 1500 })
+    expect(got.settled).toBe(true)
+    expect(Date.now() - t0).toBeLessThan(700)
+  })
+  it('still one colour at the budget is blank, not timeout', async () => {
+    const src = new FakeSource([fullFrame(W, H, 0)])
+    const noisy = setInterval(() => src.invalidate(), 10)
+    try {
+      const warnings: string[] = []
+      const got = await captureQuiescent(src, { settleMs: 100, timeoutMs: 250, blankGraceMs: 5000, animationExit: false, onWarn: m => warnings.push(m) })
+      expect(got.settled).toBe(false)
+      expect(got.unsettledReason).toBe('blank')
+      expect(warnings.join(' ')).toMatch(/\(#000000\) and stayed that way for 250 ms/)
+    } finally {
+      clearInterval(noisy)
+    }
   })
 })

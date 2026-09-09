@@ -1,4 +1,5 @@
 import { effectiveContrast, hex, relativeLuminance } from '../shared/contrast'
+import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
 import type { LintEdgeKind, LintRect, LintReport } from '../shared/lint'
 import type { PanelParams } from '../shared/types'
 import type { Matrix3 } from '../shared/vision'
@@ -223,6 +224,13 @@ export function groupFindings(findings: LintFinding[]): LintGroup[] {
 
 export interface LintResult {
   profile: string
+  /**
+   * How much smaller the page is drawn than it is laid out (`shared/layoutScale`):
+   * 1 for a page that fits its screen, 360/980 for one with no viewport meta
+   * on a 360 px phone. Every device-pixel figure is of the page as drawn; the
+   * rects are in the page's own layout px, which are 1/scale times larger.
+   */
+  layoutScale: number
   thresholds: LintThresholds
   /** Every finding counted, listed or not. */
   summary: Record<LintRule, number>
@@ -251,11 +259,17 @@ export function isLargeText(fontSizePx: number, fontWeight: number): boolean {
 const isVector = (src: string): boolean => /\.svg(?:[?#]|$)/i.test(src) || /^data:image\/svg/i.test(src)
 
 export function lintFindings(report: LintReport, screen: LintScreen, panel: LintPanel, thresholds: LintThresholds): LintResult {
-  // Device pixels per CSS pixel of the page: the density, and the reflow zoom on top of it.
-  const k = screen.deviceScaleFactor * (screen.textScale ?? 1)
+  const warnings: string[] = []
+  // Device pixels per CSS pixel of the page: the density, the reflow zoom on
+  // top of it, and the fit-to-width scale of a page laid out wider than the
+  // screen (no viewport meta on a phone), which draws every page px smaller.
+  const textScale = screen.textScale ?? 1
+  const scale = layoutScale(screen.cssWidth, textScale, report.viewport.width)
+  const scaleNote = layoutScaleNote(scale, report.viewport.width, screen.cssWidth / textScale)
+  if (scaleNote) warnings.push(scaleNote)
+  const k = screen.deviceScaleFactor * textScale * scale
   const summary: Record<LintRule, number> = { hairline: 0, 'thin-text': 0, contrast: 0, 'contrast-on-panel': 0, 'image-upscaled': 0, 'image-oversized': 0 }
   const groups: Record<LintRule, LintFinding[]> = { hairline: [], 'thin-text': [], contrast: [], 'contrast-on-panel': [], 'image-upscaled': [], 'image-oversized': [] }
-  const warnings: string[] = []
 
   for (const e of report.edges) {
     const devicePx = e.px * k
@@ -428,6 +442,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
 
   return {
     profile: panel.profileId,
+    layoutScale: round(scale, 4),
     thresholds,
     summary,
     findings,

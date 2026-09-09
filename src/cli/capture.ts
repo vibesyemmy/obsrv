@@ -1,5 +1,5 @@
 import type { FrameMessage } from '../shared/api'
-import { SETTLE_QUIET_MS } from '../shared/paint'
+import { BLANK_GRACE_MS, blankWarning, isFlatFrame, SETTLE_QUIET_MS } from '../shared/paint'
 import type { RGBAImage } from '../shared/downsample'
 
 /**
@@ -19,15 +19,15 @@ export interface FrameEmitter {
  * Why a capture is not settled: `animating` — the frame was covered and the
  * page kept painting at a steady rate, so the capture was taken early rather
  * than at the budget; `timeout` — covered, still painting at the budget;
- * `uncovered` — the budget ran out with pixels never painted.
+ * `uncovered` — the budget ran out with pixels never painted; `blank` — the
+ * frame went quiet one colour end to end and stayed that way through the
+ * grace: the page's background with nothing on it yet, or a page that really
+ * is empty, and either way not a picture to vouch for. `loading` is not this
+ * module's finding but the render's: the page load outran the budget (under
+ * a throttle, a slow load is the point), and the frame is what had painted by
+ * then — quiet or not, it is not the settled page, and `settledMs` is null.
  */
-/**
- * Why a capture is not settled. `loading` is not this module's finding but
- * the render's: the page load outran the budget (under a throttle, a slow
- * load is the point), and the frame is what had painted by then — quiet or
- * not, it is not the settled page, and `settledMs` is null.
- */
-export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'loading'
+export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'blank' | 'loading'
 
 export interface CapturedFrame {
   /** Device pixels (CSS viewport × deviceScaleFactor). */
@@ -65,6 +65,11 @@ export interface CaptureOptions {
    * slowly over 3G paints steadily too.
    */
   animationExit?: boolean
+  /**
+   * How long a quiet frame that is one colour end to end is given to paint
+   * something before it is returned as blank (default `BLANK_GRACE_MS`).
+   */
+  blankGraceMs?: number
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
@@ -150,8 +155,11 @@ function uncoveredBounds(mask: Uint8Array, width: number, height: number): { x: 
 export async function captureQuiescent(source: FrameEmitter, options: CaptureOptions = {}): Promise<CapturedFrame> {
   const settleMs = options.settleMs ?? DEFAULT_SETTLE_MS
   const timeoutMs = options.timeoutMs ?? 30_000
+  const blankGraceMs = options.blankGraceMs ?? BLANK_GRACE_MS
 
   let width = 0
+  /** When a covered frame first went quiet as one flat colour; the grace counts from here. */
+  let blankSince = 0
   let height = 0
   let buffer = new Uint8Array(0)
   let covered = false
@@ -220,7 +228,22 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     for (;;) {
       const failed = options.failure?.()
       if (failed) throw failed
-      if (covered && Date.now() - lastPaint >= settleMs) break
+      if (covered && Date.now() - lastPaint >= settleMs) {
+        // Quiet. A frame that is one colour end to end is the page's
+        // background, not the page: espn.com paints white, goes quiet for
+        // longer than the settle window, and paints its content a second
+        // later. Give it the grace to paint something; still flat after
+        // that, it comes back unsettled and says so, since a one-colour
+        // picture is never a real answer.
+        if (!isFlatFrame(buffer, width, height)) break
+        if (blankSince === 0) blankSince = Date.now()
+        if (Date.now() - blankSince >= blankGraceMs) {
+          settled = false
+          unsettledReason = 'blank'
+          options.onWarn?.(blankWarning(buffer, blankGraceMs))
+          break
+        }
+      }
       // Covered and painting steadily: it will not go quiet, and the frame
       // in hand is as good as the one at the budget.
       if (
@@ -239,8 +262,15 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       if (Date.now() >= deadline) {
         settled = false
         if (covered) {
-          unsettledReason = 'timeout'
-          options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
+          // Still painting at the budget — and if every paint left it one
+          // colour, blank is the more useful word for what came back.
+          if (isFlatFrame(buffer, width, height)) {
+            unsettledReason = 'blank'
+            options.onWarn?.(blankWarning(buffer, timeoutMs))
+          } else {
+            unsettledReason = 'timeout'
+            options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
+          }
           break
         }
         if (frames === 0 || width === 0 || height === 0) {

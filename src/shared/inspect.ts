@@ -43,6 +43,14 @@ export interface InspectReport {
    */
   background: RGBA | null
   backgroundNote: 'computed' | 'image'
+  /**
+   * The layout viewport's width, in the page's own CSS px. A page with no
+   * viewport meta tag under a phone preset lays out 980 wide and is drawn
+   * scaled to fit, so the box and the font above are larger than they are
+   * on the glass; the readout compares this with the screen to say by how much.
+   * Optional so a report from before the field reads as scale 1.
+   */
+  viewportWidth?: number
 }
 
 /**
@@ -146,6 +154,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     color,
     background,
     backgroundNote: note,
+    viewportWidth: innerWidth,
   }
 }
 

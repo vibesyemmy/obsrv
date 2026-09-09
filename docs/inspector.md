@@ -68,6 +68,15 @@ page's own font size — what the stylesheet says — and its millimetres are
 that many CSS px at `density × scale`: `16px = 4.4 mm` at ×1 reads
 `16px = 6.6 mm` at ×1.5, which is the size on the glass.
 
+## Under a page that does not fit its screen
+
+A page with no `<meta name="viewport">` under a phone preset is laid out at
+Chromium's fallback width, 980 CSS px, and drawn scaled to fit the screen.
+The element's box and font size are in the page's own layout px; the
+millimetres are of the element as drawn, through that scale (`layoutScale`
+in the readout, 1 for a page that fits), and the readout's `notes` say so.
+A 44 px button on such a page is 3.0 mm on a 360 px phone, not 8.3.
+
 ## For agents: `obsrv inspect` and `obsrv_inspect`
 
 ```

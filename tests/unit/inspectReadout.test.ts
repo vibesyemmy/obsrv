@@ -93,3 +93,32 @@ describe('inspectReadout', () => {
     expect(small.contrast).toMatchObject({ largeText: false, aaThreshold: 4.5, passesAsIs: false })
   })
 })
+
+/**
+ * A page with no viewport meta tag under a phone preset lays out 980 CSS px
+ * wide and is drawn scaled to fit: the box and the font are in the page's own
+ * layout px, and the millimetres are of the element as drawn.
+ */
+describe('inspectReadout on a page drawn scaled to fit (no viewport meta)', () => {
+  it('scales the millimetres, leaves the px alone, and says so in its notes', () => {
+    const r = inspectReadout({ ...grey, viewportWidth: 980 }, screenOf('android-65'), panelOf('reference'))
+    expect(r.layoutScale).toBeCloseTo(360 / 980, 4)
+    // 13 px × 360/980 = 4.78 CSS px at 2x on 269.9 ppi: 0.90 mm (2.45 unscaled).
+    expect(r.font.px).toBe(13)
+    expect(r.font.mm).toBeCloseTo(0.9, 2)
+    // 300 px wide drawn at 110: 20.7 mm (56.5 unscaled).
+    expect(r.rect.width).toBe(300)
+    expect(r.rectMm?.width).toBeCloseTo(20.74, 1)
+    expect(r.notes).toHaveLength(1)
+    expect(r.notes[0]).toMatch(/lays out 980 CSS px wide where the screen gives it 360 and is drawn at 0\.37× to fit/)
+  })
+  it('is scale 1 with no note for a page that fits, and for a report from before the field', () => {
+    const fits = inspectReadout({ ...grey, viewportWidth: 360 }, screenOf('android-65'), panelOf('reference'))
+    expect(fits.layoutScale).toBe(1)
+    expect(fits.notes).toEqual([])
+    expect(fits.font.mm).toBeCloseTo(2.45, 1)
+    const older = inspectReadout(grey, screenOf('android-65'), panelOf('reference'))
+    expect(older.layoutScale).toBe(1)
+    expect(older.font.mm).toBeCloseTo(2.45, 1)
+  })
+})

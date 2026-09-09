@@ -23,7 +23,10 @@
       let n = 0
       const tick = () => {
         if (Date.now() - started >= HYDRATE_MS) {
+          // Settled with something on it: a page that ends one flat colour is
+          // held for the blank grace and named blank, which is another test.
           app.style.background = '#000'
+          app.innerHTML = '<div style="width:50%;height:50%;margin:0 auto;background:#fff"></div>'
           document.title = 'hydrate-settled'
           return
         }
