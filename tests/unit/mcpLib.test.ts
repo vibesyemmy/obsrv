@@ -255,6 +255,15 @@ describe('stripChromiumChatter', () => {
     expect(stripChromiumChatter(VERGE)).toBe('obsrv: load did not finish within 30000 ms: https://www.theverge.com — raise --timeout for the full load')
     expect(stripChromiumChatter('warning: page kept painting\nobsrv: something\n')).toBe('warning: page kept painting\nobsrv: something')
   })
+  it("drops macOS NSLog lines from Electron's helpers too, the shape a CI runner writes", () => {
+    // What run 34363808945 saw on a GitHub macOS runner, ahead of the sentence.
+    const ci = [
+      '2026-09-09 14:36:37.883 Electron Helper[12850:53791] XPC error talking to pkd: Connection invalid',
+      '2026-09-09 14:36:37.936 Electron Helper (GPU)[12850:53786] XPC error talking to pkd: Connection invalid',
+      'obsrv: load did not finish within 1500 ms: http://127.0.0.1:49152/ — raise --timeout for the full load',
+    ].join('\n')
+    expect(stripChromiumChatter(ci)).toBe('obsrv: load did not finish within 1500 ms: http://127.0.0.1:49152/ — raise --timeout for the full load')
+  })
   it('is empty when there was only chatter, so the caller can fall back', () => {
     expect(stripChromiumChatter(VERGE.split('\n').slice(0, 5).join('\n'))).toBe('')
   })

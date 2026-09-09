@@ -439,6 +439,9 @@ const CHROMIUM_CHATTER = [
   /^\(node:\d+\) (?:electron|\[DEP\d+\]|ExperimentalWarning|Warning): /,
   /^\(Use `(?:Electron|node|electron) --trace-/,
   /^objc\[\d+\]: /,
+  // macOS NSLog from a helper process, the shape a GitHub runner produces:
+  // `2026-09-09 14:36:37.883 Electron Helper[12850:53791] XPC error …`.
+  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ .*\[\d+:\d+\] /,
 ]
 
 /** `stderr` without the lines Chromium and Electron wrote; empty when there were only those. */
