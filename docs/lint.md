@@ -22,6 +22,8 @@ the screen, and the reflow zoom on top of it.
 | `image-upscaled` | A raster image drawn larger, in device px, than the loaded file on either axis, as `object-fit` scales it: a cover by its larger axis, a contain by its smaller, a fill by each axis on its own. | Blurred. A 100 px asset at 200 CSS px is 2× on a 1x screen and 4× on a phone; an image that fits a 1x screen exactly is 2× on the phone. |
 | `image-oversized` | A raster image whose file is more than 2× the size it is drawn at, on the axis scaled most, per `object-fit`. | Downsampled, which softens fine lines and text in it, and wasted bytes. The finding says whether a srcset offered a candidate at all. |
 
+The background a text is judged on is what is painted under it: the stack of elements at a point inside its box, from the element down, with the first opaque background taken and the translucent layers above it composited on — so a fixed scrim from another branch of the tree counts, where a walk up the ancestors met only the body's white and failed lemonde.fr's light-on-dark consent link at 1.14:1. A background image or gradient, or an image element, on the way means no verdict (`skipped.textOnImages`). Text outside the viewport when the page is measured falls back to its ancestors.
+
 Text that is the same colour as its background (1:1) is not a contrast
 failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
 and it is counted under `skipped.invisibleText` with a warning rather than
@@ -121,6 +123,8 @@ so the budget covers about a hundred screenfuls. When it does run out, the
 warnings say so and count the image findings below the height it reached,
 which may be placeholders. `--no-walk` (`walk: false` on the MCP) measures the
 page as it first shows.
+
+A document with nothing in it — no text and no targets, or for the lint no text, edges or images — is held for three seconds and asked again every quarter second before it is measured as empty: booking.com's mobile page is empty at `load` and rendered by script in the next second, and the lint once answered zeros for it with no warning. A page that fills in that time is walked again and measured; one that stays empty is measured as it is, with a warning that says nothing was there to measure and that `--wait` (`waitMs`) gives a late page longer.
 
 ## Under a page that does not fit its screen
 

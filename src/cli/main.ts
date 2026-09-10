@@ -32,6 +32,7 @@ import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type Cap
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { walkHeadless } from './walk'
+import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote } from '../shared/walkCoverage'
@@ -818,9 +819,19 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
-    const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
+    let walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
+    // A document with nothing in it is held for a grace (a page rendered by
+    // script after `load`); one that fills in the meantime is walked again,
+    // since the walk saw an empty page, and one that stays empty is said.
+    const held = await awaitContent(() => target.auditPage(), isEmptyAuditReport)
+    let report = held.report
+    if (held.arrived && cmd.walk) {
+      walk = await walkHeadless(target)
+      report = (await target.auditPage()) ?? report
+    }
     for (const n of walk.notes) human(`warning: ${n}`)
-    const report = await target.auditPage()
+    const empty = held.stillEmpty ? emptyDocumentNote('audit', held.waitedMs) : null
+    if (empty !== null) human(`warning: ${empty}`)
     if (!report) {
       const err = watch.failed()
       if (err) throw err
@@ -870,7 +881,13 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       findings: cmd.groupsOnly ? [] : result.findings,
       // With no list there is nothing cut from it; the summary counts everything.
       ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
-      warnings: [...result.warnings, ...(listed === null ? [] : [listed]), ...walk.notes, ...(coverage === null ? [] : [coverage])],
+      warnings: [
+        ...(empty === null ? [] : [empty]),
+        ...result.warnings,
+        ...(listed === null ? [] : [listed]),
+        ...walk.notes,
+        ...(coverage === null ? [] : [coverage]),
+      ],
     })
   } finally {
     target.destroy()
@@ -889,11 +906,20 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
-    const walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
-    for (const n of walk.notes) human(`warning: ${n}`)
+    let walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
     // One device pixel on this screen, in the page's CSS px: the walk
     // brings back only the edges thinner than that.
-    const report = await target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale))
+    const measure = (): Promise<LintReport | null> => target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale))
+    // An empty document is held for a grace and, if it fills, walked again.
+    const held = await awaitContent(measure, isEmptyLintReport)
+    let report = held.report
+    if (held.arrived && cmd.walk) {
+      walk = await walkHeadless(target)
+      report = (await measure()) ?? report
+    }
+    for (const n of walk.notes) human(`warning: ${n}`)
+    const empty = held.stillEmpty ? emptyDocumentNote('lint', held.waitedMs) : null
+    if (empty !== null) human(`warning: ${empty}`)
     if (!report) {
       const err = watch.failed()
       if (err) throw err
@@ -945,6 +971,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
       groups: slimGroups(result.groups),
       warnings: [
+        ...(empty === null ? [] : [empty]),
         ...result.warnings,
         ...walk.notes,
         ...(listed === null ? [] : [listed]),

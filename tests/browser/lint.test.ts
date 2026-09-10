@@ -70,6 +70,21 @@ describe('an app shell whose inner scroller has been scrolled', () => {
     expect(menu(down)).toBeCloseTo(menu(atTop)!, 0)
   })
 
+  it('judges text on the background painted under it, a scrim from another branch included', async () => {
+    const scrim = document.createElement('div')
+    scrim.id = 'scrim'
+    scrim.style.cssText = 'position:absolute;left:0;top:100px;width:300px;height:40px;background:rgb(41,42,43);z-index:5'
+    const over = document.createElement('p')
+    over.id = 'over'
+    over.textContent = 'Reject all cookies'
+    over.style.cssText = 'position:absolute;left:10px;top:110px;margin:0;font-size:14px;color:rgb(239,240,243);z-index:6'
+    shell.append(scrim, over)
+    const r = await lintPage(EDGE_BELOW_PX, 3000, 2000, 500)
+    const t = r.text.find(x => x.element === 'p#over')!
+    expect(t.background).toEqual([41, 42, 43, 1])
+    expect(t.backgroundNote).toBe('computed')
+  })
+
   it('reports how each image is fitted into its box, so the judge can follow the right axis', async () => {
     // A 1×1 PNG: naturalWidth 1, so every box is an upscale; only the fit is under test here.
     const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='

@@ -24,11 +24,19 @@ beforeEach(() => {
       #veil span { font-size: 12px; color: rgb(255, 255, 255); }
       #photo { position: absolute; left: 10px; top: 220px; width: 300px; height: 40px; background: linear-gradient(90deg, #000, #fff); }
       #photo span { font-size: 12px; color: rgb(255, 0, 0); }
+      /* lemonde.fr's consent wall: a dark scrim from another branch of the tree, the text a sibling above it. */
+      #scrim { position: absolute; left: 10px; top: 280px; width: 300px; height: 40px; background: rgb(41, 42, 43); z-index: 1; }
+      #scrim-text { position: absolute; left: 20px; top: 290px; font-size: 14px; color: rgb(239, 240, 243); z-index: 2; }
+      /* a photo as an <img>, not a background, with a caption over it */
+      #pic { position: absolute; left: 10px; top: 340px; width: 300px; height: 40px; }
+      #pic-text { position: absolute; left: 20px; top: 350px; font-size: 12px; color: rgb(255, 255, 255); z-index: 2; }
     </style>
     <p id="grey">Grey caption text on white</p>
     <div id="card"><p id="card-text">Light text on a dark card</p></div>
     <div id="veil"><span id="veil-text">White on a half-black veil</span></div>
     <div id="photo"><span id="photo-text">Red on a gradient</span></div>
+    <div id="scrim"></div><span id="scrim-text">Reject all cookies</span>
+    <img id="pic" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt=""><span id="pic-text">Caption over a photo</span>
   `
   host.id = 'host'
   document.body.append(host)
@@ -62,6 +70,22 @@ describe('inspectAtPoint', () => {
     expect(r.fontWeight).toBe(700)
     expect(r.color).toEqual([204, 204, 204, 1])
     expect(r.background).toEqual([17, 17, 17, 1])
+  })
+  it('takes the background painted under the text, not only what its ancestors paint: a scrim from another branch', () => {
+    // A walk up the ancestors met only the host's white and failed this pair at 1.14:1.
+    const { x, y } = centre('scrim-text')
+    const r = inspectAtPoint(x, y)!
+    expect(r.id).toBe('scrim-text')
+    expect(r.color).toEqual([239, 240, 243, 1])
+    expect(r.background).toEqual([41, 42, 43, 1])
+    expect(r.backgroundNote).toBe('computed')
+  })
+  it('an image element painted under the text is a stop, like a background image', () => {
+    const { x, y } = centre('pic-text')
+    const r = inspectAtPoint(x, y)!
+    expect(r.id).toBe('pic-text')
+    expect(r.background).toBeNull()
+    expect(r.backgroundNote).toBe('image')
   })
   it('composites a translucent layer onto what is under it', () => {
     const { x, y } = centre('veil-text')

@@ -393,6 +393,16 @@ test('obsrv_audit (auto) audits the running app on the screen in force, and name
   expect(grouped.structuredContent).toMatchObject({ mode: 'live', findings: [] })
   expect((grouped.structuredContent as { groups: unknown[]; summary: { targets: { under: number } } }).groups.length).toBeGreaterThan(0)
   expect((grouped.structuredContent as { summary: { targets: { under: number } } }).summary.targets.under).toBe(1)
+  // A live document that renders after load is held for; one that stays empty is said.
+  const latePage = pathToFileURL(resolve(__dirname, '../fixtures/renders-late.html')).href
+  const late = await call('obsrv_audit', { url: latePage, groupsOnly: true })
+  expect((late.structuredContent as { summary: { targets: { count: number } } }).summary.targets.count).toBe(1)
+  const emptyPage = pathToFileURL(resolve(__dirname, '../fixtures/empty.html')).href
+  const empty = await call('obsrv_audit', { url: emptyPage, groupsOnly: true })
+  const em = empty.structuredContent as { summary: { targets: { count: number } }; warnings: string[] }
+  expect(em.summary.targets.count).toBe(0)
+  expect(em.warnings.join(' ')).toMatch(/nothing to measure/)
+  await call('obsrv_drive', { url: auditPage })
   // mode: 'headless' never touches the app, and needs a url.
   const headless = await call('obsrv_audit', { url: auditPage, preset: 'android-65', mode: 'headless' })
   expect(headless.structuredContent).toMatchObject({ mode: 'headless', preset: 'android-65', cssWidth: 360 })

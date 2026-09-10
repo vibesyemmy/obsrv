@@ -2204,8 +2204,8 @@ server.registerTool(
     description:
       `The app's inspector, for agents. Name a point (\`at\`, CSS px of the target screen) or a CSS selector, and get ` +
       `the element there: tag/id/class, its text, its box in CSS px and in millimetres on that screen, its font size in ` +
-      `px and in millimetres, its text colour and the background it actually sits on (walked up through translucent ` +
-      `layers), and its WCAG 2 contrast twice — as stated, and as the panel profile would show it — against the ` +
+      `px and in millimetres, its text colour and the background painted under it (the stack at its point, translucent ` +
+      `layers composited, a fixed scrim from elsewhere in the tree included), and its WCAG 2 contrast twice — as stated, and as the panel profile would show it — against the ` +
       `threshold that applies to text that size (4.5:1, or 3:1 for large text). A pair that clears 4.5:1 on the ` +
       `display a page was designed on can fall under 3:1 on a budget TN panel; the second number says so.\n\n` +
       `auto mode inspects a running Obsrv with agent control on — the page the user is looking at, on the screen, ` +

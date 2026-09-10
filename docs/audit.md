@@ -121,6 +121,8 @@ mount on scroll exist to be measured — usekolo.app gains six targets that
 way. The JSON's `walked` says how far it went; `--no-walk` measures the page
 as it first shows.
 
+A document with nothing in it — no text and no targets, or for the lint no text, edges or images — is held for three seconds and asked again every quarter second before it is measured as empty: booking.com's mobile page is empty at `load` and rendered by script in the next second, and the audit once answered zeros for it with no warning. A page that fills in that time is walked again and measured; one that stays empty is measured as it is, with a warning that says nothing was there to measure and that `--wait` (`waitMs`) gives a late page longer.
+
 ## Under a text scale
 
 `--text-scale 1.5` (or `textScale` on `obsrv_audit`) renders the page as a
