@@ -360,7 +360,7 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(m.findings).toEqual([])
   expect(m.summary.hairline).toBe(2)
   expect(Object.keys(m.groups[0]!.exemplar).sort()).toEqual(['element', 'message', 'rect', 'text'])
-  expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0 })
+  expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0, spacers: 0 })
 })
 
 test("a measurement that refuses a cut load answers with the CLI's sentence, not Chromium's log", async () => {

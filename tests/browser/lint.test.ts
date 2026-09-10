@@ -85,9 +85,21 @@ describe('an app shell whose inner scroller has been scrolled', () => {
     expect(t.backgroundNote).toBe('computed')
   })
 
+  it('a file of a pixel or two on a side is a spacer: counted, never listed as an image', async () => {
+    const spacer = document.createElement('img')
+    spacer.id = 'spacer'
+    spacer.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+    spacer.style.cssText = 'display:block;width:26px;height:1px'
+    scroller.prepend(spacer)
+    await spacer.decode()
+    const r = await lintPage(EDGE_BELOW_PX, 3000, 2000, 500)
+    expect(r.images.find(i => i.element === 'img#spacer')).toBeUndefined()
+    expect(r.spacers).toBe(1)
+  })
+
   it('reports how each image is fitted into its box, so the judge can follow the right axis', async () => {
-    // A 1×1 PNG: naturalWidth 1, so every box is an upscale; only the fit is under test here.
-    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    // A 4×4 PNG (a 1×1 would be a spacer and left out): every box is an upscale; only the fit is under test here.
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM0TpvJAANMcBZeDgA8YgE6ReZ83QAAAABJRU5ErkJggg=='
     const fits = ['cover', 'contain', 'fill', 'none', 'scale-down'] as const
     const imgs = fits.map(fit => {
       const img = document.createElement('img')

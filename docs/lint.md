@@ -27,7 +27,11 @@ The background a text is judged on is what is painted under it: the stack of ele
 Text that is the same colour as its background (1:1) is not a contrast
 failure here: it is a reveal mask's duplicate, a decorative layer, or a bug,
 and it is counted under `skipped.invisibleText` with a warning rather than
-judged. Images group by cause, not by asset size: whether a `srcset` exists,
+judged. A raster file of a pixel or two on a side is a spacer stretched into
+a gap — the 1×1 GIFs of a table layout — not a picture, and nothing about
+it is blurred: the image rules leave it out and count it under
+`skipped.spacers` with a warning, so a 1998 page does not spend the image
+cap on 500 of them before its first photo. Images group by cause, not by asset size: whether a `srcset` exists,
 and how many times over (2–3×, 3–5×, 5–10×, 10× and over). Contrast groups
 key on the text colour and the band its background sits in (light, mid-tone,
 dark), not the exact pair: a page's links sit on a dozen near-whites and are

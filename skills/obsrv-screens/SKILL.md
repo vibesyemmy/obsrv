@@ -101,7 +101,8 @@ summary, then the groups; ask `obsrv_audit` or `obsrv_lint` `{ groupsOnly: true 
 when the list would only be noise — on a retail page at a phone preset the
 audit's list alone is most of the answer. Text the same colour as its background is set aside as
 `skipped.invisibleText`, not reported as a contrast failure; text over an
-image gets no contrast verdict either, and the warnings say how many.
+image gets no contrast verdict either, and 1×1 spacer files are counted under
+`skipped.spacers` rather than judged; the warnings say how many of each.
 
 `obsrv_audit` measures every tap target and text element in **millimetres on
 the chosen screen**: a 24 CSS px control is 6.6 mm on a 24" 1080p and 4.5 mm

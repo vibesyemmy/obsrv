@@ -94,7 +94,18 @@ export interface LintReport {
   images: LintImage[]
   /** Entries past the caps, counted but not listed. */
   truncated: { text: number; edges: number; images: number }
+  /**
+   * Raster files of a pixel or two on a side — 1×1 GIFs stretched into gaps,
+   * the spacers of a table layout — counted here and never judged: nothing
+   * about a spacer is blurred, and paulgraham.com's desktop page put 332 of
+   * them in the upscaled rule and 206 more past the image cap. Absent from an
+   * older app's reply, which counted none.
+   */
+  spacers?: number
 }
+
+/** A raster this small on either side is a spacer, not a picture. */
+export const LINT_SPACER_MAX_PX = 2
 
 /** Caps on what one report carries back; a page past them is still summarised. */
 export const LINT_MAX_TEXT = 3000
@@ -213,6 +224,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   let textOver = 0
   let edgesOver = 0
   let imagesOver = 0
+  let spacers = 0
 
   const root = document.body ?? document.documentElement
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
@@ -292,9 +304,14 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
       if (r.width < edgeBelowPx && r.height >= 8) edge('width', r.width)
     }
 
-    // Raster images: natural against drawn size is the rules' business.
+    // Raster images: natural against drawn size is the rules' business —
+    // except a file of a pixel or two on a side (LINT_SPACER_MAX_PX, inlined
+    // since this function ships as source), which is a spacer stretched into
+    // a gap, not a picture: counted, never judged, never on the cap.
     if (el instanceof HTMLImageElement && el.naturalWidth > 0 && el.naturalHeight > 0) {
-      if (images.length >= maxImages) {
+      if (Math.min(el.naturalWidth, el.naturalHeight) <= 2) {
+        spacers++
+      } else if (images.length >= maxImages) {
         imagesOver++
       } else {
         // The candidates the page offered: the img's own srcset and, inside a
@@ -413,6 +430,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     edges,
     images,
     truncated: { text: textOver, edges: edgesOver, images: imagesOver },
+    spacers,
   }
 }
 

@@ -281,7 +281,7 @@ export interface LintResult {
    * Text that got no contrast verdict: over an image or gradient (no colour to
    * measure), or the same colour as its background (hidden by design, or broken).
    */
-  skipped: { textOnImages: number; invisibleText: number }
+  skipped: { textOnImages: number; invisibleText: number; spacers: number }
   truncated: { findings: number; text: number; edges: number; images: number }
   warnings: string[]
 }
@@ -496,6 +496,10 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
   if (invisibleText > 0) {
     warnings.push(`${invisibleText} text element${invisibleText === 1 ? ' is' : 's are'} the same colour as the background (1:1): hidden by design or broken, not judged`)
   }
+  const spacers = report.spacers ?? 0
+  if (spacers > 0) {
+    warnings.push(`${spacers} image${spacers === 1 ? ' is' : 's are'} a file of a pixel or two on a side stretched into a gap — a spacer, not a picture — and ${spacers === 1 ? 'was' : 'were'} not judged`)
+  }
   const over = report.truncated
   if (over.text > 0 || over.edges > 0 || over.images > 0) {
     warnings.push(
@@ -512,7 +516,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
     summary,
     findings,
     groups: groupFindings(all),
-    skipped: { textOnImages, invisibleText },
+    skipped: { textOnImages, invisibleText, spacers },
     truncated: { findings: all.length - findings.length, text: over.text, edges: over.edges, images: over.images },
     warnings,
   }

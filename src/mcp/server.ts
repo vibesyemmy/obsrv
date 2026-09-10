@@ -1515,8 +1515,10 @@ const lintOutputShape = {
       'The findings grouped by what they share, over every finding counted (listed or not): a page with 270 identical contrast failures is one group with count 270. Quote a group, not its members.',
     ),
   skipped: z
-    .object({ textOnImages: z.number(), invisibleText: z.number() })
-    .describe('Text that got no contrast verdict: over an image or gradient, or the same colour as its background (hidden by design, or broken).'),
+    .object({ textOnImages: z.number(), invisibleText: z.number(), spacers: z.number().optional() })
+    .describe(
+      'Text that got no contrast verdict: over an image or gradient, or the same colour as its background (hidden by design, or broken); and images of a pixel or two on a side, spacers stretched into gaps, which the image rules leave out (absent from an app older than 0.49.0).',
+    ),
   truncated: z.object({ findings: z.number(), text: z.number(), edges: z.number(), images: z.number() }),
   warnings: z.array(z.string()),
   notes: z.array(z.string()),
@@ -1832,7 +1834,7 @@ const reportOutputShape = {
           }),
           findings: z.number(),
           groups: z.number().describe('Findings grouped by what they share; the HTML lists the groups.'),
-          skipped: z.object({ textOnImages: z.number(), invisibleText: z.number() }),
+          skipped: z.object({ textOnImages: z.number(), invisibleText: z.number(), spacers: z.number() }),
         })
         .nullable()
         .describe('The lint on the same loaded page, judged on the report profile; null when the page did not answer.'),

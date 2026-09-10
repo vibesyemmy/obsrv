@@ -261,7 +261,7 @@ describe('what is set aside', () => {
     const r = report({ text: [text({ color: [0, 0, 0, 1], background: [10, 10, 10, 1], fontSizePx: 192, fontWeight: 700 }), text({ color: [153, 153, 153, 1] })] })
     const res = lintFindings(r, screen(1), reference, thresholds)
     expect(res.summary.contrast).toBe(1)
-    expect(res.skipped).toEqual({ textOnImages: 0, invisibleText: 1 })
+    expect(res.skipped).toEqual({ textOnImages: 0, invisibleText: 1, spacers: 0 })
     expect(res.warnings.some(w => /same colour as the background/.test(w))).toBe(true)
   })
   it('images group by cause, not by asset size: srcset or not, and how many times over', () => {
@@ -373,5 +373,16 @@ describe('object-fit', () => {
     const legacy = report({ images: [image({ naturalWidth: 100, naturalHeight: 100 })] })
     expect(lintFindings(legacy, screen(1), reference, thresholds).findings[0]).toMatchObject({ rule: 'image-upscaled', factor: 2, objectFit: 'fill' })
     expect(lintFindings(legacy, screen(1), reference, thresholds).findings[0]!.message).toContain('drawn over 200×200 device px: upscaled 2×')
+  })
+})
+
+describe('spacers', () => {
+  it('a page that counted spacers says so, keeps them out of the rules, and an older report without the count reads as none', () => {
+    const r = { ...report({ images: [image({ naturalWidth: 100, naturalHeight: 100 })] }), spacers: 332 }
+    const res = lintFindings(r, screen(1), reference, thresholds)
+    expect(res.summary['image-upscaled']).toBe(1)
+    expect(res.skipped).toEqual({ textOnImages: 0, invisibleText: 0, spacers: 332 })
+    expect(res.warnings.join(' ')).toContain('332 images are a file of a pixel or two on a side stretched into a gap — a spacer, not a picture — and were not judged')
+    expect(lintFindings(report({}), screen(1), reference, thresholds).skipped.spacers).toBe(0)
   })
 })
