@@ -182,7 +182,17 @@ function watchExit(raw: ElectronApplication, dir: string, removeDir: boolean): v
         )
       })
     }
-    if (removeDir) rmSync(dir, { recursive: true, force: true })
+    // A helper process can still be writing into the directory a beat after
+    // the main one exits, and a throw here is an uncaught error in an event
+    // handler, which fails the whole run even when every test passed: the
+    // 0.49.0 main build died that way on ENOTEMPTY. Retry, then let it be.
+    if (removeDir) {
+      try {
+        rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+      } catch (e) {
+        process.stderr.write(`[launch] could not remove ${dir}: ${e instanceof Error ? e.message : String(e)}\n`)
+      }
+    }
   })
 }
 
