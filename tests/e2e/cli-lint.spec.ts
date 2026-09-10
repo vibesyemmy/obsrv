@@ -162,3 +162,15 @@ test('an empty document is held for the grace and said, as for the audit', async
   const late = await runCli(['lint', fixture('renders-late.html'), '--preset', '1080p-24'])
   expect(JSON.parse(late.stdout).warnings.join(' ')).not.toMatch(/nothing to measure/)
 })
+
+test('spacer files are counted, not judged, and do not spend the image cap', async () => {
+  // paulgraham.com's desktop table: 332 "upscaled" 1×1 GIFs and 206 more past the cap.
+  const r = await runCli(['lint', fixture('spacers.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary['image-upscaled']).toBe(1)
+  expect(m.findings.map((f: { element: string }) => f.element)).toEqual(['img#photo'])
+  expect(m.skipped.spacers).toBe(300)
+  expect(m.truncated.images).toBe(0)
+  expect(m.warnings.join(' ')).toContain('300 images are a file of a pixel or two on a side stretched into a gap')
+})

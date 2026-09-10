@@ -264,7 +264,8 @@ function lintSection(s: ReportScreen): string {
     .join('')
   const skipped =
     (l.skipped.textOnImages > 0 ? `<p class="muted">${l.skipped.textOnImages} text element(s) sit on an image or gradient and got no contrast verdict.</p>` : '') +
-    (l.skipped.invisibleText > 0 ? `<p class="muted">${l.skipped.invisibleText} text element(s) are the same colour as their background: hidden by design or broken, not judged.</p>` : '')
+    (l.skipped.invisibleText > 0 ? `<p class="muted">${l.skipped.invisibleText} text element(s) are the same colour as their background: hidden by design or broken, not judged.</p>` : '') +
+    (l.skipped.spacers > 0 ? `<p class="muted">${l.skipped.spacers} image(s) are files of a pixel or two on a side stretched into gaps — spacers, not pictures — and were not judged.</p>` : '')
   return (
     `<h3>Lint — what this screen and its panel break</h3>` +
     summary +
