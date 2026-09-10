@@ -92,8 +92,17 @@ describe('an app shell whose inner scroller has been scrolled', () => {
     spacer.style.cssText = 'display:block;width:26px;height:1px'
     scroller.prepend(spacer)
     await spacer.decode()
+    // The same 1×1 with a data-src is a lazy loader's placeholder, not a spacer.
+    const lazy = document.createElement('img')
+    lazy.id = 'lazy'
+    lazy.src = spacer.src
+    lazy.setAttribute('data-src', 'https://x.test/real.png')
+    lazy.style.cssText = 'display:block;width:200px;height:200px'
+    scroller.prepend(lazy)
+    await lazy.decode()
     const r = await lintPage(EDGE_BELOW_PX, 3000, 2000, 500)
     expect(r.images.find(i => i.element === 'img#spacer')).toBeUndefined()
+    expect(r.images.find(i => i.element === 'img#lazy')).toMatchObject({ naturalWidth: 1, naturalHeight: 1 })
     expect(r.spacers).toBe(1)
   })
 

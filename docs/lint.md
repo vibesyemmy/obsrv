@@ -31,7 +31,10 @@ judged. A raster file of a pixel or two on a side is a spacer stretched into
 a gap — the 1×1 GIFs of a table layout — not a picture, and nothing about
 it is blurred: the image rules leave it out and count it under
 `skipped.spacers` with a warning, so a 1998 page does not spend the image
-cap on 500 of them before its first photo. Images group by cause, not by asset size: whether a `srcset` exists,
+cap on 500 of them before its first photo. A tiny file a lazy loader is
+still to fill (`loading="lazy"`, a `data-src`, a `srcset`) is a placeholder,
+not a spacer, and stays in the rules: that is how `--no-walk` shows a page
+as it first ships. Images group by cause, not by asset size: whether a `srcset` exists,
 and how many times over (2–3×, 3–5×, 5–10×, 10× and over). Contrast groups
 key on the text colour and the band its background sits in (light, mid-tone,
 dark), not the exact pair: a page's links sit on a dozen near-whites and are

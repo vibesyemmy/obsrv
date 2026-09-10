@@ -98,7 +98,9 @@ export interface LintReport {
    * Raster files of a pixel or two on a side — 1×1 GIFs stretched into gaps,
    * the spacers of a table layout — counted here and never judged: nothing
    * about a spacer is blurred, and paulgraham.com's desktop page put 332 of
-   * them in the upscaled rule and 206 more past the image cap. Absent from an
+   * them in the upscaled rule and 206 more past the image cap. A tiny file a
+   * lazy loader is still to fill (`loading="lazy"`, a `data-src`, a `srcset`)
+   * is a placeholder, not a spacer, and stays in the rules. Absent from an
    * older app's reply, which counted none.
    */
   spacers?: number
@@ -307,9 +309,17 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     // Raster images: natural against drawn size is the rules' business —
     // except a file of a pixel or two on a side (LINT_SPACER_MAX_PX, inlined
     // since this function ships as source), which is a spacer stretched into
-    // a gap, not a picture: counted, never judged, never on the cap.
+    // a gap, not a picture: counted, never judged, never on the cap. Unless a
+    // lazy loader is still to fill it (`loading="lazy"`, a `data-src`, a
+    // `srcset`): that 1×1 is a placeholder, and reading it as an upscale is
+    // how `--no-walk` shows a page as it first ships and the walk note names
+    // images below the height it reached.
     if (el instanceof HTMLImageElement && el.naturalWidth > 0 && el.naturalHeight > 0) {
-      if (Math.min(el.naturalWidth, el.naturalHeight) <= 2) {
+      const lazyLike =
+        el.loading === 'lazy' ||
+        el.hasAttribute('srcset') ||
+        Array.from(el.attributes).some(a => a.name.startsWith('data-') && /src|lazy|original/.test(a.name))
+      if (Math.min(el.naturalWidth, el.naturalHeight) <= 2 && !lazyLike) {
         spacers++
       } else if (images.length >= maxImages) {
         imagesOver++
