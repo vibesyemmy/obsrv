@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>an element whose id is longer than the report keeps</title>
+    <style>
+      body { margin: 0; background: #ffffff; font: 16px/1.4 system-ui, sans-serif; color: #111111; }
+    </style>
+  </head>
+  <body>
+    <!--
+      The label the page sends is "tag#id.class", and an id this long puts it
+      past the bound the parser holds every kept string to, so the report is
+      refused on the way in. What matters here is that the CLI then says what
+      happened instead of guessing that the page navigated away.
+    -->
+    <p id="iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii">A paragraph under an id no report will keep.</p>
+  </body>
+</html>

@@ -593,3 +593,16 @@ test('a live audit of a page with nothing to scroll says the walk found nothing,
   expect(s.walked).toMatchObject({ screenfuls: 0, atEnd: true })
   expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll/)
 })
+
+/**
+ * A live report the checks refuse: the page answered in full, so saying it
+ * "may have navigated away" sends the reader after the wrong thing
+ * (docs/research/2026-09-11-live-run-0.53.0.md).
+ */
+test('a live report the checks refuse says so, rather than guessing at the page', async () => {
+  const r = await call('obsrv_lint', { url: fixture('long-id.html'), mode: 'live' })
+  expect(r.isError).toBe(true)
+  const said = JSON.stringify(r.content)
+  expect(said).toContain('the page answered the lint')
+  expect(said).not.toContain('may have navigated away')
+})
