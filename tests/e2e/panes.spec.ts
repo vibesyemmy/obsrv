@@ -226,3 +226,52 @@ test('a later successful navigation clears the error badge', async () => {
   await expect(page.locator('.badge-error')).toHaveCount(0)
   await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
 })
+
+test('a failed load says so in the window, across both panes, and clears when one commits', async () => {
+  // The badge alone was a number in a corner with the reason hidden in its
+  // tooltip; the window itself was a blank rectangle. A failed load empties
+  // *both* panes — measured: a bad host replaces a good page with nothing and
+  // fires `did-fail-load` alone — so the state is drawn across them, which
+  // main allows by standing the native view down for the tab.
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+  await expect(page.locator('.load-error-state')).toHaveCount(0)
+
+  await page.fill('.url-form input', 'https://obsrv-no-such-host.invalid')
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.load-error-state')).toBeVisible({ timeout: 15_000 })
+  // The address that failed, and the reason in words rather than only a code.
+  await expect(page.locator('.load-error-url')).toContainText('obsrv-no-such-host.invalid')
+  await expect(page.locator('.load-error-why')).toContainText('ERR_NAME_NOT_RESOLVED')
+  await expect(page.locator('.badge-error')).toBeVisible()
+  // Nothing the renderer paints can appear over an OS-composited layer, so the
+  // state is only visible at all because the view stood down.
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.isVisible())).toBe(false)
+
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.load-error-state')).toHaveCount(0)
+  await expect(page.locator('.badge-error')).toHaveCount(0)
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.isVisible())).toBe(true)
+})
+
+test('Try again re-runs the address that failed, and the state survives a second failure', async () => {
+  // The case a commit-time clear misses: a failed load commits nothing, so the
+  // tab's URL is still the last page that loaded, and retrying the failing
+  // address reports no URL change at all. Clearing on the *start* of a
+  // navigation is what catches it.
+  await page.fill('.url-form input', 'https://obsrv-no-such-host.invalid')
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.load-error-state')).toBeVisible({ timeout: 15_000 })
+
+  await page.click('.load-error-retry')
+  await expect(page.locator('.load-error-state')).toBeVisible({ timeout: 15_000 })
+  await expect(page.locator('.load-error-url')).toContainText('obsrv-no-such-host.invalid')
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.isVisible())).toBe(false)
+
+  // Leave the tab on a page so the next test does not inherit the failure.
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.load-error-state')).toHaveCount(0)
+})

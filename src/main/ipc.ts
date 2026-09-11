@@ -398,8 +398,11 @@ export function registerIpc(ctx: AppContext): () => void {
   // And a fourth: the settings modal covers the panes, and the chrome cannot
   // paint over an OS-composited layer, so the view steps aside while it is up.
   let chromeObscures = false
+  // And a fifth: a failed load empties both panes, so the window draws its
+  // error state across them and the view stands down exactly as for a blank
+  // tab. Safe because there is nothing behind it to hide.
   tabs.nativeVisible = (s: TabSession): boolean =>
-    s.modeIsLive && panesShowNative && !isBlankUrl(s.url) && !chromeObscures
+    s.modeIsLive && panesShowNative && !isBlankUrl(s.url) && s.loadError === null && !chromeObscures
   // And the same for frame delivery, for the same reason: image mode is per
   // tab, so a switch changes which mode is in force without any mode changing,
   // and `setMode` below never fires. Derived here so "live" means one thing.
@@ -1410,6 +1413,11 @@ export function registerIpc(ctx: AppContext): () => void {
       }
       return {
         loading: tab().targetLoading,
+        // Null unless the last main-frame load failed. Without it a driving
+        // agent cannot tell a page that would not load from one still on its
+        // way: `url` is the address it asked for either way, and the capture
+        // is a blank frame either way.
+        error: tab().loadError,
         version: appVersion,
         url,
         tabId: tabs.activeId,

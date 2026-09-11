@@ -1146,6 +1146,61 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .empty-go:hover:not(:disabled) { background: var(--chrome-3); }
 .empty-go:disabled { color: var(--text-1); opacity: 0.6; }
 .empty-error { margin: 0; color: var(--error); }
+
+/* The load-error state. Shares the empty state's geometry — absolute over both
+   panes, above the divider, transparent to the pointer except its own control
+   — because it is the same kind of thing: the tab has nothing to show and one
+   way out. A card rather than an illustration, because the address that failed
+   and the reason are the content, and they want reading. */
+.load-error-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--surround);
+  z-index: 2;
+  pointer-events: none;
+}
+.load-error-card {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 46ch;
+  padding: 24px 28px;
+  text-align: center;
+  background: var(--chrome-1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.load-error-lede { margin: 0; color: var(--text-0); font-weight: 600; }
+.load-error-url {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.load-error-why { margin: 0; color: var(--text-1); }
+.load-error-code { font-family: var(--mono); font-size: 12px; opacity: 0.75; }
+.load-error-actions { display: flex; gap: 8px; margin-top: 4px; }
+.load-error-retry {
+  height: 30px;
+  padding: 0 14px;
+  color: var(--text-0);
+  background: var(--chrome-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+}
+.load-error-retry:hover { background: var(--chrome-3); }
+.load-error-hint { margin: 0; color: var(--text-1); font-size: 12px; }
 /* The readouts stay legible through the empty state: they still name the screen
    being simulated, which is the one fact that survives having no page. Stacking
    rather than insetting the overlay, so nothing depends on the footer's height. */

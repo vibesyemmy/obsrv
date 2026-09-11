@@ -74,6 +74,18 @@ export class TabManager {
   nativeVisible: (s: TabSession) => boolean = () => true
 
   /**
+   * Re-applies the native-view rule to the tab in front. Whether the view
+   * belongs up depends on state this manager owns — a failed load, now — while
+   * the rule itself is assigned by `registerIpc`, so the manager asks rather
+   * than deciding.
+   */
+  private refreshNativeVisibility(): void {
+    if (this.win.isDestroyed() || this.list.length === 0) return
+    const s = this.active()
+    s.native.setVisible(this.nativeVisible(s))
+  }
+
+  /**
    * Whether the bus should deliver the active session's frames. Image mode is
    * per tab, so this cannot be left to the `setMode` handler alone: that
    * handler only fires when the *mode* changes, and a tab switch changes which
@@ -394,9 +406,29 @@ export class TabManager {
     // is the one that records.
     s.native.webContents.on('did-navigate', (_e, url) => this.onNativeNavigate(url, s))
 
-    s.target.on('load-error', err => this.toRenderer(IPC.loadError, { tabId: s.id, error: err }))
+    s.target.on('load-error', err => {
+      s.loadError = err
+      // Both panes empty out on a failed load (measured: a bad host replaces a
+      // good page with nothing), so the window draws its error state across
+      // them — and the native view is an OS-composited layer that nothing the
+      // renderer paints can appear over, so it has to stand down for it.
+      this.refreshNativeVisibility()
+      this.toRenderer(IPC.loadError, { tabId: s.id, error: err })
+    })
     s.target.on('loading', loading => this.toRenderer(IPC.targetLoading, { tabId: s.id, loading }))
-    s.target.on('navigating', () => this.toRenderer(IPC.targetNavigating, { tabId: s.id }))
+    s.target.on('navigating', () => {
+      // The start of a navigation is what clears a failure, not its commit: a
+      // failed load commits nothing, so `url` still reads back the last page
+      // that did, and retrying *that* same address reports no URL change at
+      // all (SyncBus drops the echo). Clearing here catches the retry, and
+      // nothing races it — `did-start-navigation` precedes `did-fail-load`, so
+      // a second failure sets the error again straight after.
+      if (s.loadError !== null) {
+        s.loadError = null
+        this.refreshNativeVisibility()
+      }
+      this.toRenderer(IPC.targetNavigating, { tabId: s.id })
+    })
     return s
   }
 
