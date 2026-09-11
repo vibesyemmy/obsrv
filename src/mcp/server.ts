@@ -1172,7 +1172,7 @@ const auditInputShape = {
     .optional()
     .describe('Leave the per-finding list out and answer with the summary and the groups alone: on a retail page at a phone preset the list is most of the payload, and the summary and groups count everything either way.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late layout. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Budget in ms for the load and then, separately, for the measurement after it: the walk, the wait for an empty document, the page ask. A page that answers late gets zeros and a warning naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 const auditGroupShape = z.object({
@@ -1246,6 +1246,13 @@ const auditOutputShape = {
 }
 
 type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean; groupsOnly?: boolean }
+
+/** The notes a readout carries about its own figures (the layout scale, when it is not 1); none from an app older than the field. */
+function readoutNotesOf(readout: unknown): string[] {
+  if (readout === null || typeof readout !== 'object') return []
+  const notes = (readout as { notes?: unknown }).notes
+  return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string') : []
+}
 
 /** A `truncated` block with its list cut zeroed: under `groupsOnly` no list was printed, so nothing was cut from it. */
 function noListCut(truncated: unknown): Record<string, unknown> {
@@ -1423,7 +1430,7 @@ const lintInputShape = {
     .optional()
     .describe('Leave the per-finding list out and answer with the groups alone: a fraction of the payload, and the summary still counts everything.'),
   waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: budget in ms for the load and then, separately, for the measurement after it: the walk, the wait for an empty document, the page ask. A page that answers late gets an empty report and a warning naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 const lintRectShape = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
@@ -1692,7 +1699,7 @@ const inspectInputShape = {
   throttle: throttleField,
   profile: z.enum(PROFILE_IDS).optional().describe('Headless: the panel the second contrast figure is measured on. Default reference.'),
   waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: budget in ms for the load and then, separately, for the page ask after it. A page that answers late gets found: false and a note naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 
@@ -2254,7 +2261,14 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
+    // The CLI's own notes (a page ask the budget won) come through beside the
+    // call's; the readout's, which the CLI hoists too, stay in the readout and
+    // are said once.
+    const readoutNotes = new Set(readoutNotesOf((result as { readout?: unknown }).readout))
+    const cliNotes = (Array.isArray((result as { notes?: unknown }).notes) ? (result as { notes: unknown[] }).notes.filter((n): n is string => typeof n === 'string') : []).filter(
+      n => !readoutNotes.has(n),
+    )
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...cliNotes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )

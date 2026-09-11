@@ -417,6 +417,14 @@ test('a page that holds its main thread after load is answered, not killed: the 
   expect(m.warnings[0]).toMatch(/^the page did not answer the audit within 3 s of loading/)
 })
 
+test('obsrv_inspect: a page that holds its main thread after load answers found false within the budget, with the note', async () => {
+  const r = await call('obsrv_inspect', { url: fixture('blocks-after-load.html'), preset: '1080p-24', selector: '#b', timeoutMs: 3000 })
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const m = r.structuredContent as { found: boolean; notes: string[] }
+  expect(m.found).toBe(false)
+  expect(m.notes.join(' ')).toMatch(/the page did not answer the inspect within 3 s of loading/)
+})
+
 test('obsrv_audit: groupsOnly leaves the list out, as it does for lint', async () => {
   // A phone audit of a retail page came back as fifteen thousand tokens with
   // no way to ask for the groups alone; lint had had the flag since 0.32.0.
