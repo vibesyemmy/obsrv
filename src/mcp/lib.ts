@@ -546,6 +546,10 @@ export interface HeadlessPlan {
 }
 
 /** How long a launched app gets to come up before the call goes headless. */
+/** The sentence a live call carries when the dev lane relaunched its app to run a newer build (src/mcp/control.ts). */
+export const DEV_RELAUNCH_NOTE =
+  "the dev app was relaunched to run the lane's current build: it had started before that build was made"
+
 export const LAUNCH_TIMEOUT_MS = 12_000
 
 export const DECLINED_NOTE =

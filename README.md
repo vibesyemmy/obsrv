@@ -256,12 +256,9 @@ Build first, then register:
 claude mcp add --scope user obsrv -- npx -y getobsrv mcp
 ```
 
-In a checkout of this repository, register the local build under its own name
-and leave `obsrv` to the plugin or the published package:
-
-```bash
-claude mcp add --scope local obsrv-dev -- node "$PWD/bin/obsrv-mcp.js"
-```
+In a checkout of this repository, test the local build as `obsrv-dev`, through
+the dev lane (see [Develop](#develop)), and leave `obsrv` to the plugin or the
+published package.
 
 `npx getobsrv` run inside the repository is the checkout, not the release: npm
 links a project into the npx cache when the requested name is the project's
@@ -280,6 +277,50 @@ npm run test:browser  # shader parity vs the TS reference (Vitest browser mode)
 npm run test:e2e      # Playwright driving the real Electron app
 npm run dist          # build a macOS DMG (unsigned without a Developer ID identity)
 ```
+
+### The dev lane
+
+Testing a change through the MCP tools used to mean a release: publish, install
+the DMG, update the plugin, restart the session. The dev lane runs a checkout's
+own build instead, headless and live, and follows every rebuild.
+
+```bash
+npm run lane                 # point the lane at this checkout, build it, (re)launch its app
+npm run lane -- --no-build   # point and relaunch without building
+npm run lane -- --no-app     # point and build; the next live call relaunches the app
+npm run lane -- --status     # where the lane points, and how fresh its builds and app are
+```
+
+- **One lane per machine**, at `~/.obsrv-dev` (`OBSRV_DEV_HOME` overrides): a
+  pointer to the checkout it runs, the dev app's own profile, and the proxy.
+  `npm run lane` in any checkout or worktree points it there.
+- **The dev app runs beside an installed Obsrv**, never instead of it: its own
+  profile, so its own single-instance lock and `control.json`, and a title bar
+  that says `Obsrv — dev lane (<branch> @ <commit>)`.
+- **`obsrv-dev` is a proxy** (`scripts/dev-mcp.js`, installed into
+  `~/.obsrv-dev/bin`). It runs the lane's own MCP server in dev mode and
+  starts it again when `out/mcp/server.js` changes or the lane moves, so the
+  call after a build runs the build on the same session. A call in flight
+  finishes on the build it started on.
+- **In dev mode the server drives the lane's app**: it discovers the lane
+  profile's `control.json`, launches the checkout's `out/main/index.js`
+  rather than `/Applications/Obsrv.app`, and relaunches a dev app that started
+  before the latest build, saying so in the result.
+
+Register it once, then restart the session once; after that nothing about a
+rebuild needs a restart:
+
+```bash
+claude mcp add --scope local --transport stdio obsrv-dev -- node ~/.obsrv-dev/bin/dev-mcp.js
+```
+
+The loop is then: work on a branch in a worktree, `npm run lane` there, test
+through the `obsrv-dev` tools, adjust, `npm run build`, test again. `obsrv`
+stays the pinned release throughout. A release is still proven by the packed
+tarball's own CLI, since the lane by definition runs local code. Before
+removing a worktree the lane points at, point it elsewhere (`npm run lane` in
+the shared checkout); a lane that points at nothing answers every call with
+that sentence rather than failing to start.
 
 Architecture, decisions and the full spec live in
 [docs/superpowers/specs/2026-08-22-obsrv-design.md](docs/superpowers/specs/2026-08-22-obsrv-design.md);

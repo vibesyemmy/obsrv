@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { launchApp, resolveLaunchTarget } from '../../src/mcp/launch'
+import { launchApp, resolveDevTarget, resolveLaunchTarget } from '../../src/mcp/launch'
 
 const ROOT = '/pkg'
 const HOME = '/Users/x'
@@ -82,5 +82,32 @@ describe('launchApp', () => {
     const handle = launchApp({ kind: 'bundle', executable: '/A/Obsrv' }, {}, spawn as never)
     child.fire('error')
     await expect(handle.exited).resolves.toBeUndefined()
+  })
+})
+
+describe('the dev lane target', () => {
+  const lane = {
+    appLaunch: (root: string) => ({ entry: root + '/out/main/index.js', args: ['--user-data-dir=/lane/profile'], env: { OBSRV_AGENT_CONTROL: '1', OBSRV_DEV_LANE: root } }),
+  }
+  it("runs the lane's own GUI entry on the lane's profile, never the installed bundle", () => {
+    const target = resolveDevTarget('/wt', {}, () => true, () => ({ path: '/E' }), lane)
+    expect(target).toEqual({
+      kind: 'electron',
+      electron: '/E',
+      entry: '/wt/out/main/index.js',
+      args: ['--user-data-dir=/lane/profile'],
+      env: { OBSRV_AGENT_CONTROL: '1', OBSRV_DEV_LANE: '/wt' },
+    })
+  })
+  it('says what is missing when the lane has no app build, or no Electron', () => {
+    expect(resolveDevTarget('/wt', {}, () => false, () => ({ path: '/E' }), lane)).toEqual({ error: expect.stringMatching(/no app build at \/wt\/out\/main\/index\.js .*npm run build/) })
+    expect(resolveDevTarget('/wt', {}, () => true, () => ({ error: 'electron is not installed' }), lane)).toEqual({ error: expect.stringContaining('electron is not installed') })
+  })
+  it('launchApp passes the profile after the entry and the lane env through, agent control still on', () => {
+    const spawn = vi.fn(() => fakeChild())
+    launchApp({ kind: 'electron', electron: '/E', entry: '/wt/out/main/index.js', args: ['--user-data-dir=/lane/profile'], env: { OBSRV_DEV_LANE: '/wt' } }, { HOME: '/Users/x' }, spawn as never)
+    const [, args, opts] = spawn.mock.calls[0] as unknown as [string, string[], { env: NodeJS.ProcessEnv }]
+    expect(args).toEqual(['/wt/out/main/index.js', '--user-data-dir=/lane/profile'])
+    expect(opts.env).toMatchObject({ HOME: '/Users/x', OBSRV_DEV_LANE: '/wt', OBSRV_AGENT_CONTROL: '1' })
   })
 })

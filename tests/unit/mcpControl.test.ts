@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { CONTROL_FILE_ENV, discover, ensureLive, type Discovery, type EnsureDeps } from '../../src/mcp/control'
+import { CONTROL_FILE_ENV, controlFilePath, discover, ensureLive, type Discovery, type EnsureDeps } from '../../src/mcp/control'
 import { DECLINED_NOTE, LAUNCH_TIMEOUT_MS, type LivePlan } from '../../src/mcp/lib'
 import type { LiveApp } from '../../src/mcp/control'
 
@@ -315,4 +315,39 @@ describe('discover', () => {
   // absent. Building that harness for this Minor finding was judged not
   // worth it; the branch stays covered by reading, as the original review
   // noted.
+})
+
+describe('ensureLive with a prepare step (the dev lane relaunching a stale app)', () => {
+  it("a sentence from prepare joins the result's notes, and the relaunch reads as a launch", async () => {
+    const d = { ...deps([{ kind: 'absent' }, { kind: 'live', app }]), prepare: vi.fn(async () => 'relaunched') }
+    expect(await ensureLive(LIVE, d)).toEqual({ path: 'live', app, launched: true, notes: ['n', 'relaunched'] })
+    expect(d.prepare).toHaveBeenCalledTimes(1)
+  })
+  it('nothing to say, nothing added', async () => {
+    const d = { ...deps([{ kind: 'live', app }]), prepare: vi.fn(async () => null) }
+    expect(await ensureLive(LIVE, d)).toEqual({ path: 'live', app, launched: false, notes: ['n'] })
+  })
+  it('a headless plan is not prepared: nothing live is touched', async () => {
+    const d = { ...deps([]), prepare: vi.fn(async () => 'relaunched') }
+    await ensureLive({ path: 'headless', why: 'requested', notes: [] }, d)
+    expect(d.prepare).not.toHaveBeenCalled()
+  })
+})
+
+describe('controlFilePath in the dev lane', () => {
+  const saved = { dev: process.env.OBSRV_DEV, home: process.env.OBSRV_DEV_HOME, file: process.env[CONTROL_FILE_ENV] }
+  afterEach(() => {
+    for (const [k, v] of [['OBSRV_DEV', saved.dev], ['OBSRV_DEV_HOME', saved.home], [CONTROL_FILE_ENV, saved.file]] as const) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  })
+  it("reads the lane profile's control file under OBSRV_DEV=1, unless OBSRV_CONTROL_FILE names one", () => {
+    delete process.env[CONTROL_FILE_ENV]
+    process.env.OBSRV_DEV = '1'
+    process.env.OBSRV_DEV_HOME = '/tmp/lane'
+    expect(controlFilePath()).toBe('/tmp/lane/profile/control.json')
+    process.env[CONTROL_FILE_ENV] = '/tmp/explicit.json'
+    expect(controlFilePath()).toBe('/tmp/explicit.json')
+  })
 })

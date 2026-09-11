@@ -16,6 +16,7 @@ import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
+import { devMode } from './devLane'
 import { settlePage } from './settle'
 import { walkCoverageNote } from '../shared/walkCoverage'
 import {
@@ -2365,7 +2366,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport()
   await server.connect(transport)
   // stdout is the protocol channel; the one boot line goes to stderr.
-  process.stderr.write(`obsrv-mcp-server ${VERSION} running on stdio\n`)
+  process.stderr.write(`obsrv-mcp-server ${VERSION} running on stdio${devMode() ? ` — dev lane: ${REPO_ROOT}` : ''}\n`)
 }
 
 main().catch((e: unknown) => {
