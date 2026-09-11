@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -121,6 +122,72 @@ describe('ensureElectron', () => {
   it("names the installer's last line when it fails, so a network error is not a mystery", async () => {
     const d = stub("process.stderr.write('boom: no network\\n'); process.exit(1)")
     expect(await ensureElectron({ pkgDir: d })).toEqual({ error: expect.stringContaining('boom: no network') })
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+/** An installer that records each run and delivers the binary after `delayMs`. */
+const countingInstaller = (delayMs: number): string => `
+  const fs = require('fs'), path = require('path')
+  fs.appendFileSync(path.join(__dirname, 'runs.log'), 'run\\n')
+  setTimeout(() => process.stdout.write('progress 50%\\n'), Math.floor(${delayMs} / 2))
+  setTimeout(() => {
+    fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(__dirname, 'dist', 'electron-bin'), '')
+    fs.writeFileSync(path.join(__dirname, 'path.txt'), 'electron-bin\\n')
+  }, ${delayMs})
+`
+const runs = (d: string): number => (existsSync(join(d, 'runs.log')) ? readFileSync(join(d, 'runs.log'), 'utf8').split('\n').filter(l => l === 'run').length : 0)
+
+describe('ensureElectron, shared between processes', () => {
+  // Every Claude session's MCP server resolves the same npx cache folder, and
+  // after a plugin update three or four of them start here at once. Electron's
+  // installer checks isInstalled() once and then extracts into dist/ regardless,
+  // so two of them running would interleave. One installs; the rest wait.
+  it('two callers at once run the installer once, and both get the binary', async () => {
+    const d = stub(countingInstaller(200))
+    const [a, b] = await Promise.all([ensureElectron({ pkgDir: d, pollMs: 25 }), ensureElectron({ pkgDir: d, pollMs: 25 })])
+    expect(a).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(b).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('a lock held by a live process is waited on, not raced: the binary arrives, the installer never ran here', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), String(process.pid))
+    setTimeout(() => {
+      mkdirSync(join(d, 'dist'), { recursive: true })
+      writeFileSync(join(d, 'dist', 'electron-bin'), '')
+      writeFileSync(join(d, 'path.txt'), 'electron-bin\n')
+    }, 300)
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(0)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it("a lock left by a dead process is taken over, so one crash does not block every later start", async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('the download outlives the process that started it, so a server that dies mid-install does not waste it', async () => {
+    // The orphan measured on 2026-09-11 downloaded 123 MB into a temp dir and
+    // died without extracting: its stdio was the dead server's pipe. Detached,
+    // with a log file for output, the installer finishes on its own.
+    const d = stub(countingInstaller(600))
+    const helper = join(__dirname, '../../bin/electronPath.js')
+    execFileSync(process.execPath, ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)} }); setTimeout(() => process.exit(0), 50)`])
+    expect(existsSync(join(d, 'path.txt'))).toBe(false)
+    await new Promise(r => setTimeout(r, 1_200))
+    expect(existsSync(join(d, 'path.txt'))).toBe(true)
+    expect(readFileSync(join(d, 'obsrv-install.log'), 'utf8')).toContain('progress 50%')
     rmSync(d, { recursive: true, force: true })
   })
 })
