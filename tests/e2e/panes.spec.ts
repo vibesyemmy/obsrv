@@ -256,6 +256,31 @@ test('a failed load says so in the window, across both panes, and clears when on
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.isVisible())).toBe(true)
 })
 
+test('a failed load is drawn as an empty state, not a card on top of one', async () => {
+  // It is the same kind of moment as a tab with no address — nothing to show
+  // and one way out — so it is built the same way: the illustration, a line
+  // of type and the control, standing in the surround. A panel with a border
+  // around all that read as a dialog over an empty window.
+  await page.fill('.url-form input', 'https://obsrv-no-such-host.invalid')
+  await page.press('.url-form input', 'Enter')
+  await expect(page.locator('.load-error-state')).toBeVisible({ timeout: 15_000 })
+
+  await expect(page.locator('.load-error-card')).toHaveCount(0)
+  await expect(page.locator('.load-error-state svg')).toBeVisible()
+  const framed = await page.locator('.load-error-state > *').evaluateAll(els =>
+    els.some(el => {
+      const s = getComputedStyle(el)
+      return s.borderStyle !== 'none' || s.backgroundColor !== 'rgba(0, 0, 0, 0)'
+    }),
+  )
+  expect(framed).toBe(false)
+  // The empty state's own column: the two states line up rather than each
+  // inventing a layout.
+  const state = page.locator('.load-error-state')
+  await expect(state).toHaveCSS('flex-direction', 'column')
+  await expect(state).toHaveCSS('align-items', 'center')
+})
+
 test('Try again re-runs the address that failed, and the state survives a second failure', async () => {
   // The case a commit-time clear misses: a failed load commits nothing, so the
   // tab's URL is still the last page that loaded, and retrying the failing

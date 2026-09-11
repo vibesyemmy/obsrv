@@ -1147,34 +1147,32 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 .empty-go:disabled { color: var(--text-1); opacity: 0.6; }
 .empty-error { margin: 0; color: var(--error); }
 
-/* The load-error state. Shares the empty state's geometry — absolute over both
-   panes, above the divider, transparent to the pointer except its own control
-   — because it is the same kind of thing: the tab has nothing to show and one
-   way out. A card rather than an illustration, because the address that failed
-   and the reason are the content, and they want reading. */
+/* The load-error state. The empty state's geometry and its column — absolute
+   over both panes, above the divider, transparent to the pointer except its
+   own control — because it is the same kind of thing: the tab has nothing to
+   show and one way out. Drawn in the surround rather than on a card: a
+   bordered panel over an empty window read as a dialog. */
 .load-error-state {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 20px;
   padding: 24px;
   background: var(--surround);
+  text-align: center;
   z-index: 2;
   pointer-events: none;
 }
-.load-error-card {
-  pointer-events: auto;
+.load-error-state svg { width: 244px; max-width: 100%; height: auto; }
+.load-error-text {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   max-width: 46ch;
-  padding: 24px 28px;
-  text-align: center;
-  background: var(--chrome-1);
-  border: 1px solid var(--line);
-  border-radius: 8px;
 }
 .load-error-lede { margin: 0; color: var(--text-0); font-weight: 600; }
 .load-error-url {
@@ -1189,8 +1187,14 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .load-error-why { margin: 0; color: var(--text-1); }
 .load-error-code { font-family: var(--mono); font-size: 12px; opacity: 0.75; }
-.load-error-actions { display: flex; gap: 8px; margin-top: 4px; }
+.load-error-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
 .load-error-retry {
+  pointer-events: auto;
   height: 30px;
   padding: 0 14px;
   color: var(--text-0);

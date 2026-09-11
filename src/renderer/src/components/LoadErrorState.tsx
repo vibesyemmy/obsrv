@@ -1,3 +1,4 @@
+import { LoadErrorArt } from '../illustrations/LoadErrorArt'
 import { useStore, selectTab } from '../state/store'
 
 /**
@@ -14,6 +15,11 @@ import { useStore, selectTab } from '../state/store'
  * view is an OS-composited layer, so nothing the renderer paints could appear
  * over it otherwise. Safe here precisely because that pane is empty too.
  *
+ * Built as an empty state rather than a card, because it is the same kind of
+ * moment: the tab has nothing to show and there is one way out. A bordered
+ * panel in the middle of an empty window read as a dialog — something that
+ * had appeared over the work — when nothing was behind it.
+ *
  * The code itself is deliberately quiet — small, beside the description.
  * `ERR_NAME_NOT_RESOLVED` is what a person can act on; `-105` is what they
  * would have to look up.
@@ -23,8 +29,9 @@ export function LoadErrorState() {
   if (!error) return null
 
   return (
-    <div className="load-error-state">
-      <div className="load-error-card" role="alert">
+    <div className="load-error-state" role="alert">
+      <LoadErrorArt />
+      <div className="load-error-text">
         <p className="load-error-lede">This address would not load.</p>
         <p className="load-error-url" title={error.url}>
           {error.url}
@@ -33,11 +40,11 @@ export function LoadErrorState() {
           {error.description}
           <span className="load-error-code"> ({error.code})</span>
         </p>
-        <div className="load-error-actions">
-          <button type="button" className="load-error-retry" onClick={() => window.obsrv.reload()}>
-            Try again
-          </button>
-        </div>
+      </div>
+      <div className="load-error-actions">
+        <button type="button" className="load-error-retry" onClick={() => window.obsrv.reload()}>
+          Try again
+        </button>
         <p className="load-error-hint">Or edit the address above.</p>
       </div>
     </div>
