@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { createServer, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -181,4 +184,41 @@ test('a page that holds its main thread after load: the lint answers within the 
   const m = JSON.parse(r.stdout)
   expect(m.summary).toEqual({ hairline: 0, 'thin-text': 0, contrast: 0, 'contrast-on-panel': 0, 'image-upscaled': 0, 'image-oversized': 0 })
   expect(m.warnings[0]).toMatch(/^the page did not answer the lint within 3 s of loading/)
+})
+
+/**
+ * A page whose `load` never fires: the document is complete and painted,
+ * but /hang.png never answers (apnews.com behind its consent wall, measured
+ * 2026-09-11). The snap captured that page as it stood; the measurements
+ * refused it. Both should measure what is there.
+ */
+test.describe('a load that never finishes', () => {
+  let server: Server
+  let url: string
+  const held: ServerResponse[] = []
+  test.beforeAll(async () => {
+    const html = readFileSync(resolve(__dirname, '../fixtures/never-loads.html'), 'utf8')
+    server = createServer((req, res) => {
+      if (req.url === '/hang.png') {
+        held.push(res)
+        return
+      }
+      res.setHeader('Content-Type', 'text/html')
+      res.end(html)
+    })
+    await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`
+  })
+  test.afterAll(async () => {
+    for (const res of held) res.destroy()
+    await new Promise<void>(r => server.close(() => r()))
+  })
+
+  test('the lint measures the page as it stands, and its first warning names the cut load', async () => {
+    const r = await runCli(['lint', url, '--preset', '1080p-24', '--timeout', '3000'])
+    expect(r.code, r.stderr).toBe(0)
+    const m = JSON.parse(r.stdout)
+    expect(m.warnings[0]).toMatch(/^load did not finish within 3000 ms: http:\/\/127\.0\.0\.1:\d+\/ — measured the page as it stood/)
+    expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
+  })
 })

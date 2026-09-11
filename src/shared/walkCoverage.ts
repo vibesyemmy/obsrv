@@ -31,3 +31,17 @@ export function walkCoverageNote(walked: WalkedSummary | undefined, viewportHeig
     `or it grew after the walk; the measurement is of the page as it stands, and nothing below ${Math.round(covered)} px was scrolled into view`
   )
 }
+
+/**
+ * The walk's sentence for a page that hides the document's overflow and has
+ * no scroller in its light DOM — a web player's shell, an editor that scrolls
+ * by transform, a preview in an iframe (spotify.com on desktop, measured
+ * 2026-09-11). The first `next` lands where the page already was, the walk is
+ * right to stop, and `walked: { screenfuls: 0, atEnd: true }` alone read like
+ * a one-screen page. The full-page capture says this in its own words; both
+ * walks say it in these.
+ */
+export const WALK_NOTHING_NOTE =
+  "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: " +
+  'content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualised list or editor) was not brought ' +
+  'into view before measuring, and the figures are of the page as it first shows'

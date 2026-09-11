@@ -2,6 +2,7 @@ import { Deadline, walkTimeoutNote, withinBudget } from '../shared/measureBudget
 import type { TargetSource } from '../main/targetSource'
 import type { Walked } from '../shared/types'
 import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
+import { WALK_NOTHING_NOTE } from '../shared/walkCoverage'
 
 /**
  * Walking the page before measuring it, headlessly.
@@ -96,8 +97,12 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
       // show — the end, whatever `atEnd` says — so a one-screen page is zero
       // screenfuls, not twelve dwells at offset 0.
       if (r.y === lastY) {
-        if (r.atEnd) atEnd = true
-        else notes.push('the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other means); measured from where it stood.')
+        if (r.atEnd) {
+          atEnd = true
+          // Nothing to scroll on a page that hides its overflow: the walk is
+          // right to stop, and must not read like a one-screen page.
+          if (screenfuls === 0 && r.scroller === 'root' && r.hidden) notes.push(WALK_NOTHING_NOTE)
+        } else notes.push('the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other means); measured from where it stood.')
         break
       }
       lastY = r.y

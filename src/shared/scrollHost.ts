@@ -32,6 +32,43 @@ export function rootScrolls(): boolean {
 }
 
 /**
+ * Whether the page has hidden the document's overflow — `html` or `body`
+ * with `overflow-y: hidden` — which is a page saying it manages its own
+ * scrolling. With no scroller in its light DOM either, whatever it shows past
+ * one screen is somewhere neither a capture nor a walk can reach; both say so.
+ */
+export function overflowHidden(): boolean {
+  const doc = window.getComputedStyle(document.documentElement).overflowY === 'hidden'
+  const body = !!document.body && window.getComputedStyle(document.body).overflowY === 'hidden'
+  return doc || body
+}
+
+/**
+ * The iframes in the viewport at the page's top, and how much of it they
+ * cover (clipped areas summed, capped at the whole viewport). For the
+ * sentence a measurement with nothing in it carries: the measurement does not
+ * enter iframes, and a bot wall — etsy.com behind DataDome, measured
+ * 2026-09-11 — is one iframe over the whole viewport, a heading and a slider
+ * inside it, and "nothing to measure" outside.
+ */
+export function framesInViewport(): { count: number; viewportCoverage: number } {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let count = 0
+  let area = 0
+  for (const frame of Array.from(document.querySelectorAll('iframe'))) {
+    const r = frame.getBoundingClientRect()
+    const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0))
+    const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0))
+    if (w > 0 && h > 0) {
+      count++
+      area += w * h
+    }
+  }
+  return { count, viewportCoverage: vw > 0 && vh > 0 ? Math.min(1, area / (vw * vh)) : 0 }
+}
+
+/**
  * Whether this element is a scroll container with something to scroll. The
  * cheap overflow test comes first so `getComputedStyle` — the expensive half —
  * runs only for the handful of elements that could possibly qualify.
@@ -203,6 +240,8 @@ export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,
   rootScrolls.toString(),
+  overflowHidden.toString(),
+  framesInViewport.toString(),
   canScroll.toString(),
   isVisible.toString(),
   findScroller.toString(),
@@ -216,6 +255,11 @@ export interface WalkStepResult {
   /** No more page below this offset. */
   atEnd: boolean
   scroller: 'root' | 'element'
+  /**
+   * The document hides its overflow (`overflowHidden`). With `scroller:
+   * 'root'` and nothing to scroll, the walk had nowhere to go, and says so.
+   */
+  hidden: boolean
 }
 
 /**
@@ -244,7 +288,7 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
   if (el) el.scrollTo({ top: want, left: el.scrollLeft, behavior: 'instant' })
   else window.scrollTo({ top: want, left: window.scrollX, behavior: 'instant' })
   const y = el ? el.scrollTop : window.scrollY
-  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root' }
+  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root', hidden: overflowHidden() }
 }
 
 /** `walkStep` as source, self-contained, for `executeJavaScript` in a page the preload is not loaded into. */

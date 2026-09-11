@@ -15,6 +15,18 @@ describe('empty document', () => {
     )
     expect(emptyDocumentNote('lint', 3000)).toContain('no visible text, edges or images 3 s after')
   })
+  it('names the iframe the visible page is, when it is one, so a wall is not read as a blank page', () => {
+    // etsy.com's DataDome wall: one iframe over the whole viewport, and a
+    // snap that shows a heading and a slider. The measurement does not
+    // enter iframes; the sentence must say that is where the page is.
+    const note = emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 1 })
+    expect(note).toContain('nothing to measure')
+    expect(note).toContain('an <iframe> covers 100% of the viewport, which the measurement does not enter')
+    expect(emptyDocumentNote('lint', 3000, { count: 2, viewportCoverage: 0.634 })).toContain('2 <iframe>s cover 63% of the viewport')
+    expect(emptyDocumentNote('lint', 3000, { count: 0, viewportCoverage: 0 })).not.toContain('iframe')
+    expect(emptyDocumentNote('lint', 3000)).not.toContain('iframe')
+  })
+
   it('a report with content is taken at once', async () => {
     let asked = 0
     const r = await awaitContent(async () => (asked++, { text: ['a'] }), () => false, { sleep: async () => {} })

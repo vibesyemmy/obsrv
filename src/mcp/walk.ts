@@ -1,4 +1,5 @@
 import type { Walked } from '../shared/types'
+import { WALK_NOTHING_NOTE } from '../shared/walkCoverage'
 import { ControlCallError } from './control'
 
 export type { Walked }
@@ -99,8 +100,12 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       }
       const y = typeof (at as { y?: unknown }).y === 'number' ? (at as { y: number }).y : null
       if (y !== null && y === lastY) {
-        if (r['atEnd'] === true) atEnd = true
-        else notes.push('the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the page, or a page that scrolls by other means); measured from where it stood.')
+        if (r['atEnd'] === true) {
+          atEnd = true
+          // Nothing to scroll on a page that hides its overflow (an app older
+          // than the field says nothing, and gets no sentence).
+          if (screenfuls === 0 && r['scroller'] === 'root' && r['hidden'] === true) notes.push(WALK_NOTHING_NOTE)
+        } else notes.push('the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the page, or a page that scrolls by other means); measured from where it stood.')
         break
       }
       lastY = y
