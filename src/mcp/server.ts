@@ -1172,7 +1172,7 @@ const auditInputShape = {
     .optional()
     .describe('Leave the per-finding list out and answer with the summary and the groups alone: on a retail page at a phone preset the list is most of the payload, and the summary and groups count everything either way.'),
   waitMs: z.number().int().min(0).optional().describe('Extra settle time after load, in ms, for late layout. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Budget in ms for the load and then, separately, for the measurement after it: the walk, the wait for an empty document, the page ask. A page that answers late gets zeros and a warning naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 const auditGroupShape = z.object({
@@ -1430,7 +1430,7 @@ const lintInputShape = {
     .optional()
     .describe('Leave the per-finding list out and answer with the groups alone: a fraction of the payload, and the summary still counts everything.'),
   waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: budget in ms for the load and then, separately, for the measurement after it: the walk, the wait for an empty document, the page ask. A page that answers late gets an empty report and a warning naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 const lintRectShape = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
@@ -1699,7 +1699,7 @@ const inspectInputShape = {
   throttle: throttleField,
   profile: z.enum(PROFILE_IDS).optional().describe('Headless: the panel the second contrast figure is measured on. Default reference.'),
   waitMs: z.number().int().min(0).optional().describe('Headless: extra settle time after load, in ms. Default 0.'),
-  timeoutMs: z.number().int().min(1).optional().describe(`Headless: load budget in ms. Default ${DEFAULT_TIMEOUT_MS}.`),
+  timeoutMs: z.number().int().min(1).optional().describe(`Headless: budget in ms for the load and then, separately, for the page ask after it. A page that answers late gets found: false and a note naming the wait, so raise it for such a page. Default ${DEFAULT_TIMEOUT_MS}.`),
 }
 
 
