@@ -315,8 +315,11 @@ npm publish ./getobsrv-<version>.tgz
 `npm version` also rewrites the plugin manifests: their version, the
 marketplace entry's source, which is pinned to the tag `plugin-v<version>` that
 `npm run plugin:branch` creates, and the MCP registration, pinned to
-`getobsrv@<version>`. Push that tag (after `main` is green) or the marketplace
-catalog points at a ref that does not exist yet.
+`getobsrv@<version>`. Push the tags after `main` is green, and push `plugin-v<version>`
+only once npm has that version: the marketplace catalog points at the plugin
+tag, and a plugin fetched before the publish starts an MCP that npm cannot
+install. So the order is: main green, `npm publish`, then `v<version>`, `plugin`
+and `plugin-v<version>` together.
 
 Obsrv publishes to npm as **`getobsrv`** (the installed commands remain `obsrv`
 and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name
