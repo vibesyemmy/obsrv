@@ -883,8 +883,13 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       found: readout !== null,
       readout,
-      // The call's own notes; the readout keeps its own (the layout scale), said once.
-      notes,
+      // Both: the call's own notes (a measurement that ran out of budget) and
+      // the readout's (the layout scale, when it is not 1). A reader of
+      // `notes` is looking for everything worth knowing about this answer, and
+      // a page drawn at 0.37x because it has no viewport meta tag is the most
+      // important thing about the millimetres above it. The readout keeps its
+      // copy for a caller that reads only that.
+      notes: [...notes, ...(readout === null ? [] : readout.notes)],
     })
   } finally {
     target.destroy()
