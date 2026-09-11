@@ -222,3 +222,26 @@ test.describe('a load that never finishes', () => {
     expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
   })
 })
+
+/**
+ * Two ways a report used to be lost between the page and the judge, and what
+ * the reader is told about it (docs/research/2026-09-11-live-run-0.53.0.md).
+ */
+test.describe('a report that arrives with something odd in it', () => {
+  test('a srcset whose comma has no space after it is read, not refused', async () => {
+    const r = await runCli(['lint', fixture('srcset-no-space.html'), '--preset', '1080p-24'])
+    expect(r.code, r.stderr).toBe(0)
+    const m = JSON.parse(r.stdout)
+    const glued = m.findings.find((f: { element: string }) => f.element === 'img#glued')
+    expect(glued?.message).toContain('200w candidate')
+    expect(r.stderr).not.toContain('did not answer the lint')
+  })
+
+  test('a report the checks refuse says so, rather than guessing at the page', async () => {
+    const r = await runCli(['lint', fixture('long-id.html'), '--preset', '1080p-24'])
+    expect(r.code).toBe(1)
+    expect(r.stderr).toContain('the page answered the lint')
+    expect(r.stderr).toContain('did not pass checking')
+    expect(r.stderr).not.toContain('may have navigated away')
+  })
+})

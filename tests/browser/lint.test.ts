@@ -130,3 +130,69 @@ describe('an app shell whose inner scroller has been scrolled', () => {
     expect(await fromSource(EDGE_BELOW_PX, 3000, 2000, 500)).toEqual(await lintPage(EDGE_BELOW_PX, 3000, 2000, 500))
   })
 })
+
+/**
+ * A srcset is "url descriptor, url descriptor", and the comma needs no space
+ * after it. Reuters writes it that way and the whole page's lint was lost to
+ * it: splitting on whitespace alone glued the next URL onto the descriptor,
+ * which came back 254 characters long and was refused
+ * (docs/research/2026-09-11-live-run-0.53.0.md). A data URL carries commas of
+ * its own, which is why the split cannot simply be on every comma.
+ */
+describe('the candidates an <img> offered', () => {
+  const revoke: string[] = []
+  let host: HTMLDivElement
+
+  /** A real file, so the image has a natural size and is measured at all. */
+  async function png(side: number): Promise<string> {
+    const canvas = new OffscreenCanvas(side, side)
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#3366aa'
+    ctx.fillRect(0, 0, side, side)
+    const url = URL.createObjectURL(await canvas.convertToBlob({ type: 'image/png' }))
+    revoke.push(url)
+    return url
+  }
+
+  beforeEach(() => {
+    host = document.createElement('div')
+    document.body.append(host)
+  })
+
+  afterEach(() => {
+    host.remove()
+    for (const url of revoke.splice(0)) URL.revokeObjectURL(url)
+  })
+
+  async function candidatesOf(srcset: string, src: string): Promise<string[] | undefined> {
+    const img = document.createElement('img')
+    img.id = 'shot'
+    img.style.cssText = 'display:block;width:48px;height:48px'
+    img.srcset = srcset
+    img.src = src
+    host.append(img)
+    await img.decode()
+    const r = await lintPage(EDGE_BELOW_PX, 3000, 2000, 500)
+    return r.images.find(i => i.element === 'img#shot')?.candidates
+  }
+
+  it('reads the descriptors when the comma has no space after it', async () => {
+    const small = await png(60)
+    const large = await png(240)
+    expect(await candidatesOf(`${small} 60w,${large} 240w`, small)).toEqual(['60w', '240w'])
+  })
+
+  it('reads them when a space follows the comma', async () => {
+    const small = await png(60)
+    const large = await png(240)
+    expect(await candidatesOf(`${small} 60w, ${large} 240w`, small)).toEqual(['60w', '240w'])
+  })
+
+  it("does not split a data URL on its own comma, with or without one after the descriptor", async () => {
+    // A 4x4 PNG: small enough to write out, big enough not to be a spacer.
+    const data =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM0TpvJAANMcBZeDgA8YgE6ReZ83QAAAABJRU5ErkJggg=='
+    const large = await png(240)
+    expect(await candidatesOf(`${data} 1x,${large} 2x`, data)).toEqual(['1x', '2x'])
+  })
+})

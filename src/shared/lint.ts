@@ -334,9 +334,19 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
         // The candidates the page offered: the img's own srcset and, inside a
         // <picture>, each <source>'s. A srcset is "url descriptor, url
         // descriptor"; split on whitespace, since a data URL carries a comma.
+        // The comma that ends a candidate needs no space after it, though, so
+        // a descriptor can arrive with the next URL glued on ("60w,https://…").
+        // Only a token that is a descriptor followed by a comma is split, so
+        // the commas inside a data URL are still left alone.
         const parseSet = (set: string): Array<[string, string]> => {
           const out: Array<[string, string]> = []
-          const tokens = set.trim().split(/\s+/).filter(t => t.length > 0)
+          const tokens: string[] = []
+          for (const token of set.trim().split(/\s+/)) {
+            if (token.length === 0) continue
+            const glued = /^(\d+(?:\.\d+)?[wx]),(.+)$/.exec(token)
+            if (glued) tokens.push(glued[1]!, glued[2]!)
+            else tokens.push(token)
+          }
           for (let i = 0; i < tokens.length; i++) {
             let url = tokens[i]!
             if (url.endsWith(',')) {
