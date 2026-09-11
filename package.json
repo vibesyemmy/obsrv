@@ -24,7 +24,7 @@
     "postpack": "node scripts/electron-dep.js to-dev",
     "release:pack": "npm run build && npm pack",
     "plugin:branch": "node scripts/build-plugin-branch.js",
-    "version": "node scripts/sync-plugin-version.js && git add .claude-plugin"
+    "version": "node scripts/sync-plugin-version.js && git add .claude-plugin .mcp.json"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
