@@ -1,7 +1,7 @@
 import type { RGBA } from './inspect'
 
 
-import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT } from './scrollHost'
+import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT, framesInViewport } from './scrollHost'
 
 /**
  * The lint's page walk: one pass over the rendered DOM that brings back
@@ -104,6 +104,13 @@ export interface LintReport {
    * older app's reply, which counted none.
    */
   spacers?: number
+  /**
+   * The iframes in the viewport at the page's top and how much of it they
+   * cover, for the sentence a report with nothing in it carries: the
+   * measurement does not enter iframes, and a bot wall is one over the whole
+   * viewport. Absent from an older app's reply.
+   */
+  frames?: { count: number; viewportCoverage: number }
 }
 
 /** A raster this small on either side is a spacer, not a picture. */
@@ -436,6 +443,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
         ...images.filter(i => !i.rect.clipped).map(i => i.rect.y + i.rect.height),
       ),
     ),
+    frames: framesInViewport(),
     text,
     edges,
     images,

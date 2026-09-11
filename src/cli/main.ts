@@ -220,6 +220,20 @@ function loadTimeoutMessage(timeoutMs: number, throttle: string | null, url: str
 }
 
 /**
+ * The sentence a measurement carries for a load the budget cut: the page was
+ * measured as it stood. apnews.com behind its consent wall never fires
+ * `load` — a partner's beacon never answers — at 30 s or at 60 s, and the
+ * old refusal ("raise --timeout for the full load") could not help; the DOM
+ * was there to measure, as the snap's capture already showed.
+ */
+function cutLoadMeasureNote(timeoutMs: number, throttle: string | null, url: string): string {
+  return (
+    `load did not finish within ${timeoutMs} ms${throttle !== null ? ` under --throttle ${throttle}` : ''}: ${url} — measured the page as it stood; ` +
+    `a page still arriving shows more with a longer --timeout, a page whose load never completes (a beacon that never answers) does not`
+  )
+}
+
+/**
  * After a load the budget cut short, how long the capture gives the page to
  * go quiet before taking the frame as it stands. Short: the budget is spent,
  * and the frame is what a user on that connection was looking at.
@@ -232,9 +246,10 @@ async function loadWithin(
   options: { waitMs: number; timeoutMs: number; throttle?: string | null },
   watch: ReturnType<typeof watchFailures>,
   /**
-   * A render takes the page as it stands when the load outruns the budget —
-   * settled false, a warning — since the frame is still what the screen
-   * showed; a measurement cannot use a half-loaded page and errors instead.
+   * Takes the page as it stands when the load outruns the budget — a render
+   * with settled false, a measurement with `cutLoadMeasureNote` — since the
+   * frame is still what the screen showed and the DOM is still what is there.
+   * Without it a cut load is an error, which the report's renders keep.
    */
   rescue = false,
 ): Promise<{ loaded: boolean }> {
@@ -252,6 +267,14 @@ async function loadWithin(
   if (error) throw new Error(`load failed: ${error.description} (code ${error.code}) — ${error.url}`)
   if (!loaded) {
     if (!rescue) throw new Error(loadTimeoutMessage(options.timeoutMs, options.throttle ?? null, url))
+    // The budget is spent, so the load is stopped: what has arrived stays,
+    // and the page stops loading. Without this a page whose `load` never
+    // fires — apnews.com behind its consent wall, a beacon that never
+    // answers — held every script call after it, since Electron suspends
+    // `executeJavaScript` "until web page stop loading", and the measurement
+    // that followed answered nothing within its budget while the DOM sat
+    // there. A capture needs no script and never noticed.
+    target.webContents.stop()
     return { loaded: false }
   }
   if (options.waitMs > 0) {
@@ -338,10 +361,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           window.__obsrvScrollHost = el
           // A page that hides the root's overflow has said it manages its own
           // scrolling. If nothing in its light DOM scrolls either, whatever it
-          // shows past this screen is somewhere the capture cannot go.
-          const hidden =
-            getComputedStyle(document.documentElement).overflowY === 'hidden' ||
-            (!!document.body && getComputedStyle(document.body).overflowY === 'hidden')
+          // shows past this screen is somewhere the capture cannot go. The
+          // walks ask the same question: overflowHidden, in shared/scrollHost.
+          const hidden = overflowHidden()
           if (!el) return { rootScrolls, found: false, hidden, top: 0, height: 0, scrollHeight: 0 }
           const r = el.getBoundingClientRect()
           return {
@@ -906,11 +928,12 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
+    const notes: string[] = []
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
+    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     const m = await measureAfterLoad(target, watch, cmd, budget => target.auditPage(budget), isEmptyAuditReport)
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
-    const notes: string[] = []
     let report = m.report
     if (report === null) {
       if (!m.timedOut) {
@@ -923,7 +946,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
-      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
@@ -988,7 +1011,9 @@ async function runLint(cmd: LintCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
+    const notes: string[] = []
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
+    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // One device pixel on this screen, in the page's CSS px: the walk
     // brings back only the edges thinner than that.
     const m = await measureAfterLoad(
@@ -1000,7 +1025,6 @@ async function runLint(cmd: LintCommand): Promise<void> {
     )
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
-    const notes: string[] = []
     let report = m.report
     if (report === null) {
       if (!m.timedOut) {
@@ -1020,7 +1044,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
-      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(

@@ -179,6 +179,12 @@ export interface ScrollReport {
   warnings: string[]
   /** The scroller can go no further down: the loop that walks a page stops here. */
   atEnd: boolean
+  /**
+   * The document hides its overflow (html or body overflow-y: hidden): with
+   * 'root' and nothing to scroll, the walk had nowhere to go, and says so.
+   * Absent from an older app's reply.
+   */
+  hidden?: boolean
 }
 
 export type UpdateStatus = 'current' | 'available' | 'error'

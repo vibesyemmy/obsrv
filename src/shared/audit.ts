@@ -3,7 +3,7 @@
 // walk is written here so the CLI can ship it as source; nothing in this
 // file runs outside the target page except the string.
 
-import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT } from './scrollHost'
+import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT, framesInViewport } from './scrollHost'
 
 /**
  * The physical-units audit's raw material: every interactive element and
@@ -51,6 +51,13 @@ export interface AuditReport {
   text: AuditText[]
   /** Elements past the caps, counted but not listed. */
   truncated: { targets: number; text: number }
+  /**
+   * The iframes in the viewport at the page's top and how much of it they
+   * cover, for the sentence a report with nothing in it carries: the
+   * measurement does not enter iframes, and a bot wall is one over the whole
+   * viewport. Absent from an older app's reply.
+   */
+  frames?: { count: number; viewportCoverage: number }
 }
 
 /** Caps on what one report carries back; a page past them is still summarised. */
@@ -218,6 +225,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
         ...text.filter(t => !t.rect.clipped).map(t => t.rect.y + t.rect.height),
       ),
     ),
+    frames: framesInViewport(),
     targets,
     text,
     truncated: { targets: targetsOver, text: textOver },

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A wall that is an iframe</title>
+    <!--
+      The shape of a bot wall (etsy.com behind DataDome, measured 2026-09-11):
+      the top-level document holds one iframe covering the whole viewport
+      and nothing else. The measurements do not enter iframes, so they see
+      an empty page — and the sentence that says so must name the iframe,
+      or the reader thinks the wall is blank while the snap shows a heading
+      and a slider.
+    -->
+    <style>
+      html, body { margin: 0; height: 100%; }
+      iframe { display: block; width: 100vw; height: 100vh; border: 0; }
+    </style>
+  </head>
+  <body>
+    <iframe title="wall" srcdoc="&lt;body style='margin:0;font:16px system-ui'&gt;&lt;h1&gt;Verification required&lt;/h1&gt;&lt;p&gt;Slide right to secure your access&lt;/p&gt;&lt;button style='width:200px;height:44px'&gt;Continue&lt;/button&gt;&lt;/body&gt;"></iframe>
+  </body>
+</html>

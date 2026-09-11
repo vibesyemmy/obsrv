@@ -125,3 +125,14 @@ test('a page held by a consent layer: the walk sees no page to cross, and the me
   expect(l.code, l.stderr).toBe(0)
   expect(JSON.parse(l.stdout).warnings.join(' ')).toMatch(/modal or a locked scroll held the page/)
 })
+
+test('a page that hides its overflow with nothing to scroll says so, instead of reading as one screen', async () => {
+  // spotify.com's web player on desktop (2026-09-11): the full-page capture
+  // warned, the audit and lint answered `walked: { screenfuls: 0, atEnd: true }`
+  // and nothing else. The walk carries the capture's sentence now.
+  const r = await runCli(['audit', fixture('app-shell-unreachable.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
+  expect(m.warnings.join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll/)
+})

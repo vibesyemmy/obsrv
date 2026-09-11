@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ControlCallError } from '../../src/mcp/control'
 import { WALK_BUDGET_MS, WALK_DWELL_MS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
+import { WALK_NOTHING_NOTE } from '../../src/shared/walkCoverage'
 
 /**
  * The walk over an injected control call. `answers` is what each successive
@@ -125,5 +126,37 @@ describe('walkPage', () => {
     const r = await walkPage(d)
     expect(r.walked).toEqual({ screenfuls: 1, atEnd: true, ms: WALK_DWELL_MS })
     expect(r.notes.join(' ')).toMatch(/return to the top/)
+  })
+})
+
+/**
+ * On an app shell that hides the document's overflow with no scroller the app
+ * can find, the first `next` lands where the page already was — the walk is
+ * right to stop — and the answer must say so, as the full-page capture does;
+ * before this it read `walked: { screenfuls: 0, atEnd: true }`, a one-screen
+ * page (spotify.com's web player on desktop, 2026-09-11).
+ */
+describe('walkPage on a page with nothing to scroll', () => {
+  const deps = (reply: Record<string, unknown>) => {
+    let now = 0
+    return {
+      call: async (_cmd: string, _args: Record<string, unknown>) => reply,
+      sleep: async (ms: number) => void (now += ms),
+      now: () => now,
+    }
+  }
+  it('says the document hides its overflow and nothing scrolls, when the app says so', async () => {
+    const w = await walkPage(deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root', hidden: true }))
+    expect(w.walked).toMatchObject({ screenfuls: 0, atEnd: true })
+    expect(w.notes).toContain(WALK_NOTHING_NOTE)
+  })
+  it('says nothing extra for an ordinary one-screen page', async () => {
+    const w = await walkPage(deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root', hidden: false }))
+    expect(w.walked).toMatchObject({ screenfuls: 0, atEnd: true })
+    expect(w.notes).toEqual([])
+  })
+  it('says nothing extra when an older app does not report it', async () => {
+    const w = await walkPage(deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root' }))
+    expect(w.notes).toEqual([])
   })
 })

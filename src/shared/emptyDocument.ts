@@ -30,13 +30,31 @@ export function isEmptyLintReport(report: { text: unknown[]; edges: unknown[]; i
   return report.text.length === 0 && report.edges.length === 0 && report.images.length === 0
 }
 
-/** The sentence a measurement of nothing carries. */
-export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number): string {
+/** The iframes in the viewport and how much of it they cover (`framesInViewport` in shared/scrollHost). */
+export interface FrameCoverage {
+  count: number
+  viewportCoverage: number
+}
+
+/**
+ * The sentence a measurement of nothing carries. With `frames`, it names the
+ * iframes the visible page is: the measurement does not enter them, and a
+ * bot wall (etsy.com behind DataDome) is one iframe over the whole viewport —
+ * without the clause the reader took the wall for a blank page while the
+ * snap showed a heading and a slider.
+ */
+export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, frames?: FrameCoverage): string {
   const measured = what === 'audit' ? 'no visible text and no targets' : 'no visible text, edges or images'
+  const framed =
+    frames !== undefined && frames.count > 0
+      ? `; ${frames.count === 1 ? 'an <iframe> covers' : `${frames.count} <iframe>s cover`} ${Math.round(frames.viewportCoverage * 100)}% of the viewport, ` +
+        `which the measurement does not enter — a bot wall or an embed, not a blank page`
+      : ''
   return (
     `nothing to measure: the page had ${measured} ${Math.round(waitedMs / 100) / 10} s after it loaded — ` +
     `a page rendered by script that had not run yet, a bot wall, or an empty document; ` +
-    `the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer`
+    `the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer` +
+    framed
   )
 }
 

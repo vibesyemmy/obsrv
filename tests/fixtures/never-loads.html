@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A page whose load never finishes</title>
+    <!--
+      apnews.com behind its consent wall (measured 2026-09-11): the document
+      is complete and painted, but `load` never fires because a partner's
+      beacon never answers. Served by a test server that never responds to
+      /hang.png. The measurements used to refuse the page outright; the snap
+      captured it as it stood. Both should.
+    -->
+    <style>
+      body { margin: 0; padding: 24px; font: 16px/1.5 system-ui, sans-serif; }
+      button { width: 220px; height: 48px; font: inherit; }
+    </style>
+  </head>
+  <body>
+    <h1>Still loading, and readable</h1>
+    <p>The text below the fold is here; only a beacon is missing.</p>
+    <button>Accept all</button>
+    <img src="/hang.png" alt="" width="1" height="1" />
+  </body>
+</html>
