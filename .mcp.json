@@ -6,7 +6,7 @@
         "-y",
         "--prefix",
         "/",
-        "getobsrv@0.52.0",
+        "getobsrv@0.53.0",
         "mcp"
       ]
     }
