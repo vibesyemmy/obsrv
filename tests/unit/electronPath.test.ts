@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { execFile, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -231,6 +231,40 @@ describe('ensureElectron, after the starter is gone', () => {
     expect(JSON.parse(b)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
     expect(runs(d)).toBe(1)
     expect(existsSync(join(d, '.obsrv-installing'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('ensureElectron, taking over a dead lock', () => {
+  // Rename acts on a path, not on the directory that was checked: A could
+  // rename the dead lock away, make a fresh one, and have B move that. So
+  // taking over is itself guarded by an atomic mkdir beside the lock.
+  it('waits while another process is taking over, then installs once', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    mkdirSync(join(d, '.obsrv-installing.takeover'))
+    setTimeout(() => rmSync(join(d, '.obsrv-installing.takeover'), { recursive: true, force: true }), 300)
+    const notBefore = new Promise<boolean>(r => setTimeout(() => r(existsSync(join(d, 'runs.log'))), 200))
+    const result = await ensureElectron({ pkgDir: d, pollMs: 25 })
+    expect(await notBefore).toBe(false)
+    expect(result).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing.takeover'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('a takeover mutex whose owner died is expired by age, so it cannot block every later start', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    mkdirSync(join(d, '.obsrv-installing.takeover'))
+    const old = new Date(Date.now() - 60_000)
+    utimesSync(join(d, '.obsrv-installing.takeover'), old, old)
+    const started = Date.now()
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(runs(d)).toBe(1)
     rmSync(d, { recursive: true, force: true })
   })
 })

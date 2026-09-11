@@ -42,7 +42,7 @@
 'use strict'
 
 const { spawn, spawnSync } = require('node:child_process')
-const { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require('node:fs')
+const { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } = require('node:fs')
 const { dirname, join } = require('node:path')
 
 /**
@@ -171,18 +171,26 @@ function lockHolderAlive(lockDir) {
   }
 }
 
+/** The mutex around taking over a dead lock, beside it. */
+const TAKEOVER_DIR = `${LOCK_DIR}.takeover`
+/** A takeover mutex older than this belonged to a process that died inside the takeover. */
+const TAKEOVER_STALE_MS = 10_000
+
 /**
  * Takes the install lock. A lock whose holder is dead — its download died
- * with it — is taken over: by renaming it away, which is atomic, so of
- * several waiters that saw the same dead holder only one gets to install,
- * and the rest find the lock the winner made and wait. (Check-then-remove
- * let a second waiter remove the lock the first had just re-created.) False
- * when a live process holds it.
+ * with it — is taken over. Taking over is itself guarded: check-then-remove
+ * let two waiters that saw the same dead pid both own the lock, and a
+ * rename acts on a path rather than on the directory that was checked, so
+ * one waiter could move the fresh lock another had just made. An atomic
+ * `mkdir` beside the lock admits one taker, who re-checks that the holder is
+ * still dead before removing and remaking the lock; the rest wait, and find
+ * the lock the winner made. False when a live process holds it.
  *
  * @param {string} pkgDir
  */
 function acquireLock(pkgDir) {
   const lockDir = join(pkgDir, LOCK_DIR)
+  const takeover = join(pkgDir, TAKEOVER_DIR)
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       mkdirSync(lockDir)
@@ -191,14 +199,31 @@ function acquireLock(pkgDir) {
     } catch (e) {
       if (!e || e.code !== 'EEXIST') throw e
       if (lockHolderAlive(lockDir)) return false
-      const stale = `${lockDir}.stale-${process.pid}-${Date.now()}`
       try {
-        renameSync(lockDir, stale)
-      } catch {
-        // Another waiter renamed it first; its mkdir is next. Try once more.
+        mkdirSync(takeover)
+      } catch (e2) {
+        if (!e2 || e2.code !== 'EEXIST') throw e2
+        // Another process is taking over and will hold the lock next —
+        // unless it died in that window, which its mutex's age says.
+        let old = false
+        try {
+          old = Date.now() - statSync(takeover).mtimeMs > TAKEOVER_STALE_MS
+        } catch {
+          old = true
+        }
+        if (!old) return false
+        rmSync(takeover, { recursive: true, force: true })
         continue
       }
-      rmSync(stale, { recursive: true, force: true })
+      try {
+        if (lockHolderAlive(lockDir)) return false
+        rmSync(lockDir, { recursive: true, force: true })
+        // Nothing else removes a lock, so the only thing that can beat this
+        // mkdir is a fresh lock by a process that never saw the dead one —
+        // a live holder, and the next attempt waits on it.
+      } finally {
+        rmSync(takeover, { recursive: true, force: true })
+      }
     }
   }
   return false
@@ -267,7 +292,8 @@ function ensureElectron({
     let owner = false
     /** Set once our own installer has exited: { code } or { error }. */
     let exited = null
-    let tookOver = false
+    /** Times this call became the owner after another process's attempt ended without a binary. */
+    let takeovers = 0
     const fail = message => ({ error: `electron could not be downloaded${message ? `: ${message}` : ''}` })
     const start = () => {
       try {
@@ -322,13 +348,16 @@ function ensureElectron({
         const why = exited.error ?? lastLine(logText())
         return finish(fail(`installer exit ${exited.code ?? 'unknown'}${why ? `: ${why}` : ''}`))
       }
-      if (!owner && !existsSync(join(dir, LOCK_DIR))) {
-        // The process we waited on finished without a binary: its download
-        // failed, or it died. Take over once; a second failure is an answer.
-        if (tookOver) return finish(fail(`another process's download ended without a binary — see ${logFile}`))
-        tookOver = true
+      if (!owner && (!existsSync(join(dir, LOCK_DIR)) || !lockHolderAlive(join(dir, LOCK_DIR)))) {
+        // The process we waited on is gone without a binary: its download
+        // failed, or it died. Try to take over — `acquireLock` admits one
+        // taker at a time, and says no while another is at it, in which
+        // case the next poll looks again. Two takeovers of our own that
+        // ended without a binary are an answer.
+        if (takeovers >= 2) return finish(fail(`another process's download ended without a binary — see ${logFile}`))
         const problem = start()
         if (problem !== null) return finish(problem)
+        if (owner) takeovers++
       }
       if (Date.now() - started > timeoutMs) return finish(fail(`no binary after ${Math.round(timeoutMs / 60_000)} min — see ${logFile}`))
     }
