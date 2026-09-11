@@ -36,6 +36,7 @@ import {
 import { parseScrollPos, parseScrollRequest } from '../shared/ipcPayloads'
 import type { Orientation, ScrollReport, ScrollRequest } from '../shared/types'
 import { urlSchemeError } from '../shared/url'
+import { unansweredMeasureMessage, type AskOutcome } from '../shared/measureBudget'
 
 /**
  * The agent-control server (spec §14 "Live drive" / "Drive controls"): a
@@ -117,10 +118,18 @@ export interface ControlDeps {
    */
   inspect(req: InspectRequest): Promise<InspectReadout | null>
   /**
+   * How the last page ask ended, when the caller can say: a report the
+   * checks refused is not a page that never answered, and the reader is
+   * told which it was. Absent from an older caller, which reads as the
+   * cautious sentence.
+   */
+  askOutcome?(): AskOutcome
+  /**
    * The physical-units audit on the page in front: every target and text
    * element in millimetres on the screen in force, density and text scale
    * included, as `obsrv audit` measures a headless load. Null when the page
-   * did not answer (navigated away, or threw while being measured).
+   * did not answer, or answered a report the checks refused; `askOutcome`
+   * says which.
    */
   audit(req: AuditRequest): Promise<LiveAudit | null>
   /**
@@ -448,7 +457,7 @@ export class ControlServer {
         const req = parseAuditRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
         const result = await this.deps.audit(req)
-        if (!result) return reply(409, { error: 'the page did not answer the audit (it may have navigated away, or thrown while being measured)' })
+        if (!result) return reply(409, { error: unansweredMeasureMessage('audit', this.deps.askOutcome?.() ?? 'answered') })
         return reply(200, { ok: true, ...result })
       }
 
@@ -456,7 +465,7 @@ export class ControlServer {
         const req = parseLintRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
         const result = await this.deps.lint(req)
-        if (!result) return reply(409, { error: 'the page did not answer the lint (it may have navigated away, or thrown while being measured)' })
+        if (!result) return reply(409, { error: unansweredMeasureMessage('lint', this.deps.askOutcome?.() ?? 'answered') })
         return reply(200, { ok: true, ...result })
       }
 

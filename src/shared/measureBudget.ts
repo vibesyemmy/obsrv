@@ -76,6 +76,31 @@ export function measureTimeoutNote(what: 'audit' | 'lint' | 'inspect', budgetMs:
   )
 }
 
+/** What is known about an ask that came back with no report. */
+export type AskOutcome = 'answered' | 'timeout' | 'failed' | 'unparsed'
+
+/**
+ * The error for a measurement that came back with nothing. The ask knows
+ * which of the three it was, so the sentence says it rather than offering
+ * the reader a guess to check: a page that answered in full and had its
+ * report refused reads nothing like one that navigated away.
+ */
+export function unansweredMeasureMessage(what: 'audit' | 'lint', outcome: AskOutcome): string {
+  switch (outcome) {
+    case 'unparsed':
+      return (
+        `the page answered the ${what}, but the report did not pass checking on the way in ` +
+        `(a value it sent was outside what the measurement accepts), so the figures are of nothing`
+      )
+    case 'failed':
+      return `the page threw while being measured, or went away before it answered the ${what}`
+    case 'timeout':
+      return `the page did not answer the ${what} within its budget`
+    default:
+      return `the page did not answer the ${what} (it may have navigated away, or thrown while being measured)`
+  }
+}
+
 /** The walk's version: a scroll the page never answered. */
 export function walkTimeoutNote(budgetMs: number): string {
   return `the page did not answer a scroll within ${seconds(budgetMs)} (its main thread was busy or blocked)`

@@ -7,6 +7,7 @@ import {
   parseInputEvent,
   parseInspectPoint,
   parseInspectReport,
+  parseLintReport,
   parseLogMessage,
   parseMode,
   parseRect,
@@ -492,6 +493,89 @@ describe('parseAuditReport', () => {
     ['not an object', 'nope'],
   ])('rejects %s', (_name, raw) => {
     expect(parseAuditReport(raw)).toBeNull()
+  })
+})
+
+/**
+ * A report that fails is dropped whole rather than patched, which is right
+ * for a measurement: half a page's figures are worse than none. The srcset
+ * descriptors are not part of the measurement, though — they are a detail
+ * about one image — and on reuters.com a malformed one cost a whole page its
+ * lint (docs/research/2026-09-11-live-run-0.53.0.md).
+ */
+describe('parseLintReport', () => {
+  const image = {
+    element: 'img#hero',
+    src: 'https://cdn.example.com/hero.jpg',
+    rect: { x: 0, y: 0, width: 48, height: 48 },
+    naturalWidth: 120,
+    naturalHeight: 120,
+    srcset: true,
+    candidates: ['60w', '240w'],
+    chosen: '60w',
+    objectFit: 'cover',
+  }
+  const good = {
+    viewport: { width: 1920, height: 1080 },
+    pageHeight: 2400,
+    text: [
+      {
+        element: 'p#caption',
+        text: 'A caption',
+        rect: { x: 16, y: 200, width: 600, height: 12 },
+        fontSizePx: 10,
+        fontWeight: 400,
+        fontFamily: 'Inter',
+        color: [17, 17, 17, 1],
+        background: [255, 255, 255, 1],
+        backgroundNote: 'computed',
+      },
+    ],
+    edges: [],
+    images: [image],
+    truncated: { text: 0, edges: 0, images: 0 },
+    spacers: 0,
+  }
+
+  it('copies a good report', () => {
+    const r = parseLintReport(good)!
+    expect(r).not.toBeNull()
+    expect(r.images[0]!.candidates).toEqual(['60w', '240w'])
+    expect(r.images).not.toBe(good.images)
+  })
+
+  it('keeps the page when a srcset descriptor is too long, dropping that descriptor', () => {
+    const r = parseLintReport({
+      ...good,
+      images: [{ ...image, candidates: ['60w', `60w,${'u'.repeat(250)}`, '240w'] }],
+    })
+    expect(r).not.toBeNull()
+    expect(r!.images[0]!.candidates).toEqual(['60w', '240w'])
+    expect(r!.text).toHaveLength(1)
+  })
+
+  it('keeps the page when the chosen descriptor is too long, dropping it alone', () => {
+    const r = parseLintReport({ ...good, images: [{ ...image, chosen: 'x'.repeat(200) }] })
+    expect(r).not.toBeNull()
+    expect(r!.images[0]!.chosen).toBeUndefined()
+    expect(r!.images[0]!.candidates).toEqual(['60w', '240w'])
+  })
+
+  it('keeps the page when an image offers more candidates than are kept', () => {
+    const many = Array.from({ length: 15 }, (_, n) => `${(n + 1) * 60}w`)
+    const r = parseLintReport({ ...good, images: [{ ...image, candidates: many }] })
+    expect(r).not.toBeNull()
+    expect(r!.images[0]!.candidates).toEqual(many.slice(0, 12))
+  })
+
+  it.each([
+    ['a measurement that is malformed', { ...good, images: [{ ...image, rect: { x: 0, y: 0, width: 'w', height: 1 } }] }],
+    ['a natural size of zero', { ...good, images: [{ ...image, naturalWidth: 0 }] }],
+    ['a bad text entry', { ...good, text: [{ ...good.text[0], fontSizePx: -1 }] }],
+    ['a missing viewport', { ...good, viewport: undefined }],
+    ['not an object', 'nope'],
+  ])('still rejects %s whole', (_name, raw) => {
+    expect(parseLintReport(raw)).toBeNull()
   })
 })
 

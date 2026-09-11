@@ -33,7 +33,7 @@ import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
 import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
-import { Deadline, measureTimeoutNote, navigatedAfterLoadNote } from '../shared/measureBudget'
+import { Deadline, measureTimeoutNote, navigatedAfterLoadNote, unansweredMeasureMessage } from '../shared/measureBudget'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote } from '../shared/walkCoverage'
@@ -944,7 +944,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (!m.timedOut) {
         const err = watch.failed()
         if (err) throw err
-        throw new Error('the page did not answer the audit (it may have navigated away, or thrown while being measured)')
+        throw new Error(unansweredMeasureMessage('audit', target.askOutcome()))
       }
       // The page never answered within the budget: the figures are of nothing, and the note says so.
       notes.push(measureTimeoutNote('audit', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
@@ -1046,7 +1046,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (!m.timedOut) {
         const err = watch.failed()
         if (err) throw err
-        throw new Error('the page did not answer the lint (it may have navigated away, or thrown while being measured)')
+        throw new Error(unansweredMeasureMessage('lint', target.askOutcome()))
       }
       notes.push(measureTimeoutNote('lint', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
       report = {

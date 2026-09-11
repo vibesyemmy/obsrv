@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { Deadline, measureTimeoutNote, navigatedAfterLoadNote, walkTimeoutNote, withinBudget } from '../../src/shared/measureBudget'
+import {
+  Deadline,
+  measureTimeoutNote,
+  navigatedAfterLoadNote,
+  unansweredMeasureMessage,
+  walkTimeoutNote,
+  withinBudget,
+} from '../../src/shared/measureBudget'
 
 describe('measure budget', () => {
   it('a deadline counts down from its budget and passes', () => {
@@ -42,5 +49,34 @@ describe('measure budget', () => {
       'the page navigated after it loaded (to the same address): a bot challenge, an interstitial or a redirect; the figures are of the page it arrived at',
     )
     expect(navigatedAfterLoadNote('file:///a/challenge.html', 'file:///a/audit.html')).toContain(', to file:///a/audit.html: a bot challenge')
+  })
+})
+
+/**
+ * A measurement that comes back empty used to be reported with a guess —
+ * "it may have navigated away, or thrown while being measured" — and on
+ * reuters.com both halves were false: the page had answered in full and the
+ * report was refused on the way in. The reason is known; it should be said.
+ */
+describe('the sentence for a measurement that came back with nothing', () => {
+  it('says so when the page answered but its report was refused', () => {
+    const m = unansweredMeasureMessage('lint', 'unparsed')
+    expect(m).toContain('the page answered the lint')
+    expect(m).toContain('did not pass checking')
+    expect(m).not.toContain('may have navigated away')
+  })
+
+  it('says so when the ask itself failed', () => {
+    expect(unansweredMeasureMessage('audit', 'failed')).toContain('threw while being measured')
+  })
+
+  it('names the measurement it is about', () => {
+    expect(unansweredMeasureMessage('audit', 'unparsed')).toContain('the audit')
+  })
+
+  it('keeps the cautious sentence when nothing more is known', () => {
+    expect(unansweredMeasureMessage('lint', 'answered')).toBe(
+      'the page did not answer the lint (it may have navigated away, or thrown while being measured)',
+    )
   })
 })

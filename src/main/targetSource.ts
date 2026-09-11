@@ -12,7 +12,7 @@ import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } fro
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
 import { layoutScale } from '../shared/layoutScale'
-import { withinBudget } from '../shared/measureBudget'
+import { withinBudget, type AskOutcome } from '../shared/measureBudget'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport, parseLintReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
@@ -663,9 +663,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * budget won, and a caller then answers with what it has rather than
    * waiting for a kill.
    */
-  private lastAsk: 'answered' | 'timeout' | 'failed' = 'answered'
-  askOutcome(): 'answered' | 'timeout' | 'failed' {
+  private lastAsk: AskOutcome = 'answered'
+  askOutcome(): AskOutcome {
     return this.lastAsk
+  }
+
+  /**
+   * A report the checks refused is not an answer, and the caller should say
+   * which of the two it was: a page that never answered reads nothing like
+   * one that answered in full and had its report turned away at the door.
+   */
+  private checked<T>(report: T | null): T | null {
+    if (report === null && this.lastAsk === 'answered') this.lastAsk = 'unparsed'
+    return report
   }
 
   /** Runs `code` in the isolated world, within `budgetMs` when given; null when the budget won. */
@@ -762,7 +772,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   async auditPage(budgetMs?: number): Promise<AuditReport | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     try {
-      return parseAuditReport(await this.ask(`${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})`, budgetMs))
+      return this.checked(parseAuditReport(await this.ask(`${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})`, budgetMs)))
     } catch {
       this.lastAsk = 'failed'
       return null
@@ -786,7 +796,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // comes back in device px, so a wider net costs nothing but report size.
       const below = edgeBelowPx / (await this.layoutScaleNow(budgetMs))
       if (this.lastAsk === 'timeout') return null
-      return parseLintReport(await this.ask(`${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})`, budgetMs))
+      return this.checked(parseLintReport(await this.ask(`${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})`, budgetMs)))
     } catch {
       this.lastAsk = 'failed'
       return null

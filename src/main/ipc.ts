@@ -1670,6 +1670,7 @@ export function registerIpc(ctx: AppContext): () => void {
         ...(notes.length === 0 ? {} : { warnings: [...notes, ...result.warnings] }),
       }
     },
+    askOutcome: () => tab().target.askOutcome(),
     lint: async req => {
       const t = tab().target
       const textScale = t.getTextScale()
