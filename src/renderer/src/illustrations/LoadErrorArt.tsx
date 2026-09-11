@@ -1,6 +1,6 @@
 /**
- * PLACEHOLDER. The load-error state's illustration, standing in until the real
- * art arrives — swap the markup below and nothing else needs to change.
+ * The load-error state's illustration: a window that never filled, and a
+ * thread that did not reach across it.
  *
  * Built to the same rules as `EmptyArt`: inlined rather than an <img> so it
  * themes with the chrome, every colour a palette variable, and no colour at
