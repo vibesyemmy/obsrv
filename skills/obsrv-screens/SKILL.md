@@ -214,6 +214,12 @@ happened on the matrix snaps.
   page that paints late; `"loading"` means the load itself outran `--timeout` (under a
   throttle, a slow load is the point): the PNG is what had painted, `settledMs`
   is null, and `--timeout` is the answer. Use `--wait` for content that settles late.
+- `--timeout` (`timeoutMs`) bounds the load and then, separately, the
+  measurement after it. A page whose main thread is blocked after load — a
+  bot challenge, an interstitial — never answers the page ask; the audit,
+  lint and inspect then answer within the budget with nothing and a warning
+  saying so, rather than hanging until the server kills them. A page that
+  navigates itself after load is measured where it arrived, and says so.
 - The report's full-page capture takes a tall page in bands of one
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size). Chrome stuck to the viewport would be painted into every band,

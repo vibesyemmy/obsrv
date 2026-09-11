@@ -174,3 +174,11 @@ test('spacer files are counted, not judged, and do not spend the image cap', asy
   expect(m.truncated.images).toBe(0)
   expect(m.warnings.join(' ')).toContain('300 images are a file of a pixel or two on a side stretched into a gap')
 })
+
+test('a page that holds its main thread after load: the lint answers within the budget with nothing, and says so', async () => {
+  const r = await runCli(['lint', fixture('blocks-after-load.html'), '--preset', '1080p-24', '--timeout', '3000'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary).toEqual({ hairline: 0, 'thin-text': 0, contrast: 0, 'contrast-on-panel': 0, 'image-upscaled': 0, 'image-oversized': 0 })
+  expect(m.warnings[0]).toMatch(/^the page did not answer the lint within 3 s of loading/)
+})

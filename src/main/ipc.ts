@@ -1,4 +1,5 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
+import { measureTimeoutNote } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
@@ -37,6 +38,9 @@ import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
 import { checkForUpdate } from './updateCheck'
+
+/** How long a live measurement's page ask may take before it answers with nothing (`shared/measureBudget`). */
+const LIVE_MEASURE_BUDGET_MS = 30_000
 
 /**
  * Hooks `index.ts` calls into this module's setup closure. `second-instance`
@@ -1623,15 +1627,23 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     audit: async req => {
       const t = tab().target
+      const vp = t.getViewport()
       // An empty document is held for a grace before it is measured as empty
       // (shared/emptyDocument): the live walk ran before this, so a page
       // that fills meanwhile is measured as it stands and the coverage note
-      // says the walk saw less.
-      const held = await awaitContent(() => t.auditPage(), isEmptyAuditReport)
-      const report = held.report
-      if (!report) return null
-      const empty = held.stillEmpty ? emptyDocumentNote('audit', held.waitedMs) : null
-      const vp = t.getViewport()
+      // says the walk saw less. Each ask is within LIVE_MEASURE_BUDGET_MS: a
+      // page whose main thread is blocked never answers, and the answer then
+      // is of nothing, said so.
+      const held = await awaitContent(() => t.auditPage(LIVE_MEASURE_BUDGET_MS), isEmptyAuditReport)
+      let report = held.report
+      const notes: string[] = []
+      if (!report) {
+        if (t.askOutcome() !== 'timeout') return null
+        notes.push(measureTimeoutNote('audit', LIVE_MEASURE_BUDGET_MS))
+        report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
+      } else if (held.stillEmpty) {
+        notes.push(emptyDocumentNote('audit', held.waitedMs))
+      }
       // The screen's diagonal comes from the preset table, as for inspect; a
       // custom screen has none here, so there are no millimetres and the
       // result's warnings say so.
@@ -1655,19 +1667,26 @@ export function registerIpc(ctx: AppContext): () => void {
         textScale,
         pageHeight: report.pageHeight,
         ...result,
-        ...(empty === null ? {} : { warnings: [empty, ...result.warnings] }),
+        ...(notes.length === 0 ? {} : { warnings: [...notes, ...result.warnings] }),
       }
     },
     lint: async req => {
       const t = tab().target
       const textScale = t.getTextScale()
       const deviceScaleFactor = t.getDeviceScaleFactor()
-      // One device pixel on this screen, in the page's CSS px.
-      const held = await awaitContent(() => t.lintPage(1 / (deviceScaleFactor * textScale)), isEmptyLintReport)
-      const report = held.report
-      if (!report) return null
-      const empty = held.stillEmpty ? emptyDocumentNote('lint', held.waitedMs) : null
       const vp = t.getViewport()
+      // One device pixel on this screen, in the page's CSS px. The ask is
+      // within LIVE_MEASURE_BUDGET_MS, as the audit's.
+      const held = await awaitContent(() => t.lintPage(1 / (deviceScaleFactor * textScale), LIVE_MEASURE_BUDGET_MS), isEmptyLintReport)
+      let report = held.report
+      const notes: string[] = []
+      if (!report) {
+        if (t.askOutcome() !== 'timeout') return null
+        notes.push(measureTimeoutNote('lint', LIVE_MEASURE_BUDGET_MS))
+        report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, text: [], edges: [], images: [], truncated: { text: 0, edges: 0, images: 0 }, spacers: 0 }
+      } else if (held.stillEmpty) {
+        notes.push(emptyDocumentNote('lint', held.waitedMs))
+      }
       let profile
       try {
         profile = findPanelProfile(uiState.profileId)
@@ -1691,7 +1710,7 @@ export function registerIpc(ctx: AppContext): () => void {
         textScale,
         pageHeight: report.pageHeight,
         ...result,
-        ...(empty === null ? {} : { warnings: [empty, ...result.warnings] }),
+        ...(notes.length === 0 ? {} : { warnings: [...notes, ...result.warnings] }),
         groups: slimGroups(result.groups),
       }
     },

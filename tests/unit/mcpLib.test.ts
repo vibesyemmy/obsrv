@@ -25,6 +25,8 @@ import {
   stderrTail,
   urlSchemeError,
   stripChromiumChatter,
+  killedMessage,
+  chromiumChatter,
 } from '../../src/mcp/lib'
 
 const URL = 'https://x.test'
@@ -508,5 +510,37 @@ describe('buildInspectArgs', () => {
     expect(() => buildInspectArgs({ url: URL, selector: 'p', preset: 'laptop-768', width: 100, height: 100 })).toThrow(/mutually exclusive/)
     expect(inspectWhereError({ selector: '   ' })).toMatch(/exactly one/)
     expect(inspectWhereError({ at: { x: 0, y: 0 } })).toBeNull()
+  })
+})
+
+describe('killedMessage', () => {
+  // stackoverflow.com through obsrv_audit on 2026-09-11: killed at 90 s with 2 KB of tracker URLs as the whole error.
+  const chatter = [
+    '(node:25303) electron: Failed to load URL: https://sync.kueez.com/api/cookie?partnerId=kueez-smaato with error: ERR_NAME_NOT_RESOLVED',
+    '[25307:0911/095202.879564:ERROR:net/socket/ssl_client_socket_impl.cc:963] handshake failed; returned -1, SSL error code 1, net_error -101',
+    '(node:25303) electron: Failed to load URL: https://cm-supply-web.gammaplatform.com/adx/usersyncsupply?pid=7&t=pixel&gdpr=0&gdpr_consent= with error: ERR_CONNECTION_TIMED_OUT',
+  ].join('\n')
+  it('counts the chatter and clips its last line instead of printing it', () => {
+    const c = chromiumChatter(chatter)
+    expect(c.lines).toBe(3)
+    expect(c.last).toMatch(/^\(node:25303\) electron: Failed to load URL: https:\/\/cm-supply-web/)
+    expect(c.last!.length).toBe(120)
+    expect(c.last!.endsWith('…')).toBe(true)
+    expect(chromiumChatter('x'.repeat(10)).lines).toBe(0)
+    expect(chromiumChatter(`(node:1) electron: ${'u'.repeat(200)}`).last!.length).toBe(120)
+  })
+  it('a killed CLI that wrote nothing of its own says so, and how much Chromium logged, not what', () => {
+    const m = killedMessage('audit', 90_000, chatter)
+    expect(m).toMatch(/^obsrv audit did not exit within 90000 ms and was terminated; it had written nothing of its own; Chromium logged 3 lines of its own \(the last: /)
+    expect(m).not.toContain('kueez')
+    expect(m).toContain('timeoutMs bounds the load and then the measurement alike')
+    expect(m.length).toBeLessThan(700)
+  })
+  it("a killed CLI that had written a line of its own is quoted by it", () => {
+    const m = killedMessage('lint', 63_000, `${chatter}\nwarning: the walk stopped after 3 screenfuls at its 15 s budget\n`)
+    expect(m).toContain('; its last line was: warning: the walk stopped after 3 screenfuls at its 15 s budget; Chromium logged 3 lines')
+  })
+  it('no stderr at all is just the kill', () => {
+    expect(killedMessage('snap', 90_000, '')).toMatch(/^obsrv snap did not exit within 90000 ms and was terminated; it had written nothing of its own\. timeoutMs/)
   })
 })

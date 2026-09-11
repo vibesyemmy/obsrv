@@ -211,7 +211,9 @@ ${THROTTLE_PROFILES.map(t => `                         ${t.id.padEnd(13)} ${t.su
                        (a baseline: --throttle none). Absent, the JSON is unchanged.
   --profile <id>       Panel profile: ${profiles} (default reference).
   --wait <ms>          Extra settle time after load (default 0).
-  --timeout <ms>       Per-render budget for load + paint quiescence (default ${DEFAULT_TIMEOUT_MS}).
+  --timeout <ms>       Budget for the load, and then the same again for what follows it: paint
+                       quiescence for a render; the walk, the wait for content and the page ask
+                       for audit, lint and inspect (default ${DEFAULT_TIMEOUT_MS}).
 
 snap flags:
   --out <file>         Output PNG (default ./obsrv-<preset>.png). Under --matrix: an

@@ -34,6 +34,7 @@ import {
   buildSnapArgs,
   extractTrailingJson,
   killBudgetMs,
+  killedMessage,
   listCatalog,
   liveModeError,
   planLive,
@@ -138,13 +139,7 @@ function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
 function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint', run: CliRun, killAfterMs: number): CallToolResult {
-  if (run.killed) {
-    return toolError(
-      `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated. ` +
-        `Raise timeoutMs, or try a smaller preset / non-full-page snap. ` +
-        (run.stderr.trim() ? `stderr: ${stderrTail(run.stderr)}` : 'No stderr output.'),
-    )
-  }
+  if (run.killed) return toolError(killedMessage(command, killAfterMs, run.stderr))
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
 }
 
