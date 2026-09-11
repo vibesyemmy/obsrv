@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
@@ -19,9 +20,15 @@ describe('the Claude Code plugin', () => {
     expect(plugin.version).toBe(pkg.version)
     expect(existsSync(join(root, 'skills/obsrv-screens/SKILL.md'))).toBe(true)
   })
-  it('registers the MCP server the way the README installs it', () => {
+  it('registers the MCP server pinned to the package version, with npm told to look for its project at the root', () => {
+    const pkg = read('package.json')
     const mcp = read('.mcp.json')
-    expect(mcp.mcpServers.obsrv).toEqual({ command: 'npx', args: ['-y', 'getobsrv', 'mcp'] })
+    // Unpinned, `npx getobsrv` inside this checkout resolves to the checkout
+    // itself — npm links a project into the npx cache when the requested name
+    // is the project's own — and a pin alone is judged already local. With
+    // `--prefix /` npm has no project, so the spec comes from the registry
+    // wherever the session runs. See scripts/sync-plugin-version.js.
+    expect(mcp.mcpServers.obsrv).toEqual({ command: 'npx', args: ['-y', '--prefix', '/', `getobsrv@${pkg.version}`, 'mcp'] })
   })
   it('the marketplace lists this plugin at the same version, sourced from that version\'s release tag', () => {
     const pkg = read('package.json')
@@ -44,6 +51,29 @@ describe('the Claude Code plugin', () => {
   it('the manifests ship in the npm package', () => {
     const files: string[] = read('package.json').files
     expect(files).toEqual(expect.arrayContaining(['.claude-plugin', '.mcp.json', 'skills']))
+  })
+})
+
+describe('sync-plugin-version', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { sync } = require('../../scripts/sync-plugin-version.js') as { sync: (root: string) => string }
+
+  it('rewrites the three manifests to the package version, the MCP pin included', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'obsrv-sync-'))
+    try {
+      mkdirSync(join(dir, '.claude-plugin'))
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '9.9.9' }))
+      writeFileSync(join(dir, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'obsrv', version: '0.0.1' }))
+      writeFileSync(join(dir, '.claude-plugin/marketplace.json'), JSON.stringify({ plugins: [{ name: 'obsrv', version: '0.0.1', source: './' }] }))
+      writeFileSync(join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { obsrv: { command: 'npx', args: ['-y', 'getobsrv', 'mcp'] } } }))
+      expect(sync(dir)).toBe('9.9.9')
+      const r = (rel: string): any => JSON.parse(readFileSync(join(dir, rel), 'utf8'))
+      expect(r('.claude-plugin/plugin.json').version).toBe('9.9.9')
+      expect(r('.claude-plugin/marketplace.json').plugins[0]).toMatchObject({ version: '9.9.9', source: { ref: 'plugin-v9.9.9' } })
+      expect(r('.mcp.json').mcpServers.obsrv.args).toEqual(['-y', '--prefix', '/', 'getobsrv@9.9.9', 'mcp'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 

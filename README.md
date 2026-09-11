@@ -256,6 +256,21 @@ Build first, then register:
 claude mcp add --scope user obsrv -- npx -y getobsrv mcp
 ```
 
+In a checkout of this repository, register the local build under its own name
+and leave `obsrv` to the plugin or the published package:
+
+```bash
+claude mcp add --scope local obsrv-dev -- node "$PWD/bin/obsrv-mcp.js"
+```
+
+`npx getobsrv` run inside the repository is the checkout, not the release: npm
+links a project into the npx cache when the requested name is the project's
+own, so an `obsrv` registered as `npx -y getobsrv mcp` there ran whatever `out/`
+held. The manifest (`.mcp.json`, the plugin's and the project's) therefore pins
+`npx -y --prefix / getobsrv@<version> mcp`: with its project at the filesystem
+root npm has none, and fetches the pinned release wherever the session runs.
+A result from `obsrv-dev` is the local build; one from `obsrv` is the release.
+
 ## Develop
 
 ```bash
@@ -297,10 +312,11 @@ npm run release:pack
 npm publish ./getobsrv-<version>.tgz
 ```
 
-`npm version` also rewrites the plugin manifests: their version, and the
-marketplace entry's source, which is pinned to the tag `v<version>` the bump
-creates. Push that tag (after `main` is green) or the marketplace catalog
-points at a ref that does not exist yet.
+`npm version` also rewrites the plugin manifests: their version, the
+marketplace entry's source, which is pinned to the tag `plugin-v<version>` that
+`npm run plugin:branch` creates, and the MCP registration, pinned to
+`getobsrv@<version>`. Push that tag (after `main` is green) or the marketplace
+catalog points at a ref that does not exist yet.
 
 Obsrv publishes to npm as **`getobsrv`** (the installed commands remain `obsrv`
 and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name

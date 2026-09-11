@@ -101,7 +101,8 @@ function pluginTree(version) {
         `manifests and the MCP registration — so installing it does not copy a development\n` +
         `tree or run \`npm install\` into your plugin cache.\n\n` +
         `The source, the app and the CLI live on [\`main\`](https://github.com/vibesyemmy/obsrv).\n` +
-        `The MCP server it registers is the \`getobsrv\` package on npm, fetched with \`npx\`;\n` +
+        `The MCP server it registers is the \`getobsrv\` package on npm, fetched with \`npx\` at\n` +
+        `this same version;\n` +
         `nothing here is the implementation.\n\n` +
         `Built from \`v${version}\` by \`scripts/build-plugin-branch.js\`. Do not commit to this\n` +
         `branch by hand — the next release overwrites it.\n`,
