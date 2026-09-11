@@ -10,7 +10,8 @@ import {
   type ControlInfo,
   type ControlStatus,
 } from '../shared/control'
-import { cannotLaunchReason, DECLINED_NOTE, LAUNCH_TIMEOUT_MS, type HeadlessPlan, type HeadlessWhy, type LivePlan } from './lib'
+import { cannotLaunchReason, DECLINED_NOTE, DEV_RELAUNCH_NOTE, LAUNCH_TIMEOUT_MS, type HeadlessPlan, type HeadlessWhy, type LivePlan } from './lib'
+import { devLane, devMode, PACKAGE_ROOT } from './devLane'
 import { launchApp, resolveDefaultTarget, type LaunchHandle } from './launch'
 
 /**
@@ -29,7 +30,12 @@ import { launchApp, resolveDefaultTarget, type LaunchHandle } from './launch'
 export const CONTROL_FILE_ENV = 'OBSRV_CONTROL_FILE'
 
 export function controlFilePath(): string {
-  return process.env[CONTROL_FILE_ENV] ?? defaultControlFilePath(process.platform, process.env, homedir())
+  const named = process.env[CONTROL_FILE_ENV]
+  if (named !== undefined) return named
+  // The dev lane's app writes its file in the lane's profile, beside — never
+  // instead of — the installed app's (src/mcp/devLane.ts).
+  if (devMode()) return devLane().controlFile(process.env)
+  return defaultControlFilePath(process.platform, process.env, homedir())
 }
 
 /** A non-2xx answer from the control server, carrying its error message. */
@@ -218,9 +224,32 @@ export interface EnsureDeps {
    * `launch` itself to know about the gate.
    */
   cannotLaunch?: () => string | null
+  /**
+   * Runs once before discovery, on a live plan only; a sentence it returns
+   * joins the result's notes. The dev lane's (`relaunchStaleDevApp`): a dev
+   * app older than the lane's build is stopped here, so the discovery that
+   * follows finds none and launches the build — `launched: true`, and the
+   * sentence says why a window reopened.
+   */
+  prepare?: () => Promise<string | null>
 }
 
 const LAUNCH_POLL_MS = 250
+
+/**
+ * Under the dev lane, a running dev app that came up before the lane's app
+ * build is stopped, so the live call that follows drives the build rather
+ * than the code the app started with. Only the lane's own app is ever
+ * touched: discovery under dev mode reads the lane's profile alone.
+ */
+async function relaunchStaleDevApp(): Promise<string | null> {
+  const d = await discover()
+  if (d.kind !== 'live') return null
+  const { pid, startedAt } = d.app.info
+  if (pid === undefined || !devLane().isStale(startedAt, PACKAGE_ROOT)) return null
+  await devLane().stopApp(pid)
+  return DEV_RELAUNCH_NOTE
+}
 
 const realCannotLaunch = (): string | null => cannotLaunchReason(process.env, process.platform)
 
@@ -234,6 +263,7 @@ const defaultDeps: EnsureDeps = {
   sleep: ms => new Promise(r => setTimeout(r, ms)),
   now: () => Date.now(),
   cannotLaunch: realCannotLaunch,
+  ...(devMode() ? { prepare: relaunchStaleDevApp } : {}),
 }
 
 /**
@@ -257,16 +287,18 @@ const defaultDeps: EnsureDeps = {
  */
 export async function ensureLive(plan: LivePlan | HeadlessPlan, deps: EnsureDeps = defaultDeps, timeoutMs = LAUNCH_TIMEOUT_MS): Promise<LiveResolution> {
   if (plan.path === 'headless') return plan
+  const prepared = deps.prepare ? await deps.prepare() : null
+  const notes = prepared === null ? plan.notes : [...plan.notes, prepared]
   const cannotLaunch = deps.cannotLaunch ?? realCannotLaunch
   const first = await deps.discover()
-  if (first.kind === 'live') return { path: 'live', app: first.app, launched: false, notes: plan.notes }
-  if (first.kind === 'declined') return { path: 'headless', why: 'declined', notes: [...plan.notes, DECLINED_NOTE] }
+  if (first.kind === 'live') return { path: 'live', app: first.app, launched: false, notes: notes }
+  if (first.kind === 'declined') return { path: 'headless', why: 'declined', notes: [...notes, DECLINED_NOTE] }
   const reason = cannotLaunch()
   if (reason !== null) {
     return {
       path: 'headless',
       why: 'no-display',
-      notes: [...plan.notes, `the Obsrv app is not running and cannot be launched here (${reason}); rendered headlessly.`],
+      notes: [...notes, `the Obsrv app is not running and cannot be launched here (${reason}); rendered headlessly.`],
     }
   }
   // Whether the app that answers `discover()` next was already running
@@ -283,7 +315,7 @@ export async function ensureLive(plan: LivePlan | HeadlessPlan, deps: EnsureDeps
     return {
       path: 'headless',
       why: 'launch-timeout',
-      notes: [...plan.notes, `the Obsrv app could not be launched (${e instanceof Error ? e.message : String(e)}); rendered headlessly.`],
+      notes: [...notes, `the Obsrv app could not be launched (${e instanceof Error ? e.message : String(e)}); rendered headlessly.`],
     }
   }
   // Finding 2 (final review): a released app with control off predates
@@ -307,14 +339,14 @@ export async function ensureLive(plan: LivePlan | HeadlessPlan, deps: EnsureDeps
   while (deps.now() < deadline) {
     await deps.sleep(LAUNCH_POLL_MS)
     const d = await deps.discover()
-    if (d.kind === 'live') return { path: 'live', app: d.app, launched: !asking, notes: plan.notes }
-    if (d.kind === 'declined') return { path: 'headless', why: 'declined', notes: [...plan.notes, DECLINED_NOTE] }
+    if (d.kind === 'live') return { path: 'live', app: d.app, launched: !asking, notes: notes }
+    if (d.kind === 'declined') return { path: 'headless', why: 'declined', notes: [...notes, DECLINED_NOTE] }
     if (launchExited) {
       return {
         path: 'headless',
         why: 'launch-timeout',
         notes: [
-          ...plan.notes,
+          ...notes,
           "the launch exited immediately without a new instance starting — Obsrv's profile is already in use by a process that is not answering the agent-control protocol (an older Obsrv version, or one still finishing its own startup); rendered headlessly.",
         ],
       }
@@ -323,5 +355,5 @@ export async function ensureLive(plan: LivePlan | HeadlessPlan, deps: EnsureDeps
   const timeoutNote = asking
     ? `Obsrv is running and was asked whether to allow agent control, but nobody answered within ${timeoutMs / 1000} s; rendered headlessly. Answering the prompt in Obsrv lets the next call reach it.`
     : `the Obsrv app was launched but did not answer within ${timeoutMs / 1000} s; rendered headlessly. It may still be starting — the next call will find it.`
-  return { path: 'headless', why: 'launch-timeout', notes: [...plan.notes, timeoutNote] }
+  return { path: 'headless', why: 'launch-timeout', notes: [...notes, timeoutNote] }
 }

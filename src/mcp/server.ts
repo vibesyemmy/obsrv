@@ -16,6 +16,7 @@ import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
+import { devLane, devMode, laneStamp, stampField, withStamp } from './devLane'
 import { settlePage } from './settle'
 import { walkCoverageNote } from '../shared/walkCoverage'
 import {
@@ -1030,6 +1031,25 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
 // --- server ------------------------------------------------------------------
 
 const server = new McpServer({ name: 'obsrv-mcp-server', version: VERSION })
+
+/**
+ * Under the dev lane, every tool registered after this carries the build that
+ * answered in its structured result (`withStamp`, src/mcp/devLane.ts). The
+ * handlers are wrapped at registration rather than each result builder
+ * touched, so no tool can forget.
+ */
+function stampLaneResults(target: McpServer, stamp: string): void {
+  type Register = (name: unknown, config: unknown, handler: unknown) => unknown
+  const register = target.registerTool.bind(target) as unknown as Register
+  const wrapped: Register = (name, config, handler) => {
+    const field = stampField((config as { outputSchema?: Record<string, unknown> }).outputSchema)
+    if (field === null) return register(name, config, handler)
+    const inner = handler as (...args: unknown[]) => Promise<CallToolResult>
+    return register(name, config, async (...args: unknown[]) => withStamp(await inner(...args), field, stamp))
+  }
+  ;(target as unknown as { registerTool: Register }).registerTool = wrapped
+}
+if (devMode()) stampLaneResults(server, laneStamp(devLane().laneLabel(REPO_ROOT), devLane().serverStamp(REPO_ROOT), REPO_ROOT))
 
 server.registerTool(
   'obsrv_snap',
@@ -2365,7 +2385,7 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport()
   await server.connect(transport)
   // stdout is the protocol channel; the one boot line goes to stderr.
-  process.stderr.write(`obsrv-mcp-server ${VERSION} running on stdio\n`)
+  process.stderr.write(`obsrv-mcp-server ${VERSION} running on stdio${devMode() ? ` — dev lane: ${REPO_ROOT}` : ''}\n`)
 }
 
 main().catch((e: unknown) => {

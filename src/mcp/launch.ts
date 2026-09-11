@@ -2,6 +2,7 @@ import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { devLane, devMode, PACKAGE_ROOT, type DevLaneModule } from './devLane'
 
 /**
  * Launching the desktop app from the MCP server (live-first spec §2a). The
@@ -15,7 +16,13 @@ import { join, resolve } from 'node:path'
  * whole point of the launch is that `OBSRV_AGENT_CONTROL=1` reaches the app.
  */
 
-export type LaunchTarget = { kind: 'bundle'; executable: string } | { kind: 'electron'; electron: string; entry: string }
+/**
+ * `args` and `env` are the dev lane's: the lane's profile after the entry,
+ * and the lane named for the window's title (see `resolveDevTarget`).
+ */
+export type LaunchTarget =
+  | { kind: 'bundle'; executable: string }
+  | { kind: 'electron'; electron: string; entry: string; args?: string[]; env?: Record<string, string> }
 
 const BUNDLE_EXECUTABLE = join('Obsrv.app', 'Contents', 'MacOS', 'Obsrv')
 
@@ -46,6 +53,25 @@ export function resolveLaunchTarget(
 }
 
 /**
+ * The dev lane's target (src/mcp/devLane.ts): the checkout's own GUI entry on
+ * the lane's profile, whatever is installed in /Applications — the point of
+ * the lane is to drive the build, beside the installed app, not instead of it.
+ */
+export function resolveDevTarget(
+  root: string,
+  env: NodeJS.ProcessEnv,
+  exists: (p: string) => boolean,
+  resolveElectron: () => { path?: string; error?: string },
+  lane: Pick<DevLaneModule, 'appLaunch'>,
+): LaunchTarget | { error: string } {
+  const spec = lane.appLaunch(root, env)
+  if (!exists(spec.entry)) return { error: `the dev lane has no app build at ${spec.entry} — run npm run build in ${root}` }
+  const electron = resolveElectron()
+  if (!electron.path) return { error: `the dev lane cannot run its app: ${electron.error ?? 'electron missing'}` }
+  return { kind: 'electron', electron: electron.path, entry: spec.entry, args: spec.args, env: spec.env }
+}
+
+/**
  * What a launch attempt hands back so a caller can notice the spawned
  * process ending, without keeping this process alive to watch it (the child
  * stays `unref`'d regardless).
@@ -67,10 +93,10 @@ export function launchApp(target: LaunchTarget, env: NodeJS.ProcessEnv, spawn: t
   // inside the e2e harness would start a real Obsrv against the developer's
   // profile.
   if (env.OBSRV_TEST === '1') throw new Error('refusing to launch the app under OBSRV_TEST=1')
-  const childEnv: NodeJS.ProcessEnv = { ...env, OBSRV_AGENT_CONTROL: '1' }
+  const childEnv: NodeJS.ProcessEnv = { ...env, ...(target.kind === 'electron' ? target.env : undefined), OBSRV_AGENT_CONTROL: '1' }
   // Must boot the real Electron runtime, not Node-mode (see bin/obsrv.js).
   delete childEnv.ELECTRON_RUN_AS_NODE
-  const [command, args] = target.kind === 'bundle' ? [target.executable, []] : [target.electron, [target.entry]]
+  const [command, args] = target.kind === 'bundle' ? [target.executable, []] : [target.electron, [target.entry, ...(target.args ?? [])]]
   const child = spawn(command, args, { detached: true, stdio: 'ignore', env: childEnv })
   const exited = new Promise<void>(resolve => {
     child.once('exit', () => resolve())
@@ -87,5 +113,6 @@ export function resolveDefaultTarget(): LaunchTarget | { error: string } {
   const { resolveElectron } = require(resolve(__dirname, '..', '..', 'bin', 'electronPath.js')) as {
     resolveElectron: () => { path?: string; error?: string }
   }
+  if (devMode()) return resolveDevTarget(PACKAGE_ROOT, process.env, existsSync, resolveElectron, devLane())
   return resolveLaunchTarget(process.platform, homedir(), resolve(__dirname, '..', '..'), existsSync, resolveElectron)
 }
