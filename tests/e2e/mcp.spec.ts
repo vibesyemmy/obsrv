@@ -406,6 +406,17 @@ test('obsrv_inspect: the layout-scale note is said once, in the readout', async 
   expect(m.notes.join(' ')).not.toMatch(/no viewport meta tag/)
 })
 
+test('a page that holds its main thread after load is answered, not killed: the measurement has its own budget', async () => {
+  // stackoverflow.com's challenge held obsrv_audit past the 90 s kill and the answer was lost.
+  const started = Date.now()
+  const r = await call('obsrv_audit', { url: fixture('blocks-after-load.html'), preset: '1080p-24', timeoutMs: 3000 })
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  expect(Date.now() - started).toBeLessThan(30_000)
+  const m = r.structuredContent as { summary: { targets: { count: number } }; warnings: string[] }
+  expect(m.summary.targets.count).toBe(0)
+  expect(m.warnings[0]).toMatch(/^the page did not answer the audit within 3 s of loading/)
+})
+
 test('obsrv_audit: groupsOnly leaves the list out, as it does for lint', async () => {
   // A phone audit of a retail page came back as fifteen thousand tokens with
   // no way to ask for the groups alone; lint had had the flag since 0.32.0.

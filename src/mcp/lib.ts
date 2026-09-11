@@ -444,6 +444,37 @@ const CHROMIUM_CHATTER = [
   /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ .*\[\d+:\d+\] /,
 ]
 
+/** How many of `stderr`'s lines Chromium and Electron wrote, and the last of them, clipped. */
+export function chromiumChatter(stderr: string): { lines: number; last: string | null } {
+  const noise = stderr.split('\n').filter(line => line.trim().length > 0 && CHROMIUM_CHATTER.some(re => re.test(line)))
+  const last = noise.at(-1) ?? null
+  return { lines: noise.length, last: last === null ? null : last.length > 120 ? `${last.slice(0, 119)}…` : last }
+}
+
+/**
+ * The message for a CLI the server had to kill. The 0.48.0 stderr filter
+ * falls back to the raw tail when Chromium's chatter is all there is, on the
+ * theory that something beats nothing; a killed CLI has never written a
+ * line of its own, so that fallback handed the caller two kilobytes of
+ * tracker URLs and error codes. This says what is known: that it was
+ * killed, the CLI's own last line if it wrote one, how much Chromium logged
+ * (not what), and what the budget does and does not bound.
+ */
+export function killedMessage(command: string, killAfterMs: number, stderr: string): string {
+  const own = stripChromiumChatter(stderr)
+    .split('\n')
+    .filter(l => l.trim().length > 0)
+  const ownLast = own.at(-1) ?? null
+  const noise = chromiumChatter(stderr)
+  return (
+    `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated` +
+    (ownLast === null ? '; it had written nothing of its own' : `; its last line was: ${ownLast}`) +
+    (noise.lines > 0 ? `; Chromium logged ${noise.lines} line${noise.lines === 1 ? '' : 's'} of its own${noise.last === null ? '' : ` (the last: ${noise.last})`}` : '') +
+    `. timeoutMs bounds the load and then the measurement alike, so a run that outlived the kill was stuck elsewhere — ` +
+    `a render that never went quiet, or an exit that hung; raise timeoutMs only when the load itself is slow, or try a smaller preset.`
+  )
+}
+
 /** `stderr` without the lines Chromium and Electron wrote; empty when there were only those. */
 export function stripChromiumChatter(stderr: string): string {
   return stderr

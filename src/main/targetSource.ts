@@ -12,6 +12,7 @@ import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } fro
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
 import { layoutScale } from '../shared/layoutScale'
+import { withinBudget } from '../shared/measureBudget'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport, parseLintReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
@@ -654,9 +655,38 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * other payload from something untrusted. Null before the first
    * navigation, off the page, or when the answer did not parse.
    */
-  async inspectAt(x: number, y: number): Promise<InspectReport | null> {
+  /**
+   * How the last page ask ended. A page ask is one `executeJavaScript`
+   * call, and it cannot return while the page's main thread is blocked — a
+   * bot challenge, a script waiting on the network — so each is raced
+   * against the caller's budget (`shared/measureBudget`); `timeout` says the
+   * budget won, and a caller then answers with what it has rather than
+   * waiting for a kill.
+   */
+  private lastAsk: 'answered' | 'timeout' | 'failed' = 'answered'
+  askOutcome(): 'answered' | 'timeout' | 'failed' {
+    return this.lastAsk
+  }
+
+  /** Runs `code` in the isolated world, within `budgetMs` when given; null when the budget won. */
+  private async ask(code: string, budgetMs?: number): Promise<unknown> {
+    const work = this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [{ code }])
+    if (budgetMs === undefined) {
+      const value = await work
+      this.lastAsk = 'answered'
+      return value
+    }
+    const r = await withinBudget(work, budgetMs)
+    if (r.timedOut) {
+      this.lastAsk = 'timeout'
+      return null
+    }
+    this.lastAsk = 'answered'
+    return r.value
+  }
+
+  async inspectAt(x: number, y: number, budgetMs?: number): Promise<InspectReport | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
-    const wc = this.win.webContents
     try {
       // The caller speaks surface CSS px (the viewport as set); under a text
       // scale the page's own CSS px are larger by the scale, so the point
@@ -667,10 +697,9 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // its layout scale: a point 14 px across the screen is 38 of that page's
       // own px. Without this the inspector answered with whatever happened to
       // lay out at the screen's coordinates — a different element, or none.
-      const k = this.textScale * (await this.layoutScaleNow())
-      const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${INSPECT_SCRIPT}('point', ${Number(x) / k}, ${Number(y) / k})` },
-      ])
+      const k = this.textScale * (await this.layoutScaleNow(budgetMs))
+      if (this.lastAsk === 'timeout') return null
+      const raw = await this.ask(`${INSPECT_SCRIPT}('point', ${Number(x) / k}, ${Number(y) / k})`, budgetMs)
       const report = parseInspectReport(raw)
       // The box comes back in the page's own px times the text scale, as
       // `inspectSelector` reports it: the readout scales millimetres by the
@@ -681,6 +710,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       return { ...report, rect: { x: r.x * t, y: r.y * t, width: r.width * t, height: r.height * t } }
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
+      this.lastAsk = 'failed'
       return null
     }
   }
@@ -691,12 +721,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * (`shared/layoutScale`). 1 for a page that fits, 0.37 for one laid out 980
    * wide on a 360 px phone, and 1 when the page cannot be asked.
    */
-  async layoutScaleNow(): Promise<number> {
+  async layoutScaleNow(budgetMs?: number): Promise<number> {
     if (this.win.isDestroyed() || !this.firstNavDone) return 1
     try {
-      const laidOut: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [{ code: 'innerWidth' }])
+      const laidOut = await this.ask('innerWidth', budgetMs)
       return layoutScale(this.viewport.width, this.getTextScale(), typeof laidOut === 'number' ? laidOut : 0)
     } catch {
+      this.lastAsk = 'failed'
       return 1
     }
   }
@@ -706,18 +737,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * surface CSS px, font size the page's own. Null when nothing matches,
    * the selector is invalid, or the page did not answer.
    */
-  async inspectSelector(selector: string): Promise<InspectReport | null> {
+  async inspectSelector(selector: string, budgetMs?: number): Promise<InspectReport | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     try {
       const k = this.textScale
-      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${INSPECT_SCRIPT}('selector', ${JSON.stringify(selector)})` },
-      ])
+      const raw = await this.ask(`${INSPECT_SCRIPT}('selector', ${JSON.stringify(selector)})`, budgetMs)
       const report = parseInspectReport(raw)
       if (report === null || k === 1) return report
       const r = report.rect
       return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
     } catch {
+      this.lastAsk = 'failed'
       return null
     }
   }
@@ -729,14 +759,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * screen). Same isolated world and the same untrusted-payload parsing as
    * `inspectAt`.
    */
-  async auditPage(): Promise<AuditReport | null> {
+  async auditPage(budgetMs?: number): Promise<AuditReport | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     try {
-      const raw: unknown = await this.win.webContents.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})` },
-      ])
-      return parseAuditReport(raw)
+      return parseAuditReport(await this.ask(`${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})`, budgetMs))
     } catch {
+      this.lastAsk = 'failed'
       return null
     }
   }
@@ -747,22 +775,20 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * raster images with natural and drawn sizes — `cli/lint.ts` judges them.
    * Same isolated world and the same untrusted parsing as the audit.
    */
-  async lintPage(edgeBelowPx: number): Promise<LintReport | null> {
+  async lintPage(edgeBelowPx: number, budgetMs?: number): Promise<LintReport | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     if (!Number.isFinite(edgeBelowPx) || edgeBelowPx <= 0) return null
     try {
-      const wc = this.win.webContents
       // A page laid out wider than the screen and drawn to fit (no viewport
       // meta on a phone) has smaller CSS px than the screen's, so one device
       // pixel is more of them: ask how wide the page laid out and widen the
       // threshold by the same factor. `cli/lint.ts` judges every edge that
       // comes back in device px, so a wider net costs nothing but report size.
-      const below = edgeBelowPx / (await this.layoutScaleNow())
-      const raw: unknown = await wc.executeJavaScriptInIsolatedWorld(INSPECT_WORLD_ID, [
-        { code: `${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})` },
-      ])
-      return parseLintReport(raw)
+      const below = edgeBelowPx / (await this.layoutScaleNow(budgetMs))
+      if (this.lastAsk === 'timeout') return null
+      return parseLintReport(await this.ask(`${LINT_SCRIPT}(${below}, ${LINT_MAX_TEXT}, ${LINT_MAX_EDGES}, ${LINT_MAX_IMAGES})`, budgetMs))
     } catch {
+      this.lastAsk = 'failed'
       return null
     }
   }

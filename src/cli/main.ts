@@ -31,8 +31,9 @@ import { lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type L
 import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
-import { walkHeadless } from './walk'
-import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
+import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
+import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
+import { Deadline, measureTimeoutNote, navigatedAfterLoadNote } from '../shared/measureBudget'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote } from '../shared/walkCoverage'
@@ -750,6 +751,83 @@ async function runDiff(cmd: DiffCommand): Promise<void> {
  * found is not a failure: the JSON says `found: false` and exits 0, so an
  * agent can tell "not there" from "could not look".
  */
+/**
+ * The measurement phase, within a budget of its own (`shared/measureBudget`):
+ * the walk, the wait for a document with nothing in it, and the page asks.
+ * The budget is `--timeout`, the same figure as the load's, counted from the
+ * load's end. A page that navigates itself after `load` — a bot challenge
+ * that solved and reloaded, an interstitial that moved on, a redirect by
+ * script — is given the rest of the budget to arrive, then walked and
+ * measured where it arrived, and the outcome names where that was.
+ */
+interface MeasureOutcome<T> {
+  report: T | null
+  walk: HeadlessWalkOutcome
+  /** The page never answered within the budget: the caller answers with nothing, and says so. */
+  timedOut: boolean
+  /** The grace ran out on a document with nothing in it. */
+  stillEmpty: boolean
+  waitedMs: number
+  /** Where the page navigated to after `load`, when it did. */
+  arrivedAt: string | null
+}
+
+async function measureAfterLoad<T>(
+  target: TargetSource,
+  watch: ReturnType<typeof watchFailures>,
+  cmd: { walk: boolean; timeoutMs: number },
+  ask: (budgetMs: number) => Promise<T | null>,
+  isEmpty: (report: T) => boolean,
+): Promise<MeasureOutcome<T>> {
+  const deadline = new Deadline(cmd.timeoutMs)
+  // A holder rather than a `let`: the listener assigns it from a closure, which narrowing does not see.
+  const nav: { arrivedAt: string | null } = { arrivedAt: null }
+  const onNav = (url: string, inPage: boolean): void => {
+    if (!inPage) nav.arrivedAt = url
+  }
+  target.on('url-changed', onNav)
+  const walkWithin = (): Promise<HeadlessWalkOutcome> =>
+    cmd.walk ? walkHeadless(target, Math.min(HEADLESS_WALK_BUDGET_MS, deadline.remaining())) : Promise.resolve({ notes: [] })
+  // A page that navigated under the measurement gets the rest of the budget to finish loading.
+  const settle = async (): Promise<void> => {
+    while (nav.arrivedAt !== null && !deadline.passed() && target.webContents.isLoading()) {
+      const err = watch.failed()
+      if (err) throw err
+      await sleep(50)
+    }
+  }
+  try {
+    let walk: HeadlessWalkOutcome = { notes: [] }
+    let held: AwaitContentOutcome<T> = { report: null, waitedMs: 0, stillEmpty: false, arrived: false }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const seen: string | null = nav.arrivedAt
+      await settle()
+      walk = await walkWithin()
+      held = await awaitContent(() => ask(deadline.remaining()), isEmpty, { graceMs: Math.min(EMPTY_GRACE_MS, deadline.remaining()) })
+      if (held.arrived && cmd.walk) {
+        // The walk saw an empty page: walk the one that filled, and measure that.
+        walk = await walkWithin()
+        held = { ...held, report: (await ask(deadline.remaining())) ?? held.report }
+      }
+      if (held.report !== null) break
+      if (target.askOutcome() === 'timeout' || deadline.passed()) break
+      // The ask failed for another reason — a navigation under it, most
+      // likely; when the page moved, go again on the page it arrived at.
+      if (nav.arrivedAt === seen) break
+    }
+    return {
+      report: held.report,
+      walk,
+      timedOut: held.report === null && (target.askOutcome() === 'timeout' || deadline.passed()),
+      stillEmpty: held.stillEmpty,
+      waitedMs: held.waitedMs,
+      arrivedAt: nav.arrivedAt,
+    }
+  } finally {
+    target.off('url-changed', onNav)
+  }
+}
+
 async function runInspect(cmd: InspectCommand): Promise<void> {
   const profile = findProfile(cmd.profileId)
   const target = new TargetSource(30, { mobileEmulation: true })
@@ -762,11 +840,16 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
-    const report = cmd.selector !== null ? await target.inspectSelector(cmd.selector) : await target.inspectAt(cmd.at!.x, cmd.at!.y)
-    if (report === null) {
+    // The one page ask, within the same budget as the load (`shared/measureBudget`).
+    const report =
+      cmd.selector !== null ? await target.inspectSelector(cmd.selector, cmd.timeoutMs) : await target.inspectAt(cmd.at!.x, cmd.at!.y, cmd.timeoutMs)
+    const timedOut = report === null && target.askOutcome() === 'timeout'
+    if (report === null && !timedOut) {
       const err = watch.failed()
       if (err) throw err
     }
+    const notes = timedOut ? [measureTimeoutNote('inspect', cmd.timeoutMs)] : []
+    for (const n of notes) human(`warning: ${n}`)
     const where = cmd.selector !== null ? `selector ${JSON.stringify(cmd.selector)}` : `(${cmd.at!.x}, ${cmd.at!.y})`
     const readout =
       report === null
@@ -800,8 +883,8 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
       found: readout !== null,
       readout,
-      // The readout's own notes (the layout scale, when it is not 1), where a reader looks first.
-      notes: readout === null ? [] : readout.notes,
+      // The call's own notes; the readout keeps its own (the layout scale), said once.
+      notes,
     })
   } finally {
     target.destroy()
@@ -819,24 +902,25 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
-    let walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
-    // A document with nothing in it is held for a grace (a page rendered by
-    // script after `load`); one that fills in the meantime is walked again,
-    // since the walk saw an empty page, and one that stays empty is said.
-    const held = await awaitContent(() => target.auditPage(), isEmptyAuditReport)
-    let report = held.report
-    if (held.arrived && cmd.walk) {
-      walk = await walkHeadless(target)
-      report = (await target.auditPage()) ?? report
-    }
+    const m = await measureAfterLoad(target, watch, cmd, budget => target.auditPage(budget), isEmptyAuditReport)
+    const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
-    const empty = held.stillEmpty ? emptyDocumentNote('audit', held.waitedMs) : null
-    if (empty !== null) human(`warning: ${empty}`)
-    if (!report) {
-      const err = watch.failed()
-      if (err) throw err
-      throw new Error('the page did not answer the audit (it may have navigated away, or thrown while being measured)')
+    const notes: string[] = []
+    let report = m.report
+    if (report === null) {
+      if (!m.timedOut) {
+        const err = watch.failed()
+        if (err) throw err
+        throw new Error('the page did not answer the audit (it may have navigated away, or thrown while being measured)')
+      }
+      // The page never answered within the budget: the figures are of nothing, and the note says so.
+      notes.push(measureTimeoutNote('audit', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
+    } else {
+      if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs))
     }
+    for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
       report,
       {
@@ -881,13 +965,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       findings: cmd.groupsOnly ? [] : result.findings,
       // With no list there is nothing cut from it; the summary counts everything.
       ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
-      warnings: [
-        ...(empty === null ? [] : [empty]),
-        ...result.warnings,
-        ...(listed === null ? [] : [listed]),
-        ...walk.notes,
-        ...(coverage === null ? [] : [coverage]),
-      ],
+      warnings: [...notes, ...result.warnings, ...(listed === null ? [] : [listed]), ...walk.notes, ...(coverage === null ? [] : [coverage])],
     })
   } finally {
     target.destroy()
@@ -906,25 +984,40 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (refused) human(`warning: ${refused}`)
     }
     await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
-    let walk = cmd.walk ? await walkHeadless(target) : { notes: [] }
     // One device pixel on this screen, in the page's CSS px: the walk
     // brings back only the edges thinner than that.
-    const measure = (): Promise<LintReport | null> => target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale))
-    // An empty document is held for a grace and, if it fills, walked again.
-    const held = await awaitContent(measure, isEmptyLintReport)
-    let report = held.report
-    if (held.arrived && cmd.walk) {
-      walk = await walkHeadless(target)
-      report = (await measure()) ?? report
-    }
+    const m = await measureAfterLoad(
+      target,
+      watch,
+      cmd,
+      (budget): Promise<LintReport | null> => target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale), budget),
+      isEmptyLintReport,
+    )
+    const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
-    const empty = held.stillEmpty ? emptyDocumentNote('lint', held.waitedMs) : null
-    if (empty !== null) human(`warning: ${empty}`)
-    if (!report) {
-      const err = watch.failed()
-      if (err) throw err
-      throw new Error('the page did not answer the lint (it may have navigated away, or thrown while being measured)')
+    const notes: string[] = []
+    let report = m.report
+    if (report === null) {
+      if (!m.timedOut) {
+        const err = watch.failed()
+        if (err) throw err
+        throw new Error('the page did not answer the lint (it may have navigated away, or thrown while being measured)')
+      }
+      notes.push(measureTimeoutNote('lint', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      report = {
+        viewport: { width: applied.width, height: applied.height },
+        pageHeight: applied.height,
+        text: [],
+        edges: [],
+        images: [],
+        truncated: { text: 0, edges: 0, images: 0 },
+        spacers: 0,
+      }
+    } else {
+      if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs))
     }
+    for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(
       report,
       { cssWidth: applied.width, cssHeight: applied.height, deviceScaleFactor: cmd.spec.deviceScaleFactor, textScale: cmd.spec.textScale },
@@ -971,7 +1064,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       ...(cmd.groupsOnly ? { truncated: { ...result.truncated, findings: 0 } } : {}),
       groups: slimGroups(result.groups),
       warnings: [
-        ...(empty === null ? [] : [empty]),
+        ...notes,
         ...result.warnings,
         ...walk.notes,
         ...(listed === null ? [] : [listed]),

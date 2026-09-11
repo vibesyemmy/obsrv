@@ -1,0 +1,15 @@
+<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blocks after load</title>
+<!--
+  The shape of a bot challenge as the tool meets it: the document loads at
+  once with content, then its main thread is held — here by a busy loop that
+  starts on the first task after `load` and runs for 40 s — so any script
+  asked of the page cannot run until it lets go.
+-->
+<style>body{margin:16px;font:16px sans-serif}button{width:44px;height:44px}</style>
+<p id="p">This page holds its main thread for forty seconds after it loads.</p>
+<button id="b">OK</button>
+<script>
+  addEventListener('load', () => setTimeout(() => { const until = Date.now() + 40000; while (Date.now() < until) {} }, 0))
+</script>

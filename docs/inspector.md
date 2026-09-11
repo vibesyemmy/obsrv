@@ -99,3 +99,5 @@ screen, panel and vision setting in force, navigating it to `url` first if
 one is given — and falls back to a headless load otherwise, with the same
 screen options as `obsrv_snap`. Live, a custom screen's diagonal is not
 known to the tool, so its millimetres are null; the presets carry theirs.
+
+`--timeout` (`timeoutMs`) bounds the load, and then the page ask itself: one script call, which cannot return while the page's main thread is blocked (a bot challenge, a script waiting on the network). When the budget wins, the answer is `found: false` with a note saying so and what to do.

@@ -176,3 +176,26 @@ test('a document that renders after load is held for and measured; one that stay
   expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets 3(\.\d)? s after it loaded/)
   expect(Date.now() - started).toBeGreaterThanOrEqual(3000)
 })
+
+test('a page that holds its main thread after load is answered within the budget, with nothing and a sentence', async () => {
+  // The shape of stackoverflow.com's bot challenge: the audit sat behind it for
+  // minutes and the MCP killed it. Now the page ask is within --timeout.
+  const started = Date.now()
+  const r = await runCli(['audit', fixture('blocks-after-load.html'), '--preset', '1080p-24', '--timeout', '3000'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(Date.now() - started).toBeLessThan(25_000)
+  expect(m.summary.targets.count).toBe(0)
+  expect(m.summary.text.count).toBe(0)
+  expect(m.warnings[0]).toMatch(/^the page did not answer the audit within 3 s of loading: its main thread was busy or blocked/)
+})
+
+test('a page that navigates itself after load is measured where it arrived, and the answer says so', async () => {
+  // An interstitial with nothing in it that moves on to audit.html 400 ms after load.
+  const r = await runCli(['audit', fixture('challenge.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary.targets.count).toBe(2)
+  expect(m.warnings.join(' ')).toMatch(/the page navigated after it loaded, to file:.*audit\.html: a bot challenge, an interstitial or a redirect; the figures are of the page it arrived at/)
+  expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
+})

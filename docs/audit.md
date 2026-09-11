@@ -123,6 +123,8 @@ as it first shows.
 
 A document with nothing in it — no text and no targets, or for the lint no text, edges or images — is held for three seconds and asked again every quarter second before it is measured as empty: booking.com's mobile page is empty at `load` and rendered by script in the next second, and the audit once answered zeros for it with no warning. A page that fills in that time is walked again and measured; one that stays empty is measured as it is, with a warning that says nothing was there to measure and that `--wait` (`waitMs`) gives a late page longer.
 
+`--timeout` (`timeoutMs`) bounds the load, and then, separately, everything after it: the walk, the wait for a document with nothing in it, and the page ask itself. A page ask is one script call, and it cannot return while the page's main thread is blocked — a bot challenge working, an interstitial, a script waiting on a dead host — so it is raced against the budget; when the budget wins, the figures are of nothing and the first warning says so and what to do. A page that navigates itself after `load` (a challenge that solved and reloaded, a redirect by script) is given the rest of the budget to arrive and is measured where it arrived, which a warning names.
+
 ## Under a text scale
 
 `--text-scale 1.5` (or `textScale` on `obsrv_audit`) renders the page as a

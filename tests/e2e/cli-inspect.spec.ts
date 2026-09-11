@@ -91,3 +91,11 @@ test('exactly one of --at / --selector, and --at is x,y', async () => {
   const help = await runCli(['--help'])
   expect(help.stdout).toContain('obsrv inspect <url>')
 })
+
+test('a page that holds its main thread after load: inspect answers found false within the budget, and says why', async () => {
+  const r = await runCli(['inspect', fixture('blocks-after-load.html'), '--preset', '1080p-24', '--selector', '#b', '--timeout', '3000'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.found).toBe(false)
+  expect(m.notes[0]).toMatch(/^the page did not answer the inspect within 3 s of loading: .* so nothing was found/)
+})

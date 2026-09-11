@@ -1,3 +1,4 @@
+import { Deadline, walkTimeoutNote, withinBudget } from '../shared/measureBudget'
 import type { TargetSource } from '../main/targetSource'
 import type { Walked } from '../shared/types'
 import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
@@ -48,11 +49,21 @@ export interface HeadlessWalkOutcome {
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
-export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOutcome> {
+/**
+ * `budgetMs` bounds the whole walk, the image settle included, and every
+ * scroll asked of the page within it: a page whose main thread is blocked
+ * (a bot challenge) never answers a scroll, and without the bound the walk
+ * sat behind it as the measurement did (`shared/measureBudget`).
+ */
+export async function walkHeadless(target: TargetSource, budgetMs: number = HEADLESS_WALK_BUDGET_MS): Promise<HeadlessWalkOutcome> {
   const notes: string[] = []
   const started = Date.now()
-  const step = async (page: 'top' | 'next'): Promise<WalkStepResult> =>
-    (await target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`)) as WalkStepResult
+  const deadline = new Deadline(budgetMs)
+  const step = async (page: 'top' | 'next'): Promise<WalkStepResult> => {
+    const r = await withinBudget(target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`), deadline.remaining())
+    if (r.timedOut) throw new Error(walkTimeoutNote(budgetMs))
+    return r.value as WalkStepResult
+  }
   const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))
   const backToTop = async (): Promise<void> => {
     try {
@@ -74,9 +85,9 @@ export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOu
   let lastY = 0
   try {
     for (;;) {
-      if (Date.now() - started >= HEADLESS_WALK_BUDGET_MS) {
+      if (deadline.passed()) {
         notes.push(
-          `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${HEADLESS_WALK_BUDGET_MS / 1000} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
+          `the walk stopped after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} at its ${Math.round(budgetMs / 100) / 10} s budget without reaching the end of the page; the measurement covers the whole page regardless.`,
         )
         break
       }
@@ -107,7 +118,7 @@ export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOu
     return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
   }
   await backToTop()
-  await settleImages(target)
+  await settleImages(target, deadline)
   return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes }
 }
 
@@ -117,14 +128,17 @@ export async function walkHeadless(target: TargetSource): Promise<HeadlessWalkOu
  * either way), up to a bound: a page that never stops adding images is not
  * this function's to wait for.
  */
-async function settleImages(target: TargetSource): Promise<void> {
-  const deadline = Date.now() + HEADLESS_WALK_IMAGES_MS
-  while (Date.now() < deadline) {
+async function settleImages(target: TargetSource, walk: Deadline): Promise<void> {
+  const until = Math.min(Date.now() + HEADLESS_WALK_IMAGES_MS, walk.at)
+  while (Date.now() < until) {
     let pending: number
     try {
-      pending = (await target.webContents.executeJavaScript(
-        'Array.from(document.images).filter(i => !i.complete).length',
-      )) as number
+      const r = await withinBudget(
+        target.webContents.executeJavaScript('Array.from(document.images).filter(i => !i.complete).length'),
+        until - Date.now(),
+      )
+      if (r.timedOut) return
+      pending = r.value as number
     } catch {
       return
     }
