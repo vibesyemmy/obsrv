@@ -149,9 +149,12 @@ test('a load that outruns --timeout under a throttle is captured as it stands, n
   expect(existsSync(join(outDir, 'cut.png'))).toBe(true)
 })
 
-test('a measurement cannot use a half-loaded page: audit under a throttle past --timeout errors, naming both', async () => {
+test('a measurement under a throttle past --timeout takes the page as it stands, and its first warning names both', async () => {
+  // Until 0.53.0 this was an error; apnews.com never fires load behind its
+  // consent wall, and the DOM was there to measure (the snap already did).
   const r = await runCli(['audit', `${base}/`, '--preset', 'laptop-768', '--throttle', '3g', '--timeout', '1500'])
-  expect(r.code).toBe(1)
-  expect(r.stderr).toMatch(/load did not finish within 1500 ms under --throttle 3g/)
-  expect(r.stderr).toMatch(/raise --timeout/)
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.warnings[0]).toMatch(/^load did not finish within 1500 ms under --throttle 3g: .* — measured the page as it stood/)
+  expect(m.warnings[0]).toMatch(/--timeout/)
 })

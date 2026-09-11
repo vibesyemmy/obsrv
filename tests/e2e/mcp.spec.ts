@@ -363,7 +363,7 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0, spacers: 0 })
 })
 
-test("a measurement that refuses a cut load answers with the CLI's sentence, not Chromium's log", async () => {
+test("a measurement of a cut load answers with the page as it stands and the CLI's sentence, not Chromium's log", async () => {
   // theverge.com never finished loading and the error was a kilobyte of
   // task_policy_set lines with the one useful sentence last.
   const { createServer } = await import('node:http')
@@ -376,9 +376,12 @@ test("a measurement that refuses a cut load answers with the CLI's sentence, not
   const port = (server.address() as { port: number }).port
   try {
     const r = await call('obsrv_lint', { url: `http://127.0.0.1:${port}/`, preset: '1080p-24', timeoutMs: 1500 })
-    expect(r.isError).toBe(true)
-    const text = (r.content as { type: string; text: string }[]).map(c => c.text).join('\n')
-    expect(text).toMatch(/^obsrv lint failed \(exit \d+\): obsrv: load did not finish within 1500 ms/)
+    // A cut load is measured as it stands since 0.53.0: the answer is the
+    // page's, with the CLI's sentence first — and never Chromium's log.
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+    const m = r.structuredContent as { warnings: string[] }
+    expect(m.warnings[0]).toMatch(/^load did not finish within 1500 ms: http:\/\/127\.0\.0\.1:\d+\/ — measured the page as it stood/)
+    const text = JSON.stringify(r.content)
     expect(text).not.toContain('task_policy_set')
     expect(text).not.toContain('electron:')
   } finally {

@@ -935,7 +935,12 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
-    if (report === null) {
+    if (report === null && !load.loaded && !m.timedOut) {
+      // The cut came before the navigation even committed — under a throttle
+      // the first byte can take longer than the budget — so there is no page
+      // to ask; the figures are of nothing, and the cut-load warning says so.
+      report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
+    } else if (report === null) {
       if (!m.timedOut) {
         const err = watch.failed()
         if (err) throw err
@@ -1026,7 +1031,18 @@ async function runLint(cmd: LintCommand): Promise<void> {
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
-    if (report === null) {
+    if (report === null && !load.loaded && !m.timedOut) {
+      // No page yet: the cut came before the navigation committed (see the audit).
+      report = {
+        viewport: { width: applied.width, height: applied.height },
+        pageHeight: applied.height,
+        text: [],
+        edges: [],
+        images: [],
+        truncated: { text: 0, edges: 0, images: 0 },
+        spacers: 0,
+      }
+    } else if (report === null) {
       if (!m.timedOut) {
         const err = watch.failed()
         if (err) throw err
