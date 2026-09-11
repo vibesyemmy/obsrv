@@ -22,6 +22,38 @@ export interface DevLaneModule {
   isStale(startedAt: string | undefined, root: string): boolean
   stopApp(pid: number, graceMs?: number): Promise<void>
   laneLabel(root: string): string
+  serverStamp(root: string): number
+}
+
+/** The line a dev-lane result carries: the build that answered — branch and commit, when the server was built, and where. */
+export function laneStamp(label: string, builtMs: number, root: string): string {
+  return `obsrv-dev lane: ${label} · server built ${new Date(builtMs).toLocaleTimeString()} · ${root}`
+}
+
+export type StampField = 'notes' | 'warnings'
+
+/** Where a tool's result can carry the stamp: `notes` when its output schema declares them, else `warnings`, else nowhere. */
+export function stampField(outputShape: Record<string, unknown> | undefined): StampField | null {
+  if (outputShape === undefined) return null
+  if ('notes' in outputShape) return 'notes'
+  if ('warnings' in outputShape) return 'warnings'
+  return null
+}
+
+/**
+ * The result with the stamp appended to `field` of its structured content.
+ * Structured content because Claude Code shows it and not a tool's text
+ * blocks; an existing field because a client validates structured content
+ * against the schema it listed, every obsrv schema refuses keys it does not
+ * name, and a new key would fail every call of a session that listed the
+ * tools before it existed. The lane is one pointer every session shares, so
+ * this is how a session sees that another moved it. Errors, and results
+ * without structured content, come back as they were.
+ */
+export function withStamp<T extends { structuredContent?: Record<string, unknown>; isError?: boolean }>(result: T, field: StampField, stamp: string): T {
+  if (result.isError === true || result.structuredContent === undefined) return result
+  const had = result.structuredContent[field]
+  return { ...result, structuredContent: { ...result.structuredContent, [field]: [...(Array.isArray(had) ? had : []), stamp] } }
 }
 
 export function devMode(env: NodeJS.ProcessEnv = process.env): boolean {

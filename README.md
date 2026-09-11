@@ -304,9 +304,11 @@ npm run lane -- --status     # where the lane points, and how fresh its builds a
   finishes on the build it started on.
 - **Every result says which build answered.** The lane is one pointer shared by
   every session, so `npm run lane` in one session moves every other session's
-  `obsrv-dev`. Each tool result ends with a line naming the branch, commit,
-  uncommitted changes and build time, and the first result after a move says
-  the lane moved, from where.
+  `obsrv-dev`. Each tool result's `notes` (or `warnings`, for a tool without
+  notes) end with a line naming the branch, commit, uncommitted changes, build
+  time and checkout; `obsrv_presets`, which has neither, reads the preset table
+  alone. The proxy also appends that line as a text block, and after a move says
+  the lane moved, for clients that show text blocks.
 - **In dev mode the server drives the lane's app**: it discovers the lane
   profile's `control.json`, launches the checkout's `out/main/index.js`
   rather than `/Applications/Obsrv.app`, and relaunches a dev app that started
