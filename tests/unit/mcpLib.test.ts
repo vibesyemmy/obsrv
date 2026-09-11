@@ -26,6 +26,7 @@ import {
   urlSchemeError,
   stripChromiumChatter,
   killedMessage,
+  electronNote,
   chromiumChatter,
 } from '../../src/mcp/lib'
 
@@ -542,5 +543,28 @@ describe('killedMessage', () => {
   })
   it('no stderr at all is just the kill', () => {
     expect(killedMessage('snap', 90_000, '')).toMatch(/^obsrv snap did not exit within 90000 ms and was terminated; it had written nothing of its own\. timeoutMs/)
+  })
+})
+
+describe('electronNote', () => {
+  it('says nothing for a call that did not wait', () => {
+    expect(electronNote(0, '43.7.0')).toBeNull()
+    expect(electronNote(400, '43.7.0')).toBeNull()
+  })
+  it('names the wait, the version and why it happened once', () => {
+    expect(electronNote(4_200, '43.7.0')).toBe(
+      'this call waited 4.2 s for Electron 43.7.0 to download: the first headless call after an install does that once, and later calls do not',
+    )
+  })
+})
+
+describe('killedMessage during an Electron download', () => {
+  it('says the download was cut, not that the page was stuck', () => {
+    const stderr = 'obsrv: downloading Electron 43.7.0 (first run after an install; ~120 MB), which the tools wait for\nprogress 12%\n'
+    const msg = killedMessage('audit', 63_000, stderr)
+    expect(msg).toMatch(/^obsrv audit did not exit within 63000 ms and was terminated while downloading Electron 43\.7\.0/)
+    expect(msg).toContain('the download does not survive the kill')
+    expect(msg).not.toContain('nothing of its own')
+    expect(msg).not.toContain('stuck elsewhere')
   })
 })
