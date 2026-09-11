@@ -1247,6 +1247,13 @@ const auditOutputShape = {
 
 type AuditHandlerInput = Omit<AuditToolInput, 'url'> & { url?: string | undefined; mode?: 'auto' | 'headless' | 'live'; walk?: boolean; groupsOnly?: boolean }
 
+/** The notes a readout carries about its own figures (the layout scale, when it is not 1); none from an app older than the field. */
+function readoutNotesOf(readout: unknown): string[] {
+  if (readout === null || typeof readout !== 'object') return []
+  const notes = (readout as { notes?: unknown }).notes
+  return Array.isArray(notes) ? notes.filter((n): n is string => typeof n === 'string') : []
+}
+
 /** A `truncated` block with its list cut zeroed: under `groupsOnly` no list was printed, so nothing was cut from it. */
 function noListCut(truncated: unknown): Record<string, unknown> {
   const t = truncated !== null && typeof truncated === 'object' ? (truncated as Record<string, unknown>) : {}
@@ -2254,7 +2261,14 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('inspect', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv inspect exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
+    // The CLI's own notes (a page ask the budget won) come through beside the
+    // call's; the readout's, which the CLI hoists too, stay in the readout and
+    // are said once.
+    const readoutNotes = new Set(readoutNotesOf((result as { readout?: unknown }).readout))
+    const cliNotes = (Array.isArray((result as { notes?: unknown }).notes) ? (result as { notes: unknown[] }).notes.filter((n): n is string => typeof n === 'string') : []).filter(
+      n => !readoutNotes.has(n),
+    )
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...cliNotes, ...queued(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
