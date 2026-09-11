@@ -16,6 +16,13 @@
 // call saying where the lane points and how to set it, and starts the lane's
 // server the moment there is one.
 //
+// The lane is one pointer shared by every session on the machine, so
+// `npm run lane` in one session moves every other session's obsrv-dev. Every
+// tool result therefore ends with a line naming the build that answered —
+// branch, commit, when the server was built, where — and the first result
+// after a move says the lane moved, from where. The handshake's version
+// names the lane too.
+//
 // Messages are newline-delimited JSON-RPC, the MCP stdio framing.
 'use strict'
 
@@ -36,10 +43,12 @@ let initRequest = null
 let initialized = false
 /** Whether the client has had an answer to `initialize`, from a child or from here. */
 let answeredInit = false
-/** The running child: { proc, root, key, inflight: Map<id, method>, replayIds: Set<id>, waiters, lastErr, exited }. */
+/** The running child: { proc, root, key, label, built, inflight: Map<id, method>, replayIds: Set<id>, waiters, lastErr, exited }. */
 let child = null
 let replaySeq = 0
 const replays = new Map()
+/** The lane that answered this session's last tool call: { root, label }, or null before the first. */
+let lastAnswered = null
 
 /** The lane as it stands: its checkout and a key that changes with every server build; root null when there is none. */
 function currentLane() {
@@ -95,7 +104,18 @@ function startChild(root, key) {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, OBSRV_DEV: '1' },
   })
-  const c = { proc, root, key, inflight: new Map(), replayIds: new Set(), waiters: [], lastErr: [], exited: false }
+  const c = {
+    proc,
+    root,
+    key,
+    label: lane.laneLabel(root),
+    built: new Date(lane.serverStamp(root)).toLocaleTimeString(),
+    inflight: new Map(),
+    replayIds: new Set(),
+    waiters: [],
+    lastErr: [],
+    exited: false,
+  }
   proc.stdout.setEncoding('utf8')
   proc.stderr.setEncoding('utf8')
   let buffer = ''
@@ -114,7 +134,7 @@ function startChild(root, key) {
   proc.stdin.on('error', () => undefined) // EPIPE once the child is gone; its exit says the rest
   proc.on('error', err => onChildExit(c, null, null, err.message))
   proc.on('exit', (code, signal) => onChildExit(c, code, signal))
-  log(`running ${root} (${lane.laneLabel(root)}, server built ${new Date(lane.serverStamp(root)).toLocaleTimeString()})`)
+  log(`running ${root} (${c.label}, server built ${c.built})`)
   return c
 }
 
@@ -140,11 +160,27 @@ function fromChild(c, line) {
       // Promise the client list-changed notifications: they are how a rebuilt server's tools reach it.
       const caps = msg.result.capabilities || {}
       msg.result.capabilities = { ...caps, tools: { ...(caps.tools || {}), listChanged: true } }
+      const info = msg.result.serverInfo || {}
+      msg.result.serverInfo = { ...info, version: `${info.version || '?'} (dev lane: ${c.label})` }
       answeredInit = true
+    }
+    if (method === 'tools/call' && msg.result && Array.isArray(msg.result.content)) {
+      msg.result.content = [...msg.result.content, { type: 'text', text: stampFor(c) }]
     }
     if (c.inflight.size === 0) for (const done of c.waiters.splice(0)) done()
   }
   write(msg)
+}
+
+/** The line a tool result ends with: which build answered, and whether the lane moved since the last one. */
+function stampFor(c) {
+  const line = `obsrv-dev lane: ${c.label} · server built ${c.built} · ${c.root}`
+  const moved = lastAnswered !== null && lastAnswered.root !== c.root ? lastAnswered : null
+  lastAnswered = { root: c.root, label: c.label }
+  return moved === null
+    ? line
+    : `${line} — the lane moved since this session's last call, from ${moved.root} (${moved.label}): ` +
+        '`npm run lane` in any checkout moves it for every session'
 }
 
 function onChildExit(c, code, signal, error) {

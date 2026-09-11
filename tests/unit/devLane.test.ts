@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -24,6 +25,7 @@ const lane = createRequire(__filename)('../../scripts/devLane.js') as {
   isStale(startedAt: string | undefined, root: string): boolean
   appLaunch(root: string, env?: NodeJS.ProcessEnv): { entry: string; args: string[]; env: Record<string, string> }
   installProxy(env?: NodeJS.ProcessEnv): string
+  laneLabel(root: string): string
 }
 
 const made: string[] = []
@@ -105,6 +107,18 @@ describe('the dev lane', () => {
     expect(spec.args).toEqual(['--user-data-dir=/tmp/lane/profile'])
     expect(spec.env).toMatchObject({ OBSRV_AGENT_CONTROL: '1', OBSRV_DEV_LANE: root })
     expect(typeof spec.env.OBSRV_DEV_LANE_LABEL).toBe('string')
+  })
+
+  it('names a git checkout by branch and commit, and says when the tree has uncommitted changes', () => {
+    const root = temp('obsrv-lane-git-')
+    const git = (...args: string[]): void => void execFileSync('git', ['-C', root, ...args], { stdio: 'ignore' })
+    git('init', '-q', '-b', 'topic')
+    writeFileSync(join(root, 'f.txt'), 'one')
+    git('add', 'f.txt')
+    git('-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '-m', 'one')
+    expect(lane.laneLabel(root)).toMatch(/^topic @ [0-9a-f]{7,}$/)
+    writeFileSync(join(root, 'f.txt'), 'two')
+    expect(lane.laneLabel(root)).toMatch(/^topic @ [0-9a-f]{7,} \+ uncommitted changes$/)
   })
 
   it('installs the proxy beside the lane, so removing a worktree cannot take obsrv-dev with it', () => {

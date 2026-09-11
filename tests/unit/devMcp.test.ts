@@ -53,6 +53,11 @@ function checkout(mark: string): string {
   return root
 }
 const text = (r: unknown): string => (r as { content: { text: string }[] }).content[0]!.text
+/** The last content block: the lane's stamp, naming the build that answered. */
+const stamp = (r: unknown): string => {
+  const content = (r as { content: { text: string }[] }).content
+  return content[content.length - 1]!.text
+}
 const isError = (r: unknown): boolean => (r as { isError?: boolean }).isError === true
 
 describe('the obsrv-dev proxy', () => {
@@ -81,8 +86,18 @@ describe('the obsrv-dev proxy', () => {
     for (const d of [home, a, b]) rmSync(d, { recursive: true, force: true })
   })
 
-  it("answers from the lane's build, with that server in dev mode", async () => {
+  it("answers from the lane's build, with that server in dev mode, and names the lane in the handshake", async () => {
     expect(text(await client.callTool({ name: 'build' }))).toBe('A1 dev=1')
+    expect(client.getServerVersion()?.version).toContain('dev lane')
+  })
+
+  it('stamps every tool result with the build that answered: the lane, when it was built, where it is', async () => {
+    // The pointer is shared by every session on the machine: `npm run lane`
+    // in one moves another's obsrv-dev. The stamp is how a reader knows
+    // which build answered without asking (obsrv-8d's point).
+    const r = await client.callTool({ name: 'build' })
+    expect(stamp(r)).toMatch(/^obsrv-dev lane: .* · server built \d/)
+    expect(stamp(r)).toContain(a)
   })
 
   it('a new build answers the next call on the same connection, and the client is told the tools may have changed', async () => {
@@ -92,9 +107,14 @@ describe('the obsrv-dev proxy', () => {
     await expect.poll(() => listChanged).toBeGreaterThan(before)
   })
 
-  it('moving the lane to another checkout moves the next call with it', async () => {
+  it('moving the lane to another checkout moves the next call with it, and that result says the lane moved', async () => {
     lane.pointLaneAt(b, env())
-    expect(text(await client.callTool({ name: 'build' }))).toBe('B1 dev=1')
+    const r = await client.callTool({ name: 'build' })
+    expect(text(r)).toBe('B1 dev=1')
+    expect(stamp(r)).toMatch(/the lane moved since this session's last call/)
+    expect(stamp(r)).toContain(b)
+    const again = await client.callTool({ name: 'build' })
+    expect(stamp(again)).not.toMatch(/moved/)
   })
 
   it('a call in flight finishes on the build it started on; the next waits for it, then runs on the new one', async () => {

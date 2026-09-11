@@ -91,20 +91,28 @@ function isStale(startedAt, root) {
   return Number.isFinite(started) && started < appStamp(root)
 }
 
-/** The branch and commit a checkout is on; null outside a git checkout. */
+/**
+ * The branch and commit a checkout is on, and whether its tracked files
+ * differ from that commit — a build of a dirty tree is not the commit's
+ * build, and the label says so. Null outside a git checkout.
+ */
 function describe(root) {
   try {
     const git = args => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-    return { branch: git(['rev-parse', '--abbrev-ref', 'HEAD']), sha: git(['rev-parse', '--short', 'HEAD']) }
+    return {
+      branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+      sha: git(['rev-parse', '--short', 'HEAD']),
+      dirty: git(['status', '--porcelain', '--untracked-files=no']) !== '',
+    }
   } catch {
     return null
   }
 }
 
-/** How the lane names a checkout to a person: its branch and commit, or its folder. */
+/** How the lane names a checkout to a person: its branch and commit (and uncommitted changes), or its folder. */
 function laneLabel(root) {
   const d = describe(root)
-  return d === null ? basename(root) : `${d.branch} @ ${d.sha}`
+  return d === null ? basename(root) : `${d.branch} @ ${d.sha}${d.dirty ? ' + uncommitted changes' : ''}`
 }
 
 /**

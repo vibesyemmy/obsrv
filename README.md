@@ -302,6 +302,11 @@ npm run lane -- --status     # where the lane points, and how fresh its builds a
   starts it again when `out/mcp/server.js` changes or the lane moves, so the
   call after a build runs the build on the same session. A call in flight
   finishes on the build it started on.
+- **Every result says which build answered.** The lane is one pointer shared by
+  every session, so `npm run lane` in one session moves every other session's
+  `obsrv-dev`. Each tool result ends with a line naming the branch, commit,
+  uncommitted changes and build time, and the first result after a move says
+  the lane moved, from where.
 - **In dev mode the server drives the lane's app**: it discovers the lane
   profile's `control.json`, launches the checkout's `out/main/index.js`
   rather than `/Applications/Obsrv.app`, and relaunches a dev app that started
