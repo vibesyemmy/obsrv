@@ -110,13 +110,19 @@ function downloadLine(version) {
   return `obsrv: downloading Electron ${version} (first run after an install; ~120 MB), which the tools wait for`
 }
 
-/** The last non-empty line of what the installer printed, for an error. */
-const lastLine = text =>
-  text
+/**
+ * The line of the installer's output that says what went wrong: the last one
+ * that reads as an error, since an uncaught exception ends with node's own
+ * version line; else the last non-empty line.
+ */
+const lastLine = text => {
+  const lines = text
     .split(/\r?\n|\r/)
     .map(l => l.trim())
     .filter(l => l.length > 0)
-    .at(-1) ?? ''
+  const error = lines.filter(l => /error|cannot|enoent|econn|refused|failed|timed out|not found/i.test(l)).at(-1)
+  return error ?? lines.at(-1) ?? ''
+}
 
 /**
  * The binary, fetched first when it is missing: runs the package's own

@@ -110,6 +110,14 @@ describe('ensureElectron', () => {
     rmSync(d, { recursive: true, force: true })
   })
 
+  it("names the installer's error line, not node's trailing version line, when it throws", async () => {
+    const d = stub("throw new Error(\"Cannot find module '@electron/get'\")")
+    const r = await ensureElectron({ pkgDir: d })
+    expect(r).toEqual({ error: expect.stringContaining("Cannot find module '@electron/get'") })
+    expect((r as { error: string }).error).not.toMatch(/Node\.js v\d/)
+    rmSync(d, { recursive: true, force: true })
+  })
+
   it("names the installer's last line when it fails, so a network error is not a mystery", async () => {
     const d = stub("process.stderr.write('boom: no network\\n'); process.exit(1)")
     expect(await ensureElectron({ pkgDir: d })).toEqual({ error: expect.stringContaining('boom: no network') })
