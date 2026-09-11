@@ -42,7 +42,7 @@
 'use strict'
 
 const { spawn, spawnSync } = require('node:child_process')
-const { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } = require('node:fs')
+const { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require('node:fs')
 const { dirname, join } = require('node:path')
 
 /**
@@ -173,13 +173,17 @@ function lockHolderAlive(lockDir) {
 
 /**
  * Takes the install lock. A lock whose holder is dead — its download died
- * with it — is removed and taken over. False when a live process holds it.
+ * with it — is taken over: by renaming it away, which is atomic, so of
+ * several waiters that saw the same dead holder only one gets to install,
+ * and the rest find the lock the winner made and wait. (Check-then-remove
+ * let a second waiter remove the lock the first had just re-created.) False
+ * when a live process holds it.
  *
  * @param {string} pkgDir
  */
 function acquireLock(pkgDir) {
   const lockDir = join(pkgDir, LOCK_DIR)
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       mkdirSync(lockDir)
       writeFileSync(join(lockDir, 'pid'), String(process.pid))
@@ -187,10 +191,29 @@ function acquireLock(pkgDir) {
     } catch (e) {
       if (!e || e.code !== 'EEXIST') throw e
       if (lockHolderAlive(lockDir)) return false
-      rmSync(lockDir, { recursive: true, force: true })
+      const stale = `${lockDir}.stale-${process.pid}-${Date.now()}`
+      try {
+        renameSync(lockDir, stale)
+      } catch {
+        // Another waiter renamed it first; its mkdir is next. Try once more.
+        continue
+      }
+      rmSync(stale, { recursive: true, force: true })
     }
   }
   return false
+}
+
+/**
+ * Hands the lock to the installer: the starter may die (a session restart)
+ * while the detached installer keeps going, and a lock naming the dead
+ * starter would be taken over — a second download into the same dist/.
+ *
+ * @param {string} pkgDir
+ * @param {number | undefined} pid
+ */
+function lockFor(pkgDir, pid) {
+  if (pid) writeFileSync(join(pkgDir, LOCK_DIR, 'pid'), String(pid))
 }
 
 /** @param {string} pkgDir */
@@ -256,6 +279,7 @@ function ensureElectron({
       exited = null
       try {
         const child = startInstaller(dir)
+        lockFor(dir, child.pid)
         child.on('error', err => (exited = { code: null, error: err.message }))
         child.on('exit', code => (exited = exited ?? { code }))
       } catch (e) {

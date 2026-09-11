@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -188,6 +188,49 @@ describe('ensureElectron, shared between processes', () => {
     await new Promise(r => setTimeout(r, 1_200))
     expect(existsSync(join(d, 'path.txt'))).toBe(true)
     expect(readFileSync(join(d, 'obsrv-install.log'), 'utf8')).toContain('progress 50%')
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('ensureElectron, after the starter is gone', () => {
+  const helper = join(__dirname, '../../bin/electronPath.js')
+  const startAndExit = (d: string): void => {
+    execFileSync(process.execPath, ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)} }); setTimeout(() => process.exit(0), 50)`])
+  }
+
+  it('a caller that arrives after the starter exited waits for the running installer instead of starting another', async () => {
+    // Server A takes the lock and starts the detached installer; the session
+    // restarts, A dies, the installer keeps going. Server B must see a live
+    // lock — the installer's — not a dead starter's, or it starts a second
+    // download into the same dist/ (obsrv-8d, reading d446375).
+    const d = stub(countingInstaller(800))
+    startAndExit(d)
+    expect(existsSync(join(d, 'path.txt'))).toBe(false)
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('two processes that find the same dead lock run the installer once between them', async () => {
+    // Takeover is by rename, which is atomic, so of several waiters that saw
+    // the same dead holder only one gets to install; check-then-remove let
+    // the second remove the lock the first had just re-created.
+    const d = stub(countingInstaller(300))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    const one = (): Promise<string> =>
+      new Promise((res, rej) =>
+        execFile(
+          process.execPath,
+          ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)}, pollMs: 25 }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0) })`],
+          (err, stdout) => (err ? rej(err) : res(stdout)),
+        ),
+      )
+    const [a, b] = await Promise.all([one(), one()])
+    expect(JSON.parse(a)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(JSON.parse(b)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing'))).toBe(false)
     rmSync(d, { recursive: true, force: true })
   })
 })
