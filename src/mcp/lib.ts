@@ -393,6 +393,22 @@ export function queueNote(queuedMs: number, limit: number): string | null {
   )
 }
 
+/**
+ * The sentence for a call that waited for the server's Electron download —
+ * the first headless call after an install (bin/electronPath.js). Null under
+ * a second, like the queue's.
+ */
+export function electronNote(waitedMs: number, version: string): string | null {
+  if (waitedMs < QUEUE_NOTE_MS) return null
+  return (
+    `this call waited ${(waitedMs / 1000).toFixed(1)} s for Electron ${version} to download: ` +
+    `the first headless call after an install does that once, and later calls do not`
+  )
+}
+
+/** The line `bin/electronPath.js` prints before a download, with the version it names. */
+export const DOWNLOAD_LINE_RE = /^obsrv: downloading Electron (\S+) /m
+
 /** Whether a PNG of this size goes into the response as an inline image block. */
 export function shouldInlineImage(byteLength: number): boolean {
   return byteLength <= MAX_INLINE_IMAGE_BYTES
@@ -461,6 +477,17 @@ export function chromiumChatter(stderr: string): { lines: number; last: string |
  * (not what), and what the budget does and does not bound.
  */
 export function killedMessage(command: string, killAfterMs: number, stderr: string): string {
+  // A CLI killed while fetching Electron was not stuck on a page: the first
+  // run after an install downloads ~120 MB, and the download dies with it.
+  const downloading = DOWNLOAD_LINE_RE.exec(stderr)
+  if (downloading !== null) {
+    return (
+      `obsrv ${command} did not exit within ${killAfterMs} ms and was terminated while downloading Electron ${downloading[1]}, ` +
+      `the first run after an install; the download does not survive the kill. The server fetches a missing Electron ` +
+      `at startup and a call that arrives meanwhile waits for it, so retry; or run \`npx getobsrv --help\` once in a ` +
+      `terminal to fetch it with progress.`
+    )
+  }
   const own = stripChromiumChatter(stderr)
     .split('\n')
     .filter(l => l.trim().length > 0)

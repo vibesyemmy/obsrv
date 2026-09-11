@@ -23,6 +23,7 @@ import {
   concurrencyLimit,
   createGate,
   queueNote,
+  electronNote,
   UsageError,
   buildAuditArgs,
   buildLintArgs,
@@ -80,7 +81,44 @@ interface CliRun {
   killed: boolean
   /** How long the run waited for a render slot before it was spawned. */
   queuedMs: number
+  /** How long the run waited for the server's Electron download before that. */
+  electronWaitMs: number
 }
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const electronHelper = require(join(REPO_ROOT, 'bin', 'electronPath.js')) as {
+  electronStatus: () => { present: true; path: string } | { present: false; pkgDir: string; version: string } | { present: false; error: string }
+  ensureElectron: (options: { pkgDir: string; onData?: (chunk: string) => void }) => Promise<{ path: string; downloadedMs: number } | { error: string }>
+  downloadLine: (version: string) => string
+}
+
+/**
+ * A fresh install has no Electron binary — Electron 43 has no postinstall,
+ * its `index.js` downloads on first use — so the first headless call used to
+ * fetch ~120 MB inside the CLI, and on a slow link the kill budget cut it,
+ * the orphaned installer died without extracting, and every later call
+ * started over (measured 2026-09-11, 240 KB/s: eight minutes against a 63 s
+ * budget). So the server starts the download at boot when the binary is
+ * missing, with the installer's progress on stderr, and `runCli` waits for
+ * it before spawning — outside the kill budget, and saying so in the result.
+ * The server itself is up at once, so the client's connection never waits.
+ * A failed download is logged and not fatal: the CLI's own resolution
+ * reports it per call.
+ */
+function warmElectron(): { version: string; ready: Promise<void> } {
+  const status = electronHelper.electronStatus()
+  if (status.present || 'error' in status) return { version: '', ready: Promise.resolve() }
+  process.stderr.write(`obsrv-mcp-server: ${electronHelper.downloadLine(status.version)}\n`)
+  const ready = electronHelper.ensureElectron({ pkgDir: status.pkgDir, onData: chunk => process.stderr.write(chunk) }).then(r => {
+    process.stderr.write(
+      'error' in r
+        ? `obsrv-mcp-server: ${r.error}\n`
+        : `obsrv-mcp-server: Electron ${status.version} ready after ${(r.downloadedMs / 1000).toFixed(1)} s\n`,
+    )
+  })
+  return { version: status.version, ready }
+}
+const electronWarm = warmElectron()
 
 /**
  * At most this many CLI runs at once (see `concurrencyLimit`): each is its
@@ -91,10 +129,14 @@ interface CliRun {
 const RENDER_LIMIT = concurrencyLimit()
 const renderGate = createGate(RENDER_LIMIT)
 
-/** The queue's sentence for a run that waited, for the result's warnings or notes; nothing under a second. */
-const queued = (run: CliRun): string[] => {
-  const note = queueNote(run.queuedMs, RENDER_LIMIT)
-  return note === null ? [] : [note]
+/** The sentences for a run that waited — for Electron, for a render slot — for the result's warnings or notes; nothing under a second. */
+const waits = (run: CliRun): string[] => {
+  const notes: string[] = []
+  const electron = electronNote(run.electronWaitMs, electronWarm.version)
+  if (electron !== null) notes.push(electron)
+  const queue = queueNote(run.queuedMs, RENDER_LIMIT)
+  if (queue !== null) notes.push(queue)
+  return notes
 }
 
 /** Grace between SIGTERM and SIGKILL for a run that ignores the former. */
@@ -103,9 +145,18 @@ const SIGKILL_GRACE_MS = 10_000
 /**
  * Spawns `node bin/obsrv.js <args>`; SIGTERMs a wedged run after
  * `killAfterMs`, and SIGKILLs it if it still has not exited after
- * SIGKILL_GRACE_MS more.
+ * SIGKILL_GRACE_MS more. Waits for the server's Electron download first
+ * (see `warmElectron`), which the kill budget does not count.
  */
-function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
+async function runCli(args: string[], killAfterMs: number): Promise<CliRun> {
+  const asked = Date.now()
+  await electronWarm.ready
+  const electronWaitMs = Date.now() - asked
+  const run = await spawnCli(args, killAfterMs)
+  return { ...run, electronWaitMs }
+}
+
+function spawnCli(args: string[], killAfterMs: number): Promise<Omit<CliRun, 'electronWaitMs'>> {
   return renderGate.run(
     () =>
       new Promise((done, fail) => {
@@ -1055,7 +1106,7 @@ server.registerTool(
       mode: 'headless',
       why,
       inlined: image.inlined,
-      warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note]), ...queued(run)],
+      warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note]), ...waits(run)],
       pngPath,
     }
     return {
@@ -1113,7 +1164,7 @@ server.registerTool(
       content.push({ type: 'text', text: 'reference.png (the 2x render downsampled onto the 1x grid):' })
       content.push((await inlineImage(files.reference, 'reference.png', '')).block)
     }
-    const structured = { ...metrics, ...(queued(run).length > 0 ? { notes: queued(run) } : {}) }
+    const structured = { ...metrics, ...(waits(run).length > 0 ? { notes: waits(run) } : {}) }
     content[0] = { type: 'text', text: JSON.stringify(structured, null, 2) }
     return { content, structuredContent: structured }
   },
@@ -1392,7 +1443,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...waits(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1666,7 +1717,7 @@ server.registerTool(
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
     // `groupsOnly` went to the CLI as --groups-only, which leaves the list out
     // at the source, and with it the sentence about the list's cap.
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...queued(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...waits(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1905,7 +1956,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('report', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv report exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { ...result, ...(queued(run).length > 0 ? { notes: queued(run) } : {}) }
+    const structured = { ...result, ...(waits(run).length > 0 ? { notes: waits(run) } : {}) }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -2268,7 +2319,7 @@ server.registerTool(
     const cliNotes = (Array.isArray((result as { notes?: unknown }).notes) ? (result as { notes: unknown[] }).notes.filter((n): n is string => typeof n === 'string') : []).filter(
       n => !readoutNotes.has(n),
     )
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...cliNotes, ...queued(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...cliNotes, ...waits(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )

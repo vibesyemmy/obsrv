@@ -16,8 +16,11 @@ where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
 ## Commands
 
-Prerequisite: none when using `npx -y getobsrv` (npm downloads everything,
-including Electron, on first run). In a local Obsrv checkout, run
+Prerequisite: none when using `npx -y getobsrv`. npm installs everything but
+Electron's ~120 MB binary, which is fetched on first use: the MCP server
+starts that download when it boots and a call that arrives meanwhile waits
+for it and says so in its notes (once per install; minutes on a slow link);
+a CLI run prints one line to stderr while it downloads. In a local Obsrv checkout, run
 `npm install && npm run build` there first. As a Claude Code plugin the
 repo installs the skill and the MCP server in one step:
 `claude plugin marketplace add vibesyemmy/obsrv` then
