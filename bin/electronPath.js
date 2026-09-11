@@ -13,14 +13,27 @@
 //
 // So: work out the path ourselves, which cannot print anything, and only when
 // the binary is genuinely absent run the package's own installer in a child
-// whose output we redirect to stderr — behind one line (`downloadLine`) that
-// says what is happening, since the download is ~120 MB and on a slow link
-// takes minutes: the MCP server killed a first call mid-download and the
+// whose output never touches our stdout — behind one line (`downloadLine`)
+// that says what is happening, since the download is ~120 MB and on a slow
+// link takes minutes: the MCP server killed a first call mid-download and the
 // orphaned installer died without extracting, so every later call started
 // over (measured 2026-09-11). The server now fetches a missing Electron at
 // startup (`ensureElectron`, asynchronous) and a call that arrives meanwhile
 // waits for it; the CLI's own synchronous path (`resolveElectron`) remains
 // for a CLI run outside the server.
+//
+// Two things about that download, both measured or read from the installer:
+//
+// - Every Claude session's MCP server resolves the same npx cache folder, and
+//   after a plugin update several of them start at once. The installer checks
+//   `isInstalled()` once and then extracts into `dist/` regardless, so two of
+//   them running together would interleave. An atomic `mkdir` lock
+//   (`.obsrv-installing/`, holding the owner's pid) lets one run it; the rest
+//   wait for `path.txt`. A lock whose holder is dead is taken over.
+// - The orphan that downloaded 123 MB and died had the dead server's pipe as
+//   its stdio. The installer is started detached, its output in
+//   `obsrv-install.log` beside it, so it outlives whoever started it; the
+//   starter watches `path.txt`, not the child.
 //
 // The installer is run directly (`<pkg>/install.js`, what the package's own
 // `index.js` does) rather than through `require('electron')` in a `-e`
@@ -29,7 +42,7 @@
 'use strict'
 
 const { spawn, spawnSync } = require('node:child_process')
-const { existsSync, readFileSync } = require('node:fs')
+const { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync } = require('node:fs')
 const { dirname, join } = require('node:path')
 
 /**
@@ -124,44 +137,279 @@ const lastLine = text => {
   return error ?? lines.at(-1) ?? ''
 }
 
+// --- the install lock ---------------------------------------------------------
+
+/** The lock directory inside the package: `mkdir` is atomic, so one process wins. */
+const LOCK_DIR = '.obsrv-installing'
+/** Where a detached installer writes everything it prints. */
+const LOG_FILE = 'obsrv-install.log'
+/** A lock without a readable pid yet is trusted for this long: its owner is between mkdir and the write. */
+const LOCK_YOUNG_MS = 5_000
+/** How long a waiter gives a download before it gives up. */
+const DEFAULT_INSTALL_TIMEOUT_MS = 30 * 60_000
+
+/** @param {string} lockDir */
+function lockHolderAlive(lockDir) {
+  let pid = 0
+  try {
+    pid = Number(readFileSync(join(lockDir, 'pid'), 'utf8').trim())
+  } catch {
+    pid = 0
+  }
+  if (!Number.isInteger(pid) || pid <= 0) {
+    try {
+      return Date.now() - statSync(lockDir).mtimeMs < LOCK_YOUNG_MS
+    } catch {
+      return false
+    }
+  }
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return e && e.code === 'EPERM'
+  }
+}
+
+/** The mutex around taking over a dead lock, beside it. */
+const TAKEOVER_DIR = `${LOCK_DIR}.takeover`
+/** A takeover mutex older than this belonged to a process that died inside the takeover. */
+const TAKEOVER_STALE_MS = 10_000
+
 /**
- * The binary, fetched first when it is missing: runs the package's own
- * installer in a child, hands everything it prints to `onData` (progress,
- * mostly), and answers once the binary is in place. Resolves at once, with
- * `downloadedMs: 0`, when nothing was missing.
+ * Takes the install lock. A lock whose holder is dead — its download died
+ * with it — is taken over. Taking over is itself guarded: check-then-remove
+ * let two waiters that saw the same dead pid both own the lock, and a
+ * rename acts on a path rather than on the directory that was checked, so
+ * one waiter could move the fresh lock another had just made. An atomic
+ * `mkdir` beside the lock admits one taker, who re-checks that the holder is
+ * still dead before removing and remaking the lock; the rest wait, and find
+ * the lock the winner made. False when a live process holds it.
  *
- * @param {{ pkgDir?: string | null, override?: string, onData?: (chunk: string) => void }} [options]
+ * @param {string} pkgDir
+ */
+function acquireLock(pkgDir) {
+  const lockDir = join(pkgDir, LOCK_DIR)
+  const takeover = join(pkgDir, TAKEOVER_DIR)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      mkdirSync(lockDir)
+      writeFileSync(join(lockDir, 'pid'), String(process.pid))
+      return true
+    } catch (e) {
+      if (!e || e.code !== 'EEXIST') throw e
+      if (lockHolderAlive(lockDir)) return false
+      try {
+        mkdirSync(takeover)
+      } catch (e2) {
+        if (!e2 || e2.code !== 'EEXIST') throw e2
+        // Another process is taking over and will hold the lock next —
+        // unless it died in that window, which its mutex's age says.
+        let old = false
+        try {
+          old = Date.now() - statSync(takeover).mtimeMs > TAKEOVER_STALE_MS
+        } catch {
+          old = true
+        }
+        if (!old) return false
+        rmSync(takeover, { recursive: true, force: true })
+        continue
+      }
+      try {
+        if (lockHolderAlive(lockDir)) return false
+        rmSync(lockDir, { recursive: true, force: true })
+        // Nothing else removes a lock, so the only thing that can beat this
+        // mkdir is a fresh lock by a process that never saw the dead one —
+        // a live holder, and the next attempt waits on it.
+      } finally {
+        rmSync(takeover, { recursive: true, force: true })
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Hands the lock to the installer: the starter may die (a session restart)
+ * while the detached installer keeps going, and a lock naming the dead
+ * starter would be taken over — a second download into the same dist/.
+ *
+ * @param {string} pkgDir
+ * @param {number | undefined} pid
+ */
+function lockFor(pkgDir, pid) {
+  if (pid) writeFileSync(join(pkgDir, LOCK_DIR, 'pid'), String(pid))
+}
+
+/**
+ * Releases the lock — only if it is still the one this process wrote. After
+ * an installer dies, a waiter may already have taken over and hold a fresh
+ * lock naming its own installer; an unconditional remove took that one
+ * away, and the next caller found no lock and started a third download
+ * beside the second. The check and the remove sit under the takeover mutex
+ * so they cannot interleave with a takeover; when the mutex is busy the
+ * release is skipped, since a lock naming a dead installer is taken over by
+ * whoever comes next anyway.
+ *
+ * @param {string} pkgDir
+ * @param {number | string | null} mine the pid this process last wrote into the lock
+ */
+function releaseLock(pkgDir, mine) {
+  const lockDir = join(pkgDir, LOCK_DIR)
+  const takeover = join(pkgDir, TAKEOVER_DIR)
+  try {
+    mkdirSync(takeover)
+  } catch {
+    return
+  }
+  try {
+    let pid = ''
+    try {
+      pid = readFileSync(join(lockDir, 'pid'), 'utf8').trim()
+    } catch {
+      return
+    }
+    if (pid === String(mine)) rmSync(lockDir, { recursive: true, force: true })
+  } finally {
+    rmSync(takeover, { recursive: true, force: true })
+  }
+}
+
+/**
+ * Starts the package's installer detached, its output in the log file, so it
+ * outlives whoever started it. The child is unref'd: the starter's exit does
+ * not wait for it, and its exit does not stop it.
+ *
+ * @param {string} pkgDir
+ */
+function startInstaller(pkgDir) {
+  // Appended, never truncated: a second attempt after a failed one must not
+  // erase the line that says why the first failed.
+  const out = openSync(join(pkgDir, LOG_FILE), 'a')
+  try {
+    const child = spawn(process.execPath, [join(pkgDir, 'install.js')], { cwd: pkgDir, detached: true, stdio: ['ignore', out, out] })
+    child.unref()
+    return child
+  } finally {
+    closeSync(out)
+  }
+}
+
+/**
+ * The binary, fetched first when it is missing: takes the lock and starts the
+ * package's own installer (detached, logging beside it), or waits for the
+ * process that holds the lock; hands everything the installer prints to
+ * `onData` as it appears in the log; answers once `path.txt` names a binary
+ * that exists. Resolves at once, with `downloadedMs: 0`, when nothing was
+ * missing.
+ *
+ * @param {{ pkgDir?: string | null, override?: string, onData?: (chunk: string) => void, pollMs?: number, timeoutMs?: number }} [options]
  * @returns {Promise<{ path: string, downloadedMs: number } | { error: string }>}
  */
-function ensureElectron({ pkgDir = electronPackageDir(), override = process.env.ELECTRON_OVERRIDE_DIST_PATH, onData } = {}) {
+function ensureElectron({
+  pkgDir = electronPackageDir(),
+  override = process.env.ELECTRON_OVERRIDE_DIST_PATH,
+  onData,
+  pollMs = 500,
+  timeoutMs = DEFAULT_INSTALL_TIMEOUT_MS,
+} = {}) {
   const before = electronStatus(pkgDir, override)
   if (before.present) return Promise.resolve({ path: before.path, downloadedMs: 0 })
   if (before.error) return Promise.resolve({ error: before.error })
+  const dir = before.pkgDir
+  const logFile = join(dir, LOG_FILE)
   return new Promise(done => {
     const started = Date.now()
-    let printed = ''
-    const child = spawn(process.execPath, [join(before.pkgDir, 'install.js')], { cwd: before.pkgDir, stdio: ['ignore', 'pipe', 'pipe'] })
-    const take = chunk => {
-      const s = String(chunk)
-      printed += s
-      if (onData) onData(s)
+    let owner = false
+    /** Set once our own installer has exited: { code } or { error }. */
+    let exited = null
+    /** Times this call became the owner after another process's attempt ended without a binary. */
+    let takeovers = 0
+    const fail = message => ({ error: `electron could not be downloaded${message ? `: ${message}` : ''}` })
+    /** The pid this call last wrote into the lock: its own, then its installer's. */
+    let lockPid = null
+    const start = () => {
+      try {
+        owner = acquireLock(dir)
+      } catch (e) {
+        return fail(e.message)
+      }
+      if (!owner) return null
+      lockPid = process.pid
+      exited = null
+      try {
+        const child = startInstaller(dir)
+        lockFor(dir, child.pid)
+        if (child.pid) lockPid = child.pid
+        child.on('error', err => (exited = { code: null, error: err.message }))
+        child.on('exit', code => (exited = exited ?? { code }))
+      } catch (e) {
+        releaseLock(dir, lockPid)
+        owner = false
+        return fail(e.message)
+      }
+      return null
     }
-    child.stdout.on('data', take)
-    child.stderr.on('data', take)
-    child.on('error', err => done({ error: `electron could not be downloaded: ${err.message}` }))
-    child.on('close', code => {
-      const after = electronStatus(before.pkgDir, override)
-      if (after.present) return done({ path: after.path, downloadedMs: Date.now() - started })
-      const why = lastLine(printed)
-      done({ error: `electron could not be downloaded (installer exit ${code ?? 'unknown'})${why ? `: ${why}` : ''}` })
-    })
+    const early = start()
+    if (early !== null) return done(early)
+
+    let offset = 0
+    const logText = () => {
+      try {
+        return readFileSync(logFile, 'utf8')
+      } catch {
+        return ''
+      }
+    }
+    const tail = () => {
+      if (!onData) return
+      const text = logText()
+      if (text.length > offset) {
+        onData(text.slice(offset))
+        offset = text.length
+      }
+    }
+    const finish = result => {
+      clearInterval(timer)
+      tail()
+      if (owner) releaseLock(dir, lockPid)
+      done(result)
+    }
+    const check = () => {
+      tail()
+      const now = electronStatus(dir, override)
+      if (now.present) return finish({ path: now.path, downloadedMs: Date.now() - started })
+      if (owner && exited !== null) {
+        const why = exited.error ?? lastLine(logText())
+        return finish(fail(`installer exit ${exited.code ?? 'unknown'}${why ? `: ${why}` : ''}`))
+      }
+      if (!owner && (!existsSync(join(dir, LOCK_DIR)) || !lockHolderAlive(join(dir, LOCK_DIR)))) {
+        // The process we waited on is gone without a binary: its download
+        // failed, or it died. Try to take over — `acquireLock` admits one
+        // taker at a time, and says no while another is at it, in which
+        // case the next poll looks again. Two takeovers of our own that
+        // ended without a binary are an answer.
+        if (takeovers >= 2) return finish(fail(`another process's download ended without a binary — see ${logFile}`))
+        const problem = start()
+        if (problem !== null) return finish(problem)
+        if (owner) takeovers++
+      }
+      if (Date.now() - started > timeoutMs) return finish(fail(`no binary after ${Math.round(timeoutMs / 60_000)} min — see ${logFile}`))
+    }
+    const timer = setInterval(check, pollMs)
   })
+}
+
+/** A synchronous sleep, for the CLI's wait on another process's download. */
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
 /**
  * The Electron binary for the CLI launcher, synchronously: downloading it
  * first if it is missing, behind the line that says so, with every byte the
- * download prints sent to stderr.
+ * download prints sent to stderr. Under the same lock as the server's
+ * download: when another process is fetching it, this waits for that.
  *
  * @returns {{ path: string } | { error: string }}
  */
@@ -169,14 +417,35 @@ function resolveElectron() {
   const status = electronStatus()
   if (status.present) return { path: status.path }
   if (status.error) return { error: status.error }
+  const dir = status.pkgDir
   process.stderr.write(`${downloadLine(status.version)}\n`)
-  const child = spawnSync(process.execPath, [join(status.pkgDir, 'install.js')], { cwd: status.pkgDir, stdio: ['ignore', 'pipe', 'pipe'] })
-  // Anything the installer wrote to stdout was progress, not an answer.
-  if (child.stdout && child.stdout.length > 0) process.stderr.write(child.stdout)
-  if (child.stderr && child.stderr.length > 0) process.stderr.write(child.stderr)
+  let owner = false
+  try {
+    owner = acquireLock(dir)
+  } catch (e) {
+    return { error: `electron could not be downloaded: ${e.message}` }
+  }
+  if (owner) {
+    const child = spawnSync(process.execPath, [join(dir, 'install.js')], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Anything the installer wrote to stdout was progress, not an answer.
+    if (child.stdout && child.stdout.length > 0) process.stderr.write(child.stdout)
+    if (child.stderr && child.stderr.length > 0) process.stderr.write(child.stderr)
+    releaseLock(dir, process.pid)
+    const after = electronStatus()
+    if (after.present) return { path: after.path }
+    return { error: `electron could not be downloaded (installer exit ${child.status ?? 'unknown'}) — see the lines above` }
+  }
+  process.stderr.write(`obsrv: another obsrv process is downloading it; waiting\n`)
+  const deadline = Date.now() + DEFAULT_INSTALL_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    sleepSync(500)
+    const now = electronStatus()
+    if (now.present) return { path: now.path }
+    if (!existsSync(join(dir, LOCK_DIR))) break
+  }
   const after = electronStatus()
   if (after.present) return { path: after.path }
-  return { error: `electron could not be downloaded (installer exit ${child.status ?? 'unknown'}) — see the lines above` }
+  return { error: `electron could not be downloaded: the other process's download ended without a binary — see ${join(dir, LOG_FILE)}` }
 }
 
 module.exports = { electronBinaryPath, electronPackageDir, electronStatus, downloadLine, ensureElectron, resolveElectron }

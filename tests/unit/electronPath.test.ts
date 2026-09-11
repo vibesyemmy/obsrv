@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFile, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -121,6 +122,189 @@ describe('ensureElectron', () => {
   it("names the installer's last line when it fails, so a network error is not a mystery", async () => {
     const d = stub("process.stderr.write('boom: no network\\n'); process.exit(1)")
     expect(await ensureElectron({ pkgDir: d })).toEqual({ error: expect.stringContaining('boom: no network') })
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+/** An installer that records each run and delivers the binary after `delayMs`. */
+const countingInstaller = (delayMs: number): string => `
+  const fs = require('fs'), path = require('path')
+  fs.appendFileSync(path.join(__dirname, 'runs.log'), 'run\\n')
+  setTimeout(() => process.stdout.write('progress 50%\\n'), Math.floor(${delayMs} / 2))
+  setTimeout(() => {
+    fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(__dirname, 'dist', 'electron-bin'), '')
+    fs.writeFileSync(path.join(__dirname, 'path.txt'), 'electron-bin\\n')
+  }, ${delayMs})
+`
+const runs = (d: string): number => (existsSync(join(d, 'runs.log')) ? readFileSync(join(d, 'runs.log'), 'utf8').split('\n').filter(l => l === 'run').length : 0)
+
+describe('ensureElectron, shared between processes', () => {
+  // Every Claude session's MCP server resolves the same npx cache folder, and
+  // after a plugin update three or four of them start here at once. Electron's
+  // installer checks isInstalled() once and then extracts into dist/ regardless,
+  // so two of them running would interleave. One installs; the rest wait.
+  it('two callers at once run the installer once, and both get the binary', async () => {
+    const d = stub(countingInstaller(200))
+    const [a, b] = await Promise.all([ensureElectron({ pkgDir: d, pollMs: 25 }), ensureElectron({ pkgDir: d, pollMs: 25 })])
+    expect(a).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(b).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('a lock held by a live process is waited on, not raced: the binary arrives, the installer never ran here', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), String(process.pid))
+    setTimeout(() => {
+      mkdirSync(join(d, 'dist'), { recursive: true })
+      writeFileSync(join(d, 'dist', 'electron-bin'), '')
+      writeFileSync(join(d, 'path.txt'), 'electron-bin\n')
+    }, 300)
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(0)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it("a lock left by a dead process is taken over, so one crash does not block every later start", async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('the download outlives the process that started it, so a server that dies mid-install does not waste it', async () => {
+    // The orphan measured on 2026-09-11 downloaded 123 MB into a temp dir and
+    // died without extracting: its stdio was the dead server's pipe. Detached,
+    // with a log file for output, the installer finishes on its own.
+    const d = stub(countingInstaller(600))
+    const helper = join(__dirname, '../../bin/electronPath.js')
+    execFileSync(process.execPath, ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)} }); setTimeout(() => process.exit(0), 50)`])
+    expect(existsSync(join(d, 'path.txt'))).toBe(false)
+    await new Promise(r => setTimeout(r, 1_200))
+    expect(existsSync(join(d, 'path.txt'))).toBe(true)
+    expect(readFileSync(join(d, 'obsrv-install.log'), 'utf8')).toContain('progress 50%')
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('ensureElectron, after the starter is gone', () => {
+  const helper = join(__dirname, '../../bin/electronPath.js')
+  const startAndExit = (d: string): void => {
+    execFileSync(process.execPath, ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)} }); setTimeout(() => process.exit(0), 50)`])
+  }
+
+  it('a caller that arrives after the starter exited waits for the running installer instead of starting another', async () => {
+    // Server A takes the lock and starts the detached installer; the session
+    // restarts, A dies, the installer keeps going. Server B must see a live
+    // lock — the installer's — not a dead starter's, or it starts a second
+    // download into the same dist/ (obsrv-8d, reading d446375).
+    const d = stub(countingInstaller(800))
+    startAndExit(d)
+    expect(existsSync(join(d, 'path.txt'))).toBe(false)
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('two processes that find the same dead lock run the installer once between them', async () => {
+    // Takeover is by rename, which is atomic, so of several waiters that saw
+    // the same dead holder only one gets to install; check-then-remove let
+    // the second remove the lock the first had just re-created.
+    const d = stub(countingInstaller(300))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    const one = (): Promise<string> =>
+      new Promise((res, rej) =>
+        execFile(
+          process.execPath,
+          ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)}, pollMs: 25 }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0) })`],
+          (err, stdout) => (err ? rej(err) : res(stdout)),
+        ),
+      )
+    const [a, b] = await Promise.all([one(), one()])
+    expect(JSON.parse(a)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(JSON.parse(b)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('ensureElectron, taking over a dead lock', () => {
+  // Rename acts on a path, not on the directory that was checked: A could
+  // rename the dead lock away, make a fresh one, and have B move that. So
+  // taking over is itself guarded by an atomic mkdir beside the lock.
+  it('waits while another process is taking over, then installs once', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    mkdirSync(join(d, '.obsrv-installing.takeover'))
+    setTimeout(() => rmSync(join(d, '.obsrv-installing.takeover'), { recursive: true, force: true }), 300)
+    const notBefore = new Promise<boolean>(r => setTimeout(() => r(existsSync(join(d, 'runs.log'))), 200))
+    const result = await ensureElectron({ pkgDir: d, pollMs: 25 })
+    expect(await notBefore).toBe(false)
+    expect(result).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(1)
+    expect(existsSync(join(d, '.obsrv-installing.takeover'))).toBe(false)
+    rmSync(d, { recursive: true, force: true })
+  })
+
+  it('a takeover mutex whose owner died is expired by age, so it cannot block every later start', async () => {
+    const d = stub(countingInstaller(50))
+    mkdirSync(join(d, '.obsrv-installing'))
+    writeFileSync(join(d, '.obsrv-installing', 'pid'), '2147483646')
+    mkdirSync(join(d, '.obsrv-installing.takeover'))
+    const old = new Date(Date.now() - 60_000)
+    utimesSync(join(d, '.obsrv-installing.takeover'), old, old)
+    const started = Date.now()
+    expect(await ensureElectron({ pkgDir: d, pollMs: 25 })).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(Date.now() - started).toBeLessThan(1_000)
+    expect(runs(d)).toBe(1)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
+describe('ensureElectron, releasing a lock', () => {
+  it("an owner whose installer failed releases only its own lock, not the one a waiter has since taken over", async () => {
+    // S owns the lock; its installer dies at 100 ms. Waiter W sees the dead
+    // installer, takes over, and starts a second installer. S's poll then
+    // finishes and must not remove W's lock, or a third caller finds none
+    // and starts a third installer beside W's (obsrv-8d, reading 1f6fd23).
+    const d = stub(`
+      const fs = require('fs'), path = require('path')
+      fs.appendFileSync(path.join(__dirname, 'runs.log'), 'run\\n')
+      const n = fs.readFileSync(path.join(__dirname, 'runs.log'), 'utf8').split('\\n').filter(l => l === 'run').length
+      if (n === 1) setTimeout(() => { process.stderr.write('boom: no network\\n'); process.exit(1) }, 100)
+      else setTimeout(() => {
+        fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true })
+        fs.writeFileSync(path.join(__dirname, 'dist', 'electron-bin'), '')
+        fs.writeFileSync(path.join(__dirname, 'path.txt'), 'electron-bin\\n')
+      }, 500)
+    `)
+    const helper = join(__dirname, '../../bin/electronPath.js')
+    const other = (): Promise<string> =>
+      new Promise((res, rej) =>
+        execFile(
+          process.execPath,
+          ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)}, pollMs: 25 }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0) })`],
+          (err, stdout) => (err ? rej(err) : res(stdout)),
+        ),
+      )
+    // The owner polls slowly, so it finishes after the waiter has taken over;
+    // the third caller arrives just after that finish.
+    const owner = ensureElectron({ pkgDir: d, pollMs: 500 })
+    const waiter = other()
+    const late = new Promise<string>(r => setTimeout(() => r(other()), 560))
+    const [s, w, c] = await Promise.all([owner, waiter, late])
+    expect(s).toEqual({ error: expect.stringContaining('boom: no network') })
+    expect(JSON.parse(w)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(JSON.parse(c)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(2)
     rmSync(d, { recursive: true, force: true })
   })
 })
