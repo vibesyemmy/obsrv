@@ -8,7 +8,7 @@ import type { VisionType } from '../shared/vision'
 import type { AgentViewMode } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_ORIENTATION } from '../shared/presets'
-import type { Orientation } from '../shared/types'
+import type { LoadError, Orientation } from '../shared/types'
 import { NativePane } from './nativePane'
 import { attachSyncBus, type SyncBus } from './syncBus'
 import { TargetSource } from './targetSource'
@@ -74,6 +74,13 @@ export class TabSession {
    * `tabTitle` falls back to the host, then the URL.
    */
   url = ''
+  /**
+   * The last failed main-frame load, cleared when the next navigation starts.
+   * Kept here because the agent's `status` has to tell a page that would not
+   * load from one that has not loaded yet — `url` reads back the address that
+   * was asked for either way, and the capture is a blank frame either way.
+   */
+  loadError: LoadError | null = null
   title = ''
 
   /** A preset change is in flight; a capture or scroll must wait for it. */
@@ -119,6 +126,7 @@ export class TabSession {
     // report a navigation or an error while the main window is closing.
     this.native = new NativePane(win, {
       onLoadError: err => {
+        this.loadError = err
         // Named, like every renderer-bound forward: the renderer keeps a load
         // error per tab, and an unnamed one from a background tab would badge
         // the tab in front.

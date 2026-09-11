@@ -637,6 +637,13 @@ const driveOutputShape = {
   throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
   onionSkin: z.number().describe("The onion skin's opacity, 0 = off. Reported as 0 by an app older than the field."),
   loading: z.boolean().describe('Whether the target is loading a document. Reported as false by an app older than the field.'),
+  error: z
+    .object({ code: z.number(), description: z.string(), url: z.string() })
+    .nullable()
+    .optional()
+    .describe(
+      'The last main-frame load that failed, or null. A failed load empties both panes while `url` still reads back the address asked for, so a capture taken now is a blank frame of a page that never arrived — check this before believing one. Cleared when the next navigation starts. Absent from an app older than the field.',
+    ),
   orientation: z
     .string()
     .describe(
