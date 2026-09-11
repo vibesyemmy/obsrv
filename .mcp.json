@@ -4,7 +4,9 @@
       "command": "npx",
       "args": [
         "-y",
-        "getobsrv",
+        "--prefix",
+        "/",
+        "getobsrv@0.51.0",
         "mcp"
       ]
     }
