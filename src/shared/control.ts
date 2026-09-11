@@ -175,6 +175,13 @@ export interface ControlStatus extends AgentUiState {
   /** Whether the target is loading a document. `false` from an app that predates the field. */
   loading: boolean
   /**
+   * The last main-frame load that failed, or null — `null` too from an app
+   * that predates the field. A failed load leaves both panes empty while `url`
+   * still reads back the address that was asked for, so this is the only thing
+   * that separates "would not load" from "has not loaded yet".
+   */
+  error: { code: number; description: string; url: string } | null
+  /**
    * The shape those dimensions actually have. `orientation` above is the
    * rotation *flag* — "the preset as its table stores it" vs "turned a quarter
    * turn" — and for a landscape-natural monitor preset the two diverge: a
@@ -653,6 +660,19 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   // inventing a size would be worse than admitting the gap.
   const loading = raw.loading ?? false
   if (typeof loading !== 'boolean') return null
+  // Absent means "it did not say", which for an older app is indistinguishable
+  // from "nothing failed" — and null is the honest reading of both. A status
+  // that cannot be trusted about a failure is not one to invent a failure from.
+  let error: ControlStatus['error'] = null
+  if (raw.error !== undefined && raw.error !== null) {
+    const e = raw.error
+    if (typeof e !== 'object' || Array.isArray(e)) return null
+    const { code, description, url: failed } = e as Record<string, unknown>
+    if (typeof code !== 'number' || !Number.isFinite(code)) return null
+    if (typeof description !== 'string' || description.length > 400) return null
+    if (typeof failed !== 'string' || failed.length > 2048) return null
+    error = { code, description, url: failed }
+  }
   const cssWidth = raw.cssWidth ?? 0
   if (typeof cssWidth !== 'number' || !Number.isFinite(cssWidth) || cssWidth < 0) return null
   const cssHeight = raw.cssHeight ?? 0
@@ -697,6 +717,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     cssWidth,
     cssHeight,
     loading,
+    error,
     screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),
     tabs,
   }

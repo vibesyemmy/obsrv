@@ -258,6 +258,43 @@ record the assertion that failed: whether the ratio fell outside 0.3–0.7
 (the renders disagreeing) or one of the two PNGs was missing (the temp dir
 or the write losing a race) points at quite different causes.
 
+## `cli.spec`'s temp-dir leak check reads state this machine shares
+
+`snap leaves no obsrv-cli-* user-data dirs behind in os.tmpdir` snapshots the
+`obsrv-cli-*` directories in `os.tmpdir()`, runs one snap, and fails if any
+*new* one appeared. That is not a fact about this repository. Every obsrv CLI
+invocation on the machine writes such a directory, so the assertion is about
+machine-global state, and anything else running the CLI during its window
+reads as a leak here.
+
+Seen 2026-09-11: it failed in two consecutive full runs (8.4 minutes each) and
+passed in isolation, on a branch whose diff is nowhere near the CLI. A second
+Claude session was working the same repository from its own git worktree.
+Worktrees separate the checkouts; they do not separate `os.tmpdir()`.
+
+**Two writers, and the second is the one that will waste your afternoon.** The
+obvious one is that session running its own Playwright e2e. The other is its
+MCP server: a headless `obsrv_*` tool call spawns a CLI process, and so writes
+one of these directories — meaning an agent merely *using* the tools trips this
+without ever running a test. Whoever meets it next goes looking for a leak in
+their own change and finds nothing, because the directory was never theirs.
+
+How to tell them apart, before suspecting your branch:
+
+- Run the single test on its own. It passes: the window is then milliseconds
+  rather than minutes.
+- Watch `os.tmpdir()` for `obsrv-cli-*` while running nothing yourself. New
+  ones appearing means another writer; none appearing does not clear it,
+  because the other writer may work in bursts.
+- Ask. Two agents on one machine can compare timelines, which is what settled
+  it here.
+
+Not fixed, deliberately. The test is the only thing guarding a real leak that
+shipped once, so weakening the assertion to make a branch green is the wrong
+trade — and doing it *because your own branch is red* is the move that turns a
+ledger into a graveyard. Making it robust means scoping the CLI's user-data
+directory per run, which is a change to the product rather than to the test.
+
 ## `cli.spec`'s "solid red": a download banner on the machine channel
 
 The one that failed on CI and passed on re-run, repeatedly, and never once

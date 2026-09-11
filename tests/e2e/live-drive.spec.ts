@@ -800,6 +800,30 @@ test('a capture of a hidden window shows the page now, not the frame before it w
   }
 })
 
+test('status names the load that failed, so a blank capture is not mistaken for a page', async () => {
+  // `url` reads back the address that was asked for whether the page arrived
+  // or not, and the capture is a blank frame either way. Without this an agent
+  // driving to a typo gets a blank PNG and a status that looks healthy.
+  const good = await call('status', {})
+  expect(good.status).toBe(200)
+  expect(good.body.error ?? null, 'a page that loaded carries no error').toBeNull()
+
+  const bad = await call('navigate', { url: 'https://obsrv-no-such-host.invalid' })
+  expect(bad.status).toBe(200)
+  await expect
+    .poll(async () => ((await call('status', {})).body as { error?: { description?: string } | null }).error?.description ?? null, {
+      timeout: 15_000,
+    })
+    .toBe('ERR_NAME_NOT_RESOLVED')
+  const failed = (await call('status', {})).body as { error: { code: number; url: string } }
+  expect(failed.error.code).toBeLessThan(0)
+  expect(failed.error.url).toContain('obsrv-no-such-host.invalid')
+
+  // And a load that commits puts the status back.
+  expect((await call('navigate', { url: FIXTURE })).status).toBe(200)
+  await expect.poll(async () => ((await call('status', {})).body as { error: unknown }).error).toBeNull()
+})
+
 test('a preset change clears a showing highlight (its long timer never fires late)', async () => {
   const r = await call('highlight', { x: 10, y: 10, width: 100, height: 60, durationMs: 8000 })
   expect(r.status).toBe(200)

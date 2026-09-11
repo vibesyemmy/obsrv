@@ -12,6 +12,7 @@ import { TargetFooter } from './components/PaneFooter'
 import { PanelControls, type PanelSection } from './components/PanelControls'
 import { SettingsModal } from './components/SettingsModal'
 import { EmptyState } from './components/EmptyState'
+import { LoadErrorState } from './components/LoadErrorState'
 import { TargetCanvas } from './components/TargetCanvas'
 import { Toast } from './components/Toast'
 import { Toolbar, type Drawer } from './components/Toolbar'
@@ -140,6 +141,11 @@ export function App() {
       }),
       window.obsrv.onTitleChanged(({ tabId, title }) => setTabTitle(tabId, title)),
       window.obsrv.onLoadError(({ tabId, error }) => setTabError(tabId, error)),
+      // Clears on the *start* of a navigation, matching main: a failed load
+      // commits nothing, so retrying the same address reports no URL change
+      // and the commit-time clear never fires. `did-start-navigation` precedes
+      // `did-fail-load`, so a retry that fails again still ends up badged.
+      window.obsrv.onTargetNavigating(({ tabId }) => setTabError(tabId, null)),
       window.obsrv.onTargetLoading(({ tabId, loading }) => setTabLoading(tabId, loading)),
       window.obsrv.onTabsChanged(syncTabs),
       window.obsrv.onUpdateStatus(setUpdate),
@@ -453,6 +459,10 @@ export function App() {
               `nativeVisible` in main): the view is an OS-composited layer, and
               while it is up nothing the renderer paints can appear over it. */}
           {blank && <EmptyState />}
+          {/* The same place and the same reason, and mutually exclusive with
+              it: a tab wearing a load error has an address, so it is not
+              blank. Main stands the native view down for both. */}
+          {!blank && mode === 'url' && <LoadErrorState />}
         </div>
         {panelMounted && (
           <aside className="drawer" inert={!panelOpen} aria-hidden={!panelOpen}>

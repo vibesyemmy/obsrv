@@ -332,6 +332,9 @@ describe('parseControlStatus', () => {
     throttle: 'none',
     onionSkin: 0,
     loading: false,
+    // Null unless the last main-frame load failed; an app that predates the
+    // field reads the same way, which is the honest reading of both.
+    error: null,
     screenShape: 'landscape',
     cssWidth: 1366,
     cssHeight: 768,
@@ -599,6 +602,21 @@ describe('parseControlStatus loading', () => {
   it('an app older than the field reports not loading; a bad value is refused', () => {
     expect(parseControlStatus(base)?.loading).toBe(false)
     expect(parseControlStatus({ ...base, loading: true })?.loading).toBe(true)
+  })
+
+  it('reads a load error when present, refuses a malformed one, and defaults it to null', () => {
+    const failed = { code: -105, description: 'ERR_NAME_NOT_RESOLVED', url: 'https://nope.invalid/' }
+    expect(parseControlStatus({ ...base, error: failed })?.error).toEqual(failed)
+    // An app that predates the field says nothing, which reads as no failure —
+    // the only honest answer, and not one to invent a failure from.
+    expect(parseControlStatus({ ...base })?.error).toBeNull()
+    expect(parseControlStatus({ ...base, error: null })?.error).toBeNull()
+    // Malformed is refused outright rather than half-read: a status that is
+    // wrong about a failure is worse than one that admits it cannot be parsed.
+    expect(parseControlStatus({ ...base, error: { code: 'nope', description: 'x', url: 'y' } })).toBeNull()
+    expect(parseControlStatus({ ...base, error: { code: -105, url: 'y' } })).toBeNull()
+    expect(parseControlStatus({ ...base, error: 'ERR' })).toBeNull()
+    expect(parseControlStatus({ ...base, error: { code: -105, description: 'x'.repeat(401), url: 'y' } })).toBeNull()
     expect(parseControlStatus({ ...base, loading: 'yes' })).toBeNull()
   })
 })
