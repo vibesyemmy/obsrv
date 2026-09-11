@@ -223,6 +223,10 @@ happened on the matrix snaps.
   lint and inspect then answer within the budget with nothing and a warning
   saying so, rather than hanging until the server kills them. A page that
   navigates itself after load is measured where it arrived, and says so.
+  A load that never finishes (a consent wall's beacon) is measured as it
+  stands, with a first warning saying so; an empty page that is an iframe
+  (a bot wall) is named as one; a page that hides its overflow with nothing
+  to scroll is named by the walk rather than reading as one screen.
 - The report's full-page capture takes a tall page in bands of one
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size). Chrome stuck to the viewport would be painted into every band,
