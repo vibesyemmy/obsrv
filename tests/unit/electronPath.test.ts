@@ -269,6 +269,46 @@ describe('ensureElectron, taking over a dead lock', () => {
   })
 })
 
+describe('ensureElectron, releasing a lock', () => {
+  it("an owner whose installer failed releases only its own lock, not the one a waiter has since taken over", async () => {
+    // S owns the lock; its installer dies at 100 ms. Waiter W sees the dead
+    // installer, takes over, and starts a second installer. S's poll then
+    // finishes and must not remove W's lock, or a third caller finds none
+    // and starts a third installer beside W's (obsrv-8d, reading 1f6fd23).
+    const d = stub(`
+      const fs = require('fs'), path = require('path')
+      fs.appendFileSync(path.join(__dirname, 'runs.log'), 'run\\n')
+      const n = fs.readFileSync(path.join(__dirname, 'runs.log'), 'utf8').split('\\n').filter(l => l === 'run').length
+      if (n === 1) setTimeout(() => { process.stderr.write('boom: no network\\n'); process.exit(1) }, 100)
+      else setTimeout(() => {
+        fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true })
+        fs.writeFileSync(path.join(__dirname, 'dist', 'electron-bin'), '')
+        fs.writeFileSync(path.join(__dirname, 'path.txt'), 'electron-bin\\n')
+      }, 500)
+    `)
+    const helper = join(__dirname, '../../bin/electronPath.js')
+    const other = (): Promise<string> =>
+      new Promise((res, rej) =>
+        execFile(
+          process.execPath,
+          ['-e', `require(${JSON.stringify(helper)}).ensureElectron({ pkgDir: ${JSON.stringify(d)}, pollMs: 25 }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0) })`],
+          (err, stdout) => (err ? rej(err) : res(stdout)),
+        ),
+      )
+    // The owner polls slowly, so it finishes after the waiter has taken over;
+    // the third caller arrives just after that finish.
+    const owner = ensureElectron({ pkgDir: d, pollMs: 500 })
+    const waiter = other()
+    const late = new Promise<string>(r => setTimeout(() => r(other()), 560))
+    const [s, w, c] = await Promise.all([owner, waiter, late])
+    expect(s).toEqual({ error: expect.stringContaining('boom: no network') })
+    expect(JSON.parse(w)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(JSON.parse(c)).toMatchObject({ path: join(d, 'dist', 'electron-bin') })
+    expect(runs(d)).toBe(2)
+    rmSync(d, { recursive: true, force: true })
+  })
+})
+
 describe('downloadLine', () => {
   it('is one line a human and the server can both recognise', () => {
     expect(downloadLine('43.7.0')).toMatch(/^obsrv: downloading Electron 43\.7\.0 \(first run after an install/)

@@ -241,9 +241,38 @@ function lockFor(pkgDir, pid) {
   if (pid) writeFileSync(join(pkgDir, LOCK_DIR, 'pid'), String(pid))
 }
 
-/** @param {string} pkgDir */
-function releaseLock(pkgDir) {
-  rmSync(join(pkgDir, LOCK_DIR), { recursive: true, force: true })
+/**
+ * Releases the lock — only if it is still the one this process wrote. After
+ * an installer dies, a waiter may already have taken over and hold a fresh
+ * lock naming its own installer; an unconditional remove took that one
+ * away, and the next caller found no lock and started a third download
+ * beside the second. The check and the remove sit under the takeover mutex
+ * so they cannot interleave with a takeover; when the mutex is busy the
+ * release is skipped, since a lock naming a dead installer is taken over by
+ * whoever comes next anyway.
+ *
+ * @param {string} pkgDir
+ * @param {number | string | null} mine the pid this process last wrote into the lock
+ */
+function releaseLock(pkgDir, mine) {
+  const lockDir = join(pkgDir, LOCK_DIR)
+  const takeover = join(pkgDir, TAKEOVER_DIR)
+  try {
+    mkdirSync(takeover)
+  } catch {
+    return
+  }
+  try {
+    let pid = ''
+    try {
+      pid = readFileSync(join(lockDir, 'pid'), 'utf8').trim()
+    } catch {
+      return
+    }
+    if (pid === String(mine)) rmSync(lockDir, { recursive: true, force: true })
+  } finally {
+    rmSync(takeover, { recursive: true, force: true })
+  }
 }
 
 /**
@@ -254,7 +283,9 @@ function releaseLock(pkgDir) {
  * @param {string} pkgDir
  */
 function startInstaller(pkgDir) {
-  const out = openSync(join(pkgDir, LOG_FILE), 'w')
+  // Appended, never truncated: a second attempt after a failed one must not
+  // erase the line that says why the first failed.
+  const out = openSync(join(pkgDir, LOG_FILE), 'a')
   try {
     const child = spawn(process.execPath, [join(pkgDir, 'install.js')], { cwd: pkgDir, detached: true, stdio: ['ignore', out, out] })
     child.unref()
@@ -295,6 +326,8 @@ function ensureElectron({
     /** Times this call became the owner after another process's attempt ended without a binary. */
     let takeovers = 0
     const fail = message => ({ error: `electron could not be downloaded${message ? `: ${message}` : ''}` })
+    /** The pid this call last wrote into the lock: its own, then its installer's. */
+    let lockPid = null
     const start = () => {
       try {
         owner = acquireLock(dir)
@@ -302,14 +335,16 @@ function ensureElectron({
         return fail(e.message)
       }
       if (!owner) return null
+      lockPid = process.pid
       exited = null
       try {
         const child = startInstaller(dir)
         lockFor(dir, child.pid)
+        if (child.pid) lockPid = child.pid
         child.on('error', err => (exited = { code: null, error: err.message }))
         child.on('exit', code => (exited = exited ?? { code }))
       } catch (e) {
-        releaseLock(dir)
+        releaseLock(dir, lockPid)
         owner = false
         return fail(e.message)
       }
@@ -337,7 +372,7 @@ function ensureElectron({
     const finish = result => {
       clearInterval(timer)
       tail()
-      if (owner) releaseLock(dir)
+      if (owner) releaseLock(dir, lockPid)
       done(result)
     }
     const check = () => {
@@ -395,7 +430,7 @@ function resolveElectron() {
     // Anything the installer wrote to stdout was progress, not an answer.
     if (child.stdout && child.stdout.length > 0) process.stderr.write(child.stdout)
     if (child.stderr && child.stderr.length > 0) process.stderr.write(child.stderr)
-    releaseLock(dir)
+    releaseLock(dir, process.pid)
     const after = electronStatus()
     if (after.present) return { path: after.path }
     return { error: `electron could not be downloaded (installer exit ${child.status ?? 'unknown'}) — see the lines above` }
