@@ -127,8 +127,25 @@ describe('CI gates the release on the plugin tag', () => {
 
   it('holds the DMG release until the check passes', () => {
     // Otherwise a cut that forgot `npm run plugin:branch` publishes a release
-    // whose marketplace entry points at a ref nobody can clone.
-    expect(ci).toContain('needs: [test, plugin-tag]')
+    // whose marketplace entry points at a ref nobody can clone. The suite
+    // itself left the tag's critical path in 0.56.0 — it had already run on
+    // main for the same commit — so what the release waits on is the plugin
+    // tag and the proof that it did.
+    expect(ci).toContain('needs: [tested-on-main, plugin-tag]')
+  })
+
+  it('will not publish DMGs from a commit main never tested', () => {
+    const job = ci.slice(ci.indexOf('tested-on-main:'))
+    const body = job.slice(0, job.indexOf('release:'))
+    expect(body).toContain("if: startsWith(github.ref, 'refs/tags/v')")
+    // Both halves: on main at all, and green there for this exact commit.
+    expect(body).toContain('git merge-base --is-ancestor')
+    expect(body).toContain('--workflow ci.yml --commit')
+  })
+
+  it('does not re-run the suite on a version tag', () => {
+    const job = ci.slice(ci.indexOf('  test:'))
+    expect(job.slice(0, job.indexOf('steps:'))).toContain("!startsWith(github.ref, 'refs/tags/v')")
   })
 })
 
