@@ -1,3 +1,5 @@
+import { normalizeUrl } from './url'
+
 /**
  * A budget for everything that happens after a page has loaded: the walk,
  * the wait for a document with nothing in it, and the page asks that measure
@@ -130,11 +132,55 @@ export function navigatedAfterLoadNote(from: string, to: string): string {
  * status at all (file://, about:blank). A 3xx has already become the address
  * it redirected to, which the navigated note names.
  */
-export function httpStatusNote(code: number, statusText: string, url: string): string | null {
+export function httpStatusNote(code: number, statusText: string, url: string, asked?: string): string | null {
   if (code < 400) return null
   const said = statusText.trim() === '' ? `${code}` : `${code} ${statusText.trim()}`
+  // "not of the page asked for" is this sentence's whole point when the
+  // address that 404s is the one asked for. When the status belongs to some
+  // other address the reader has already been told the load landed elsewhere,
+  // and saying it again is the same point in consecutive lines. The test is
+  // the same `sameAddress` the redirect note uses, so the contrast can never
+  // be dropped by a sentence that is not there.
+  const contrast = asked === undefined || sameAddress(asked, url) ? 'the figures are of the error page it sent, not of the page asked for' : 'the figures are of the error page it sent'
+  return `the server answered ${said} for ${url}: ${contrast} — check the route, the port, and that the server has it`
+}
+
+/**
+ * A load that was redirected on its way — `/private` answering 302 to
+ * `/login`, the ordinary shape of a page behind a login — commits the page it
+ * landed on and answers 200 for it, so neither the navigated-after-load note
+ * nor the status note has anything to say (run 14, 2026-09-12: two targets
+ * where fifty were expected, and silence). Null when the load ended where it
+ * was sent, the address only gained the trailing slash the server adds, or
+ * nothing committed at all.
+ */
+function sameAddress(asked: string, landed: string): boolean {
+  const bare = (u: string): string => u.replace(/^http:\/\//, 'https://').replace(/\/$/, '')
+  let sent = asked
+  try {
+    sent = normalizeUrl(asked)
+  } catch {
+    sent = asked
+  }
+  return bare(sent) === bare(landed)
+}
+
+export function landedElsewhereNote(asked: string, landed: string): string | null {
+  if (landed === '') return null
+  // Compared as the loader spells it, not as it was typed: TargetSource.load
+  // normalises (`example.com` → `https://example.com/`), so a raw comparison
+  // calls every bare-host call a redirect. An upgrade to https is not one
+  // either — it happens on most public addresses and says nothing about which
+  // page was measured.
+  if (sameAddress(asked, landed)) return null
+  let sent = asked
+  try {
+    sent = normalizeUrl(asked)
+  } catch {
+    sent = asked
+  }
   return (
-    `the server answered ${said} for ${url}: the figures are of the error page it sent, ` +
-    `not of the page asked for — check the route, the port, and that the server has it`
+    `the load of ${sent} ended at ${landed}: a login wall, a route that has moved, or a redirect the server chose — ` +
+    `the figures are of the page it landed on, not of the one asked for`
   )
 }

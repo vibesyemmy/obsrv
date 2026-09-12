@@ -47,6 +47,29 @@ test.beforeAll(async () => {
       res.end(html)
       return
     }
+    // The page behind a login: the route answers a redirect, and what gets
+    // measured is the login page, under a perfectly good 200.
+    if (path === '/private') {
+      res.writeHead(302, { Location: '/login' })
+      res.end()
+      return
+    }
+    if (path === '/login') {
+      res.setHeader('Content-Type', 'text/html')
+      res.end(
+        '<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Sign in</h1>' +
+          '<input type="email" style="width:220px;height:44px" aria-label="Email" />' +
+          '<button style="width:220px;height:44px">Continue</button></body></html>',
+      )
+      return
+    }
+    // A redirect that lands on a route the server does not have: both
+    // sentences at once, which is where the reading gets hard.
+    if (path === '/gone') {
+      res.writeHead(302, { Location: '/missing' })
+      res.end()
+      return
+    }
     res.writeHead(404, 'Not Found', { 'Content-Type': 'text/html' })
     if (path === '/missing-empty') {
       res.end('<!doctype html><html lang="en"><head><title>404</title></head><body></body></html>')
@@ -125,4 +148,42 @@ test('the status comes before what was found on the page, since it says the page
   expect(status, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
   expect(found, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
   expect(status).toBeLessThan(found)
+})
+
+test('a redirect during the load names the page the figures are of', async () => {
+  // Run 14: /private answered 302 to /login, the login page was measured, and
+  // nothing said so — two targets where fifty were expected.
+  const r = await runCli(['audit', `${origin}/private`, '--preset', '1080p-24', '--timeout', '20000'])
+  expect(r.code, r.stderr).toBe(0)
+  const out = JSON.parse(r.stdout)
+  expect(out.url).toBe(`${origin}/private`)
+  const warnings: string[] = out.warnings
+  const landed = warnings.find(w => w.includes('ended at'))
+  expect(landed, `warnings were ${JSON.stringify(warnings)}`).toBeTruthy()
+  expect(landed).toContain(`${origin}/login`)
+  expect(landed).toContain(`the load of ${origin}/private`)
+})
+
+test('the lint says it too, and an inspect of an element on the page it landed on says which page that was', async () => {
+  const lint = await runCli(['lint', `${origin}/private`, '--preset', '1080p-24', '--timeout', '20000'])
+  expect(lint.code, lint.stderr).toBe(0)
+  const lintWarnings: string[] = JSON.parse(lint.stdout).warnings
+  expect(lintWarnings.find(w => w.includes('ended at')), `warnings were ${JSON.stringify(lintWarnings)}`).toContain(`${origin}/login`)
+
+  const inspect = await runCli(['inspect', `${origin}/private`, '--preset', '1080p-24', '--selector', 'button', '--timeout', '20000'])
+  expect(inspect.code, inspect.stderr).toBe(0)
+  const notes: string[] = JSON.parse(inspect.stdout).notes
+  expect(notes.find(n => n.includes('ended at')), `notes were ${JSON.stringify(notes)}`).toContain(`${origin}/login`)
+})
+
+test('a redirect onto a route the server does not have says where it landed before what the server answered', async () => {
+  const r = await runCli(['audit', `${origin}/gone`, '--preset', '1080p-24', '--timeout', '20000'])
+  expect(r.code, r.stderr).toBe(0)
+  const warnings: string[] = JSON.parse(r.stdout).warnings
+  const landed = warnings.findIndex(w => w.includes('ended at'))
+  const status = warnings.findIndex(w => w.includes('the server answered 404'))
+  expect(landed, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
+  expect(status, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
+  // Which page, then what its server said about it.
+  expect(landed).toBeLessThan(status)
 })
