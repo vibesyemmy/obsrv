@@ -39,6 +39,39 @@ export const SHADOW_SHARE_FLOOR = 0.15
 export const SHADOW_HIDDEN_FLOOR = 3
 
 /**
+ * A share is the wrong measure on a large page, and the floor above was
+ * chosen on pages of about fifty elements. Printed at 500: 60 hidden of 560
+ * is 10.7% and was silent — sixty controls nobody measured and no word about
+ * it. At 10 of 510 the sentence reads as trivia and at 30 of 530 it reports
+ * a navigation bar's worth of controls that were not checked, so the count
+ * carries where the share cannot. ORed with the share, not ANDed: a page is
+ * worth a sentence when *either* a lot of it is hidden or a lot is.
+ *
+ * Found by obsrv-4f asking for the asymmetric shape to be printed rather
+ * than defaulted — the shape they named (4 of 44) is correctly silent, and
+ * printing it surfaced the one either side of it that was not.
+ *
+ * **Controls only.** A count means the same thing on every page when it
+ * counts controls and nothing like it when it counts text: measured on four
+ * live sites the same day, text elements per interactive element ran 1.15
+ * (ikea.com), 1.19 (ft.com), 1.47 (gov.uk) and 5.75 (linear.app) — a spread
+ * of five, so no single number is the same amount of page twice. Twenty-five
+ * hidden text elements is a card on one page and a section on another; 25
+ * hidden controls is a navigation on both. Lint keeps the share alone, which
+ * scales by construction.
+ *
+ * **The 0.5% case is deliberate, not an oversight.** 25 hidden of 5025 fires
+ * on the count alone, and that will look wrong to whoever reads this next:
+ * half a percent of a page, reported. It is right. A reader with 5,000
+ * controls has an application rather than a page, and 25 controls it could
+ * not measure is a component of that application — a toolbar, a menu, a
+ * table's row actions — not a rounding error. Raising the ceiling to make
+ * the percentage look respectable would silence exactly the pages where the
+ * share is least able to speak.
+ */
+export const SHADOW_HIDDEN_CEILING = 25
+
+/**
  * What the measurement did not enter, when the page also gave it something
  * to measure. Returns null when the page hides nothing worth saying — no
  * roots, roots holding nothing, or a share small enough to be a widget — and
@@ -66,7 +99,10 @@ export function shadowShareNote(what: 'audit' | 'lint', shadow?: ShadowContent):
   // day removing.
   if (light === 0) return null
   const total = hidden + light
-  if (hidden / total < SHADOW_SHARE_FLOOR) return null
+  // The absolute is the audit's: see SHADOW_HIDDEN_CEILING for why a count
+  // of text elements is not a count of anything comparable across pages.
+  const ceiling = what === 'audit' ? SHADOW_HIDDEN_CEILING : Number.POSITIVE_INFINITY
+  if (hidden / total < SHADOW_SHARE_FLOOR && hidden < ceiling) return null
   const roots = shadow.hosts === 1 ? '1 shadow root' : `${shadow.hosts} shadow roots`
   const holdVerb = shadow.hosts === 1 ? 'holds' : 'hold'
   // The tail says what the figures are of and stops. Naming the light count

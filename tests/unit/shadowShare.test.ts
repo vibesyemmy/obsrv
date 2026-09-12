@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SHADOW_HIDDEN_FLOOR, SHADOW_SHARE_FLOOR, shadowShareNote } from '../../src/shared/shadowShare'
+import { SHADOW_HIDDEN_CEILING, SHADOW_HIDDEN_FLOOR, SHADOW_SHARE_FLOOR, shadowShareNote } from '../../src/shared/shadowShare'
 import type { ShadowContent } from '../../src/shared/emptyDocument'
 
 /**
@@ -89,5 +89,51 @@ describe('shadowShareNote', () => {
     expect(note).toContain('1 shadow root holds 3')
     expect(note).not.toContain('1 shadow roots')
     expect(note).not.toContain('root hold ')
+  })
+})
+
+describe('the share floor on a page the share floor was not chosen for', () => {
+  const big = (hosts: number, hidden: number, light: number): ShadowContent => ({
+    hosts,
+    interactive: hidden,
+    text: 0,
+    lightInteractive: light,
+    lightText: 0,
+  })
+
+  it('speaks when a lot is hidden, even where the share is small', () => {
+    // 60 of 560 is 10.7% and was silent: sixty controls nobody measured, on
+    // a page big enough for the share to hide them. The floors were chosen
+    // on pages of about fifty (run 15) and did not scale.
+    expect(shadowShareNote('audit', big(6, 60, 500))).toContain("60 of this page's 560")
+    // 40 of 940 is 4.3% and is still forty controls.
+    expect(shadowShareNote('audit', big(4, 40, 900))).toContain("40 of this page's 940")
+  })
+
+  it('stays quiet for a handful on a large page', () => {
+    // 10 of 510 reads as trivia, and the sentence costs more than it says.
+    expect(shadowShareNote('audit', big(1, 10, 500))).toBeNull()
+    // The shape obsrv-4f asked to see decided rather than defaulted: 4 of 44
+    // is 9.1%, four controls, and below both lines. It stays silent.
+    expect(shadowShareNote('audit', big(1, 4, 40))).toBeNull()
+  })
+
+  it('leaves the absolute to the audit, because a text count is not comparable across pages', () => {
+    // Measured the same day on four live sites: text elements per
+    // interactive element ran 1.15 (ikea), 1.19 (ft), 1.47 (gov.uk) and 5.75
+    // (linear) — a spread of five. 25 hidden text elements is a card on one
+    // page and a section on another, so lint keeps the share, which scales.
+    expect(shadowShareNote('lint', { hosts: 4, interactive: 0, text: 60, lightInteractive: 300, lightText: 2000 })).toBeNull()
+    // And still speaks when the share is real.
+    expect(shadowShareNote('lint', { hosts: 4, interactive: 0, text: 400, lightInteractive: 300, lightText: 2000 })).toContain(
+      "400 of this page's 2400 text elements",
+    )
+  })
+
+  it('agrees with its own ceiling', () => {
+    expect(SHADOW_HIDDEN_CEILING).toBe(25)
+    // The two conditions are ORed: a small page still needs a real share.
+    expect(shadowShareNote('audit', big(1, 24, 500))).toBeNull()
+    expect(shadowShareNote('audit', big(1, 25, 500))).toContain("25 of this page's 525")
   })
 })
