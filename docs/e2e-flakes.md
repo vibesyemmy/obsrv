@@ -159,6 +159,34 @@ Retina display after passing on an external 1x monitor — the "second"
 failure that followed was Playwright restarting the worker after the
 first, so the next test met a fresh app without the scale it assumed.
 
+## `fit-cap` and `onion-skin`: red on the built-in Retina, green everywhere else
+
+Seen 2026-09-12: `fit-cap.spec.ts:43` and both raster assertions in
+`onion-skin.spec.ts` failed three runs in a row, locally, while
+`typecheck`, unit and browser were green and the same commit's CI on
+macos-14 passed the whole suite.
+
+It is the `capturePage` scale above, in a second guise. What changed was
+not the tree: the machine's external monitors had been disconnected, so
+the Mac was on its built-in Liquid Retina XDR alone (3024×1964, 2x). The
+same three specs had passed on this machine earlier the same day with a 1x
+monitor attached, and they pass on CI, whose runner display never moves.
+
+**Isolate it before reading it as a regression, the way that day did:**
+
+- Run the specs on `main` with your branch's changes out of the way. Same
+  three failed there, which is what ruled the branch out in about a
+  minute.
+- Check what the machine is plugged into: `system_profiler
+  SPDisplaysDataType | grep -E "Resolution|Main Display"`. A 2x built-in
+  as the main display is the condition.
+- The desk-state skips are a second tell: a run that skips the five
+  `visibility`/`log` specs and these three together is a desk story, not a
+  code one.
+
+Stopping other Electron apps does **not** help here — that was checked, and
+is what separates this from the contention above.
+
 ## `solo-target.spec`: the `afterAll` that timed out in `app.close()`
 
 Seen once, on the 0.22.1 tag run: the file's last test passed in under a

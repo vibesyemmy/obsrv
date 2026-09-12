@@ -51,6 +51,12 @@ export interface WalkOutcome {
   /** Absent when the walk did not run to a measurement — the notes say why. */
   walked?: Walked
   notes: string[]
+  /**
+   * The document hid its own overflow when the walk stopped — see
+   * `HeadlessWalkOutcome.documentLocked`. Not part of `walked`, which the
+   * tools' output shape pins.
+   */
+  documentLocked?: boolean
 }
 
 /**
@@ -83,6 +89,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // The offset the last scroll reached. A `next` that lands where the page
   // already was has no more page to show — the end, whatever `atEnd` says —
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
+  let documentLocked = false
   let dialogWalked = false
   let lastY: number | null = 0
   try {
@@ -94,6 +101,8 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
         break
       }
       const r = await scroll('next')
+      // As the headless walk: the document's overflow when the walk stopped.
+      documentLocked = r['hidden'] === true
       // The page is locked and the only scroller left is a dialog's panel:
       // the screenfuls below belong to the dialog, not the page. An app older
       // than the field sends nothing, and gets no sentence.
@@ -132,7 +141,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   }
   if (dialogWalked) notes.push(walkDialogNote(screenfuls))
   await backToTop()
-  return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes }
+  return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes, documentLocked }
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */

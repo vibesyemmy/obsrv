@@ -1341,9 +1341,11 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     // The person watching sees the page pass before the number arrives; on a
     // page that mounts sections on scroll, the number is of the whole page.
     let walked: Walked | undefined
+    let documentLocked: boolean | undefined
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
+      documentLocked = w.documentLocked
       notes.push(...w.notes)
     }
     const payload = {
@@ -1370,6 +1372,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       status.cssHeight / (typeof textScale === 'number' && textScale > 0 ? textScale : 1),
       (typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0) *
         (typeof measured['layoutScale'] === 'number' && measured['layoutScale'] > 0 ? measured['layoutScale'] : 1),
+      { documentLocked },
     )
     const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
     // The list's cap is said by whoever prints the list — here, unless
@@ -1616,9 +1619,11 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     // The person watching sees the page pass before the number arrives; on a
     // page that mounts sections on scroll, the number is of the whole page.
     let walked: Walked | undefined
+    let documentLocked: boolean | undefined
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
+      documentLocked = w.documentLocked
       notes.push(...w.notes)
     }
     const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
@@ -1649,6 +1654,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       status.cssHeight / liveTextScale,
       (typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? ((judged as { pageHeight: number }).pageHeight) : 0) *
         (typeof judgedScale === 'number' && judgedScale > 0 ? judgedScale : 1),
+      { documentLocked },
     )
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {

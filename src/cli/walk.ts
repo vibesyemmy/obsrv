@@ -46,6 +46,13 @@ export interface HeadlessWalkOutcome {
   /** Absent when the walk did not run to a measurement — the notes say why. */
   walked?: Walked
   notes: string[]
+  /**
+   * The document hid its own overflow when the walk stopped: the shape a
+   * modal's scroll lock makes. Kept out of `walked`, which is part of the
+   * tools' output shape — a new key there breaks a session that listed them
+   * before it existed. `walkCoverageNote` uses it to name the cause.
+   */
+  documentLocked?: boolean
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
@@ -83,6 +90,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
 
   let screenfuls = 0
   let atEnd = false
+  let documentLocked = false
   let dialogWalked = false
   let lastY = 0
   try {
@@ -94,6 +102,9 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
         break
       }
       const r = await step('next')
+      // The document's own overflow as the walk last saw it: what tells a
+      // page that grew under the walk from one a modal held (walkCoverage).
+      documentLocked = r.hidden === true
       // The page is locked and the only scroller left is a dialog's panel:
       // whatever this walk covers belongs to the dialog, not the page.
       if (r.scroller === 'element' && r.dialog && r.hidden) dialogWalked = true
@@ -129,7 +140,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   if (dialogWalked) notes.push(walkDialogNote(screenfuls))
   await backToTop()
   await settleImages(target, deadline)
-  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes }
+  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked }
 }
 
 /**

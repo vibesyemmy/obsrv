@@ -32,6 +32,47 @@ describe('walkCoverageNote', () => {
  * belong to a 300 px panel rather than the page (measured 2026-09-12 on a
  * fixture, and on airbnb.com's consent dialog).
  */
+/**
+ * Which cause the note names. Measured 2026-09-12 on theguardian.com (9
+ * screenfuls of a 21,440 px page), spiegel.de (10 of 34,582) and
+ * nytimes.com (6 of 9,741): each was told "a modal or a locked scroll held
+ * the page" about a page whose root the walk had just scrolled to its end,
+ * which sends the reader after something that is not there. The walk knows
+ * whether the document was locked when it stopped; the sentence should use
+ * it.
+ */
+describe('walkCoverageNote names the cause it can rule out', () => {
+  const walked = { screenfuls: 9, atEnd: true }
+
+  it('a page that scrolled and came up short grew: no modal in the sentence', () => {
+    const note = walkCoverageNote(walked, 1200, 21_440, { documentLocked: false })!
+    expect(note).toContain('grew as it was walked')
+    expect(note).not.toContain('a modal or a locked scroll')
+    // The figures the reader acts on are unchanged.
+    expect(note).toContain('9 screenfuls')
+    expect(note).toContain('21440 CSS px')
+    expect(note).toContain('nothing below 12000 px was scrolled into view')
+  })
+
+  it('a page locked when the walk stopped keeps the modal reading', () => {
+    const note = walkCoverageNote(walked, 1200, 21_440, { documentLocked: true })!
+    expect(note).toContain('a modal or a locked scroll held the page')
+  })
+
+  it('says nothing new when the caller cannot tell: the cautious sentence stands', () => {
+    const note = walkCoverageNote(walked, 1200, 21_440)!
+    expect(note).toContain('a modal or a locked scroll held the page')
+    expect(note).toContain('or it grew after the walk')
+  })
+
+  it('a walk that went nowhere reads as held, whatever the flag says', () => {
+    // Zero screenfuls on a tall page is the shape a lock makes, and the
+    // document may be locked by something the flag does not see.
+    const note = walkCoverageNote({ screenfuls: 0, atEnd: true }, 1200, 21_440, { documentLocked: false })!
+    expect(note).toContain('a modal or a locked scroll held the page')
+  })
+})
+
 describe('walkDialogNote', () => {
   it('says the screenfuls were the dialog\'s, and what that cost', () => {
     const note = walkDialogNote(5)

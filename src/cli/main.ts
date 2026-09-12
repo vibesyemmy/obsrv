@@ -602,10 +602,12 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // the end and back first, so lazy images have loaded and late sections
     // mounted (cli/walk.ts). `--no-walk` measures it as it first shows.
     let walked: Walked | undefined
+    let documentLocked: boolean | undefined
     if ((options.audit || options.lint) && options.walk !== false) {
       const w = await walkHeadless(target)
       for (const n of w.notes) warn(`warning: ${n}`)
       walked = w.walked
+      documentLocked = w.documentLocked
     }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
@@ -614,7 +616,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // Both heights in the screen's px: a page laid out wider than the screen
     // and drawn to fit reports its height in its own, larger, px.
     const scale = layoutScale(applied.width, spec.textScale, auditReport?.viewport.width ?? lintReport?.viewport.width ?? 0)
-    const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) * scale)
+    const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) * scale, {
+      documentLocked,
+    })
     if (coverage !== null) warn(`warning: ${coverage}`)
     return {
       frame,
@@ -970,7 +974,9 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const listed = cmd.groupsOnly ? null : auditListTruncationNote(result.truncated.findings)
     if (listed !== null) human(`warning: ${listed}`)
     // The page's height is in its own px; the screen's are what the walk counted in.
-    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale)
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
+      documentLocked: walk.documentLocked,
+    })
     if (coverage !== null) human(`warning: ${coverage}`)
     const t = result.summary.targets
     const x = result.summary.text
@@ -1081,7 +1087,9 @@ async function runLint(cmd: LintCommand): Promise<void> {
         ? unwalkedImageNote(result.findings, (walk.walked.screenfuls + 1) * (applied.height / cmd.spec.textScale))
         : null
     if (unwalked !== null) human(`warning: ${unwalked}`)
-    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale)
+    const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
+      documentLocked: walk.documentLocked,
+    })
     if (coverage !== null) human(`warning: ${coverage}`)
     const s = result.summary
     const total = Object.values(s).reduce((a, b) => a + b, 0)
