@@ -41,8 +41,9 @@ is false then too. A load that outruns `--timeout` — under a throttle, the
 point — is not an error: the render captures the page as it stands,
 `settled: false` with `unsettledReason: "loading"`, `settledMs` null, and a
 warning naming the throttle; raise `--timeout` for the full load (bbc.com
-under `budget-phone` settles at about 70 s). `audit`, `lint` and `inspect`
-cannot measure a half-loaded page and error instead, naming the same. It is a
+under `budget-phone` settles at about 70 s). `audit` and `lint` measure the
+page as it stood, their first warning naming the cut load; `inspect` errors
+instead, naming the same. It is a
 wall-clock number on the machine running
 Obsrv: compare it against a `--throttle none` run of the same page on
 the same machine, not against a number from somewhere else.

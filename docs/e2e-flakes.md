@@ -472,3 +472,35 @@ next test in the file, on both of its attempts, for the same reason. Two
 failures on the report, one event underneath. The scroll tests now settle
 the tall fixture for themselves (`onTall`), so a retry of any of them
 starts from the page it needs.
+
+## `update.spec`: the automatic-check toggle, a 30 s `page.reload` on the tag runner
+
+Seen once, on the v0.54.0 tag run (2026-09-12): `update.spec.ts:133 the
+automatic-check toggle round-trips through main` timed out twice — first on
+`page.uncheck`, then on `page.reload` at 30 s — and took the run red with it,
+which skipped `Publish DMGs to a GitHub Release`. So a flake in a test about
+the update checkbox is what stood between a published npm package and a
+release with no DMGs on it.
+
+It is not the tree. **The same commit had passed that same test in 410 ms on
+the `main` run an hour earlier**, and it passes locally in full runs. A
+`gh run rerun <id> --failed` went green in 14m5s and published both DMGs.
+
+The shape is the one already on this page — the renderer not answering
+promptly under contention — rather than anything about the update path: the
+test hides nothing behind a network call (`update.spec` stubs the check), and
+the two failing calls are both plain Playwright waits on the renderer.
+
+What to do when it appears: re-run the failed job before reading anything into
+it, and check whether the same commit passed elsewhere — a tag build and its
+`main` build are the same tree, so a green `main` run is the control this
+repository gets for free. If it starts recurring on tags specifically, the
+thing to look at is what else the tag job does that `main` does not: it builds
+and signs two DMGs in the same workflow, so the e2e job can be sharing a
+runner with more work than usual.
+
+**A release consequence worth knowing:** the tag workflow publishes the DMGs
+only if the test job passes, and the npm publish happens *before* the tags are
+pushed. A flake here therefore leaves npm and the plugin tag live while the
+release page has no DMGs — for as long as it takes to notice. Re-running the
+failed job is the whole fix, but nobody sees the gap unless they are watching.

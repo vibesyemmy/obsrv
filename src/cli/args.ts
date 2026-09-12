@@ -283,8 +283,8 @@ painted. False is a rescued capture, not a failure: a page that kept animating
 warning naming what was missing. Only a render that painted nothing errors. A load
 that outruns --timeout — under a throttle, the point — is captured as it stands
 (settled false, settledMs null) with a warning naming the throttle; raise --timeout
-for the full load. audit, lint and inspect cannot measure a half-loaded page and
-error instead, naming the same.`
+for the full load. audit and lint measure the page as it stood, their first
+warning naming the cut load; inspect errors instead, naming the same.`
 }
 
 /** Flags that take no value. */
