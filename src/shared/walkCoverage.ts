@@ -28,6 +28,15 @@ const COVERAGE_SLACK = 0.5
  */
 export interface WalkEnd {
   documentLocked?: boolean
+  /**
+   * What the walk measured holding the page, when it found nothing to
+   * scroll. Not for naming the cause again — `walkNothingNote` does that,
+   * better, in the sentence above — but for knowing that it *was* named, so
+   * this one can stop offering a hedge for a page whose cause is on the
+   * screen. Keyed off the measurement, not off the other sentence: a note
+   * that is right because of its neighbour is waiting to be reordered.
+   */
+  blocked?: WalkBlocked
 }
 
 export function walkCoverageNote(
@@ -49,12 +58,22 @@ export function walkCoverageNote(
   // went nowhere reads as held whatever the flag says: zero screenfuls on a
   // tall page is the shape a lock makes, and it may be one this cannot see.
   const held = end?.documentLocked !== false || walked.screenfuls === 0
-  const cause = held
-    ? 'a modal or a locked scroll held the page, or it grew after the walk'
-    : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
+  // A wall was measured over the viewport, so the cause is not in doubt and
+  // is already stated in full one line up. Offering "a modal or a locked
+  // scroll held the page, or it grew after the walk" after it hedges what
+  // has just been established, and the second half of that disjunction is a
+  // page that grew — which a page that never moved did not do. Measured on
+  // ft.com, run 15: the two sentences arrived together and the vaguer one
+  // read as doubt about the first.
+  const walled = (end?.blocked?.frames?.viewportCoverage ?? 0) >= FRAME_WALL_COVERAGE && (end?.blocked?.frames?.count ?? 0) > 0
+  const cause = walled
+    ? null
+    : held
+      ? 'a modal or a locked scroll held the page, or it grew after the walk'
+      : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
   return (
     `the walk saw the end after ${walked.screenfuls} screenful${walked.screenfuls === 1 ? '' : 's'} (${Math.round(covered)} CSS px), ` +
-    `but the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls): ${cause}; ` +
+    `but the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls)${cause === null ? '' : `: ${cause}`}; ` +
     `the measurement is of the page as it stands, and nothing below ${Math.round(covered)} px was scrolled into view`
   )
 }
@@ -68,10 +87,89 @@ export function walkCoverageNote(
  * a one-screen page. The full-page capture says this in its own words; both
  * walks say it in these.
  */
-export const WALK_NOTHING_NOTE =
-  "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: " +
-  'content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualised list or editor) was not brought ' +
-  'into view before measuring, and the figures are of the page as it first shows'
+export interface WalkBlocked {
+  /** Iframes overlapping the viewport, and how much of it they cover. */
+  frames?: { count: number; viewportCoverage: number }
+  /** Open shadow hosts on the page (`shadowContent().hosts`). */
+  shadowHosts?: number
+}
+
+/** A frame has to cover a real part of the screen before it explains one. */
+const FRAME_WALL_COVERAGE = 0.5
+
+/**
+ * The walk's sentence for a page that hides the document's overflow and has
+ * no scroller in its light DOM — a web player's shell, an editor that
+ * scrolls by transform, a preview in an iframe (spotify.com on desktop,
+ * measured 2026-09-11).
+ *
+ * It used to be a bare constant offering three causes: an iframe, a shadow
+ * root, or a transform container. On ft.com it offered all three while the
+ * measurement was holding the answer — one iframe covering 100% of the
+ * viewport (a consent wall), and zero shadow hosts. `framesInViewport()` and
+ * `shadowContent()` run on the same unconditional line as everything else
+ * the walk sees, so the guesses were in front of a measured fact (run 15,
+ * 2026-09-12). The same defect the empty-document note had before 0.57.0,
+ * one function over. It names what was measured, and keeps the list only for
+ * the case where nothing measured explains it.
+ */
+export function walkNothingNote(blocked?: WalkBlocked): string {
+  const opening =
+    "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: "
+  const tail = ', and the figures are of the page as it first shows'
+  const coverage = Math.round((blocked?.frames?.viewportCoverage ?? 0) * 100)
+  const frameCount = blocked?.frames?.count ?? 0
+  const hosts = blocked?.shadowHosts ?? 0
+  // A frame over half the screen on a page that scrolls nothing is a wall,
+  // and naming it is the whole point: "a consent wall or a paywall" is what
+  // the reader does something about, where "content in an iframe" is a fact
+  // about markup.
+  if (frameCount > 0 && coverage >= FRAME_WALL_COVERAGE * 100) {
+    return (
+      `${opening}${frameCount === 1 ? 'an <iframe> covers' : `${frameCount} <iframe>s cover`} ${coverage}% of the viewport and the ` +
+      `page beneath it did not move — a consent wall, a paywall or an onboarding layer holds it${tail}`
+    )
+  }
+  if (hosts > 0) {
+    return (
+      `${opening}the page has ${hosts === 1 ? '1 open shadow root' : `${hosts} open shadow roots`}, which the walk does not enter, ` +
+      `and nothing in the light DOM scrolls${tail}`
+    )
+  }
+  if (frameCount > 0) {
+    return (
+      `${opening}${frameCount === 1 ? 'an <iframe> covers' : `${frameCount} <iframe>s cover`} ${coverage}% of the viewport, and what ` +
+      `scrolls is either inside it or scrolls by transform (a virtualised list or editor)${tail}`
+    )
+  }
+  // Nothing measured explains it: a frame was looked for and not found, a
+  // root was looked for and not found. What is left is a container that
+  // scrolls by transform, which cannot be counted from outside, so this one
+  // case keeps a guess — one guess, about a page two facts have been ruled
+  // out for.
+  if (blocked?.frames !== undefined && blocked.shadowHosts !== undefined) {
+    return (
+      `${opening}no iframe covers the viewport and the page has no open shadow roots, so what scrolls is a container ` +
+      `that scrolls by transform (a virtualised list or editor)${tail}`
+    )
+  }
+  // And when the caller measured neither, say the list. "No iframe covers
+  // the viewport" from a caller that never looked for one is the very defect
+  // this function exists to remove: printed at the no-argument shape before
+  // this branch existed, and it asserted both facts confidently.
+  return (
+    `${opening}content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualised ` +
+    `list or editor) was not brought into view before measuring${tail}`
+  )
+}
+
+/**
+ * The sentence for a caller that has not measured what blocked the page — an
+ * older app over the control socket. Same words the note carried before it
+ * could name a cause, which is the honest thing to say when nothing was
+ * looked at.
+ */
+export const WALK_NOTHING_NOTE = walkNothingNote()
 
 /**
  * The walk's sentence for a page locked behind a dialog. A consent wall, a

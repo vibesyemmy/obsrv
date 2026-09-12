@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { walkCoverageNote, walkDialogNote } from '../../src/shared/walkCoverage'
+import { walkCoverageNote, walkDialogNote, walkNothingNote } from '../../src/shared/walkCoverage'
 
 describe('walkCoverageNote', () => {
   it('is silent when the walk covered the page', () => {
@@ -88,5 +88,77 @@ describe('walkDialogNote', () => {
 
   it('reads sensibly when the dialog did not move either', () => {
     expect(walkDialogNote(0)).toContain('the page never moved')
+  })
+})
+
+/**
+ * The walk's "nothing to scroll" sentence used to be a bare constant naming
+ * three causes: an iframe, a shadow root, a container that scrolls by
+ * transform. On ft.com it offered all three while the measurement held the
+ * answer — one iframe covering 100% of the viewport (a consent wall), zero
+ * shadow hosts (run 15, 2026-09-12). Both counts are taken on the same
+ * unconditional line as everything else the walk sees.
+ */
+describe('walkNothingNote', () => {
+  it('names the wall on the page that exposed this', () => {
+    const note = walkNothingNote({ frames: { count: 1, viewportCoverage: 1 }, shadowHosts: 0 })
+    expect(note).toContain('an <iframe> covers 100% of the viewport')
+    expect(note).toContain('a consent wall, a paywall or an onboarding layer holds it')
+    // The three-guess list is what it replaces.
+    expect(note).not.toContain('content in an iframe, in a shadow root, or in a container')
+  })
+
+  it('does not call a small embed a wall', () => {
+    const note = walkNothingNote({ frames: { count: 1, viewportCoverage: 0.2 }, shadowHosts: 0 })
+    expect(note).toContain('20% of the viewport')
+    expect(note).not.toContain('consent wall')
+  })
+
+  it('names shadow roots when there is no frame over the page', () => {
+    expect(walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 12 })).toContain('12 open shadow roots')
+    expect(walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 1 })).toContain('1 open shadow root,')
+  })
+
+  it('keeps one guess when both were measured and neither explains it', () => {
+    const note = walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 0 })
+    expect(note).toContain('no iframe covers the viewport and the page has no open shadow roots')
+    expect(note).toContain('scrolls by transform')
+  })
+
+  it('claims no measurement it was not given', () => {
+    // The failure this branch exists for: printed at the no-argument shape,
+    // the sentence asserted "no iframe covers the viewport and the page has
+    // no open shadow roots" from a caller that had looked for neither —
+    // which is the defect the whole function removes, produced by it.
+    for (const blocked of [undefined, { frames: { count: 0, viewportCoverage: 0 } }, { shadowHosts: 0 }]) {
+      const note = walkNothingNote(blocked)
+      expect(note).toContain('content in an iframe, in a shadow root, or in a container')
+      expect(note).not.toContain('no iframe covers the viewport')
+    }
+  })
+})
+
+describe('walkCoverageNote beside a named wall', () => {
+  const walked = { screenfuls: 0, atEnd: true }
+
+  it('stops offering a cause once the wall above has named one', () => {
+    const note = walkCoverageNote(walked, 1080, 8337, {
+      documentLocked: true,
+      blocked: { frames: { count: 1, viewportCoverage: 1 }, shadowHosts: 0 },
+    })
+    expect(note).toContain('(8 screenfuls)')
+    // ft.com carried both sentences: the second hedged what the first
+    // established, and offered a page that grew — which a page that never
+    // moved did not do.
+    expect(note).not.toContain('a modal or a locked scroll held the page')
+    expect(note).not.toContain('grew after the walk')
+    expect(note).toContain('nothing below 1080 px was scrolled into view')
+  })
+
+  it('keeps the cause when no wall was measured', () => {
+    expect(walkCoverageNote(walked, 1080, 8337, { documentLocked: true })).toContain('a modal or a locked scroll held the page')
+    expect(
+      walkCoverageNote(walked, 1080, 8337, { documentLocked: true, blocked: { frames: { count: 1, viewportCoverage: 0.2 }, shadowHosts: 0 } }),
+    ).toContain('a modal or a locked scroll held the page')
   })
 })

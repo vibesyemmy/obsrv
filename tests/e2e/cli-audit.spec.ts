@@ -281,3 +281,44 @@ test('an ordinary empty page still gets the old sentence', async () => {
   expect(first).toMatch(/^nothing to measure: /)
   expect(first).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
 })
+
+test('a page that measures fine and hides most of itself says how much it hid', async () => {
+  // Run 15, 2026-09-12: twelve buttons in the light DOM and forty behind four
+  // open roots answered "12 targets, 12 findings, 0 warnings". The counts had
+  // been taken — `shadowContent` runs on every measurement — and were read in
+  // four places, all of them inside a `stillEmpty` guard, so the rare case
+  // was covered and the common one was silent.
+  const r = await runCli(['audit', fixture('half-in-shadow.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary.targets.count).toBe(12)
+  const share = (m.warnings as string[]).find(w => w.includes('shadow roots hold'))
+  expect(share, `warnings were ${JSON.stringify(m.warnings)}`).toBeTruthy()
+  expect(share).toContain("4 shadow roots hold 40 of this page's 52 interactive elements")
+  expect(share).toContain('the figures above are of the light DOM alone')
+  // It is not the empty page's sentence: this page measured something.
+  expect(share).not.toContain('built from web components')
+})
+
+test('a page held by a wall is told which wall, not offered three', async () => {
+  // ft.com (run 15): one iframe over the whole viewport, a fixed body, and a
+  // note that offered "an iframe, a shadow root, or a container that scrolls
+  // by transform" while the measurement held the frame's coverage and a
+  // shadow-host count of zero.
+  const r = await runCli(['audit', fixture('wall-over-a-tall-page.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const warnings: string[] = JSON.parse(r.stdout).warnings
+  const nothing = warnings.find(w => w.includes('had nothing to scroll'))
+  expect(nothing, `warnings were ${JSON.stringify(warnings)}`).toBeTruthy()
+  expect(nothing).toContain('<iframe> covers 100% of the viewport')
+  expect(nothing).toContain('a consent wall, a paywall or an onboarding layer holds it')
+  expect(nothing).not.toContain('content in an iframe, in a shadow root, or in a container')
+  // And the coverage sentence beside it stops hedging a cause that has just
+  // been named — including "or it grew after the walk", which a page that
+  // never moved did not do.
+  const coverage = warnings.find(w => w.includes('the walk saw the end after'))
+  if (coverage !== undefined) {
+    expect(coverage).not.toContain('a modal or a locked scroll held the page')
+    expect(coverage).not.toContain('grew after the walk')
+  }
+})

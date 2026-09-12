@@ -1,0 +1,30 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Half in the shadows</title>
+<style>body{font:16px system-ui;margin:24px} button{margin:2px;padding:6px 10px}</style>
+<!--
+  A page that measures fine and hides most of itself: twelve ordinary buttons
+  in the light DOM and forty more inside four open shadow roots. Before run 15
+  this answered "12 targets, 12 findings, 0 warnings" — the counts were taken
+  on the way past and read only when the light DOM was completely empty.
+-->
+<h1>Half in the shadows</h1>
+<p>Twelve controls the measurement can reach.</p>
+<button>light 0</button><button>light 1</button><button>light 2</button>
+<button>light 3</button><button>light 4</button><button>light 5</button>
+<button>light 6</button><button>light 7</button><button>light 8</button>
+<button>light 9</button><button>light 10</button><button>light 11</button>
+<x-panel></x-panel><x-panel></x-panel><x-panel></x-panel><x-panel></x-panel>
+<script>
+  class XPanel extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: 'open' })
+      for (let i = 0; i < 10; i++) {
+        const b = document.createElement('button')
+        b.textContent = 'hidden ' + i
+        root.append(b)
+      }
+    }
+  }
+  customElements.define('x-panel', XPanel)
+</script>

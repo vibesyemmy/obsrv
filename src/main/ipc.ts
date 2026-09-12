@@ -1,4 +1,5 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
+import { shadowShareNote } from '../shared/shadowShare'
 import { measureTimeoutNote } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
@@ -1644,6 +1645,12 @@ export function registerIpc(ctx: AppContext): () => void {
       } else if (held.stillEmpty) {
         notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, report.shadow))
       }
+      // The live path says the same thing as the CLI: a page that measures
+      // fine and hides half of itself was silent on both surfaces.
+      if (report) {
+        const shareNote = shadowShareNote('audit', report.shadow)
+        if (shareNote !== null) notes.push(shareNote)
+      }
       // The screen's diagonal comes from the preset table, as for inspect; a
       // custom screen has none here, so there are no millimetres and the
       // result's warnings say so.
@@ -1687,6 +1694,10 @@ export function registerIpc(ctx: AppContext): () => void {
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, text: [], edges: [], images: [], truncated: { text: 0, edges: 0, images: 0 }, spacers: 0 }
       } else if (held.stillEmpty) {
         notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow))
+      }
+      if (report) {
+        const shareNote = shadowShareNote('lint', report.shadow)
+        if (shareNote !== null) notes.push(shareNote)
       }
       let profile
       try {
