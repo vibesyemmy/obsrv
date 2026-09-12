@@ -9,11 +9,14 @@ describe('empty document', () => {
     expect(isEmptyLintReport({ text: [], edges: [], images: [1] })).toBe(false)
   })
   it('the note says what was missing, for how long, and what to do', () => {
+    // "3 s after it loaded" cannot be read on a page that navigated: after
+    // which load? The figure is how long the document was held, so it says
+    // that and claims no origin (obsrv-4f's cold read, 2026-09-12).
     expect(emptyDocumentNote('audit', 3012)).toBe(
-      'nothing to measure: the page had no visible text and no targets 3 s after it loaded — a page rendered by script that had not run yet, ' +
+      'nothing to measure: the page had no visible text and no targets, and none arrived in the 3 s it was held — a page rendered by script that had not run yet, ' +
         'a bot wall, or an empty document; the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer',
     )
-    expect(emptyDocumentNote('lint', 3000)).toContain('no visible text, edges or images 3 s after')
+    expect(emptyDocumentNote('lint', 3000)).toContain('no visible text, edges or images, and none arrived in the 3 s it was held')
   })
   it('names the iframe the visible page is, when it is one, so a wall is not read as a blank page', () => {
     // etsy.com's DataDome wall: one iframe over the whole viewport, and a
@@ -86,5 +89,87 @@ describe('a report emptied by dropped entries', () => {
 
   it('an empty `dropped` block still reads as empty', () => {
     expect(isEmptyLintReport({ text: [], edges: [], images: [], dropped: {} })).toBe(true)
+  })
+})
+
+/**
+ * chromestatus.com/features (2026-09-12): 0 targets and 0 text, and the
+ * note offered three causes — a script that had not run, a bot wall, an
+ * empty document. All three were false. The page holds 159 shadow roots
+ * with 136 interactive elements in them, which the measurement does not
+ * enter. When that is what happened, the note should say so instead of
+ * guessing, and should not advise waiting longer: waiting cannot help.
+ */
+describe('a page whose content is in shadow roots', () => {
+  const shadow = { hosts: 159, interactive: 136, text: 147 }
+
+  it('names the shadow roots and what they hold', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    expect(note).toContain('159 shadow roots')
+    expect(note).toContain('136 interactive elements')
+    expect(note).toContain('does not enter')
+  })
+
+  it('drops the three causes that are false, and the advice that cannot help', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    expect(note).not.toContain('a bot wall')
+    expect(note).not.toContain('had not run yet')
+    expect(note).not.toContain('renders late longer')
+  })
+
+  it('says what no wait can change, not that no wait is worth making', () => {
+    // A dev app reloading under the measurement is a page where raising
+    // --wait is sensible — to catch a later revision. The flat "no wait will
+    // change that" told the reader otherwise; it is about the shadow content
+    // and should say so (obsrv-4f's cold read of the two notes together).
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    // What matters is that it names what a wait cannot do, rather than
+    // telling a reader on a reloading page that waiting is pointless.
+    expect(note).toMatch(/no wait brings its content into the light DOM/)
+    expect(note).not.toContain('no wait will change that')
+  })
+
+  it('says the light DOM is what the figures are of', () => {
+    expect(emptyDocumentNote('lint', 3000, undefined, shadow)).toContain('light DOM')
+  })
+
+  it('counts one root in the singular', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 0 })
+    expect(note).toContain('1 shadow root ')
+    expect(note).not.toContain('1 shadow roots')
+  })
+
+  it('names its own subject, so it does not depend on a sentence before it', () => {
+    // On a 404 the note sits under a status line naming the error page, and
+    // "this page is built from web components" then reads as being about the
+    // error page — correct, but only because of what precedes it. A reorder
+    // would silently turn it into a claim about the page the reader asked
+    // for, and no test would notice (obsrv-4f's second cold read). It says
+    // which page it means instead.
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 3, interactive: 4, text: 5 })
+    expect(note).toContain('the page measured is built from web components')
+    expect(note).not.toContain('this page is built from web components')
+  })
+
+  it('leaves the old sentence alone when there are no shadow roots', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 0, interactive: 0, text: 0 })
+    expect(note).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
+  })
+})
+
+/**
+ * An iframe that covers none of the viewport is not a bot wall and not an
+ * embed worth naming — chromestatus.com carries one, and the clause read
+ * "an <iframe> covers 0% of the viewport … a bot wall or an embed", which is
+ * noise beside the true cause (2026-09-12).
+ */
+describe('an iframe too small to matter', () => {
+  it('earns no clause at 0% of the viewport', () => {
+    const note = emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 0.001 })
+    expect(note).not.toContain('<iframe>')
+  })
+
+  it('still names one that covers the viewport', () => {
+    expect(emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 1 })).toContain('an <iframe> covers 100%')
   })
 })

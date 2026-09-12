@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a page built from web components</title>
+    <style>body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111; background: #fff; }</style>
+  </head>
+  <body>
+    <!--
+      chromestatus.com in miniature. Every visible thing is inside an open
+      shadow root, so the light DOM the measurement reads holds nothing at
+      all — and the answer used to call that a script that had not run, a
+      bot wall, or an empty document (2026-09-12). It is none of those, and
+      no wait will change it.
+    -->
+    <feature-list></feature-list>
+    <script>
+      class FeatureRow extends HTMLElement {
+        connectedCallback() {
+          const root = this.attachShadow({ mode: 'open' })
+          root.innerHTML =
+            '<style>a{display:block;padding:8px}button{height:26px}</style>' +
+            `<a href="#${this.dataset.n}">Feature ${this.dataset.n}</a>` +
+            '<button>Star</button>'
+        }
+      }
+      class FeatureList extends HTMLElement {
+        connectedCallback() {
+          const root = this.attachShadow({ mode: 'open' })
+          root.innerHTML = '<style>h1{font:600 24px system-ui}</style><h1>Features</h1>'
+          for (let i = 1; i <= 8; i++) {
+            const row = document.createElement('feature-row')
+            row.dataset.n = String(i)
+            root.append(row)
+          }
+        }
+      }
+      customElements.define('feature-row', FeatureRow)
+      customElements.define('feature-list', FeatureList)
+    </script>
+  </body>
+</html>

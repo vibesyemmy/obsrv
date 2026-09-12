@@ -955,7 +955,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
-      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames, report.shadow))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
@@ -1066,7 +1066,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
-      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames))
+      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames, report.shadow))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(

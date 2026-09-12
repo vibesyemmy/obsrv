@@ -81,6 +81,46 @@ export function framesInViewport(): { count: number; viewportCoverage: number } 
 }
 
 /**
+ * What the open shadow roots on this page hold that the measurement will not
+ * see: how many hosts, how many interactive elements inside them, and how
+ * many elements with text of their own.
+ *
+ * The audit and the lint read the light DOM — `querySelectorAll` does not
+ * cross a shadow boundary — so a page built from web components measures as
+ * nothing at all. chromestatus.com/features (2026-09-12) answered 0 targets
+ * and 0 text while holding 159 roots with 136 interactive elements, and was
+ * described as a script that had not run, a bot wall, or an empty document.
+ * Counting what is behind the boundary is what lets the answer say which.
+ *
+ * Closed roots are unreachable from script and are not counted: the number
+ * is what could have been measured had the measurement entered, not a guess
+ * at everything on the page. Bounded by MAX_VISITED, as the scroll-host walk
+ * is, so a page of ten thousand components cannot make this expensive.
+ */
+export function shadowContent(): { hosts: number; interactive: number; text: number } {
+  const INTERACTIVE = 'a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'
+  let hosts = 0
+  let interactive = 0
+  let text = 0
+  let visited = 0
+  const walk = (root: Document | ShadowRoot): void => {
+    for (const el of Array.from(root.querySelectorAll('*'))) {
+      if (visited++ > MAX_VISITED) return
+      const shadow = el.shadowRoot
+      if (shadow === null) continue
+      hosts++
+      interactive += shadow.querySelectorAll(INTERACTIVE).length
+      for (const node of Array.from(shadow.querySelectorAll('*'))) {
+        if (Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)) text++
+      }
+      walk(shadow)
+    }
+  }
+  walk(document)
+  return { hosts, interactive, text }
+}
+
+/**
  * Whether this element is a scroll container with something to scroll. The
  * cheap overflow test comes first so `getComputedStyle` — the expensive half —
  * runs only for the handful of elements that could possibly qualify.
@@ -254,6 +294,7 @@ export const SCROLL_HOST_SCRIPT = [
   rootScrolls.toString(),
   overflowHidden.toString(),
   inDialog.toString(),
+  shadowContent.toString(),
   framesInViewport.toString(),
   canScroll.toString(),
   isVisible.toString(),

@@ -175,7 +175,7 @@ test('a document that renders after load is held for and measured; one that stay
   const e = JSON.parse(empty.stdout)
   expect(e.summary.targets.count).toBe(0)
   expect(e.summary.text.count).toBe(0)
-  expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets 3(\.\d)? s after it loaded/)
+  expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets, and none arrived in the 3(\.\d)? s it was held/)
   expect(Date.now() - started).toBeGreaterThanOrEqual(3000)
 })
 
@@ -251,4 +251,33 @@ test('an empty document that is an iframe says so: a bot wall is not a blank pag
   const m = JSON.parse(r.stdout)
   expect(m.summary.targets.count).toBe(0)
   expect(m.warnings.join(' ')).toMatch(/nothing to measure: .*an <iframe> covers 100% of the viewport, which the measurement does not enter/)
+})
+
+test('a page built from web components is named as one, not called empty', async () => {
+  // chromestatus.com/features (2026-09-12): 0 targets, 0 text, and three
+  // causes offered — a script that had not run, a bot wall, an empty
+  // document. All false; the page held 159 shadow roots with 136 interactive
+  // elements the measurement does not enter. The answer says which now.
+  const r = await runCli(['audit', fixture('web-components.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.summary.targets.count).toBe(0)
+  const first = m.warnings[0]
+  expect(first).toMatch(/^nothing to measure in the light DOM/)
+  expect(first).toMatch(/9 shadow roots hold 16 interactive elements and 26 text elements the measurement does not enter/)
+  expect(first).toContain('built from web components, not empty')
+  // The three that were false, and the advice that cannot help, are gone.
+  expect(first).not.toContain('a bot wall')
+  expect(first).not.toContain('had not run yet')
+  expect(first).not.toContain('renders late longer')
+})
+
+test('an ordinary empty page still gets the old sentence', async () => {
+  // The neighbour must not change: no shadow roots, so the causes that were
+  // right there are still offered.
+  const r = await runCli(['audit', fixture('empty.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const first = JSON.parse(r.stdout).warnings[0]
+  expect(first).toMatch(/^nothing to measure: /)
+  expect(first).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
 })
