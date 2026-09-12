@@ -2,6 +2,15 @@
 # plus unsigned DMG artefacts on version tags. A tag also checks that the
 # generated `plugin` branch was rebuilt for it, and the release waits on that.
 #
+# A version tag does NOT re-run the suite. It points at a commit that was
+# pushed to `main` and tested there minutes earlier, so running it again cost
+# ~14 minutes of macOS CI for an answer already held — and, twice in a row
+# (0.54.0's update.spec, 0.55.0's text-scale.spec), a flake in that redundant
+# run skipped the DMG publish and left npm live with no downloads on the
+# release page. The invariant is kept by proving it instead: `tested-on-main`
+# below requires the tagged commit to be on `main` and to have a successful
+# CI run of its own.
+#
 # Everything runs on macOS: the e2e suite drives the real Electron app
 # (offscreen 1x rendering is the product), and macOS runners provide the
 # display session Electron needs.
@@ -18,6 +27,9 @@ on:
 jobs:
   test:
     name: typecheck · unit · shader parity · e2e
+    # Not on a version tag: `tested-on-main` proves this tree already passed
+    # here, on the `main` push the tag was cut from.
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -82,9 +94,49 @@ jobs:
       - name: Compare plugin-v<version> against scripts/build-plugin-branch.js
         run: node scripts/build-plugin-branch.js --check
 
+  # Tags only, and the reason the suite above can sit this one out: the DMGs
+  # ship from a tree the suite passed, and this says so out loud rather than
+  # assuming it. Two facts, both cheap — the tagged commit is on `main`, and
+  # `main`'s own CI went green for that exact SHA. A tag cut from a side
+  # branch, or pushed before `main` finished, fails here with which of the two
+  # was missing, instead of publishing untested DMGs.
+  tested-on-main:
+    name: The tagged commit is one main tested
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: The tagged commit is on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::$GITHUB_SHA is not on main. A release is cut from main, so the DMGs would ship a tree nobody reviewed there."
+            exit 1
+          fi
+          echo "$GITHUB_SHA is on main"
+
+      - name: Main's CI passed for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The tag's own run is excluded by name: it shares this SHA and is
+          # in flight right now, so only a run of `main` counts as the answer.
+          passed=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" \
+            --json conclusion,headBranch \
+            --jq '[.[] | select(.headBranch == "main" and .conclusion == "success")] | length')
+          if [ "$passed" -lt 1 ]; then
+            echo "::error::No successful CI run of main for $GITHUB_SHA. Wait for main to go green, then re-run this job."
+            exit 1
+          fi
+          echo "main's CI passed for $GITHUB_SHA"
+
   release:
     name: Publish DMGs to a GitHub Release
-    needs: [test, plugin-tag]
+    needs: [tested-on-main, plugin-tag]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-14
     timeout-minutes: 30
