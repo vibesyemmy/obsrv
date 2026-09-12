@@ -72,6 +72,10 @@ export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, fram
       ? `; ${frames.count === 1 ? 'an <iframe> covers' : `${frames.count} <iframe>s cover`} ${coverage}% of the viewport, ` +
         `which the measurement does not enter — a bot wall or an embed, not a blank page`
       : ''
+  // "the page measured", not "this page": on a 404 this note sits under a
+  // status line naming the error page, and a bare "this page" is only right
+  // because that line precedes it — a reorder would turn it back into a claim
+  // about the page the reader asked for. It names its own subject instead.
   // A page built from web components is not empty, not slow and not a bot
   // wall, and it will never fill however long it is given: its content is in
   // shadow roots the measurement does not enter (chromestatus.com, measured
@@ -88,8 +92,8 @@ export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, fram
       .join(' and ')
     return (
       `nothing to measure in the light DOM: the page had ${measured}, ${held}, but ${roots}` +
-      `hold ${holds} the measurement does not enter — this page is built from web components, not empty, ` +
-      `and no wait brings it into the light DOM; the figures are of the light DOM alone` +
+      `hold ${holds} the measurement does not enter — the page measured is built from web components, not empty, ` +
+      `and no wait brings its content into the light DOM; the figures are of the light DOM alone` +
       framed
     )
   }

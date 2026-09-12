@@ -123,7 +123,9 @@ describe('a page whose content is in shadow roots', () => {
     // change that" told the reader otherwise; it is about the shadow content
     // and should say so (obsrv-4f's cold read of the two notes together).
     const note = emptyDocumentNote('audit', 3000, undefined, shadow)
-    expect(note).toContain('no wait brings it into the light DOM')
+    // What matters is that it names what a wait cannot do, rather than
+    // telling a reader on a reloading page that waiting is pointless.
+    expect(note).toMatch(/no wait brings its content into the light DOM/)
     expect(note).not.toContain('no wait will change that')
   })
 
@@ -135,6 +137,18 @@ describe('a page whose content is in shadow roots', () => {
     const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 0 })
     expect(note).toContain('1 shadow root ')
     expect(note).not.toContain('1 shadow roots')
+  })
+
+  it('names its own subject, so it does not depend on a sentence before it', () => {
+    // On a 404 the note sits under a status line naming the error page, and
+    // "this page is built from web components" then reads as being about the
+    // error page — correct, but only because of what precedes it. A reorder
+    // would silently turn it into a claim about the page the reader asked
+    // for, and no test would notice (obsrv-4f's second cold read). It says
+    // which page it means instead.
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 3, interactive: 4, text: 5 })
+    expect(note).toContain('the page measured is built from web components')
+    expect(note).not.toContain('this page is built from web components')
   })
 
   it('leaves the old sentence alone when there are no shadow roots', () => {
