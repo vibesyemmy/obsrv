@@ -964,7 +964,6 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     // port all answer with a page, and run 13's 404 was silent.
     const status = target.httpStatus()
     const statusNote = httpStatusNote(status.code, status.text, status.url)
-    if (statusNote !== null) notes.push(statusNote)
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
@@ -986,6 +985,9 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
       if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames))
     }
+    // Last of the three, because it is about the page named by the sentence
+    // before it: which page was arrived at, then what its server answered.
+    if (statusNote !== null) notes.push(statusNote)
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
       report,
@@ -1066,7 +1068,6 @@ async function runLint(cmd: LintCommand): Promise<void> {
     )
     const lintStatus = target.httpStatus()
     const lintStatusNote = httpStatusNote(lintStatus.code, lintStatus.text, lintStatus.url)
-    if (lintStatusNote !== null) notes.push(lintStatusNote)
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
@@ -1101,6 +1102,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
       if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames))
     }
+    // After the arrival, as in the audit: the status is of the page arrived at.
+    if (lintStatusNote !== null) notes.push(lintStatusNote)
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(
       report,

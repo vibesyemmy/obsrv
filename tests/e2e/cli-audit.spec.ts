@@ -198,7 +198,7 @@ test('a page that navigates itself after load is measured where it arrived, and 
   expect(r.code, r.stderr).toBe(0)
   const m = JSON.parse(r.stdout)
   expect(m.summary.targets.count).toBe(2)
-  expect(m.warnings.join(' ')).toMatch(/the page navigated after it loaded, to file:.*audit\.html: a bot challenge, an interstitial or a redirect; the figures are of the page it arrived at/)
+  expect(m.warnings.join(' ')).toMatch(/the page navigated after it loaded, to file:.*audit\.html: a bot challenge, an interstitial, a redirect, or a dev server reloading under an edit; the figures are of the page it arrived at/)
   expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
 })
 
