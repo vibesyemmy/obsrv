@@ -58,7 +58,14 @@ export interface FrameCoverage {
  * without the clause the reader took the wall for a blank page while the
  * snap showed a heading and a slider.
  */
-export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, frames?: FrameCoverage, shadow?: ShadowContent): string {
+export function emptyDocumentNote(
+  what: 'audit' | 'lint',
+  waitedMs: number,
+  frames?: FrameCoverage,
+  shadow?: ShadowContent,
+  /** The HTTP status the page committed with, when it is known (`httpStatus`). */
+  status?: number,
+): string {
   const measured = what === 'audit' ? 'no visible text and no targets' : 'no visible text, edges or images'
   // How long the document was held, not a time since some event: a page
   // that navigated makes "after it loaded" ambiguous about which load.
@@ -106,6 +113,19 @@ export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, fram
       `and no wait brings its content into the light DOM; the figures are of the light DOM alone` +
       framed
     )
+  }
+  // An error page that is empty has a cause already named, one line above, by
+  // the status sentence: offering "a page rendered by script that had not run
+  // yet, a bot wall, or an empty document" repeats guesses it has disproved,
+  // and "waitMs gives a page that renders late longer" is advice that cannot
+  // help a 404. The shadow branch above takes precedence — roots are the more
+  // specific cause, and an error page in a component-built app has both.
+  if (status !== undefined && status >= 400) {
+    // "the page the server sent", and no closing "the figures are of X": the
+    // status sentence and, on a redirect, the landing sentence have each
+    // carried one already, and three in a row read as a chant while asking
+    // the reader to reconcile three descriptions of one page.
+    return `nothing to measure: the page the server sent had ${measured}, ${held}${framed}`
   }
   return (
     `nothing to measure: the page had ${measured}, ${held} — ` +

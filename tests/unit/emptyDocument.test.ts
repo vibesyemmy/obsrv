@@ -192,3 +192,37 @@ describe('an iframe too small to matter', () => {
     expect(emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 1 })).toContain('an <iframe> covers 100%')
   })
 })
+
+/**
+ * Read on a redirect that lands on a 404 (2026-09-12): the status sentence
+ * named the cause one line above, and this one still offered three guesses it
+ * had just disproved, plus advice to wait longer that cannot help an error
+ * page. The same generalisation the shadow-root branch already makes: when
+ * the cause is known, the guesses give way to it.
+ */
+describe('an empty page whose status already says why', () => {
+  it('drops the guesses and the wait advice when the server answered an error', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, undefined, 404)
+    expect(note).toContain('nothing to measure')
+    expect(note).not.toContain('a page rendered by script that had not run yet')
+    expect(note).not.toContain('bot wall')
+    expect(note).not.toContain('waitMs')
+    // And it names its own subject rather than adding a third "the figures
+    // are of X" to a reading that already carries two.
+    expect(note).toContain('the page the server sent had no visible text and no targets')
+    expect(note).not.toContain('the figures are of')
+  })
+  it('keeps them for an ordinary 200, where the cause really is unknown', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, undefined, 200)
+    expect(note).toContain('a page rendered by script that had not run yet')
+    expect(note).toContain('waitMs')
+  })
+  it('names the shadow roots even on an error page, since that is the more specific cause', () => {
+    // Both conditions true — an error page in a component-built app. The
+    // roots are what we know; the status has already said the rest.
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 3, interactive: 4, text: 5 }, 404)
+    expect(note).toContain('3 shadow roots')
+    expect(note).toContain('the page measured is built from web components')
+    expect(note).not.toContain('waitMs')
+  })
+})

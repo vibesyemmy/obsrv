@@ -3,6 +3,7 @@ import {
   Deadline,
   measureTimeoutNote,
   httpStatusNote,
+  landedElsewhereNote,
   navigatedAfterLoadNote,
   unansweredMeasureMessage,
   walkTimeoutNote,
@@ -98,6 +99,33 @@ describe('a page the server answered with an error status', () => {
         'not of the page asked for — check the route, the port, and that the server has it',
     )
   })
+  it('leaves the contrast out when the status is for an address other than the one asked for', () => {
+    // The redirect sentence has already said "not of the one asked for"; this
+    // one repeating it is the same point twice in consecutive lines. The
+    // condition is a fact this sentence holds — the status is for a different
+    // address — not an inference about whatever precedes it.
+    const moved = httpStatusNote(404, 'Not Found', 'https://a.test/missing', 'https://a.test/gone')
+    expect(moved).toBe(
+      'the server answered 404 Not Found for https://a.test/missing: the figures are of the error page it sent — ' +
+        'check the route, the port, and that the server has it',
+    )
+    // Same address: the contrast is the whole point, since the page asked for
+    // is the one that does not exist.
+    expect(httpStatusNote(404, 'Not Found', 'https://a.test/x', 'https://a.test/x')).toContain('not of the page asked for')
+  })
+  it('cannot drop the contrast unless the redirect sentence is there to carry it', () => {
+    // The two conditions must not come apart: whenever this note leaves the
+    // contrast out, landedElsewhereNote has something to say about the pair.
+    for (const [asked, landed] of [
+      ['https://a.test/gone', 'https://a.test/missing'],
+      ['a.test/gone', 'https://a.test/missing'],
+      ['http://127.0.0.1:5173/private', 'http://127.0.0.1:5173/login'],
+    ]) {
+      const said = httpStatusNote(404, 'Not Found', landed, asked)!
+      const dropped = !said.includes('not of the page asked for')
+      expect(dropped, `${asked} → ${landed}`).toBe(landedElsewhereNote(asked, landed) !== null)
+    }
+  })
   it('says the bare code when the server sent no reason', () => {
     expect(httpStatusNote(503, '', 'https://a.test/x')).toContain('the server answered 503 for https://a.test/x:')
   })
@@ -106,5 +134,55 @@ describe('a page the server answered with an error status', () => {
     expect(httpStatusNote(200, 'OK', 'https://a.test/')).toBeNull()
     expect(httpStatusNote(304, 'Not Modified', 'https://a.test/')).toBeNull()
     expect(httpStatusNote(0, '', 'file:///a/fixture.html')).toBeNull()
+  })
+})
+
+/**
+ * Run 14: a dev route that 302s to a login page was measured as though it
+ * were the route asked for — two targets where fifty were expected, and no
+ * sentence at all. The navigation note covers a move *after* load and the
+ * status note covers a 4xx; a redirect during the load that ends in a clean
+ * 200 is neither, so the address the load landed on is what has to be said.
+ */
+describe('a load that landed somewhere else', () => {
+  it('names where the figures came from, and what usually causes it', () => {
+    expect(landedElsewhereNote('http://127.0.0.1:5173/private', 'http://127.0.0.1:5173/login')).toBe(
+      'the load of http://127.0.0.1:5173/private ended at http://127.0.0.1:5173/login: a login wall, a route that has moved, ' +
+        'or a redirect the server chose — the figures are of the page it landed on, not of the one asked for',
+    )
+  })
+  it('leaves out a cause the landing page disproves', () => {
+    // A landing page that answers 404 was not a login wall. The note holds the
+    // status, so the list is narrowed on a fact rather than on the sentence
+    // that happens to follow it.
+    const onError = landedElsewhereNote('https://a.test/gone', 'https://a.test/missing', 404)!
+    expect(onError).toContain('a route that has moved, or a redirect the server chose')
+    expect(onError).not.toContain('a login wall')
+    // A clean landing keeps the full list: a login page answers 200.
+    expect(landedElsewhereNote('https://a.test/private', 'https://a.test/login', 200)).toContain('a login wall')
+    expect(landedElsewhereNote('https://a.test/private', 'https://a.test/login')).toContain('a login wall')
+  })
+  it('is nothing to say for the shapes the loader normalises, which every CLI call goes through', () => {
+    // The CLI hands the address on as typed and TargetSource.load normalises
+    // it, so the committed URL is routinely a fuller spelling of the same
+    // address. Reported as a redirect, `obsrv audit example.com` would say it
+    // landed somewhere else on every run.
+    expect(landedElsewhereNote('example.com', 'https://example.com/')).toBeNull()
+    expect(landedElsewhereNote('localhost:5173', 'http://localhost:5173/')).toBeNull()
+    expect(landedElsewhereNote('/tmp/page.html', 'file:///tmp/page.html')).toBeNull()
+    // An upgrade to https is not the redirect anyone means by this sentence:
+    // it happens on most public addresses and says nothing about the page.
+    expect(landedElsewhereNote('http://a.test/x', 'https://a.test/x')).toBeNull()
+    // A real move still reads as one, upgrade or not — and both addresses are
+    // printed the way the loader spells them, so the two halves of the
+    // sentence can be compared by eye.
+    expect(landedElsewhereNote('http://a.test/private', 'https://a.test/login')).toContain('ended at https://a.test/login')
+    expect(landedElsewhereNote('a.test/private', 'https://a.test/login')).toContain('the load of https://a.test/private')
+  })
+  it('is nothing to say when the load ended where it was sent', () => {
+    expect(landedElsewhereNote('https://a.test/x', 'https://a.test/x')).toBeNull()
+    // A trailing slash the server added is not a redirect worth a sentence.
+    expect(landedElsewhereNote('https://a.test/x', 'https://a.test/x/')).toBeNull()
+    expect(landedElsewhereNote('https://a.test/x', '')).toBeNull()
   })
 })
