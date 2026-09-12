@@ -237,11 +237,17 @@ test.describe('a report that arrives with something odd in it', () => {
     expect(r.stderr).not.toContain('did not answer the lint')
   })
 
-  test('a report the checks refuse says so, rather than guessing at the page', async () => {
+  test('an entry the checks refuse costs itself, and the count is the first warning', async () => {
+    // Until 0.55.0 this page's one over-long label refused the whole report,
+    // and the CLI exited 1. The entry goes now, the page is measured, and
+    // the reader is told how many went and of what kind — which is the only
+    // thing between a systematic fault and a page that looks thin.
     const r = await runCli(['lint', fixture('long-id.html'), '--preset', '1080p-24'])
-    expect(r.code).toBe(1)
-    expect(r.stderr).toContain('the page answered the lint')
-    expect(r.stderr).toContain('did not pass checking')
-    expect(r.stderr).not.toContain('may have navigated away')
+    expect(r.code, r.stderr).toBe(0)
+    const m = JSON.parse(r.stdout)
+    expect(m.warnings[0]).toMatch(/^1 of 1 text element the page sent was dropped: a value in it was outside what the measurement accepts/)
+    // And it is not reported as a page that had nothing on it, which is what
+    // the empty-document note would otherwise have said.
+    expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
   })
 })

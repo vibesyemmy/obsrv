@@ -1,6 +1,7 @@
 import type { AuditRect, AuditReport } from '../shared/audit'
 import { ppi as ppiOf } from '../shared/calibration'
 import { cssPxToMm } from '../shared/contrast'
+import { droppedEntriesNote } from '../shared/droppedEntries'
 import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
 
 /**
@@ -143,6 +144,13 @@ const round = (v: number, places: number): number => {
 
 export function auditFindings(report: AuditReport, screen: AuditScreen, thresholds: AuditThresholds): AuditResult {
   const warnings: string[] = []
+  // First, before any figure is offered: see the lint's twin, and
+  // shared/droppedEntries.ts for why the count is said out loud.
+  const droppedNote = droppedEntriesNote(report.dropped, {
+    targets: report.targets.length + (report.dropped?.targets ?? 0),
+    text: report.text.length + (report.dropped?.text ?? 0),
+  })
+  if (droppedNote) warnings.push(droppedNote)
   const ppi =
     screen.diagonalInches !== null && screen.diagonalInches > 0
       ? ppiOf(screen.cssWidth * screen.deviceScaleFactor, screen.cssHeight * screen.deviceScaleFactor, screen.diagonalInches)

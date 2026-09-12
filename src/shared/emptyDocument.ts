@@ -21,12 +21,27 @@ export const EMPTY_GRACE_MS = 3_000
 export const EMPTY_POLL_MS = 250
 
 /** An audit report with no target and no text element. */
-export function isEmptyAuditReport(report: { targets: unknown[]; text: unknown[] }): boolean {
+/** Whether the checks refused anything: an absent or all-zero block has not. */
+const anyDropped = (dropped: Record<string, number | undefined> | undefined): boolean =>
+  dropped !== undefined && Object.values(dropped).some(n => (n ?? 0) > 0)
+
+export function isEmptyAuditReport(report: { targets: unknown[]; text: unknown[]; dropped?: Record<string, number | undefined> }): boolean {
+  // A report the checks emptied is not an empty document: the page had
+  // content and the measurement refused it, which its own warning says.
+  // Reading it as "renders late" would hold the page for the grace period
+  // and then tell the reader something untrue about their page.
+  if (anyDropped(report.dropped)) return false
   return report.targets.length === 0 && report.text.length === 0
 }
 
 /** A lint report with no text, no edge and no image. */
-export function isEmptyLintReport(report: { text: unknown[]; edges: unknown[]; images: unknown[] }): boolean {
+export function isEmptyLintReport(report: {
+  text: unknown[]
+  edges: unknown[]
+  images: unknown[]
+  dropped?: Record<string, number | undefined>
+}): boolean {
+  if (anyDropped(report.dropped)) return false
   return report.text.length === 0 && report.edges.length === 0 && report.images.length === 0
 }
 

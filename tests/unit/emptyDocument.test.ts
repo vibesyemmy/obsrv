@@ -66,3 +66,25 @@ describe('empty document', () => {
     expect(r.stillEmpty).toBe(false)
   })
 })
+
+/**
+ * A report whose entries the checks dropped is not an empty document: the
+ * page had content and the measurement refused it. Saying "the page had no
+ * visible text" there is simply false, and it hides the drop behind a
+ * plausible story about a page that renders late.
+ */
+describe('a report emptied by dropped entries', () => {
+  it('is not an empty lint report', () => {
+    expect(isEmptyLintReport({ text: [], edges: [], images: [] })).toBe(true)
+    expect(isEmptyLintReport({ text: [], edges: [], images: [], dropped: { text: 1 } })).toBe(false)
+  })
+
+  it('is not an empty audit report', () => {
+    expect(isEmptyAuditReport({ targets: [], text: [] })).toBe(true)
+    expect(isEmptyAuditReport({ targets: [], text: [], dropped: { targets: 2 } })).toBe(false)
+  })
+
+  it('an empty `dropped` block still reads as empty', () => {
+    expect(isEmptyLintReport({ text: [], edges: [], images: [], dropped: {} })).toBe(true)
+  })
+})

@@ -599,12 +599,11 @@ test('a live audit of a page with nothing to scroll says the walk found nothing,
  * "may have navigated away" sends the reader after the wrong thing
  * (docs/research/2026-09-11-live-run-0.53.0.md).
  */
-test('a live report the checks refuse says so, rather than guessing at the page', async () => {
+test('a live entry the checks refuse costs itself, and the count is said', async () => {
   const r = await call('obsrv_lint', { url: fixture('long-id.html'), mode: 'live' })
-  expect(r.isError).toBe(true)
-  const said = JSON.stringify(r.content)
-  expect(said).toContain('the page answered the lint')
-  expect(said).not.toContain('may have navigated away')
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/1 of 1 text element the page sent was dropped/)
 })
 
 /**
