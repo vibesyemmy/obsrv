@@ -12,6 +12,7 @@ contention. This records what was investigated so it is not investigated again.
 | `Resulting promise was garbage collected` | Playwright ↔ Electron main, via CDP |
 | `UnknownVizError` from a capture | Chromium's GPU compositor |
 | A seam drag landing short of the pointer | Synthesised input timing |
+| `history.spec.ts:148` — the list falling left of the native pane at a wide split | Layout read before the split settled |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
 | `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | The desk: Electron's macOS hide/show are occlusion transitions |
@@ -66,6 +67,21 @@ webContents that is destroyed mid-call (a density change recreates the
 target's window) never settles — it hangs, and the promise stays reachable,
 so an evaluate awaiting it runs into the test timeout rather than this error.
 A spec that awaits a page script across a recreation should race it.
+
+## `history.spec.ts:148`, named because you will search for the line
+
+Seen 2026-09-12 on the merged tree of two branches, neither of which
+touched `history.spec` or any renderer code: "the list never falls left of
+the native pane, at a wide split or in solo target", one failure in a run
+of 486. It passes 11/11 when the file is run alone, and had passed in a
+full run of the same tree's parent half an hour earlier.
+
+It belongs to the drag-and-layout family above — a position read before
+the split has settled — but it is written out here under its own line
+number because that is what the next person will search for. Seeing it
+alone in an otherwise green run, on a change that touches no renderer
+code, is the signature; run the file by itself before reading anything
+into it.
 
 ## Ruled out
 
