@@ -9,11 +9,14 @@ describe('empty document', () => {
     expect(isEmptyLintReport({ text: [], edges: [], images: [1] })).toBe(false)
   })
   it('the note says what was missing, for how long, and what to do', () => {
+    // "3 s after it loaded" cannot be read on a page that navigated: after
+    // which load? The figure is how long the document was held, so it says
+    // that and claims no origin (obsrv-4f's cold read, 2026-09-12).
     expect(emptyDocumentNote('audit', 3012)).toBe(
-      'nothing to measure: the page had no visible text and no targets 3 s after it loaded — a page rendered by script that had not run yet, ' +
+      'nothing to measure: the page had no visible text and no targets, and none arrived in the 3 s it was held — a page rendered by script that had not run yet, ' +
         'a bot wall, or an empty document; the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer',
     )
-    expect(emptyDocumentNote('lint', 3000)).toContain('no visible text, edges or images 3 s after')
+    expect(emptyDocumentNote('lint', 3000)).toContain('no visible text, edges or images, and none arrived in the 3 s it was held')
   })
   it('names the iframe the visible page is, when it is one, so a wall is not read as a blank page', () => {
     // etsy.com's DataDome wall: one iframe over the whole viewport, and a
@@ -112,6 +115,16 @@ describe('a page whose content is in shadow roots', () => {
     expect(note).not.toContain('a bot wall')
     expect(note).not.toContain('had not run yet')
     expect(note).not.toContain('renders late longer')
+  })
+
+  it('says what no wait can change, not that no wait is worth making', () => {
+    // A dev app reloading under the measurement is a page where raising
+    // --wait is sensible — to catch a later revision. The flat "no wait will
+    // change that" told the reader otherwise; it is about the shadow content
+    // and should say so (obsrv-4f's cold read of the two notes together).
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    expect(note).toContain('no wait brings it into the light DOM')
+    expect(note).not.toContain('no wait will change that')
   })
 
   it('says the light DOM is what the figures are of', () => {

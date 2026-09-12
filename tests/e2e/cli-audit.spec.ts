@@ -175,7 +175,7 @@ test('a document that renders after load is held for and measured; one that stay
   const e = JSON.parse(empty.stdout)
   expect(e.summary.targets.count).toBe(0)
   expect(e.summary.text.count).toBe(0)
-  expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets 3(\.\d)? s after it loaded/)
+  expect(e.warnings[0]).toMatch(/^nothing to measure: the page had no visible text and no targets, and none arrived in the 3(\.\d)? s it was held/)
   expect(Date.now() - started).toBeGreaterThanOrEqual(3000)
 })
 

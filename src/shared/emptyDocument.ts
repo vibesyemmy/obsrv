@@ -60,7 +60,9 @@ export interface FrameCoverage {
  */
 export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, frames?: FrameCoverage, shadow?: ShadowContent): string {
   const measured = what === 'audit' ? 'no visible text and no targets' : 'no visible text, edges or images'
-  const waited = `${Math.round(waitedMs / 100) / 10} s`
+  // How long the document was held, not a time since some event: a page
+  // that navigated makes "after it loaded" ambiguous about which load.
+  const held = `and none arrived in the ${Math.round(waitedMs / 100) / 10} s it was held`
   // An iframe covering none of the viewport is neither a wall nor an embed
   // worth naming: chromestatus.com carries one, and "an <iframe> covers 0% of
   // the viewport — a bot wall or an embed" was noise beside the real cause.
@@ -78,21 +80,21 @@ export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, fram
   // drop the guesses, including the advice to wait, which cannot help here.
   if (shadow !== undefined && shadow.hosts > 0 && shadow.interactive + shadow.text > 0) {
     const roots = shadow.hosts === 1 ? '1 shadow root ' : `${shadow.hosts} shadow roots `
-    const held = [
+    const holds = [
       shadow.interactive > 0 ? `${shadow.interactive} interactive element${shadow.interactive === 1 ? '' : 's'}` : null,
       shadow.text > 0 ? `${shadow.text} text element${shadow.text === 1 ? '' : 's'}` : null,
     ]
       .filter((p): p is string => p !== null)
       .join(' and ')
     return (
-      `nothing to measure in the light DOM: the page had ${measured} ${waited} after it loaded, but ${roots}` +
-      `hold ${held} the measurement does not enter — this page is built from web components, not empty, ` +
-      `and no wait will change that; the figures are of the light DOM alone` +
+      `nothing to measure in the light DOM: the page had ${measured}, ${held}, but ${roots}` +
+      `hold ${holds} the measurement does not enter — this page is built from web components, not empty, ` +
+      `and no wait brings it into the light DOM; the figures are of the light DOM alone` +
       framed
     )
   }
   return (
-    `nothing to measure: the page had ${measured} ${waited} after it loaded — ` +
+    `nothing to measure: the page had ${measured}, ${held} — ` +
     `a page rendered by script that had not run yet, a bot wall, or an empty document; ` +
     `the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer` +
     framed
