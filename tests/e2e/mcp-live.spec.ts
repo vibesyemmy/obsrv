@@ -606,3 +606,16 @@ test('a live report the checks refuse says so, rather than guessing at the page'
   expect(said).toContain('the page answered the lint')
   expect(said).not.toContain('may have navigated away')
 })
+
+/**
+ * The live half of the dialog walk. A page locked behind a consent wall
+ * leaves the dialog's panel as the only scroller, and the app's own walk
+ * moves that while the page stays put — which the answer must say, exactly
+ * as the headless walk does (cli-walk.spec).
+ */
+test('a live audit of a page locked behind a dialog says the walk scrolled the dialog', async () => {
+  const r = await call('obsrv_audit', { url: fixture('dialog-locked.html'), mode: 'live', groupsOnly: true })
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/the walk scrolled a dialog, not the page/)
+})

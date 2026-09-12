@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a locked page whose dialog scrolls</title>
+    <style>
+      body { margin: 0; font: 16px/1.4 system-ui, sans-serif; color: #111; background: #fff;
+             position: fixed; top: 0; left: 0; right: 0; overflow: hidden; }
+      header { height: 64px; display: flex; gap: 16px; align-items: center; padding: 0 24px; }
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px; }
+      .card { border: 1px solid #ddd; padding: 12px; height: 160px; }
+      .save { height: 28px; }
+      .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; }
+      /* The dialog scrolls: that is the whole point — the walk finds *a*
+         scroller, so the note about having nothing to scroll stays quiet. */
+      .panel { background: #fff; width: 420px; max-height: 300px; overflow-y: auto; padding: 20px 24px; }
+    </style>
+  </head>
+  <body>
+    <header><a href="#home">Home</a><button type="button">Sign in</button></header>
+    <main class="grid">
+    <article class="card"><button class="save" type="button">Save 1</button></article>
+    <article class="card"><button class="save" type="button">Save 2</button></article>
+    <article class="card"><button class="save" type="button">Save 3</button></article>
+    <article class="card"><button class="save" type="button">Save 4</button></article>
+    <article class="card"><button class="save" type="button">Save 5</button></article>
+    <article class="card"><button class="save" type="button">Save 6</button></article>
+    <article class="card"><button class="save" type="button">Save 7</button></article>
+    <article class="card"><button class="save" type="button">Save 8</button></article>
+    <article class="card"><button class="save" type="button">Save 9</button></article>
+    <article class="card"><button class="save" type="button">Save 10</button></article>
+    <article class="card"><button class="save" type="button">Save 11</button></article>
+    <article class="card"><button class="save" type="button">Save 12</button></article>
+    <article class="card"><button class="save" type="button">Save 13</button></article>
+    <article class="card"><button class="save" type="button">Save 14</button></article>
+    <article class="card"><button class="save" type="button">Save 15</button></article>
+    <article class="card"><button class="save" type="button">Save 16</button></article>
+    <article class="card"><button class="save" type="button">Save 17</button></article>
+    <article class="card"><button class="save" type="button">Save 18</button></article>
+    <article class="card"><button class="save" type="button">Save 19</button></article>
+    <article class="card"><button class="save" type="button">Save 20</button></article>
+    <article class="card"><button class="save" type="button">Save 21</button></article>
+    <article class="card"><button class="save" type="button">Save 22</button></article>
+    <article class="card"><button class="save" type="button">Save 23</button></article>
+    <article class="card"><button class="save" type="button">Save 24</button></article>
+    <article class="card"><button class="save" type="button">Save 25</button></article>
+    <article class="card"><button class="save" type="button">Save 26</button></article>
+    <article class="card"><button class="save" type="button">Save 27</button></article>
+    <article class="card"><button class="save" type="button">Save 28</button></article>
+    <article class="card"><button class="save" type="button">Save 29</button></article>
+    <article class="card"><button class="save" type="button">Save 30</button></article>
+    </main>
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="panel">
+        <h1>Before you continue</h1>
+      <p class="line">Consent detail paragraph 1, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 2, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 3, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 4, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 5, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 6, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 7, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 8, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 9, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 10, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 11, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 12, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 13, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 14, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 15, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 16, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 17, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 18, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 19, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 20, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 21, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 22, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 23, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 24, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 25, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 26, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 27, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 28, so this panel scrolls on its own.</p>
+      <p class="line">Consent detail paragraph 29, so this panel scrolls on its own.</p>
+        <button id="got-it" type="button">Got it</button>
+      </div>
+    </div>
+  </body>
+</html>

@@ -2,7 +2,7 @@ import { Deadline, walkTimeoutNote, withinBudget } from '../shared/measureBudget
 import type { TargetSource } from '../main/targetSource'
 import type { Walked } from '../shared/types'
 import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
-import { WALK_NOTHING_NOTE } from '../shared/walkCoverage'
+import { WALK_NOTHING_NOTE, walkDialogNote } from '../shared/walkCoverage'
 
 /**
  * Walking the page before measuring it, headlessly.
@@ -83,6 +83,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
 
   let screenfuls = 0
   let atEnd = false
+  let dialogWalked = false
   let lastY = 0
   try {
     for (;;) {
@@ -93,6 +94,9 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
         break
       }
       const r = await step('next')
+      // The page is locked and the only scroller left is a dialog's panel:
+      // whatever this walk covers belongs to the dialog, not the page.
+      if (r.scroller === 'element' && r.dialog && r.hidden) dialogWalked = true
       // A `next` that lands where the page already was has no more page to
       // show — the end, whatever `atEnd` says — so a one-screen page is zero
       // screenfuls, not twelve dwells at offset 0.
@@ -122,6 +126,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
   }
+  if (dialogWalked) notes.push(walkDialogNote(screenfuls))
   await backToTop()
   await settleImages(target, deadline)
   return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes }

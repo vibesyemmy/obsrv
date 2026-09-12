@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { walkCoverageNote } from '../../src/shared/walkCoverage'
+import { walkCoverageNote, walkDialogNote } from '../../src/shared/walkCoverage'
 
 describe('walkCoverageNote', () => {
   it('is silent when the walk covered the page', () => {
@@ -23,5 +23,29 @@ describe('walkCoverageNote', () => {
         'was scrolled into view',
     )
     expect(walkCoverageNote({ screenfuls: 1, atEnd: true }, 800, 5_000)).toMatch(/after 1 screenful \(1600 CSS px\)/)
+  })
+})
+
+/**
+ * A page locked behind a dialog leaves the dialog's own panel as the only
+ * scroller, so the walk scrolls that and reports screenfuls and an end that
+ * belong to a 300 px panel rather than the page (measured 2026-09-12 on a
+ * fixture, and on airbnb.com's consent dialog).
+ */
+describe('walkDialogNote', () => {
+  it('says the screenfuls were the dialog\'s, and what that cost', () => {
+    const note = walkDialogNote(5)
+    expect(note).toContain('scrolled a dialog, not the page')
+    expect(note).toContain('5 screenfuls')
+    expect(note).toContain('was not brought into view before measuring')
+  })
+
+  it('counts one screenful in the singular', () => {
+    expect(walkDialogNote(1)).toContain('1 screenful ')
+    expect(walkDialogNote(1)).not.toContain('1 screenfuls')
+  })
+
+  it('reads sensibly when the dialog did not move either', () => {
+    expect(walkDialogNote(0)).toContain('the page never moved')
   })
 })

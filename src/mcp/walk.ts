@@ -1,5 +1,5 @@
 import type { Walked } from '../shared/types'
-import { WALK_NOTHING_NOTE } from '../shared/walkCoverage'
+import { WALK_NOTHING_NOTE, walkDialogNote } from '../shared/walkCoverage'
 import { ControlCallError } from './control'
 
 export type { Walked }
@@ -83,6 +83,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // The offset the last scroll reached. A `next` that lands where the page
   // already was has no more page to show — the end, whatever `atEnd` says —
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
+  let dialogWalked = false
   let lastY: number | null = 0
   try {
     for (;;) {
@@ -93,6 +94,10 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
         break
       }
       const r = await scroll('next')
+      // The page is locked and the only scroller left is a dialog's panel:
+      // the screenfuls below belong to the dialog, not the page. An app older
+      // than the field sends nothing, and gets no sentence.
+      if (r['dialog'] === true) dialogWalked = true
       const at = r['scrolled']
       if (at === null || at === undefined) {
         notes.push('the page did not confirm a scroll during the walk; the walk stopped there.')
@@ -125,6 +130,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - started }, notes } : { notes }
   }
+  if (dialogWalked) notes.push(walkDialogNote(screenfuls))
   await backToTop()
   return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes }
 }

@@ -136,3 +136,30 @@ test('a page that hides its overflow with nothing to scroll says so, instead of 
   expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
   expect(m.warnings.join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll/)
 })
+
+test('a page locked behind a dialog says the walk scrolled the dialog, not the page', async () => {
+  // The consent wall, the paywall, the onboarding modal: the body is fixed in
+  // place, so the only scroller left in the light DOM is the dialog's own
+  // panel. The walk scrolls that and used to report screenfuls and an end
+  // that belonged to a 300 px panel, with nothing to say the page never
+  // moved (measured 2026-09-12; airbnb.com's dialog is the same shape).
+  const r = await runCli(['audit', fixture('dialog-locked.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked.screenfuls).toBeGreaterThan(0)
+  expect(m.warnings.join(' ')).toMatch(/the walk scrolled a dialog, not the page/)
+  expect(m.warnings.join(' ')).toMatch(/was not brought into view before measuring/)
+})
+
+test('the lint says it too, on the same page', async () => {
+  const r = await runCli(['lint', fixture('dialog-locked.html'), '--preset', '1080p-24', '--groups-only'])
+  expect(r.code, r.stderr).toBe(0)
+  expect(JSON.parse(r.stdout).warnings.join(' ')).toMatch(/the walk scrolled a dialog, not the page/)
+})
+
+test('an app shell scrolling its own container is not called a dialog', async () => {
+  // The neighbouring case must stay quiet: same locked document, no dialog.
+  const r = await runCli(['audit', fixture('app-shell-unreachable.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  expect(JSON.parse(r.stdout).warnings.join(' ')).not.toMatch(/scrolled a dialog/)
+})

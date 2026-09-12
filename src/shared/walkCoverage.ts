@@ -45,3 +45,23 @@ export const WALK_NOTHING_NOTE =
   "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: " +
   'content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualised list or editor) was not brought ' +
   'into view before measuring, and the figures are of the page as it first shows'
+
+/**
+ * The walk's sentence for a page locked behind a dialog. A consent wall, a
+ * paywall or an onboarding modal fixes the body in place, which leaves the
+ * dialog's own panel as the only scroller in the light DOM — so the walk
+ * scrolls *that*, and `walked: { screenfuls: 5, atEnd: true }` vouches for a
+ * page it never moved (measured 2026-09-12 on a fixture, and on
+ * airbnb.com's). Named dialog semantics only: a page locked by an anonymous
+ * div says nothing here rather than the wrong thing.
+ */
+export function walkDialogNote(screenfuls: number): string {
+  const walked =
+    screenfuls === 0
+      ? 'the dialog did not move either and the page never moved'
+      : `the ${screenfuls} screenful${screenfuls === 1 ? ' ' : 's '}above ${screenfuls === 1 ? 'is' : 'are'} that dialog's and the page never moved`
+  return (
+    `the walk scrolled a dialog, not the page: this page hides the document's overflow while a dialog is open, so ${walked} — ` +
+    `content the page loads as it scrolls, and anything below the first screen, was not brought into view before measuring`
+  )
+}

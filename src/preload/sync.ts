@@ -5,7 +5,7 @@ import type { MAX_SELECT_OPTIONS, SelectOpen, SelectPick } from '../shared/selec
 import type { MAX_PICKER_VALUE, PickerOpen, PickerPick, PickerType } from '../shared/pickerPopup'
 import type { ScrollPos, ScrollReport, ScrollRequest, ScrollerKind } from '../shared/types'
 // One implementation, shared with the headless capture; see shared/scrollHost.ts.
-import { MAX_VISITED, canScroll, findScroller, overflowHidden, rootScrolls } from '../shared/scrollHost'
+import { MAX_VISITED, canScroll, findScroller, inDialog, overflowHidden, rootScrolls } from '../shared/scrollHost'
 // Re-exported: `MAX_VISITED` and `findScroller` are this module's public face
 // for tests/browser/findScroller.test.ts, which predates the move.
 export { MAX_VISITED, findScroller }
@@ -212,6 +212,10 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
       // document hides its overflow and the root is all there was to scroll.
       // An app shell with an inner scroller found says false: its walk works.
       hidden: scroller === 'root' && overflowHidden(),
+      // And the other way a walk can cover nothing of the page: the document
+      // is locked and the only scroller left is a dialog's own panel, so the
+      // screenfuls belong to the dialog. Pre-combined, as `hidden` is.
+      dialog: scroller === 'element' && overflowHidden() && inDialog(scrollerEl),
     } satisfies ScrollReport)
   }
 })
