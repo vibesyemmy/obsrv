@@ -133,10 +133,29 @@ describe('a page whose content is in shadow roots', () => {
     expect(emptyDocumentNote('lint', 3000, undefined, shadow)).toContain('light DOM')
   })
 
-  it('counts one root in the singular', () => {
+  it('counts one root in the singular, verb included', () => {
+    // The noun was singularised and the verb was not: a page with exactly one
+    // open host read "1 shadow root hold 12 interactive elements". Shipped in
+    // 0.57.0 and unseen until a fixture had one host — chromestatus had 159,
+    // and every reading since had been of many. The old assertion passed
+    // through it, because it only checked the noun.
     const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 0 })
-    expect(note).toContain('1 shadow root ')
+    expect(note).toContain('1 shadow root holds 1 interactive element')
     expect(note).not.toContain('1 shadow roots')
+    expect(note).not.toContain('root hold ')
+  })
+
+  it('reads with one of everything, which is the same page that has one host', () => {
+    // A page with a single open host is the page most likely to hold one of
+    // each, and that sentence had never been printed either (obsrv-4f).
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 1 })
+    expect(note).toContain('1 shadow root holds 1 interactive element and 1 text element')
+  })
+
+  it('keeps the plural verb for more than one root', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 2, interactive: 3, text: 4 })
+    expect(note).toContain('2 shadow roots hold 3 interactive elements and 4 text elements')
+    expect(note).not.toContain('roots holds')
   })
 
   it('names its own subject, so it does not depend on a sentence before it', () => {
