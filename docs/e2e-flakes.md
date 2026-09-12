@@ -203,6 +203,13 @@ monitor attached, and they pass on CI, whose runner display never moves.
 Stopping other Electron apps does **not** help here — that was checked, and
 is what separates this from the contention above.
 
+**A green run does not confirm this entry.** On 2026-09-12 a full suite of
+489 passed with these three among them, on a machine with the externals
+plugged back in. That says the condition was absent, not that the entry is
+stale: the three can only fail on the built-in panel alone, so a run that
+cannot fail them cannot confirm them either. Only unplug-and-rerun retires
+this.
+
 ## `solo-target.spec`: the `afterAll` that timed out in `app.close()`
 
 Seen once, on the 0.22.1 tag run: the file's last test passed in under a

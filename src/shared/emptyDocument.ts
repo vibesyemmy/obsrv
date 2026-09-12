@@ -83,16 +83,26 @@ export function emptyDocumentNote(what: 'audit' | 'lint', waitedMs: number, fram
   // "nothing to measure" with three causes, all false). Say the true one and
   // drop the guesses, including the advice to wait, which cannot help here.
   if (shadow !== undefined && shadow.hosts > 0 && shadow.interactive + shadow.text > 0) {
-    const roots = shadow.hosts === 1 ? '1 shadow root ' : `${shadow.hosts} shadow roots `
+    // The verb agrees with the count: one root *holds*. Measured on a page
+    // with exactly one open host (2026-09-12) — every earlier reading had
+    // many roots, so the plural verb was never seen to be wrong.
+    const roots = shadow.hosts === 1 ? '1 shadow root' : `${shadow.hosts} shadow roots`
+    const holdVerb = shadow.hosts === 1 ? 'holds' : 'hold'
     const holds = [
       shadow.interactive > 0 ? `${shadow.interactive} interactive element${shadow.interactive === 1 ? '' : 's'}` : null,
       shadow.text > 0 ? `${shadow.text} text element${shadow.text === 1 ? '' : 's'}` : null,
     ]
       .filter((p): p is string => p !== null)
       .join(' and ')
+    // "…holds 12 interactive elements the measurement does not enter" is a
+    // reduced relative ("[that] the measurement does not enter"), noticed
+    // 2026-09-12 and kept: it garden-paths — you read "elements the
+    // measurement" as a noun phrase before the verb lands — but it is
+    // grammatical, it is released wording, and rewriting it belongs in a
+    // change made for that reason, not folded into a fix for something else.
     return (
-      `nothing to measure in the light DOM: the page had ${measured}, ${held}, but ${roots}` +
-      `hold ${holds} the measurement does not enter — the page measured is built from web components, not empty, ` +
+      `nothing to measure in the light DOM: the page had ${measured}, ${held}, but ${roots} ` +
+      `${holdVerb} ${holds} the measurement does not enter — the page measured is built from web components, not empty, ` +
       `and no wait brings its content into the light DOM; the figures are of the light DOM alone` +
       framed
     )
