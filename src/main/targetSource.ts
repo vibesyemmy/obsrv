@@ -213,6 +213,8 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * Frames still flow — a blank paint is stale for a moment, never wrong.
    */
   private internal = false
+  /** The HTTP status of the last main-frame document that committed, and the address it was for. */
+  private lastStatus: { code: number; text: string; url: string } = { code: 0, text: '', url: '' }
   private disposed = false
   /**
    * What the owner asked for, not what the current window happens to be doing.
@@ -313,7 +315,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       })
     })
 
-    wc.on('did-navigate', (_e, url) => {
+    wc.on('did-navigate', (_e, url, httpResponseCode, httpStatusText) => {
       // Chromium wiped any device emulation with the old document; re-apply
       // before reporting, so the page lays out mobile from its first paint.
       this.applyEmulation()
@@ -322,6 +324,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // saying it again here is cheap and closes most of that window.
       if (this.throttle !== NO_THROTTLE) void this.applyThrottle()
       if (this.internal) return
+      // The status of the document that committed — the last one, after any
+      // redirects, on the main frame alone, which is the document that gets
+      // measured. A scheme with no HTTP status (file://, about:blank) gives 0.
+      this.lastStatus = { code: httpResponseCode ?? 0, text: httpStatusText ?? '', url }
       this.intendedUrl = url
       this.emit('url-changed', url, false)
     })
@@ -666,6 +672,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private lastAsk: AskOutcome = 'answered'
   askOutcome(): AskOutcome {
     return this.lastAsk
+  }
+
+  /**
+   * The HTTP status the server gave the document now loaded, with the address
+   * it answered for. A 4xx or 5xx page is still a page and is measured like
+   * any other, so the caller says which one the figures are of
+   * (`httpStatusNote`). Zero when the navigation carried no HTTP status at
+   * all — a file:// fixture, about:blank — or before anything has committed.
+   */
+  httpStatus(): { code: number; text: string; url: string } {
+    return this.lastStatus
   }
 
   /**

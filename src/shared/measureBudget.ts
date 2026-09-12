@@ -108,13 +108,33 @@ export function walkTimeoutNote(budgetMs: number): string {
 
 /**
  * A page that navigated after `load` — a challenge that solved and reloaded,
- * an interstitial that moved on, a redirect by script — was measured where
- * it arrived, which the answer says.
+ * an interstitial that moved on, a redirect by script, a dev server reloading
+ * under an edit — was measured where it arrived, which the answer says. Run
+ * 13 drove a dev server and found the dev causes were the common ones and the
+ * sentence named none of them.
  */
 export function navigatedAfterLoadNote(from: string, to: string): string {
   const same = from.replace(/\/$/, '') === to.replace(/\/$/, '')
   return (
     `the page navigated after it loaded${same ? ' (to the same address)' : `, to ${to}`}: ` +
-    `a bot challenge, an interstitial or a redirect; the figures are of the page it arrived at`
+    `a bot challenge, an interstitial, a redirect, or a dev server reloading under an edit; ` +
+    `the figures are of the page it arrived at`
+  )
+}
+
+/**
+ * A page the server answered with an error status is still a page, and was
+ * measured as though it were the one asked for: run 13's dev fixture answered
+ * 0 targets and 2 text elements for a missing route, silently. Null when the
+ * status carries the page — a 2xx, a 304, and 0 for a navigation with no HTTP
+ * status at all (file://, about:blank). A 3xx has already become the address
+ * it redirected to, which the navigated note names.
+ */
+export function httpStatusNote(code: number, statusText: string, url: string): string | null {
+  if (code < 400) return null
+  const said = statusText.trim() === '' ? `${code}` : `${code} ${statusText.trim()}`
+  return (
+    `the server answered ${said} for ${url}: the figures are of the error page it sent, ` +
+    `not of the page asked for — check the route, the port, and that the server has it`
   )
 }

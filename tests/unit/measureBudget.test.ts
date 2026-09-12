@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   Deadline,
   measureTimeoutNote,
+  httpStatusNote,
   navigatedAfterLoadNote,
   unansweredMeasureMessage,
   walkTimeoutNote,
@@ -45,8 +46,11 @@ describe('measure budget', () => {
     )
     expect(measureTimeoutNote('lint', 30_000, { from: 'https://a.test/', to: 'https://b.test/x' })).toContain('after navigating to https://b.test/x —')
     expect(walkTimeoutNote(15_000)).toBe('the page did not answer a scroll within 15 s (its main thread was busy or blocked)')
+    // Run 13: in dev the cause is usually none of the three this named — a
+    // dev server reloading under an edit, an auth redirect, a router replace.
     expect(navigatedAfterLoadNote('https://stackoverflow.com/questions', 'https://stackoverflow.com/questions/')).toBe(
-      'the page navigated after it loaded (to the same address): a bot challenge, an interstitial or a redirect; the figures are of the page it arrived at',
+      'the page navigated after it loaded (to the same address): a bot challenge, an interstitial, a redirect, ' +
+        'or a dev server reloading under an edit; the figures are of the page it arrived at',
     )
     expect(navigatedAfterLoadNote('file:///a/challenge.html', 'file:///a/audit.html')).toContain(', to file:///a/audit.html: a bot challenge')
   })
@@ -78,5 +82,29 @@ describe('the sentence for a measurement that came back with nothing', () => {
     expect(unansweredMeasureMessage('lint', 'answered')).toBe(
       'the page did not answer the lint (it may have navigated away, or thrown while being measured)',
     )
+  })
+})
+
+/**
+ * Run 13: a dev server's missing route answered 0 targets and 2 text
+ * elements with no warning — the 404 page measured as though it were the
+ * page. The status is on the navigation that committed, so the answer can
+ * say which page it really measured.
+ */
+describe('a page the server answered with an error status', () => {
+  it('names the status and says the figures are of the error page', () => {
+    expect(httpStatusNote(404, 'Not Found', 'http://127.0.0.1:5173/feature')).toBe(
+      'the server answered 404 Not Found for http://127.0.0.1:5173/feature: the figures are of the error page it sent, ' +
+        'not of the page asked for — check the route, the port, and that the server has it',
+    )
+  })
+  it('says the bare code when the server sent no reason', () => {
+    expect(httpStatusNote(503, '', 'https://a.test/x')).toContain('the server answered 503 for https://a.test/x:')
+  })
+  it('is nothing to say for a status that carries a page', () => {
+    // 200 and 304 are the page; a 3xx has already become the address it redirected to.
+    expect(httpStatusNote(200, 'OK', 'https://a.test/')).toBeNull()
+    expect(httpStatusNote(304, 'Not Modified', 'https://a.test/')).toBeNull()
+    expect(httpStatusNote(0, '', 'file:///a/fixture.html')).toBeNull()
   })
 })

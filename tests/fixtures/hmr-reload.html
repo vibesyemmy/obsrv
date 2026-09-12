@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a page that reloads under the measurement</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 0; padding: 24px; }
+      button { display: block; width: 220px; height: 48px; margin: 8px 0; font-size: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1 id="revision">revision</h1>
+    <div id="actions"></div>
+    <script>
+      // A dev server under an edit-save-edit-save: two reloads, 1.2 s apart,
+      // which is what HMR, an auth redirect or a router replace look like from
+      // outside. Revision n renders 5n + 1 buttons, so the target count in the
+      // answer says which revision was measured: 1, 6, then 11.
+      const n = Number(new URLSearchParams(location.search).get('n') || 0)
+      document.getElementById('revision').textContent = `revision ${n}`
+      const actions = document.getElementById('actions')
+      for (let i = 0; i < 5 * n + 1; i++) {
+        const b = document.createElement('button')
+        b.textContent = `action ${i + 1}`
+        actions.append(b)
+      }
+      if (n < 2) setTimeout(() => location.replace(`${location.pathname}?n=${n + 1}`), 1200)
+    </script>
+  </body>
+</html>
