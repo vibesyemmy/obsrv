@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { createServer, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -98,4 +101,42 @@ test('a page that holds its main thread after load: inspect answers found false 
   const m = JSON.parse(r.stdout)
   expect(m.found).toBe(false)
   expect(m.notes[0]).toMatch(/^the page did not answer the inspect within 3 s of loading: .* so nothing was found/)
+})
+
+/**
+ * The other half of the cut-load contract. Since 0.53.0 the audit and the
+ * lint measure a page whose `load` never fires and warn (cli-lint.spec pins
+ * that); inspect still errors, because a readout of one element is either
+ * the element or nothing. The CLI's help and docs/throttle.md say exactly
+ * that, and said the opposite for two releases because nothing here
+ * objected when the behaviour changed underneath them.
+ */
+test.describe('a load that never finishes', () => {
+  let server: Server
+  let url: string
+  const held: ServerResponse[] = []
+  test.beforeAll(async () => {
+    const html = readFileSync(resolve(__dirname, '../fixtures/never-loads.html'), 'utf8')
+    server = createServer((req, res) => {
+      if (req.url === '/hang.png') {
+        held.push(res)
+        return
+      }
+      res.setHeader('Content-Type', 'text/html')
+      res.end(html)
+    })
+    await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+    url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`
+  })
+  test.afterAll(async () => {
+    for (const res of held) res.destroy()
+    await new Promise<void>(r => server.close(() => r()))
+  })
+
+  test('inspect errors on a cut load, where the audit and the lint measure what stood', async () => {
+    const r = await runCli(['inspect', url, '--preset', '1080p-24', '--timeout', '3000', '--selector', 'p'])
+    expect(r.code).toBe(1)
+    expect(r.stderr).toMatch(/^obsrv: load did not finish within 3000 ms: http:\/\/127\.0\.0\.1:\d+\/ — raise --timeout for the full load/m)
+    expect(r.stdout).toBe('')
+  })
 })
