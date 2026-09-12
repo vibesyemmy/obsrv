@@ -555,3 +555,25 @@ only if the test job passes, and the npm publish happens *before* the tags are
 pushed. A flake here therefore leaves npm and the plugin tag live while the
 release page has no DMGs — for as long as it takes to notice. Re-running the
 failed job is the whole fix, but nobody sees the gap unless they are watching.
+
+
+## `select.spec.ts:101`: the overlay menu polls to zero rows and times out
+
+Seen 2026-09-12 on a run that followed three other suites back to back. The
+whole `select.spec.ts` file failed at line 101 — `expect.poll(() =>
+menuRows(app).then(r => r.length)).toBeGreaterThan(0)` received 0 after 9.9
+s — and every one of the file's nine tests passed on retry, the same
+assertion in 46 ms.
+
+The menu is drawn by Obsrv rather than by the platform: the trigger goes
+through the preload hook into main and back out as an overlay. The first
+open after a cold app start does that round trip with everything else the
+app is doing at launch, and under load it can miss the poll window; the
+retry finds an app that is already warm.
+
+**Telling it from a regression:** a regression fails on the retry too, and
+fails alone. This shape fails once, takes the rest of the file down with it
+(they share the app), and the whole file is green on retry in two orders of
+magnitude less time. If you see it after a change that does not touch
+`src/preload`, `src/main/ipc.ts`'s select handling or the overlay renderer,
+it is this.
