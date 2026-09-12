@@ -9,5 +9,5 @@ The MCP server it registers is the `getobsrv` package on npm, fetched with `npx`
 this same version;
 nothing here is the implementation.
 
-Built from `v0.55.0` by `scripts/build-plugin-branch.js`. Do not commit to this
+Built from `v0.56.0` by `scripts/build-plugin-branch.js`. Do not commit to this
 branch by hand — the next release overwrites it.
