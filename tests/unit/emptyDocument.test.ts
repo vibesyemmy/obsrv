@@ -88,3 +88,61 @@ describe('a report emptied by dropped entries', () => {
     expect(isEmptyLintReport({ text: [], edges: [], images: [], dropped: {} })).toBe(true)
   })
 })
+
+/**
+ * chromestatus.com/features (2026-09-12): 0 targets and 0 text, and the
+ * note offered three causes — a script that had not run, a bot wall, an
+ * empty document. All three were false. The page holds 159 shadow roots
+ * with 136 interactive elements in them, which the measurement does not
+ * enter. When that is what happened, the note should say so instead of
+ * guessing, and should not advise waiting longer: waiting cannot help.
+ */
+describe('a page whose content is in shadow roots', () => {
+  const shadow = { hosts: 159, interactive: 136, text: 147 }
+
+  it('names the shadow roots and what they hold', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    expect(note).toContain('159 shadow roots')
+    expect(note).toContain('136 interactive elements')
+    expect(note).toContain('does not enter')
+  })
+
+  it('drops the three causes that are false, and the advice that cannot help', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
+    expect(note).not.toContain('a bot wall')
+    expect(note).not.toContain('had not run yet')
+    expect(note).not.toContain('renders late longer')
+  })
+
+  it('says the light DOM is what the figures are of', () => {
+    expect(emptyDocumentNote('lint', 3000, undefined, shadow)).toContain('light DOM')
+  })
+
+  it('counts one root in the singular', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 0 })
+    expect(note).toContain('1 shadow root ')
+    expect(note).not.toContain('1 shadow roots')
+  })
+
+  it('leaves the old sentence alone when there are no shadow roots', () => {
+    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 0, interactive: 0, text: 0 })
+    expect(note).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
+  })
+})
+
+/**
+ * An iframe that covers none of the viewport is not a bot wall and not an
+ * embed worth naming — chromestatus.com carries one, and the clause read
+ * "an <iframe> covers 0% of the viewport … a bot wall or an embed", which is
+ * noise beside the true cause (2026-09-12).
+ */
+describe('an iframe too small to matter', () => {
+  it('earns no clause at 0% of the viewport', () => {
+    const note = emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 0.001 })
+    expect(note).not.toContain('<iframe>')
+  })
+
+  it('still names one that covers the viewport', () => {
+    expect(emptyDocumentNote('audit', 3000, { count: 1, viewportCoverage: 1 })).toContain('an <iframe> covers 100%')
+  })
+})

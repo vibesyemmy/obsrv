@@ -3,7 +3,7 @@
 // walk is written here so the CLI can ship it as source; nothing in this
 // file runs outside the target page except the string.
 
-import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT, framesInViewport } from './scrollHost'
+import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowContent } from './scrollHost'
 
 /**
  * The physical-units audit's raw material: every interactive element and
@@ -58,6 +58,12 @@ export interface AuditReport {
    * viewport. Absent from an older app's reply.
    */
   frames?: { count: number; viewportCoverage: number }
+  /**
+   * What the open shadow roots hold that this measurement did not enter
+   * (`shadowContent`). A page built from web components measures as nothing;
+   * this is how the answer says so instead of guessing.
+   */
+  shadow?: { hosts: number; interactive: number; text: number }
   /**
    * How many entries the checks refused, by kind — absent when none were.
    * A value out of bounds costs its own entry, not the page; the judge says
@@ -233,6 +239,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       ),
     ),
     frames: framesInViewport(),
+    shadow: shadowContent(),
     targets,
     text,
     truncated: { targets: targetsOver, text: textOver },

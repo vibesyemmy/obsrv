@@ -1,7 +1,7 @@
 import type { RGBA } from './inspect'
 
 
-import { clipTest, findScroller, rootScrolls, scrollOffset, SCROLL_HOST_SCRIPT, framesInViewport } from './scrollHost'
+import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowContent } from './scrollHost'
 
 /**
  * The lint's page walk: one pass over the rendered DOM that brings back
@@ -111,6 +111,12 @@ export interface LintReport {
    * viewport. Absent from an older app's reply.
    */
   frames?: { count: number; viewportCoverage: number }
+  /**
+   * What the open shadow roots hold that this measurement did not enter
+   * (`shadowContent`). A page built from web components measures as nothing;
+   * this is how the answer says so instead of guessing.
+   */
+  shadow?: { hosts: number; interactive: number; text: number }
   /**
    * How many entries the checks refused, by kind — absent when none were.
    * See `AuditReport.dropped`: the entry goes, not the page, and the judge
@@ -460,6 +466,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
       ),
     ),
     frames: framesInViewport(),
+    shadow: shadowContent(),
     text,
     edges,
     images,

@@ -1642,7 +1642,7 @@ export function registerIpc(ctx: AppContext): () => void {
         notes.push(measureTimeoutNote('audit', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames))
+        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, report.shadow))
       }
       // The screen's diagonal comes from the preset table, as for inspect; a
       // custom screen has none here, so there are no millimetres and the
@@ -1686,7 +1686,7 @@ export function registerIpc(ctx: AppContext): () => void {
         notes.push(measureTimeoutNote('lint', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, text: [], edges: [], images: [], truncated: { text: 0, edges: 0, images: 0 }, spacers: 0 }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames))
+        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow))
       }
       let profile
       try {
