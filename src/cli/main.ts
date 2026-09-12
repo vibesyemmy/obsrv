@@ -33,7 +33,7 @@ import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
 import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
-import { Deadline, measureTimeoutNote, navigatedAfterLoadNote, unansweredMeasureMessage } from '../shared/measureBudget'
+import { Deadline, httpStatusNote, measureTimeoutNote, navigatedAfterLoadNote, unansweredMeasureMessage } from '../shared/measureBudget'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote } from '../shared/walkCoverage'
@@ -252,7 +252,7 @@ async function loadWithin(
    * Without it a cut load is an error, which the report's renders keep.
    */
   rescue = false,
-): Promise<{ loaded: boolean }> {
+): Promise<{ loaded: boolean; arrivedAt: string | null }> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<false>(resolve => {
     timer = setTimeout(() => resolve(false), options.timeoutMs)
@@ -275,17 +275,31 @@ async function loadWithin(
     // that followed answered nothing within its budget while the DOM sat
     // there. A capture needs no script and never noticed.
     target.webContents.stop()
-    return { loaded: false }
+    return { loaded: false, arrivedAt: null }
   }
-  if (options.waitMs > 0) {
-    const until = Date.now() + options.waitMs
-    while (Date.now() < until) {
-      const err = watch.failed()
-      if (err) throw err
-      await sleep(Math.min(50, until - Date.now()))
+  // A navigation that lands during the wait is the page that will be
+  // measured: under a dev server that is HMR, an auth redirect or a router
+  // replace, and run 13 measured revision 2 of a fixture while naming the
+  // address of revision 0. `measureAfterLoad`'s own watch starts after this
+  // wait, so the wait watches for itself and hands the arrival on.
+  let arrivedAt: string | null = null
+  const onNav = (url: string, inPage: boolean): void => {
+    if (!inPage) arrivedAt = url
+  }
+  target.on('url-changed', onNav)
+  try {
+    if (options.waitMs > 0) {
+      const until = Date.now() + options.waitMs
+      while (Date.now() < until) {
+        const err = watch.failed()
+        if (err) throw err
+        await sleep(Math.min(50, until - Date.now()))
+      }
     }
+  } finally {
+    target.off('url-changed', onNav)
   }
-  return { loaded: true }
+  return { loaded: true, arrivedAt }
 }
 
 async function render(url: string, spec: RenderSpec, options: RenderOptions): Promise<RenderResult> {
@@ -804,10 +818,12 @@ async function measureAfterLoad<T>(
   cmd: { walk: boolean; timeoutMs: number },
   ask: (budgetMs: number) => Promise<T | null>,
   isEmpty: (report: T) => boolean,
+  /** Where the page had already gone during the load's wait, when it did. */
+  arrivedDuringWait: string | null = null,
 ): Promise<MeasureOutcome<T>> {
   const deadline = new Deadline(cmd.timeoutMs)
   // A holder rather than a `let`: the listener assigns it from a closure, which narrowing does not see.
-  const nav: { arrivedAt: string | null } = { arrivedAt: null }
+  const nav: { arrivedAt: string | null } = { arrivedAt: arrivedDuringWait }
   const onNav = (url: string, inPage: boolean): void => {
     if (!inPage) nav.arrivedAt = url
   }
@@ -865,7 +881,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
       if (refused) human(`warning: ${refused}`)
     }
-    await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     // The one page ask, within the same budget as the load (`shared/measureBudget`).
     const report =
       cmd.selector !== null ? await target.inspectSelector(cmd.selector, cmd.timeoutMs) : await target.inspectAt(cmd.at!.x, cmd.at!.y, cmd.timeoutMs)
@@ -875,6 +891,13 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       if (err) throw err
     }
     const notes = timedOut ? [measureTimeoutNote('inspect', cmd.timeoutMs)] : []
+    // The element was read on the page that is there now, which is not always
+    // the page that was asked for: it may have moved under the wait, and it
+    // may be the server's error page.
+    if (load.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, load.arrivedAt))
+    const inspectStatus = target.httpStatus()
+    const inspectStatusNote = httpStatusNote(inspectStatus.code, inspectStatus.text, inspectStatus.url)
+    if (inspectStatusNote !== null) notes.push(inspectStatusNote)
     for (const n of notes) human(`warning: ${n}`)
     const where = cmd.selector !== null ? `selector ${JSON.stringify(cmd.selector)}` : `(${cmd.at!.x}, ${cmd.at!.y})`
     const readout =
@@ -935,7 +958,12 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const notes: string[] = []
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
-    const m = await measureAfterLoad(target, watch, cmd, budget => target.auditPage(budget), isEmptyAuditReport)
+    const m = await measureAfterLoad(target, watch, cmd, budget => target.auditPage(budget), isEmptyAuditReport, load.arrivedAt)
+    // A 4xx or 5xx page is measured like any other page, so say which one
+    // these figures are of: a mistyped route, a stale dev server or the wrong
+    // port all answer with a page, and run 13's 404 was silent.
+    const status = target.httpStatus()
+    const statusNote = httpStatusNote(status.code, status.text, status.url)
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
@@ -952,9 +980,18 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       }
       // The page never answered within the budget: the figures are of nothing, and the note says so.
       notes.push(measureTimeoutNote('audit', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      if (statusNote !== null) notes.push(statusNote)
       report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      // After the arrival, which names the page, and before anything about
+      // what was in it: an error status says the page is not the one asked
+      // for, so every sentence after it is about a page the reader did not
+      // choose. Read the other way round — measured on the merge of this and
+      // the shadow-root work, 2026-09-12 — a paragraph about the error page's
+      // web components arrives first and reads as being about the page asked
+      // for, and the 404 only lands at the end.
+      if (statusNote !== null) notes.push(statusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames, report.shadow))
     }
     for (const n of notes) human(`warning: ${n}`)
@@ -1033,7 +1070,10 @@ async function runLint(cmd: LintCommand): Promise<void> {
       cmd,
       (budget): Promise<LintReport | null> => target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale), budget),
       isEmptyLintReport,
+      load.arrivedAt,
     )
+    const lintStatus = target.httpStatus()
+    const lintStatusNote = httpStatusNote(lintStatus.code, lintStatus.text, lintStatus.url)
     const walk = m.walk
     for (const n of walk.notes) human(`warning: ${n}`)
     let report = m.report
@@ -1055,6 +1095,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
         throw new Error(unansweredMeasureMessage('lint', target.askOutcome()))
       }
       notes.push(measureTimeoutNote('lint', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      if (lintStatusNote !== null) notes.push(lintStatusNote)
       report = {
         viewport: { width: applied.width, height: applied.height },
         pageHeight: applied.height,
@@ -1066,6 +1107,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
       }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      // The arrival, then the status, then what was in it — see the audit.
+      if (lintStatusNote !== null) notes.push(lintStatusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames, report.shadow))
     }
     for (const n of notes) human(`warning: ${n}`)
