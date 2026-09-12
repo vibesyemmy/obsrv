@@ -151,6 +151,17 @@ describe('a load that landed somewhere else', () => {
         'or a redirect the server chose — the figures are of the page it landed on, not of the one asked for',
     )
   })
+  it('leaves out a cause the landing page disproves', () => {
+    // A landing page that answers 404 was not a login wall. The note holds the
+    // status, so the list is narrowed on a fact rather than on the sentence
+    // that happens to follow it.
+    const onError = landedElsewhereNote('https://a.test/gone', 'https://a.test/missing', 404)!
+    expect(onError).toContain('a route that has moved, or a redirect the server chose')
+    expect(onError).not.toContain('a login wall')
+    // A clean landing keeps the full list: a login page answers 200.
+    expect(landedElsewhereNote('https://a.test/private', 'https://a.test/login', 200)).toContain('a login wall')
+    expect(landedElsewhereNote('https://a.test/private', 'https://a.test/login')).toContain('a login wall')
+  })
   it('is nothing to say for the shapes the loader normalises, which every CLI call goes through', () => {
     // The CLI hands the address on as typed and TargetSource.load normalises
     // it, so the committed URL is routinely a fuller spelling of the same

@@ -907,7 +907,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     // The element was read on the page that is there now, which is not always
     // the page that was asked for: it may have moved under the wait, and it
     // may be the server's error page.
-    const inspectLanded = landedElsewhereNote(cmd.url, load.landedAt)
+    const inspectLanded = landedElsewhereNote(cmd.url, load.landedAt, target.httpStatus().code)
     if (inspectLanded !== null) notes.push(inspectLanded)
     if (load.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, load.arrivedAt))
     const inspectStatus = target.httpStatus()
@@ -975,7 +975,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // Where the load landed comes before anything measured on the page: it is
     // the sentence that says which page the rest is about.
-    const landed = landedElsewhereNote(cmd.url, load.landedAt)
+    const landed = landedElsewhereNote(cmd.url, load.landedAt, target.httpStatus().code)
     if (landed !== null) notes.push(landed)
     const m = await measureAfterLoad(target, watch, cmd, budget => target.auditPage(budget), isEmptyAuditReport, load.arrivedAt)
     // A 4xx or 5xx page is measured like any other page, so say which one
@@ -1088,7 +1088,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // As in the audit: which page the figures are of, first.
-    const lintLanded = landedElsewhereNote(cmd.url, load.landedAt)
+    const lintLanded = landedElsewhereNote(cmd.url, load.landedAt, target.httpStatus().code)
     if (lintLanded !== null) notes.push(lintLanded)
     // One device pixel on this screen, in the page's CSS px: the walk
     // brings back only the edges thinner than that.

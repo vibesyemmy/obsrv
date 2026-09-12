@@ -165,7 +165,7 @@ function sameAddress(asked: string, landed: string): boolean {
   return bare(sent) === bare(landed)
 }
 
-export function landedElsewhereNote(asked: string, landed: string): string | null {
+export function landedElsewhereNote(asked: string, landed: string, status?: number): string | null {
   if (landed === '') return null
   // Compared as the loader spells it, not as it was typed: TargetSource.load
   // normalises (`example.com` → `https://example.com/`), so a raw comparison
@@ -179,8 +179,10 @@ export function landedElsewhereNote(asked: string, landed: string): string | nul
   } catch {
     sent = asked
   }
-  return (
-    `the load of ${sent} ended at ${landed}: a login wall, a route that has moved, or a redirect the server chose — ` +
-    `the figures are of the page it landed on, not of the one asked for`
-  )
+  // A landing page that answers an error was not a login wall — a login page
+  // answers 200 — so that cause is left out rather than left for the reader to
+  // step past. Conditioned on the status this note holds, not on the status
+  // sentence that follows it.
+  const causes = status !== undefined && status >= 400 ? 'a route that has moved, or a redirect the server chose' : 'a login wall, a route that has moved, or a redirect the server chose'
+  return `the load of ${sent} ended at ${landed}: ${causes} — the figures are of the page it landed on, not of the one asked for`
 }
