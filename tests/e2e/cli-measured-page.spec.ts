@@ -48,6 +48,10 @@ test.beforeAll(async () => {
       return
     }
     res.writeHead(404, 'Not Found', { 'Content-Type': 'text/html' })
+    if (path === '/missing-empty') {
+      res.end('<!doctype html><html lang="en"><head><title>404</title></head><body></body></html>')
+      return
+    }
     res.end('<!doctype html><html lang="en"><body><h1>Cannot GET</h1><p>no such route</p></body></html>')
   })
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
@@ -107,4 +111,18 @@ test('an inspect of an element on an error page, or on a page that moved, says w
   expect(reloaded.code, reloaded.stderr).toBe(0)
   const moved = JSON.parse(reloaded.stdout)
   expect(moved.notes.find((n: string) => n.includes('navigated')), `notes were ${JSON.stringify(moved.notes)}`).toContain('?n=2')
+})
+
+test('the status comes before what was found on the page, since it says the page is the wrong one', async () => {
+  // A 404 with nothing in it earns both sentences. Read in the other order,
+  // the reader takes a paragraph about an empty page as being about theirs,
+  // and only afterwards learns it was the server's error page.
+  const r = await runCli(['audit', `${origin}/missing-empty`, '--preset', '1080p-24', '--timeout', '20000'])
+  expect(r.code, r.stderr).toBe(0)
+  const warnings: string[] = JSON.parse(r.stdout).warnings
+  const status = warnings.findIndex(w => w.includes('the server answered 404'))
+  const found = warnings.findIndex(w => w.includes('nothing to measure'))
+  expect(status, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
+  expect(found, `warnings were ${JSON.stringify(warnings)}`).toBeGreaterThanOrEqual(0)
+  expect(status).toBeLessThan(found)
 })

@@ -980,14 +980,20 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       }
       // The page never answered within the budget: the figures are of nothing, and the note says so.
       notes.push(measureTimeoutNote('audit', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      if (statusNote !== null) notes.push(statusNote)
       report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      // After the arrival, which names the page, and before anything about
+      // what was in it: an error status says the page is not the one asked
+      // for, so every sentence after it is about a page the reader did not
+      // choose. Read the other way round — measured on the merge of this and
+      // the shadow-root work, 2026-09-12 — a paragraph about the error page's
+      // web components arrives first and reads as being about the page asked
+      // for, and the 404 only lands at the end.
+      if (statusNote !== null) notes.push(statusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames))
     }
-    // Last of the three, because it is about the page named by the sentence
-    // before it: which page was arrived at, then what its server answered.
-    if (statusNote !== null) notes.push(statusNote)
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
       report,
@@ -1089,6 +1095,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
         throw new Error(unansweredMeasureMessage('lint', target.askOutcome()))
       }
       notes.push(measureTimeoutNote('lint', cmd.timeoutMs, m.arrivedAt === null ? undefined : { from: cmd.url, to: m.arrivedAt }))
+      if (lintStatusNote !== null) notes.push(lintStatusNote)
       report = {
         viewport: { width: applied.width, height: applied.height },
         pageHeight: applied.height,
@@ -1100,10 +1107,10 @@ async function runLint(cmd: LintCommand): Promise<void> {
       }
     } else {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
+      // The arrival, then the status, then what was in it — see the audit.
+      if (lintStatusNote !== null) notes.push(lintStatusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames))
     }
-    // After the arrival, as in the audit: the status is of the page arrived at.
-    if (lintStatusNote !== null) notes.push(lintStatusNote)
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(
       report,
