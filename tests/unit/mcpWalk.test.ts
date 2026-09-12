@@ -43,7 +43,9 @@ describe('walkPage', () => {
   it('walks to the end a screenful at a time, dwells on each, and returns to the top', async () => {
     const d = deps([step(768), step(1536), step(2000, true)])
     const r = await walkPage(d)
-    expect(r).toEqual({ walked: { screenfuls: 3, atEnd: true, ms: 3 * WALK_DWELL_MS }, notes: [] })
+    // `documentLocked` is what the coverage note reads to tell a page that
+    // grew from one a modal held: false here, an ordinary page that scrolled.
+    expect(r).toEqual({ walked: { screenfuls: 3, atEnd: true, ms: 3 * WALK_DWELL_MS }, notes: [], documentLocked: false })
     expect(d.commands.map(c => c.payload['page'])).toEqual(['top', 'next', 'next', 'next', 'top'])
     expect(d.commands.every(c => c.command === 'scroll')).toBe(true)
     expect(d.slept).toEqual([WALK_DWELL_MS, WALK_DWELL_MS, WALK_DWELL_MS])
@@ -65,7 +67,7 @@ describe('walkPage', () => {
   it('a page with nothing to scroll: the first next lands where the page already was and the app says atEnd — zero screenfuls, at the end, no dwell', async () => {
     const d = deps([step(0, true)])
     const r = await walkPage(d)
-    expect(r).toEqual({ walked: { screenfuls: 0, atEnd: true, ms: 0 }, notes: [] })
+    expect(r).toEqual({ walked: { screenfuls: 0, atEnd: true, ms: 0 }, notes: [], documentLocked: false })
     expect(d.commands.map(c => c.payload['page'])).toEqual(['top', 'next', 'top'])
     expect(d.slept).toEqual([])
   })

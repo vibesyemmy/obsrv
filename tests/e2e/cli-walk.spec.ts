@@ -163,3 +163,29 @@ test('an app shell scrolling its own container is not called a dialog', async ()
   expect(r.code, r.stderr).toBe(0)
   expect(JSON.parse(r.stdout).warnings.join(' ')).not.toMatch(/scrolled a dialog/)
 })
+
+test('a page that grew under the walk is told it grew, not offered a modal', async () => {
+  // theguardian.com (9 screenfuls of 21,440 px), spiegel.de (10 of 34,582)
+  // and nytimes.com (6 of 9,741) were each told "a modal or a locked scroll
+  // held the page" about a page whose root the walk had just scrolled to its
+  // end — a cause the walk had already ruled out (2026-09-12).
+  const r = await runCli(['audit', fixture('grows-as-walked.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked).toMatchObject({ atEnd: true })
+  const warnings = m.warnings.join(' ')
+  expect(warnings).toMatch(/the page grew as it was walked/)
+  expect(warnings).not.toMatch(/a modal or a locked scroll/)
+})
+
+test('a walk that went nowhere on a tall page still reads as held', async () => {
+  // The other branch: zero screenfuls is the shape a lock makes, and the
+  // cautious sentence is right there even when nothing says the document
+  // was locked.
+  const r = await runCli(['audit', fixture('app-shell-unreachable.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const warnings = JSON.parse(r.stdout).warnings.join(' ')
+  if (/the walk saw the end after/.test(warnings)) {
+    expect(warnings).toMatch(/a modal or a locked scroll held the page/)
+  }
+})

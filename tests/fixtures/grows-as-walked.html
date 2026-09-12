@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a feed that extends as you scroll</title>
+    <style>
+      body { margin: 0; font: 16px/1.4 system-ui, sans-serif; color: #111; background: #fff; }
+      .row { height: 400px; border-bottom: 1px solid #ddd; padding: 12px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      What an endless feed does to a walk: the walk reaches the end that was
+      the end at the time, and by the time the page is measured there is more
+      of it. The coverage note reports the gap; the page is never locked and
+      the root always scrolls, so the note must say the page grew rather than
+      offer a modal that is not here (theguardian.com, spiegel.de and
+      nytimes.com all read that way on 2026-09-12).
+
+      The growth is hung off the walk's own return to the top rather than a
+      timer, so the fixture behaves the same on a slow runner as a fast one.
+    -->
+    <main id="feed"></main>
+    <script>
+      const feed = document.getElementById('feed')
+      let n = 0
+      const add = count => {
+        for (let i = 0; i < count; i++) {
+          const row = document.createElement('div')
+          row.className = 'row'
+          row.textContent = `Row ${++n}`
+          feed.append(row)
+        }
+      }
+      add(6)
+      let sawBottom = false
+      let grown = false
+      addEventListener('scroll', () => {
+        if (scrollY + innerHeight >= document.documentElement.scrollHeight - 2) sawBottom = true
+        // The walk ends by going back to the top: that is when the rest of
+        // the feed arrives, exactly as a real one mounts behind you.
+        if (sawBottom && !grown && scrollY === 0) {
+          grown = true
+          add(40)
+        }
+      })
+    </script>
+  </body>
+</html>

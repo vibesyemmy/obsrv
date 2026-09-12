@@ -19,16 +19,43 @@ export interface WalkedSummary {
 /** Slack: a page up to half a screenful past what the walk covered is rounding, not a gap. */
 const COVERAGE_SLACK = 0.5
 
-export function walkCoverageNote(walked: WalkedSummary | undefined, viewportHeightPx: number, pageHeightPx: number): string | null {
+/**
+ * What the walk saw of the page it stopped on, for naming the cause rather
+ * than offering the reader a list. `documentLocked` is the document hiding
+ * its own overflow at the moment the walk stopped — the shape a modal's
+ * scroll lock makes, including one that appears mid-walk. Absent when the
+ * caller cannot tell (an older app), and the sentence then stays cautious.
+ */
+export interface WalkEnd {
+  documentLocked?: boolean
+}
+
+export function walkCoverageNote(
+  walked: WalkedSummary | undefined,
+  viewportHeightPx: number,
+  pageHeightPx: number,
+  end?: WalkEnd,
+): string | null {
   if (walked === undefined || !walked.atEnd) return null
   if (!(viewportHeightPx > 0) || !(pageHeightPx > 0)) return null
   const covered = (walked.screenfuls + 1) * viewportHeightPx
   if (pageHeightPx <= covered + viewportHeightPx * COVERAGE_SLACK) return null
   const screens = Math.ceil(pageHeightPx / viewportHeightPx)
+  // A page the walk actually scrolled, on a document that was not locked
+  // when it stopped, was not held by anything: it grew under the walk, which
+  // is what an endless feed does. Saying "a modal or a locked scroll" there
+  // sends the reader after something that cannot be on the page (measured on
+  // theguardian.com, spiegel.de and nytimes.com, 2026-09-12). A walk that
+  // went nowhere reads as held whatever the flag says: zero screenfuls on a
+  // tall page is the shape a lock makes, and it may be one this cannot see.
+  const held = end?.documentLocked !== false || walked.screenfuls === 0
+  const cause = held
+    ? 'a modal or a locked scroll held the page, or it grew after the walk'
+    : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
   return (
     `the walk saw the end after ${walked.screenfuls} screenful${walked.screenfuls === 1 ? '' : 's'} (${Math.round(covered)} CSS px), ` +
-    `but the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls): a modal or a locked scroll held the page, ` +
-    `or it grew after the walk; the measurement is of the page as it stands, and nothing below ${Math.round(covered)} px was scrolled into view`
+    `but the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls): ${cause}; ` +
+    `the measurement is of the page as it stands, and nothing below ${Math.round(covered)} px was scrolled into view`
   )
 }
 
