@@ -20,7 +20,7 @@ afterEach(() => {
   host?.remove()
   host = null
   document.documentElement.style.overflow = ''
-  document.body.style.overflow = ''
+  document.body.style.cssText = ''
   window.scrollTo(0, 0)
 })
 
@@ -67,4 +67,60 @@ describe('walkStep', () => {
     expect(walkStep('top')).toMatchObject({ y: 0, scroller: 'element' })
     expect(shell.scrollTop).toBe(0)
   })
+
+  /**
+   * A page locked behind a dialog: the document cannot scroll, and the only
+   * scroller in the light DOM is the dialog's own panel. The walk then
+   * scrolls the dialog and reports five screenfuls of a 300 px panel, which
+   * reads as a walked page. It must say which it moved.
+   */
+  it('says when the container it scrolled is inside a dialog', () => {
+    // The lock every modal library applies: `position: fixed` on the body,
+    // which collapses the document's scroll height. `overflow: hidden` alone
+    // does not — `rootScrolls` is geometric, and the root still measures
+    // taller than its client box.
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.cssText = 'position:fixed;top:0;left:0;right:0;overflow:hidden'
+    mount(`
+      <main style="height:2400px">a page nobody can scroll</main>
+      <div role="dialog" aria-modal="true" style="position:fixed;inset:0">
+        <div id="panel" style="width:420px;max-height:300px;overflow-y:auto">
+          <div style="height:1800px">consent detail</div>
+        </div>
+      </div>
+    `)
+    const r = walkStep('next')
+    expect(r.scroller).toBe('element')
+    expect(r.hidden).toBe(true)
+    expect(r.dialog).toBe(true)
+  })
+
+  it('an app shell that scrolls its own container is not a dialog', () => {
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    mount(`
+      <div id="shell" style="position:fixed;inset:0">
+        <div id="scroller" style="position:absolute;inset:0;overflow-y:auto">
+          <div style="height:2400px">the app's own content</div>
+        </div>
+      </div>
+    `)
+    const r = walkStep('next')
+    expect(r.scroller).toBe('element')
+    expect(r.hidden).toBe(true)
+    expect(r.dialog).toBe(false)
+  })
+
+  it('a dialog on a page that still scrolls leaves the root the scroller', () => {
+    mount(`
+      <main style="height:2400px">a page that still scrolls</main>
+      <div role="dialog" style="position:fixed;top:0;left:0;width:300px;max-height:200px;overflow-y:auto">
+        <div style="height:900px">a panel that scrolls, over a page that also does</div>
+      </div>
+    `)
+    const r = walkStep('next')
+    expect(r.scroller).toBe('root')
+    expect(r.dialog).toBe(false)
+  })
+
 })

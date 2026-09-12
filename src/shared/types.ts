@@ -185,6 +185,12 @@ export interface ScrollReport {
    * Absent from an older app's reply.
    */
   hidden?: boolean
+  /**
+   * The walk moved a container inside a dialog while the document's own
+   * scroll was locked: the screenfuls it reports are the dialog's, not the
+   * page's. Absent from an older app's reply.
+   */
+  dialog?: boolean
 }
 
 export type UpdateStatus = 'current' | 'available' | 'error'

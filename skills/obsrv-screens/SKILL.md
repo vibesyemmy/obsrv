@@ -226,7 +226,9 @@ happened on the matrix snaps.
   A load that never finishes (a consent wall's beacon) is measured as it
   stands, with a first warning saying so; an empty page that is an iframe
   (a bot wall) is named as one; a page that hides its overflow with nothing
-  to scroll is named by the walk rather than reading as one screen.
+  to scroll is named by the walk rather than reading as one screen; and a
+  page locked behind a dialog, where the walk can only scroll the dialog's
+  own panel, is named too, so its screenfuls are not read as the page's.
 - The report's full-page capture takes a tall page in bands of one
   screenful each (the viewport stays the screen's, so `100vh` sections keep
   their size). Chrome stuck to the viewport would be painted into every band,

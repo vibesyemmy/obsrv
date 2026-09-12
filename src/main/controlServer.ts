@@ -484,9 +484,10 @@ export class ControlServer {
           scrolled: { x: result.x, y: result.y },
           scroller: result.scroller,
           atEnd: result.atEnd,
-          // Only when true — the one case the live walk acts on; an ordinary page's
-          // reply keeps its shape, and an older preload sends none.
+          // Only when true — the two cases the live walk acts on; an ordinary
+          // page's reply keeps its shape, and an older preload sends neither.
           ...(result.hidden === true ? { hidden: true } : {}),
+          ...(result.dialog === true ? { dialog: true } : {}),
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
         })
       }

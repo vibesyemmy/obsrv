@@ -37,6 +37,18 @@ export function rootScrolls(): boolean {
  * scrolling. With no scroller in its light DOM either, whatever it shows past
  * one screen is somewhere neither a capture nor a walk can reach; both say so.
  */
+/**
+ * Whether an element sits inside a dialog — a `<dialog>`, or the ARIA
+ * spelling every modal library reaches for. Used by the walk: a page that
+ * locks its own scroll while a dialog is open leaves the dialog's panel as
+ * the only scroller in the light DOM, and a walk that scrolls *that* has not
+ * walked the page at all. Named semantics rather than a guess at sizes, so a
+ * page locked by an anonymous div says nothing instead of the wrong thing.
+ */
+export function inDialog(el: Element | null): boolean {
+  return el !== null && el.closest('dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]') !== null
+}
+
 export function overflowHidden(): boolean {
   const doc = window.getComputedStyle(document.documentElement).overflowY === 'hidden'
   const body = !!document.body && window.getComputedStyle(document.body).overflowY === 'hidden'
@@ -241,6 +253,7 @@ export const SCROLL_HOST_SCRIPT = [
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,
   rootScrolls.toString(),
   overflowHidden.toString(),
+  inDialog.toString(),
   framesInViewport.toString(),
   canScroll.toString(),
   isVisible.toString(),
@@ -260,6 +273,13 @@ export interface WalkStepResult {
    * 'root'` and nothing to scroll, the walk had nowhere to go, and says so.
    */
   hidden: boolean
+  /**
+   * The container that was scrolled sits inside a dialog (`inDialog`). With
+   * `hidden`, the page itself is locked and the screenfuls above are the
+   * dialog's, not the page's — which the walk says rather than letting
+   * `atEnd` vouch for a page it never crossed.
+   */
+  dialog: boolean
 }
 
 /**
@@ -288,7 +308,7 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
   if (el) el.scrollTo({ top: want, left: el.scrollLeft, behavior: 'instant' })
   else window.scrollTo({ top: want, left: window.scrollX, behavior: 'instant' })
   const y = el ? el.scrollTop : window.scrollY
-  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root', hidden: overflowHidden() }
+  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root', hidden: overflowHidden(), dialog: inDialog(el) }
 }
 
 /** `walkStep` as source, self-contained, for `executeJavaScript` in a page the preload is not loaded into. */
