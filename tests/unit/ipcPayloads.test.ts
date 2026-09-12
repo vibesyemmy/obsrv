@@ -484,9 +484,30 @@ describe('parseAuditReport', () => {
     expect(r).toEqual(good)
     expect(r.targets).not.toBe(good.targets)
   })
+  /**
+   * A value the checks refuse costs its own entry, not the page. Refusing
+   * the report whole meant one bad element discarded every figure on the
+   * page — which is what a srcset descriptor did on reuters.com in 0.54.0.
+   */
+  it('drops the entry that failed and keeps its neighbours, counting it', () => {
+    const bad = { element: 'a', text: 'x', rect: { x: 0, y: 0, width: 'w', height: 1 } }
+    const r = parseAuditReport({ ...good, targets: [good.targets[0], bad, good.targets[0]] })!
+    expect(r).not.toBeNull()
+    expect(r.targets).toHaveLength(2)
+    expect(r.dropped).toEqual({ targets: 1 })
+    expect(r.text).toHaveLength(1)
+  })
+
+  it('counts text and targets apart, and says nothing when nothing was dropped', () => {
+    const badText = { ...good.text[0], fontSizePx: -1 }
+    const r = parseAuditReport({ ...good, text: [badText, good.text[0]] })!
+    expect(r.text).toHaveLength(1)
+    expect(r.dropped).toEqual({ text: 1 })
+    expect(parseAuditReport(good)!.dropped).toBeUndefined()
+  })
+
   it.each([
-    ['a bad entry, dropping the whole report', { ...good, targets: [{ element: 'a', text: 'x', rect: { x: 0, y: 0, width: 'w', height: 1 } }] }],
-    ['a negative font size', { ...good, text: [{ ...good.text[0], fontSizePx: -1 }] }],
+    ['a missing truncated block', { ...good, truncated: undefined }],
     ['a non-integer truncation count', { ...good, truncated: { targets: 1.5, text: 0 } }],
     ['a list past the bound', { ...good, targets: Array.from({ length: 5001 }, () => good.targets[0]) }],
     ['a missing viewport', { ...good, viewport: undefined }],
@@ -561,6 +582,26 @@ describe('parseLintReport', () => {
     expect(r!.images[0]!.candidates).toEqual(['60w', '240w'])
   })
 
+  it('drops a text entry that fails its checks, keeping the rest of the page', () => {
+    const bad = { ...good.text[0], color: 'not a colour' }
+    const r = parseLintReport({ ...good, text: [good.text[0], bad] })!
+    expect(r).not.toBeNull()
+    expect(r.text).toHaveLength(1)
+    expect(r.images).toHaveLength(1)
+    expect(r.dropped).toEqual({ text: 1 })
+  })
+
+  it('drops a bad image without costing the page its text', () => {
+    const r = parseLintReport({ ...good, images: [{ ...image, naturalWidth: 0 }] })!
+    expect(r.images).toHaveLength(0)
+    expect(r.text).toHaveLength(1)
+    expect(r.dropped).toEqual({ images: 1 })
+  })
+
+  it('says nothing when nothing was dropped', () => {
+    expect(parseLintReport(good)!.dropped).toBeUndefined()
+  })
+
   it('keeps the page when an image offers more candidates than are kept', () => {
     const many = Array.from({ length: 15 }, (_, n) => `${(n + 1) * 60}w`)
     const r = parseLintReport({ ...good, images: [{ ...image, candidates: many }] })
@@ -569,10 +610,9 @@ describe('parseLintReport', () => {
   })
 
   it.each([
-    ['a measurement that is malformed', { ...good, images: [{ ...image, rect: { x: 0, y: 0, width: 'w', height: 1 } }] }],
-    ['a natural size of zero', { ...good, images: [{ ...image, naturalWidth: 0 }] }],
-    ['a bad text entry', { ...good, text: [{ ...good.text[0], fontSizePx: -1 }] }],
     ['a missing viewport', { ...good, viewport: undefined }],
+    ['a missing truncated block', { ...good, truncated: undefined }],
+    ['a list past the bound', { ...good, text: Array.from({ length: 5001 }, () => good.text[0]) }],
     ['not an object', 'nope'],
   ])('still rejects %s whole', (_name, raw) => {
     expect(parseLintReport(raw)).toBeNull()

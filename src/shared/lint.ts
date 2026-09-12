@@ -111,6 +111,12 @@ export interface LintReport {
    * viewport. Absent from an older app's reply.
    */
   frames?: { count: number; viewportCoverage: number }
+  /**
+   * How many entries the checks refused, by kind — absent when none were.
+   * See `AuditReport.dropped`: the entry goes, not the page, and the judge
+   * says how many and of what kind.
+   */
+  dropped?: { text?: number; edges?: number; images?: number }
 }
 
 /** A raster this small on either side is a spacer, not a picture. */

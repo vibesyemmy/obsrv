@@ -1,4 +1,5 @@
 import { effectiveContrast, hex, relativeLuminance } from '../shared/contrast'
+import { droppedEntriesNote } from '../shared/droppedEntries'
 import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
 import type { LintEdgeKind, LintRect, LintReport, LintObjectFit } from '../shared/lint'
 import type { PanelParams } from '../shared/types'
@@ -300,6 +301,15 @@ const isVector = (src: string): boolean => /\.svg(?:[?#]|$)/i.test(src) || /^dat
 
 export function lintFindings(report: LintReport, screen: LintScreen, panel: LintPanel, thresholds: LintThresholds): LintResult {
   const warnings: string[] = []
+  // First, before any figure is offered: entries the checks refused are
+  // missing from everything below, and a systematic fault would otherwise
+  // read as a thin page (see shared/droppedEntries.ts).
+  const droppedNote = droppedEntriesNote(report.dropped, {
+    text: report.text.length + (report.dropped?.text ?? 0),
+    edges: report.edges.length + (report.dropped?.edges ?? 0),
+    images: report.images.length + (report.dropped?.images ?? 0),
+  })
+  if (droppedNote) warnings.push(droppedNote)
   // Device pixels per CSS pixel of the page: the density, the reflow zoom on
   // top of it, and the fit-to-width scale of a page laid out wider than the
   // screen (no viewport meta on a phone), which draws every page px smaller.

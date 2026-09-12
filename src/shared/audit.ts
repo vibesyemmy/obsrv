@@ -58,6 +58,13 @@ export interface AuditReport {
    * viewport. Absent from an older app's reply.
    */
   frames?: { count: number; viewportCoverage: number }
+  /**
+   * How many entries the checks refused, by kind — absent when none were.
+   * A value out of bounds costs its own entry, not the page; the judge says
+   * how many went, so a systematic fault reads as a number rather than as a
+   * quietly thin page.
+   */
+  dropped?: { targets?: number; text?: number }
 }
 
 /** Caps on what one report carries back; a page past them is still summarised. */
