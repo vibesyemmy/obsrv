@@ -97,8 +97,16 @@ export function framesInViewport(): { count: number; viewportCoverage: number } 
  * at everything on the page. Bounded by MAX_VISITED, as the scroll-host walk
  * is, so a page of ten thousand components cannot make this expensive.
  */
-export function shadowContent(): { hosts: number; interactive: number; text: number } {
+export function shadowContent(): {
+  hosts: number
+  interactive: number
+  text: number
+  lightInteractive: number
+  lightText: number
+} {
   const INTERACTIVE = 'a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'
+  const hasOwnText = (node: Element): boolean =>
+    Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)
   let hosts = 0
   let interactive = 0
   let text = 0
@@ -111,13 +119,24 @@ export function shadowContent(): { hosts: number; interactive: number; text: num
       hosts++
       interactive += shadow.querySelectorAll(INTERACTIVE).length
       for (const node of Array.from(shadow.querySelectorAll('*'))) {
-        if (Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)) text++
+        if (hasOwnText(node)) text++
       }
       walk(shadow)
     }
   }
   walk(document)
-  return { hosts, interactive, text }
+  // The light DOM counted by the same selector and the same text rule, so
+  // the share can be stated as a fraction of one page rather than two
+  // measurements compared across a difference nobody stated. The audit's own
+  // target count is the wrong denominator: it exempts inline text links
+  // (gov.uk, 102 of 125), so "40 of 12" is a sentence it could produce.
+  let lightText = 0
+  let lightVisited = 0
+  for (const node of Array.from(document.querySelectorAll('*'))) {
+    if (lightVisited++ > MAX_VISITED) break
+    if (hasOwnText(node)) lightText++
+  }
+  return { hosts, interactive, text, lightInteractive: document.querySelectorAll(INTERACTIVE).length, lightText }
 }
 
 /**
@@ -321,6 +340,14 @@ export interface WalkStepResult {
    * `atEnd` vouch for a page it never crossed.
    */
   dialog: boolean
+  /**
+   * What was on the page when the walk found nothing to scroll: iframes over
+   * the viewport and open shadow hosts, so the note can name the cause it
+   * measured instead of listing three (`walkNothingNote`). Measured only in
+   * that case — both counts walk the whole document, and a walk that is
+   * moving has no use for them.
+   */
+  blocked?: { frames: { count: number; viewportCoverage: number }; shadowHosts: number }
 }
 
 /**
@@ -349,7 +376,19 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
   if (el) el.scrollTo({ top: want, left: el.scrollLeft, behavior: 'instant' })
   else window.scrollTo({ top: want, left: window.scrollX, behavior: 'instant' })
   const y = el ? el.scrollTop : window.scrollY
-  return { y, atEnd: y >= max - 1, scroller: el ? 'element' : 'root', hidden: overflowHidden(), dialog: inDialog(el) }
+  const atEnd = y >= max - 1
+  const hidden = overflowHidden()
+  // The one case the note has to explain: the root is the scroller, it hides
+  // its overflow, and there is nowhere to go. Everything else pays nothing.
+  const stuck = atEnd && el === null && hidden
+  return {
+    y,
+    atEnd,
+    scroller: el ? 'element' : 'root',
+    hidden,
+    dialog: inDialog(el),
+    ...(stuck ? { blocked: { frames: framesInViewport(), shadowHosts: shadowContent().hosts } } : {}),
+  }
 }
 
 /** `walkStep` as source, self-contained, for `executeJavaScript` in a page the preload is not loaded into. */

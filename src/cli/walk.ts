@@ -2,7 +2,7 @@ import { Deadline, walkTimeoutNote, withinBudget } from '../shared/measureBudget
 import type { TargetSource } from '../main/targetSource'
 import type { Walked } from '../shared/types'
 import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
-import { WALK_NOTHING_NOTE, walkDialogNote } from '../shared/walkCoverage'
+import { walkDialogNote, walkNothingNote, type WalkBlocked } from '../shared/walkCoverage'
 
 /**
  * Walking the page before measuring it, headlessly.
@@ -53,6 +53,8 @@ export interface HeadlessWalkOutcome {
    * before it existed. `walkCoverageNote` uses it to name the cause.
    */
   documentLocked?: boolean
+  /** What blocked the page, when the walk found nothing to scroll (`walkNothingNote`). */
+  blocked?: WalkBlocked
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
@@ -91,6 +93,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   let screenfuls = 0
   let atEnd = false
   let documentLocked = false
+  let blocked: WalkBlocked | undefined
   let dialogWalked = false
   let lastY = 0
   try {
@@ -116,7 +119,10 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
           atEnd = true
           // Nothing to scroll on a page that hides its overflow: the walk is
           // right to stop, and must not read like a one-screen page.
-          if (screenfuls === 0 && r.scroller === 'root' && r.hidden) notes.push(WALK_NOTHING_NOTE)
+          if (screenfuls === 0 && r.scroller === 'root' && r.hidden) {
+            blocked = r.blocked
+            notes.push(walkNothingNote(r.blocked))
+          }
         } else notes.push('the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other means); measured from where it stood.')
         break
       }
@@ -140,7 +146,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   if (dialogWalked) notes.push(walkDialogNote(screenfuls))
   await backToTop()
   await settleImages(target, deadline)
-  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked }
+  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked, blocked }
 }
 
 /**

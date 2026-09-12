@@ -128,6 +128,15 @@ export interface ShadowContent {
   interactive: number
   /** Elements with text of their own inside them. */
   text: number
+  /**
+   * The same two counts taken over the light DOM, with the same selector and
+   * the same text rule, so a share can be stated as a fraction of one page
+   * (`shadowShareNote`). Optional: a payload from an older app has neither,
+   * and the share sentence then stays silent rather than dividing by a
+   * number it did not receive.
+   */
+  lightInteractive?: number
+  lightText?: number
 }
 
 export interface AwaitContentOptions {

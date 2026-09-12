@@ -33,10 +33,11 @@ import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
 import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
+import { shadowShareNote } from '../shared/shadowShare'
 import { Deadline, httpStatusNote, measureTimeoutNote, navigatedAfterLoadNote, unansweredMeasureMessage } from '../shared/measureBudget'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
-import { walkCoverageNote } from '../shared/walkCoverage'
+import { walkCoverageNote, type WalkBlocked } from '../shared/walkCoverage'
 import { layoutScale } from '../shared/layoutScale'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
@@ -617,11 +618,13 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // mounted (cli/walk.ts). `--no-walk` measures it as it first shows.
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
+    let blocked: WalkBlocked | undefined
     if ((options.audit || options.lint) && options.walk !== false) {
       const w = await walkHeadless(target)
       for (const n of w.notes) warn(`warning: ${n}`)
       walked = w.walked
       documentLocked = w.documentLocked
+      blocked = w.blocked
     }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
@@ -632,6 +635,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     const scale = layoutScale(applied.width, spec.textScale, auditReport?.viewport.width ?? lintReport?.viewport.width ?? 0)
     const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) * scale, {
       documentLocked,
+      blocked,
     })
     if (coverage !== null) warn(`warning: ${coverage}`)
     return {
@@ -993,6 +997,11 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       // for, and the 404 only lands at the end.
       if (statusNote !== null) notes.push(statusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames, report.shadow))
+      // And when the page did give something to measure, what it kept back.
+      // Not an `else`: the empty note wins when there is nothing at all,
+      // and `shadowShareNote` stands down for that case itself.
+      const shareNote = shadowShareNote('audit', report.shadow)
+      if (shareNote !== null) notes.push(shareNote)
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
@@ -1013,6 +1022,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     // The page's height is in its own px; the screen's are what the walk counted in.
     const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
       documentLocked: walk.documentLocked,
+      blocked: walk.blocked,
     })
     if (coverage !== null) human(`warning: ${coverage}`)
     const t = result.summary.targets
@@ -1110,6 +1120,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
       // The arrival, then the status, then what was in it — see the audit.
       if (lintStatusNote !== null) notes.push(lintStatusNote)
       if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames, report.shadow))
+      const shareNote = shadowShareNote('lint', report.shadow)
+      if (shareNote !== null) notes.push(shareNote)
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(
@@ -1132,6 +1144,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
     if (unwalked !== null) human(`warning: ${unwalked}`)
     const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
       documentLocked: walk.documentLocked,
+      blocked: walk.blocked,
     })
     if (coverage !== null) human(`warning: ${coverage}`)
     const s = result.summary

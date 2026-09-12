@@ -1,5 +1,5 @@
 import type { Walked } from '../shared/types'
-import { WALK_NOTHING_NOTE, walkDialogNote } from '../shared/walkCoverage'
+import { walkDialogNote, walkNothingNote, type WalkBlocked } from '../shared/walkCoverage'
 import { ControlCallError } from './control'
 
 export type { Walked }
@@ -64,6 +64,27 @@ export interface WalkOutcome {
  * the page did not confirm; then `top` again. Never throws: a walk must not
  * fail the measurement it precedes, so every failure is a note.
  */
+/**
+ * What an app said blocked the page, when it said it in numbers. An app
+ * older than the field sends nothing, and `walkNothingNote` then offers the
+ * list rather than claiming two measurements nobody made.
+ */
+function blockedFrom(raw: unknown): WalkBlocked | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const f = r['frames']
+  const hosts = r['shadowHosts']
+  if (f === null || typeof f !== 'object' || typeof hosts !== 'number' || !Number.isFinite(hosts)) return undefined
+  const fr = f as Record<string, unknown>
+  const count = fr['count']
+  const cover = fr['viewportCoverage']
+  if (typeof count !== 'number' || !Number.isFinite(count) || typeof cover !== 'number' || !Number.isFinite(cover)) return undefined
+  return {
+    frames: { count: Math.max(0, Math.floor(count)), viewportCoverage: Math.min(1, Math.max(0, cover)) },
+    shadowHosts: Math.max(0, Math.floor(hosts)),
+  }
+}
+
 export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   const notes: string[] = []
   const started = deps.now()
@@ -118,7 +139,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
           atEnd = true
           // Nothing to scroll on a page that hides its overflow (an app older
           // than the field says nothing, and gets no sentence).
-          if (screenfuls === 0 && r['scroller'] === 'root' && r['hidden'] === true) notes.push(WALK_NOTHING_NOTE)
+          if (screenfuls === 0 && r['scroller'] === 'root' && r['hidden'] === true) notes.push(walkNothingNote(blockedFrom(r['blocked'])))
         } else notes.push('the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the page, or a page that scrolls by other means); measured from where it stood.')
         break
       }
