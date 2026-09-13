@@ -90,10 +90,25 @@ reached one screenful further, a contrast verdict on a gradient) then part of
 what they read is noise wearing the shape of a result. obsrv-9b raised this
 and ranked it third of three; I would rank it first, because B4 and every
 before-and-after a user ever runs are measuring against it.
-*Check:* three real sites, five runs each, nothing changed between runs; the
-variation in finding counts published. Then the same three across two
-released versions, since drift between releases is the same defect on a
-longer clock. **Status: unknown — never measured.**
+*Check:* **two numbers, published separately, because one of them cannot be
+read without the other** (obsrv-9b's sharpening — a single figure over live
+sites cannot tell *the tool moved* from *the page moved*, and live sites
+rotate ads, split traffic and lazy-load on timing).
+
+1. **Against locally served fixtures**, five runs, bytes provably identical
+   between them: any variation is ours — a walk that reached a screenful
+   further, a settle that fired earlier, a contrast verdict that landed
+   differently. This is the number that says whether the tool is
+   deterministic, and it is the cheaper of the two. A non-zero result here
+   makes the second number uninterpretable, so run it first.
+2. **Against three real sites**, five runs: ours plus theirs, not
+   decomposable. This is what a user meets on a before-and-after, and it is
+   what B4's ratio has to survive.
+
+Then the fixtures again across two released versions, since drift between
+releases is the same defect on a longer clock — the walk count changing in
+0.60.0 was deliberate, and a number alone would not have said so.
+**Status: unknown — never measured.**
 
 ---
 
