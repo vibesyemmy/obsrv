@@ -78,6 +78,13 @@ type StatusReport = Omit<ControlStatus, 'tabs'>
 export interface ControlDeps {
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
   status(): StatusReport
+  /**
+   * The front tab's committed navigations so far, and where the last one
+   * went. One increment site in main (ipc.ts), so the walk can know its
+   * document was replaced under it without inferring a navigation from a URL
+   * string — the same fact the measurement notes read directly.
+   */
+  arrivals?(): { count: number; url: string }
   /** The same both-panes load `IPC.navigate` performs; resolves with the applied URL. */
   /** Points both panes at the URL; `loaded: false` when the load outran the app's navigate budget and is still going. */
   navigate(url: string): Promise<{ url: string; loaded: boolean }>

@@ -618,3 +618,34 @@ test('a live audit of a page locked behind a dialog says the walk scrolled the d
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/the walk scrolled a dialog, not the page/)
 })
+
+/**
+ * The live path's "the page navigated after it loaded" note, on the two
+ * shapes that were silent when it compared addresses instead of counting
+ * commits (obsrv-8d drove these against the running app, 2026-09-13): a page
+ * that reloads to the *same* URL, and a page that moves inside the window
+ * between the navigate resolving and the measurement starting. The headless
+ * path has subscribed to `url-changed` for the whole wait since 0.58.0; the
+ * live path took a snapshot at each end and could not see either.
+ */
+test('a live audit of a page that reloads to the same address mid-walk says it moved', async () => {
+  const r = await call('obsrv_audit', { url: fixture('reloads-during-walk.html'), mode: 'live', groupsOnly: true })
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
+  expect(said, `said: ${said}`).toMatch(/the page navigated after it loaded/)
+})
+
+// The third shape — a page that moves *during* the load rather than after it
+// — is not testable from here. Over file:// there is no HTTP status, so the
+// landing address falls back to the address requested and the comparison that
+// would catch it is blind; over http it needs a fixture server this spec does
+// not have. obsrv-8d saw it silent while driving the real app at an http
+// route (2026-09-13), and it stays unproven rather than asserted here.
+test('a live audit of a page that stays put says nothing about navigating', async () => {
+  // The other half of the two facts: a page that did not move must not draw
+  // the sentence. A count that never resets would fire on every tab reuse.
+  const r = await call('obsrv_audit', { url: fixture('tall.html'), mode: 'live', groupsOnly: true })
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).not.toMatch(/navigated after it loaded/)
+})
