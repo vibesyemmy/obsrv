@@ -29,7 +29,7 @@ describe('shadowShareNote', () => {
     const note = shadowShareNote('audit', shadow({ hosts: 4, interactive: 40, lightInteractive: 12 }))
     expect(note).toBe(
       "4 shadow roots hold 40 of this page's 52 interactive elements, which the measurement does not enter: " +
-        'the figures above are of the light DOM alone',
+        'the figures are of the light DOM alone',
     )
   })
 

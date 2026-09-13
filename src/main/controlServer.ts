@@ -487,6 +487,7 @@ export class ControlServer {
           // Only when true — the two cases the live walk acts on; an ordinary
           // page's reply keeps its shape, and an older preload sends neither.
           ...(result.hidden === true ? { hidden: true } : {}),
+          ...(result.panel === true ? { panel: true } : {}),
           ...(result.dialog === true ? { dialog: true } : {}),
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
         })

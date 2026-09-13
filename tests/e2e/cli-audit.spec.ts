@@ -264,7 +264,12 @@ test('a page built from web components is named as one, not called empty', async
   expect(m.summary.targets.count).toBe(0)
   const first = m.warnings[0]
   expect(first).toMatch(/^nothing to measure in the light DOM/)
-  expect(first).toMatch(/9 shadow roots hold 16 interactive elements and 26 text elements the measurement does not enter/)
+  // 17, not the 26 this asserted before 2026-09-13: both sides of the count
+  // are now filtered to what a measurement would have kept, and nine of the
+  // fixture's text-bearing elements inside those roots are not drawn — a
+  // <style> element has a text child and is not text on the page. The old
+  // number sat beside "the page had no visible text" and contradicted it.
+  expect(first).toMatch(/9 shadow roots hold 16 interactive elements and 17 text elements the measurement does not enter/)
   expect(first).toContain('built from web components, not empty')
   // The three that were false, and the advice that cannot help, are gone.
   expect(first).not.toContain('a bot wall')
@@ -295,7 +300,7 @@ test('a page that measures fine and hides most of itself says how much it hid', 
   const share = (m.warnings as string[]).find(w => w.includes('shadow roots hold'))
   expect(share, `warnings were ${JSON.stringify(m.warnings)}`).toBeTruthy()
   expect(share).toContain("4 shadow roots hold 40 of this page's 52 interactive elements")
-  expect(share).toContain('the figures above are of the light DOM alone')
+  expect(share).toContain('the figures are of the light DOM alone')
   // It is not the empty page's sentence: this page measured something.
   expect(share).not.toContain('built from web components')
 })

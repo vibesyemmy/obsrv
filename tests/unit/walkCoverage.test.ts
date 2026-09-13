@@ -27,10 +27,14 @@ describe('walkCoverageNote', () => {
 })
 
 /**
- * A page locked behind a dialog leaves the dialog's own panel as the only
- * scroller, so the walk scrolls that and reports screenfuls and an end that
- * belong to a 300 px panel rather than the page (measured 2026-09-12 on a
- * fixture, and on airbnb.com's consent dialog).
+ * A page locked behind a dialog leaves its panel as the only scroller, so the
+ * walk scrolls that and reports screenfuls and an end that belong to a 300 px
+ * panel rather than the page.
+ *
+ * Pinned on a fixture and never seen live. This comment used to add "and on
+ * airbnb.com's consent dialog"; the same day's report withdrew that claim in
+ * full, and what survived was the mechanism rather than the site. The second
+ * copy of a stale citation, found while fixing the first (2026-09-13).
  */
 /**
  * Which cause the note names. Measured 2026-09-12 on theguardian.com (9
@@ -86,8 +90,26 @@ describe('walkDialogNote', () => {
     expect(walkDialogNote(1)).not.toContain('1 screenfuls')
   })
 
-  it('reads sensibly when the dialog did not move either', () => {
-    expect(walkDialogNote(0)).toContain('the page never moved')
+  it('does not claim it scrolled something it could not move', () => {
+    // The zero shape opened "the walk scrolled a dialog" and closed "the
+    // dialog did not move either", contradicting itself in one sentence —
+    // seen only once all six shapes were printed together (2026-09-13).
+    const note = walkDialogNote(0)
+    expect(note).toContain('could not move the page or the dialog over it')
+    expect(note).not.toContain('the walk scrolled a dialog')
+  })
+
+  it('speaks for a panel with no dialog semantics, which used to be silent', () => {
+    // Strip role="dialog" from the fixture and the whole answer was empty,
+    // for a page whose panel scrolled five screenfuls while the page never
+    // moved. The gate is now the measurement — an element scroller on a
+    // locked document — and the dialog wording is layered on top of it.
+    const anon = walkDialogNote(5, false)
+    expect(anon).toContain('the walk scrolled a panel on the page, not the page itself')
+    expect(anon).toContain("are that panel's and the page never moved")
+    expect(anon).not.toContain('dialog')
+    // And the zero shape of the same case does not claim a scroll either.
+    expect(walkDialogNote(0, false)).toContain('could not move the page or the panel on it')
   })
 })
 
@@ -152,7 +174,11 @@ describe('walkCoverageNote beside a named wall', () => {
     // moved did not do.
     expect(note).not.toContain('a modal or a locked scroll held the page')
     expect(note).not.toContain('grew after the walk')
-    expect(note).toContain('nothing below 1080 px was scrolled into view')
+    // Beside a named wall it keeps only what it alone has — the two numbers.
+    // "The walk saw the end after 0 screenfuls" is wrong for a walk that was
+    // stopped, and the rest restated the wall note (the sweep, 2026-09-13).
+    expect(note).toBe('the page measures 8337 CSS px (8 screenfuls); the walk reached the first 1080 px of it')
+    expect(note).not.toContain('the walk saw the end')
   })
 
   it('keeps the cause when no wall was measured', () => {

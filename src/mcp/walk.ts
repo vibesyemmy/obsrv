@@ -111,7 +111,8 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // already was has no more page to show — the end, whatever `atEnd` says —
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
   let documentLocked = false
-  let dialogWalked = false
+  let panelWalked = false
+  let panelWasDialog = false
   let lastY: number | null = 0
   try {
     for (;;) {
@@ -127,7 +128,16 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       // The page is locked and the only scroller left is a dialog's panel:
       // the screenfuls below belong to the dialog, not the page. An app older
       // than the field sends nothing, and gets no sentence.
-      if (r['dialog'] === true) dialogWalked = true
+      // `panel` is the live measurement — an element scroller on a locked
+      // document. `hidden` cannot stand in for it here: on this surface it
+      // means *root* scroller plus a locked document, so the pair can never
+      // both be true (src/preload/sync.ts). An app older than `panel` sends
+      // only `dialog`, which is that same measurement narrowed to a named
+      // role, so it still fires and simply cannot report the anonymous case.
+      if (r['panel'] === true || r['dialog'] === true) {
+        panelWalked = true
+        if (r['dialog'] === true) panelWasDialog = true
+      }
       const at = r['scrolled']
       if (at === null || at === undefined) {
         notes.push('the page did not confirm a scroll during the walk; the walk stopped there.')
@@ -160,7 +170,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - started }, notes } : { notes }
   }
-  if (dialogWalked) notes.push(walkDialogNote(screenfuls))
+  if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes, documentLocked }
 }
