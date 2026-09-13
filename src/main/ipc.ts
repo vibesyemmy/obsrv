@@ -274,6 +274,13 @@ export function registerIpc(ctx: AppContext): () => void {
     // was written, so the navigation's own arrival came afterwards and read as
     // the page moving under the measurement. When the commit has not landed
     // yet, the next arrival is it, and it sets the barrier.
+    //
+    // A load that never commits — a navigation that fails outright — leaves
+    // this listener armed, and a later arrival sets that record's `atCount`
+    // long after the fact. Harmless as it stands: the record has left
+    // `askedOf` by then and nothing reads what it sets. It stops being
+    // harmless the moment that record gains a second reader, which is the
+    // change that would make this a defect rather than an oddity.
     if (arrivals(s).count === before) {
       const settle = (): void => {
         s.target.off('url-changed', settle)
