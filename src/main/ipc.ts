@@ -1761,8 +1761,12 @@ export function registerIpc(ctx: AppContext): () => void {
         const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
         if (landed !== null) pre.push(landed)
         // A navigation committed after the load settled: the page moved under
-        // the agent between `navigate` and this measurement.
-        if (st.url && st.url !== askedHere.landedAt) pre.push(navigatedAfterLoadNote(askedHere.asked, st.url))
+        // the agent between `navigate` and this measurement. Counted, not
+        // compared — as the audit's site above, which this one was left
+        // behind by: a reload to the same address moves the page just as much
+        // as a redirect to another one, and comparing addresses cannot see it.
+        const seen = arrivals(tab())
+        if (seen.count > askedHere.atCount && seen.url) pre.push(navigatedAfterLoadNote(askedHere.asked, seen.url))
       }
       const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
       if (statusNote !== null) pre.push(statusNote)

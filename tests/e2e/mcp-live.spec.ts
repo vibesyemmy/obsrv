@@ -691,3 +691,40 @@ test('a live measurement answers under the address it was asked for, not the pag
     await new Promise<void>(r => server.close(() => r()))
   }
 })
+
+/**
+ * Obsrv recreates its offscreen window when the density changes, then
+ * re-loads the page to restore it — a real navigation, at the page's own
+ * address, made by Obsrv rather than by the page. The arrivals record
+ * counted it, so the first live measurement after a preset change said "the
+ * page navigated after it loaded" about Obsrv's own housekeeping (run 16,
+ * 2026-09-13: cold app, two arrivals at the landing address where the page
+ * had committed once).
+ */
+test('a preset change is not reported as the page navigating', async () => {
+  // The page loads, then the density changes under it: `url` then `preset`
+  // is the order obsrv_drive applies them, so this is the sequence a user
+  // produces by picking a phone after opening a page.
+  const drove = await call('obsrv_drive', { url: fixture('tall.html'), preset: 'android-65' })
+  expect(drove.isError, JSON.stringify(drove.content).slice(0, 200)).toBeFalsy()
+  const r = await call('obsrv_audit', { mode: 'live', groupsOnly: true })
+  const m = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  const said = [...(m.warnings ?? []), ...(m.notes ?? [])].join(' ')
+  expect(said, `said: ${said}`).not.toMatch(/navigated after it loaded/)
+})
+
+/**
+ * The same page, the same reload, through the *lint*. The arrivals record
+ * converted the audit's measure site on 2026-09-13 and left the lint's
+ * comparing addresses, so live lint could not see a reload to the same
+ * address while live audit could — one record, two readers, one converted
+ * (found by obsrv-9b during run 16). The defect that record exists to fix,
+ * surviving in the site next door.
+ */
+test('a live lint of a page that reloads to the same address says it moved', async () => {
+  const r = await call('obsrv_lint', { url: fixture('reloads-during-walk.html'), mode: 'live', groupsOnly: true })
+  expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
+  expect(said, `said: ${said}`).toMatch(/the page navigated after it loaded/)
+})
