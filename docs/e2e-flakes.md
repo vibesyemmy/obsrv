@@ -409,6 +409,16 @@ delivering occlusion transitions still fails red rather than skipping
 green. A local run that reports these five as skipped is that desk; one
 that reports them failed is a real regression in the hide path.
 
+**They ran on a desk on 2026-09-13, and passed.** Every local suite that
+day had skipped them — through the 0.59.0 cut and the greens it shipped on —
+until a run late in the day came back **0 skipped, 496 passed**, the
+externals evidently plugged back in. So the hide path was exercised for the
+first time that day by a branch that had nothing to do with it, and every
+earlier green stands with a gap this one fills rather than repeats. Worth
+knowing in both directions: a skip is the desk, and a *pass* is the only
+thing that says the path still works — a green with seven skips in it has
+said nothing about them.
+
 ## `devtools.spec`: "Target page, context or browser has been closed" was the app crashing
 
 The one flaky retry in the first CI run after the collected-promise fix
