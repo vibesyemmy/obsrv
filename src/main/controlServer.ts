@@ -486,11 +486,18 @@ export class ControlServer {
         // and still not an error: the scroll may well have landed.
         const result = await this.deps.scroll(req)
         if (!result) return reply(200, { ok: true, scrolled: null, warnings: ['scroll offset could not be confirmed'] })
+        // Every reply carries the arrival: the live walk compares it between
+        // steps to tell a document that was replaced under it from a page
+        // that stopped moving, and without it that walk counted screenfuls
+        // across two pages (mcp/walk.ts). Main counts the commits, so neither
+        // side infers a navigation from an address that changed.
+        const arrival = this.deps.arrivals?.()
         return reply(200, {
           ok: true,
           scrolled: { x: result.x, y: result.y },
           scroller: result.scroller,
           atEnd: result.atEnd,
+          ...(arrival === undefined ? {} : { arrival }),
           // Only when true — the two cases the live walk acts on; an ordinary
           // page's reply keeps its shape, and an older preload sends neither.
           ...(result.hidden === true ? { hidden: true } : {}),

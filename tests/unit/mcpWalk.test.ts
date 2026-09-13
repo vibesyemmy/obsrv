@@ -199,6 +199,25 @@ describe('a page replaced under the walk', () => {
     expect(r.notes).toEqual([])
   })
 
+  it('two replacements in one walk leave the count and the offset belonging to the last page', async () => {
+    // The count is arithmetic and handles this by construction; the
+    // remembered offset is state, which is the half worth pinning.
+    const d = deps([arrived(768, 1), arrived(768, 2), arrived(768, 3), arrived(1536, 3, true)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 4 * WALK_DWELL_MS })
+    expect(r.notes).toEqual([])
+  })
+
+  it('a page that stops moving with no replacement still says a locked scroll held it', async () => {
+    // The reset must not have taken that sentence's job away: a page that
+    // will not move and a page that was replaced are different facts, and
+    // before this fix the second was reported as the first.
+    const d = deps([arrived(768, 1), arrived(768, 1)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 1, atEnd: false, ms: WALK_DWELL_MS })
+    expect(r.notes.join(' ')).toMatch(/stopped moving before the end of the walk/)
+  })
+
   it('an app that sends no arrivals keeps today\'s behaviour and says nothing new', async () => {
     const d = deps([step(768), step(1536), step(2000, true)])
     const r = await walkPage(d)

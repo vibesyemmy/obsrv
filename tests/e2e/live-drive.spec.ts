@@ -372,7 +372,13 @@ test('scroll drives the page offset of both panes and reports the offset reached
   expect(r.status).toBe(200)
   // A normal long page still scrolls the document root, and the round-trip
   // answers with what it actually reached rather than a bare ok.
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root', atEnd: false })
+  // The arrival is on every scroll reply: the live walk compares it between
+  // steps to tell a page that was replaced under it from one that stopped
+  // moving, and a field that appeared only sometimes would be a silence that
+  // fits two facts.
+  expect(r.body).toMatchObject({ ok: true, scrolled: { x: 0, y: 1200 }, scroller: 'root', atEnd: false })
+  expect(r.body.arrival).toMatchObject({ count: expect.any(Number), url: expect.any(String) })
+  expect((r.body.arrival as { count: number }).count).toBeGreaterThan(0)
   await expect.poll(() => paneScrollY('target'), { timeout: 5_000 }).toBe(1200)
   await expect.poll(() => paneScrollY('native'), { timeout: 5_000 }).toBe(1200)
 })
@@ -454,7 +460,7 @@ test('scroll finds the inner scroller on an app shell whose root cannot scroll',
 
   const r = await call('scroll', { x: 0, y: 1500 })
   expect(r.status).toBe(200)
-  expect(r.body).toEqual({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element', atEnd: false })
+  expect(r.body).toMatchObject({ ok: true, scrolled: { x: 0, y: 1500 }, scroller: 'element', atEnd: false })
 
   // The reported offset is not the whole claim: the inner scroller really
   // moved, in both panes, while the window itself never left the top.
@@ -493,7 +499,7 @@ test('scrollSelector targets a named container, and says so when it matches noth
 
   const named = await call('scroll', { x: 0, y: 900, scrollSelector: '#scroller' })
   expect(named.status).toBe(200)
-  expect(named.body).toEqual({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element', atEnd: false })
+  expect(named.body).toMatchObject({ ok: true, scrolled: { x: 0, y: 900 }, scroller: 'element', atEnd: false })
   expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
 
   // A selector that matches nothing must report the mismatch, not quietly
