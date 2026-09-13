@@ -258,6 +258,7 @@ export function registerIpc(ctx: AppContext): () => void {
     } catch {
       // Reported by `native.load` / `target.load` below.
     }
+    const before = arrivals(s).count
     const [applied] = await Promise.all([s.native.load(wanted), s.target.load(wanted)])
     // What the caller asked for, and where the load ended up. The headless
     // path has had both since 0.58.0 and says which page its figures are of;
@@ -265,7 +266,21 @@ export function registerIpc(ctx: AppContext): () => void {
     // `did-navigate` on every surface — and never asked for them, so an agent
     // driving the app at an authenticated route was handed the login page's
     // figures under the address it typed (the sweep, 2026-09-13).
-    askedOf.set(s, { asked: url, landedAt: s.target.httpStatus().url || applied, atCount: arrivals(s).count })
+    const record = { asked: url, landedAt: s.target.httpStatus().url || applied, atCount: arrivals(s).count }
+    askedOf.set(s, record)
+    // The barrier is this navigation's own commit, not the moment its promise
+    // resolved. `load` can resolve before the commit it asked for lands — run
+    // 16 caught it: the count was still the *previous* page's when the record
+    // was written, so the navigation's own arrival came afterwards and read as
+    // the page moving under the measurement. When the commit has not landed
+    // yet, the next arrival is it, and it sets the barrier.
+    if (arrivals(s).count === before) {
+      const settle = (): void => {
+        s.target.off('url-changed', settle)
+        record.atCount = arrivals(s).count
+      }
+      s.target.on('url-changed', settle)
+    }
     return applied
   }
   handle(IPC.navigate, (e, url: string) => {

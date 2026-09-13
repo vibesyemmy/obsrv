@@ -728,3 +728,38 @@ test('a live lint of a page that reloads to the same address says it moved', asy
   const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
   expect(said, `said: ${said}`).toMatch(/the page navigated after it loaded/)
 })
+
+/**
+ * A redirect makes the two panes disagree with the expectation: `expect` is
+ * registered for the address asked for and the panes commit the landing one,
+ * so the sync bus reads the visible pane's commit as news and mirrors it into
+ * the measuring pane, which loads it again. That second commit is Obsrv
+ * keeping its panes in step, and the arrivals record counted it as the page
+ * navigating — run 16, 2026-09-13, instrumented: `mirror? from=native` then a
+ * second `did-navigate` after the load resolved.
+ */
+test('a redirect is not reported as the page navigating after it loaded', async () => {
+  const server: Server = createServer((req, res) => {
+    if ((req.url ?? '').startsWith('/private')) {
+      res.writeHead(302, { Location: '/login' })
+      res.end()
+      return
+    }
+    res.setHeader('Content-Type', 'text/html')
+    res.end('<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Sign in</h1><button style="width:220px;height:44px">Continue</button></body></html>')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    const r = await call('obsrv_audit', { url: `${origin}/private`, mode: 'live', groupsOnly: true })
+    const m = r.structuredContent as { warnings?: string[] }
+    const said = (m.warnings ?? []).join(' ')
+    // The landing is still named — that sentence is the true one.
+    expect(said, `said: ${said}`).toMatch(/ended at .*\/login/)
+    // The page did not navigate after loading; Obsrv mirrored its own panes.
+    expect(said, `said: ${said}`).not.toMatch(/navigated after it loaded/)
+  } finally {
+    server.closeAllConnections()
+    await new Promise<void>(r => server.close(() => r()))
+  }
+})

@@ -226,6 +226,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * to say so.
    */
   private restoring = false
+  /**
+   * A load the sync bus sent into this pane to match the other one. Same
+   * reasoning as `restoring`, one layer out: a redirect commits an address
+   * `SyncBus.expect` was not told about, so the bus reads the visible pane's
+   * commit as news and mirrors it here — a real commit, made by Obsrv keeping
+   * its panes in step, which a consumer counting commits reads as the page
+   * navigating (run 16, instrumented: `mirror? from=native` immediately
+   * before it). Status and intended URL are kept; only `url-changed` is
+   * withheld, and only for the mirror's own load.
+   */
+  private mirroring = false
   /** The HTTP status of the last main-frame document that committed, and the address it was for. */
   private lastStatus: { code: number; text: string; url: string } = { code: 0, text: '', url: '' }
   private disposed = false
@@ -342,7 +353,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // measured. A scheme with no HTTP status (file://, about:blank) gives 0.
       this.lastStatus = { code: httpResponseCode ?? 0, text: httpStatusText ?? '', url }
       this.intendedUrl = url
-      if (this.restoring) return
+      if (this.restoring || this.mirroring) return
       this.emit('url-changed', url, false)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
@@ -565,6 +576,20 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   }
 
   /** Loads URL-bar input; returns the normalised URL that was requested. */
+  /**
+   * `load`, for the sync bus mirroring the other pane's commit into this one.
+   * See `mirroring`.
+   */
+  async loadMirrored(input: string): Promise<string> {
+    this.mirroring = true
+    try {
+      return await this.load(input)
+    } finally {
+      // As `restoring`: a flag left standing would swallow real navigations.
+      this.mirroring = false
+    }
+  }
+
   async load(input: string): Promise<string> {
     try {
       const url = normalizeUrl(input)
