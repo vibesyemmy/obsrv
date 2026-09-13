@@ -89,7 +89,13 @@ test('closing it from inside an inspector dispatch, a beat after it opened, no l
   }
 })
 
-test('a second toggle before the inspector has opened is ignored, not turned into a re-open', async () => {
+test('a toggle that arrives while the inspector is opening is applied when it opens, not dropped', async () => {
+  // The in-flight guard used to *drop* such a toggle, which reads as a
+  // click that did nothing: on a slow machine the window between
+  // `openDevTools()` and `devtools-opened` is wide enough to swallow a
+  // close, and CI caught it (0.59.0's bump run, devtools.spec:92 failing
+  // its close poll twice at 10 s). Two clicks in one tick put the second
+  // inside that window by construction, whatever the machine's speed.
   const opened = (): Promise<boolean> =>
     app.evaluate(() => (globalThis as any).__obsrv.target.webContents.isDevToolsOpened())
   await app.evaluate(({ Menu }) => {
@@ -97,7 +103,28 @@ test('a second toggle before the inspector has opened is ignored, not turned int
     item.click()
     item.click()
   })
-  await expect.poll(opened, { timeout: 10_000 }).toBe(true)
-  await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('target-devtools')!.click())
+  // Two toggles, so it opens and then closes — the second is honoured once
+  // the window exists rather than vanishing.
   await expect.poll(opened, { timeout: 10_000 }).toBe(false)
+  // And it stays closed: the pending toggle is one, not a queue that
+  // re-opens behind it.
+  await new Promise(r => setTimeout(r, 500))
+  expect(await opened()).toBe(false)
+  expect(await app.evaluate(() => 1 + 1)).toBe(2)
+})
+
+test('a third toggle while one is already pending does not stack up', async () => {
+  const opened = (): Promise<boolean> =>
+    app.evaluate(() => (globalThis as any).__obsrv.target.webContents.isDevToolsOpened())
+  await app.evaluate(({ Menu }) => {
+    const item = Menu.getApplicationMenu()!.getMenuItemById('target-devtools')!
+    item.click()
+    item.click()
+    item.click()
+  })
+  // Open, then one pending close — the third click collapses into the
+  // second rather than queueing a re-open behind it.
+  await expect.poll(opened, { timeout: 10_000 }).toBe(false)
+  await new Promise(r => setTimeout(r, 500))
+  expect(await opened()).toBe(false)
 })
