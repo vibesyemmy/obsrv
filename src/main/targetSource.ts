@@ -213,6 +213,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * Frames still flow — a blank paint is stale for a moment, never wrong.
    */
   private internal = false
+  /**
+   * Obsrv re-loading the page it was already showing, after a density change
+   * recreated the window. Narrower than `internal`, which covers the
+   * recreation's own `about:blank`: this is a real commit at the page's own
+   * address, so the status and the intended URL are kept, and only the
+   * `url-changed` event is withheld — a consumer counting commits reads it as
+   * the page navigating under the measurement otherwise, and the live audit
+   * said "the page navigated after it loaded (to the same address)" about
+   * Obsrv's own housekeeping (run 16, 2026-09-13). A load error is still
+   * reported: a restore that fails leaves the pane blank, and the window has
+   * to say so.
+   */
+  private restoring = false
   /** The HTTP status of the last main-frame document that committed, and the address it was for. */
   private lastStatus: { code: number; text: string; url: string } = { code: 0, text: '', url: '' }
   private disposed = false
@@ -329,6 +342,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // measured. A scheme with no HTTP status (file://, about:blank) gives 0.
       this.lastStatus = { code: httpResponseCode ?? 0, text: httpStatusText ?? '', url }
       this.intendedUrl = url
+      if (this.restoring) return
       this.emit('url-changed', url, false)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
@@ -532,10 +546,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // whichever loses commits nothing but an ERR_ABORTED).
       const url = this.intendedUrl
       if (url && url !== 'about:blank') {
+        // See `restoring`: this navigation is Obsrv's, not the page's.
+        this.restoring = true
         try {
           await win.webContents.loadURL(url)
         } catch {
           // `did-fail-load` already reported it; Chromium renders its error page.
+        } finally {
+          // In a `finally` because a flag that survived a failed restore would
+          // swallow every real navigation after it — the same defect, inverted
+          // and permanent.
+          this.restoring = false
         }
       } else {
         win.webContents.invalidate()
