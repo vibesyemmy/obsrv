@@ -130,6 +130,21 @@ export interface ReportToolInput {
 }
 
 /** Exactly one of `at` / `selector`; the message names both. */
+/**
+ * The address a measurement result answers under. One meaning on both
+ * surfaces: what this call asked for, or — live with no `url`, where there is
+ * no request to echo — the page it found showing. Live used to report the
+ * page the app had ended on, so the same field held the request headless and
+ * the landing live, and a caller reading fields alone could not tell which.
+ * Where the figures came from, when a load redirected or the page moved under
+ * the measurement, is what the notes are for; what the window is showing now
+ * is what `obsrv_drive`'s status is for.
+ */
+export function answeredUrl(asked: string | undefined, showing: string): string {
+  const trimmed = asked?.trim() ?? ''
+  return trimmed === '' ? showing : trimmed
+}
+
 export function inspectWhereError(input: Pick<InspectToolInput, 'at' | 'selector'>): string | null {
   const hasAt = input.at !== undefined
   const hasSelector = input.selector !== undefined && input.selector.trim().length > 0

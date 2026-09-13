@@ -2,6 +2,8 @@ import { test, expect, type ElectronApplication } from '@playwright/test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -648,4 +650,44 @@ test('a live audit of a page that stays put says nothing about navigating', asyn
   const r = await call('obsrv_audit', { url: fixture('tall.html'), mode: 'live', groupsOnly: true })
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).not.toMatch(/navigated after it loaded/)
+})
+
+/**
+ * `url` means one thing on both surfaces: the address the call asked for.
+ * Live reported the page the app had ended on instead, so the same field held
+ * the request headless and the landing live — measured 2026-09-13 driving the
+ * running app at a route that 302s to a login page. Where the figures came
+ * from is the note's job, and it names both addresses.
+ */
+test('a live measurement answers under the address it was asked for, not the page it landed on', async () => {
+  const server: Server = createServer((req, res) => {
+    if ((req.url ?? '').startsWith('/private')) {
+      res.writeHead(302, { Location: '/login' })
+      res.end()
+      return
+    }
+    res.setHeader('Content-Type', 'text/html')
+    res.end('<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Sign in</h1><button style="width:220px;height:44px">Continue</button></body></html>')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    const r = await call('obsrv_audit', { url: `${origin}/private`, mode: 'live', groupsOnly: true })
+    const m = r.structuredContent as { mode: string; url: string; warnings?: string[]; summary: { targets: { count: number } } }
+    expect(m.mode).toBe('live')
+    // The address asked for, though the figures are of the login page it landed on.
+    expect(m.url).toBe(`${origin}/private`)
+    expect(m.summary.targets.count).toBe(1)
+    // And the landing is not lost: the note names both addresses, which is
+    // what makes the field safe to pin to the request.
+    const landed = (m.warnings ?? []).find(w => w.includes('ended at'))
+    expect(landed, `warnings were ${JSON.stringify(m.warnings)}`).toContain(`${origin}/login`)
+    expect(landed).toContain(`${origin}/private`)
+  } finally {
+    // The app keeps its connection alive, so `close` alone waits for a socket
+    // that is not coming back and the test times out rather than fails —
+    // measured, about one run in five.
+    server.closeAllConnections()
+    await new Promise<void>(r => server.close(() => r()))
+  }
 })

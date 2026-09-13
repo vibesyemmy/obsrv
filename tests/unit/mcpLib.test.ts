@@ -3,6 +3,7 @@ import {
   MAX_INLINE_IMAGE_BYTES,
   PANE_CAPTURE_HEADLESS_NOTE,
   UsageError,
+  answeredUrl,
   buildAuditArgs,
   buildLintArgs,
   buildDiffArgs,
@@ -566,5 +567,25 @@ describe('killedMessage during an Electron download', () => {
     expect(msg).toContain('the download does not survive the kill')
     expect(msg).not.toContain('nothing of its own')
     expect(msg).not.toContain('stuck elsewhere')
+  })
+})
+
+/**
+ * `url` in a measurement result meant two different things: the address asked
+ * for headless, and the page the app happened to be showing live — so a
+ * caller reading fields alone could not tell which it held, and could not
+ * recover the request on the live surface without parsing the note's prose.
+ * One meaning on both surfaces: the address this call asked for, or the page
+ * it found when it asked for none.
+ */
+describe('the address a measurement answers under', () => {
+  it('is the address the call asked for, whatever the page turned out to be', () => {
+    expect(answeredUrl('https://a.test/private', 'https://a.test/login')).toBe('https://a.test/private')
+    expect(answeredUrl('  https://a.test/private  ', 'https://a.test/login')).toBe('https://a.test/private')
+  })
+  it('is the page it found when the call named no address, which is the live no-url case', () => {
+    expect(answeredUrl(undefined, 'https://a.test/showing')).toBe('https://a.test/showing')
+    expect(answeredUrl('', 'https://a.test/showing')).toBe('https://a.test/showing')
+    expect(answeredUrl('   ', 'https://a.test/showing')).toBe('https://a.test/showing')
   })
 })

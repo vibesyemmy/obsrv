@@ -38,6 +38,7 @@ import {
   killBudgetMs,
   killedMessage,
   listCatalog,
+  answeredUrl,
   liveModeError,
   planLive,
   planSnapPath,
@@ -404,7 +405,12 @@ const snapOutputShape = {
   inlined: z
     .boolean()
     .describe('Whether the PNG came back as an inline image block. False past the 1.5 MiB cap (typically fullPage); a warning says so and names the path.'),
-  url: z.string().optional().describe('Live only: the URL the app reports showing, read after the capture.'),
+  url: z
+    .string()
+    .optional()
+    .describe(
+      'Live only: the page captured, read after the capture — which is the landing when a load redirected. The measuring tools answer under the address asked for instead; a capture has no such choice, since the PNG is of whatever arrived.',
+    ),
   presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
   profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
@@ -1273,7 +1279,11 @@ const auditOutputShape = {
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   walked: walkedField,
-  url: z.string().describe('The page audited: the argument (headless) or what the app reports showing (live).'),
+  url: z
+    .string()
+    .describe(
+      'The address this call asked for, on either surface — or, live with no `url`, the page it found showing. A load that redirected, or a page that moved under the measurement, is named in the notes rather than swapped in here, so the figures can always be attributed to the request that produced them; `obsrv_drive` reports what the window is showing now.',
+    ),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was measured.'),
   tabIndex: z.number().optional(),
@@ -1382,7 +1392,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     const auditAdded = [...(auditListed === null ? [] : [auditListed]), ...(auditCoverage === null ? [] : [auditCoverage])]
     const structured = {
       mode: 'live',
-      url: status.url,
+      url: answeredUrl(input.url, status.url),
       preset: status.presetId,
       tabId: status.tabId,
       tabIndex: status.tabIndex,
@@ -1547,7 +1557,11 @@ const lintOutputShape = {
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   walked: walkedField,
-  url: z.string().describe('The page linted: the argument (headless) or what the app reports showing (live).'),
+  url: z
+    .string()
+    .describe(
+      'The address this call asked for, on either surface — or, live with no `url`, the page it found showing. A load that redirected, or a page that moved under the measurement, is named in the notes rather than swapped in here, so the figures can always be attributed to the request that produced them; `obsrv_drive` reports what the window is showing now.',
+    ),
   preset: z.string().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was judged.'),
   tabIndex: z.number().optional(),
@@ -1659,7 +1673,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {
       mode: 'live',
-      url: status.url,
+      url: answeredUrl(input.url, status.url),
       preset: status.presetId,
       tabId: status.tabId,
       tabIndex: status.tabIndex,
@@ -1842,7 +1856,11 @@ const inspectOutputShape = {
         '(the app was launched but did not answer in time; the next call will likely find it).',
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
-  url: z.string().describe('The page inspected: the argument (headless) or what the app reports showing (live).'),
+  url: z
+    .string()
+    .describe(
+      'The address this call asked for, on either surface — or, live with no `url`, the page it found showing. A load that redirected, or a page that moved under the measurement, is named in the notes rather than swapped in here, so the figures can always be attributed to the request that produced them; `obsrv_drive` reports what the window is showing now.',
+    ),
   preset: z.string().optional().describe("Headless: preset id or 'custom'. Live: the app's preset."),
   tabId: z.string().optional().describe('Live: the tab that was inspected.'),
   tabIndex: z.number().optional(),
@@ -2263,7 +2281,7 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     }
     const structured = {
       mode: 'live',
-      url: status.url,
+      url: answeredUrl(input.url, status.url),
       preset: status.presetId,
       tabId: status.tabId,
       tabIndex: status.tabIndex,
