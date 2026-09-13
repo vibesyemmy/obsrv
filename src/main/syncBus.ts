@@ -149,7 +149,11 @@ export function attachSyncBus(
 
     issued[to].set(url, now)
     armedAt[to] = now
-    void other.load(url)
+    // Into the target through the door that says who is loading: this commit
+    // is the bus matching the panes, not the page moving, and the arrivals
+    // record counts commits (src/main/targetSource.ts).
+    if (to === 'target') void target.loadMirrored(url)
+    else void other.load(url)
   }
 
   const onNativeNav = (_e: Electron.Event, url: string): void => mirror('native', url, false)
