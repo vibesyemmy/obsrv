@@ -186,9 +186,15 @@ export interface ScrollReport {
    */
   hidden?: boolean
   /**
-   * The walk moved a container inside a dialog while the document's own
-   * scroll was locked: the screenfuls it reports are the dialog's, not the
-   * page's. Absent from an older app's reply.
+   * The walk moved a panel while the document's own scroll was locked: the
+   * screenfuls it reports are that panel's, not the page's. The measurement,
+   * with no claim about what the panel is. Absent from an older app's reply.
+   */
+  panel?: boolean
+  /**
+   * And that panel carries named dialog semantics, which only changes how the
+   * sentence reads. Absent from an older app's reply, whose `dialog` then
+   * stands in for `panel` — losing the anonymous case, as it always did.
    */
   dialog?: boolean
 }

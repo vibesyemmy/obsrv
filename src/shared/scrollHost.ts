@@ -105,8 +105,24 @@ export function shadowContent(): {
   lightText: number
 } {
   const INTERACTIVE = 'a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'
+  // Both sides count what a measurement would have kept, not what the DOM
+  // contains. The unfiltered count read "26 of this page's 29 text elements"
+  // beside a sentence saying the page had no visible text — three invisible
+  // elements, true of the DOM and irreconcilable with the figures next to it
+  // (the sweep, 2026-09-13). It is the same defect as reporting airbnb's 267
+  // interactive elements beside an audit that kept 84.
+  //
+  // The consequence is deliberate and worth stating, because the next reader
+  // will be tempted to take the filter off and call it more accurate: a page
+  // whose components render collapsed by default now counts as hiding
+  // nothing, because nothing in them would have been measured either.
+  const shown = (el: Element): boolean => {
+    const check = (el as Element & { checkVisibility?: (o?: unknown) => boolean }).checkVisibility
+    if (typeof check === 'function') return check.call(el, { visibilityProperty: true, opacityProperty: true })
+    return el.getClientRects().length > 0
+  }
   const hasOwnText = (node: Element): boolean =>
-    Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)
+    shown(node) && Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)
   let hosts = 0
   let interactive = 0
   let text = 0
@@ -117,7 +133,7 @@ export function shadowContent(): {
       const shadow = el.shadowRoot
       if (shadow === null) continue
       hosts++
-      interactive += shadow.querySelectorAll(INTERACTIVE).length
+      for (const c of Array.from(shadow.querySelectorAll(INTERACTIVE))) if (shown(c)) interactive++
       for (const node of Array.from(shadow.querySelectorAll('*'))) {
         if (hasOwnText(node)) text++
       }
@@ -136,7 +152,9 @@ export function shadowContent(): {
     if (lightVisited++ > MAX_VISITED) break
     if (hasOwnText(node)) lightText++
   }
-  return { hosts, interactive, text, lightInteractive: document.querySelectorAll(INTERACTIVE).length, lightText }
+  let lightInteractive = 0
+  for (const el of Array.from(document.querySelectorAll(INTERACTIVE))) if (shown(el)) lightInteractive++
+  return { hosts, interactive, text, lightInteractive, lightText }
 }
 
 /**

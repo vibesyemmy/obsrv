@@ -1,6 +1,6 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
 import { shadowShareNote } from '../shared/shadowShare'
-import { measureTimeoutNote } from '../shared/measureBudget'
+import { httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
@@ -189,6 +189,12 @@ export function registerIpc(ctx: AppContext): () => void {
   }
 
   // --- navigation -----------------------------------------------------------
+  /**
+   * Per tab: the URL an agent asked for and the URL its load committed to.
+   * A WeakMap so a closed tab takes its entry with it.
+   */
+  const askedOf = new WeakMap<TabSession, { asked: string; landedAt: string }>()
+
   // An explicit `navigate` drives both panes. History moves (back, forward,
   // reload) drive the native pane only: SyncBus mirrors whatever it commits
   // into the target, whose own history is not user-facing. Driving both would
@@ -219,6 +225,13 @@ export function registerIpc(ctx: AppContext): () => void {
       // Reported by `native.load` / `target.load` below.
     }
     const [applied] = await Promise.all([s.native.load(wanted), s.target.load(wanted)])
+    // What the caller asked for, and where the load ended up. The headless
+    // path has had both since 0.58.0 and says which page its figures are of;
+    // the live path held the same facts — `TargetSource` listens for
+    // `did-navigate` on every surface — and never asked for them, so an agent
+    // driving the app at an authenticated route was handed the login page's
+    // figures under the address it typed (the sweep, 2026-09-13).
+    askedOf.set(s, { asked: url, landedAt: s.target.httpStatus().url || applied })
     return applied
   }
   handle(IPC.navigate, (e, url: string) => {
@@ -1635,15 +1648,30 @@ export function registerIpc(ctx: AppContext): () => void {
       // says the walk saw less. Each ask is within LIVE_MEASURE_BUDGET_MS: a
       // page whose main thread is blocked never answers, and the answer then
       // is of nothing, said so.
+      // Which page these figures are of, before anything about what was in
+      // it. Same order the headless path settled on: where the load landed,
+      // then the status, then the contents.
+      const st = t.httpStatus()
+      const askedHere = askedOf.get(tab())
+      const pre: string[] = []
+      if (askedHere) {
+        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
+        if (landed !== null) pre.push(landed)
+        // A navigation committed after the load settled: the page moved under
+        // the agent between `navigate` and this measurement.
+        if (st.url && st.url !== askedHere.landedAt) pre.push(navigatedAfterLoadNote(askedHere.asked, st.url))
+      }
+      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
+      if (statusNote !== null) pre.push(statusNote)
       const held = await awaitContent(() => t.auditPage(LIVE_MEASURE_BUDGET_MS), isEmptyAuditReport)
       let report = held.report
-      const notes: string[] = []
+      const notes: string[] = [...pre]
       if (!report) {
         if (t.askOutcome() !== 'timeout') return null
         notes.push(measureTimeoutNote('audit', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, report.shadow))
+        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, report.shadow, st.code))
       }
       // The live path says the same thing as the CLI: a page that measures
       // fine and hides half of itself was silent on both surfaces.
@@ -1685,15 +1713,30 @@ export function registerIpc(ctx: AppContext): () => void {
       const vp = t.getViewport()
       // One device pixel on this screen, in the page's CSS px. The ask is
       // within LIVE_MEASURE_BUDGET_MS, as the audit's.
+      // Which page these figures are of, before anything about what was in
+      // it. Same order the headless path settled on: where the load landed,
+      // then the status, then the contents.
+      const st = t.httpStatus()
+      const askedHere = askedOf.get(tab())
+      const pre: string[] = []
+      if (askedHere) {
+        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
+        if (landed !== null) pre.push(landed)
+        // A navigation committed after the load settled: the page moved under
+        // the agent between `navigate` and this measurement.
+        if (st.url && st.url !== askedHere.landedAt) pre.push(navigatedAfterLoadNote(askedHere.asked, st.url))
+      }
+      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
+      if (statusNote !== null) pre.push(statusNote)
       const held = await awaitContent(() => t.lintPage(1 / (deviceScaleFactor * textScale), LIVE_MEASURE_BUDGET_MS), isEmptyLintReport)
       let report = held.report
-      const notes: string[] = []
+      const notes: string[] = [...pre]
       if (!report) {
         if (t.askOutcome() !== 'timeout') return null
         notes.push(measureTimeoutNote('lint', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, text: [], edges: [], images: [], truncated: { text: 0, edges: 0, images: 0 }, spacers: 0 }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow))
+        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow, st.code))
       }
       if (report) {
         const shareNote = shadowShareNote('lint', report.shadow)

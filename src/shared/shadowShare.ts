@@ -93,10 +93,15 @@ export function shadowShareNote(what: 'audit' | 'lint', shadow?: ShadowContent):
   // measured, whatever else it holds: a threshold in hosts would fire on a
   // page whose components are decoration.
   if (hidden < SHADOW_HIDDEN_FLOOR) return null
-  // Nothing in the light DOM is the empty-document case, and that note is
-  // more specific: it can say the page is *built* from components, which
-  // this cannot. Two notes describing one page is what the 404 work spent a
-  // day removing.
+  // The empty-document case belongs to `emptyDocumentNote`, which says more:
+  // that the page is *built* from components. Standing down on `light === 0`
+  // was not the same test that note uses — it fires on the *measurement*
+  // being empty, which a page can be while three invisible elements sit in
+  // the DOM. On the web-components fixture both fired and disagreed about
+  // whether the light DOM had text (the sweep, 2026-09-13). Now that both
+  // counts are filtered to what a measurement would keep, `light === 0` and
+  // "the measurement found nothing" are the same condition, and the two
+  // notes cannot both fire.
   if (light === 0) return null
   const total = hidden + light
   // The absolute is the audit's: see SHADOW_HIDDEN_CEILING for why a count
@@ -110,8 +115,11 @@ export function shadowShareNote(what: 'audit' | 'lint', shadow?: ShadowContent):
   // boundary" — put three counts in one sentence, and on a small page the
   // same number three times (printed at 3 of 6, run 15). The subtraction is
   // the reader's to do and they have both halves.
+  // Not "the figures above": the note is above them in the CLI's stderr, a
+  // sibling field in the JSON, and wherever a client puts it through the MCP.
+  // A sentence that describes the reader's layout is guessing at it.
   return (
     `${roots} ${holdVerb} ${hidden} of this page's ${total} ${kind}, which the measurement does not enter: ` +
-    `the figures above are of the light DOM alone`
+    `the figures are of the light DOM alone`
   )
 }

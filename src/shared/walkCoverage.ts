@@ -66,11 +66,21 @@ export function walkCoverageNote(
   // ft.com, run 15: the two sentences arrived together and the vaguer one
   // read as doubt about the first.
   const walled = (end?.blocked?.frames?.viewportCoverage ?? 0) >= FRAME_WALL_COVERAGE && (end?.blocked?.frames?.count ?? 0) > 0
-  const cause = walled
-    ? null
-    : held
-      ? 'a modal or a locked scroll held the page, or it grew after the walk'
-      : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
+  const cause = held
+    ? 'a modal or a locked scroll held the page, or it grew after the walk'
+    : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
+  // Beside a named wall this sentence had three jobs and did one. "The walk
+  // saw the end after 0 screenfuls" is wrong for a walk that could not move —
+  // it was stopped, it saw nothing; "the measurement is of the page as it
+  // stands" restates the wall note's "the figures are of the page as it first
+  // shows"; and "nothing below N px was scrolled into view" restates "the page
+  // beneath it did not move". What it alone has is the two numbers, so beside
+  // a wall that is all it says (the sweep, 2026-09-13).
+  if (walled) {
+    // Not "all of it below": the first screen was reached, and only what is
+    // past it was not.
+    return `the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls); the walk reached the first ${Math.round(covered)} px of it`
+  }
   return (
     `the walk saw the end after ${walked.screenfuls} screenful${walked.screenfuls === 1 ? '' : 's'} (${Math.round(covered)} CSS px), ` +
     `but the page measures ${Math.round(pageHeightPx)} CSS px (${screens} screenfuls)${cause === null ? '' : `: ${cause}`}; ` +
@@ -176,17 +186,47 @@ export const WALK_NOTHING_NOTE = walkNothingNote()
  * paywall or an onboarding modal fixes the body in place, which leaves the
  * dialog's own panel as the only scroller in the light DOM — so the walk
  * scrolls *that*, and `walked: { screenfuls: 5, atEnd: true }` vouches for a
- * page it never moved (measured 2026-09-12 on a fixture, and on
- * airbnb.com's). Named dialog semantics only: a page locked by an anonymous
- * div says nothing here rather than the wrong thing.
+ * page it never moved.
+ *
+ * **Pinned on a fixture, never seen live.** This comment used to add "and on
+ * airbnb.com's". The same day's report withdrew that: the airbnb claim "does
+ * not survive checking", and what survived was "the mechanism, not the site"
+ * (docs/research/2026-09-12-live-run-0.54.0-candidate.md). Ten live sites
+ * over four runs have drawn no firing. A reader of this function would
+ * otherwise believe it has been seen working.
+ *
+ * **Keyed on what the walk measured, not on the role it hoped for.** It used
+ * to require named dialog semantics, on the reasoning that "a page locked by
+ * an anonymous div says nothing rather than the wrong thing". That is a false
+ * pair: the third option is to say the fact the walk holds. Stripping
+ * `role="dialog"` from the fixture and changing nothing else produced *no
+ * warnings at all* on both commands, for a page whose panel scrolled five
+ * screenfuls while the page never moved (the sweep, 2026-09-13). The dialog
+ * wording is layered on when the role is there, and the measurement is
+ * reported either way.
  */
-export function walkDialogNote(screenfuls: number): string {
-  const walked =
-    screenfuls === 0
-      ? 'the dialog did not move either and the page never moved'
-      : `the ${screenfuls} screenful${screenfuls === 1 ? ' ' : 's '}above ${screenfuls === 1 ? 'is' : 'are'} that dialog's and the page never moved`
+export function walkDialogNote(screenfuls: number, dialog = true): string {
+  // "a container inside it" opened the sentence with a pronoun whose referent
+  // arrives four words later, and then repeated the phrase in the clause that
+  // supplies it (printed 2026-09-13). Each half names what it means.
+  const what = dialog ? 'a dialog' : 'a panel on the page'
+  const whose = dialog ? "that dialog's" : "that panel's"
+  const opened = dialog ? 'while a dialog is open' : 'and the only scroller the walk found was a panel within it'
+  // Zero screenfuls is not a walk that scrolled something: it is a walk that
+  // found the only scroller and could not move it either. The old sentence
+  // opened "the walk scrolled a dialog" and closed "the dialog did not move
+  // either", contradicting itself in one line — visible only once all six
+  // shapes were printed side by side (2026-09-13).
+  if (screenfuls === 0) {
+    return (
+      `the walk could not move the page or ${what === 'a dialog' ? 'the dialog over it' : 'the panel on it'}: this page hides the ` +
+      `document's overflow ${opened}, and neither moved — the figures are of the first screen, and anything below it was never ` +
+      `brought into view`
+    )
+  }
+  const walked = `the ${screenfuls} screenful${screenfuls === 1 ? ' ' : 's '}the walk covered ${screenfuls === 1 ? 'is' : 'are'} ${whose} and the page never moved`
   return (
-    `the walk scrolled a dialog, not the page: this page hides the document's overflow while a dialog is open, so ${walked} — ` +
+    `the walk scrolled ${what}, not the page itself: this page hides the document's overflow ${opened}, so ${walked} — ` +
     `content the page loads as it scrolls, and anything below the first screen, was not brought into view before measuring`
   )
 }

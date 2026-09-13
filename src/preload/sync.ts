@@ -213,8 +213,17 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
       // An app shell with an inner scroller found says false: its walk works.
       hidden: scroller === 'root' && overflowHidden(),
       // And the other way a walk can cover nothing of the page: the document
-      // is locked and the only scroller left is a dialog's own panel, so the
-      // screenfuls belong to the dialog. Pre-combined, as `hidden` is.
+      // is locked and the only scroller left is a panel on it, so the
+      // screenfuls belong to that panel. Pre-combined, as `hidden` is.
+      //
+      // `panel` is the measurement and `dialog` is the role. They used to be
+      // one field, which meant the live surface could not express "locked,
+      // and what scrolled was a panel with no dialog semantics" — the case
+      // that produced no warning at all headless until 2026-09-13. Note also
+      // that `hidden` here is narrower than the headless field of the same
+      // name, which is `overflowHidden()` alone: same word, two meanings,
+      // across two surfaces.
+      panel: scroller === 'element' && overflowHidden(),
       dialog: scroller === 'element' && overflowHidden() && inDialog(scrollerEl),
     } satisfies ScrollReport)
   }

@@ -94,7 +94,8 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   let atEnd = false
   let documentLocked = false
   let blocked: WalkBlocked | undefined
-  let dialogWalked = false
+  let panelWalked = false
+  let panelWasDialog = false
   let lastY = 0
   try {
     for (;;) {
@@ -110,7 +111,10 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
       documentLocked = r.hidden === true
       // The page is locked and the only scroller left is a dialog's panel:
       // whatever this walk covers belongs to the dialog, not the page.
-      if (r.scroller === 'element' && r.dialog && r.hidden) dialogWalked = true
+      if (r.scroller === 'element' && r.hidden) {
+        panelWalked = true
+        if (r.dialog) panelWasDialog = true
+      }
       // A `next` that lands where the page already was has no more page to
       // show — the end, whatever `atEnd` says — so a one-screen page is zero
       // screenfuls, not twelve dwells at offset 0.
@@ -143,7 +147,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
     await backToTop()
     return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
   }
-  if (dialogWalked) notes.push(walkDialogNote(screenfuls))
+  if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   await settleImages(target, deadline)
   return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked, blocked }
