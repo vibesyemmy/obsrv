@@ -78,9 +78,15 @@ calibrated against, and what would move it. **Status: not met.**
 targets with **103 under 7 mm**. If most of those are not things anyone would
 change, a first run teaches the reader to skim, and every true finding after
 that is cheaper to ignore.
-*Check:* three real sites, every finding classified *would act* / *would not*,
-the ratio published. **Status: unknown — never measured.** Depends on B5: a
-ratio measured against a moving quantity says nothing.
+*Check:* three real sites, every finding classified *would act* / *would
+not*, the ratio published — **classified by someone who did not write the
+rules**, because the same result read two ways is the defect this list keeps
+producing: a ratio scored by the rules' author fits "the rules are good" and
+"the scorer wrote the rules" equally well, and the number cannot separate
+them. Two classifiers, their disagreement rate published beside the ratio,
+and neither of them the person who chose the thresholds. **Status: unknown —
+never measured.** Depends on B5: a ratio measured against a moving quantity
+says nothing.
 
 **B5. The same page measured twice answers the same.** Nothing on this list
 matters more and nobody has ever checked it. A user's first real use is a
