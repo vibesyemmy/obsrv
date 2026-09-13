@@ -11,7 +11,8 @@ result written down with a date, not when it feels true. An unrun check is
 recorded as *unknown*, which is a different thing from *failing* and worth
 keeping separate — most of this list is unknown rather than broken.
 
-Status here is as of **0.60.0, 2026-09-13**.
+Status here is as of **0.60.0, 2026-09-13**. Nineteen criteria: A1-A4, B1-B5,
+C1-C5, D1-D3, E1-E2.
 
 ---
 
@@ -77,8 +78,43 @@ calibrated against, and what would move it. **Status: not met.**
 targets with **103 under 7 mm**. If most of those are not things anyone would
 change, a first run teaches the reader to skim, and every true finding after
 that is cheaper to ignore.
-*Check:* three real sites, every finding classified *would act* / *would not*,
-the ratio published. **Status: unknown — never measured.**
+*Check:* three real sites, every finding classified *would act* / *would
+not*, the ratio published — **classified by someone who did not write the
+rules**, because the same result read two ways is the defect this list keeps
+producing: a ratio scored by the rules' author fits "the rules are good" and
+"the scorer wrote the rules" equally well, and the number cannot separate
+them. Two classifiers, their disagreement rate published beside the ratio,
+and neither of them the person who chose the thresholds. **Status: unknown —
+never measured.** Depends on B5: a ratio measured against a moving quantity
+says nothing.
+
+**B5. The same page measured twice answers the same.** Nothing on this list
+matters more and nobody has ever checked it. A user's first real use is a
+before-and-after — change the CSS, run it again, read the difference — and if
+the count moves on its own (a lazy image that loaded this time, a walk that
+reached one screenful further, a contrast verdict on a gradient) then part of
+what they read is noise wearing the shape of a result. obsrv-9b raised this
+and ranked it third of three; I would rank it first, because B4 and every
+before-and-after a user ever runs are measuring against it.
+*Check:* **two numbers, published separately, because one of them cannot be
+read without the other** (obsrv-9b's sharpening — a single figure over live
+sites cannot tell *the tool moved* from *the page moved*, and live sites
+rotate ads, split traffic and lazy-load on timing).
+
+1. **Against locally served fixtures**, five runs, bytes provably identical
+   between them: any variation is ours — a walk that reached a screenful
+   further, a settle that fired earlier, a contrast verdict that landed
+   differently. This is the number that says whether the tool is
+   deterministic, and it is the cheaper of the two. A non-zero result here
+   makes the second number uninterpretable, so run it first.
+2. **Against three real sites**, five runs: ours plus theirs, not
+   decomposable. This is what a user meets on a before-and-after, and it is
+   what B4's ratio has to survive.
+
+Then the fixtures again across two released versions, since drift between
+releases is the same defect on a longer clock — the walk count changing in
+0.60.0 was deliberate, and a number alone would not have said so.
+**Status: unknown — never measured.**
 
 ---
 
@@ -104,6 +140,30 @@ so. **Status: partly met, by habit rather than rule.**
 is what an agent reads instead of the README, and it has drifted before.
 *Check:* drive every documented example against the current release; each
 answers. **Status: unknown for 0.60.0.**
+
+**C4. The two surfaces answer the same question the same way, or the
+difference is written down.** The most productive defect class of the last
+fortnight, and it had no criterion here until obsrv-9b said so. `url` meant
+the request headless and the landing live. `hidden` meant `overflowHidden()`
+headless and `scroller === 'root' && overflowHidden()` live — one name, two
+definitions, and the live side structurally unable to express a case being
+added. Three notes existed only headless for a full release. An agent calling
+`mode: auto` does not choose which surface answers, so a divergence is
+invisible to it by construction.
+*Check:* one fixture set driven through both surfaces, compared **field by
+field** rather than note by note, with every difference either removed or
+listed as intended. **Status: unknown — the 2026-09-13 sweep did this for
+notes and found four divergences; no field-level pass has ever run.**
+
+**C5. Every note the tool can emit has been seen to fire, on a real page.** A
+note that has never fired is indistinguishable from a note that *cannot*
+fire, and this project has shipped at least one of each: `walkDialogNote` was
+pinned on a fixture while citing a live site the same day's report had
+withdrawn, and the shadow share reported only on pages measuring as empty for
+three releases while claiming to gather evidence about pages that were not.
+*Check:* an inventory of the emitting functions, each with the date and page
+where its output was last observed, and the ones never seen in the wild
+published as such. **Status: unknown.**
 
 ---
 
@@ -160,7 +220,10 @@ version, documented where someone looking for them will be.
 
 ## Where that leaves us
 
-Nothing on this list is hard. **A1 is the only one that depends on someone
+Nothing on this list is hard, and two items are load-bearing for others:
+**B5**, because a measurement that moves on its own makes B4 and every
+before-and-after meaningless, and **C4**, because an agent cannot see which
+surface answered it. **A1 is the only one that depends on someone
 outside the project** — Apple issuing a Developer ID Application certificate
 — which is why it should start first. B1 is the only one that cannot be
 scheduled: it is met when a run finds nothing, and the way to get there is to
