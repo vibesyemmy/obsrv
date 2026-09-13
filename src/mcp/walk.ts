@@ -114,6 +114,11 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   let panelWalked = false
   let panelWasDialog = false
   let lastY: number | null = 0
+  // The arrivals count from main, echoed on every scroll reply (ipc.ts): it
+  // changes when a committed navigation replaced the document under the walk.
+  // Null until an app new enough to send it answers; an older one never
+  // changes it, so the walk behaves exactly as it did.
+  let arrivals: number | null = null
   try {
     for (;;) {
       if (deps.now() - started >= WALK_BUDGET_MS) {
@@ -123,6 +128,20 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
         break
       }
       const r = await scroll('next')
+      // A page that replaced itself under the walk put a new document at the
+      // top: the screenfuls counted so far are of a page that is gone, and the
+      // offset they ended at means nothing here. Count the new one from zero,
+      // and forget the old offset, so the first scroll of the new document is
+      // not read as a page that would not move.
+      const arrival = r['arrival'] as { count?: unknown } | undefined
+      const count = arrival !== undefined && typeof arrival.count === 'number' ? arrival.count : null
+      if (count !== null) {
+        if (arrivals !== null && count !== arrivals) {
+          screenfuls = 0
+          lastY = null
+        }
+        arrivals = count
+      }
       // As the headless walk: the document's overflow when the walk stopped.
       documentLocked = r['hidden'] === true
       // The page is locked and the only scroller left is a dialog's panel:
