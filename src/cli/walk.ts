@@ -69,6 +69,20 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   const notes: string[] = []
   const started = Date.now()
   const deadline = new Deadline(budgetMs)
+  // A page that replaced itself under the walk — HMR, an auth redirect, a
+  // router — put a new document at the top. Subscribing to the commit is the
+  // same event the measurement's own notes read (cli/main.ts); inferring one
+  // from an offset that went backwards would be a second mechanism for one
+  // fact. Live reads the arrivals count echoed on the scroll reply, which is
+  // this event crossing a process boundary (mcp/walk.ts).
+  let replaced = false
+  // The reported time restarts with the count: both fields of `walked`
+  // describe the document the figures are of. The budget keeps its own clock.
+  let walkedFrom = started
+  const onCommit = (_url: string, inPage: boolean): void => {
+    if (!inPage) replaced = true
+  }
+  target.on('url-changed', onCommit)
   const step = async (page: 'top' | 'next'): Promise<WalkStepResult> => {
     const r = await withinBudget(target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`), deadline.remaining())
     if (r.timedOut) throw new Error(walkTimeoutNote(budgetMs))
@@ -96,7 +110,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   let blocked: WalkBlocked | undefined
   let panelWalked = false
   let panelWasDialog = false
-  let lastY = 0
+  let lastY: number | null = 0
   try {
     for (;;) {
       if (deadline.passed()) {
@@ -106,6 +120,19 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
         break
       }
       const r = await step('next')
+      // The document under the walk was replaced: the screenfuls counted so
+      // far are of a page that is gone, and the offset they ended at belongs
+      // to it. Count the new one from zero and forget that offset — without
+      // this the new document's first scroll can land exactly where the old
+      // one had reached, which read as a page that would not move and ended
+      // the walk with a locked-scroll sentence about a page that had simply
+      // been replaced (measured 2026-09-13: one screenful, atEnd false).
+      if (replaced) {
+        replaced = false
+        screenfuls = 0
+        lastY = null
+        walkedFrom = Date.now()
+      }
       // The document's own overflow as the walk last saw it: what tells a
       // page that grew under the walk from one a modal held (walkCoverage).
       documentLocked = r.hidden === true
@@ -144,13 +171,15 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
       `the walk was cut short after ${screenfuls} screenful${screenfuls === 1 ? '' : 's'} (${message(e)}); ` +
         (partial ? 'measured after a partial walk.' : 'measured without walking.'),
     )
+    target.off('url-changed', onCommit)
     await backToTop()
-    return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
+    return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - walkedFrom }, notes } : { notes }
   }
+  target.off('url-changed', onCommit)
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   await settleImages(target, deadline)
-  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked, blocked }
+  return { walked: { screenfuls, atEnd, ms: Date.now() - walkedFrom }, notes, documentLocked, blocked }
 }
 
 /**

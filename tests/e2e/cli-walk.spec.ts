@@ -189,3 +189,24 @@ test('a walk that went nowhere on a tall page still reads as held', async () => 
     expect(warnings).toMatch(/a modal or a locked scroll held the page/)
   }
 })
+
+/**
+ * A page that replaces itself under the walk — HMR, an auth redirect, a
+ * router — puts a new document at the top, and the walk kept counting across
+ * both: driving the live app at such a page returned 10 screenfuls for a
+ * 6.8-screenful page, and `atEnd` vouched for the end of a document that was
+ * gone (measured 2026-09-13). The count must describe the page the figures
+ * are of, which is the one it ended on.
+ */
+test('the walk counts screenfuls of the page it ended on, not of the one that was replaced', async () => {
+  const r = await runCli(['audit', fixture('replaces-itself-on-scroll.html'), '--preset', '1080p-24', '--groups-only'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  // The figures are of the second document.
+  expect(m.warnings.join(' ')).toContain('navigated after it loaded')
+  // Its own height, in screenfuls of the 1080 px screen, is the ceiling the
+  // count must respect: before the fix this was 4 on a 3-screenful page.
+  const screenfulsOfPage = Math.ceil(m.pageHeight / 1080)
+  expect(m.walked.screenfuls).toBeLessThanOrEqual(screenfulsOfPage)
+  expect(m.walked.atEnd).toBe(true)
+})

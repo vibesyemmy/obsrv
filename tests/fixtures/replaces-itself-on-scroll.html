@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a page that replaces itself under the walk</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 0; padding: 24px; }
+      .row { height: 200px; }
+      button { display: block; width: 220px; height: 48px; }
+    </style>
+  </head>
+  <body>
+    <h1 id="which">before</h1>
+    <button>A button</button>
+    <div id="rows"></div>
+    <script>
+      // The second document is short (about three screenfuls at 1080). The
+      // first is long, and replaces itself the moment the walk scrolls it —
+      // hung off the scroll rather than a timer, so the commit lands inside
+      // the walk by construction rather than by hope.
+      const moved = new URLSearchParams(location.search).get('n') === '1'
+      document.getElementById('which').textContent = moved ? 'after' : 'before'
+      const rows = document.getElementById('rows')
+      for (let i = 0; i < (moved ? 16 : 60); i++) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.textContent = `${moved ? 'after' : 'before'} row ${i + 1}`
+        rows.append(d)
+      }
+      if (!moved) {
+        addEventListener(
+          'scroll',
+          () => location.replace(`${location.pathname}?n=1`),
+          { once: true },
+        )
+      }
+    </script>
+  </body>
+</html>

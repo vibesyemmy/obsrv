@@ -37,6 +37,8 @@ function deps(
 }
 
 const step = (y: number, atEnd = false) => ({ ok: true, scrolled: { x: 0, y }, scroller: 'root', atEnd })
+const arrived = (y: number, count: number, atEnd = false) => ({ ...step(y, atEnd), arrival: { count, url: `https://a.test/?n=${count}` } })
+
 const older = () => new ControlCallError('obsrv control scroll: scroll payload must be { x, y } with finite, non-negative CSS-pixel offsets', 400)
 
 describe('walkPage', () => {
@@ -160,5 +162,69 @@ describe('walkPage on a page with nothing to scroll', () => {
   it('says nothing extra when an older app does not report it', async () => {
     const w = await walkPage(deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root' }))
     expect(w.notes).toEqual([])
+  })
+})
+
+/**
+ * A page that replaces itself under the walk — HMR, an auth redirect, a
+ * router — resets the scroll to the top, and the walk kept counting. Driving
+ * the live app at a page that moved 1.2 s in returned `screenfuls: 10` for a
+ * 6.8-screenful page: the count spanned two documents and `atEnd` vouched for
+ * the end of a page that was gone (measured 2026-09-13). The arrivals count
+ * from main (ipc.ts) is echoed on each scroll reply, so the walk knows a
+ * commit happened rather than inferring one from a scroll going backwards.
+ */
+describe('a page replaced under the walk', () => {
+  it('counts screenfuls of the page it ended on, not of both', async () => {
+    // Two screenfuls of the first document, then the commit, then three of the
+    // second — which is a three-screenful page, and what the answer should say.
+    const d = deps([
+      arrived(768, 1),
+      arrived(1536, 1),
+      arrived(768, 2),
+      arrived(1536, 2),
+      arrived(2000, 2, true),
+    ])
+    const r = await walkPage(d)
+    // Three screenfuls of the page measured, and the time of those three: a
+    // record whose fields disagree about which document they describe lets a
+    // reader derive a rate that is true of neither.
+    expect(r.walked).toEqual({ screenfuls: 3, atEnd: true, ms: 3 * WALK_DWELL_MS })
+  })
+
+  it('does not read the new page\'s first offset as a page that would not move', async () => {
+    // The second document starts at the top, so its first `next` can land
+    // below where the first document had reached — or at the same offset. The
+    // same-offset case must not read as "the page stopped moving".
+    const d = deps([arrived(768, 1), arrived(768, 2), arrived(1536, 2, true)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 2 * WALK_DWELL_MS })
+    expect(r.notes).toEqual([])
+  })
+
+  it('two replacements in one walk leave the count and the offset belonging to the last page', async () => {
+    // The count is arithmetic and handles this by construction; the
+    // remembered offset is state, which is the half worth pinning.
+    const d = deps([arrived(768, 1), arrived(768, 2), arrived(768, 3), arrived(1536, 3, true)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 2 * WALK_DWELL_MS })
+    expect(r.notes).toEqual([])
+  })
+
+  it('a page that stops moving with no replacement still says a locked scroll held it', async () => {
+    // The reset must not have taken that sentence's job away: a page that
+    // will not move and a page that was replaced are different facts, and
+    // before this fix the second was reported as the first.
+    const d = deps([arrived(768, 1), arrived(768, 1)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 1, atEnd: false, ms: WALK_DWELL_MS })
+    expect(r.notes.join(' ')).toMatch(/stopped moving before the end of the walk/)
+  })
+
+  it('an app that sends no arrivals keeps today\'s behaviour and says nothing new', async () => {
+    const d = deps([step(768), step(1536), step(2000, true)])
+    const r = await walkPage(d)
+    expect(r.walked).toEqual({ screenfuls: 3, atEnd: true, ms: 3 * WALK_DWELL_MS })
+    expect(r.notes).toEqual([])
   })
 })
