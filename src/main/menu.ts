@@ -43,10 +43,29 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
    * `isDevToolsOpened()` answers for the request, not the window.
    */
   const devToolsOpening = new WeakSet<WebContents>()
+  /**
+   * A toggle that arrived while an open was in flight. Held rather than
+   * dropped: dropping it reads as a click that did nothing, and the window it
+   * lands in is invisible to whoever clicked — `isDevToolsOpened()` is already
+   * true while `devtools-opened` has not fired, so the inspector looks open
+   * and a close aimed at it went nowhere. CI found it on a loaded runner
+   * (0.59.0's bump run: the close poll timed out twice at 10 s, no crash, the
+   * app answering fine afterwards). One is held, not a queue: three clicks in
+   * a tick are an open and a close, not an open and a close and a re-open.
+   */
+  const devToolsPending = new WeakSet<WebContents>()
   const toggleDetachedDevTools = (wc: WebContents): void => {
-    if (wc.isDestroyed() || devToolsOpening.has(wc)) return
+    if (wc.isDestroyed()) return
+    if (devToolsOpening.has(wc)) {
+      devToolsPending.add(wc)
+      return
+    }
     setTimeout(() => {
-      if (wc.isDestroyed() || devToolsOpening.has(wc)) return
+      if (wc.isDestroyed()) return
+      if (devToolsOpening.has(wc)) {
+        devToolsPending.add(wc)
+        return
+      }
       if (wc.isDevToolsOpened()) {
         wc.closeDevTools()
         return
@@ -54,6 +73,32 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
       devToolsOpening.add(wc)
       const settle = (): void => {
         devToolsOpening.delete(wc)
+        if (!devToolsPending.has(wc)) return
+        devToolsPending.delete(wc)
+        // What is held is the *intent* — close it — not "toggle again". The
+        // case this forecloses, rather than one that was observed: `settle`
+        // answers both `devtools-opened` and `devtools-closed`, so a window
+        // the user shut by hand while the open was still in flight would
+        // reach a held *toggle* with the inspector already closed, and a
+        // toggle opens what is closed — their close becoming an open, on a
+        // window they had just shut themselves. Holding the intent cannot do
+        // that under any ordering: if it is shut by the time this runs, that
+        // is already what was asked for.
+        //
+        // Nobody reproduced that ordering, and failing to reproduce it is not
+        // evidence the change was unnecessary — the argument is that
+        // "toggle again" was never what the click meant. A store that
+        // describes the request falsely gets read by some ordering
+        // eventually, whether or not one can be staged today.
+        //
+        // Off this stack before anything acts. `settle` runs inside the
+        // `devtools-opened` dispatch, and a close issued there is the crash:
+        // 3 of 3 measured, against 0 of 3 from a timer at the same moment
+        // (docs/e2e-flakes.md).
+        setTimeout(() => {
+          if (wc.isDestroyed() || !wc.isDevToolsOpened()) return
+          wc.closeDevTools()
+        }, 0)
       }
       wc.once('devtools-opened', settle)
       wc.once('devtools-closed', settle)
