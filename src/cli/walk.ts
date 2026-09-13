@@ -76,6 +76,9 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   // fact. Live reads the arrivals count echoed on the scroll reply, which is
   // this event crossing a process boundary (mcp/walk.ts).
   let replaced = false
+  // The reported time restarts with the count: both fields of `walked`
+  // describe the document the figures are of. The budget keeps its own clock.
+  let walkedFrom = started
   const onCommit = (_url: string, inPage: boolean): void => {
     if (!inPage) replaced = true
   }
@@ -128,6 +131,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
         replaced = false
         screenfuls = 0
         lastY = null
+        walkedFrom = Date.now()
       }
       // The document's own overflow as the walk last saw it: what tells a
       // page that grew under the walk from one a modal held (walkCoverage).
@@ -169,13 +173,13 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
     )
     target.off('url-changed', onCommit)
     await backToTop()
-    return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - started }, notes } : { notes }
+    return partial ? { walked: { screenfuls, atEnd: false, ms: Date.now() - walkedFrom }, notes } : { notes }
   }
   target.off('url-changed', onCommit)
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   await settleImages(target, deadline)
-  return { walked: { screenfuls, atEnd, ms: Date.now() - started }, notes, documentLocked, blocked }
+  return { walked: { screenfuls, atEnd, ms: Date.now() - walkedFrom }, notes, documentLocked, blocked }
 }
 
 /**

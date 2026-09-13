@@ -186,7 +186,10 @@ describe('a page replaced under the walk', () => {
       arrived(2000, 2, true),
     ])
     const r = await walkPage(d)
-    expect(r.walked).toEqual({ screenfuls: 3, atEnd: true, ms: 5 * WALK_DWELL_MS })
+    // Three screenfuls of the page measured, and the time of those three: a
+    // record whose fields disagree about which document they describe lets a
+    // reader derive a rate that is true of neither.
+    expect(r.walked).toEqual({ screenfuls: 3, atEnd: true, ms: 3 * WALK_DWELL_MS })
   })
 
   it('does not read the new page\'s first offset as a page that would not move', async () => {
@@ -195,7 +198,7 @@ describe('a page replaced under the walk', () => {
     // same-offset case must not read as "the page stopped moving".
     const d = deps([arrived(768, 1), arrived(768, 2), arrived(1536, 2, true)])
     const r = await walkPage(d)
-    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 3 * WALK_DWELL_MS })
+    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 2 * WALK_DWELL_MS })
     expect(r.notes).toEqual([])
   })
 
@@ -204,7 +207,7 @@ describe('a page replaced under the walk', () => {
     // remembered offset is state, which is the half worth pinning.
     const d = deps([arrived(768, 1), arrived(768, 2), arrived(768, 3), arrived(1536, 3, true)])
     const r = await walkPage(d)
-    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 4 * WALK_DWELL_MS })
+    expect(r.walked).toEqual({ screenfuls: 2, atEnd: true, ms: 2 * WALK_DWELL_MS })
     expect(r.notes).toEqual([])
   })
 

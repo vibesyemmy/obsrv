@@ -119,6 +119,12 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // Null until an app new enough to send it answers; an older one never
   // changes it, so the walk behaves exactly as it did.
   let arrivals: number | null = null
+  // When the walk restarts on a new document, the time it reports restarts
+  // with it: `screenfuls` and `ms` are two fields of one record, and a record
+  // whose fields describe different documents lets a reader derive a rate
+  // that is true of neither. The budget above keeps its own clock from
+  // `started`, since that bounds the walk rather than describing the page.
+  let walkedFrom = started
   try {
     for (;;) {
       if (deps.now() - started >= WALK_BUDGET_MS) {
@@ -139,6 +145,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
         if (arrivals !== null && count !== arrivals) {
           screenfuls = 0
           lastY = null
+          walkedFrom = deps.now()
         }
         arrivals = count
       }
@@ -187,11 +194,11 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
         (partial ? 'measured after a partial walk.' : 'measured without walking.'),
     )
     await backToTop()
-    return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - started }, notes } : { notes }
+    return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - walkedFrom }, notes } : { notes }
   }
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
-  return { walked: { screenfuls, atEnd, ms: deps.now() - started }, notes, documentLocked }
+  return { walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom }, notes, documentLocked }
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */
