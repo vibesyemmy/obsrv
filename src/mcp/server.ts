@@ -6,6 +6,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { pruneTempDirs } from '../shared/pruneTemp'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -121,6 +122,16 @@ function warmElectron(): { version: string; ready: Promise<void> } {
   return { version: status.version, ready }
 }
 const electronWarm = warmElectron()
+
+// The temp directories previous runs left behind. Every live capture writes
+// its PNG into a fresh one and answers with the path, so it cannot be removed
+// when the call returns — the client has not read it yet — and until now
+// nothing removed them afterwards either: 10,045 entries and 400 MB on one
+// machine, 2,139 of them from a single day (2026-09-13). Only this server's
+// own prefix, and only what is over a day old: a recent directory may be a
+// path an agent is about to open, and the specs' temp directories are theirs.
+// Bounded and best-effort, so a backlog cannot hold up a startup.
+pruneTempDirs({ dir: tmpdir(), prefix: 'obsrv-mcp-' })
 
 /**
  * At most this many CLI runs at once (see `concurrencyLimit`): each is its
