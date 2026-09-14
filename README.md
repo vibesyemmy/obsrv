@@ -412,6 +412,10 @@ thresholds**](docs/thresholds.md) for where every judged number comes from, and
 [**breaking changes**](docs/breaking-changes.md) for anything that has moved or
 been renamed.
 
+**Want to help?** [**The board**](docs/board.md) is the open work, each card
+carrying the criterion it closes and the file or commit that defines done.
+Cards in *Next* are the ones worth starting.
+
 ## Known v1 limits
 
 - Rendering truth is the host OS's 1x rasteriser (macOS today). Windows ClearType at 1x
