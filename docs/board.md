@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*48 cards, 26 open, 20 of those unclaimed.*
+*48 cards, 26 open, 19 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 10
+## Next — 9
 
 *Picked, not claimed — start here.*
 
@@ -81,29 +81,6 @@ Updated 2026-09-14 evening. Two of three delivered, and the order changed — Op
 1. c5-elevated — DELIVERED into Review, 6b7acb4. Inverted the card's own fallback: `resizing` fires, keep the value. 2. bug-retina — DELIVERED into Review, cf52dc8, and it corrected the card's premise. See that card. 3. c3 — does skills/obsrv-screens/SKILL.md describe the tools that exist. NOT started; Kenya is putting it to Opeyemi before picking it up.
 
 Henry asked Kenya to SPLIT docs/c5-note-inventory into two branches so bug-retina can merge first — it makes every other local run cheaper to read, so it is worth more merged before people run suites than after. Sequencing only; both still wait on Opeyemi's word given to Kenya directly.
-
-### Check the skill describes the tools that exist
-
-[`c3`](../board/c3.md) · **C3** · readiness · *unclaimed*
-
-GO-AHEAD GIVEN by Opeyemi 2026-09-14, relayed through Henry. Kenya to claim it — edit this file rather than asking anyone.
-
-ONE MEASUREMENT DONE UP FRONT so it is not repeated, and it changes what the card is about. The obvious check PASSES. The MCP server registers eight tools (eight `server.registerTool` call sites in src/mcp/server.ts): obsrv_snap, obsrv_diff, obsrv_audit, obsrv_inspect, obsrv_lint, obsrv_report, obsrv_drive, obsrv_presets. All eight are named in skills/obsrv-screens/SKILL.md.
-
-So C3 is not "does the skill list the tools that exist" — it does. It is whether the skill's PROSE is still true about tools whose names did not change, which is the C5 shape pointed at documentation: same name, same presence, different behaviour, and nothing fails.
-
-Where to look first, from what 0.61.0 changed under unchanged names:
-- `snap` live no longer answers presetId/profileId; it answers preset/profile. A skill telling an agent to read the old spelling is wrong in a way no tool list catches.
-- The live walk's sentences moved from `notes` to `warnings`. The rule is now: warnings is about the page, notes is about the call.
-- `unsettledReason` can be 'resizing' — a value that now fires and that a skill describing the settle verdict may not admit.
-- `obsrv --version` exists as of E2 and the skill does not mention it. The skill's Commands section is where a CLI user looks.
-- The skill carries no version marker at all, so there is nothing in it that says which surface it was written against. That is its own finding: a document that cannot go stale visibly is one that goes stale invisibly.
-
-AND THE TRAP, which is Kenya's own from C5 and now points at Kenya's next card: a mention-count sieve UNDERCOUNTS and overcounts. Counting `obsrv_lint` occurrences says the skill mentions lint; it says nothing about whether what it says is true. The count above is published as a pointer to where to look, explicitly not as a result — the same way docs/note-inventory.md publishes its phrase sieve.
-
-Reference: docs/breaking-changes.md is the list of things that moved under a stable name, which is exactly the set a skill gets wrong silently.
-
-skills/obsrv-screens/SKILL.md — unknown for 0.60.0.
 
 ### Whatever decides, something else must notice when the decision changes
 
@@ -224,6 +201,45 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+---
+
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
+
+### Check the skill describes the tools that exist
+
+[`c3`](../board/c3.md) · **C3** · readiness · owner: Kenya
+
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c3-skill-audit` (as of the tip; THE BRANCH IS THE ADDRESS, the sha is a timestamp). Cut from 0893bd7. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Claimed by editing this file, which is the first card claimed under the repo board rather than through Henry.
+
+STATUS: PARTLY MET, and the unchecked part is named below rather than rounded up. The same precedent as C5.
+
+WHAT WAS CHECKED, EACH AGAINST THE CODE RATHER THAN AGAINST THE PROSE'S PLAUSIBILITY. Nine claims read out of SKILL.md and looked up in src/:
+- the eight tool names — all registered (Henry's up-front measurement, confirmed)
+- `mode` / `why` values (requested, headless-only, no-display, declined, launch-timeout) — match the enum at server.ts:345 exactly
+- `obsrv_report` and `obsrv_diff` have no `mode` or `why` field — true; neither key exists in either output shape
+- the 1.5 MiB inline cap — MAX_INLINE_IMAGE_BYTES = 1_572_864 (lib.ts:16)
+- "at most 200 findings listed" — server.ts:1360 and :1661
+- 7 mm taps / 2 mm text — DEFAULT_TAP_MM, DEFAULT_TEXT_MM (cli/audit.ts:23)
+- diff's 2048px CSS viewport limit — server.ts:1201
+- the eight throttle preset ids — shared/throttle.ts:42-49, all eight, spelled as the skill spells them
+- the render-slot wait landing "in its warnings or notes" — matches server.ts:145
+
+THREE DEFECTS FOUND, ALL OF THE PREDICTED SHAPE: stable tool name, moved behaviour, nothing fails.
+
+1. `unsettledReason` was enumerated in Caveats as animating / timeout / uncovered / blank / loading — five of the six. `"resizing"` was missing, and it is the LIVE-ONLY value, in the one place the live Review section sends a reader to for that field. It became real earlier the same day (c5-elevated), so the skill was wrong about the thing this room had just proved. Now documented with what provokes it: a viewport that keeps moving for the whole budget, not a capture that followed a preset change.
+
+2. `obsrv --version` was absent from Commands, which is where a CLI user looks. It has existed since the E2 merge. Added with the property that makes it worth having — it answers before the build or the Electron binary is looked for, so it works on the machine where one of those is what broke.
+
+3. NO VERSION MARKER ANYWHERE IN THE FILE, which is the finding under the other two rather than a nitpick. Nothing in the skill said which surface it was written against, so no reader could tell the 0.60.0-era prose from the current shape, and neither defect above could have been noticed by reading. Now: "Written against Obsrv 0.61.0 (2026-09-14)", with `obsrv --version` and any MCP reply's `version` named as the check and docs/breaking-changes.md as the list of what moves under stable names.
+
+ONE ADDITION THAT IS NOT A DEFECT FIX: the warnings-vs-notes rule (warnings is about the page, notes is about the call) is now stated in The MCP tools, with the 0.61.0 move of the live walk's sentences named. The skill was not wrong here — it never told anyone to read the old location — but it gave an agent nothing to decide with, and this is the field that moved most recently.
+
+NOT CHECKED, AND THIS IS WHAT KEEPS IT AT PARTLY MET: the skill is 265 lines of prose and nine claims were verified against source. The Review (live) walkthrough, the regression loop, and the diff caveats were read for staleness but not executed. A claim about what a tool SAYS can only be settled by running it, which is C5's standard, and by that standard this card is an inventory rather than a proof. The honest next step is running the Review (live) sequence end to end against the current build and checking each sentence it produces.
+
+THE TRAP, KEPT VISIBLE because Henry nearly published it as a result and it is the same one from note-inventory.md: the eight-of-eight tool count is a MENTION count. It says the skill mentions lint; it says nothing about whether what it says about lint is true. Two of the three defects above are inside sentences about tools that count as present. A completeness number over a document measures the index, not the content.
 
 ---
 
