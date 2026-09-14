@@ -58,12 +58,18 @@ the same as arriving.
 producing no finding that changes what a user is told. **Status: not met —
 never achieved.**
 
-**B2. The known gaps are closed or written down as limits.** Open today: a
-page locked by a wall versus a page whose dialog steals the walk are
-different shapes and only one has a sentence; the dialog note has never fired
-on a live site across four runs; whether the measurement should enter open
-shadow roots at all is undecided, and the evidence that decision needs was
-only being collected for pages that measure as *empty*.
+**B2. The known gaps are closed or written down as limits.** Open today:
+**`audit` and `lint` measure a moving page without saying so** — neither has a
+settle concept, while `snap` answers `settled: false` on the same URL, and the
+silence covers finding boxes that moved up to 438 CSS px between runs on
+stripe.com (B5, 2026-09-14); a page locked by a wall versus a page whose
+dialog steals the walk are different shapes and only one has a sentence —
+though on fixtures both fired, identically on all five runs, the dialog's in
+its own words ("the walk scrolled a dialog, not the page itself"), so what is
+unproven is live firing rather than the sentence's existence; the dialog note
+has never fired on a live site across four runs; whether the measurement
+should enter open shadow roots at all is undecided, and the evidence that
+decision needs was only being collected for pages that measure as *empty*.
 *Check:* each item either fixed, or present in the limitations page (D1) in a
 sentence a user could act on. **Status: not met.**
 
@@ -114,7 +120,21 @@ rotate ads, split traffic and lazy-load on timing).
 Then the fixtures again across two released versions, since drift between
 releases is the same defect on a longer clock — the walk count changing in
 0.60.0 was deliberate, and a number alone would not have said so.
-**Status: unknown — never measured.**
+**Status: measured 2026-09-14 (`docs/research/2026-09-14-b5-repeatability.md`),
+first two numbers in, third outstanding.** Fixtures: **0 of 3,375 fields
+moved**, 33 cases × 5 runs, quiet and with the machine saturated, the
+comparator proved able to see planted differences first. Real sites:
+**0 of 49 on berkshirehathaway.com** — a real site over the real internet with
+nothing different — while bbc.com and stripe.com moved in geometry only, the
+counts a user acts on (`findings`, `targets.under`) holding on every run. The
+cross-version number is not done.
+
+It found one defect, which is B2's to close and C4's as much as B5's:
+**`audit` and `lint` measure a moving page without saying so.** stripe.com
+answers `settled: false, unsettledReason: animating` to `snap` and
+`warnings: []` to the other two, which have no settle concept at all — and
+that silence covers finding boxes moving up to 438 CSS px between runs, on
+coordinates `report` pins to a screenshot.
 
 ---
 
