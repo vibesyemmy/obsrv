@@ -41,10 +41,16 @@ silently at this until 0.52.0; the CLI path has not been tested cold.
 *Check:* a fresh account, no caches, all three surfaces, timed, with the
 output read as a stranger would read it. **Status: unknown.**
 
-**A4. Removing it leaves nothing behind.** Nothing prunes the temp files:
-this machine holds **9,828 `obsrv-*` entries** in `os.tmpdir()` from months of
-runs, and the app's own state lives in `~/.obsrv` and its Electron profile.
-*Check:* install, use, uninstall, then list what remains. **Status: not met.**
+**A4. Removing it leaves nothing behind.** The temp half is closed: nothing
+pruned the capture directories, and this machine held **10,045 `obsrv-*`
+entries** in `os.tmpdir()` (400 MB) before they were cleared by hand; the MCP
+server now prunes its own prefix, older than a day, at startup
+(`src/shared/pruneTemp.ts`, 2026-09-14). What remains unanswered is the
+question the criterion actually asks — the app's own state lives in
+`~/.obsrv` and its Electron profile, and nobody has run the check.
+*Check:* install, use, uninstall, then list what remains.
+**Status: partly met — the leak is fixed, the uninstall has never been
+performed.**
 
 ---
 
