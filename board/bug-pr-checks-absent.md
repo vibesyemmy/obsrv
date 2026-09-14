@@ -27,12 +27,28 @@ So `board:check` — the guard whose entire purpose is to stop a hand-resolved b
 
 **HENRY'S ERROR, recorded because it is the reason nobody looked.** Asked earlier the same evening whether board:check covered PRs, Henry answered: *"ci.yml has a bare `pull_request:` with no branch filter, and board:check is a step in the `test` job, so it runs on every PR. The branch is covered, which is where the conflict happens."* That was read off a trigger line and had never been observed, because no PR had ever existed to observe it on. A check nobody has watched succeed — the same shape as the log that could not be attributed and the grep that returned zero, on the same day, stated as reassurance.
 
-**THE TEST THAT SETTLES THE POSITIVE HALF, not yet run:** rebase a conflicting PR onto main so it becomes mergeable, push, and watch whether checks appear. If they do, the cause above is confirmed and the fix is about conflicts. If they do not, `pull_request` is broken here for some other reason and this card is bigger. Kenya is rebasing PR #1 regardless, so the observation is nearly free — **take the reading rather than assuming the diagnosis.**
+**POSITIVE HALF NOW OBSERVED — the diagnosis is confirmed, not inferred.** Kenya rebased PR #1 onto 69de54b, resolved by regenerating (board:check green, 54 cards), force-pushed. Verified independently by Henry after:
 
-**POSSIBLE FIXES, once the cause is confirmed,** in increasing order of how much they change:
+    before rebase   mergeable CONFLICTING   refs/pull/1/merge  404        pull_request runs  0
+    after rebase    mergeable MERGEABLE     refs/pull/1/merge  af50d6c    pull_request runs  2
+                    gh pr checks 1 -> typecheck · unit · shader parity · e2e   pending
 
-- Accept it, and make `board:check` on the main push the backstop it already is. Cheapest, and leaves a window where a hand-resolved board is on main until the next push run.
-- Trigger the board check on `push` for all branches rather than only main, so a branch gets checked whether or not its PR can compute a merge ref. Does not depend on PR state at all.
-- Treat a PR with no checks as not mergeable by policy, which needs a branch protection rule and a human to hold the line.
+So `pull_request` is not broken here and never was. A conflicting PR has no merge ref to run against, and every PR this repository had ever had was conflicting — there being one.
+
+Worth sitting with: the first pull request in the repo's history had to be made mergeable before anyone could observe whether a mechanism the project had been relying on for months existed at all. It did. Nobody knew.
+
+**POSSIBLE FIXES — and the ranking changed once Kenya produced the collision by hand.**
+
+Kenya's interaction finding, which kills the option that looked cheapest: its commit scheduled the sweep TWICE, once from a temporary `push` trigger and once from the `pull_request` paths filter. Two runs of one workflow on one tree. A small waste now, and a confusing artefact later — two `b5-sweep-ci.json` files from a single commit, differing only by desk-identical noise, is exactly the thing someone reads as a repeatability result.
+
+**So "run board:check on push for all branches" is worse than it looked.** It makes that double permanent for every workflow that also runs on pull requests, and this repo's CI runs on both. The cheap fix buys a guard and pays in duplicate runs and duplicate artefacts.
+
+In order, as they stand now:
+
+- **Add a `concurrency:` group keyed on workflow and ref**, then reconsider the push trigger. Deduplication first, coverage second — otherwise the coverage fix creates the artefact problem. This is the standard idiom and it is one block.
+- **Accept the gap and rely on the main-push run as the backstop it already is.** Leaves a window where a hand-resolved board sits on main until the next push run, which is usually seconds.
+- **Require checks by branch protection**, so a PR with none cannot merge. Needs a rule and a human to hold the line, and it turns this from a silent gap into a visible block.
+
+What NOT to do, because it is the tempting one: nothing here needs the board's generated files to stop being committed. They are what makes staleness impossible, and the conflicts are the price of that, not a defect in it.
 
 Related: `chore-guard` is the card about a green that means nothing. This is an ABSENT green that means nothing, which is the same family and arguably worse — nothing even claims to have checked.
