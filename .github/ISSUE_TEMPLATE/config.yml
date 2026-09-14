@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Is it a known limit?
+    url: https://github.com/vibesyemmy/obsrv/blob/main/docs/limitations.md
+    about: >
+      macOS-only rasterisation, diff being 1x-only, iframes and shadow roots
+      the measurement does not enter, pages that move while being measured —
+      the things that look like bugs and are not.
+  - name: What an agent can do to your machine
+    url: https://github.com/vibesyemmy/obsrv/blob/main/docs/agent-control.md
+    about: The agent-control surface in full — every command, the four gates, and how to turn it off.

@@ -196,10 +196,10 @@ without caveats.
 
 ## What this page does not cover
 
-- **What an agent can do to your machine** when agent control is on — the
-  control surface, the consent bar, and how to turn it off.
-- **What leaves your machine**, and where files are written.
+Two neighbouring questions have their own pages now:
 
-Both are owed their own sections and do not have them yet. Nothing is uploaded
-anywhere; PNGs, report HTML and logs are written locally, some under
-`os.tmpdir()`. That is the short answer until the long one is written.
+- [**What an agent can do to your machine**](agent-control.md) — every command
+  the control surface accepts, the four gates in front of it, the consent bar,
+  and how to turn it off.
+- [**Privacy and files**](../README.md#privacy-and-files) — the one outbound
+  request the app makes, and every file it writes.
