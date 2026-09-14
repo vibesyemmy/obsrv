@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*48 cards, 26 open, 20 of those unclaimed.*
+*51 cards, 29 open, 23 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 10
+## Next — 12
 
 *Picked, not claimed — start here.*
 
@@ -61,6 +61,12 @@ Cheapest version is probably a CI workflow that runs the fixture half of the B5 
 ### Sign and notarise the app
 
 [`a1`](../board/a1.md) · **A1** · readiness · owner: Rook (cert step is Opeyemi's)
+
+LIVE RISK CONFIRMED 2026-09-14, found by Rook while doing A4 and not while looking for it. docs/signing.md step 3 carries a warning about electron-builder picking the wrong identity. **It reproduced verbatim on the first build anyone has run since that warning was written**: electron-builder signed with `identityName=Restack Dev` and REPORTED SUCCESS.
+
+That is the dangerous half. A wrong-identity signature does not fail — it succeeds, loudly, with a green build log, and the identity is only visible if someone reads which one it used. Anyone cutting a release without checking would ship a build signed by the wrong entity and have no signal at all.
+
+So docs/signing.md is right and is not sufficient: a warning in a document is read once, and this needs a check that fires every time. Whoever takes A1 should treat "assert the signing identity is the one intended, and fail the build otherwise" as part of the work rather than a follow-up.
 
 Blocked on Apple issuing a Developer ID Application certificate. The cert in ~/Documents/obsrv-signing is Apple Distribution (Voicify Limited) — wrong type. Wiring waits on chore/signing.
 
@@ -189,6 +195,28 @@ What is NOT yet known, and should be established before choosing a fix, because 
 
 The related limits question: `docs/limitations.md` says what Obsrv cannot measure and `README.md` has a *Privacy and files* section naming where files live. Neither says this directory grows without limit, which a user would want to know before it is 1.3 GB.
 
+### Deleting Obsrv.app leaves your browsing history behind, undocumented
+
+[`bug-history-survives-uninstall`](../board/bug-history-survives-uninstall.md) · bug · *unclaimed*
+
+Measured by Rook 2026-09-14 on a real packaged build — unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under `CFFIXED_USER_HOME`, one page loaded by typing its URL, quit cleanly, then the bundle deleted, which is what dragging to the Trash does.
+
+after one page load     87 entries, 6 MB     after deleting the app  86 entries, 6 MB
+
+**One entry went, and it was the app.** What stays: `settings.json`, `tabs.json`, `obsrv.log`, the whole Chromium profile — Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches — and `history.json`.
+
+**Lead with the history, not the megabytes.** `history.json` is, in the README's own words, "the addresses you have visited in the app". A user who deletes an app they used to look at private pages has every reason to think those addresses went with it. They did not, there is no uninstall command, and no document says where to look.
+
+The README's silence is the pointed part rather than an oversight of omission. Its *Privacy and files* section goes out of its way to say what IS cleaned up — headless CLI runs "use a throwaway Electron profile under `os.tmpdir()` and remove it on exit", and the MCP server "prunes its own, older than a day, at startup". Against that care, saying nothing about the app's own state reads as though there were nothing to say.
+
+**Two things this card wants, and they are separable** — see `chore-uninstall-path` for the second:
+
+1. The README says what survives deleting the app, and where it is. Cheap, and it closes the privacy gap on its own. 2. A supported way to remove it.
+
+RELATED README ACCURACY, found in the same run and recorded here so it is not lost: a **locally built DMG carries no quarantine attribute**, so nobody testing a local build reproduces the "damaged" dialog the install instructions describe, and may conclude the instructions are wrong. Not a false statement — the instructions are right about downloaded DMGs — just silent about which builds they apply to.
+
+Isolation for this measurement was read from INSIDE the running app (`app.getPath` for home, userData, logs, appData, cache, temp) rather than inferred from the filesystem afterwards, for the reason this project keeps relearning: a directory nothing consulted and a directory that came out empty look identical. `CFFIXED_USER_HOME` held on the real packaged app; temp never moved. Opeyemi's own profile was counted before and after at 22,251 entries, unchanged.
+
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
 [`bug-walk-coverage-diverges`](../board/bug-walk-coverage-diverges.md) · **C4** · bug · owner: obsrv-e7
@@ -204,6 +232,23 @@ FIXTURE NOW IN THE REPO: tests/fixtures/app-shell-grows.html (merged 586caab) �
 Handed to obsrv-e7 to run through the C4 parity harness, which catches exactly this asymmetry (a note-bearing array present on one surface and empty on the other) and is how the panel silence and the inspect gap both surfaced. obsrv-e7's read: if live really never fires the coverage note on an app shell, it is a seventh defect rather than a footnote to the sixth.
 
 Cause still open: the `hidden` divergence, the two walks scrolling differently, or the growth being timing-dependent. obsrv-a6's one-off comparison could not separate them.
+
+### There is no supported way to remove Obsrv's data
+
+[`chore-uninstall-path`](../board/chore-uninstall-path.md) · chore · *unclaimed*
+
+Split from `bug-history-survives-uninstall` deliberately: that card is a privacy gap closable by a paragraph in the README, this one is a feature, and tying them means the cheap fix waits for the expensive one.
+
+Deleting `Obsrv.app` removes the app and nothing else — measured, 87 entries before and 86 after. There is no `obsrv uninstall`, and `npm rm -g getobsrv` leaves the 128 MB Electron zip in `~/Library/Caches/electron/` (see `a4`).
+
+Two shapes, and the lighter one may be enough:
+
+- **A documented path list.** Four or five lines in the README naming every directory, so someone can remove them by hand and know they got all of it. No code, no risk of deleting the wrong thing on someone's behalf.
+- **An `obsrv uninstall` command.** More usable, and it takes on the job of being careful — it must not delete a profile another instance is using, must say what it is about to remove before removing it, and must handle the CLI, the app and the MCP server having different footprints.
+
+**Prefer the list first.** It is the part that makes the privacy statement true, it can ship immediately, and it is the specification the command would have to implement anyway. A command written before the list exists is a command whose completeness nobody can check.
+
+Whoever takes the command: `a4`'s write-up (`docs/research/2026-09-14-a4-install-remains.md`) is the inventory, measured on a real packaged build rather than reasoned from the code.
 
 ---
 
@@ -227,7 +272,7 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Backlog — 15
+## Backlog — 16
 
 *Not started, not yet picked.*
 
@@ -356,6 +401,22 @@ Bears on documentation: nobody should write "the dev app stays up" in `docs/` un
 [`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · *unclaimed*
 
 What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depends on C1: the policy defining what counts has not been written, and applying an unwritten policy retroactively is how a register becomes a matter of taste.
+
+### control.json survives a crash and then survives the uninstall
+
+[`bug-control-json-crash-stale`](../board/bug-control-json-crash-stale.md) · bug · *unclaimed*
+
+Measured by Rook 2026-09-14, and the way it was measured is the part worth copying.
+
+Rook's first packaged-app run threw before `close()` and left a `control.json`; the clean run did not. **Two runs differing in one thing is a hypothesis, not a finding**, so it ran both deliberately with agent control on: a clean quit removes the file, `SIGKILL` leaves it — port, token, pid, mode `0600`.
+
+Not a functional defect on its own. Discovery already treats a dead pid as no app (see `single-instance`), so a stale file does not mislead the MCP server or another instance.
+
+The cost is that it is a **token on disk with no owner**, and it then survives deleting the app along with everything else in `bug-history-survives-uninstall`. A loopback token is low-value — it is bound to a port nothing is listening on — but "low-value credential left behind indefinitely after the program that made it is gone" is the sort of sentence that is easier to fix than to defend.
+
+Cheapest fix is a sweep at startup rather than a handler at exit: a crash is by definition the case where the exit path did not run, so anything that relies on shutdown cannot close this. The app already knows how to judge a dead pid; the same check can delete rather than only ignore.
+
+Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for the removal question this feeds into.
 
 ---
 
@@ -678,4 +739,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 12 readiness, 7 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 12 readiness, 9 bugs, 8 chores, among the open cards.*
