@@ -1009,6 +1009,18 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     return toolError(liveFailure(e))
   }
   warnings.push(...capture.warnings)
+  // An app older than the capture's settle verdict sends none, and the line
+  // below falls back to the navigation flag — which is the question this
+  // field used to answer. That is the right degradation and the wrong
+  // silence: without this sentence the reply answers one of two questions
+  // under a name documented as the other, and nothing distinguishes them.
+  // Reachable in the ordinary way, since the npm package updates ahead of
+  // the installed app.
+  if (capture.settled === undefined) {
+    warnings.push(
+      "this app is older than the capture's settle verdict, so `settled` reports whether the navigation was confirmed rather than whether the page went paint-quiet; update the app for the paint-quiet answer.",
+    )
+  }
   const { pngPath, width, height } = capture
 
   // The status the PNG is reported with is read after the capture, which
