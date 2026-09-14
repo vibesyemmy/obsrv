@@ -378,6 +378,15 @@ test('every written reason still describes a real difference', () => {
     Object.keys((r.surface.live ?? {}) as Record<string, unknown>).length > 0
 
   const toolsCompared = new Set(rows.filter(answeredBoth).map(r => r.tool))
+  // A run where nothing compared cannot say anything about the table, and a
+  // test that passes on no evidence is the defect this file exists to find.
+  // Seen for real: run this spec with `-g` and the per-page tests above never
+  // populate `rows`, so every row looks live and the check is vacuous.
+  expect(
+    toolsCompared.size,
+    'No tool compared on any page, so this test had nothing to check. It is not evidence the table is current — ' +
+      'run the whole file rather than a filtered subset.',
+  ).toBeGreaterThan(0)
   const seen = new Set<string>()
   for (const row of rows) {
     if (!answeredBoth(row)) continue
