@@ -62,6 +62,22 @@ Cheapest version is probably a CI workflow that runs the fixture half of the B5 
 
 [`a1`](../board/a1.md) · **A1** · readiness · owner: Rook (cert step is Opeyemi's)
 
+A1'S GROUNDWORK ALREADY EXISTS, ON A BRANCH UNMERGED SINCE 2026-08-30. Henry cited `docs/signing.md` on this card without saying where it is; it is NOT on main, and a reader looking there finds nothing. Corrected here.
+
+branch chore/signing (as of f3fdbe9, 2026-08-30)       .github/workflows/ci.yml   +42   HAS_SIGNING gate, CSC_IDENTITY_AUTO_DISCOVERY       docs/signing.md            +116  new file — the step-3 warning lives here       package.json               +1    dist:signed = build + electron-builder --config.mac.notarize=true
+
+`HAS_SIGNING` is `secrets.CSC_LINK != '' && secrets.APPLE_API_KEY_ID != ''`, and the release step runs `dist:signed` only when it is true — so the fork case is already handled gracefully. That branch is two weeks behind a main that has moved a great deal today; it will need a rebase before anyone judges it.
+
+ROOK'S PROPOSED IDENTITY ASSERTION, stated concretely so it is judged as work rather than as a principle. Three lines after `dist:signed`, the build failing on any:
+
+codesign -dv --verbose=4 <app>    authority must contain "Developer ID Application: Voicify Limited (NDXPR623CF)"     spctl -a -vvv -t install <app>    must say  source=Notarized Developer ID     xcrun stapler validate <dmg>      must pass, per DMG
+
+A shell step in the release job, not a new subsystem. It replaces nothing in docs/signing.md: the doc explains why, the assertion makes the why unskippable.
+
+THE POINT THAT MAKES IT AN IDENTITY CHECK RATHER THAN A SIGNATURE CHECK, and it is Rook's: **assert what it must EQUAL, never "is signed" or "is not unsigned".** `spctl` accepts an ad-hoc signature happily, and "signed" is exactly the answer that was true today and wrong — electron-builder reported success with `identityName=Restack Dev`. The team id in the string is what makes it an identity. A check whose pass fits both "signed as us" and "signed as anything" is this project's own defect family, pointed at the release.
+
+SCOPE, deliberately not widened: NOT the local build. Enforcing it in `npm run dist` would fail on any machine without the cert, including a contributor's fork. It belongs where `HAS_SIGNING` is true.
+
 LIVE RISK CONFIRMED 2026-09-14, found by Rook while doing A4 and not while looking for it. docs/signing.md step 3 carries a warning about electron-builder picking the wrong identity. **It reproduced verbatim on the first build anyone has run since that warning was written**: electron-builder signed with `identityName=Restack Dev` and REPORTED SUCCESS.
 
 That is the dangerous half. A wrong-identity signature does not fail — it succeeds, loudly, with a green build log, and the identity is only visible if someone reads which one it used. Anyone cutting a release without checking would ship a build signed by the wrong entity and have no signal at all.
