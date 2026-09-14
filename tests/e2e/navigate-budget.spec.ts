@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
-import { launchApp } from './launch'
+import { launchApp, rendererWindow } from './launch'
 
 /**
  * An agent's `navigate` (and `openTab` with a URL) waits for both panes to
@@ -74,4 +74,34 @@ test('a new tab with such a URL answers the same way', async () => {
   expect(r.status).toBe(200)
   expect(r.body).toMatchObject({ ok: true, loading: true })
   expect(typeof r.body.id).toBe('string')
+})
+
+/**
+ * The toolbar's own navigate, which had no budget at all until 2026-09-14.
+ *
+ * `IPC.navigate` returned `navigateBoth` — the unbounded load — while the
+ * agent's path above went through the budget. `Toolbar.go` and `EmptyState`
+ * both *await* that answer before they sync the address field, so on a page
+ * that never finishes loading the user was left looking at a loaded page with
+ * the address they typed still pending, with nothing to resolve it.
+ *
+ * It also cost the suite a worker. `tabs.spec`'s relaunch test drives this
+ * channel, its normal runtime is 4.4 s, and on a contended CI runner it hung
+ * for exactly the 30 s test timeout — no assertion, no error — and took the
+ * eight tests after it down with the worker (2026-09-14).
+ */
+test('the toolbar navigate answers within the budget too, not only the agent one', async () => {
+  const own = await launchApp([], { OBSRV_NAVIGATE_WAIT_MS: '1500' })
+  try {
+    const page = await rendererWindow(own)
+    const started = Date.now()
+    const applied = await page.evaluate(u => window.obsrv.navigate(u), `${base}/`)
+    const ms = Date.now() - started
+    // The address it answers with is the one to put in the field: a string,
+    // which is what this channel has always returned.
+    expect(applied).toBe(`${base}/`)
+    expect(ms).toBeLessThan(8_000)
+  } finally {
+    await own.close()
+  }
 })

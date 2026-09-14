@@ -20,6 +20,27 @@ import { join, resolve } from 'node:path'
  * `boot()` registered its continuation at module load, before any evaluate
  * can register one, so awaiting `whenReady()` from here orders after it.
  */
+/**
+ * The navigate budget every e2e app runs under, and why it is not the
+ * production default.
+ *
+ * `navigateWithin` answers with the page as it stands when a load has not
+ * finished within `OBSRV_NAVIGATE_WAIT_MS` — 30 s in production, which is
+ * **exactly Playwright's per-test timeout**. Those two being equal means a
+ * test whose load is slow to reach `did-finish-load` dies at the instant the
+ * app would have answered it: no assertion, no error, a 30.0 s hang, and a
+ * worker teardown that then takes the rest of the file's tests down with it.
+ * That is the tabs relaunch flake, seen on CI 2026-09-14 — a test whose
+ * normal runtime is 4.4 s.
+ *
+ * Every navigation in this suite is a `file://` fixture or a loopback server,
+ * so 8 s is an order of magnitude of headroom for even a badly contended
+ * runner, and it leaves 22 s of the test budget for the assertions that
+ * follow a navigation rather than none. A spec that needs a different budget
+ * passes its own in `extraEnv`, which wins.
+ */
+export const E2E_NAVIGATE_WAIT_MS = 8_000
+
 export async function launchApp(
   extraArgs: string[] = [],
   extraEnv: Record<string, string> = {},
@@ -28,7 +49,12 @@ export async function launchApp(
   const dir = userData ?? mkdtempSync(join(tmpdir(), 'obsrv-e2e-'))
   const raw = await electron.launch({
     args: [resolve(__dirname, '../../out/main/index.js'), `--user-data-dir=${dir}`, ...extraArgs],
-    env: { ...process.env, OBSRV_TEST: '1', ...extraEnv },
+    env: {
+      ...process.env,
+      OBSRV_TEST: '1',
+      OBSRV_NAVIGATE_WAIT_MS: String(E2E_NAVIGATE_WAIT_MS),
+      ...extraEnv,
+    },
   })
   watchExit(raw, dir, userData === undefined)
   const app = hardenEvaluate(raw)

@@ -587,3 +587,46 @@ fails alone. This shape fails once, takes the rest of the file down with it
 magnitude less time. If you see it after a change that does not touch
 `src/preload`, `src/main/ipc.ts`'s select handling or the overlay renderer,
 it is this.
+
+## `tabs.spec.ts:755`: the 30 s hang that was a product bug
+
+Seen on CI 2026-09-14: `tabs come back on relaunch › restores the urls, the
+screen and which tab was in front` failed at **exactly 30.0 s** with no
+assertion and no error, then `Worker teardown timeout of 30000ms exceeded`
+took the eight tests after it down unrun and turned the run red. It passed on
+retry in **4.4 s**. A 7× overshoot is not load drift.
+
+**Two hypotheses were wrong**, and both were killed by measurement rather than
+by argument:
+
+1. *The single-instance lock.* The lock is keyed on the userData path and this
+   test relaunches on the same one, and `src/main/index.ts` says a loser
+   "exits before it has a window" — so `rendererWindow`, which has no timeout,
+   would wait forever. Probed five relaunches at 1258% CPU: `close()` always
+   waited for process exit and the relaunch always got its windows. Dead.
+2. *`NAVIGATE_WAIT_MS` equals the test timeout.* Both are 30 s, which is a real
+   collision — but a probe measured the hang at 30 s with the budget set to
+   8 s, proving the budget was not in that path at all.
+
+**What found it** was the artifact, not the reasoning. `gh run download -n
+playwright-traces` yields `error-context.md`, whose page snapshot is the app
+at the moment of the timeout: one tab titled *New tab*, preset `1080p 24"`,
+the empty state. A fresh app that had never navigated — so the hang was the
+*first* navigation, not the relaunch.
+
+**The root cause was in the product.** `handle(IPC.navigate)` returned
+`navigateBoth`, which resolves on `did-finish-load` and has no budget; the
+agent's path had been given `navigateWithin` for exactly this reason and the
+renderer's had not. `Toolbar.go` and `EmptyState` both *await* that answer
+before syncing the address field, so on a page that never finishes loading a
+real user is left looking at a loaded page with the address they typed still
+pending, with nothing that will ever resolve it. The test drove that channel
+and inherited the hang.
+
+**Telling it from a regression:** this one is not flaky in the usual sense —
+it is a real unbounded wait that only shows when the host is slow enough for
+`did-finish-load` to be late. Fixed by routing the renderer through the same
+budget, and by giving the e2e harness a navigate budget (8 s) meaningfully
+under Playwright's 30 s per-test timeout, since a budget equal to the timeout
+can never be observed. `tests/unit/e2eBudgets.test.ts` fails if those two
+numbers are ever brought back together.
