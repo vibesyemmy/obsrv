@@ -1,10 +1,18 @@
 ---
-title: "QUEUE — Rook: e2 DONE · a1 blocked on Opeyemi · bug-orientation-name next"
+title: "QUEUE — Rook: chore-guard now · flake-sync-165 next · a1 on Opeyemi"
 column: next
 kind: chore
 owner: "Rook"
 order: 2
 ---
+
+UPDATED 2026-09-14 evening.
+
+1. `chore-guard` — IN PROGRESS. Rook's own first preference; obsrv-91 released it rather than hold it against a maybe. Read the stale-lock section before building: that branch needs an observation, not a design.
+2. `flake-sync-165` — QUEUED, on Opeyemi's word. Reshaped from a reproduction hunt into a margin measurement, because the flake was seen once and six runs were clean after; a hunt could end with nothing. The card now names the constants and the number to produce.
+3. `a1` — BLOCKED on Opeyemi: the design, the Voicify-versus-Opeyemi identity, and the credentials. Its first step is the `chore/signing` rebase, inside the card. Rook has read that branch; it merges clean today, 447 commits on, zero conflicts.
+
+Not Rook's unless asked: the three a4 follow-ups. Rook declined them unprompted as "mine by provenance, not by right", and `chore-uninstall-path` in particular is a decision about what Obsrv promises rather than a cleanup.
 
 Updated 2026-09-14 evening, after the queue went stale within hours of being written — which is the failure mode this card is an instance of, not an exception to.
 
