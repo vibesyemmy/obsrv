@@ -58,11 +58,15 @@ the same as arriving.
 producing no finding that changes what a user is told. **Status: not met —
 never achieved.**
 
-**B2. The known gaps are closed or written down as limits.** Open today:
-**`audit` and `lint` measure a moving page without saying so** — neither has a
-settle concept, while `snap` answers `settled: false` on the same URL, and the
-silence covers finding boxes that moved up to 438 CSS px between runs on
-stripe.com (B5, 2026-09-14); a page locked by a wall versus a page whose
+**B2. The known gaps are closed or written down as limits.** Closed
+2026-09-14: `audit` and `lint` measured a moving page without saying so. Both
+now measure the page twice, 250 ms apart, and say what actually moved — keyed
+off their own boxes rather than off a paint verdict, because a video and an
+opacity fade paint steadily without moving anything and their figures are
+perfectly repeatable. **Its own limit belongs in D1**: the probe sees motion
+during its window, so a carousel that steps every few seconds passes it, and
+the note's absence is not a promise that the page is still. Open today: a page
+locked by a wall versus a page whose
 dialog steals the walk are different shapes and only one has a sentence —
 though on fixtures both fired, identically on all five runs, the dialog's in
 its own words ("the walk scrolled a dialog, not the page itself"), so what is

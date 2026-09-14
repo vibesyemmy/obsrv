@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
 import { maxCssViewport, screenShape } from '../shared/calibration'
 import { SCROLL_HOST_SCRIPT } from '../shared/scrollHost'
+import { MOTION_PROBE_MS, auditBoxes, lintBoxes, motionAfter, pageMovedNote } from '../shared/pageMotion'
 import type { StuckBar } from '../shared/stuckChrome'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
@@ -637,6 +638,24 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
+    // What `audit` and `lint` ask on their own, `report` asks too, or its
+    // page is the one place this goes unsaid. One wait covers both: the
+    // second pass is 15 ms, the wait is the price (shared/pageMotion).
+    if (auditReport !== undefined) {
+      const motion = await motionAfter(auditBoxes(auditReport), () => target.auditPage(), auditBoxes)
+      const note = motion === null ? null : pageMovedNote('audit', motion, motion.afterMs)
+      if (note !== null) warn(`warning: ${note}`)
+    }
+    if (lintReport !== undefined) {
+      const motion = await motionAfter(
+        lintBoxes(lintReport),
+        () => target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)),
+        lintBoxes,
+        auditReport === undefined ? MOTION_PROBE_MS : 0,
+      )
+      const note = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
+      if (note !== null) warn(`warning: ${note}`)
+    }
     // The walk may have seen the end of a page it never crossed — a consent
     // layer that fixes the body, a page that grew after the walk: say so.
     // Both heights in the screen's px: a page laid out wider than the screen
@@ -1002,6 +1021,13 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       if (statusNote !== null) notes.push(statusNote)
       report = { viewport: { width: applied.width, height: applied.height }, pageHeight: applied.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
     } else {
+      // Whether these boxes are where those elements stay. Asked of every
+      // page, because nothing cheaper knows: `audit` captures no frame, so
+      // there is no paint verdict here to gate it on, and the second pass
+      // costs 15 ms against a wait of 250 (shared/pageMotion).
+      const motion = await motionAfter(auditBoxes(report), () => target.auditPage(cmd.timeoutMs), auditBoxes)
+      const movedNote = motion === null ? null : pageMovedNote('audit', motion, motion.afterMs)
+      if (movedNote !== null) notes.push(movedNote)
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
       // After the arrival, which names the page, and before anything about
       // what was in it: an error status says the page is not the one asked
@@ -1134,6 +1160,14 @@ async function runLint(cmd: LintCommand): Promise<void> {
         spacers: 0,
       }
     } else {
+      // As for audit: measured, not assumed (shared/pageMotion).
+      const motion = await motionAfter(
+        lintBoxes(report),
+        () => target.lintPage(1 / (cmd.spec.deviceScaleFactor * cmd.spec.textScale), cmd.timeoutMs),
+        lintBoxes,
+      )
+      const movedNote = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
+      if (movedNote !== null) notes.push(movedNote)
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
       // The arrival, then the status, then what was in it — see the audit.
       if (lintStatusNote !== null) notes.push(lintStatusNote)
