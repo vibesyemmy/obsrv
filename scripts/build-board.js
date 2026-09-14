@@ -14,6 +14,19 @@
 // agreement. A board nobody can rebuild is a board that starts lying the first
 // time the real one changes.
 //
+// How fast that happens, measured rather than guessed, because the number is
+// the whole argument: six hours on 2026-09-14, and then ten minutes, when a
+// branch was split between this file being generated and being committed.
+//
+// The same day produced the reason cards name work as `branch (as of sha)`
+// rather than by sha alone. Unmerged branches get rebased when main moves,
+// which leaves the content identical and every sha different — so a bare sha
+// goes wrong while still reading as precise, which is this file's own failure
+// one level down. It is an observation, not a worry: within an hour of the
+// convention landing, one merge had already moved feat/cli-version from
+// 717e924 to 43b110e and docs/c5-note-inventory from 6b7acb4 to 856d268, on
+// cards nobody had touched.
+//
 //   node scripts/build-board.js <dump-dir> > docs/board.md
 //
 // where <dump-dir> holds one JSON file per card, as the Artifact tool's

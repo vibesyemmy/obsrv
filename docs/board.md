@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*Generated 2026-09-14 from the team board. 45 cards, 28 open, 19 of those unclaimed.*
+*Generated 2026-09-14 from the team board. 45 cards, 27 open, 18 of those unclaimed.*
 
 This is a snapshot of a live board that lives in a Claude Artifact with a
 shared database. That board is organization-internal and cannot be made
@@ -42,7 +42,7 @@ The live board, for anyone in the organization: https://claude.ai/code/artifact/
 
 ---
 
-## Next — 8
+## Next — 9
 
 *Picked, not claimed — start here.*
 
@@ -120,6 +120,20 @@ Three options, roughly in order of how much they are worth:
 
 The third is the one that makes the file honest rather than merely fresh, and it is the one worth the time.
 
+### Install, use, uninstall — then list what remains
+
+`a4` · **A4** · readiness · owner: Rook
+
+ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
+
+Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
+
+HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
+
+WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
+
+Worktree off current main (403717b), finish into Review, merging waits on Opeyemi's word given to Rook directly. Rook's board writes are refused (bug-board-access), so it reports and Henry moves the card.
+
 ### Two peer sessions cannot read the board at all
 
 `bug-board-access` · bug · owner: Henry
@@ -130,7 +144,7 @@ no such artifact, collection, or document (or no access — the two are delibera
 
 Three times each, independently. Two sessions blocked identically is one permission, not two coincidences.
 
-WHAT IT COSTS RIGHT NOW: neither can claim a card, set an owner, or move anything to Review. Every board move today has gone through Henry by hand, which means the board is accurate only while one session is awake to update it, and a card sits `unclaimed` while someone is actively working it. That is exactly the quiet staleness docs/board.md was built to guard against, arriving through the door nobody watched.
+NARROWED 2026-09-14 after the push of 403717b. This was recorded as ONE problem and is TWO, and the read half already had an answer sitting in the repo: `git pull && cat docs/board.md` works for every session, because the generated board is a public file and the artifact is not the only copy. Henry spent hours treating the artifact as the only board while the workaround was the very file he had built for exactly this. So the live cost is WRITES ONLY.\n\nThat also changes what the fix has to be. If reads are served by the repo and writes are not, then the question is not `how do we share the artifact` but `what is the write path for a session that cannot reach it` — and one answer is that there may not need to be one, if claiming a card can happen through the same public file by pull request. That is a different design from sharing an org-internal artifact more widely, and it should be chosen rather than defaulted into.\n\nWHAT IT COSTS RIGHT NOW: neither can claim a card, set an owner, or move anything to Review. Every board move today has gone through Henry by hand, which means the board is accurate only while one session is awake to update it, and a card sits `unclaimed` while someone is actively working it. That is exactly the quiet staleness docs/board.md was built to guard against, arriving through the door nobody watched.
 
 Both refused to hand-edit docs/board.md instead, which was right — scripts/build-board.js says in its own header that the snapshot exists to be regenerated rather than edited back into agreement, and a generated file saying `Kenya, Doing` while the artifact says `unclaimed` is the defect the file exists to prevent.
 
@@ -174,7 +188,7 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Review — 3
+## Review — 2
 
 *Finished, waiting on the maintainer to merge.*
 
@@ -182,7 +196,7 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 `c5-elevated` · **C5** · readiness · owner: Kenya
 
-DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c5-note-inventory` (as of 6b7acb4 + d1706f0, cut from 2c7c0a9). THE BRANCH IS THE ADDRESS; the shas are a timestamp and do not survive a rebase. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Split out from bug-retina at Henry's request so that one can merge first; no file appears in both branches, so they merge in either order.\n\nTouches docs/breaking-changes.md, docs/note-inventory.md, docs/readiness.md, tests/e2e/live-drive.spec.ts. live-drive: 45 passed, 58.1 s.\n\nd1706f0 also rewrites the 0.61.0 entry in docs/breaking-changes.md: `Decided 2026-09-14 rather than arrived at` now reads as OBSERVED, three of three. It keeps the eight-viewport cycle AND the 30,000-flip negative result, because the obvious two-preset test returns `animating` and reads as proof the value is unreachable — so the negative result is the load-bearing half of the record, not a curiosity.
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c5-note-inventory` (as of 856d268 + 5c6ad3d, rebased onto 98d3f82). THE BRANCH IS THE ADDRESS; the shas are a timestamp and do not survive a rebase — these are already the second set, the first being 6b7acb4 + d1706f0. Rebase was clean, no conflicts, and re-verified after it: live-drive 45 passed, 58.1 s, the same count and the same duration as before. Kenya confirmed 98d3f82 was in origin/main by merge-base before rebasing onto it rather than reading it off a message. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Split out from bug-retina at Henry's request so that one can merge first; no file appears in both branches, so they merge in either order.\n\nTouches docs/breaking-changes.md, docs/note-inventory.md, docs/readiness.md, tests/e2e/live-drive.spec.ts. live-drive: 45 passed, 58.1 s.\n\nd1706f0 also rewrites the 0.61.0 entry in docs/breaking-changes.md: `Decided 2026-09-14 rather than arrived at` now reads as OBSERVED, three of three. It keeps the eight-viewport cycle AND the 30,000-flip negative result, because the obvious two-preset test returns `animating` and reads as proof the value is unreachable — so the negative result is the load-bearing half of the record, not a curiosity.
 
 THE CARD'S FALLBACK WAS WRONG AND IS NOW INVERTED. `unsettledReason: 'resizing'` FIRES. Seen 3 runs of 3, on a real page, in the app. KEEP THE VALUE — do not remove it. This also retro-justifies shipping the enum in 0.61.0: docs/breaking-changes.md says the state is real, and it now has an observation behind it rather than a decision.
 
@@ -199,7 +213,7 @@ THE FOURTH SHAPE OF THE DAY'S DEFECT, named by obsrv-91 against its own shipped 
 
 `e2` · **E2** · readiness · owner: Rook
 
-DELIVERED 2026-09-14 by Rook, into Review. Branch `feat/cli-version` (as of 717e924), worktree .claude/worktrees/rook-cli-version. THE BRANCH IS THE ADDRESS; the sha is a timestamp and does not survive a rebase. NOT merged, NOT pushed — merging waits on Opeyemi's word given to Rook directly.
+DELIVERED 2026-09-14 by Rook, into Review. Branch `feat/cli-version` (as of 43b110e, rebased onto 403717b), worktree .claude/worktrees/rook-cli-version. THE BRANCH IS THE ADDRESS; the sha is a timestamp and does not survive a rebase — this is the second sha, the first being 717e924.\n\nThat rebase is also the convention's first observed instance rather than a predicted one, and Henry found it by looking at the worktree rather than by being told, so it is worth saying how it was checked. A file-count comparison is NOT sufficient: `git diff 717e924 43b110e` spans every main commit in between and shows 15 files, which proves nothing either way. The check that settles it is each commit's OWN patch: `diff <(git show --format=\"\" A) <(git show --format=\"\" B)`. Result here — identical but for one blob index and one hunk offset in src/cli/main.ts (@@ -1556 becomes @@ -1566, because main moved ten lines in that file). Textbook clean rebase, content unchanged. NOT merged, NOT pushed — merging waits on Opeyemi's word given to Rook directly.
 
 What it does: bin/obsrv.js answers --version and -v from package.json BEFORE it looks for out/ or the Electron binary, so the flag works on the machine where the build or the download is what broke. The built entry answers the same flag under Electron. --help lists it. Bare semver on stdout, nothing on stderr, exit 0.
 
@@ -216,31 +230,9 @@ Original card below.
 
 Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look.
 
-### fit-cap and onion-skin fail rather than skip when the desk scales the capture
-
-`bug-retina` · bug · owner: Kenya
-
-DELIVERED 2026-09-14 by Kenya, into Review. Branch `fix/retina-desk-skip` (as of 9fe0fda + 59b6097, cut from 2c7c0a9). THE BRANCH IS THE ADDRESS; the shas are a timestamp — Kenya rebases on request when main moves, and the content survives while the shas do not. NOT merged, NOT pushed. Opeyemi picked this card directly. MERGE THIS ONE FIRST — it makes every other local run cheaper to read; it shares no file with the C5 branch, so the two merge in either order and the sequencing is a choice rather than a constraint.\n\nTouches docs/e2e-flakes.md, tests/e2e/fit-cap.spec.ts, tests/e2e/helpers/captureScale.ts, tests/e2e/onion-skin.spec.ts. fit-cap + onion-skin: 7 passed, 16.3 s. Typecheck clean.\n\nA FLAKE FOUND, REMOVED, AND DELIBERATELY NOT FILED AS EXPLAINED (59b6097). After the rebase a three-spec run came back 51 passed, 1 flaky: fit-cap read a pane at 218 where the window's own size says 368 — a layout measured against a window still at its launch size, setContentSize(1900,1100) not yet landed. Kenya GUESSED contention from its own dev app, which docs/e2e-flakes.md documents as a known cause, then TESTED the guess rather than filing it: three runs with the dev app stopped, three with it running, all six passed. The documented cause is NOT this one, and an entry in the flakes doc saying otherwise would have been worse than no entry. Repeating the same three-spec shape gave 52 passed, no flake — one occurrence in two runs of that shape, none in six isolated. So 59b6097 polls the window's content size in beforeAll before anything reads a pane: it REMOVES the race and does not DIAGNOSE the failure, and the commit message says that in those words rather than claiming a fix.\n\nSTILL NOT VERIFIED, and it is the same shape as the resizing value on the C5 card: nobody has watched the skip fire on a real 2x desk. --force-device-scale-factor=2 is the same arithmetic, not the same machine. One run on the built-in display alone settles it — and that same run says whether onion-skin's 50% test belongs in the skip.
-
-THE CARD'S PREMISE WAS WRONG AND THE CORRECTION MATTERS MORE THAN THE FIX. The three are PASSING on this machine. Kenya ran them before touching anything: fit-cap.spec.ts + onion-skin.spec.ts, 7 passed, 17.0 s, no skips. system_profiler says the main display is a 3440x1440 ultrawide at 1x — the external monitor is plugged back in. Henry verified independently: `UI Looks like: 3440 x 1440`, Main Display: Yes.
-
-So `every local full run currently reports three failures` was true on 2026-09-12 and is NOT true today. The trio tracks WHAT IS PLUGGED IN, not which machine. Henry had been telling Opeyemi `they fail on this laptop and pass on CI`, which is the wrong axis and makes a green local run look like evidence the problem is gone. It is not.
-
-THE FIX: both specs probe the desk once in beforeAll; the three assertions that read a scaled capture skip with the scale named in the reason. tests/e2e/helpers/captureScale.ts, modelled on helpers/deskState.ts. Never skips on CI.
-
-The probe MEASURES rather than infers — capture the real window, divide by the size that window reports. Deliberately not a host list and not a `scaleFactor > 1` guess about displays, because what breaks the assertions is the CAPTURE, and that is directly observable.
-
-VERIFIED BOTH DIRECTIONS, since a skip that never fires and a skip that always fires are identical in a green run:
-- --force-device-scale-factor=2 → probe reports 2 → skip = true
-- plain launch → probe reports 1 → skip = false
-- fit-cap + onion-skin on this desk: 7 passed, no skips, 16.4 s
-- typecheck clean
-
-TWO THINGS LEFT UNDONE ON PURPOSE, both written into docs/e2e-flakes.md rather than a commit message: 1. onion-skin.spec.ts's 50% test also reads a captured pixel and was NOT skipped — it was not among the three observed red on 2026-09-12, and it should join them on an observation rather than on the symmetry. 2. A SKIP IS NOT A FIX. On a 2x desk those assertions still cannot run, so what they cover is unproven there. Making them desk-independent means comparing captures to each other or reading the frame bus.
-
 ---
 
-## Backlog — 16
+## Backlog — 15
 
 *Not started, not yet picked.*
 
@@ -287,12 +279,6 @@ The updater checks GitHub daily and offers the release page; it never installs. 
 `a3` · **A3** · readiness · *unclaimed*
 
 Never done on a machine that has never run Obsrv. Read the output as a stranger would.
-
-### Install, use, uninstall — then list what remains
-
-`a4` · **A4** · readiness · *unclaimed*
-
-Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched; the check has never been run.
 
 ### Close or write down the remaining known gaps
 
@@ -354,7 +340,7 @@ What C2's check actually asks and the register does not yet satisfy: read 0.56.0
 
 ---
 
-## Done — 17
+## Done — 18
 
 *Merged.*
 
@@ -438,6 +424,28 @@ NOT observed: `answeredBoth` returning false for a row carrying an error. The br
 
 docs/thresholds.md — seven judged numbers, each answering what it derives from / was calibrated against / would move it, sorted into standard-borrowed, calibrated, reasoned-only, and definitional. Linked from README, limitations, audit.md, lint.md. Merged 1e1594a.
 
+### fit-cap and onion-skin fail rather than skip when the desk scales the capture
+
+`bug-retina` · bug · owner: Kenya
+
+MERGED 2026-09-14 on Opeyemi's word, as 98d3f82 on main, pushed. Verified by Henry before pushing rather than taken on the branch's own report: npm run typecheck clean across all three configs (tsconfig.node / web / mcp — the single-config shortcut is what let a red commit reach main earlier this week), and fit-cap + onion-skin 7 passed, 16.9 s, matching Kenya's 16.3 s.\n\nWHAT IS AND IS NOT PROVEN AFTER THE MERGE. Henry first wrote that his run exercised only `skip false` and that Kenya's forced-scale run was the evidence for the other direction. Kenya corrected that as too generous and it is; the corrected version, checked against docs/e2e-flakes.md rather than argued:\n\n(a) PROVEN, physically, 2026-09-12: the three assertions FAIL on a real 2x main display. The flakes doc records it — external monitors disconnected, the Mac on its built-in Liquid Retina XDR alone (3024x1964, 2x), three runs in a row red, while the same commit's CI on macos-14 passed the whole suite.\n(b) PROVEN, synthetically, today: with --force-device-scale-factor=2 the probe returns 2 and the predicate skips; plain launch returns 1 and it does not.\n(c) NOT PROVEN, and it is the join between them: nobody has run captureScale() — written today — on a machine whose DISPLAY is 2x. The 09-12 observation predates the probe.\n\nAnd (b) is weaker than it looks: --force-device-scale-factor forces the APP's scale, while the documented cause is the HOST DISPLAY's scale (e2e-flakes.md: capturePage answers at the host display's scale whatever the target's own density). Those are different knobs that happen to produce the same ratio, so (b) shows the arithmetic and the predicate agree — not that the probe reads a real 2x desk correctly.\n\nHENRY'S AND KENYA'S GREEN RUNS ARE THE SAME EVIDENCE, NOT TWO. Both are 1x desks exercising `skip false`. Two sessions agreeing looked like corroboration and was one measurement taken twice — which is this project's agreement-fits-two-facts defect, arriving in the verification of the card that is about exactly this.\n\nONE RUN ON THE BUILT-IN DISPLAY ALONE closes (c), and the same run says whether onion-skin's 50% test belongs in the skip.\n\nDELIVERED 2026-09-14 by Kenya, into Review. Branch `fix/retina-desk-skip` (as of 9fe0fda + 59b6097, cut from 2c7c0a9). THE BRANCH IS THE ADDRESS; the shas are a timestamp — Kenya rebases on request when main moves, and the content survives while the shas do not. NOT merged, NOT pushed. Opeyemi picked this card directly. MERGE THIS ONE FIRST — it makes every other local run cheaper to read; it shares no file with the C5 branch, so the two merge in either order and the sequencing is a choice rather than a constraint.\n\nTouches docs/e2e-flakes.md, tests/e2e/fit-cap.spec.ts, tests/e2e/helpers/captureScale.ts, tests/e2e/onion-skin.spec.ts. fit-cap + onion-skin: 7 passed, 16.3 s. Typecheck clean.\n\nA FLAKE FOUND, REMOVED, AND DELIBERATELY NOT FILED AS EXPLAINED (59b6097). After the rebase a three-spec run came back 51 passed, 1 flaky: fit-cap read a pane at 218 where the window's own size says 368 — a layout measured against a window still at its launch size, setContentSize(1900,1100) not yet landed. Kenya GUESSED contention from its own dev app, which docs/e2e-flakes.md documents as a known cause, then TESTED the guess rather than filing it: three runs with the dev app stopped, three with it running, all six passed. The documented cause is NOT this one, and an entry in the flakes doc saying otherwise would have been worse than no entry. Repeating the same three-spec shape gave 52 passed, no flake — one occurrence in two runs of that shape, none in six isolated. So 59b6097 polls the window's content size in beforeAll before anything reads a pane: it REMOVES the race and does not DIAGNOSE the failure, and the commit message says that in those words rather than claiming a fix.\n\nSTILL NOT VERIFIED, and it is the same shape as the resizing value on the C5 card: nobody has watched the skip fire on a real 2x desk. --force-device-scale-factor=2 is the same arithmetic, not the same machine. One run on the built-in display alone settles it — and that same run says whether onion-skin's 50% test belongs in the skip.
+
+THE CARD'S PREMISE WAS WRONG AND THE CORRECTION MATTERS MORE THAN THE FIX. The three are PASSING on this machine. Kenya ran them before touching anything: fit-cap.spec.ts + onion-skin.spec.ts, 7 passed, 17.0 s, no skips. system_profiler says the main display is a 3440x1440 ultrawide at 1x — the external monitor is plugged back in. Henry verified independently: `UI Looks like: 3440 x 1440`, Main Display: Yes.
+
+So `every local full run currently reports three failures` was true on 2026-09-12 and is NOT true today. The trio tracks WHAT IS PLUGGED IN, not which machine. Henry had been telling Opeyemi `they fail on this laptop and pass on CI`, which is the wrong axis and makes a green local run look like evidence the problem is gone. It is not.
+
+THE FIX: both specs probe the desk once in beforeAll; the three assertions that read a scaled capture skip with the scale named in the reason. tests/e2e/helpers/captureScale.ts, modelled on helpers/deskState.ts. Never skips on CI.
+
+The probe MEASURES rather than infers — capture the real window, divide by the size that window reports. Deliberately not a host list and not a `scaleFactor > 1` guess about displays, because what breaks the assertions is the CAPTURE, and that is directly observable.
+
+VERIFIED BOTH DIRECTIONS, since a skip that never fires and a skip that always fires are identical in a green run:
+- --force-device-scale-factor=2 → probe reports 2 → skip = true
+- plain launch → probe reports 1 → skip = false
+- fit-cap + onion-skin on this desk: 7 passed, no skips, 16.4 s
+- typecheck clean
+
+TWO THINGS LEFT UNDONE ON PURPOSE, both written into docs/e2e-flakes.md rather than a commit message: 1. onion-skin.spec.ts's 50% test also reads a captured pixel and was NOT skipped — it was not among the three observed red on 2026-09-12, and it should join them on an observation rather than on the symmetry. 2. A SKIP IS NOT A FIX. On a 2x desk those assertions still cannot run, so what they cover is unproven there. Making them desk-independent means comparing captures to each other or reading the frame bus.
+
 ### Calibrate thin text: sweep 12 / 14 / 16 device px against real pages
 
 `b3-thinpx` · **B3** · chore · owner: obsrv-a6
@@ -514,4 +522,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 14 readiness, 6 bugs, 8 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 14 readiness, 5 bugs, 8 chores, among the open cards.*
