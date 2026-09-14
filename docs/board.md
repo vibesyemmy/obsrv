@@ -117,7 +117,7 @@ Cause still open: the `hidden` divergence, the two walks scrolling differently, 
 
 ---
 
-## Doing — 2
+## Doing — 1
 
 *Claimed. Someone is on it.*
 
@@ -134,6 +134,12 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+---
+
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
 
 ### Install, use, uninstall — then list what remains
 
@@ -154,6 +160,16 @@ SCOPE THIS PASS, Opeyemi's call: the CLI and MCP surfaces — a global npm insta
 FOUND BEFORE RUNNING ANYTHING, by reading: this card and docs/readiness.md:50 both name `~/.obsrv` as where the app's state lives. NOTHING in the source writes there. The app uses Electron's `app.getPath('userData')` (`~/Library/Application Support/Obsrv`, per ipc.ts for settings/history/tabs/control.json) and `app.getPath('logs')` (`~/Library/Logs/Obsrv`, per main/log.ts). `~/.obsrv-dev` is the dev lane (scripts/devLane.js), and `~/.claude/skills` is install-skill's target. So the criterion has been pointing at a path that may not exist — the "I looked in the wrong place" half of its own warning, sitting inside the check.
 
 GATE BEFORE ANY INSTALL: prove the isolated HOME is actually honoured before trusting a single path in the result. Setting the variable is not evidence it was used, and a reading from a contaminated HOME is indistinguishable from a clean one. If Electron ignores HOME for some paths, that finding outranks this card — every isolated-lane assumption in the project, the dev lane included, rests on it.
+
+INTO REVIEW 2026-09-14, branch `chore/a4-install-remains` off 9134567. Full write-up: docs/research/2026-09-14-a4-install-remains.md. Real profile counted before and after (22,251 entries in ~/Library/Application Support/Obsrv, unchanged; all five sentinel paths identical), so "nothing of Opeyemi's was touched" is evidence rather than an assurance.
+
+THE GATE FAILED, AND THAT IS THE BIGGEST FINDING. Electron on macOS IGNORES HOME for home/userData/appData/logs/cache — os.homedir() follows it, Chromium does not. A HOME-only sandbox writes into the real profile while every Node-level check reports the fake path. CFFIXED_USER_HOME moves them; --user-data-dir moves userData/sessionData/crashDumps but NOT logs, so the dev lane and the installed app share one ~/Library/Logs/Obsrv/obsrv.log. Neither lever moves app.getPath('temp'). Anything in this repo that isolates by HOME needs re-checking.
+
+THE CRITERION NAMED A PATH NOTHING WRITES. `~/.obsrv` does not exist on a machine that has run Obsrv for weeks, and no source writes it. Corrected in docs/readiness.md.
+
+WHAT REMAINS after `npm rm -g getobsrv`: 128 MB, and it is ~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip — put there by @electron/get on first run, outside node_modules, removed by nothing, documented nowhere. Plus ~/.claude/skills/obsrv-screens (correct, but install-skill has no removal and nothing says it survives). CLEAN, measured on a real render and a real MCP handshake: no obsrv-cli-* and no obsrv-mcp-* entry left anywhere.
+
+NOT MEASURED, and A4 is not fully met without it: the desktop app, where settings/history/tabs/control.json and obsrv.log live. Opeyemi's scope call. One number for whoever takes it — the real userData on this machine is 1.3 GB, 936 MB of it Chromium's `Cache`, and nothing prunes it.
 
 ---
 
