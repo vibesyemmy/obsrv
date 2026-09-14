@@ -1364,12 +1364,20 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
   let walkBlocked: WalkBlocked | undefined
+  const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
       walkBlocked = w.blocked
-      notes.push(...w.notes)
+      // The walk sentences are caveats about the figures, so they go where
+      // every other caveat goes and where the headless surface has always put
+      // them: `warnings`. They were in `notes` until 2026-09-14, which meant
+      // the identical string reached a caller under a different key depending
+      // on which surface answered — and `mode: auto` picks the surface, so
+      // nothing the caller did decided it. The call's own notes (a launch, a
+      // cut navigation) stay in `notes`: those are about the call.
+      walkNotes.push(...w.notes)
     }
     const payload = {
       ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
@@ -1417,7 +1425,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
       ...(input.groupsOnly ? { findings: [], truncated: noListCut(measured['truncated']) } : {}),
-      ...(auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...auditAdded] }),
+      ...(walkNotes.length + auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...walkNotes, ...auditAdded] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1651,12 +1659,20 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
   let walkBlocked: WalkBlocked | undefined
+  const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
       walkBlocked = w.blocked
-      notes.push(...w.notes)
+      // The walk sentences are caveats about the figures, so they go where
+      // every other caveat goes and where the headless surface has always put
+      // them: `warnings`. They were in `notes` until 2026-09-14, which meant
+      // the identical string reached a caller under a different key depending
+      // on which surface answered — and `mode: auto` picks the surface, so
+      // nothing the caller did decided it. The call's own notes (a launch, a
+      // cut navigation) stay in `notes`: those are about the call.
+      walkNotes.push(...w.notes)
     }
     const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
@@ -1703,7 +1719,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
       ...(input.groupsOnly ? { findings: [], truncated: noListCut((judged as { truncated?: unknown }).truncated) } : {}),
-      ...(added.length === 0 ? {} : { warnings: [...liveWarnings, ...added] }),
+      ...(walkNotes.length + added.length === 0 ? {} : { warnings: [...liveWarnings, ...walkNotes, ...added] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
