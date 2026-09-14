@@ -269,3 +269,49 @@ fail is indistinguishable from a gate that cannot.
 
 Cost: 1.9 minutes of e2e. It would have caught four of the six on the day
 they were introduced.
+
+## An eleventh page, and the seventh divergence
+
+Added after the six above were fixed: `app-shell-grows.html` (obsrv-a6's
+fixture, commit `e2d7fd2` on `test/app-shell-grows-fixture`), an app shell
+whose feed extends as it is walked. It was brought in to test a prediction
+that had failed to reproduce — that `hidden` meaning two things across the
+surfaces would make `walkCoverageNote` pick a different causal clause on each.
+
+The prediction was right. Both surfaces now walk 2 screenfuls, both measure
+the page at 4712 CSS px, both fire both notes, and every *field* difference is
+already in the intended table. The **second sentence** differs:
+
+- headless: *"…but the page measures 4712 CSS px (5 screenfuls): **a modal or
+  a locked scroll held the page, or it grew after the walk**; the measurement
+  is of the page as it stands…"*
+- live: *"…but the page measures 4712 CSS px (5 screenfuls): **the page grew as
+  it was walked — a feed that extends as you scroll** — so the end the walk saw
+  was the end at the time…"*
+
+**Live is the correct one, and headless is the defect.** The page's lock has
+already been named by the sentence immediately above it — the walk scrolled a
+panel — so offering "a modal or a locked scroll held the page" is the hedge
+that `walkCoverage`'s own comments warn against: a note that is right or wrong
+depending on its neighbour. Live reaches the specific clause; headless does
+not.
+
+The mechanism is `hidden`. Headless `hidden` is `overflowHidden()` alone, so
+`documentLocked` is true on this page and the lock clause wins. The preload's
+`hidden` is `scroller === 'root' && overflowHidden()`, false here because the
+scroller is a panel, so live falls through to the growth clause. One name, two
+definitions, and the reader gets a worse sentence on the surface where the
+definition is broader.
+
+Not fixed here. It is a change to what the *headless* surface says, on a page
+shape neither of the two locked fixtures in this corpus produces, and it
+belongs with the `hidden` card rather than inside a parity pass that is
+already carrying three breaking changes.
+
+**And it is worth being exact about why the gate did not catch it.** The gate
+compares fields. This is note *text* — the same key, the same type, on both
+surfaces, carrying different English. C5 is the criterion that would catch it,
+and this is the second time a defect has been found by reading sentences after
+the fields agreed. A field-level gate and a note-level inventory are not
+substitutes for each other, and neither is a substitute for pointing the tool
+at a page shape nobody had tried.
