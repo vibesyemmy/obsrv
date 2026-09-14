@@ -82,10 +82,11 @@ says so.
 
 - `--profile` names the panel the `contrast-on-panel` rule is judged on.
   Live, the panel and vision setting in force are used.
-- `--thin-px` sets the thin-text threshold in device px. Provisional and
-  stated in the output — and the least evidenced number in the tool: it has a
-  mechanism behind it but has never been calibrated against real pages. See
-  [**docs/thresholds.md**](thresholds.md#thin-text--14-device-px-for-weights-under-400).
+- `--thin-px` sets the thin-text threshold in device px. Stated in the output,
+  and calibrated 2026-09-14 across nine public sites: at 14 the rule fires on
+  one of them, and what it flags clusters at 8-11 px weight 300, with nothing
+  between 12 and 14 px — so 12 through 15 are the same answer on the page that
+  fires. See [**docs/thresholds.md**](thresholds.md#thin-text--14-device-px-for-weights-under-400).
 - `--text-scale` multiplies the density: at 200% on a 1x screen a 0.5px
   rule is a whole pixel and 12px light text is 24 device px tall.
 - Custom `--width`/`--height`/`--dsf` work as for `snap`; the diagonal is

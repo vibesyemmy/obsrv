@@ -13,12 +13,12 @@ any individual value:
 |---|---|---|
 | **From a published standard** | W3C, not us | contrast ratios, large-text sizes |
 | **Calibrated against real output** | Us, with counter-evidence | shadow share, page motion |
-| **Reasoned but never calibrated** | Us, cheaply — these are the soft ones | thin text |
+| **Calibrated late** | Us, with counter-evidence | thin text (swept 2026-09-14) |
 | **Definitional** | Nobody; it is arithmetic | sub-pixel edges |
 
-If you only read one row, read the third. **Thin text is the number in this
-tool with the least evidence under it**, and it is stated here rather than
-buried so that a disagreement can start from the right place.
+Every judged number now has something under it. The one with the least is
+**tap targets at 7 mm** — not because it is arbitrary, but because the
+platform guides it sits between do not publish their own evidence either.
 
 ---
 
@@ -73,16 +73,57 @@ approach one device pixel and go grey and broken. 300-weight at 12 px is 12
 device px on a 1x monitor and 24 on a 2x phone, so the same CSS breaks on one
 screen and not the other — which is the rule's whole point.
 
-**Calibrated against nothing.** There is no table behind 14 the way there is
-behind 7 mm. It has never been swept against real pages, and no
-false-positive rate has been measured for it. **This is the weakest number in
-the tool.**
+**Calibrated 2026-09-14**, on nine public sites — the seven the tap-target
+table used, plus vercel.com and linear.app, added because the first pass
+produced almost everything from one page and a calibration resting on one page
+is not one. Both extra sites are design-forward marketing pages of the kind
+that reaches for light weights: chosen to give the rule its best chance of
+firing, not its easiest silence. Viewports are stated in pixels rather than by
+preset id, because `--orientation` names which *stored* form to use and a
+preset id alone does not pin the screen.
 
-**What would move it:** almost any real evidence. A sweep at 12 / 14 / 16
-device px across the pages already used for the tap-target table, with the
-findings classified, would settle it in an afternoon and is the obvious first
-piece of work if this rule ever feels noisy. Until then treat a `thin-text`
-finding as "look at this on a 1x screen", not as a verdict. Override with
+**1920×1080 @1x** — findings at each candidate threshold:
+
+| Page | <10 | <12 | <14 | <16 | <18 |
+| --- | --- | --- | --- | --- | --- |
+| stripe.com | 28 | 224 | **226** | 248 | 370 |
+| linear.app | 0 | 0 | **0** | 4 | 4 |
+| wikipedia, github, bbc, hn, mdn, guardian, vercel | 0 | 0 | **0** | 0 | 0 |
+| **sites firing** | 1/9 | 1/9 | **1/9** | 2/9 | 2/9 |
+
+**360×800 @2x: zero on every site at every threshold** (bar 4 on stripe at 18).
+That is the rule working, not failing — at dsf 2 a 12 px font is 24 device px,
+above every candidate. The same CSS breaking on a 1x monitor and not on a 2x
+phone is the rule's whole premise, and this is it, demonstrated.
+
+Three things follow, and the second is the one that defends the number:
+
+**The rule is quiet.** At 14 it fires on **one site in nine**. Whatever B4's
+noise turns out to be, this is not where it comes from — which is the opposite
+of what this page predicted before the sweep was run.
+
+**14 sits on a plateau, not a cliff.** What stripe flags clusters entirely at
+**8–11 px, every one of them weight 300** — 127 at 10 px, 45 at 11 px, 23 at
+9 px, 5 at 8 px — and there is essentially nothing between 12 and 14 px:
+moving the threshold from 12 to 14 adds **two findings**. Real pages do not
+put light text at 12–14 px; they put it at 8–11 or at 14+. So the exact
+position of the line barely matters, which is the next best thing to being
+derived. That is a defence of 14 nobody had before, and it is not "14 is
+right" — it is "12 through 15 are the same answer".
+
+**It is not insensitive everywhere.** linear.app crosses between 14 and 16, so
+a site can sit exactly on the line even though stripe does not. The plateau is
+stripe's, not the web's.
+
+**What it catches looks real.** The smallest are `div "or"` / `"oder"` /
+`"または"` at 8 px weight 300 — language-switcher labels at eight device pixels
+of light stroke. Nobody would defend those as legible on a 1x monitor.
+
+**What would move it:** a site that fires between 12 and 15, which would turn
+the plateau into a real choice — linear.app is the near miss. Failing that,
+the case for lowering to 12 is that it drops two findings and nothing else;
+the case for 16 is that it picks up linear's four. Neither is compelling on
+this evidence, which is the argument for leaving 14 where it is. Override with
 `--thin-px` / `thinPx`.
 
 ---
@@ -206,8 +247,13 @@ a team can set its own and a reader can see what was applied. That was always
 true; what was missing was the ability to *disagree on a ground other than
 taste*.
 
-Two of them deserve work rather than defence: **thin text** has no calibration
-at all, and the **tap-target** figure rests on platform guides whose own
-evidence is unpublished. Neither is a reason not to use them — a finding still
-carries the millimetres, which are exact — but both are reasons to read a
-count as a starting point rather than a verdict.
+**Thin text was the weak one and is no longer**: it was swept the same day this
+page was written, across nine sites, and came back quiet and insensitive in
+its own neighbourhood. The prediction on this page — that it would be B4's
+largest source of noise — was wrong, and the sweep is what said so.
+
+What still deserves work rather than defence is the **tap-target** figure: 7 mm
+rests on platform guides whose own evidence Apple and Google do not publish,
+and no study anyone can cite says hit rates fall off there. That is not a
+reason to ignore it — a finding still carries the millimetres, which are exact
+— but it is a reason to read a count as a starting point rather than a verdict.
