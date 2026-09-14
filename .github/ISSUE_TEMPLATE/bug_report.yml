@@ -1,0 +1,118 @@
+name: Bug report
+description: Something Obsrv measured, drew or said looks wrong
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things make a report we can act on straight away: **the address you
+        pointed it at** and **the JSON it printed**. The JSON carries the
+        preset, the density, the walk, the page height and every warning — it
+        is usually the whole diagnosis.
+
+        If the page is private or behind a login, say so and skip the URL; the
+        JSON alone is still worth a lot.
+
+  - type: input
+    id: url
+    attributes:
+      label: The address
+      description: The URL you measured. A public page we can load ourselves is best.
+      placeholder: https://example.com/pricing
+    validations:
+      required: false
+
+  - type: textarea
+    id: json
+    attributes:
+      label: The JSON it printed
+      description: >
+        Everything on stdout. The CLI prints JSON to stdout and human lines to
+        stderr, so `obsrv audit <url> --preset laptop-768 > report.json` keeps
+        them apart. From an MCP tool, paste the tool result. **Read it before
+        pasting** — it contains the URLs measured and the text of the page.
+      render: json
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: What you ran
+      description: The exact command, or the MCP tool and its arguments.
+      placeholder: obsrv audit https://example.com --preset laptop-768 --profile budget-tn
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what you got
+      description: >
+        Be concrete about the disagreement. "It said 47 findings and I count 3
+        real ones" tells us more than "the audit is noisy" — the second could
+        be a threshold, a bug, or the page.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      description: The same page measured two ways can answer differently; we need to know which one you saw.
+      options:
+        - The desktop app (a window you were watching)
+        - The CLI (obsrv ...)
+        - An MCP tool from an agent (obsrv_audit, obsrv_lint, ...)
+        - The report HTML
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >
+        The app shows it in Settings → Updates. For the CLI, `npm ls -g getobsrv`
+        (there is no `obsrv --version` yet). If an agent drove it, the `status`
+        reply carries `version`.
+      placeholder: 0.60.0
+    validations:
+      required: true
+
+  - type: input
+    id: screen
+    attributes:
+      label: Your display
+      description: >
+        Which screen the app was on and its scale — some of what Obsrv draws
+        depends on the host display, not just the preset. macOS shows this in
+        System Settings → Displays.
+      placeholder: built-in Retina, 2x — or 1080p external at 1x
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log lines, if the app misbehaved
+      description: >
+        Only for a crash, a blank pane or a window that stopped painting —
+        `~/Library/Logs/Obsrv/obsrv.log`. It records GPU and window events, not
+        the addresses you visit.
+      render: text
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        Before you post: [**what Obsrv cannot
+        do**](https://github.com/vibesyemmy/obsrv/blob/main/docs/limitations.md)
+        lists the things that look like bugs and are not — macOS-only
+        rasterisation, `diff` being 1x-only, sub-pixel borders, iframes and
+        shadow roots the measurement does not enter, and pages that move while
+        being measured. If yours is on that page and the behaviour still seems
+        wrong, say so and file it anyway — a limitation that keeps surprising
+        people is its own bug.

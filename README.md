@@ -379,6 +379,36 @@ Obsrv publishes to npm as **`getobsrv`** (the installed commands remain `obsrv`
 and `obsrv-mcp`; the app's display name remains Obsrv). The bare `obsrv` npm name
 belongs to an unrelated package.
 
+## Privacy and files
+
+**Nothing is uploaded.** Obsrv makes exactly one outbound request of its own:
+a version check to `api.github.com` once a day, which asks for the latest
+release and sends nothing about you (`src/main/updateCheck.ts`). Everything
+else that touches the network is the page you asked it to render, fetched by
+Chromium the way any browser would.
+
+**Everything it produces is a local file.** PNGs and report HTML go where you
+point `--out` / `--out-dir`. Live captures are written into a fresh
+`obsrv-mcp-*` directory under `os.tmpdir()` and handed back as a path — the
+MCP server prunes its own, older than a day, at startup
+(`src/shared/pruneTemp.ts`). Headless CLI runs use a throwaway Electron
+profile under `os.tmpdir()` and remove it on exit.
+
+**The app keeps its own state** in Electron's application-support directory
+for Obsrv: `settings.json`, `history.json` (the addresses you have visited in
+the app), `tabs.json` (the session it restores), and — only while agent
+control is on — `control.json`, mode `0600`, holding the loopback port and
+token.
+
+**The log records what breaks, not where you went.** `obsrv.log`, in
+Electron's logs directory, is a few lines an hour about GPU processes dying,
+crashed targets and lost WebGL contexts, so a bug report arrives with evidence
+(`src/shared/logFile.ts`). It does not record the URLs you visit.
+
+See [**what an agent can do to your machine**](docs/agent-control.md) for the
+agent-control surface in full, and [**what Obsrv cannot
+do**](docs/limitations.md) for the measurement's limits.
+
 ## Known v1 limits
 
 - Rendering truth is the host OS's 1x rasteriser (macOS today). Windows ClearType at 1x

@@ -222,18 +222,35 @@ client drives the window: navigates anywhere, clicks, scrolls, captures. The
 control file is loopback with a token and a single-instance lock, and there
 is a consent bar — a defensible model that no public user can currently read.
 *Check:* one page describing the surface, the consent, and how to turn it
-off. **Status: not met.**
+off. **Status: met 2026-09-14 — [`docs/agent-control.md`](agent-control.md),
+linked from the README and from the limitations page.** Every command the
+control server accepts, the four gates in front of it (loopback bind, Origin
+refused, JSON content type required, constant-time token), the consent bar and
+the fact that "Allow for this session" writes nothing to disk, and the
+`0600` discovery file — including the boundary it does *not* cross: anything
+running as you can read that token while control is on.
 
 **D3. What leaves the machine, and what is written where.** Nothing is
 uploaded; PNGs, report HTML and logs are written locally, some to
 `os.tmpdir()` (see A4).
-*Check:* a paragraph in the README stating both. **Status: not met.**
+*Check:* a paragraph in the README stating both. **Status: met 2026-09-14 —
+the README's *Privacy and files* section.** One outbound request of the app's
+own (the daily version check), every file it writes named with its directory,
+and the log stated for what it does *not* record: it carries GPU and window
+events, not the addresses visited.
 
 ---
 
 ## E. A stranger can report a bug
 
-**E1. Somewhere to report it, that asks for what we need.** `.github/` holds
+**E1. Somewhere to report it, that asks for what we need.** **Met 2026-09-14
+— [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml).**
+A GitHub issue form that requires the JSON and asks for the address, the exact
+command, which of the three surfaces answered, the version, and the host
+display — the last because some of what Obsrv draws depends on it, as the
+`fit-cap` and `onion-skin` failures showed. It warns that the JSON carries the
+URLs and page text before you paste it, and `config.yml` points at the
+limitations page first. Previously: `.github/` held
 a workflow and nothing else: no issue template, no CONTRIBUTING, no
 SECURITY.md. A report without the JSON answer and the version is
 unactionable, and a template is the cheapest way to always get both.
@@ -242,7 +259,13 @@ URL and the JSON. **Status: not met.**
 
 **E2. Diagnostics are reachable.** The log file's location and the running
 version, documented where someone looking for them will be.
-*Check:* find both from the README alone. **Status: unknown.**
+*Check:* find both from the README alone. **Status: partly met 2026-09-14.**
+The log's location is now in the README's *Privacy and files* section and in
+the issue template. The running version is reachable from the app (Settings →
+Updates), from a live `status` reply, and from `npm ls -g getobsrv` — but
+**there is no `obsrv --version`**, which is the obvious place a CLI user
+looks. Found while writing the template (E1), which says so rather than
+telling people to run a flag that does not exist.
 
 ---
 
