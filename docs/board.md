@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*51 cards, 27 open, 22 of those unclaimed.*
+*51 cards, 26 open, 21 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 10
+## Next — 9
 
 *Picked, not claimed — start here.*
 
@@ -181,28 +181,6 @@ Nothing prunes either. They are Chromium's own caches for every page Obsrv has e
 What is NOT yet known, and should be established before choosing a fix, because the obvious fix is a cap and the obvious cap is wrong if the cache is load-bearing: whether these caches make repeat measurements of the same page faster or more consistent. Obsrv's whole product is that two measurements of the same page agree (B5), so a cache that quietly improves repeatability is not free to delete. Measure the effect on a repeat snap before capping anything.
 
 The related limits question: `docs/limitations.md` says what Obsrv cannot measure and `README.md` has a *Privacy and files* section naming where files live. Neither says this directory grows without limit, which a user would want to know before it is 1.3 GB.
-
-### Deleting Obsrv.app leaves your browsing history behind, undocumented
-
-[`bug-history-survives-uninstall`](../board/bug-history-survives-uninstall.md) · bug · *unclaimed*
-
-Measured by Rook 2026-09-14 on a real packaged build — unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under `CFFIXED_USER_HOME`, one page loaded by typing its URL, quit cleanly, then the bundle deleted, which is what dragging to the Trash does.
-
-after one page load     87 entries, 6 MB     after deleting the app  86 entries, 6 MB
-
-**One entry went, and it was the app.** What stays: `settings.json`, `tabs.json`, `obsrv.log`, the whole Chromium profile — Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches — and `history.json`.
-
-**Lead with the history, not the megabytes.** `history.json` is, in the README's own words, "the addresses you have visited in the app". A user who deletes an app they used to look at private pages has every reason to think those addresses went with it. They did not, there is no uninstall command, and no document says where to look.
-
-The README's silence is the pointed part rather than an oversight of omission. Its *Privacy and files* section goes out of its way to say what IS cleaned up — headless CLI runs "use a throwaway Electron profile under `os.tmpdir()` and remove it on exit", and the MCP server "prunes its own, older than a day, at startup". Against that care, saying nothing about the app's own state reads as though there were nothing to say.
-
-**Two things this card wants, and they are separable** — see `chore-uninstall-path` for the second:
-
-1. The README says what survives deleting the app, and where it is. Cheap, and it closes the privacy gap on its own. 2. A supported way to remove it.
-
-RELATED README ACCURACY, found in the same run and recorded here so it is not lost: a **locally built DMG carries no quarantine attribute**, so nobody testing a local build reproduces the "damaged" dialog the install instructions describe, and may conclude the instructions are wrong. Not a false statement — the instructions are right about downloaded DMGs — just silent about which builds they apply to.
-
-Isolation for this measurement was read from INSIDE the running app (`app.getPath` for home, userData, logs, appData, cache, temp) rather than inferred from the filesystem afterwards, for the reason this project keeps relearning: a directory nothing consulted and a directory that came out empty look identical. `CFFIXED_USER_HOME` held on the real packaged app; temp never moved. Opeyemi's own profile was counted before and after at 22,251 entries, unchanged.
 
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
@@ -407,7 +385,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Done — 24
+## Done — 25
 
 *Merged.*
 
@@ -781,6 +759,40 @@ tests/fixtures/dialog-over-tall.html is committed beside app-shell-grows.html. E
 
 docs/research/2026-09-14-b5-repeatability.md — 0 of 3,375 fields on fixtures, 0 of 49 on berkshirehathaway.com, 0 of 22 across releases against a control finding 7.
 
+### Deleting Obsrv.app leaves your browsing history behind, undocumented
+
+[`bug-history-survives-uninstall`](../board/bug-history-survives-uninstall.md) · bug · *unclaimed*
+
+SHIPPED 2026-09-14 on Opeyemi's word — the cheap half, which is the half that closes the privacy gap. README's *Privacy and files* section now carries a **"Removing Obsrv does not remove any of that"** paragraph: deleting Obsrv.app removes the app and nothing else, `npm rm -g getobsrv` removes the CLI and nothing else, there is no uninstall command yet, and here are the three paths to remove by hand.
+
+It names `history.json` explicitly as the line that matters for privacy, which is the whole point of the card. Every path was verified to resolve before being written into a README that tells people to `rm -rf` it:
+
+~/Library/Application Support/Obsrv    1.3 GB, 38 entries   settings, history, tabs, Chromium profile     ~/Library/Logs/Obsrv                    60 KB,  1 entry     obsrv.log     ~/Library/Caches/electron              477 MB,  3 entries   the Electron runtimes
+
+The 477 MB corrects the card's own 128 MB, and the difference is instructive rather than an error: Rook measured a disposable home holding ONE Electron version; this machine has three, because the cache is keyed by version and nothing prunes it. The README says "one copy per version Obsrv has used" rather than quoting either number as the size.
+
+Also warned in the paragraph: quit Obsrv first, and check no other Electron app relies on that cache — it is not Obsrv's directory, it is Electron's.
+
+THE EXPENSIVE HALF IS STILL OPEN as `chore-uninstall-path`. This card is closed because the privacy statement is now true, not because removal is solved. Splitting them is what let this ship tonight.
+
+Measured by Rook 2026-09-14 on a real packaged build — unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under `CFFIXED_USER_HOME`, one page loaded by typing its URL, quit cleanly, then the bundle deleted, which is what dragging to the Trash does.
+
+after one page load     87 entries, 6 MB     after deleting the app  86 entries, 6 MB
+
+**One entry went, and it was the app.** What stays: `settings.json`, `tabs.json`, `obsrv.log`, the whole Chromium profile — Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches — and `history.json`.
+
+**Lead with the history, not the megabytes.** `history.json` is, in the README's own words, "the addresses you have visited in the app". A user who deletes an app they used to look at private pages has every reason to think those addresses went with it. They did not, there is no uninstall command, and no document says where to look.
+
+The README's silence is the pointed part rather than an oversight of omission. Its *Privacy and files* section goes out of its way to say what IS cleaned up — headless CLI runs "use a throwaway Electron profile under `os.tmpdir()` and remove it on exit", and the MCP server "prunes its own, older than a day, at startup". Against that care, saying nothing about the app's own state reads as though there were nothing to say.
+
+**Two things this card wants, and they are separable** — see `chore-uninstall-path` for the second:
+
+1. The README says what survives deleting the app, and where it is. Cheap, and it closes the privacy gap on its own. 2. A supported way to remove it.
+
+RELATED README ACCURACY, found in the same run and recorded here so it is not lost: a **locally built DMG carries no quarantine attribute**, so nobody testing a local build reproduces the "damaged" dialog the install instructions describe, and may conclude the instructions are wrong. Not a false statement — the instructions are right about downloaded DMGs — just silent about which builds they apply to.
+
+Isolation for this measurement was read from INSIDE the running app (`app.getPath` for home, userData, logs, appData, cache, temp) rather than inferred from the filesystem afterwards, for the reason this project keeps relearning: a directory nothing consulted and a directory that came out empty look identical. `CFFIXED_USER_HOME` held on the real packaged app; temp never moved. Opeyemi's own profile was counted before and after at 22,251 entries, unchanged.
+
 ### D1: a limitations page
 
 [`done-d1`](../board/done-d1.md) · **D1** · readiness · owner: obsrv-a6
@@ -813,4 +825,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 10 readiness, 9 bugs, 8 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 10 readiness, 8 bugs, 8 chores, among the open cards.*

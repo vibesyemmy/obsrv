@@ -401,6 +401,25 @@ the app), `tabs.json` (the session it restores), and — only while agent
 control is on — `control.json`, mode `0600`, holding the loopback port and
 token.
 
+**Removing Obsrv does not remove any of that.** Deleting `Obsrv.app` — dragging
+it to the Trash — removes the app and nothing else; `npm rm -g getobsrv`
+removes the CLI and nothing else. Measured on a fresh install: one page
+visited, then the app deleted, and every file below was still there. There is
+no uninstall command yet. On macOS, to remove it by hand:
+
+```bash
+rm -rf ~/Library/Application\ Support/Obsrv   # settings, history, tabs, the Chromium profile
+rm -rf ~/Library/Logs/Obsrv                    # obsrv.log
+rm -rf ~/Library/Caches/electron               # the downloaded Electron runtimes
+```
+
+The first line is the one that matters for privacy: `history.json` lives there
+and holds the addresses you visited in the app. The third is the one that
+matters for disk — it is Electron itself, one copy per version Obsrv has used,
+kept outside `node_modules` and left behind by `npm rm`; it reached 477 MB on
+the machine this was measured on. Quit Obsrv before removing these, and check
+no other Electron app of yours relies on that cache.
+
 **The log records what breaks, not where you went.** `obsrv.log`, in
 Electron's logs directory, is a few lines an hour about GPU processes dying,
 crashed targets and lost WebGL contexts, so a bug report arrives with evidence

@@ -1,9 +1,23 @@
 ---
 title: "Deleting Obsrv.app leaves your browsing history behind, undocumented"
-column: next
+column: done
 kind: bug
 order: 31
 ---
+
+SHIPPED 2026-09-14 on Opeyemi's word — the cheap half, which is the half that closes the privacy gap. README's *Privacy and files* section now carries a **"Removing Obsrv does not remove any of that"** paragraph: deleting Obsrv.app removes the app and nothing else, `npm rm -g getobsrv` removes the CLI and nothing else, there is no uninstall command yet, and here are the three paths to remove by hand.
+
+It names `history.json` explicitly as the line that matters for privacy, which is the whole point of the card. Every path was verified to resolve before being written into a README that tells people to `rm -rf` it:
+
+    ~/Library/Application Support/Obsrv    1.3 GB, 38 entries   settings, history, tabs, Chromium profile
+    ~/Library/Logs/Obsrv                    60 KB,  1 entry     obsrv.log
+    ~/Library/Caches/electron              477 MB,  3 entries   the Electron runtimes
+
+The 477 MB corrects the card's own 128 MB, and the difference is instructive rather than an error: Rook measured a disposable home holding ONE Electron version; this machine has three, because the cache is keyed by version and nothing prunes it. The README says "one copy per version Obsrv has used" rather than quoting either number as the size.
+
+Also warned in the paragraph: quit Obsrv first, and check no other Electron app relies on that cache — it is not Obsrv's directory, it is Electron's.
+
+THE EXPENSIVE HALF IS STILL OPEN as `chore-uninstall-path`. This card is closed because the privacy statement is now true, not because removal is solved. Splitting them is what let this ship tonight.
 
 Measured by Rook 2026-09-14 on a real packaged build — unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under `CFFIXED_USER_HOME`, one page loaded by typing its URL, quit cleanly, then the bundle deleted, which is what dragging to the Trash does.
 
