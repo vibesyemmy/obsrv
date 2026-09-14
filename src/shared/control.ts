@@ -172,6 +172,13 @@ export interface ControlStatus extends AgentUiState {
    */
   cssWidth: number
   cssHeight: number
+  /**
+   * Device pixels per CSS pixel of that viewport. Absent from an app that
+   * predates the field — the headless surface has always reported it, and a
+   * live capture that omitted it left a caller unable to turn the PNG's pixels
+   * into the page's.
+   */
+  deviceScaleFactor?: number
   /** Whether the target is loading a document. `false` from an app that predates the field. */
   loading: boolean
   /**
@@ -677,6 +684,11 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
   if (typeof cssWidth !== 'number' || !Number.isFinite(cssWidth) || cssWidth < 0) return null
   const cssHeight = raw.cssHeight ?? 0
   if (typeof cssHeight !== 'number' || !Number.isFinite(cssHeight) || cssHeight < 0) return null
+  // Optional rather than defaulted: a density of 0 or a guessed 1 would be a
+  // number a caller could divide by, and an app older than the field has not
+  // told us. Absent means unknown, and the tools leave the key out.
+  const deviceScaleFactor = raw.deviceScaleFactor
+  if (deviceScaleFactor !== undefined && (typeof deviceScaleFactor !== 'number' || !(deviceScaleFactor > 0))) return null
   const reported = raw.screenShape
   if (reported !== undefined && !isOrientation(reported)) return null
   // And the same version skew once more. An app that predates the vision
@@ -716,6 +728,7 @@ export function parseControlStatus(raw: unknown): ControlStatus | null {
     tabIndex,
     cssWidth,
     cssHeight,
+    ...(deviceScaleFactor === undefined ? {} : { deviceScaleFactor }),
     loading,
     error,
     screenShape: reported ?? inferScreenShape(cssWidth, cssHeight, presetId, orientation),

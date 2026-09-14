@@ -1491,8 +1491,13 @@ export function registerIpc(ctx: AppContext): () => void {
       // while the target is mid-recreation, which `parseControlStatus` treats
       // as "did not say" rather than as a shape.
       let css = { width: 0, height: 0 }
+      // Read beside the viewport and from the same source: a live capture that
+      // reported pixels without the density left a caller unable to turn them
+      // into the page's own units, which the headless reply has always allowed.
+      let dsf: number | undefined
       try {
         css = tab().target.getViewport()
+        dsf = tab().target.getDeviceScaleFactor()
       } catch {
         // Mid-recreation or closing; zeroes are honest.
       }
@@ -1509,6 +1514,7 @@ export function registerIpc(ctx: AppContext): () => void {
         tabIndex: tabs.activeIndex,
         cssWidth: css.width,
         cssHeight: css.height,
+        ...(dsf === undefined ? {} : { deviceScaleFactor: dsf }),
         screenShape: screenShape(css.width, css.height),
         ...uiState,
       }
