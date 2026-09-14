@@ -960,6 +960,58 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
 })
 
+test('a pane still being resized when the budget runs out is captured as resizing, and says so', async () => {
+  // The other half of the pair above: that test pins `resizing` to stay OFF a
+  // page that is merely painting, and until this one existed the value had
+  // never been seen ON anything. It was admitted by the snap schema, asserted
+  // legal by mcp.spec, and produced by nothing — a name for a state no run had
+  // ever reached.
+  //
+  // Provoking it needs more than a resize. `settleTarget` ends on two EQUAL
+  // 80 ms viewport reads inside its 4 s budget, so flipping between two presets
+  // agrees on some pair almost at once and exits settled — measured, 30k flips
+  // deep, and it came back `animating`. Eight distinct viewports in rotation
+  // keep consecutive reads disagreeing for the whole budget, which is the only
+  // way through to `'resizing'`. The real-world shape is the same: a window
+  // dragged by its corner while a capture runs.
+  test.setTimeout(60_000)
+  const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
+  const nav = await call('navigate', { url: SOLID_RED })
+  expect(nav.status).toBe(200)
+
+  let resizing = true
+  let applied = 0
+  const spin = (async () => {
+    for (let i = 0; resizing; i++) {
+      const r = await call('setPreset', { id: CYCLE[i % CYCLE.length]! })
+      if (r.status === 200) applied++
+    }
+  })()
+  // Let the cycle get going, so the capture starts mid-resize rather than
+  // racing the first apply.
+  await new Promise(r => setTimeout(r, 400))
+  const shot = await call('captureTarget')
+  resizing = false
+  await spin
+
+  expect(shot.status).toBe(200)
+  const body = shot.body as { ok: boolean; warnings: string[]; settled: boolean; unsettledReason?: string }
+  expect(body.ok).toBe(true)
+  // Enough applies to have covered the budget; a handful would mean the cycle
+  // stalled and the assertion below would be measuring something else.
+  expect(applied).toBeGreaterThan(20)
+  expect(body).toMatchObject({ settled: false, unsettledReason: 'resizing' })
+  expect(body.warnings.some(w => w.includes('still resizing'))).toBe(true)
+  // Named rather than blamed: a pane that cannot hold still is not the page
+  // painting, and the two warnings must not be swapped for each other.
+  expect(body.warnings.some(w => w.includes('keeps painting steadily'))).toBe(false)
+
+  // With the cycle stopped, the same page settles — the verdict was about the
+  // resizing, not about this fixture.
+  const after = await call('captureTarget')
+  expect((after.body as { unsettledReason?: string }).unsettledReason).not.toBe('resizing')
+})
+
 test('a page that paints its background and nothing else is captured as blank, not settled', async () => {
   // espn.com's shape: white, quiet, the page a second later. Photographed
   // white and called settled on every surface, this pane included: the

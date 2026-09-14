@@ -87,7 +87,18 @@ can always defer: the alternative is to keep reporting this state as
 did not run out on a page that would not settle, the pane had not finished
 resizing. Folding it back in would reintroduce exactly the one-name-two-answers
 problem the rest of this release exists to remove. Decided 2026-09-14 rather
-than arrived at.
+than arrived at — and **observed the same day**: a capture taken while the
+target pane was cycled through eight distinct viewports answered `"resizing"`,
+three runs of three, pinned by `tests/e2e/live-drive.spec.ts`.
+
+The eight matters, and is the reason this paragraph is longer than the decision
+needs. `settleTarget` ends on two *equal* consecutive 80 ms viewport reads
+inside a 4 s budget, so flipping between **two** presets gives each pair of
+reads a coin-flip chance of agreeing and comes back `animating` almost at once
+— measured, 30,000 flips deep. That result looks like proof the value is
+unreachable and is proof of nothing. Anyone re-testing this, or deciding later
+that a value nothing produces should come out of the enum, wants the
+eight-viewport cycle rather than the obvious flip.
 
 **What to do:** restart the session after upgrading.
 

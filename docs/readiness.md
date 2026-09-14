@@ -223,7 +223,13 @@ withdrawn, and the shadow share reported only on pages measuring as empty for
 three releases while claiming to gather evidence about pages that were not.
 *Check:* an inventory of the emitting functions, each with the date and page
 where its output was last observed, and the ones never seen in the wild
-published as such. **Status: unknown.**
+published as such. **Status: partly met, 2026-09-14** — the inventory is
+`docs/note-inventory.md`. It collects all 58 emitting call sites and checks the
+17 on the live surface by hand: three have been observed, fourteen have not and
+are published as such. The 41 headless and MCP call sites are not yet checked.
+`unsettledReason: 'resizing'` — legal in the schema, asserted legal by
+`tests/e2e/mcp.spec.ts:472`, never once produced — was observed on 2026-09-14
+and is now pinned by `tests/e2e/live-drive.spec.ts`.
 
 ---
 
