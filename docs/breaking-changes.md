@@ -91,13 +91,30 @@ than arrived at.
 
 **What to do:** restart the session after upgrading.
 
+### The CLI's own JSON gains `url` — a third contract, not just the MCP replies
+
+`obsrv snap` prints JSON to stdout, and that key set is a contract: the suite
+asserts it exactly (`Object.keys(json).sort()` against a literal list), which
+is how this change was caught rather than shipped. Until now the headless snap
+reply had no field saying which page the PNG was of.
+
+**What breaks:** anything that asserts the exact key set, as the project's own
+test did. A consumer reading named fields is unaffected — the change is
+additive.
+
+**What to do:** nothing, unless you compare key sets. If you do, add `url`.
+
+**Why it is listed here** even though it is additive: the key set being pinned
+in a test is the evidence that it is treated as a contract, and a register that
+only covered the MCP surfaces would have said 0.61.0 left the CLI alone. It
+did not.
+
 ### Also in 0.61.0, not breaking
 
 `blocked` and `panel` now survive the trip from the page to the live walk, so
 the live surface names what held a page instead of listing three things it
 might have been; live `inspect` gains the landing and status sentences that
-`audit` and `lint` already had; headless `snap` answers `url`; and both
-surfaces answer `deviceScaleFactor`. Those are additions to fields already
+`audit` and `lint` already had; and both surfaces answer `deviceScaleFactor`. Those are additions to fields already
 declared, and the restart note above covers them too.
 
 ---
