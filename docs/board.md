@@ -169,7 +169,13 @@ THE CRITERION NAMED A PATH NOTHING WRITES. `~/.obsrv` does not exist on a machin
 
 WHAT REMAINS after `npm rm -g getobsrv`: 128 MB, and it is ~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip — put there by @electron/get on first run, outside node_modules, removed by nothing, documented nowhere. Plus ~/.claude/skills/obsrv-screens (correct, but install-skill has no removal and nothing says it survives). CLEAN, measured on a real render and a real MCP handshake: no obsrv-cli-* and no obsrv-mcp-* entry left anywhere.
 
-NOT MEASURED, and A4 is not fully met without it: the desktop app, where settings/history/tabs/control.json and obsrv.log live. Opeyemi's scope call. One number for whoever takes it — the real userData on this machine is 1.3 GB, 936 MB of it Chromium's `Cache`, and nothing prunes it.
+APP HALF DONE 2026-09-14 on Opeyemi's word, same branch. Unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under CFFIXED_USER_HOME, a page loaded by typing its URL, quit cleanly, bundle deleted. Isolation read from INSIDE the running app (app.getPath) rather than inferred afterwards. Real profile counted before and after: 22,251 entries, unchanged.
+
+THE RESULT IS THAT A4 IS NOT MET. Deleting Obsrv.app removes exactly one thing: the app. 87 entries after one page load, 86 after deleting the bundle. What stays: settings.json, tabs.json, obsrv.log, the whole Chromium profile (Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches) and — the one that matters — history.json, the addresses visited in the app. The README says history.json holds them; nothing says it outlives the app, and there is no uninstall command.
+
+ALSO MEASURED: control.json (port, token, pid, 0600) is removed on a clean quit and SURVIVES a SIGKILL — proved deliberately with both, since two runs differing in one thing is a hypothesis. Harmless to discovery (a dead pid reads as no app) but it then survives the uninstall too.
+
+TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute, so nobody testing a local build reproduces the README's "damaged" dialog. And electron-builder signed it with `Restack Dev` and reported success — docs/signing.md step 3's warning, reproduced without trying. That one belongs to a1.
 
 ---
 

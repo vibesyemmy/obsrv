@@ -45,12 +45,22 @@ output read as a stranger would read it. **Status: unknown.**
 pruned the capture directories, and this machine held **10,045 `obsrv-*`
 entries** in `os.tmpdir()` (400 MB) before they were cleared by hand; the MCP
 server now prunes its own prefix, older than a day, at startup
-(`src/shared/pruneTemp.ts`, 2026-09-14). The CLI and MCP half of the check has
-now been run — install, use, uninstall, in a disposable home
+(`src/shared/pruneTemp.ts`, 2026-09-14). The check has now been run on all three
+surfaces — CLI, MCP and the desktop app — install, use, uninstall, in a
+disposable home
 ([`docs/research/2026-09-14-a4-install-remains.md`](research/2026-09-14-a4-install-remains.md)).
 *Check:* install, use, uninstall, then list what remains.
-**Status: partly met 2026-09-14 — the CLI and MCP surfaces are measured, the
-desktop app is not.**
+**Status: NOT met 2026-09-14 — measured, and removing it leaves everything
+behind.**
+Deleting `Obsrv.app` removes one thing: the app. After one page load the
+profile held 86 entries and 6 MB, and deleting the bundle changed none of them —
+`settings.json`, `tabs.json`, the Chromium profile (Cookies, Local Storage,
+Session Storage, the caches), `obsrv.log`, and **`history.json`, the addresses
+visited in the app**. The README says history.json holds them; nothing says it
+outlives the app, and there is no uninstall command or documented removal. With
+agent control on, `control.json` (port, token, pid, mode 0600) is removed on a
+clean quit and **survives a SIGKILL** — harmless to discovery, which treats a
+dead pid as no app, but it then survives the uninstall too.
 The temp directories are genuinely clean: after a real render and an MCP
 handshake, no `obsrv-cli-*` or `obsrv-mcp-*` entry remained. What `npm rm -g
 getobsrv` leaves is **128 MB**: `~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip`,

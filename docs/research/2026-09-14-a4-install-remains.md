@@ -1,8 +1,11 @@
 # A4: install, use, uninstall — what remains
 
-Run 2026-09-14 by Rook. Surfaces: the npm CLI and the MCP server. The desktop
-app is **not** covered here and is where the app's own state lives, so A4 is not
-fully answered by this page — see *Not measured* at the end.
+Run 2026-09-14 by Rook. All three surfaces: the npm CLI, the MCP server, and
+the desktop app.
+
+**The headline, and it is the app half: deleting Obsrv.app removes nothing.**
+The whole profile survives — including `history.json`, the list of addresses
+visited in the app. See *The desktop app* below.
 
 Nothing under Opeyemi's own HOME was installed to, written to, or removed. The
 cycle ran in a disposable home, and the real profile was counted before and
@@ -123,15 +126,97 @@ still there, and `install-skill` has no matching removal.
 - The npm prefix is left with empty `bin/` and `lib/node_modules/` — npm's own
   shape, no Obsrv files.
 
-## Not measured
+## The desktop app
 
-The desktop app. It is where `settings.json`, `history.json`, `tabs.json`,
-`control.json` and `obsrv.log` are written, and it needs a DMG built, mounted,
-run and removed under `CFFIXED_USER_HOME`. Scope decision, deferred.
+`npm run dist` built an unsigned arm64 DMG from this tree at 0.60.0. Mounted
+with `hdiutil`, `Obsrv.app` copied into the disposable home's `Applications`,
+detached — then launched, a page loaded by typing its URL into the address
+field, quit cleanly, and the bundle deleted, which is what dragging it to the
+Trash does.
 
-One number worth having before that work: on this machine the real
-`~/Library/Application Support/Obsrv` is **1.3 GB**, of which 936 MB is
-`Cache` and 338 MB `Code Cache` — Chromium's HTTP and compiled-code caches for
-every page ever rendered in the app. That is the app's own profile, untouched by
-this run, and nothing prunes it. Whether that belongs to A4 (what removal leaves)
-or to a card of its own is a judgement for whoever takes the app half.
+Isolation was verified from inside the running app rather than inferred from
+the filesystem, because an empty directory and a directory nothing consulted
+look identical:
+
+```
+home      /tmp/a4-app-…
+userData  /tmp/a4-app-…/Library/Application Support/Obsrv
+logs      /tmp/a4-app-…/Library/Logs/Obsrv
+appData   /tmp/a4-app-…/Library/Application Support
+cache     /tmp/a4-app-…/Library/Caches
+temp      /var/folders/…/T/            <- never moves
+```
+
+The use is real, not simulated: `obsrv.log` records the start, and
+`history.json` and `tabs.json` both carry the loaded URL.
+
+| Phase | Entries (app bundle excluded) | Size |
+| --- | --- | --- |
+| 0 baseline | 3 | 0 KB |
+| 1 after install | 4 | 298 MB (the bundle) |
+| 2 after one use | 87 | 298 MB + 6 MB |
+| 3 after deleting the app | **86** | **6 MB** |
+
+**Deleting the app removed one entry: the app.** Everything it wrote stays.
+
+### What remains, by kind
+
+- **The addresses visited.** `history.json` — here a single line, in real use
+  every URL rendered in the app. The README's *Privacy and files* section says
+  history.json holds "the addresses you have visited in the app"; nothing says
+  it outlives the app.
+- **Chromium's per-site state** for every page rendered: `Cookies`,
+  `Local Storage/leveldb`, `Session Storage`, `Trust Tokens`,
+  `TransportSecurity`, `Network Persistent State`, `DIPS`, `blob_storage`,
+  `Shared Dictionary`.
+- **Caches**: `Cache/Cache_Data`, `Code Cache/{js,wasm,electron-preload}`,
+  `GPUCache`, `DawnGraphiteCache`, `DawnWebGPUCache`.
+- **Settings and session**: `settings.json` (screen diagonal, nits, agent
+  control, update check, split, max tabs), `tabs.json` (the session restored on
+  relaunch), `Preferences`, `Local State`, `DevToolsActivePort`.
+- **The log**: `~/Library/Logs/Obsrv/obsrv.log`.
+
+Six MB after one page. On this machine, after weeks of real use, the same
+directory is **1.3 GB** — 936 MB `Cache`, 338 MB `Code Cache`. That growth is
+what normal use accumulates rather than uninstall residue, and is its own card
+(`bug-userdata-unbounded`); what belongs here is that **none of it is removed,
+ever, by any documented step.**
+
+### control.json survives a crash, not a quit
+
+Measured deliberately, because two runs differing in one thing is a hypothesis
+rather than a finding. With agent control on, `control.json` holds the loopback
+port, the token, the pid and a start time, mode 0600:
+
+```
+clean quit  -> absent  — removed
+SIGKILL     -> PRESENT — survives
+```
+
+Not a functional defect: MCP discovery treats a file whose pid is dead as no
+app. But a crashed run leaves a token file in a profile that then survives the
+uninstall too, and nothing sweeps it.
+
+### Two things worth noting that are not residue
+
+- **The locally built DMG carries no quarantine attribute** — `xattr` reports
+  none, because it was not downloaded. The README's `xattr -cr` step is about
+  builds fetched from Releases; anyone testing a local build will not reproduce
+  the "damaged" dialog it describes.
+- **electron-builder signed the app with `Restack Dev`**, an unrelated
+  certificate on this machine, and reported success: `identityName=Restack Dev`.
+  That is exactly the failure `docs/signing.md` step 3 warns about, reproduced
+  without trying. It matters for A1, not for A4.
+
+## What a removal would have to do
+
+Nothing in the repo or the README removes any of the above, and there is no
+uninstall command. For the record, the full list on macOS is:
+
+```
+~/Library/Application Support/Obsrv      settings, history, tabs, Chromium profile
+~/Library/Logs/Obsrv                     obsrv.log
+~/Library/Caches/electron/<sha>/*.zip    128 MB, only if the npm CLI was used
+~/.claude/skills/obsrv-screens           only if `obsrv install-skill` was run
+~/Library/Saved Application State/…      macOS window state, if any
+```
