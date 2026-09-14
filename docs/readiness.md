@@ -97,14 +97,16 @@ argue upstream), calibrated against real output (the shadow share's
 1.9/3.8/7.7/15.4/23/50/77% sweep, the motion probe's 0-4 s table), reasoned
 but never calibrated, or definitional (a sub-pixel edge is arithmetic).
 
-**Writing it found the answer to its own question.** The soft number is
-**thin text at 14 device px**: it has a mechanism but no table behind it, has
-never been swept against real pages, and no false-positive rate has been
-measured — stated as the weakest number in the tool rather than left for a
-user to discover. The tap-target 7 mm is better founded but rests on platform
-guides whose own evidence Apple and Google do not publish, which the page also
-says. Those two are now B4's most likely sources of noise, named in advance
-rather than after.
+**Writing it found the answer to its own question, and then the answer was
+measured.** The page named **thin text at 14 device px** as the weakest number
+in the tool — a mechanism, no table — and predicted it would be B4's largest
+source of noise. It was swept the same day across nine public sites, and the
+prediction was wrong: at 14 the rule fires on **one site in nine**, and what
+it flags clusters at 8-11 px weight 300 with nothing between 12 and 14, so
+moving the line from 12 to 14 changes two findings. 14 sits on a plateau
+rather than a cliff, which is a defence of it that did not exist that morning.
+The number that still rests on unpublished evidence is the tap-target 7 mm,
+and the page now says so instead.
 
 **B4. The noise ratio is measured, not assumed.** zalando.de answered 143
 targets with **103 under 7 mm**. If most of those are not things anyone would
