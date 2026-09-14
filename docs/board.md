@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 7
+## Next — 8
 
 *Picked, not claimed — start here.*
 
@@ -81,6 +81,29 @@ Updated 2026-09-14 evening. Two of three delivered, and the order changed — Op
 1. c5-elevated — DELIVERED into Review, 6b7acb4. Inverted the card's own fallback: `resizing` fires, keep the value. 2. bug-retina — DELIVERED into Review, cf52dc8, and it corrected the card's premise. See that card. 3. c3 — does skills/obsrv-screens/SKILL.md describe the tools that exist. NOT started; Kenya is putting it to Opeyemi before picking it up.
 
 Henry asked Kenya to SPLIT docs/c5-note-inventory into two branches so bug-retina can merge first — it makes every other local run cheaper to read, so it is worth more merged before people run suites than after. Sequencing only; both still wait on Opeyemi's word given to Kenya directly.
+
+### Check the skill describes the tools that exist
+
+[`c3`](../board/c3.md) · **C3** · readiness · *unclaimed*
+
+GO-AHEAD GIVEN by Opeyemi 2026-09-14, relayed through Henry. Kenya to claim it — edit this file rather than asking anyone.
+
+ONE MEASUREMENT DONE UP FRONT so it is not repeated, and it changes what the card is about. The obvious check PASSES. The MCP server registers eight tools (eight `server.registerTool` call sites in src/mcp/server.ts): obsrv_snap, obsrv_diff, obsrv_audit, obsrv_inspect, obsrv_lint, obsrv_report, obsrv_drive, obsrv_presets. All eight are named in skills/obsrv-screens/SKILL.md.
+
+So C3 is not "does the skill list the tools that exist" — it does. It is whether the skill's PROSE is still true about tools whose names did not change, which is the C5 shape pointed at documentation: same name, same presence, different behaviour, and nothing fails.
+
+Where to look first, from what 0.61.0 changed under unchanged names:
+- `snap` live no longer answers presetId/profileId; it answers preset/profile. A skill telling an agent to read the old spelling is wrong in a way no tool list catches.
+- The live walk's sentences moved from `notes` to `warnings`. The rule is now: warnings is about the page, notes is about the call.
+- `unsettledReason` can be 'resizing' — a value that now fires and that a skill describing the settle verdict may not admit.
+- `obsrv --version` exists as of E2 and the skill does not mention it. The skill's Commands section is where a CLI user looks.
+- The skill carries no version marker at all, so there is nothing in it that says which surface it was written against. That is its own finding: a document that cannot go stale visibly is one that goes stale invisibly.
+
+AND THE TRAP, which is Kenya's own from C5 and now points at Kenya's next card: a mention-count sieve UNDERCOUNTS and overcounts. Counting `obsrv_lint` occurrences says the skill mentions lint; it says nothing about whether what it says is true. The count above is published as a pointer to where to look, explicitly not as a result — the same way docs/note-inventory.md publishes its phrase sieve.
+
+Reference: docs/breaking-changes.md is the list of things that moved under a stable name, which is exactly the set a skill gets wrong silently.
+
+skills/obsrv-screens/SKILL.md — unknown for 0.60.0.
 
 ### Whatever decides, something else must notice when the decision changes
 
@@ -151,7 +174,7 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Backlog — 15
+## Backlog — 14
 
 *Not started, not yet picked.*
 
@@ -168,12 +191,6 @@ So this is the same fragility showing without an added test, which means the sha
 [`c5`](../board/c5.md) · **C5** · readiness · *unclaimed*
 
 The 2026-09-13 sweep did this for notes and found gaps; never completed.
-
-### Check the skill describes the tools that exist
-
-[`c3`](../board/c3.md) · **C3** · readiness · *unclaimed*
-
-skills/obsrv-screens/SKILL.md — unknown for 0.60.0.
 
 ### Written compatibility policy
 
