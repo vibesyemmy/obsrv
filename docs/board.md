@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*Generated 2026-09-14 from the team board. 42 cards, 26 open, 21 of those unclaimed.*
+*Generated 2026-09-14 from the team board. 45 cards, 28 open, 19 of those unclaimed.*
 
 This is a snapshot of a live board that lives in a Claude Artifact with a
 shared database. That board is organization-internal and cannot be made
@@ -20,6 +20,15 @@ the description. An unowned card in Next or Backlog is free; a card with an
 owner is being worked on by that session or person, and a card in Review is
 finished and waiting on the maintainer rather than on help.
 
+**How to read a commit on a card.** Where a card names delivered work it
+gives a branch and then a sha as `as of` — `fix/thing (as of 9fe0fda)`. The
+**branch is the address**; the sha is a timestamp. Unmerged branches get
+rebased when main moves, which leaves the content identical and every sha
+different, so a bare sha on a card becomes wrong while still reading as
+precise — the failure this file exists to avoid, one level down. Go to the
+branch. If its tip no longer matches the `as of`, that is a rebase and not
+a different piece of work.
+
 Two things worth knowing before you start, both of which this project has
 learned the hard way and written down:
 
@@ -33,21 +42,9 @@ The live board, for anyone in the organization: https://claude.ai/code/artifact/
 
 ---
 
-## Next — 7
+## Next — 8
 
 *Picked, not claimed — start here.*
-
-### C5 is the criterion that catches what field comparison cannot
-
-`c5-elevated` · **C5** · readiness · owner: Kenya
-
-REASSIGNED 2026-09-14 from Kaya to Kenya. Henry's first assignment was wrong and Kenya caught it: Kaya reports from memory and does not touch the checkout, but this card needs a note SEEN TO FIRE on a real page — driving a page until it does, or showing it cannot. Reading cannot produce that. Assigned by convenience rather than by what the card needs.
-
-obsrv-e7's observation, recorded because it is the general lesson rather than one bug: its C4 gate compares fields and would never have caught the `hidden` defect, because that is note TEXT — same key, same type, different English. Twice this week a defect survived agreeing fields and was found only by reading sentences.
-
-SHARPEST EXAMPLE, and not a legacy silence: `unsettledReason: 'resizing'` was added 2026-09-14, has a test asserting it is legal, and has NEVER BEEN SEEN TO FIRE. settleTarget returns it when the pane is still changing size at the budget, so provoking it likely needs a preset flip or a resize racing a capture — a harness fixture rather than an HTML one. If it proves unreachable, the honest resolution is removing the value, not leaving it admitted forever.
-
-Work in a worktree: git worktree add /tmp/obsrv-kenya -b docs/c5-note-inventory. Three sessions were in one checkout when this was assigned.
 
 ### Run the suite on a host unlike this laptop, more than once a release
 
@@ -69,13 +66,23 @@ Cheapest version is probably a CI workflow that runs the fixture half of the B5 
 
 Blocked on Apple issuing a Developer ID Application certificate. The cert in ~/Documents/obsrv-signing is Apple Distribution (Voicify Limited) — wrong type. Wiring waits on chore/signing.
 
-### Make diagnostics reachable from the README
+### QUEUE — Rook: e2 DONE · a1 blocked on Opeyemi · bug-orientation-name next
 
-`e2` · **E2** · readiness · owner: Rook
+`queue-rook` · chore · owner: Rook
 
-Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look. Version is reachable from Settings → Updates, a live status reply, and npm ls -g getobsrv.
+Updated 2026-09-14 evening, after the queue went stale within hours of being written — which is the failure mode this card is an instance of, not an exception to.
 
-Assigned to Rook 2026-09-14 as work that can proceed WHILE A1 is blocked on the certificate. Small and self-contained: add a --version flag to the CLI (src/cli/args.ts handles flags; the version comes from package.json, and scripts/sync-plugin-version.js shows how the repo already keeps that in step). Note obsrv --help already exists and `--version` currently errors with 'unknown flag', which is the discoverable wrong answer.
+1. e2 — DELIVERED into Review, 717e924. See the e2 card. 2. a1 — BLOCKED, and not on the certificate any more. Rook has a design with Opeyemi and waits on his yes. Two things need his decision, not Rook's: the design itself, and the IDENTITY — the app would be signed as Voicify Limited, which is what Gatekeeper shows users, while `copyright` says Opeyemi Ajagbe and CI would hold Voicify's private key. The remaining mechanical step needs Opeyemi to type a p12 password, so it cannot be finished by any session alone.    Already settled by measurement, so nobody re-opens it: the identity PAIRS. Public-key SHA-256 of the cert's -pubkey against each .key — obsrv-developer-id.key matches the Developer ID leaf at 53c1b7ae; the 21:34 pair is a different keypair at 1cd2c04d. And the G2 CA is a PUBLIC intermediate, not account-gated — Henry relayed the opposite to Opeyemi and has corrected it. 3. bug-orientation-name — unstarted, and the next one to pick up when a1 is unblocked or if Rook wants work in the gap.
+
+### QUEUE — Kenya: c5-elevated DONE · bug-retina DONE · c3 remains
+
+`queue-kenya` · chore · owner: Kenya
+
+Updated 2026-09-14 evening. Two of three delivered, and the order changed — Opeyemi picked bug-retina directly rather than c3, so the queue Henry wrote was overtaken by the user's own routing. That is the correct precedence and the card records it rather than hiding it: Henry's word routes work, Opeyemi's authorises it.
+
+1. c5-elevated — DELIVERED into Review, 6b7acb4. Inverted the card's own fallback: `resizing` fires, keep the value. 2. bug-retina — DELIVERED into Review, cf52dc8, and it corrected the card's premise. See that card. 3. c3 — does skills/obsrv-screens/SKILL.md describe the tools that exist. NOT started; Kenya is putting it to Opeyemi before picking it up.
+
+Henry asked Kenya to SPLIT docs/c5-note-inventory into two branches so bug-retina can merge first — it makes every other local run cheaper to read, so it is worth more merged before people run suites than after. Sequencing only; both still wait on Opeyemi's word given to Kenya directly.
 
 ### Whatever decides, something else must notice when the decision changes
 
@@ -112,6 +119,22 @@ Three options, roughly in order of how much they are worth:
 - Export the board to a committed JSON alongside the markdown, so the generator has a repo-local source and only the export needs a session. Then `npm run board` is reproducible by anyone and the drift check is trivial.
 
 The third is the one that makes the file honest rather than merely fresh, and it is the one worth the time.
+
+### Two peer sessions cannot read the board at all
+
+`bug-board-access` · bug · owner: Henry
+
+Raised 2026-09-14. Rook (room #21) and Kenya (#23, and direct) both get the same refusal reading the artifact's `tasks` collection:
+
+no such artifact, collection, or document (or no access — the two are deliberately indistinguishable)
+
+Three times each, independently. Two sessions blocked identically is one permission, not two coincidences.
+
+WHAT IT COSTS RIGHT NOW: neither can claim a card, set an owner, or move anything to Review. Every board move today has gone through Henry by hand, which means the board is accurate only while one session is awake to update it, and a card sits `unclaimed` while someone is actively working it. That is exactly the quiet staleness docs/board.md was built to guard against, arriving through the door nobody watched.
+
+Both refused to hand-edit docs/board.md instead, which was right — scripts/build-board.js says in its own header that the snapshot exists to be regenerated rather than edited back into agreement, and a generated file saying `Kenya, Doing` while the artifact says `unclaimed` is the defect the file exists to prevent.
+
+The message is deliberately ambiguous between `does not exist` and `you cannot see it`, so the refusal itself cannot tell us which. Needs Opeyemi: check who the artifact is shared with. If org-internal sharing cannot reach these sessions at all, then the artifact is not usable as a multi-session board and docs/board.md is not a snapshot of the real board but the only board — which is a different design and should be decided rather than drifted into.
 
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
@@ -151,21 +174,75 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Backlog — 18
+## Review — 3
+
+*Finished, waiting on the maintainer to merge.*
+
+### C5 is the criterion that catches what field comparison cannot
+
+`c5-elevated` · **C5** · readiness · owner: Kenya
+
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c5-note-inventory` (as of 6b7acb4 + d1706f0, cut from 2c7c0a9). THE BRANCH IS THE ADDRESS; the shas are a timestamp and do not survive a rebase. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Split out from bug-retina at Henry's request so that one can merge first; no file appears in both branches, so they merge in either order.\n\nTouches docs/breaking-changes.md, docs/note-inventory.md, docs/readiness.md, tests/e2e/live-drive.spec.ts. live-drive: 45 passed, 58.1 s.\n\nd1706f0 also rewrites the 0.61.0 entry in docs/breaking-changes.md: `Decided 2026-09-14 rather than arrived at` now reads as OBSERVED, three of three. It keeps the eight-viewport cycle AND the 30,000-flip negative result, because the obvious two-preset test returns `animating` and reads as proof the value is unreachable — so the negative result is the load-bearing half of the record, not a curiosity.
+
+THE CARD'S FALLBACK WAS WRONG AND IS NOW INVERTED. `unsettledReason: 'resizing'` FIRES. Seen 3 runs of 3, on a real page, in the app. KEEP THE VALUE — do not remove it. This also retro-justifies shipping the enum in 0.61.0: docs/breaking-changes.md says the state is real, and it now has an observation behind it rather than a decision.
+
+Why it looked unreachable, which is the part worth keeping: settleTarget (ipc.ts:1093) exits on two EQUAL consecutive 80 ms viewport reads inside a 4 s budget. Flipping between TWO presets gives each pair of reads a coin-flip chance of agreeing, so it exits `settled` almost at once — Kenya measured that first, 30,000 flips deep, and got `animating`. EIGHT distinct viewports in rotation keep consecutive reads disagreeing across the whole budget, and only then does it fall through to 'resizing' at ipc.ts:1105. So the real-world shape is not `a capture that caught a resize` but `the viewport changing on essentially every read for four continuous seconds` — a window dragged by its corner while a capture runs. The card's guess that it needed a harness fixture rather than an HTML one was right; the guess that a preset flip would do it was the part that hid it for a day.
+
+Delivered:
+- tests/e2e/live-drive.spec.ts — the positive case beside the existing negative assertion at :955, so the pair reads `this is when it fires` and `this is when it must not`. Full spec 44 passed, 1 skipped, 55.6 s, unfiltered.
+- docs/note-inventory.md — 58 emitting call sites; the 17 on the live surface hand-checked: 3 observed, 14 never seen, published as such with file and line.
+- docs/readiness.md — C5 PARTLY met, with the 41 unchecked headless/MCP sites named as unchecked rather than implied done.
+
+THE FOURTH SHAPE OF THE DAY'S DEFECT, named by obsrv-91 against its own shipped proposal, and the one that belongs highest on this card: A VALUE NEVER OBSERVED FITS TWO FACTS — either it cannot happen, or nobody has provoked it hard enough. Removing it on the first is right; removing it on the second is data loss. The two are indistinguishable until someone designs an experiment to make it fire.\n\nobsrv-91 added `resizing` yesterday, told its user plainly it had never seen it fire, and proposed removing the value if it proved unreachable — suggesting a preset flip as the way to try. The flip is exactly what cannot produce it. So a CHEAP attempt to provoke a value feels like a test of reachability and is not: `nobody has made it happen` was never evidence it could not, and the error was reasoning as though one honest try settled it. obsrv-91's own words: its verification habit is to make checks fail on purpose, and this is the same move pointed at a value rather than an assertion.\n\nTWO METHOD FINDINGS Kenya asked be kept out of the commit message: 1. A phrase sieve over the suite UNDERCOUNTS. Matching note text mechanically said `55 of 58 never asserted`; spot-checking six found four that ARE asserted, through regexes and partial phrases the matcher cannot see (cli-snap-tiled.spec.ts:102, cli-walk.spec.ts:137, others). The sieve is in the file as a pointer to where to look, explicitly not as a result. A number that reads as measurement and is not is the same defect as the note that had never fired. Anyone automating C5: this is the trap. 2. live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run dies on `Cannot read properties of undefined (reading 'token')`. It reads like a bug in whatever test you just wrote. Cost a run.
+
+### Make diagnostics reachable from the README
+
+`e2` · **E2** · readiness · owner: Rook
+
+DELIVERED 2026-09-14 by Rook, into Review. Branch `feat/cli-version` (as of 717e924), worktree .claude/worktrees/rook-cli-version. THE BRANCH IS THE ADDRESS; the sha is a timestamp and does not survive a rebase. NOT merged, NOT pushed — merging waits on Opeyemi's word given to Rook directly.
+
+What it does: bin/obsrv.js answers --version and -v from package.json BEFORE it looks for out/ or the Electron binary, so the flag works on the machine where the build or the download is what broke. The built entry answers the same flag under Electron. --help lists it. Bare semver on stdout, nothing on stderr, exit 0.
+
+Evidence, measured not read:
+- RED first: parseArgs(['--version']) threw `unknown command: --version` — COMMAND, not flag, because the token is argv[0] and hit the command check rather than the flag loop.
+- GREEN: 1118/1118 unit, typecheck clean.
+- `node bin/obsrv.js --version` → 0.60.0 in a checkout with no out/ and no Electron binary present.
+- tests/unit/cliLauncher.test.ts pins that: launcher beside its own package.json, no out/, no node_modules, so every Electron route fails there and a version on stdout proves it never took one.
+- Not run: e2e (nothing in it touches this path).
+
+Also landed: README (Agent & CI line + Privacy and files paragraph naming all three places the version lives), issue template now says `obsrv --version` (0.61.0+), docs/readiness.md E2 → met 2026-09-14.
+
+Original card below.
+
+Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look.
+
+### fit-cap and onion-skin fail rather than skip when the desk scales the capture
+
+`bug-retina` · bug · owner: Kenya
+
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `fix/retina-desk-skip` (as of 9fe0fda + 59b6097, cut from 2c7c0a9). THE BRANCH IS THE ADDRESS; the shas are a timestamp — Kenya rebases on request when main moves, and the content survives while the shas do not. NOT merged, NOT pushed. Opeyemi picked this card directly. MERGE THIS ONE FIRST — it makes every other local run cheaper to read; it shares no file with the C5 branch, so the two merge in either order and the sequencing is a choice rather than a constraint.\n\nTouches docs/e2e-flakes.md, tests/e2e/fit-cap.spec.ts, tests/e2e/helpers/captureScale.ts, tests/e2e/onion-skin.spec.ts. fit-cap + onion-skin: 7 passed, 16.3 s. Typecheck clean.\n\nA FLAKE FOUND, REMOVED, AND DELIBERATELY NOT FILED AS EXPLAINED (59b6097). After the rebase a three-spec run came back 51 passed, 1 flaky: fit-cap read a pane at 218 where the window's own size says 368 — a layout measured against a window still at its launch size, setContentSize(1900,1100) not yet landed. Kenya GUESSED contention from its own dev app, which docs/e2e-flakes.md documents as a known cause, then TESTED the guess rather than filing it: three runs with the dev app stopped, three with it running, all six passed. The documented cause is NOT this one, and an entry in the flakes doc saying otherwise would have been worse than no entry. Repeating the same three-spec shape gave 52 passed, no flake — one occurrence in two runs of that shape, none in six isolated. So 59b6097 polls the window's content size in beforeAll before anything reads a pane: it REMOVES the race and does not DIAGNOSE the failure, and the commit message says that in those words rather than claiming a fix.\n\nSTILL NOT VERIFIED, and it is the same shape as the resizing value on the C5 card: nobody has watched the skip fire on a real 2x desk. --force-device-scale-factor=2 is the same arithmetic, not the same machine. One run on the built-in display alone settles it — and that same run says whether onion-skin's 50% test belongs in the skip.
+
+THE CARD'S PREMISE WAS WRONG AND THE CORRECTION MATTERS MORE THAN THE FIX. The three are PASSING on this machine. Kenya ran them before touching anything: fit-cap.spec.ts + onion-skin.spec.ts, 7 passed, 17.0 s, no skips. system_profiler says the main display is a 3440x1440 ultrawide at 1x — the external monitor is plugged back in. Henry verified independently: `UI Looks like: 3440 x 1440`, Main Display: Yes.
+
+So `every local full run currently reports three failures` was true on 2026-09-12 and is NOT true today. The trio tracks WHAT IS PLUGGED IN, not which machine. Henry had been telling Opeyemi `they fail on this laptop and pass on CI`, which is the wrong axis and makes a green local run look like evidence the problem is gone. It is not.
+
+THE FIX: both specs probe the desk once in beforeAll; the three assertions that read a scaled capture skip with the scale named in the reason. tests/e2e/helpers/captureScale.ts, modelled on helpers/deskState.ts. Never skips on CI.
+
+The probe MEASURES rather than infers — capture the real window, divide by the size that window reports. Deliberately not a host list and not a `scaleFactor > 1` guess about displays, because what breaks the assertions is the CAPTURE, and that is directly observable.
+
+VERIFIED BOTH DIRECTIONS, since a skip that never fires and a skip that always fires are identical in a green run:
+- --force-device-scale-factor=2 → probe reports 2 → skip = true
+- plain launch → probe reports 1 → skip = false
+- fit-cap + onion-skin on this desk: 7 passed, no skips, 16.4 s
+- typecheck clean
+
+TWO THINGS LEFT UNDONE ON PURPOSE, both written into docs/e2e-flakes.md rather than a commit message: 1. onion-skin.spec.ts's 50% test also reads a captured pixel and was NOT skipped — it was not among the three observed red on 2026-09-12, and it should join them on an observation rather than on the symmetry. 2. A SKIP IS NOT A FIX. On a 2x desk those assertions still cannot run, so what they cover is unproven there. Making them desk-independent means comparing captures to each other or reading the frame bus.
+
+---
+
+## Backlog — 16
 
 *Not started, not yet picked.*
-
-### `settled` degrades to the old meaning on an older app, without saying so
-
-`bug-settled-fallback-silent` · **C4** · bug · *unclaimed*
-
-Raised by obsrv-a6 reviewing obsrv-e7's a330d09, which obsrv-e7 had itself flagged as the one arguable line in the stack.
-
-`liveSnap` now answers `settled: capture.settled ?? confirmed`. The fallback is RIGHT: on an app older than the capture verdict the reply carries none, and answering the question the field used to answer beats answering nothing.
-
-The objection is that it is silent. That commit's whole point is that one name stopped meaning two things across surfaces; the fallback reintroduces it across app VERSIONS. A caller driving an older app gets the navigation answer under a name now documented as the paint-quiet answer, and nothing in the reply distinguishes them. Reachable in the ordinary case — npm package updated ahead of the installed app.
-
-Fix is one line in a channel already in use: a warning when the fallback fires, saying this app is older than the capture verdict so `settled` reports whether the navigation was confirmed. Deliberately NOT asked of obsrv-e7 as a change to a clean five-commit split; its own commit or its own card is fine. Recorded so it does not merge with nobody having said it out loud.
 
 ### sync.spec.ts:165 went flaky once on the loop-breaker test
 
@@ -241,17 +318,21 @@ Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found some
 
 Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
 
-### fit-cap and onion-skin fail rather than skip on a Retina-only host
-
-`bug-retina` · bug · *unclaimed*
-
-docs/e2e-flakes.md documents the cause since 2026-09-12. They should skip on a host that cannot satisfy them, the way the desk-state tests do, instead of reporting red.
-
-### Refuse to start a suite while another is running
+### A suite that measured nothing must be as loud as two suites at once
 
 `chore-guard` · chore · *unclaimed*
 
-Must refuse, name precisely what it found, and be wired to stop the thing. Two concurrent suites in one worktree made both greens untrustworthy.
+SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
+
+HALF ONE — refuse to start a suite while another is running. Two concurrent suites in one worktree made both greens untrustworthy and cost a full afternoon.
+
+THE HARD PART, and the reason a naive lock file is worse than nothing: the guard must distinguish ANOTHER SUITE RUNNING from A STALE LOCK LEFT BY A SUITE THAT DIED. Those are identical from a lock file alone. A guard that refuses on a stale lock gets its lock deleted by the first person who hits it, and then nobody trusts it again. Whatever it checks — a pid, a port, a live process — the refusal text must SAY WHICH OF THE TWO IT FOUND.
+
+HALF TWO — a suite that passed having measured nothing is indistinguishable from one that passed having checked everything. obsrv-a6 hit this with a -g filtered run; Henry hit the same shape verifying the surface-parity staleness check, which passed green on a planted stale row because filtering had starved the rows it compares. The fix there was a vacuity guard (surface-parity.spec.ts:368) that fails when the comparison had no evidence. Generalise it.
+
+Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
+
+So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
 
 ### `orientation: landscape` produces a portrait screen on every desktop preset
 
@@ -273,9 +354,23 @@ What C2's check actually asks and the register does not yet satisfy: read 0.56.0
 
 ---
 
-## Done — 16
+## Done — 17
 
 *Merged.*
+
+### `settled` degrades to the old meaning on an older app, without saying so
+
+`bug-settled-fallback-silent` · **C4** · bug · owner: obsrv-91
+
+CLOSED 2026-09-14 — already fixed before this card was written, and the card was the one thing that was stale. obsrv-a6 raised it in review of obsrv-91's stack and obsrv-91 fixed it before merging: commit c8b7f15, merged in cdd7056, CI green at 1d4e505.
+
+VERIFIED rather than taken on the peer's word: `git merge-base --is-ancestor c8b7f15 origin/main` → yes, and origin/main:src/mcp/server.ts ~1012 carries the warning, pushed into the same array as capture.warnings, saying the app is older than the capture's settle verdict, that `settled` therefore reports whether the navigation was confirmed rather than whether the page went paint-quiet, and to update the app for the other answer.
+
+Closed rather than assigned deliberately: anyone taking it reads the code, finds the warning already there, and loses twenty minutes deciding whether they are looking at the right line. A card describing a fixed bug costs more than no card.
+
+Original diagnosis below, which was exactly right.
+
+`liveSnap` answered `settled: capture.settled ?? confirmed`. The fallback is RIGHT; the objection was that it was silent — one name meaning two things across app VERSIONS, in the commit whose whole point was removing that across surfaces.
 
 ### Write: what an agent can do to the machine
 
@@ -419,4 +514,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 14 readiness, 6 bugs, 6 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 14 readiness, 6 bugs, 8 chores, among the open cards.*
