@@ -47,7 +47,18 @@ const { join, dirname } = require('node:path')
 const ROOT = join(dirname(__dirname))
 const CARDS = join(ROOT, 'board')
 const OUT = join(ROOT, 'docs', 'board.md')
+const OUT_HTML = join(ROOT, 'docs', 'board.html')
 const check = process.argv.includes('--check')
+// `--stamp <text>` is for a PUBLISHED copy only, and is deliberately absent
+// from the committed file. A published page is a snapshot: it cannot be
+// CI-checked against the cards, so it has to say which commit it was made
+// from, or it goes quietly stale while looking current — the exact failure
+// this board moved into the repo to escape. The repo copy needs no stamp,
+// because it and the cards land in the same commit.
+const stampAt = process.argv.indexOf('--stamp')
+const stamp = stampAt === -1 ? '' : (process.argv[stampAt + 1] ?? '')
+const htmlAt = process.argv.indexOf('--html')
+const htmlOut = htmlAt === -1 ? OUT_HTML : (process.argv[htmlAt + 1] ?? OUT_HTML)
 
 const COLUMNS = [
   { id: 'next', name: 'Next', blurb: 'Picked, not claimed — start here.' },
@@ -183,31 +194,172 @@ out.push('')
 out.push(`*Regenerate with \`npm run board\`. Counts above: ${byKind('readiness')} readiness, ${byKind('bug')} bugs, ${byKind('chore')} chores, among the open cards.*`)
 const rendered = out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n'
 
+// The same cards as a Kanban page, for seeing state at a glance rather than
+// reading 51 cards. Read-only on purpose: moving a card is editing its file,
+// and a page you could drag cards in would put card state in two places that
+// disagree — which is what this board was moved into the repo to stop.
+function renderHtml(stampText) {
+  const data = COLUMNS.map(col => ({
+    ...col,
+    cards: cards
+      .filter(c => c.column === col.id)
+      .map(c => ({ id: c.id, title: c.title, owner: c.owner ?? '', criterion: c.criterion ?? '', kind: c.kind ?? '', evidence: c.evidence ?? '' })),
+  })).filter(c => c.cards.length > 0)
+  // `</script>` inside a card's prose would end the tag early; the escape is
+  // invisible to JSON.parse and keeps the page from breaking on a card that
+  // happens to quote some HTML.
+  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, stamp: stampText })
+    .replace(/</g, '\\u003c')
+  return `<title>Obsrv Board</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #fff; --card: #fff; --ink: #14171a; --dim: #5b6570;
+    --line: #e2e6ea; --accent: #2f6df6; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
+    --next: #2f6df6; --doing: #b4690e; --review: #7a3ec8; --backlog: #5b6570; --done: #1a7f4b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171a; --panel: #1b1f24; --card: #20252b; --ink: #e8ecf1; --dim: #96a1ad;
+      --line: #2b323a; --shadow: none;
+      --next: #7da6ff; --doing: #e8b06a; --review: #c39bf0; --backlog: #96a1ad; --done: #5cc98d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171a; --panel: #1b1f24; --card: #20252b; --ink: #e8ecf1; --dim: #96a1ad;
+    --line: #2b323a; --shadow: none;
+    --next: #7da6ff; --doing: #e8b06a; --review: #c39bf0; --backlog: #96a1ad; --done: #5cc98d;
+  }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  .wrap { padding: 20px 16px 40px; max-width: 1600px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--dim); margin: 0 0 4px; }
+  .stamp { color: var(--dim); font-size: 12px; margin: 0 0 18px; }
+  .stamp b { color: var(--ink); font-weight: 600; }
+  .cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 1fr); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+  @media (max-width: 860px) { .cols { grid-auto-flow: row; grid-auto-columns: auto; } }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+  .colhead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .colhead h2 { font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: .06em; }
+  .n { font-size: 12px; color: var(--dim); }
+  .blurb { color: var(--dim); font-size: 12px; margin: 0 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; margin-bottom: 8px; box-shadow: var(--shadow); cursor: pointer; }
+  .card:hover { border-color: var(--accent); }
+  .card h3 { font-size: 13.5px; margin: 0 0 6px; font-weight: 600; line-height: 1.35; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; }
+  .tag { border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; color: var(--dim); }
+  .tag.crit { border-color: currentColor; font-weight: 600; }
+  .owner { color: var(--dim); }
+  .owner.none { font-style: italic; opacity: .75; }
+  .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--dim); }
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); max-width: 760px; width: calc(100% - 32px); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  .dhead { padding: 16px 18px 10px; border-bottom: 1px solid var(--line); }
+  .dhead h3 { margin: 0 0 8px; font-size: 16px; }
+  .dbody { padding: 14px 18px 18px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 60vh; overflow-y: auto; }
+  .dbody code, .dbody :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .close { position: sticky; bottom: 0; display: block; width: 100%; padding: 11px; border: 0; border-top: 1px solid var(--line); background: var(--panel); color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; border-radius: 0 0 12px 12px; }
+  .empty { color: var(--dim); font-style: italic; font-size: 12px; }
+</style>
+<div class="wrap">
+  <h1>The Obsrv board</h1>
+  <p class="sub" id="sub"></p>
+  <p class="stamp" id="stamp"></p>
+  <div class="cols" id="cols"></div>
+</div>
+<dialog id="dlg">
+  <div class="dhead"><h3 id="dtitle"></h3><div class="meta" id="dmeta"></div></div>
+  <div class="dbody" id="dbody"></div>
+  <button class="close" id="dclose">Close</button>
+</dialog>
+<script>
+const DATA = JSON.parse(${JSON.stringify(json)});
+const COLOR = { next: 'var(--next)', doing: 'var(--doing)', review: 'var(--review)', backlog: 'var(--backlog)', done: 'var(--done)' };
+document.getElementById('sub').textContent =
+  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed';
+const st = document.getElementById('stamp');
+if (DATA.stamp) {
+  st.innerHTML = 'Snapshot of <b>' + DATA.stamp.replace(/[<>&]/g, '') +
+    '</b> — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
+} else { st.remove(); }
+const cols = document.getElementById('cols');
+for (const col of DATA.columns) {
+  const d = document.createElement('div');
+  d.className = 'col';
+  const head = document.createElement('div');
+  head.className = 'colhead';
+  const h = document.createElement('h2');
+  h.textContent = col.name; h.style.color = COLOR[col.id] || 'var(--ink)';
+  const n = document.createElement('span'); n.className = 'n'; n.textContent = col.cards.length;
+  head.append(h, n);
+  const b = document.createElement('p'); b.className = 'blurb'; b.textContent = col.blurb;
+  d.append(head, b);
+  for (const c of col.cards) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    const t = document.createElement('h3'); t.textContent = c.title;
+    const m = document.createElement('div'); m.className = 'meta';
+    if (c.criterion) { const s = document.createElement('span'); s.className = 'tag crit'; s.style.color = COLOR[col.id]; s.textContent = c.criterion; m.append(s); }
+    if (c.kind) { const s = document.createElement('span'); s.className = 'tag'; s.textContent = c.kind; m.append(s); }
+    const o = document.createElement('span');
+    o.className = 'owner' + (c.owner ? '' : ' none');
+    o.textContent = c.owner || 'unclaimed';
+    const id = document.createElement('span'); id.className = 'id'; id.textContent = c.id;
+    m.append(o, id);
+    el.append(t, m);
+    el.addEventListener('click', () => open_(c, col));
+    d.append(el);
+  }
+  cols.append(d);
+}
+const dlg = document.getElementById('dlg');
+function open_(c, col) {
+  document.getElementById('dtitle').textContent = c.title;
+  const meta = document.getElementById('dmeta');
+  meta.textContent = '';
+  const bits = [c.id, col.name, c.criterion, c.kind, c.owner || 'unclaimed'].filter(Boolean);
+  for (const b of bits) { const s = document.createElement('span'); s.className = 'tag'; s.textContent = b; meta.append(s); }
+  document.getElementById('dbody').textContent = c.evidence || 'No evidence recorded on this card.';
+  dlg.showModal();
+}
+document.getElementById('dclose').addEventListener('click', () => dlg.close());
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+</script>
+`
+}
+
 if (!check) {
   writeFileSync(OUT, rendered)
-  console.error(`board: ${cards.length} cards → docs/board.md`)
+  writeFileSync(htmlOut, renderHtml(stamp))
+  console.error(`board: ${cards.length} cards → docs/board.md${htmlOut === OUT_HTML ? ' + docs/board.html' : ` + ${htmlOut}`}`)
   process.exit(0)
 }
 
 // --check is the part that makes staleness impossible rather than merely
 // discouraged. A generated file nobody compares is a generated file that
 // starts lying the first time someone edits a card and forgets the command.
-let current = ''
-try {
-  current = readFileSync(OUT, 'utf8')
-} catch {
-  console.error('board: docs/board.md does not exist. Run `npm run board`.')
-  process.exit(1)
+// Both generated files are checked. The HTML is as capable of drifting as the
+// markdown, and a Kanban page that silently disagrees with the cards is worse
+// than no Kanban page — it is the thing people glance at.
+let bad = false
+for (const [path, want, label] of [[OUT, rendered, 'docs/board.md'], [OUT_HTML, renderHtml(''), 'docs/board.html']]) {
+  let got = ''
+  try {
+    got = readFileSync(path, 'utf8')
+  } catch {
+    console.error(`board: ${label} does not exist. Run \`npm run board\`.`)
+    bad = true
+    continue
+  }
+  if (got === want) continue
+  const a = got.split('\n')
+  const b = want.split('\n')
+  const at = a.findIndex((l, i) => l !== b[i])
+  console.error(`board: ${label} does NOT match board/. Run \`npm run board\` and commit the result.`)
+  console.error(`  first difference at line ${at + 1}:`)
+  console.error(`    committed: ${JSON.stringify((a[at] ?? '<end of file>').slice(0, 160))}`)
+  console.error(`    board/:    ${JSON.stringify((b[at] ?? '<end of file>').slice(0, 160))}`)
+  bad = true
 }
-if (current === rendered) {
-  console.error(`board: docs/board.md matches board/ (${cards.length} cards)`)
-  process.exit(0)
-}
-const a = current.split('\n')
-const b = rendered.split('\n')
-const at = a.findIndex((l, i) => l !== b[i])
-console.error('board: docs/board.md does NOT match board/. Run `npm run board` and commit the result.')
-console.error(`  first difference at line ${at + 1}:`)
-console.error(`    committed: ${JSON.stringify(a[at] ?? '<end of file>')}`)
-console.error(`    board/:    ${JSON.stringify(b[at] ?? '<end of file>')}`)
-process.exit(1)
+if (bad) process.exit(1)
+console.error(`board: docs/board.md and docs/board.html match board/ (${cards.length} cards)`)
+process.exit(0)
