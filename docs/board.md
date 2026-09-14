@@ -498,13 +498,49 @@ Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the m
 
 ---
 
-## Doing — 2
+## Doing — 1
 
 *Claimed. Someone is on it.*
+
+### Three sessions were sharing one working tree
+
+[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
+
+Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
+
+`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
+
+RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
+
+Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
+
+OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+---
+
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
 
 ### Run the suite on a host unlike this laptop, more than once a release
 
 [`ci-second-host`](../board/ci-second-host.md) · **B5** · chore · owner: Kenya
+
+THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
+
+this laptop   Apple M4 Pro, 14 cores, 1x ultrawide      result fields moved: 0   182 s     CI            Apple M1 (Virtual), 3 cores                result fields moved: 3   225 s                   errors 0 and comparator control passed on both desks                   1,061 leaves a run, per-case leaf counts identical across desks
+
+Both diverging cases are `grows-as-walked.html`, and the values say two different things.
+
+**A NOTE THAT SOMETIMES DOES NOT FIRE.** On audit, `warnings.length` was 1, 1, 1, **0**, 1 across the five CI runs. The missing one is the page-is-still-moving note: "this page was still moving when it was measured: 40 had been replaced in the 254 ms after the figures were taken". On a 3-core VM that note fires four times in five. This is a real result difference and it is the one that matters: the tool's own warning about an unstable page is itself unstable there.
+
+**A SENTENCE THAT EMBEDS A DURATION.** On lint, the same note fired all five times and its text still differed: 258 ms, 261 ms, 256 ms, 259 ms, 256 ms. Nothing about the page's measurement changed; the sentence quotes an elapsed time. A warning that embeds a duration can never be byte-identical across runs, so any sentence-level comparison flags it forever — on this desk too, if the note fired here at all.
+
+**AND THE DIVERGENCE ITSELF VARIES.** The first CI run moved `pageHeight`, `summary.text.count` and `warnings[0]`; the second moved `warnings.length` and `warnings[0]` on audit and `warnings[0]` on lint. Same desk, same tree, different set. So "4 fields" and "3 fields" are both samples of a range rather than a figure, and the card records both rather than the tidier one.
+
+NEXT, AND DELIBERATELY NOT DONE HERE: the classifier should separate "a sentence whose only difference is an embedded number" from "a sentence that appeared or did not". They are one bucket today, and they are opposite findings — the first is a wording property, the second is the tool answering differently. I did not change it after the numbers were taken, because the committed code should be the code that produced the artefacts on the card.
+
+---
 
 CLAIMED 2026-09-14 evening by Kenya, on Opeyemi's word given in his own session. IN DOING, not Review: the card is done when the COMPARISON EXISTS, and the second desk has not run yet. What exists is the harness that lets it, and one desk's numbers from it.
 
@@ -535,20 +571,6 @@ THE PLANTED-DIFFERENCE CONTROL PASSED THROUGHOUT, and was right to: plants go in
 Related, and the reason the fixture list changed: the first list was seven structural shapes, and 9 of its 12 valid cases had zero findings — so "0 fields moved" was a statement about 447 leaves, most of them the same four walk counts. Pages that actually produce findings (`audit`, `lint`, `contrast`, `hairline`, `app-shell-findings`) are in the core list now, which took it to 1,061. The original compared 3,375 a run over 33 cases; `--all` widens this one and the gap is honest rather than closed.
 
 WHAT WOULD FINISH THE CARD: the CI run's numbers beside the ones above, both with their desks. A match means B5 survives with two desks behind it. A difference means B5's zero is about this machine, and every before-and-after measured against it inherits that. Done is when the comparison exists, not when it comes out a particular way — and per Henry, B5's zero is his and he would rather have it corrected than kept.
-
-### Three sessions were sharing one working tree
-
-[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
-
-Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
-
-`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
-
-RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
-
-Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
-
-OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
 
 ---
 

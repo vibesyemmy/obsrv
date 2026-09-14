@@ -1,9 +1,28 @@
 ---
 title: "Run the suite on a host unlike this laptop, more than once a release"
-column: doing
+column: review
 kind: chore
 criterion: B5
 owner: "Kenya"
+---
+
+THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
+
+    this laptop   Apple M4 Pro, 14 cores, 1x ultrawide      result fields moved: 0   182 s
+    CI            Apple M1 (Virtual), 3 cores                result fields moved: 3   225 s
+                  errors 0 and comparator control passed on both desks
+                  1,061 leaves a run, per-case leaf counts identical across desks
+
+Both diverging cases are `grows-as-walked.html`, and the values say two different things.
+
+**A NOTE THAT SOMETIMES DOES NOT FIRE.** On audit, `warnings.length` was 1, 1, 1, **0**, 1 across the five CI runs. The missing one is the page-is-still-moving note: "this page was still moving when it was measured: 40 had been replaced in the 254 ms after the figures were taken". On a 3-core VM that note fires four times in five. This is a real result difference and it is the one that matters: the tool's own warning about an unstable page is itself unstable there.
+
+**A SENTENCE THAT EMBEDS A DURATION.** On lint, the same note fired all five times and its text still differed: 258 ms, 261 ms, 256 ms, 259 ms, 256 ms. Nothing about the page's measurement changed; the sentence quotes an elapsed time. A warning that embeds a duration can never be byte-identical across runs, so any sentence-level comparison flags it forever — on this desk too, if the note fired here at all.
+
+**AND THE DIVERGENCE ITSELF VARIES.** The first CI run moved `pageHeight`, `summary.text.count` and `warnings[0]`; the second moved `warnings.length` and `warnings[0]` on audit and `warnings[0]` on lint. Same desk, same tree, different set. So "4 fields" and "3 fields" are both samples of a range rather than a figure, and the card records both rather than the tidier one.
+
+NEXT, AND DELIBERATELY NOT DONE HERE: the classifier should separate "a sentence whose only difference is an embedded number" from "a sentence that appeared or did not". They are one bucket today, and they are opposite findings — the first is a wording property, the second is the tool answering differently. I did not change it after the numbers were taken, because the committed code should be the code that produced the artefacts on the card.
+
 ---
 
 CLAIMED 2026-09-14 evening by Kenya, on Opeyemi's word given in his own session. IN DOING, not Review: the card is done when the COMPARISON EXISTS, and the second desk has not run yet. What exists is the harness that lets it, and one desk's numbers from it.
