@@ -14,6 +14,22 @@ semantics for phone presets — with optional cheap-panel simulation
 emulation only changes the viewport; Obsrv changes the rasterisation, which is
 where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
+**Written against `main` with 0.61.0's changes in, 2026-09-14. The newest
+release is 0.60.0, so this page is currently *ahead* of what `npx -y getobsrv`
+installs.** What you have: `obsrv --version` on the CLI, or `obsrv_drive`'s
+`version` field — it is the only reply that carries one, so do not go looking
+for `version` on a snap or an audit.
+
+A difference points two ways and they are not the same problem. **Older than
+the version named here** — the page describes behaviour you do not have yet;
+every such claim below is marked (`0.61.0+`, "moved in 0.61.0"), so read those
+as future and the rest as current. **Newer** — the page is behind and the
+reply is right, since field names and note wording have moved under unchanged
+tool names before; `docs/breaking-changes.md` in the repo lists what moved.
+
+A skill with no version on it cannot be seen to be stale, which is how it goes
+stale unnoticed.
+
 ## Commands
 
 Prerequisite: none when using `npx -y getobsrv`. npm installs everything but
@@ -33,6 +49,11 @@ newer one later, `claude plugin marketplace update obsrv` then
 OBSRV="npx -y getobsrv"
 # Or, in a local Obsrv checkout (faster, no download):
 # OBSRV="node /path/to/Obsrv/bin/obsrv.js"
+
+# Which Obsrv you have — answered before the build or the Electron binary is
+# looked for, so it works on the machine where one of those is what broke
+# (0.61.0+; on older versions, npm ls -g getobsrv):
+$OBSRV --version
 
 # One screen, one PNG (+ JSON metadata on stdout, humans on stderr):
 $OBSRV snap http://localhost:5173 --preset laptop-768 --out shots/laptop.png
@@ -91,6 +112,13 @@ If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
+
+**Which list a sentence lands in:** `warnings` is about the **page**,
+`notes` is about the **call**. A walk that covered a panel rather than the
+page, or a page that grew as it was walked, is a warning; a launch, a cut
+navigation, an ignored argument or a wait for a render slot is a note. The
+live walk's sentences moved from `notes` to `warnings` in 0.61.0, so scan both
+if you support older versions.
 
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
@@ -227,6 +255,12 @@ schema. Start a new conversation, or reconnect the MCP server.
   page that paints late; `"loading"` means the load itself outran `--timeout` (under a
   throttle, a slow load is the point): the PNG is what had painted, `settledMs`
   is null, and `--timeout` is the answer. Use `--wait` for content that settles late.
+  `"resizing"` is **live only** and the headless surface cannot produce it: the
+  target pane was still changing size when the budget ran out, so the page had
+  not finished reflowing to the screen it is being measured on. It takes a
+  viewport that keeps moving for the whole budget — a window dragged by its
+  corner while a capture runs — so a capture that merely followed a preset
+  change settles normally. Retake it; the PNG is a transitional frame.
 - `--timeout` (`timeoutMs`) bounds the load and then, separately, the
   measurement after it. A page whose main thread is blocked after load — a
   bot challenge, an interstitial — never answers the page ask; the audit,
