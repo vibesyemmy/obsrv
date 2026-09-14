@@ -1,3 +1,5 @@
+import type { WalkBlocked } from './walkCoverage'
+
 export type PresetGroup = 'laptop' | 'desktop' | 'mobile'
 
 /**
@@ -197,6 +199,13 @@ export interface ScrollReport {
    * stands in for `panel` — losing the anonymous case, as it always did.
    */
   dialog?: boolean
+  /**
+   * What was over the page when the walk found nothing to scroll, so the
+   * sentence can name the cause it measured instead of listing three it did
+   * not. Present only in that case — the measurement costs a frame count and
+   * a shadow-host count, which no ordinary scroll should pay.
+   */
+  blocked?: WalkBlocked
 }
 
 export type UpdateStatus = 'current' | 'available' | 'error'
