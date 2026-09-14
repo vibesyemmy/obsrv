@@ -1,0 +1,78 @@
+# Publishes the board's Kanban view to GitHub Pages on every push to main.
+#
+# The point is to take a person out of the loop. A published copy of a
+# generated file is a snapshot, and this project has measured how fast those
+# go stale while still looking current: six hours, then ten minutes, then
+# twenty, each one a regeneration somebody had to remember. Building it here
+# means the published page is whatever `board/` said at the commit it was
+# built from, and nobody has to remember anything.
+#
+# It is generated FRESH from the cards rather than serving the committed
+# docs/board.html, so the page carries the commit it was built from in its own
+# stamp. Those two are the same content — CI's `board:check` in ci.yml is what
+# guarantees that — but a build from source can state its provenance and a
+# copied file cannot.
+name: Board on Pages
+
+on:
+  push:
+    branches: [main]
+    # Only what can change the page. A docs typo should not redeploy a site.
+    paths:
+      - 'board/**'
+      - 'scripts/build-board.js'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, newest wins. Two merges a minute apart should leave
+# the later one published, not whichever job happened to finish last.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build the board from board/ and publish it
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc   # same toolchain the repo develops on
+
+      # No `npm ci`: the generator is plain Node with no dependencies, so the
+      # install would be a minute spent on nothing.
+      - name: Build the board page
+        run: |
+          mkdir -p _site
+          node scripts/build-board.js \
+            --html _site/index.html \
+            --auto \
+            --stamp "main @ $(git rev-parse --short HEAD), $(date -u '+%-d %b %Y, %H:%M UTC')"
+
+      # A page that says 51 cards when board/ holds none would be a deploy of
+      # an empty board, and the stamp would make it look authoritative. Cheap
+      # to assert, and the failure it guards is silent.
+      - name: The page is not empty
+        run: |
+          test -s _site/index.html
+          grep -q 'The Obsrv board' _site/index.html
+          cards=$(ls board/*.md | wc -l)
+          test "$cards" -gt 0
+          echo "built from $cards cards"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

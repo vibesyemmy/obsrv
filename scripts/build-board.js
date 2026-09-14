@@ -59,6 +59,18 @@ const stampAt = process.argv.indexOf('--stamp')
 const stamp = stampAt === -1 ? '' : (process.argv[stampAt + 1] ?? '')
 const htmlAt = process.argv.indexOf('--html')
 const htmlOut = htmlAt === -1 ? OUT_HTML : (process.argv[htmlAt + 1] ?? OUT_HTML)
+// The committed file and the Pages build are whole documents: served or opened
+// on their own they need a charset of their own, and this page is full of
+// em-dashes that render as mojibake without one. `--fragment` drops the
+// wrapper for the Claude Artifact copy, which supplies its own skeleton and
+// rejects a file that brings its own <html>.
+const fragment = process.argv.includes('--fragment')
+// `--auto` says the page rebuilds itself, which changes what the stamp is
+// allowed to claim. A GitHub Pages build is rebuilt on every push to main; a
+// hand-published copy is not. The same sentence cannot be true of both, and
+// "this page does not update itself" printed on a page that does is exactly
+// the quietly-false kind this project keeps finding.
+const auto = process.argv.includes('--auto')
 
 // Left to right is the order work actually travels: raised, picked, claimed,
 // finished, merged. Backlog leads because that is where a card starts — it was
@@ -212,10 +224,23 @@ function renderHtml(stampText) {
   // `</script>` inside a card's prose would end the tag early; the escape is
   // invisible to JSON.parse and keeps the page from breaking on a card that
   // happens to quote some HTML.
-  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, stamp: stampText })
+  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, stamp: stampText, auto })
     .replace(/</g, '\\u003c')
-  return `<title>Obsrv Board</title>
+  const head = fragment
+    ? ''
+    : `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="The open work on Obsrv, generated from the card files in the repository.">
+`
+  const tail = fragment ? '' : '\n</body>\n</html>\n'
+  const bodyOpen = fragment ? '' : '</head>\n<body>\n'
+  return `${head}<title>Obsrv Board</title>
 <style>
+  ${fragment ? '' : 'body { margin: 0; } img { max-width: 100%; } [hidden] { display: none !important; }'}
   :root {
     --bg: #f6f7f9; --panel: #fff; --card: #fff; --ink: #14171a; --dim: #5b6570;
     --line: #e2e6ea; --accent: #2f6df6; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1);
@@ -264,7 +289,7 @@ function renderHtml(stampText) {
   .close { position: sticky; bottom: 0; display: block; width: 100%; padding: 11px; border: 0; border-top: 1px solid var(--line); background: var(--panel); color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; border-radius: 0 0 12px 12px; }
   .empty { color: var(--dim); font-style: italic; font-size: 12px; }
 </style>
-<div class="wrap">
+${bodyOpen}<div class="wrap">
   <h1>The Obsrv board</h1>
   <p class="sub" id="sub"></p>
   <p class="stamp" id="stamp"></p>
@@ -282,8 +307,10 @@ document.getElementById('sub').textContent =
   DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed';
 const st = document.getElementById('stamp');
 if (DATA.stamp) {
-  st.innerHTML = 'Snapshot of <b>' + DATA.stamp.replace(/[<>&]/g, '') +
-    '</b> — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
+  const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
+  st.innerHTML = DATA.auto
+    ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
+    : 'Snapshot of ' + where + ' — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
 } else { st.remove(); }
 const cols = document.getElementById('cols');
 for (const col of DATA.columns) {
@@ -327,8 +354,7 @@ function open_(c, col) {
 }
 document.getElementById('dclose').addEventListener('click', () => dlg.close());
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
-</script>
-`
+</script>${tail}`
 }
 
 if (!check) {
