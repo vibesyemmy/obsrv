@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Backlog — 16
+## Backlog — 15
 
 *Raised, not yet picked.*
 
@@ -105,22 +105,6 @@ Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found some
 [`bug-arrivals`](../board/bug-arrivals.md) · **B2** · bug · *unclaimed*
 
 Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
-
-### A suite that measured nothing must be as loud as two suites at once
-
-[`chore-guard`](../board/chore-guard.md) · chore · *unclaimed*
-
-SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
-
-HALF ONE — refuse to start a suite while another is running. Two concurrent suites in one worktree made both greens untrustworthy and cost a full afternoon.
-
-THE HARD PART, and the reason a naive lock file is worse than nothing: the guard must distinguish ANOTHER SUITE RUNNING from A STALE LOCK LEFT BY A SUITE THAT DIED. Those are identical from a lock file alone. A guard that refuses on a stale lock gets its lock deleted by the first person who hits it, and then nobody trusts it again. Whatever it checks — a pid, a port, a live process — the refusal text must SAY WHICH OF THE TWO IT FOUND.
-
-HALF TWO — a suite that passed having measured nothing is indistinguishable from one that passed having checked everything. obsrv-a6 hit this with a -g filtered run; Henry hit the same shape verifying the surface-parity staleness check, which passed green on a planted stale row because filtering had starved the rows it compares. The fix there was a vacuity guard (surface-parity.spec.ts:368) that fails when the comparison had no evidence. Generalise it.
-
-Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
-
-So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
 
 ### `orientation: landscape` produces a portrait screen on every desktop preset
 
@@ -188,7 +172,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 9
+## Next — 10
 
 *Picked, not claimed — start here.*
 
@@ -290,6 +274,32 @@ THE LESSON. This machine read 1080 twice on every local run, so the comparison w
 THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `moving` flag with src/shared/pageMotion.ts, which already answers 'was this page holding still' on both surfaces. obsrv-e7's objection, correct: THE PROBE ANSWERS PER-RUN TOO — a page that moves slowly, or only while loading, reads as still on a fast host, which is how `moves` got past everyone. A probe that silently decides whether to compare values gives a green that fits two facts again, harder to spot because nothing names it.
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
+
+### A suite that measured nothing must be as loud as two suites at once
+
+[`chore-guard`](../board/chore-guard.md) · chore · *unclaimed*
+
+FREE AS OF 2026-09-14 evening. obsrv-91 raised it with its user twice and got silence rather than a refusal, then released it rather than hold a card against a maybe while someone else was free and wanting it: "mine only in the sense that nobody else has it, which is not a claim on a card." If its user later says take it, it will ask what is left rather than start a second copy, and Henry hears before it touches anything.
+
+**THE PART obsrv-91 SAYS IT WOULD HAVE GOT WRONG FIRST, and it is the difference between a guard and a green light.** The STALE-LOCK branch needs an OBSERVATION, not a design.
+
+A guard that has only ever been seen to refuse a *live* suite has been shown capable of refusing. That is not the same as being right about WHICH of the two it found. Both branches produce a refusal; only one of them is correct in a given moment, and a refusal you cannot tell apart is what gets the lock deleted by the first person it blocks — after which nobody trusts it again.
+
+So: kill a suite mid-run, leave the lock behind, and watch the refusal NAME IT AS STALE. Until that has been seen, the two branches are indistinguishable in the only way that matters.
+
+obsrv-91 flags this as the same shape that caught it and obsrv-a6 yesterday — both had verified their gates by making them fail on purpose, and both experiments were sound and blind, because what was wrong was not the assertion but what it was fed. A check shown capable of failing is still only a claim about the check.
+
+SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
+
+HALF ONE — refuse to start a suite while another is running. Two concurrent suites in one worktree made both greens untrustworthy and cost a full afternoon.
+
+THE HARD PART, and the reason a naive lock file is worse than nothing: the guard must distinguish ANOTHER SUITE RUNNING from A STALE LOCK LEFT BY A SUITE THAT DIED. Those are identical from a lock file alone. A guard that refuses on a stale lock gets its lock deleted by the first person who hits it, and then nobody trusts it again. Whatever it checks — a pid, a port, a live process — the refusal text must SAY WHICH OF THE TWO IT FOUND.
+
+HALF TWO — a suite that passed having measured nothing is indistinguishable from one that passed having checked everything. obsrv-a6 hit this with a -g filtered run; Henry hit the same shape verifying the surface-parity staleness check, which passed green on a planted stale row because filtering had starved the rows it compares. The fix there was a vacuity guard (surface-parity.spec.ts:368) that fails when the comparison had no evidence. Generalise it.
+
+Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
+
+So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
 
 ### A log line cannot be attributed to the dev app or the installed one
 

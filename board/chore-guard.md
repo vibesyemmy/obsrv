@@ -1,9 +1,19 @@
 ---
 title: "A suite that measured nothing must be as loud as two suites at once"
-column: backlog
+column: next
 kind: chore
 order: 25
 ---
+
+FREE AS OF 2026-09-14 evening. obsrv-91 raised it with its user twice and got silence rather than a refusal, then released it rather than hold a card against a maybe while someone else was free and wanting it: "mine only in the sense that nobody else has it, which is not a claim on a card." If its user later says take it, it will ask what is left rather than start a second copy, and Henry hears before it touches anything.
+
+**THE PART obsrv-91 SAYS IT WOULD HAVE GOT WRONG FIRST, and it is the difference between a guard and a green light.** The STALE-LOCK branch needs an OBSERVATION, not a design.
+
+A guard that has only ever been seen to refuse a *live* suite has been shown capable of refusing. That is not the same as being right about WHICH of the two it found. Both branches produce a refusal; only one of them is correct in a given moment, and a refusal you cannot tell apart is what gets the lock deleted by the first person it blocks — after which nobody trusts it again.
+
+So: kill a suite mid-run, leave the lock behind, and watch the refusal NAME IT AS STALE. Until that has been seen, the two branches are indistinguishable in the only way that matters.
+
+obsrv-91 flags this as the same shape that caught it and obsrv-a6 yesterday — both had verified their gates by making them fail on purpose, and both experiments were sound and blind, because what was wrong was not the assertion but what it was fed. A check shown capable of failing is still only a claim about the check.
 
 SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
 
