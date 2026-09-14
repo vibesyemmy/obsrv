@@ -406,8 +406,9 @@ crashed targets and lost WebGL contexts, so a bug report arrives with evidence
 (`src/shared/logFile.ts`). It does not record the URLs you visit.
 
 See [**what an agent can do to your machine**](docs/agent-control.md) for the
-agent-control surface in full, and [**what Obsrv cannot
-do**](docs/limitations.md) for the measurement's limits.
+agent-control surface in full, [**what Obsrv cannot
+do**](docs/limitations.md) for the measurement's limits, and [**the
+thresholds**](docs/thresholds.md) for where every judged number comes from.
 
 ## Known v1 limits
 

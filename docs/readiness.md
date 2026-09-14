@@ -88,7 +88,23 @@ text, 14 device px for thin text, 15% or 25 elements for the shadow share.
 The output calls them provisional, which is honest and leaves a reader unable
 to disagree on any ground but taste.
 *Check:* one short section per threshold — what it derives from, what it was
-calibrated against, and what would move it. **Status: not met.**
+calibrated against, and what would move it. **Status: met 2026-09-14 —
+[`docs/thresholds.md`](thresholds.md), linked from the README, the limitations
+page, `audit.md` and `lint.md`.** Each of the seven judged numbers answers the
+three questions, and the page opens by sorting them into the kinds that can be
+argued with at all: borrowed from a published standard (the WCAG ratios —
+argue upstream), calibrated against real output (the shadow share's
+1.9/3.8/7.7/15.4/23/50/77% sweep, the motion probe's 0-4 s table), reasoned
+but never calibrated, or definitional (a sub-pixel edge is arithmetic).
+
+**Writing it found the answer to its own question.** The soft number is
+**thin text at 14 device px**: it has a mechanism but no table behind it, has
+never been swept against real pages, and no false-positive rate has been
+measured — stated as the weakest number in the tool rather than left for a
+user to discover. The tap-target 7 mm is better founded but rests on platform
+guides whose own evidence Apple and Google do not publish, which the page also
+says. Those two are now B4's most likely sources of noise, named in advance
+rather than after.
 
 **B4. The noise ratio is measured, not assumed.** zalando.de answered 143
 targets with **103 under 7 mm**. If most of those are not things anyone would
