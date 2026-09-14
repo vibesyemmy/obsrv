@@ -272,8 +272,8 @@ they were introduced.
 
 ## An eleventh page, and the seventh divergence
 
-Added after the six above were fixed: `app-shell-grows.html` (obsrv-a6's
-fixture, commit `e2d7fd2` on `test/app-shell-grows-fixture`), an app shell
+Added after the six above were fixed: `app-shell-grows.html` (obsrv-a6's fixture,
+`e2d7fd2`, merged to main as `586caab` while this was being written), an app shell
 whose feed extends as it is walked. It was brought in to test a prediction
 that had failed to reproduce — that `hidden` meaning two things across the
 surfaces would make `walkCoverageNote` pick a different causal clause on each.
