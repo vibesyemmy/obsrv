@@ -49,6 +49,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # docs/board.md is generated from board/. This fails when the two
+      # disagree, which is the only reason the generated file can be trusted:
+      # the snapshot it replaced went stale in six hours, then ten minutes,
+      # then twenty, and nothing noticed any of them.
+      - name: The board matches the cards it is generated from
+        run: npm run board:check
+
       - name: Unit tests
         run: npm test
 
