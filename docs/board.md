@@ -66,7 +66,15 @@ A1'S GROUNDWORK ALREADY EXISTS, ON A BRANCH UNMERGED SINCE 2026-08-30. Henry cit
 
 branch chore/signing (as of f3fdbe9, 2026-08-30)       .github/workflows/ci.yml   +42   HAS_SIGNING gate, CSC_IDENTITY_AUTO_DISCOVERY       docs/signing.md            +116  new file — the step-3 warning lives here       package.json               +1    dist:signed = build + electron-builder --config.mac.notarize=true
 
-`HAS_SIGNING` is `secrets.CSC_LINK != '' && secrets.APPLE_API_KEY_ID != ''`, and the release step runs `dist:signed` only when it is true — so the fork case is already handled gracefully. That branch is two weeks behind a main that has moved a great deal today; it will need a rebase before anyone judges it.
+`HAS_SIGNING` is `secrets.CSC_LINK != '' && secrets.APPLE_API_KEY_ID != ''`, and the release step runs `dist:signed` only when it is true — so the fork case is already handled gracefully.
+
+**AND IT STILL MERGES CLEAN, which corrects Henry's first reading of it.** "Two weeks stale, will need a rebase before anyone judges it" overstated the cost. Measured by Rook and verified here independently:
+
+base                          3521bc8, 2026-08-29     commits on main since base    447     conflicts if merged today     0     commits touching ci.yml           3     commits touching package.json    60   (almost all `npm version` bumps)     commits touching docs/signing.md  0   (the file exists nowhere else, so nothing could)
+
+447 commits and it still applies, because the branch touches three files and main has barely moved in two of those places — ci.yml's later additions (plugin-tag, tested-on-main) sit BELOW the release job this edits. Rook's own caveat, kept because it is the right one: re-measure on the day someone merges rather than trusting this number, since it is true of today's main and nothing guarantees tomorrow's.
+
+**A SECOND CORRECTION, Rook's, and it changes the estimate rather than only the record.** Henry wrote that Rook "had the shape right without the branch in front of it". That was an inference and it was wrong. Rook had read `chore/signing:docs/signing.md` in full and the `main...chore/signing` diff before proposing anything — step 3's warning is where its `identityName=Restack Dev` build got its meaning, and its A1 design to Opeyemi opens by rebasing that branch. So the identity assertion was written to fit the existing `HAS_SIGNING` gate rather than to sit beside it. The groundwork is not merely known to exist; it has been read.
 
 ROOK'S PROPOSED IDENTITY ASSERTION, stated concretely so it is judged as work rather than as a principle. Three lines after `dist:signed`, the build failing on any:
 
