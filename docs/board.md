@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*Generated 2026-09-14 from the team board. 40 cards, 25 open, 23 of those unclaimed.*
+*Generated 2026-09-14 from the team board. 42 cards, 26 open, 21 of those unclaimed.*
 
 This is a snapshot of a live board that lives in a Claude Artifact with a
 shared database. That board is organization-internal and cannot be made
@@ -39,17 +39,15 @@ The live board, for anyone in the organization: https://claude.ai/code/artifact/
 
 ### C5 is the criterion that catches what field comparison cannot
 
-`c5-elevated` · **C5** · readiness · *unclaimed*
+`c5-elevated` · **C5** · readiness · owner: Kenya
 
-obsrv-e7's observation, recorded because it is the general lesson rather than one bug: its C4 gate compares fields and would never have caught the `hidden` defect, because that is note TEXT - same key, same type, different English. Twice this week a defect survived agreeing fields and was found only by reading sentences (the note sweep 2026-09-13, and this).
+REASSIGNED 2026-09-14 from Kaya to Kenya. Henry's first assignment was wrong and Kenya caught it: Kaya reports from memory and does not touch the checkout, but this card needs a note SEEN TO FIRE on a real page — driving a page until it does, or showing it cannot. Reading cannot produce that. Assigned by convenience rather than by what the card needs.
 
-That raises C5 from housekeeping to the criterion that covers the class C4's automation structurally cannot. C5 asks that every note the tool can emit has been seen to fire on a real page; the sharper version this suggests is that every note has been READ on a real page, beside its neighbours, since both defects were sentences that were individually true and wrong in company.
+obsrv-e7's observation, recorded because it is the general lesson rather than one bug: its C4 gate compares fields and would never have caught the `hidden` defect, because that is note TEXT — same key, same type, different English. Twice this week a defect survived agreeing fields and was found only by reading sentences.
 
-SHARPEST EXAMPLE, and it is not a legacy silence: `unsettledReason: 'resizing'` was added 2026-09-14, has a test asserting it is legal, and has NEVER BEEN SEEN TO FIRE. A schema that admits a value no page has ever produced is a claim about the world with no observation behind it — C5's exact shape, created the same day the criterion was being argued about.
+SHARPEST EXAMPLE, and not a legacy silence: `unsettledReason: 'resizing'` was added 2026-09-14, has a test asserting it is legal, and has NEVER BEEN SEEN TO FIRE. settleTarget returns it when the pane is still changing size at the budget, so provoking it likely needs a preset flip or a resize racing a capture — a harness fixture rather than an HTML one. If it proves unreachable, the honest resolution is removing the value, not leaving it admitted forever.
 
-Two notes for whoever takes it: settleTarget returns 'resizing' when the pane is still changing size at the budget, so provoking it likely needs a preset flip or a window resize racing a capture — a harness fixture rather than an HTML one. And if it proves unreachable in practice, the honest resolution is removing the value, not leaving it admitted forever on the grounds that it might occur.
-
-Depends on nothing. The 2026-09-13 sweep did part of it and found eight silences and guesses.
+Work in a worktree: git worktree add /tmp/obsrv-kenya -b docs/c5-note-inventory. Three sessions were in one checkout when this was assigned.
 
 ### Run the suite on a host unlike this laptop, more than once a release
 
@@ -67,15 +65,17 @@ Cheapest version is probably a CI workflow that runs the fixture half of the B5 
 
 ### Sign and notarise the app
 
-`a1` · **A1** · readiness · owner: you
+`a1` · **A1** · readiness · owner: Rook (cert step is Opeyemi's)
 
 Blocked on Apple issuing a Developer ID Application certificate. The cert in ~/Documents/obsrv-signing is Apple Distribution (Voicify Limited) — wrong type. Wiring waits on chore/signing.
 
 ### Make diagnostics reachable from the README
 
-`e2` · **E2** · readiness · *unclaimed*
+`e2` · **E2** · readiness · owner: Rook
 
 Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look. Version is reachable from Settings → Updates, a live status reply, and npm ls -g getobsrv.
+
+Assigned to Rook 2026-09-14 as work that can proceed WHILE A1 is blocked on the certificate. Small and self-contained: add a --version flag to the CLI (src/cli/args.ts handles flags; the version comes from package.json, and scripts/sync-plugin-version.js shows how the repo already keeps that in step). Note obsrv --help already exists and `--version` currently errors with 'unknown flag', which is the discoverable wrong answer.
 
 ### Whatever decides, something else must notice when the decision changes
 
@@ -94,23 +94,24 @@ THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `movin
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
 
-### PROVEN: `hidden`'s two meanings make headless hedge where live is right
+### Regenerate the public board as part of cutting a release
 
-`bug-hidden-two-meanings` · **C4** · bug · *unclaimed*
+`chore-board-on-release` · chore · *unclaimed*
 
-PROVEN 2026-09-14 by obsrv-e7, running obsrv-a6's fixture (tests/fixtures/app-shell-grows.html, e2d7fd2) through the C4 parity harness. Recorded in 165429a, deliberately NOT fixed there.
+docs/board.md is public (github.com/vibesyemmy/obsrv/blob/main/docs/board.md) and is the only surface an outside contributor has. It is generated by `npm run board` and nothing regenerates it, so it drifts from the artifact the moment a card moves — and a stale board is worse than none, because it sends someone to claim work that is already done.
 
-Mechanism is exactly as traced from the source: headless `hidden = overflowHidden()` alone, so documentLocked is true and walkCoverageNote takes the lock clause; the preload's is `scroller === 'root' && overflowHidden()`, false on this page because the scroller is a panel, so live falls through to the growth clause.
+It was built with three guards against reading as current when it is not: a generation date, a line saying the artifact is authoritative, and a reproducible generator. Those make drift VISIBLE. This card makes it RARE.
 
-But the DIRECTION is the opposite of what obsrv-a6 assumed. Headless is the wrong one:
+The obvious hook is `npm version`, which already runs scripts/sync-plugin-version.js and git-adds the plugin manifest — the same shape of problem (a generated file that must not lag the thing it describes) already solved once in this repo. Adding the board there means the public copy is never more than one release behind.
 
-headless: '...a modal or a locked scroll held the page, or it grew after the walk'   live:     '...the page grew as it was walked - a feed that extends as you scroll'
+ONE PROBLEM TO SOLVE FIRST, and it is why this is not a two-line change: `npm run board` takes a dump directory as an argument, because the board lives in a Claude Artifact that a shell script cannot read — the dump comes from the Artifact tool's read_db with out_dir, which only an agent session can call. So a release hook cannot regenerate it unattended today.
 
-Live is right. The page's lock is already named by the sentence directly above it (the walk scrolled a panel), so headless's clause is exactly the hedge walkCoverage's own comments warn against: a note that is right or wrong depending on its neighbour.
+Three options, roughly in order of how much they are worth:
+- Make the release checklist say 'ask the session to run npm run board and commit it' — honest, costs nothing, relies on a human remembering.
+- Have the version hook FAIL when docs/board.md is older than the newest card's updatedAt, so a release cannot be cut on a stale board. Needs a dump to compare against, so it has the same reachability problem, but only as a check rather than a build.
+- Export the board to a committed JSON alongside the markdown, so the generator has a repo-local source and only the export needs a session. Then `npm run board` is reproducible by anyone and the drift check is trivial.
 
-Also corrects obsrv-a6's earlier reproduction attempt: 'live never fires the coverage note' was an artefact of the pre-fix build, where the whitelist dropped blocked/panel so live could not reach that branch at all. With obsrv-e7's fix in, both surfaces fire it, 2 screenfuls, 4712 CSS px, and only the sentence differs.
-
-FIX: make headless's documentLocked mean what live's does, or make walkCoverageNote stop offering the lock clause when the sentence above has already named the lock. Changes headless output on a page shape, so it wants its own change rather than riding a parity stack already carrying three breaking changes.
+The third is the one that makes the file honest rather than merely fresh, and it is the one worth the time.
 
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
@@ -127,6 +128,26 @@ FIXTURE NOW IN THE REPO: tests/fixtures/app-shell-grows.html (merged 586caab) �
 Handed to obsrv-e7 to run through the C4 parity harness, which catches exactly this asymmetry (a note-bearing array present on one surface and empty on the other) and is how the panel silence and the inspect gap both surfaced. obsrv-e7's read: if live really never fires the coverage note on an app shell, it is a seventh defect rather than a footnote to the sixth.
 
 Cause still open: the `hidden` divergence, the two walks scrolling differently, or the growth being timing-dependent. obsrv-a6's one-off comparison could not separate them.
+
+---
+
+## Doing — 1
+
+*Claimed. Someone is on it.*
+
+### Three sessions were sharing one working tree
+
+`chore-worktree-discipline` · chore · owner: Henry
+
+Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
+
+`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
+
+RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
+
+Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
+
+OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
 
 ---
 
@@ -252,7 +273,7 @@ What C2's check actually asks and the register does not yet satisfy: read 0.56.0
 
 ---
 
-## Done — 15
+## Done — 16
 
 *Merged.*
 
@@ -338,6 +359,28 @@ The fix itself: obsrv-e7 found and fixed it. Root cause was parseScrollReport in
 
 Merged in cdd7056 and pushed 2026-09-14. Live status and open questions are on the C4 card.
 
+### FIXED: the coverage note measures whether the page grew instead of guessing
+
+`bug-hidden-two-meanings` · **C4** · bug · owner: Henry
+
+Merged 219223e, pushed 2026-09-14. Suite: 516 passed, 3 failed (the documented Retina trio, which fail on this laptop and pass on CI), 0 flaky. Unit 1251.
+
+THE ORIGINAL CARD'S FIX WAS WRONG and was abandoned before building. It said: headless hedges, live is right, make headless match live. Henry built the missing counter-example first — a STATIC page behind an open dialog — and live announced 'the page grew as it was walked' directly beneath its own note saying 'the page never moved'. So:
+
+app-shell-grows    headless said held; the feed had grown   dialog-over-tall   live said grew; the page was static
+
+Each surface was right on the page its author had tested and wrong on the other. Matching one to the other would have replaced a hedge with a false statement.
+
+THE REAL DEFECT was one level down: `held` inferred from `documentLocked`, a question nothing measured. THE FIX: the walk records the page's height at its first step; the note compares it with the height measured afterwards. Grew, or did not. The disjunction is gone from both surfaces rather than re-pointed.
+
+A wrong turn worth keeping: the first version compared the walk's FIRST step against its LAST, which reads 'did not grow' on grows-as-walked.html — a fixture named for growing — because it extends after the walk's last step. Caught because a fixture whose name predicts its answer gave the opposite one.
+
+When nobody measured (older app, no step taken) the sentence keeps its old hedge, with a unit test pinning that branch. A disjunction is the honest shape of an answer nobody took; the fault was stating a guess as fact.
+
+Rode the same chain the blocked/panel fix mapped out: scrollHost, preload, ScrollReport, controlServer, and the ipcPayloads whitelist that silently drops unnamed fields — which has now caught three sessions in one day.
+
+tests/fixtures/dialog-over-tall.html is committed beside app-shell-grows.html. Either alone argues convincingly for the wrong fix; only the pair makes it measurable.
+
 ### B5: the same page measured twice answers the same
 
 `done-b5` · **B5** · readiness · owner: obsrv-a6
@@ -376,4 +419,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 14 readiness, 7 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 14 readiness, 6 bugs, 6 chores, among the open cards.*
