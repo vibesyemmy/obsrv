@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { choose } from './helpers/select'
+import { captureScale, captureScaleReason, skipWhenCapturesAreScaled } from './helpers/captureScale'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -17,6 +18,7 @@ const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 
 let app: ElectronApplication
 let page: Page
+let scale = 1
 
 const readout = (): Promise<{ footer: string; width: number }> =>
   page.evaluate(() => ({
@@ -28,10 +30,19 @@ const fitScaleOf = (footer: string): number => Number(/fit ×([\d.]+)/.exec(foot
 test.beforeAll(async () => {
   app = await launchApp()
   page = await rendererWindow(app)
+  scale = await captureScale(app)
   await page.evaluate(u => window.obsrv.navigate(u), TALL)
   // A pane the phone fits in with room to spare, so that a cap that moved
   // would show: at true size the phone is a fraction of the pane.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1900, 1100))
+  // Wait for the resize to land before anything reads a pane width. Seen once,
+  // 2026-09-14, in a three-spec run: the fit assertions came back 218 where the
+  // window's own size says 368, and passed on the retry — the shape of a layout
+  // read against a window that was still the launch size. One observation, so
+  // this removes the race rather than claiming to have explained the failure.
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getContentSize()[0]))
+    .toBe(1900)
   await page.click('.panes-target')
   await choose(app, page, '.preset-select', 'android-65')
   await expect.poll(() => page.locator('.target-canvas').evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(0)
@@ -41,6 +52,11 @@ test.afterAll(async () => {
 })
 
 test('Fit shows the same picture whether it is reached from Actual or from Pixels', async () => {
+  // Red on a 2× desk since 2026-09-12 and green on CI, with the tree
+  // unchanged: the pixel-exact scale this compares against is the host
+  // display's, not the app's. Skipped rather than reported as a failure, so a
+  // local full run stops carrying three reds that are about the monitor.
+  test.skip(skipWhenCapturesAreScaled(scale), captureScaleReason(scale))
   await page.click('.view-1x')
   await expect.poll(() => readout().then(r => r.footer)).toContain('×')
   const actual = await readout()

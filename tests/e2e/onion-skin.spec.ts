@@ -4,6 +4,7 @@ import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { captureScale, captureScaleReason, skipWhenCapturesAreScaled } from './helpers/captureScale'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { openPanel } from './helpers/select'
 import { launchApp, rendererWindow } from './launch'
@@ -22,6 +23,7 @@ const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 let app: ElectronApplication
 let page: Page
 let info: ControlInfo
+let scale = 1
 
 interface Reply {
   status: number
@@ -77,6 +79,7 @@ const footer = (): Promise<string> => page.locator('.target-pane .pane-footer').
 test.beforeAll(async () => {
   app = await launchApp([], { OBSRV_AGENT_CONTROL: '1' })
   page = await rendererWindow(app)
+  scale = await captureScale(app)
   const userData = await app.evaluate(({ app: a }) => a.getPath('userData'))
   const controlFile = join(userData, CONTROL_FILE_NAME)
   await expect.poll(() => existsSync(controlFile)).toBe(true)
@@ -94,6 +97,10 @@ test.afterAll(async () => {
 })
 
 test('off by default: the 1x raster alone, no reference, the slider at 0', async () => {
+  // One of the three that go red on a 2× desk and green on CI (2026-09-12,
+  // docs/e2e-flakes.md): `centre` reads a pixel out of a capture the host
+  // display has already scaled. Skipped there rather than failed.
+  test.skip(skipWhenCapturesAreScaled(scale), captureScaleReason(scale))
   await expect.poll(centre).toEqual([0, 0, 255])
   expect(await reference()).toBeNull()
   await expect(page.locator('.onion-slider')).toHaveValue('0')
@@ -114,6 +121,11 @@ test('at 50% a 2× reference exists at the target viewport, and the pane is the 
 })
 
 test('at 100% the pane is the HiDPI render outright; off again drops the reference and the 1x raster returns', async () => {
+  // The second of the three. Note what is NOT skipped: the 50% test above also
+  // reads `centre`, and was not among the three observed red on 2026-09-12, so
+  // it keeps running. If a 2× desk turns it red too, it belongs here — on that
+  // observation, not on the symmetry.
+  test.skip(skipWhenCapturesAreScaled(scale), captureScaleReason(scale))
   await call('setOnionSkin', { onionSkin: 1 })
   await expect.poll(async () => near(await centre(), [255, 0, 0]), { timeout: 10_000 }).toBe(true)
   await call('setOnionSkin', { onionSkin: 0 })

@@ -203,6 +203,25 @@ monitor attached, and they pass on CI, whose runner display never moves.
 Stopping other Electron apps does **not** help here — that was checked, and
 is what separates this from the contention above.
 
+**Since 2026-09-14 these three skip instead of failing.** `fit-cap.spec.ts`
+and `onion-skin.spec.ts` probe the desk once in `beforeAll` — capture the real
+window, divide by the size that window reports — and the three assertions that
+read a scaled capture skip with the scale in the reason
+(`tests/e2e/helpers/captureScale.ts`). Never on CI, where the runner's display
+does not move and a red is still the signal. The probe is measured, not a list
+of hosts: a machine that stops scaling its captures stops skipping, with
+nothing to edit. Verified both ways by forcing the app's scale factor —
+`--force-device-scale-factor=2` reports 2 and skips, a plain launch reports 1
+and runs.
+
+Two things it deliberately does not do. It does not skip
+`onion-skin.spec.ts`'s 50% test, which also reads a captured pixel but was not
+among the three observed red — if a 2× desk turns that one red as well it
+belongs in the same skip, on that observation rather than on the symmetry. And
+a skip is not a fix: the assertions still cannot run on a 2× desk, so what
+they cover is unproven there. Comparing captures to each other, or reading the
+frame bus, is what would make them desk-independent.
+
 **A green run does not confirm this entry.** On 2026-09-12 a full suite of
 489 passed with these three among them, on a machine with the externals
 plugged back in. That says the condition was absent, not that the entry is
