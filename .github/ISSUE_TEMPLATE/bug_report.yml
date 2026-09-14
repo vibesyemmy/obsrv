@@ -74,9 +74,9 @@ body:
     attributes:
       label: Version
       description: >
-        The app shows it in Settings → Updates. For the CLI, `npm ls -g getobsrv`
-        (there is no `obsrv --version` yet). If an agent drove it, the `status`
-        reply carries `version`.
+        The app shows it in Settings → Updates. For the CLI, `obsrv --version`
+        (0.61.0 and later; before that, `npm ls -g getobsrv`). If an agent
+        drove it, the `status` reply carries `version`.
       placeholder: 0.60.0
     validations:
       required: true

@@ -29,6 +29,17 @@ if (process.argv[2] === 'install-skill') {
   return
 }
 
+// `obsrv --version` is answered here, before the build or the Electron binary
+// is looked for: a version question must not need either. It is the first
+// thing a bug report asks for, and the machine asking may be the one where
+// the build or the download is what went wrong. The built entry answers the
+// same flag too (src/cli/args.ts), for anyone running it under Electron
+// directly.
+if (process.argv[2] === '--version' || process.argv[2] === '-v') {
+  process.stdout.write(`${require('../package.json').version}\n`)
+  return
+}
+
 const cliEntry = join(__dirname, '..', 'out', 'main', 'cli.js')
 if (!existsSync(cliEntry)) {
   console.error('obsrv: out/main/cli.js is missing — run `npm run build` in the Obsrv repo first')

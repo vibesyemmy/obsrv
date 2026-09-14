@@ -291,13 +291,15 @@ URL and the JSON. **Status: not met.**
 
 **E2. Diagnostics are reachable.** The log file's location and the running
 version, documented where someone looking for them will be.
-*Check:* find both from the README alone. **Status: partly met 2026-09-14.**
-The log's location is now in the README's *Privacy and files* section and in
-the issue template. The running version is reachable from the app (Settings →
-Updates), from a live `status` reply, and from `npm ls -g getobsrv` — but
-**there is no `obsrv --version`**, which is the obvious place a CLI user
-looks. Found while writing the template (E1), which says so rather than
-telling people to run a flag that does not exist.
+*Check:* find both from the README alone. **Status: met 2026-09-14.**
+The log's location and the version are both in the README's *Privacy and
+files* section and in the issue template. `obsrv --version` (also `-v`) is
+answered by the plain-Node launcher before it looks for the build or the
+Electron binary, so it works on the machine where either of those is what
+broke — measured in a checkout with no `out/` and no Electron downloaded
+(`tests/unit/cliLauncher.test.ts` holds that as a fixture). The built entry
+answers the same flag for anyone running it under Electron directly. Before
+this the flag was the one thing the issue template had to say did not exist.
 
 ---
 

@@ -152,7 +152,12 @@ export interface HelpCommand {
   text: string
 }
 
-export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | InspectCommand | LintCommand | HelpCommand
+/** `obsrv --version`: the package version alone on stdout. bin/obsrv.js answers it before Electron; this is for the built entry run directly. */
+export interface VersionCommand {
+  command: 'version'
+}
+
+export type CliCommand = SnapCommand | DiffCommand | AuditCommand | ReportCommand | InspectCommand | LintCommand | HelpCommand | VersionCommand
 
 /** The screens a report covers when none are named: two laptops-and-desktops, two phones. */
 export const DEFAULT_REPORT_MATRIX = ['laptop-768', '1080p-24', 'android-65', 'iphone-61'] as const
@@ -181,6 +186,7 @@ Usage:
                              images; print JSON findings.
   obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
   obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
+  obsrv --version            Print the installed version (also -v). No build or Electron needed.
 
 Shared flags:
   --preset <id>        Screen preset (default ${DEFAULT_PRESET}):
@@ -496,6 +502,7 @@ export function parseArgs(argv: string[]): CliCommand {
   if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     return { command: 'help', text: usage() }
   }
+  if (command === '--version' || command === '-v') return { command: 'version' }
   if (command !== 'snap' && command !== 'diff' && command !== 'audit' && command !== 'report' && command !== 'inspect' && command !== 'lint') {
     throw new ArgError(`unknown command: ${command}\n\n${usage()}`)
   }
