@@ -1566,6 +1566,8 @@ void app.whenReady().then(async () => {
     const cmd = parseArgs(cliArgv())
     if (cmd.command === 'help') {
       await new Promise<void>(done => process.stdout.write(`${cmd.text}\n`, () => done()))
+    } else if (cmd.command === 'version') {
+      await new Promise<void>(done => process.stdout.write(`${cliVersion()}\n`, () => done()))
     } else if (cmd.command === 'snap') {
       await runSnap(cmd)
     } else if (cmd.command === 'audit') {

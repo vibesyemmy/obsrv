@@ -14,6 +14,14 @@ describe('parseArgs: commands', () => {
       if (cmd.command === 'help') expect(cmd.text).toContain('obsrv snap <url>')
     }
   })
+  it('--version / -v ask for the version, and the usage text says the flag exists', () => {
+    // A version flag that is not in --help is one a user has to guess at; the
+    // issue template used to say "there is no obsrv --version yet" for want
+    // of it.
+    for (const argv of [['--version'], ['-v']]) expect(parseArgs(argv).command).toBe('version')
+    const help = parseArgs(['--help'])
+    if (help.command === 'help') expect(help.text).toContain('obsrv --version')
+  })
   it('rejects unknown commands', () => {
     expect(() => parseArgs(['grab', 'https://x.test'])).toThrow(ArgError)
     expect(() => parseArgs(['grab'])).toThrow(/unknown command: grab/)

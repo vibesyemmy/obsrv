@@ -190,7 +190,8 @@ npx -y getobsrv snap http://localhost:5173 --preset android-65 --throttle budget
 npx -y getobsrv inspect http://localhost:5173 --preset android-65 --profile budget-tn --selector '#cta'
 ```
 
-`npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag. Diff findings
+`npx -y getobsrv --help` (or `node bin/obsrv.js --help` in a checkout) lists every preset, profile and flag;
+`npx -y getobsrv --version` prints the installed version, and needs neither a build nor Electron. Diff findings
 are informational (exit 0); CI thresholds are the caller's job. A ready-made
 Claude Code skill that wraps the loop (snap matrix → read the PNGs → diff →
 fix → re-snap) lives at [skills/obsrv-screens/SKILL.md](skills/obsrv-screens/SKILL.md);
@@ -404,6 +405,10 @@ token.
 Electron's logs directory, is a few lines an hour about GPU processes dying,
 crashed targets and lost WebGL contexts, so a bug report arrives with evidence
 (`src/shared/logFile.ts`). It does not record the URLs you visit.
+
+**The version a bug report needs** is `obsrv --version` for the CLI (no build
+or Electron required), Settings → Updates in the app, and `version` in any
+live `status` reply.
 
 See [**what an agent can do to your machine**](docs/agent-control.md) for the
 agent-control surface in full, [**what Obsrv cannot
