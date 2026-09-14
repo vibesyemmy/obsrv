@@ -26,7 +26,12 @@ import { log } from './log'
 export interface TargetSourceEventMap {
   frame: [FrameMessage]
   /** A committed main-frame navigation; the flag is true for a same-document one (`did-navigate-in-page`). */
-  'url-changed': [string, boolean]
+  /**
+   * `[url, inPage, mirrored]`. `mirrored` marks a commit the sync bus caused
+   * by mirroring the other pane into this one — the pane moved, but not
+   * because the page or the user moved it.
+   */
+  'url-changed': [string, boolean, boolean]
   /** The page's cursor as CSS, for the canvas (see shared/cursor.ts). */
   cursor: [string]
   'load-error': [LoadError]
@@ -353,13 +358,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // measured. A scheme with no HTTP status (file://, about:blank) gives 0.
       this.lastStatus = { code: httpResponseCode ?? 0, text: httpStatusText ?? '', url }
       this.intendedUrl = url
-      if (this.restoring || this.mirroring) return
-      this.emit('url-changed', url, false)
+      if (this.restoring) return
+      // Marked rather than withheld. Withholding it made whether a consumer
+      // ever heard about a mirrored commit depend on a race: `mirroring` is
+      // only true while `load()` is in flight, so a client-side redirect
+      // landed inside that window on a slow machine and outside it on a fast
+      // one — `sync.spec`'s redirect test saw one commit locally and none on
+      // CI, from the same code (2026-09-14). The fact a consumer needs is
+      // *which kind* of commit this was, so say it and let each decide.
+      this.emit('url-changed', url, false, this.mirroring)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame && !this.internal) {
         this.intendedUrl = url
-        this.emit('url-changed', url, true)
+        // Never the mirroring flag: an in-page commit was always reported and
+        // always mirrored back, `mirroring` or not, and marking it would stop
+        // the bus mirroring it (`onTargetNav` drops what is marked). Three
+        // quick navigations back and forth stopped mirroring when this was
+        // wired to the flag — the loop test caught it.
+        this.emit('url-changed', url, true, false)
       }
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {

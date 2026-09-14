@@ -630,3 +630,40 @@ budget, and by giving the e2e harness a navigate budget (8 s) meaningfully
 under Playwright's 30 s per-test timeout, since a budget equal to the timeout
 can never be observed. `tests/unit/e2eBudgets.test.ts` fails if those two
 numbers are ever brought back together.
+
+## `sync.spec.ts:138`: a flake made of a suppressed event
+
+Seen on CI 2026-09-14, failing **both attempts** — so not a flake bounce —
+with `seen.length` 0 where 1 was expected: the target had ended on the right
+URL without ever reporting that it moved. The same commit had passed CI 90
+minutes earlier, and the tree between them was documentation only.
+
+**The cause was the mirror fix suppressing the event it was asked about.**
+`TargetSource` withheld `url-changed` entirely while `mirroring` was set, and
+that flag is only true while `load()` is in flight. A client-side redirect's
+second commit therefore landed *inside* that window on a slow machine and
+*outside* it on a fast one. Probed directly: the target committed
+`redirect.html` and `hairline.html`, and only one of the two reached
+`url-changed`. Locally that was enough for the assertion; on CI neither
+escaped.
+
+Fixed by marking rather than withholding — the event always fires and carries
+whether the bus caused it, and the two consumers that must ignore a mirror
+(`syncBus`'s mirror-back and the arrivals counter behind "navigated after it
+loaded") drop it themselves. Nothing now depends on that timing. Clean `main`
+failed the test 1 run in 6 locally; with the fix, 0 in 6.
+
+**Two things this cost on the way, both worth knowing:**
+
+*Wiring `did-navigate-in-page` to the same flag broke the loop test.* In-page
+commits were never suppressed, so marking them stopped the bus mirroring them
+and "quick legitimate reversals are not a loop" began failing half its runs.
+That line takes `false`, not the flag.
+
+*A new test in `sync.spec` destabilised its neighbour.* That file shares one
+app, and the loop breaker counts direction reversals within `LOOP_WINDOW_MS`
+(3 s), so a test that drives four commits and hands over primes the counter
+for whoever runs next. A 3.2 s settle did **not** fix it; three attempts at
+timing the handover failed. It lives in `sync-mirror-mark.spec.ts` with its
+own app instead — the coupling was shared state, not timing, and the remedy
+for shared state is not sharing it.
