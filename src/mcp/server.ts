@@ -2295,6 +2295,10 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     }
     const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
     const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+    // Which page the element was read on, ahead of the call's own notes —
+    // the order the headless surface uses, and the order that matters: a
+    // reader learns it is looking at the login page before anything else.
+    if (Array.isArray(answer['notes'])) notes.unshift(...(answer['notes'] as unknown[]).map(String))
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
     for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {

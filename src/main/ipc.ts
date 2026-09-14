@@ -1676,8 +1676,28 @@ export function registerIpc(ctx: AppContext): () => void {
     inspect: async req => {
       const t = tab().target
       const report = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
-      if (!report) return null
       const vp = t.getViewport()
+      // Which page this element was read on, before anything about the
+      // element. The same three sentences the headless inspect says
+      // (cli/main.ts:933-938) and in the same order — audit and lint have
+      // said them live since 0.60.0 and inspect was not carried across, so a
+      // live inspect of a route that redirects, or of a 404, described the
+      // page it landed on and never said it had landed anywhere.
+      const st = t.httpStatus()
+      const askedHere = askedOf.get(tab())
+      const pre: string[] = []
+      if (askedHere) {
+        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
+        if (landed !== null) pre.push(landed)
+        const seen = arrivals(tab())
+        if (seen.count > askedHere.atCount && seen.url) pre.push(navigatedAfterLoadNote(askedHere.asked, seen.url))
+      }
+      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
+      if (statusNote !== null) pre.push(statusNote)
+      // Which page it was, even when there was nothing at the point asked
+      // about: "nothing at (400, 300)" on a login page the caller never asked
+      // for is the case where the sentence matters most.
+      if (!report) return { readout: null, notes: pre }
       // The screen's diagonal comes from the preset table; a custom screen's
       // lives in the renderer's own store and is not mirrored here, so it
       // reads as unknown: no millimetres, the rest intact.
@@ -1697,7 +1717,7 @@ export function registerIpc(ctx: AppContext): () => void {
         uiState.visionType === 'none'
           ? undefined
           : { label: `${uiState.visionType} ${Math.round(uiState.visionSeverity * 100)}%`, matrix: visionMatrix(uiState.visionType, uiState.visionSeverity) }
-      return inspectReadout(
+      const readout = inspectReadout(
         report,
         { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor: t.getDeviceScaleFactor(), diagonalInches, textScale: t.getTextScale() },
         { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
@@ -1705,6 +1725,10 @@ export function registerIpc(ctx: AppContext): () => void {
         // recorded — the same source a page-space highlight is mapped through.
         tab().targetScroll,
       )
+      // Beside the readout, not inside it: the readout's own notes are about
+      // the figures, these are about which page the figures came from, and
+      // the headless surface keeps that same split (cli/main.ts:933-938).
+      return { readout, notes: pre }
     },
     audit: async req => {
       const t = tab().target
