@@ -15,9 +15,9 @@
     "lane": "node scripts/lane.js",
     "build": "electron-vite build && npm run build:mcp",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.mcp.json",
-    "test": "vitest run --project unit",
-    "test:browser": "vitest run --project browser",
-    "test:e2e": "npm run build && playwright test",
+    "test": "node scripts/suite.js unit vitest run --project unit",
+    "test:browser": "node scripts/suite.js browser vitest run --project browser",
+    "test:e2e": "node scripts/suite.js e2e npm run test:e2e:run",
     "dist": "npm run build && electron-builder --mac --publish never",
     "build:mcp": "tsc -p tsconfig.mcp.json",
     "prepublishOnly": "npm run build",
@@ -27,7 +27,8 @@
     "plugin:branch": "node scripts/build-plugin-branch.js",
     "version": "node scripts/sync-plugin-version.js && git add .claude-plugin .mcp.json",
     "board": "node scripts/build-board.js",
-    "board:check": "node scripts/build-board.js --check"
+    "board:check": "node scripts/build-board.js --check",
+    "test:e2e:run": "npm run build && playwright test"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

@@ -7,6 +7,7 @@ import { CONTROL_FILE_NAME, isDeclinedStance, isDisabledStance, parseControlFile
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
+import { established } from '../../src/shared/established'
 
 /**
  * Drives the agent-control server over real loopback HTTP against the real
@@ -46,14 +47,19 @@ function call(
   headers?: Record<string, string>,
 ): Promise<Reply> {
   return new Promise((done, fail) => {
+    // `info` is filled by this file's first test, so a filtered run reaches
+    // here with nothing and used to die inside `request` on
+    // `Cannot read properties of undefined (reading 'token')` — a crash that
+    // names the app rather than the run. See src/shared/established.ts.
+    const control = established(info, 'info (the control port and token)', "this file's first test")
     const body: Record<string, unknown> = { command }
-    if (token !== null) body.token = token ?? info.token
+    if (token !== null) body.token = token ?? control.token
     if (payload) body.payload = payload
     const data = JSON.stringify(body)
     const req = request(
       {
         host: '127.0.0.1',
-        port: info.port,
+        port: control.port,
         method: 'POST',
         path: '/',
         headers: { 'content-type': 'application/json', ...headers },

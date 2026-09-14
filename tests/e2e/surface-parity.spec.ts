@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME } from '../../src/shared/control'
+import { noEvidenceMessage } from '../../src/shared/established'
 import { launchApp } from './launch'
 
 /**
@@ -384,8 +385,7 @@ test('every written reason still describes a real difference', () => {
   // populate `rows`, so every row looks live and the check is vacuous.
   expect(
     toolsCompared.size,
-    'No tool compared on any page, so this test had nothing to check. It is not evidence the table is current — ' +
-      'run the whole file rather than a filtered subset.',
+    noEvidenceMessage('tool compared on any page', 'run the whole file rather than a filtered subset'),
   ).toBeGreaterThan(0)
   const seen = new Set<string>()
   for (const row of rows) {
