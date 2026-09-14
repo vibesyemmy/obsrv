@@ -223,8 +223,11 @@ export function registerIpc(ctx: AppContext): () => void {
     watched.add(s)
     // `inPage` is a fragment or a history entry the document survives: the
     // page did not change, so neither did what the figures are of.
-    s.target.on('url-changed', (url: string, inPage: boolean) => {
-      if (inPage) return
+    // `mirrored` is the sync bus loading the other pane's address into this
+    // one: the pane moved, the page did not, and counting it would report
+    // "the page navigated after it loaded" about Obsrv's own plumbing.
+    s.target.on('url-changed', (url: string, inPage: boolean, mirrored: boolean) => {
+      if (inPage || mirrored) return
       arrivalsOf.set(s, { count: arrivals(s).count + 1, url })
     })
   }

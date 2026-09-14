@@ -160,7 +160,14 @@ export function attachSyncBus(
   const onNativeNavInPage = (_e: Electron.Event, url: string, isMainFrame: boolean): void => {
     if (isMainFrame) mirror('native', url, true)
   }
-  const onTargetNav = (url: string, inPage: boolean): void => mirror('target', url, inPage)
+  // A commit this bus caused by mirroring into the target is not the target
+  // moving on its own, and mirroring it back is the loop `expect` exists to
+  // break. Dropped here rather than at the source, which used to withhold the
+  // event from everyone (see `TargetSource`'s `url-changed`).
+  const onTargetNav = (url: string, inPage: boolean, mirrored: boolean): void => {
+    if (mirrored) return
+    mirror('target', url, inPage)
+  }
 
   native.webContents.on('did-navigate', onNativeNav)
   native.webContents.on('did-navigate-in-page', onNativeNavInPage)
