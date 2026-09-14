@@ -124,21 +124,25 @@ rotate ads, split traffic and lazy-load on timing).
 Then the fixtures again across two released versions, since drift between
 releases is the same defect on a longer clock — the walk count changing in
 0.60.0 was deliberate, and a number alone would not have said so.
-**Status: measured 2026-09-14 (`docs/research/2026-09-14-b5-repeatability.md`),
-first two numbers in, third outstanding.** Fixtures: **0 of 3,375 fields
+**Status: met, measured 2026-09-14
+(`docs/research/2026-09-14-b5-repeatability.md`).** Fixtures: **0 of 3,375 fields
 moved**, 33 cases × 5 runs, quiet and with the machine saturated, the
 comparator proved able to see planted differences first. Real sites:
 **0 of 49 on berkshirehathaway.com** — a real site over the real internet with
 nothing different — while bbc.com and stripe.com moved in geometry only, the
-counts a user acts on (`findings`, `targets.under`) holding on every run. The
-cross-version number is not done.
+counts a user acts on (`findings`, `targets.under`) holding on every run.
+Across releases: **0 of 22 cases** differ between 0.59.0 and 0.60.0, and 0
+between 0.60.0 and `main`, against a control — 0.58.0 to 0.59.0 — that finds 7
+and traces every one to a named commit. That zero was predicted before it was
+measured: 0.60.0's only functional change was the application menu, and the
+CLI has no View menu.
 
-It found one defect, which is B2's to close and C4's as much as B5's:
-**`audit` and `lint` measure a moving page without saying so.** stripe.com
-answers `settled: false, unsettledReason: animating` to `snap` and
-`warnings: []` to the other two, which have no settle concept at all — and
-that silence covers finding boxes moving up to 438 CSS px between runs, on
-coordinates `report` pins to a screenshot.
+It found one defect, which was C4's as much as B5's and is **closed the same
+day**: `audit` and `lint` measured a moving page without saying so — stripe.com
+answered `settled: false, unsettledReason: animating` to `snap` and
+`warnings: []` to the other two, over finding boxes moving up to 438 CSS px
+between runs, on coordinates `report` pins to a screenshot. Both now measure
+twice and say what moved (B2, and `src/shared/pageMotion.ts`).
 
 ---
 
@@ -244,10 +248,13 @@ version, documented where someone looking for them will be.
 
 ## Where that leaves us
 
-Nothing on this list is hard, and two items are load-bearing for others:
+Nothing on this list is hard, and two items were load-bearing for others:
 **B5**, because a measurement that moves on its own makes B4 and every
 before-and-after meaningless, and **C4**, because an agent cannot see which
-surface answered it. **A1 is the only one that depends on someone
+surface answered it. **B5 is now met** — the tool does not move on its own,
+which is what B4 and every before-and-after are measured against, and the one
+defect it found was a C4 failure too and is fixed. **A1 is the only one that
+depends on someone
 outside the project** — Apple issuing a Developer ID Application certificate
 — which is why it should start first. B1 is the only one that cannot be
 scheduled: it is met when a run finds nothing, and the way to get there is to

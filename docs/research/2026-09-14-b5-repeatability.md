@@ -142,6 +142,53 @@ and silence is not a promise of stillness.
 
 ---
 
+---
+
+## Number 3 — across released versions: 0, against a control that says 7
+
+Drift between releases is the same defect on a longer clock. Each version was
+installed from npm into its own directory and driven through **its own**
+`bin/obsrv.js`, the way a user who installed it would, against the same
+fixture server. 22 cases — part 1's, minus the ones that measure nothing,
+since a case that answers empty in both versions agrees for a reason that is
+not stability.
+
+| pair | cases differing |
+|---|---|
+| 0.58.0 → 0.59.0 (the control) | **7 of 22** |
+| 0.59.0 → 0.60.0 | **0 of 22** |
+| 0.60.0 → main | **0 of 22** |
+
+The 0.59.0 → 0.60.0 zero was **predicted before it was measured**, and it is
+the interesting one: 0.60.0's only functional change was the inspector toggle
+in the application menu, and the CLI has no View menu. Its release notes
+claimed the npm channel carried the version rather than the fix. That is now
+measured rather than asserted.
+
+### The control is history, not a plant
+
+A zero from a comparator nobody has shown can see is worth nothing, and part 1
+settled that by planting differences. Here the release history offers
+something better: 0.59.0 deliberately changed the walk count, so 0.58.0 →
+0.59.0 must show it. It does, and **every one of the seven traces to a named
+commit**:
+
+| case | what changed | commit |
+|---|---|---|
+| `replaces-itself-on-scroll` | `screenfuls` 1 → 4, `atEnd` false → true, a warning dropped | `3771c4d` the walk counts screenfuls of the page it ended on, not of two pages |
+| `reloads-during-walk` | `screenfuls` 7 → 6 | `3771c4d`, as above |
+| `app-shell`, `app-shell-findings`, `app-shell-sticky` | a note arrives: the walk scrolled a panel, not the page | `eb3824a` the note sweep |
+| `dialog-locked` | "not the page" → "not the page itself"; "the 5 screenfuls above" → "the 5 screenfuls the walk covered" | `eb3824a` |
+| `wall-over-a-tall-page` | the long coverage sentence replaced by the short one that sits beside a named wall | `eb3824a`, the ft.com run-15 finding |
+
+Nothing unexplained. Which is the point the criterion makes in its own words:
+**a number alone would not have said so.** Seven of twenty-two cases changed
+between two consecutive releases, and as a bare figure that reads like a
+warning; read field by field, every one of them was the thing that release set
+out to do.
+
+---
+
 ## Status after this
 
 - **B5 fixtures: met.** 0 of 3,375 fields, 33 cases, 5 runs, quiet and
@@ -149,8 +196,8 @@ and silence is not a promise of stillness.
 - **B5 real sites: measured, and the number is legible** — 0 on a static real
   site, and on the other two the movement is the site's, with the counts a
   user acts on stable throughout.
-- **B5 across two released versions: not done.** That is the third part of the
-  check and wants 0.59.0 and 0.60.0 installed side by side.
+- **B5 across released versions: met.** 0 between the last two releases and 0
+  to `main`, against a control that finds 7 and explains all of them.
 
 ## Reproducing it
 
