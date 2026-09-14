@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>moves-while-measured-fixture</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+        font: 16px system-ui;
+      }
+      /*
+        A page whose measurable elements move, which is a different thing from
+        a page that merely keeps painting: animated.html spins a box with no
+        text and no targets in it, so an audit of it has nothing to compare.
+        These slide continuously — a carousel, a marquee, a banner easing in —
+        so a second measurement 250 ms later finds them somewhere else.
+
+        140 px/s, so a 250 ms window moves them ~35 px: comfortably past the
+        1 px floor, and slow enough that the fixture is not relying on being
+        measured at any particular instant.
+      */
+      .slider {
+        animation: slide 8s linear infinite;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(1120px);
+        }
+      }
+      p {
+        height: 40px;
+        margin: 12px;
+      }
+      button {
+        width: 120px;
+        height: 44px;
+        margin: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>A page that moves while it is measured</h1>
+    <!-- Measurable: the audit counts the buttons as targets and the text as text. -->
+    <div class="slider">
+      <p>This paragraph slides across the page.</p>
+      <button>A sliding button</button>
+    </div>
+    <div class="slider">
+      <p>So does this one, a screenful down.</p>
+      <button>Another sliding button</button>
+    </div>
+    <!-- Held still, so the note's denominator is not all movement. -->
+    <p>This paragraph stays where it is.</p>
+    <button>A button that stays put</button>
+  </body>
+</html>

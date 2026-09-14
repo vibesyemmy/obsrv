@@ -132,8 +132,13 @@ ours.** Three things follow from it:
 `snap` states it. `audit` and `lint` are the two that do not, and they are the
 two whose output a user compares across runs.
 
-**Not fixed here.** This document is the measurement; the fix is its own
-change.
+**Fixed the same day**, in `src/shared/pageMotion.ts`: both commands now
+measure the page twice and say what moved, on both surfaces. The fix keys off
+its own boxes rather than the paint verdict — `animated.html` paints without
+pause and moves nothing an audit reports, and warning about it would spend the
+sentence's credibility for nothing. Its limit is in D1: the probe sees motion
+during its 250 ms window, so a page that changes on a longer cycle passes it,
+and silence is not a promise of stillness.
 
 ---
 

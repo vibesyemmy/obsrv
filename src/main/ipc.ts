@@ -38,6 +38,7 @@ import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
 import type { TargetSource } from './targetSource'
+import { MOTION_PROBE_MS, auditBoxes, lintBoxes, motionAfter, pageMovedNote } from '../shared/pageMotion'
 import { checkForUpdate } from './updateCheck'
 
 /** How long a live measurement's page ask may take before it answers with nothing (`shared/measureBudget`). */
@@ -1737,6 +1738,12 @@ export function registerIpc(ctx: AppContext): () => void {
       if (report) {
         const shareNote = shadowShareNote('audit', report.shadow)
         if (shareNote !== null) notes.push(shareNote)
+        // The headless path asks every page whether its boxes stay put; so
+        // does this one, or the two surfaces answer the same question
+        // differently (shared/pageMotion).
+        const motion = await motionAfter(auditBoxes(report), () => t.auditPage(LIVE_MEASURE_BUDGET_MS), auditBoxes)
+        const movedNote = motion === null ? null : pageMovedNote('audit', motion, motion.afterMs)
+        if (movedNote !== null) notes.push(movedNote)
       }
       // The screen's diagonal comes from the preset table, as for inspect; a
       // custom screen has none here, so there are no millimetres and the
@@ -1803,6 +1810,13 @@ export function registerIpc(ctx: AppContext): () => void {
         notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow, st.code))
       }
       if (report) {
+        const motion = await motionAfter(
+          lintBoxes(report),
+          () => t.lintPage(1 / (deviceScaleFactor * textScale), LIVE_MEASURE_BUDGET_MS),
+          lintBoxes,
+        )
+        const movedNote = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
+        if (movedNote !== null) notes.push(movedNote)
         const shareNote = shadowShareNote('lint', report.shadow)
         if (shareNote !== null) notes.push(shareNote)
       }

@@ -19,6 +19,7 @@ const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).h
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const HYDRATE = pathToFileURL(resolve(__dirname, '../fixtures/hydrate.html')).href
 const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).href
+const MOVES = pathToFileURL(resolve(__dirname, '../fixtures/moves-while-measured.html')).href
 const BUTTON = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')).href
 const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
@@ -1167,4 +1168,29 @@ test('audit and lint measure an app shell the same wherever its scroller has bee
   expect((lintTop.body.findings as Finding[]).some(f => f.rule === 'contrast' && f.element === 'p#deep-text')).toBe(true)
 
   await call('scroll', { page: 'top' })
+})
+
+
+/**
+ * C4: the same page, asked the same question by both surfaces, answers the
+ * same way. `audit` and `lint` measured a moving page in silence on both
+ * until B5 (docs/research/2026-09-14-b5-repeatability.md); the headless half
+ * is covered in cli-animating.spec, and this is the live half.
+ */
+test('live audit and lint say a page moved under them, as the headless ones do', async () => {
+  await call('navigate', { url: MOVES })
+  for (const what of ['audit', 'lint']) {
+    const r = await call(what)
+    expect(r.status).toBe(200)
+    const warnings = (r.body.warnings ?? []) as string[]
+    const note = warnings.find(w => /still moving/.test(w))
+    expect(note, `${what} warnings were ${JSON.stringify(warnings)}`).toBeTruthy()
+    expect(note).toMatch(/\d+ of the \d+ elements re-measured had moved, by up to \d+ CSS px/)
+  }
+})
+
+test('live audit is quiet on a page that holds still', async () => {
+  await call('navigate', { url: AUDIT })
+  const r = await call('audit')
+  expect(((r.body.warnings ?? []) as string[]).join(' ')).not.toMatch(/still moving/)
 })

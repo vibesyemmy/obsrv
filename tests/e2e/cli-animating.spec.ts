@@ -74,3 +74,57 @@ test('a full-page capture of a tall animating page warns once, not once per band
   expect(painting).toHaveLength(1)
   expect(new Set(meta.warnings).size).toBe(meta.warnings.length)
 })
+
+/**
+ * A page that keeps painting and a page whose boxes move are different
+ * things, and only the second makes a measurement unrepeatable. `snap` knew
+ * about the first and said so; `audit` and `lint` knew about neither until
+ * B5 measured stripe.com's finding boxes moving 438 CSS px between runs with
+ * `warnings: []` on every one (docs/research/2026-09-14-b5-repeatability.md).
+ */
+const MOVES = pathToFileURL(resolve(__dirname, '../fixtures/moves-while-measured.html')).href
+const STILL = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
+
+test('an audit of a page whose elements move says so, with its own numbers', async () => {
+  const r = await runCli(['audit', MOVES, '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const meta = JSON.parse(r.stdout)
+  const note = meta.warnings.find((w: string) => /still moving/.test(w))
+  expect(note, `warnings were ${JSON.stringify(meta.warnings)}`).toBeTruthy()
+  // The sentence carries what it measured, not an adjective: how many of how
+  // many, how far, and over what interval.
+  expect(note).toMatch(/\d+ of the \d+ elements re-measured had moved, by up to \d+ CSS px/)
+  expect(note).toMatch(/in the \d+ ms after the figures were taken/)
+  expect(note).toMatch(/a repeat run will not agree on them/)
+  // The elements held still are in the denominator and not in the numerator:
+  // a note claiming everything moved would be as useless as no note.
+  const [, moved, compared] = /(\d+) of the (\d+) elements/.exec(note as string) as RegExpExecArray
+  expect(Number(moved)).toBeGreaterThan(0)
+  expect(Number(moved)).toBeLessThan(Number(compared))
+})
+
+test('a lint of the same page says it too, since both measure boxes', async () => {
+  const r = await runCli(['lint', MOVES, '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const meta = JSON.parse(r.stdout)
+  expect(meta.warnings.join(' ')).toMatch(/still moving/)
+})
+
+test('a still page is not warned about, so the note keeps its meaning', async () => {
+  // The cost of crying wolf is the whole value of the sentence: a page that
+  // holds still has repeatable figures and earns no warning at all.
+  for (const cmd of ['audit', 'lint']) {
+    const r = await runCli([cmd, STILL, '--preset', 'laptop-768'])
+    expect(r.code, r.stderr).toBe(0)
+    expect(JSON.parse(r.stdout).warnings.join(' ')).not.toMatch(/still moving/)
+  }
+})
+
+test('an animating page that moves nothing measurable is not warned about either', async () => {
+  // animated.html spins a box: it never goes paint-quiet, so `snap` calls it
+  // unsettled — but a transform on an element with no text and no targets in
+  // it moves nothing an audit reports, and the audit is repeatable.
+  const r = await runCli(['audit', ANIMATED, '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  expect(JSON.parse(r.stdout).warnings.join(' ')).not.toMatch(/still moving/)
+})
