@@ -166,7 +166,7 @@ const perRun = (p: string): boolean => PER_RUN.some((r) => r.test(p))
 
 type Divergence = { path: string; headless: unknown; live: unknown; kind: 'shape' | 'value' }
 
-const compare = (h: unknown, l: unknown): Divergence[] => {
+const compare = (h: unknown, l: unknown, moving = false): Divergence[] => {
   const out: Divergence[] = []
   const [hs, ls] = [shapeOf(h), shapeOf(l)]
   for (const [p, t] of hs) {
@@ -179,6 +179,9 @@ const compare = (h: unknown, l: unknown): Divergence[] => {
     if (perRun(p) || hs.has(p)) continue
     out.push({ path: p, headless: '(absent)', live: t, kind: 'shape' })
   }
+  // A page that is still moving answers a different number to each reader,
+  // and which reader got the larger one says nothing about the surfaces.
+  if (moving) return out
   const [hv, lv] = [valuesOf(h), valuesOf(l)]
   for (const [p, v] of hv) {
     if (perRun(p) || !lv.has(p)) continue
@@ -190,8 +193,18 @@ const compare = (h: unknown, l: unknown): Divergence[] => {
 
 // ------------------------------------------------------------- the corpus
 
-/** The page shapes each of which produced, or could produce, a divergence. */
-const PAGES: { name: string; url: () => string; why: string }[] = [
+/**
+ * The page shapes each of which produced, or could produce, a divergence.
+ *
+ * `moving` marks a page whose geometry is different every time it is read,
+ * because the page itself never stops. Values are not compared on those —
+ * shape and type still are. Without it the harness reports a page doing
+ * exactly what the fixture exists to make it do as a surface defect: CI
+ * caught `pageHeight` at 1080 headless and 1065 live on `moves`, fifteen
+ * pixels of a slide measured twice, while this machine happened to read the
+ * same number twice and stayed quiet about it.
+ */
+const PAGES: { name: string; url: () => string; why: string; moving?: true }[] = [
   { name: 'ordinary', url: () => fixture('audit.html'), why: 'a page with targets and text and nothing unusual' },
   { name: 'shadow', url: () => fixture('half-in-shadow.html'), why: 'most of the page inside components' },
   { name: 'panel-locked', url: () => fixture('anon-panel-locked.html'), why: 'a locked page whose scroller is an element, with no dialog role' },
@@ -199,7 +212,7 @@ const PAGES: { name: string; url: () => string; why: string }[] = [
   { name: 'wall', url: () => fixture('wall-over-a-tall-page.html'), why: 'an iframe over a page that cannot move' },
   { name: 'tall', url: () => fixture('tall-audit.html'), why: 'more page than one screenful' },
   { name: 'empty', url: () => fixture('empty.html'), why: 'a document with nothing in it' },
-  { name: 'moves', url: () => fixture('moves-while-measured.html'), why: 'a page that moves under the measurement' },
+  { name: 'moves', url: () => fixture('moves-while-measured.html'), why: 'a page that moves under the measurement', moving: true },
   { name: 'redirect', url: () => `${origin}/redirect`, why: 'a load that ends somewhere else' },
   { name: 'status-404', url: () => `${origin}/missing`, why: 'an empty document with a status that explains it' },
 ]
@@ -267,7 +280,7 @@ for (const page of PAGES) {
         return Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]]))
       }
       row.surface = { headless: witness(h), live: witness(l) }
-      if (h !== undefined && l !== undefined) row.divergences = compare(h, l)
+      if (h !== undefined && l !== undefined) row.divergences = compare(h, l, page.moving === true)
       rows.push(row)
       const tag = `${page.name}/${tool.replace('obsrv_', '')}`
       const surfaces = `${JSON.stringify(row.surface.headless)}|${JSON.stringify(row.surface.live)}`

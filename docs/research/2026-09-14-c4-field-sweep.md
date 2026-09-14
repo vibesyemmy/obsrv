@@ -315,3 +315,35 @@ and this is the second time a defect has been found by reading sentences after
 the fields agreed. A field-level gate and a note-level inventory are not
 substitutes for each other, and neither is a substitute for pointing the tool
 at a page shape nobody had tried.
+
+## The harness's own false positive, caught by CI
+
+The first CI run of this spec on main went red, and it was right to. On the
+runner:
+
+```
+obsrv_audit pageHeight   moves: headless=1080 live=1065
+obsrv_lint  pageHeight   moves: headless=1080 live=1065
+```
+
+`moves-while-measured.html` slides its content continuously at 140 px/s. Its
+height is a different number every time it is read, so two measurements of it
+differ by construction — fifteen pixels of a slide, measured twice. Nothing
+about the two surfaces is implicated.
+
+This machine read 1080 both times and said nothing, which is the part worth
+keeping: the harness was wrong on every run and only a slower machine made it
+say so. A green result on one host was not evidence the comparison was sound;
+it was evidence that two reads happened to land in the same frame.
+
+Pages whose geometry never settles are now marked `moving` in the corpus, and
+values are not compared on them — shape and type still are, so a field that
+appears on one surface and not the other is still caught there. Checked by
+running the flagged page and an unflagged one side by side: `moves` reports no
+value divergences at all, including the `pngPath` that every snap comparison
+produces, while `ordinary` still reports it, and both still report their 21
+shape differences.
+
+obsrv-a6 predicted this class before the sweep ran — that the motion note's
+own numbers are per-run and would differ between the surfaces. The warning was
+right and I applied it to the note and not to the geometry the note describes.
