@@ -30,6 +30,17 @@
 // repo is writable by everyone who can open a pull request, which is everyone.
 //
 // Claiming a card is now editing its file. That is the whole mechanism.
+//
+// WHEN docs/board.md CONFLICTS ON A REBASE, REGENERATE IT — NEVER HAND-RESOLVE.
+// It will conflict on any branch that touches a card while main moves, because
+// two people generated the same file from different card sets. Resolving the
+// markers by hand produces a board that matches neither side and belongs to
+// nobody: the one artefact here with no source is the generated one. Take
+// either side, run `npm run board`, and let the cards decide. `--check` is
+// what stops a hand-resolved file reaching main, and it runs on pull requests
+// as well as pushes, which is the half that matters — a check that only ran on
+// main would tell you the board was broken after it was broken. First hit by
+// Kenya rebasing c3, who regenerated rather than merging and was right to.
 const { readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { join, dirname } = require('node:path')
 
