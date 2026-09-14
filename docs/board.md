@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*47 cards, 25 open, 19 of those unclaimed.*
+*48 cards, 26 open, 20 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -227,7 +227,7 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Backlog — 14
+## Backlog — 15
 
 *Not started, not yet picked.*
 
@@ -320,6 +320,36 @@ src/shared/calibration.ts:40 — the flag names which STORED form to use (as-lis
 [`feat-tab-reorder`](../board/feat-tab-reorder.md) · chore · *unclaimed*
 
 Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
+
+### A dev app exited between 18:42 and 19:13 with no explicit stop
+
+[`bug-dev-app-exited`](../board/bug-dev-app-exited.md) · bug · *unclaimed*
+
+Observed by Kenya 2026-09-14. **Titled for what was seen rather than for a mechanism, at Kenya's insistence — it declined to let this be filed as "the lane reaps idle apps" because the code says otherwise and that would have been a second claim inferred from mechanism within the hour.** Nobody knows why this app exited. That is the card.
+
+TIMELINE, local time:
+
+- ~17:55 — Kenya deliberately killed pid 65770
+- then     relaunched with `--no-build`, got pid 2299
+- 18:42:47 — the shared log's last write (`window hidden; target rasterisation paused` / `window shown; … resumed`, repeatedly)
+- 19:13 — pid 2299 gone, noticed incidentally while checking something else
+
+So it died inside that half hour, after logging normally.
+
+WHY THIS IS SURPRISING RATHER THAN EXPECTED, verified in the source rather than taken from the report:
+
+- `scripts/lane.js:59` spawns the app `detached: true, stdio: 'ignore'` and calls `.unref()`. It is in its own process group and should outlive the shell that launched it.
+- Nothing in `scripts/lane.js`, `scripts/devLane.js` or `src/main/controlServer.ts` reaps an idle app. The only kills are the explicit stop path — `devLane.js:157` SIGTERM, `devLane.js:167` SIGKILL after a grace. The `process.kill(pid, 0)` at `devLane.js:133` is a liveness probe, not a kill.
+
+A LEAD, TO BE HELD LOOSELY: the last lines are occlusion transitions — the same macOS desk state the visibility and log specs skip over. That is a place to look, not a cause, and Kenya flagged it as exactly the kind of lead someone will harden into an explanation if it is written down carelessly.
+
+WHAT CANNOT BE SAID: whether it crashed, was killed from outside the lane, or exited cleanly. The lane app writes to the shared `~/Library/Logs/Obsrv/obsrv.log` with no field naming its writer, so its own exit line — if it wrote one — is indistinguishable from the installed app's.
+
+**Which makes this card blocked on [[bug-log-attribution]] in practice.** Investigating it means reading a log that cannot say which process produced a line. Stamping the line should land first, or whoever takes this spends the effort and comes back with the same two-facts absence.
+
+COST TO REPRODUCE: a relaunch and an idle half hour, spent watching a process rather than driving anything. Kenya will take it if Opeyemi wants it chased; otherwise it sits here with the timeline intact.
+
+Bears on documentation: nobody should write "the dev app stays up" in `docs/` until this is understood. It is the kind of sentence that becomes a support answer.
 
 ### Apply the breaking-changes policy to the last five releases
 
@@ -648,4 +678,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 12 readiness, 6 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 12 readiness, 7 bugs, 7 chores, among the open cards.*
