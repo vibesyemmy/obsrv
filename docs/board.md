@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 12
+## Next — 11
 
 *Picked, not claimed — start here.*
 
@@ -151,20 +151,6 @@ THE LESSON. This machine read 1080 twice on every local run, so the comparison w
 THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `moving` flag with src/shared/pageMotion.ts, which already answers 'was this page holding still' on both surfaces. obsrv-e7's objection, correct: THE PROBE ANSWERS PER-RUN TOO — a page that moves slowly, or only while loading, reads as still on a fast host, which is how `moves` got past everyone. A probe that silently decides whether to compare values gives a green that fits two facts again, harder to spot because nothing names it.
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
-
-### Install, use, uninstall — then list what remains
-
-[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
-
-ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
-
-Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
-
-HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
-
-WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
-
-Worktree off current main (403717b), finish into Review, merging waits on Opeyemi's word given to Rook directly. Rook's board writes are refused (bug-board-access), so it reports and Henry moves the card.
 
 ### A log line cannot be attributed to the dev app or the installed one
 
@@ -293,6 +279,48 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+---
+
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
+
+### Install, use, uninstall — then list what remains
+
+[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
+
+ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
+
+Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
+
+HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
+
+WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
+
+STARTED 2026-09-14 evening, branch `chore/a4-install-remains` off 9134567. Claimed by editing this file, which is the mechanism now — Rook's board writes were never a permission (bug-board-access, dissolved).
+
+SCOPE THIS PASS, Opeyemi's call: the CLI and MCP surfaces — a global npm install into a throwaway prefix, a real CLI run, an MCP server run, `install-skill` — all under a disposable HOME. The desktop app half (an unsigned DMG built locally, mounted, run, removed) waits on a separate yes, and is where `settings.json`, `history.json`, `tabs.json` and `obsrv.log` live, so the criterion is not fully answered until it is done.
+
+FOUND BEFORE RUNNING ANYTHING, by reading: this card and docs/readiness.md:50 both name `~/.obsrv` as where the app's state lives. NOTHING in the source writes there. The app uses Electron's `app.getPath('userData')` (`~/Library/Application Support/Obsrv`, per ipc.ts for settings/history/tabs/control.json) and `app.getPath('logs')` (`~/Library/Logs/Obsrv`, per main/log.ts). `~/.obsrv-dev` is the dev lane (scripts/devLane.js), and `~/.claude/skills` is install-skill's target. So the criterion has been pointing at a path that may not exist — the "I looked in the wrong place" half of its own warning, sitting inside the check.
+
+GATE BEFORE ANY INSTALL: prove the isolated HOME is actually honoured before trusting a single path in the result. Setting the variable is not evidence it was used, and a reading from a contaminated HOME is indistinguishable from a clean one. If Electron ignores HOME for some paths, that finding outranks this card — every isolated-lane assumption in the project, the dev lane included, rests on it.
+
+INTO REVIEW 2026-09-14, branch `chore/a4-install-remains` off 9134567. Full write-up: docs/research/2026-09-14-a4-install-remains.md. Real profile counted before and after (22,251 entries in ~/Library/Application Support/Obsrv, unchanged; all five sentinel paths identical), so "nothing of Opeyemi's was touched" is evidence rather than an assurance.
+
+THE GATE FAILED, AND THAT IS THE BIGGEST FINDING. Electron on macOS IGNORES HOME for home/userData/appData/logs/cache — os.homedir() follows it, Chromium does not. A HOME-only sandbox writes into the real profile while every Node-level check reports the fake path. CFFIXED_USER_HOME moves them; --user-data-dir moves userData/sessionData/crashDumps but NOT logs, so the dev lane and the installed app share one ~/Library/Logs/Obsrv/obsrv.log. Neither lever moves app.getPath('temp'). Anything in this repo that isolates by HOME needs re-checking.
+
+THE CRITERION NAMED A PATH NOTHING WRITES. `~/.obsrv` does not exist on a machine that has run Obsrv for weeks, and no source writes it. Corrected in docs/readiness.md.
+
+WHAT REMAINS after `npm rm -g getobsrv`: 128 MB, and it is ~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip — put there by @electron/get on first run, outside node_modules, removed by nothing, documented nowhere. Plus ~/.claude/skills/obsrv-screens (correct, but install-skill has no removal and nothing says it survives). CLEAN, measured on a real render and a real MCP handshake: no obsrv-cli-* and no obsrv-mcp-* entry left anywhere.
+
+APP HALF DONE 2026-09-14 on Opeyemi's word, same branch. Unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under CFFIXED_USER_HOME, a page loaded by typing its URL, quit cleanly, bundle deleted. Isolation read from INSIDE the running app (app.getPath) rather than inferred afterwards. Real profile counted before and after: 22,251 entries, unchanged.
+
+THE RESULT IS THAT A4 IS NOT MET. Deleting Obsrv.app removes exactly one thing: the app. 87 entries after one page load, 86 after deleting the bundle. What stays: settings.json, tabs.json, obsrv.log, the whole Chromium profile (Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches) and — the one that matters — history.json, the addresses visited in the app. The README says history.json holds them; nothing says it outlives the app, and there is no uninstall command.
+
+ALSO MEASURED: control.json (port, token, pid, 0600) is removed on a clean quit and SURVIVES a SIGKILL — proved deliberately with both, since two runs differing in one thing is a hypothesis. Harmless to discovery (a dead pid reads as no app) but it then survives the uninstall too.
+
+TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute, so nobody testing a local build reproduces the README's "damaged" dialog. And electron-builder signed it with `Restack Dev` and reported success — docs/signing.md step 3's warning, reproduced without trying. That one belongs to a1.
 
 ---
 

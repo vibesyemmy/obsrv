@@ -45,12 +45,39 @@ output read as a stranger would read it. **Status: unknown.**
 pruned the capture directories, and this machine held **10,045 `obsrv-*`
 entries** in `os.tmpdir()` (400 MB) before they were cleared by hand; the MCP
 server now prunes its own prefix, older than a day, at startup
-(`src/shared/pruneTemp.ts`, 2026-09-14). What remains unanswered is the
-question the criterion actually asks — the app's own state lives in
-`~/.obsrv` and its Electron profile, and nobody has run the check.
+(`src/shared/pruneTemp.ts`, 2026-09-14). The check has now been run on all three
+surfaces — CLI, MCP and the desktop app — install, use, uninstall, in a
+disposable home
+([`docs/research/2026-09-14-a4-install-remains.md`](research/2026-09-14-a4-install-remains.md)).
 *Check:* install, use, uninstall, then list what remains.
-**Status: partly met — the leak is fixed, the uninstall has never been
-performed.**
+**Status: NOT met 2026-09-14 — measured, and removing it leaves everything
+behind.**
+Deleting `Obsrv.app` removes one thing: the app. After one page load the
+profile held 86 entries and 6 MB, and deleting the bundle changed none of them —
+`settings.json`, `tabs.json`, the Chromium profile (Cookies, Local Storage,
+Session Storage, the caches), `obsrv.log`, and **`history.json`, the addresses
+visited in the app**. The README says history.json holds them; nothing says it
+outlives the app, and there is no uninstall command or documented removal. With
+agent control on, `control.json` (port, token, pid, mode 0600) is removed on a
+clean quit and **survives a SIGKILL** — harmless to discovery, which treats a
+dead pid as no app, but it then survives the uninstall too.
+The temp directories are genuinely clean: after a real render and an MCP
+handshake, no `obsrv-cli-*` or `obsrv-mcp-*` entry remained. What `npm rm -g
+getobsrv` leaves is **128 MB**: `~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip`,
+downloaded by `@electron/get` on first run, outside `node_modules`, removed by
+nothing and mentioned in no document. `~/.claude/skills/obsrv-screens` also
+survives — correct, since it is a separate explicit install, but `install-skill`
+has no removal and nothing says so.
+Two corrections this produced. **This criterion named `~/.obsrv`, which does not
+exist and which nothing writes** — the app's state is in
+`~/Library/Application Support/Obsrv` and `~/Library/Logs/Obsrv`; a check
+looking in `~/.obsrv` would have reported "nothing remains" whatever the truth.
+And **`HOME` does not isolate Electron on macOS**: `os.homedir()` follows it
+while `userData`, `appData`, `logs` and `cache` stay in the real user's
+directory, so a HOME-only sandbox writes into the profile it is supposed to
+protect while every Node-level check says otherwise. `CFFIXED_USER_HOME` moves
+them; `--user-data-dir` moves `userData` but **not `logs`**, which is why the dev
+lane and the installed app share one `obsrv.log`.
 
 ---
 
