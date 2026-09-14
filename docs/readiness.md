@@ -203,7 +203,13 @@ differ; `diff` is 1x-only; the measurement does not enter open shadow roots;
 captures cap at 4096 device px; content inside an `<iframe>` is not reached;
 there is no Windows or Linux build.
 *Check:* one page, linked from the README, that a user hits before the
-limitation does. **Status: not met.**
+limitation does. **Status: met 2026-09-14 —
+[`docs/limitations.md`](limitations.md), linked from the README above the
+Quickstart.** It carries the six above plus the motion probe's window, the
+walk's coverage, the MCP's concurrency, the thresholds' provisional standing,
+and the two gaps we have not closed (the dialog note never firing live, and
+B4's unmeasured noise ratio). D2 and D3 are named on it as owed and not
+written.
 
 **D2. What an agent can do to the machine.** With agent control on, an MCP
 client drives the window: navigates anywhere, clicks, scrolls, captures. The
