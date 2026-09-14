@@ -114,10 +114,12 @@ and they should not be quoted as if they were.
 ### The millimetre thresholds are provisional
 
 7 mm for tap targets and 2 mm for text are the defaults, and both are tunable.
-They are **not** calibrated against a published standard, and nothing yet
-records what they were chosen from. Treat a finding as "this is small on this
-screen, in millimetres" — which is exact — rather than as "this fails a
-standard", which is not a claim Obsrv is currently entitled to make.
+They are **not** calibrated against a published standard. What each one does
+derive from, what it was checked against and what would move it is set out in
+[**the thresholds page**](thresholds.md) — including which of them has no
+calibration at all. Treat a finding as "this is small on this screen, in
+millimetres" — which is exact — rather than as "this fails a standard", which
+is not a claim Obsrv is currently entitled to make.
 
 ### Captures cap at 4,096 device pixels
 
