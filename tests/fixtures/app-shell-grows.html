@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>app-shell-grows-fixture</title>
+    <style>
+      /*
+        The shape the `hidden` divergence needs and no existing fixture has:
+        an app shell (document overflow hidden, an inner container scrolling)
+        whose scroller GROWS as it is walked. That is an infinite feed inside
+        a web app — Slack, Gmail, a timeline — so it is common rather than
+        contrived.
+
+        Why the combination matters: the walk reaches the scroller's end and
+        reports atEnd, but the content appended behind it makes the measured
+        page taller than the screenfuls covered, which is the only way
+        walkCoverageNote fires on an element scroller.
+      */
+      html, body { overflow: hidden; margin: 0; height: 100%; font: 16px system-ui; }
+      #shell { height: 100vh; display: flex; flex-direction: column; }
+      #bar { flex: 0 0 48px; background: #eee; display: flex; align-items: center; padding: 0 12px; }
+      #feed { flex: 1 1 auto; overflow-y: auto; }
+      .row { height: 180px; margin: 8px 12px; background: #f5f5f5; padding: 12px; }
+      button { height: 44px; width: 160px; }
+    </style>
+  </head>
+  <body>
+    <div id="shell">
+      <div id="bar">An app shell, with a feed that extends</div>
+      <div id="feed"></div>
+    </div>
+    <script>
+      const feed = document.getElementById('feed')
+      let n = 0
+      const add = count => {
+        for (let i = 0; i < count; i++) {
+          const d = document.createElement('div')
+          d.className = 'row'
+          d.textContent = 'row ' + ++n
+          const b = document.createElement('button')
+          b.textContent = 'open ' + n
+          d.appendChild(b)
+          feed.appendChild(d)
+        }
+      }
+      add(12)
+      // Extend when the walk nears the end, twice, then stop — so the walk
+      // does reach a real end and reports atEnd, while the page it measures
+      // afterwards is taller than the screenfuls it covered.
+      let grew = 0
+      feed.addEventListener('scroll', () => {
+        if (grew >= 2) return
+        if (feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 200) {
+          grew++
+          add(10)
+        }
+      })
+    </script>
+  </body>
+</html>
