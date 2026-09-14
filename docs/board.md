@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 7
+## Next — 6
 
 *Picked, not claimed — start here.*
 
@@ -99,20 +99,6 @@ THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `movin
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
 
-### Install, use, uninstall — then list what remains
-
-[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
-
-ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
-
-Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
-
-HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
-
-WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
-
-Worktree off current main (403717b), finish into Review, merging waits on Opeyemi's word given to Rook directly. Rook's board writes are refused (bug-board-access), so it reports and Henry moves the card.
-
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
 [`bug-walk-coverage-diverges`](../board/bug-walk-coverage-diverges.md) · **C4** · bug · owner: obsrv-e7
@@ -131,7 +117,7 @@ Cause still open: the `hidden` divergence, the two walks scrolling differently, 
 
 ---
 
-## Doing — 1
+## Doing — 2
 
 *Claimed. Someone is on it.*
 
@@ -148,6 +134,26 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+### Install, use, uninstall — then list what remains
+
+[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
+
+ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
+
+Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
+
+HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
+
+WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
+
+STARTED 2026-09-14 evening, branch `chore/a4-install-remains` off 9134567. Claimed by editing this file, which is the mechanism now — Rook's board writes were never a permission (bug-board-access, dissolved).
+
+SCOPE THIS PASS, Opeyemi's call: the CLI and MCP surfaces — a global npm install into a throwaway prefix, a real CLI run, an MCP server run, `install-skill` — all under a disposable HOME. The desktop app half (an unsigned DMG built locally, mounted, run, removed) waits on a separate yes, and is where `settings.json`, `history.json`, `tabs.json` and `obsrv.log` live, so the criterion is not fully answered until it is done.
+
+FOUND BEFORE RUNNING ANYTHING, by reading: this card and docs/readiness.md:50 both name `~/.obsrv` as where the app's state lives. NOTHING in the source writes there. The app uses Electron's `app.getPath('userData')` (`~/Library/Application Support/Obsrv`, per ipc.ts for settings/history/tabs/control.json) and `app.getPath('logs')` (`~/Library/Logs/Obsrv`, per main/log.ts). `~/.obsrv-dev` is the dev lane (scripts/devLane.js), and `~/.claude/skills` is install-skill's target. So the criterion has been pointing at a path that may not exist — the "I looked in the wrong place" half of its own warning, sitting inside the check.
+
+GATE BEFORE ANY INSTALL: prove the isolated HOME is actually honoured before trusting a single path in the result. Setting the variable is not evidence it was used, and a reading from a contaminated HOME is indistinguishable from a clean one. If Electron ignores HOME for some paths, that finding outranks this card — every isolated-lane assumption in the project, the dev lane included, rests on it.
 
 ---
 
