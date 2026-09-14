@@ -1685,7 +1685,7 @@ export function registerIpc(ctx: AppContext): () => void {
       const vp = t.getViewport()
       // Which page this element was read on, before anything about the
       // element. The same three sentences the headless inspect says
-      // (cli/main.ts:933-938) and in the same order — audit and lint have
+      // (cli/main.ts:945-953) and in the same order — audit and lint have
       // said them live since 0.60.0 and inspect was not carried across, so a
       // live inspect of a route that redirects, or of a 404, described the
       // page it landed on and never said it had landed anywhere.
@@ -1733,7 +1733,7 @@ export function registerIpc(ctx: AppContext): () => void {
       )
       // Beside the readout, not inside it: the readout's own notes are about
       // the figures, these are about which page the figures came from, and
-      // the headless surface keeps that same split (cli/main.ts:933-938).
+      // the headless surface keeps that same split (cli/main.ts:945-953).
       return { readout, notes: pre }
     },
     audit: async req => {
