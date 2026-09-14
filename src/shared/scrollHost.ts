@@ -366,6 +366,16 @@ export interface WalkStepResult {
    * moving has no use for them.
    */
   blocked?: { frames: { count: number; viewportCoverage: number }; shadowHosts: number }
+  /**
+   * The document's height when this step was taken. Compared between the
+   * walk's first step and its last, it says whether a page taller than the
+   * walk covered GREW under it or was HELD — which `walkCoverageNote` used to
+   * guess from `documentLocked`, and got wrong on one page shape per surface
+   * (app-shell-grows headless, dialog-over-tall live). Absent from an older
+   * app's reply, and the sentence then keeps its hedge rather than stating
+   * something nobody measured.
+   */
+  pageHeight?: number
 }
 
 /**
@@ -405,6 +415,12 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
     scroller: el ? 'element' : 'root',
     hidden,
     dialog: inDialog(el),
+    // The document's own height, on every step rather than once. It is the
+    // only way to answer the question `walkCoverageNote` was guessing at:
+    // a page taller than the walk covered either GREW while being walked or
+    // was HELD, and nothing measured which. Read from the document rather
+    // than the scroller, because a panel's height is not the page's.
+    pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
     ...(stuck ? { blocked: { frames: framesInViewport(), shadowHosts: shadowContent().hosts } } : {}),
   }
 }

@@ -232,6 +232,10 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
       // live surface spent 0.58.0 and 0.59.0 printing the old list because it
       // never sent these, and nothing downstream could tell that from a page
       // where the measurement came back empty.
+      // The document's height on every step, not only when stuck: growth is
+      // measured by comparing the walk's first step with its last, so a step
+      // that omits it is a gap in the comparison rather than a saving.
+      pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
       ...(atEndOf(scrollerEl, reached) && scrollerEl === null && overflowHidden()
         ? { blocked: { frames: framesInViewport(), shadowHosts: shadowContent().hosts } }
         : {}),

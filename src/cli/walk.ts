@@ -55,6 +55,8 @@ export interface HeadlessWalkOutcome {
   documentLocked?: boolean
   /** What blocked the page, when the walk found nothing to scroll (`walkNothingNote`). */
   blocked?: WalkBlocked
+  /** The page's height at the walk's first step; the caller compares it with the height measured afterwards. */
+  pageHeightAtStart?: number
 }
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
@@ -111,6 +113,11 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   let panelWalked = false
   let panelWasDialog = false
   let lastY: number | null = 0
+  // The page's height at the walk's FIRST step. Compared against the height
+  // the measurement reports afterwards, it says whether the page grew.
+  // First-against-last is the wrong pair: grows-as-walked.html extends after
+  // the walk's last step, so those two agree on a page that plainly grew.
+  let heightAtStart: number | undefined
   try {
     for (;;) {
       if (deadline.passed()) {
@@ -136,6 +143,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
       // The document's own overflow as the walk last saw it: what tells a
       // page that grew under the walk from one a modal held (walkCoverage).
       documentLocked = r.hidden === true
+      if (typeof r.pageHeight === 'number' && heightAtStart === undefined) heightAtStart = r.pageHeight
       // The page is locked and the only scroller left is a dialog's panel:
       // whatever this walk covers belongs to the dialog, not the page.
       if (r.scroller === 'element' && r.hidden) {
@@ -179,7 +187,7 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   await settleImages(target, deadline)
-  return { walked: { screenfuls, atEnd, ms: Date.now() - walkedFrom }, notes, documentLocked, blocked }
+  return { walked: { screenfuls, atEnd, ms: Date.now() - walkedFrom }, notes, documentLocked, blocked, pageHeightAtStart: heightAtStart }
 }
 
 /**

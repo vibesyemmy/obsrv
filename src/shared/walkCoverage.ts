@@ -29,6 +29,19 @@ const COVERAGE_SLACK = 0.5
 export interface WalkEnd {
   documentLocked?: boolean
   /**
+   * Whether the page's own height ROSE between the walk's first step and its
+   * last — measured, not inferred. This is the question the sentence below
+   * used to guess at: a page taller than the walk covered either grew under
+   * it or was held, and `documentLocked` answered neither. It got the answer
+   * wrong on one page shape per surface, in opposite directions:
+   * app-shell-grows (headless said held, the feed had grown) and
+   * dialog-over-tall (live said grew, the page behind the dialog was static).
+   * Undefined when nobody measured — an older app, or a walk that never took
+   * two steps — and the sentence then keeps its old hedge rather than
+   * claiming a fact it does not have.
+   */
+  grew?: boolean
+  /**
    * What the walk measured holding the page, when it found nothing to
    * scroll. Not for naming the cause again — `walkNothingNote` does that,
    * better, in the sentence above — but for knowing that it *was* named, so
@@ -57,7 +70,11 @@ export function walkCoverageNote(
   // theguardian.com, spiegel.de and nytimes.com, 2026-09-12). A walk that
   // went nowhere reads as held whatever the flag says: zero screenfuls on a
   // tall page is the shape a lock makes, and it may be one this cannot see.
-  const held = end?.documentLocked !== false || walked.screenfuls === 0
+  // Measured beats inferred. `grew` is the page's own height compared between
+  // the walk's first step and its last; only when nobody measured does this
+  // fall back to the old inference, which is a guess and was wrong on one page
+  // shape per surface.
+  const held = end?.grew !== undefined ? !end.grew : end?.documentLocked !== false || walked.screenfuls === 0
   // A wall was measured over the viewport, so the cause is not in doubt and
   // is already stated in full one line up. Offering "a modal or a locked
   // scroll held the page, or it grew after the walk" after it hedges what
@@ -66,8 +83,14 @@ export function walkCoverageNote(
   // ft.com, run 15: the two sentences arrived together and the vaguer one
   // read as doubt about the first.
   const walled = (end?.blocked?.frames?.viewportCoverage ?? 0) >= FRAME_WALL_COVERAGE && (end?.blocked?.frames?.count ?? 0) > 0
+  // With a measurement, each branch states one thing. Without one, the first
+  // branch keeps its disjunction, because that hedge is the honest shape of
+  // an answer nobody took.
+  const measured = end?.grew !== undefined
   const cause = held
-    ? 'a modal or a locked scroll held the page, or it grew after the walk'
+    ? measured
+      ? 'the page did not grow while it was walked, so something held it — a modal, a locked scroll, or a panel that scrolled in its place'
+      : 'a modal or a locked scroll held the page, or it grew after the walk'
     : 'the page grew as it was walked — a feed that extends as you scroll — so the end the walk saw was the end at the time'
   // Beside a named wall this sentence had three jobs and did one. "The walk
   // saw the end after 0 screenfuls" is wrong for a walk that could not move —

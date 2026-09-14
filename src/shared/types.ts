@@ -206,6 +206,16 @@ export interface ScrollReport {
    * a shadow-host count, which no ordinary scroll should pay.
    */
   blocked?: WalkBlocked
+  /**
+   * The document's height when this step was taken. Compared between the
+   * walk's first step and its last, it says whether a page taller than the
+   * walk covered GREW under it or was HELD — which `walkCoverageNote` used to
+   * guess from `documentLocked`, and got wrong on one page shape per surface
+   * (app-shell-grows headless, dialog-over-tall live). Absent from an older
+   * app's reply, and the sentence then keeps its hedge rather than stating
+   * something nobody measured.
+   */
+  pageHeight?: number
 }
 
 export type UpdateStatus = 'current' | 'available' | 'error'

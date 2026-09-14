@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><title>dialog-over-tall</title><style>
+html,body{overflow:hidden;margin:0;height:100%;font:16px system-ui}
+#page p{height:200px;margin:8px}
+#dlg{position:fixed;inset:10% 20%;background:#fff;border:1px solid #999;overflow-y:auto}
+#dlg p{height:150px;margin:8px}
+</style></head><body>
+<div id="page"></div>
+<div id="dlg" role="dialog" aria-modal="true"></div>
+<script>
+// A STATIC page of 10 screenfuls behind a dialog whose own content is short.
+// The page did not grow; it was held. This is the case where "the page grew as
+// it was walked" would be a false answer.
+const page=document.getElementById('page'); for(let i=0;i<40;i++){const p=document.createElement('p');p.textContent='page row '+(i+1);page.appendChild(p)}
+const d=document.getElementById('dlg'); for(let i=0;i<10;i++){const p=document.createElement('p');p.textContent='dialog row '+(i+1);d.appendChild(p)}
+</script></body></html>

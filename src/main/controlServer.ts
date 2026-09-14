@@ -508,6 +508,9 @@ export class ControlServer {
           ...(result.hidden === true ? { hidden: true } : {}),
           ...(result.panel === true ? { panel: true } : {}),
           ...(result.dialog === true ? { dialog: true } : {}),
+          // Carried on every step so the live walk can compare the first with
+          // the last; the headless walk reads the same field off its own step.
+          ...(typeof result.pageHeight === 'number' ? { pageHeight: result.pageHeight } : {}),
           // Only on a walk that covered nothing, which is when the preload
           // measures it. Without it the live walk names no cause and prints
           // the three-item list its own measurement had ruled two items out

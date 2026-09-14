@@ -1393,12 +1393,14 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
   let walkBlocked: WalkBlocked | undefined
+  let walkHeightAtStart: number | undefined
   const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
       walkBlocked = w.blocked
+      walkHeightAtStart = w.pageHeightAtStart
       // The walk sentences are caveats about the figures, so they go where
       // every other caveat goes and where the headless surface has always put
       // them: `warnings`. They were in `notes` until 2026-09-14, which meant
@@ -1427,6 +1429,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     // CLI says it: the answer carries the page height it measured.
     // The page's height is in its own px; a page laid out wider than the
     // screen and drawn to fit (no viewport meta) reports a larger one.
+    const measuredPageHeight = typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0
     const auditCoverage = walkCoverageNote(
       walked,
       status.cssHeight / (typeof textScale === 'number' && textScale > 0 ? textScale : 1),
@@ -1435,7 +1438,14 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       // `blocked` as well as the lock: a coverage sentence that hedges about a
       // cause the sentence above it has just named is the shape 0.58.0 removed
       // from the headless surface, and the live one kept for want of the field.
-      { documentLocked, ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }) },
+      {
+        documentLocked,
+        ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }),
+        // Measured rather than inferred: the height the page had when the walk
+        // began, against the height the measurement reports now. Raw page px
+        // on both sides — the note's own argument is scaled.
+        ...(walkHeightAtStart === undefined ? {} : { grew: measuredPageHeight > walkHeightAtStart }),
+      },
     )
     const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
     // The list's cap is said by whoever prints the list — here, unless
@@ -1688,12 +1698,14 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
   let walkBlocked: WalkBlocked | undefined
+  let walkHeightAtStart: number | undefined
   const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
       walkBlocked = w.blocked
+      walkHeightAtStart = w.pageHeightAtStart
       // The walk sentences are caveats about the figures, so they go where
       // every other caveat goes and where the headless surface has always put
       // them: `warnings`. They were in `notes` until 2026-09-14, which meant
@@ -1726,6 +1738,8 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
         ? unwalkedImageNote(liveFindings, (walked.screenfuls + 1) * (status.cssHeight / liveTextScale))
         : null
     const judgedScale = (judged as { layoutScale?: unknown }).layoutScale
+    const measuredPageHeight =
+      typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? (judged as { pageHeight: number }).pageHeight : 0
     const lintCoverage = walkCoverageNote(
       walked,
       status.cssHeight / liveTextScale,
@@ -1734,7 +1748,14 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       // `blocked` as well as the lock: a coverage sentence that hedges about a
       // cause the sentence above it has just named is the shape 0.58.0 removed
       // from the headless surface, and the live one kept for want of the field.
-      { documentLocked, ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }) },
+      {
+        documentLocked,
+        ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }),
+        // Measured rather than inferred: the height the page had when the walk
+        // began, against the height the measurement reports now. Raw page px
+        // on both sides — the note's own argument is scaled.
+        ...(walkHeightAtStart === undefined ? {} : { grew: measuredPageHeight > walkHeightAtStart }),
+      },
     )
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {
