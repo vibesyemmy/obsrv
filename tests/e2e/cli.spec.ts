@@ -66,10 +66,17 @@ test('snap: solid red at laptop-768 — dims, JSON contract, true RGB red', asyn
     cssHeight: 768,
     deviceScaleFactor: 1,
     profile: 'reference',
+    // The page the PNG is of. A capture reports where the load ended, not
+    // what was asked for, which is why this is the fixture back verbatim
+    // here and would be the login page on a route that redirects.
+    url: fixture('solid-red.html'),
     settled: false,
     unsettledReason: 'blank',
   })
-  expect(Object.keys(json).sort()).toEqual(['cssHeight', 'cssWidth', 'deviceScaleFactor', 'out', 'preset', 'profile', 'settled', 'unsettledReason', 'warnings'])
+  // `url` joined the contract in 0.61.0: the headless reply had no field
+  // saying which page it captured, where the live one always has. Additive,
+  // and this assertion is the reason it cannot arrive unnoticed.
+  expect(Object.keys(json).sort()).toEqual(['cssHeight', 'cssWidth', 'deviceScaleFactor', 'out', 'preset', 'profile', 'settled', 'unsettledReason', 'url', 'warnings'])
   expect(json.warnings).toHaveLength(1)
   expect(json.warnings[0]).toMatch(/one colour end to end \(#ff0000\)/)
   expect(r.stderr).toContain('1366×768 device px')

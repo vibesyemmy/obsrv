@@ -414,6 +414,48 @@ describe('parseScrollReport: atEnd', () => {
   })
 })
 
+describe('parseScrollReport: the fields a walk reads', () => {
+  const base = { id: 1, x: 0, y: 700, scroller: 'element' as const, warnings: [], atEnd: true }
+
+  /**
+   * This function is a whitelist, and a field it does not name is dropped
+   * between a preload that measured it and a caller that acts on it — with
+   * no error anywhere, and indistinguishable downstream from a page where the
+   * measurement came back false. `panel` and `blocked` were both in that
+   * state from the day they were added until 2026-09-14: the live walk went
+   * silent on a locked page with no dialog role, and named no wall on a page
+   * whose measurement held a full-viewport iframe.
+   */
+  it('keeps panel, the anonymous-locked-panel measurement, separately from dialog', () => {
+    expect(parseScrollReport({ ...base, panel: true })).toMatchObject({ panel: true })
+    expect(parseScrollReport({ ...base, panel: true, dialog: true })).toMatchObject({ panel: true, dialog: true })
+    // An older preload sends neither, and says less rather than guessing.
+    expect(parseScrollReport(base)).not.toHaveProperty('panel')
+  })
+
+  it('keeps what a blocked walk measured, so the sentence can name its cause', () => {
+    const blocked = { frames: { count: 1, viewportCoverage: 1 }, shadowHosts: 0 }
+    expect(parseScrollReport({ ...base, blocked })).toMatchObject({ blocked })
+  })
+
+  it.each([
+    ['no blocked at all', undefined],
+    ['a blocked that measured neither thing', {}],
+    ['frames without a coverage', { frames: { count: 2 } }],
+    ['a non-record', 'iframe'],
+  ])('drops %s rather than reporting a measurement nobody took', (_label, blocked) => {
+    expect(parseScrollReport({ ...base, blocked })).not.toHaveProperty('blocked')
+  })
+
+  it('clamps what the renderer sends, like every other field crossing into main', () => {
+    const blocked = { frames: { count: 1e9, viewportCoverage: 4 }, shadowHosts: -3 }
+    expect(parseScrollReport({ ...base, blocked })?.blocked).toEqual({
+      frames: { count: 10_000, viewportCoverage: 1 },
+      shadowHosts: 0,
+    })
+  })
+})
+
 describe('parseInspectPoint', () => {
   it('keeps a finite point inside the bound', () => {
     expect(parseInspectPoint({ x: 12.5, y: 0 })).toEqual({ x: 12.5, y: 0 })

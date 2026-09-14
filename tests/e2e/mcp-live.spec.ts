@@ -63,8 +63,10 @@ test('obsrv_snap (auto) drives the visible app and captures its window', async (
   expect(meta).toMatchObject({
     mode: 'live',
     url: FIXTURE,
-    presetId: 'laptop-768',
-    profileId: 'reference',
+    // `preset` and `profile`, not `presetId`/`profileId`: 0.61.0 gave each
+    // fact one name across the two surfaces, and snap live was the outlier.
+    preset: 'laptop-768',
+    profile: 'reference',
     settled: true,
   })
   expect(meta.width as number).toBeGreaterThanOrEqual(900)
@@ -584,7 +586,7 @@ test('a live snap that flips to a phone preset reports the page it captured, not
     const r = await call('obsrv_snap', { url: FIXTURE, preset, capture: 'pane' })
     expect(r.isError).toBeFalsy()
     const m = r.structuredContent as Record<string, unknown>
-    expect(m, preset).toMatchObject({ mode: 'live', url: FIXTURE, presetId: preset, loading: false, navigated: false })
+    expect(m, preset).toMatchObject({ mode: 'live', url: FIXTURE, preset, loading: false, navigated: false })
   }
 })
 

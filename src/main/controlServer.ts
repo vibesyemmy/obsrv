@@ -121,9 +121,14 @@ export interface ControlDeps {
   /**
    * The inspector, for agents: what is under a point of the target screen
    * or what a selector names, with millimetres and contrast on the panel in
-   * force. Null when nothing is there.
+   * force. A null readout means nothing is there.
+   *
+   * `notes` is which page the element was read on — a load that landed
+   * elsewhere, a navigation after the load, an HTTP status — and is beside
+   * the readout rather than in it because the readout's own notes are about
+   * the figures. It arrives even when the readout is null.
    */
-  inspect(req: InspectRequest): Promise<InspectReadout | null>
+  inspect(req: InspectRequest): Promise<{ readout: InspectReadout | null; notes: string[] }>
   /**
    * How the last page ask ended, when the caller can say: a report the
    * checks refused is not a page that never answered, and the reader is
@@ -456,8 +461,8 @@ export class ControlServer {
       case 'inspect': {
         const req = parseInspectRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
-        const readout = await this.deps.inspect(req)
-        return reply(200, { ok: true, found: readout !== null, readout })
+        const { readout, notes } = await this.deps.inspect(req)
+        return reply(200, { ok: true, found: readout !== null, readout, ...(notes.length > 0 ? { notes } : {}) })
       }
 
       case 'audit': {
@@ -503,6 +508,11 @@ export class ControlServer {
           ...(result.hidden === true ? { hidden: true } : {}),
           ...(result.panel === true ? { panel: true } : {}),
           ...(result.dialog === true ? { dialog: true } : {}),
+          // Only on a walk that covered nothing, which is when the preload
+          // measures it. Without it the live walk names no cause and prints
+          // the three-item list its own measurement had ruled two items out
+          // of — the shape 0.58.0 removed from the headless surface.
+          ...(result.blocked === undefined ? {} : { blocked: result.blocked }),
           ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
         })
       }

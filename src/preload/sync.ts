@@ -5,7 +5,7 @@ import type { MAX_SELECT_OPTIONS, SelectOpen, SelectPick } from '../shared/selec
 import type { MAX_PICKER_VALUE, PickerOpen, PickerPick, PickerType } from '../shared/pickerPopup'
 import type { ScrollPos, ScrollReport, ScrollRequest, ScrollerKind } from '../shared/types'
 // One implementation, shared with the headless capture; see shared/scrollHost.ts.
-import { MAX_VISITED, canScroll, findScroller, inDialog, overflowHidden, rootScrolls } from '../shared/scrollHost'
+import { MAX_VISITED, canScroll, findScroller, framesInViewport, inDialog, overflowHidden, rootScrolls, shadowContent } from '../shared/scrollHost'
 // Re-exported: `MAX_VISITED` and `findScroller` are this module's public face
 // for tests/browser/findScroller.test.ts, which predates the move.
 export { MAX_VISITED, findScroller }
@@ -225,6 +225,16 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
       // across two surfaces.
       panel: scroller === 'element' && overflowHidden(),
       dialog: scroller === 'element' && overflowHidden() && inDialog(scrollerEl),
+      // What is over the page, in the one case where the walk covered none of
+      // it: the sentence can then name the cause it measured rather than list
+      // three it did not. The same condition and the same two counts as
+      // `walkStep` (shared/scrollHost.ts), which is the headless path — the
+      // live surface spent 0.58.0 and 0.59.0 printing the old list because it
+      // never sent these, and nothing downstream could tell that from a page
+      // where the measurement came back empty.
+      ...(atEndOf(scrollerEl, reached) && scrollerEl === null && overflowHidden()
+        ? { blocked: { frames: framesInViewport(), shadowHosts: shadowContent().hosts } }
+        : {}),
     } satisfies ScrollReport)
   }
 })

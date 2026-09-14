@@ -57,6 +57,13 @@ export interface WalkOutcome {
    * tools' output shape pins.
    */
   documentLocked?: boolean
+  /**
+   * And what the app measured holding it, for `walkCoverageNote` — which
+   * stops hedging about a cause once one has been named. The headless walk
+   * has carried this since 0.58.0 (`HeadlessWalkOutcome.blocked`); the live
+   * one could not until the app began sending it.
+   */
+  blocked?: WalkBlocked
 }
 
 /**
@@ -111,6 +118,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // already was has no more page to show — the end, whatever `atEnd` says —
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
   let documentLocked = false
+  let blocked: WalkBlocked | undefined
   let panelWalked = false
   let panelWasDialog = false
   let lastY: number | null = 0
@@ -175,7 +183,10 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
           atEnd = true
           // Nothing to scroll on a page that hides its overflow (an app older
           // than the field says nothing, and gets no sentence).
-          if (screenfuls === 0 && r['scroller'] === 'root' && r['hidden'] === true) notes.push(walkNothingNote(blockedFrom(r['blocked'])))
+          if (screenfuls === 0 && r['scroller'] === 'root' && r['hidden'] === true) {
+            blocked = blockedFrom(r['blocked'])
+            notes.push(walkNothingNote(blocked))
+          }
         } else notes.push('the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the page, or a page that scrolls by other means); measured from where it stood.')
         break
       }
@@ -198,7 +209,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   }
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
-  return { walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom }, notes, documentLocked }
+  return { walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom }, notes, documentLocked, ...(blocked === undefined ? {} : { blocked }) }
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */

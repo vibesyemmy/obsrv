@@ -127,6 +127,13 @@ function encodeJpeg(img: RGBAImage, quality: number): Buffer {
 
 interface RenderResult {
   frame: CapturedFrame
+  /**
+   * Where the load ended, which for a capture is the address that matters:
+   * the PNG is of whatever arrived, redirect and all. `snap` reports it as
+   * `url`; the measuring tools answer under the address that was asked for
+   * and name the landing in a note instead.
+   */
+  landedAt: string
   /** Applied CSS viewport (after clamping / full-page growth). */
   cssWidth: number
   cssHeight: number
@@ -672,6 +679,10 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     if (coverage !== null) warn(`warning: ${coverage}`)
     return {
       frame,
+      // Where the load actually ended, for snap's `url`: a capture is of
+      // whatever arrived, so the address it reports is the landing rather
+      // than the one asked for (the measuring tools answer the other way).
+      landedAt: load.landedAt,
       cssWidth: applied.width,
       cssHeight,
       warnings,
@@ -720,6 +731,10 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
     )
     results.push({
       out,
+      // The page captured. Headless answered nothing here until 0.61.0, while
+      // the live capture always has — the one field a caller needed to know
+      // which page the PNG is of.
+      url: r.landedAt,
       preset: spec.presetId,
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,

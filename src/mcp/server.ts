@@ -19,7 +19,7 @@ import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import { devLane, devMode, laneStamp, stampField, withStamp } from './devLane'
 import { settlePage } from './settle'
-import { walkCoverageNote } from '../shared/walkCoverage'
+import { walkCoverageNote, type WalkBlocked } from '../shared/walkCoverage'
 import {
   inlineNote,
   concurrencyLimit,
@@ -351,7 +351,7 @@ const snapOutputShape = {
     ),
   launched: z.boolean().optional().describe('True on the one call that launched the Obsrv app. Tell the user once: a window has opened.'),
   out: z.string().optional().describe('Headless only: PNG path the CLI wrote (same file as pngPath).'),
-  preset: z.string().optional().describe('Headless only: preset id, or "custom" for width/height runs.'),
+  preset: z.string().optional().describe('The screen: the preset id, or "custom" for a width/height run. Headless, the one applied; live, the one selected in the app.'),
   cssWidth: z
     .number()
     .optional()
@@ -372,7 +372,7 @@ const snapOutputShape = {
         "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
         "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
         "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
-  deviceScaleFactor: z.number().optional().describe('Headless only.'),
+  deviceScaleFactor: z.number().optional().describe('Device pixels per CSS pixel of the screen being rendered, on either surface.'),
   textScale: z.number().optional().describe('Browser zoom as reflow the page was rendered at. Present only when a scale other than 1 was applied.'),
   throttle: z.string().optional().describe('Headless only, and only when `throttle` was given: the conditions applied.'),
   settledMs: z
@@ -383,14 +383,15 @@ const snapOutputShape = {
       'Headless only, and only when `throttle` was given: ms from navigation to the page going paint-quiet (waitMs taken out). ' +
         'Null when it never settled within timeoutMs. Compare against a `none` run of the same page.',
     ),
-  profile: z.string().optional().describe('Headless only: applied panel profile id.'),
+  profile: z.string().optional().describe('The panel profile id. Headless, the one applied; live, the one selected in the app.'),
   settled: z
     .boolean()
     .describe(
-      'Headless: the page went paint-quiet and every pixel painted. False is still a usable capture — a page that ' +
-        'kept animating, or one whose repaint never completed, is returned as-is with a warning saying what was ' +
-        'missing. Live: the app confirmed the navigation before the capture — or, with nothing navigated, that ' +
-        'the tab was neither blank nor loading (a preset flip reloads the page).',
+      'The page went paint-quiet and every pixel painted, on either surface. False is still a usable capture — a ' +
+        'page that kept animating, or one whose repaint never completed, is returned as-is and `unsettledReason` ' +
+        'says which. Whether the app confirmed the *navigation* is a separate question and is a warning, not this ' +
+        'field: before 0.61.0 the live answer reported that instead, so a live capture of a page still painting ' +
+        'came back `settled: true` because the address had landed.',
     ),
   navigated: z
     .boolean()
@@ -401,7 +402,7 @@ const snapOutputShape = {
         'a fresh load, which starts at the top of the page.',
     ),
   unsettledReason: z
-    .enum(['animating', 'timeout', 'uncovered', 'blank', 'loading'])
+    .enum(['animating', 'timeout', 'uncovered', 'blank', 'loading', 'resizing'])
     .optional()
     .describe(
       "Only when settled is false: 'animating' — the page kept painting steadily after its first full frame, so the capture was taken " +
@@ -409,6 +410,8 @@ const snapOutputShape = {
         "'uncovered' — part of the frame never painted within the budget; 'blank' — the frame is one colour end to end and stayed " +
         "that way for 3 s after going quiet: the page's background with nothing on it yet, or a page that really is empty — the PNG " +
         "is not a picture of the page, so pass waitMs for a page that paints late; 'loading' — the load outran timeoutMs (under a " +
+        "resizing' — live only: the target pane was still changing size when the budget ran out, so the page had not " +
+        "finished reflowing to the screen it is being measured on. " +
         "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load.",
     ),
   warnings: z.array(z.string()),
@@ -420,10 +423,13 @@ const snapOutputShape = {
     .string()
     .optional()
     .describe(
-      'Live only: the page captured, read after the capture — which is the landing when a load redirected. The measuring tools answer under the address asked for instead; a capture has no such choice, since the PNG is of whatever arrived.',
+      'The page captured — the landing when a load redirected, read after the capture. The measuring tools answer under the address asked for instead; a capture has no such choice, since the PNG is of whatever arrived. Headless answered nothing here at all until 0.61.0.',
     ),
-  presetId: z.string().optional().describe('Live only: the screen preset selected in the app.'),
-  profileId: z.string().optional().describe('Live only: the panel profile selected in the app.'),
+  // `presetId` and `profileId` were the live spellings of `preset` and
+  // `profile` until 0.61.0. One fact, one name: a caller reading `preset`
+  // got undefined live, and one reading `presetId` got undefined headless,
+  // with `mode: auto` deciding which. Every other tool already answered
+  // under `preset`; snap was the outlier.
   viewMode: z.string().optional().describe("Live only: the app's target-pane view (1:1 or fit)."),
   panes: z.string().optional().describe("Live only: 'both' (native pane beside the target) or 'target' (the target render has the whole window)."),
   tabId: z.string().optional().describe('Live only: which of the app\'s tabs was captured (the active one). Empty from an app older than tabs.'),
@@ -964,24 +970,29 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
   // the target and reloaded its page (the control confirms once that is
   // under way, not done): settle when the tab is neither blank nor loading.
   let status = app.status
-  let settled = false
+  // Whether the app confirmed the *navigation* — a different question from
+  // whether the page stopped changing, which is what `settled` reports on the
+  // headless surface. Until 2026-09-14 this value was reported as `settled`,
+  // so the two surfaces answered different questions under one name: the live
+  // reply called a still-painting page settled because the URL had landed.
+  let confirmed = false
   const deadline = Date.now() + LIVE_SETTLE_MS
   for (;;) {
     try {
       const s = parseControlStatus(await controlCall(info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (s) {
         status = s
-        settled = navigated
+        confirmed = navigated
           ? s.url === applied || (applied !== '' && s.url !== before && s.url !== 'about:blank')
           : !s.loading && s.url !== 'about:blank'
       }
     } catch (e) {
       return toolError(liveFailure(e))
     }
-    if (settled || Date.now() >= deadline) break
+    if (confirmed || Date.now() >= deadline) break
     await sleep(250)
   }
-  if (!settled) {
+  if (!confirmed) {
     warnings.push(
       navigated
         ? 'the app did not confirm the navigation before capture; the PNG may show the previous page.'
@@ -998,6 +1009,18 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     return toolError(liveFailure(e))
   }
   warnings.push(...capture.warnings)
+  // An app older than the capture's settle verdict sends none, and the line
+  // below falls back to the navigation flag — which is the question this
+  // field used to answer. That is the right degradation and the wrong
+  // silence: without this sentence the reply answers one of two questions
+  // under a name documented as the other, and nothing distinguishes them.
+  // Reachable in the ordinary way, since the npm package updates ahead of
+  // the installed app.
+  if (capture.settled === undefined) {
+    warnings.push(
+      "this app is older than the capture's settle verdict, so `settled` reports whether the navigation was confirmed rather than whether the page went paint-quiet; update the app for the paint-quiet answer.",
+    )
+  }
   const { pngPath, width, height } = capture
 
   // The status the PNG is reported with is read after the capture, which
@@ -1016,8 +1039,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
   const structured = {
     mode: 'live',
     url: status.url,
-    presetId: status.presetId,
-    profileId: status.profileId,
+    preset: status.presetId,
+    profile: status.profileId,
+    ...(status.deviceScaleFactor === undefined ? {} : { deviceScaleFactor: status.deviceScaleFactor }),
     orientation: status.orientation,
     screenShape: status.screenShape,
     textScale: status.textScale,
@@ -1032,7 +1056,12 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     tabIndex: status.tabIndex,
     width,
     height,
-    settled,
+    // The capture's own verdict, which is the question the headless surface
+    // answers under this name. `captureVisible` and `captureTarget` have
+    // measured it all along (ipc.ts, `settleFields`) and this path threw it
+    // away in favour of the navigation flag.
+    settled: capture.settled ?? confirmed,
+    ...(capture.unsettledReason === undefined ? {} : { unsettledReason: capture.unsettledReason }),
     navigated,
     inlined: image.inlined,
     warnings,
@@ -1363,11 +1392,21 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     // page that mounts sections on scroll, the number is of the whole page.
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
+  let walkBlocked: WalkBlocked | undefined
+  const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
-      notes.push(...w.notes)
+      walkBlocked = w.blocked
+      // The walk sentences are caveats about the figures, so they go where
+      // every other caveat goes and where the headless surface has always put
+      // them: `warnings`. They were in `notes` until 2026-09-14, which meant
+      // the identical string reached a caller under a different key depending
+      // on which surface answered — and `mode: auto` picks the surface, so
+      // nothing the caller did decided it. The call's own notes (a launch, a
+      // cut navigation) stay in `notes`: those are about the call.
+      walkNotes.push(...w.notes)
     }
     const payload = {
       ...(input.tapMm !== undefined ? { tapMm: input.tapMm } : {}),
@@ -1393,7 +1432,10 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       status.cssHeight / (typeof textScale === 'number' && textScale > 0 ? textScale : 1),
       (typeof measured['pageHeight'] === 'number' ? measured['pageHeight'] : 0) *
         (typeof measured['layoutScale'] === 'number' && measured['layoutScale'] > 0 ? measured['layoutScale'] : 1),
-      { documentLocked },
+      // `blocked` as well as the lock: a coverage sentence that hedges about a
+      // cause the sentence above it has just named is the shape 0.58.0 removed
+      // from the headless surface, and the live one kept for want of the field.
+      { documentLocked, ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }) },
     )
     const measuredWarnings = Array.isArray(measured['warnings']) ? (measured['warnings'] as unknown[]) : []
     // The list's cap is said by whoever prints the list — here, unless
@@ -1412,7 +1454,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...measured,
       ...(input.groupsOnly ? { findings: [], truncated: noListCut(measured['truncated']) } : {}),
-      ...(auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...auditAdded] }),
+      ...(walkNotes.length + auditAdded.length === 0 ? {} : { warnings: [...measuredWarnings, ...walkNotes, ...auditAdded] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -1645,11 +1687,21 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     // page that mounts sections on scroll, the number is of the whole page.
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
+  let walkBlocked: WalkBlocked | undefined
+  const walkNotes: string[] = []
     if (input.walk !== false) {
       const w = await walkPage(walkDeps(info))
       walked = w.walked
       documentLocked = w.documentLocked
-      notes.push(...w.notes)
+      walkBlocked = w.blocked
+      // The walk sentences are caveats about the figures, so they go where
+      // every other caveat goes and where the headless surface has always put
+      // them: `warnings`. They were in `notes` until 2026-09-14, which meant
+      // the identical string reached a caller under a different key depending
+      // on which surface answered — and `mode: auto` picks the surface, so
+      // nothing the caller did decided it. The call's own notes (a launch, a
+      // cut navigation) stay in `notes`: those are about the call.
+      walkNotes.push(...w.notes)
     }
     const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
@@ -1679,7 +1731,10 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       status.cssHeight / liveTextScale,
       (typeof (judged as { pageHeight?: unknown }).pageHeight === 'number' ? ((judged as { pageHeight: number }).pageHeight) : 0) *
         (typeof judgedScale === 'number' && judgedScale > 0 ? judgedScale : 1),
-      { documentLocked },
+      // `blocked` as well as the lock: a coverage sentence that hedges about a
+      // cause the sentence above it has just named is the shape 0.58.0 removed
+      // from the headless surface, and the live one kept for want of the field.
+      { documentLocked, ...(walkBlocked === undefined ? {} : { blocked: walkBlocked }) },
     )
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
     const structured = {
@@ -1693,7 +1748,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       ...(status.throttle !== 'none' ? { throttle: status.throttle } : {}),
       ...judged,
       ...(input.groupsOnly ? { findings: [], truncated: noListCut((judged as { truncated?: unknown }).truncated) } : {}),
-      ...(added.length === 0 ? {} : { warnings: [...liveWarnings, ...added] }),
+      ...(walkNotes.length + added.length === 0 ? {} : { warnings: [...liveWarnings, ...walkNotes, ...added] }),
       notes,
       ...(launched ? { launched: true } : {}),
     }
@@ -2285,6 +2340,10 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     }
     const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
     const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+    // Which page the element was read on, ahead of the call's own notes —
+    // the order the headless surface uses, and the order that matters: a
+    // reader learns it is looking at the login page before anything else.
+    if (Array.isArray(answer['notes'])) notes.unshift(...(answer['notes'] as unknown[]).map(String))
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
     for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
@@ -2299,6 +2358,10 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
       profile: status.profileId,
       cssWidth: status.cssWidth,
       cssHeight: status.cssHeight,
+      // The same fact the headless reply has always carried, and the live one
+      // could not until `status` began sending it: without the density, the
+      // millimetres in the readout cannot be checked against the pixels.
+      ...(status.deviceScaleFactor === undefined ? {} : { deviceScaleFactor: status.deviceScaleFactor }),
       textScale: status.textScale,
       throttle: status.throttle,
       found: answer.found === true,
