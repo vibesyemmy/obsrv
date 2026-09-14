@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*45 cards, 24 open, 17 of those unclaimed.*
+*45 cards, 23 open, 17 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -151,35 +151,6 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Review — 1
-
-*Finished, waiting on the maintainer to merge.*
-
-### Make diagnostics reachable from the README
-
-[`e2`](../board/e2.md) · **E2** · readiness · owner: Rook
-
-DELIVERED 2026-09-14 by Rook, into Review. Branch `feat/cli-version` (as of 43b110e, rebased onto 403717b), worktree .claude/worktrees/rook-cli-version. THE BRANCH IS THE ADDRESS; the sha is a timestamp and does not survive a rebase — this is the second sha, the first being 717e924.
-
-That rebase is also the convention's first observed instance rather than a predicted one, and Henry found it by looking at the worktree rather than by being told, so it is worth saying how it was checked. A file-count comparison is NOT sufficient: `git diff 717e924 43b110e` spans every main commit in between and shows 15 files, which proves nothing either way. The check that settles it is each commit's OWN patch: `diff <(git show --format=\"\" A) <(git show --format=\"\" B)`. Result here — identical but for one blob index and one hunk offset in src/cli/main.ts (@@ -1556 becomes @@ -1566, because main moved ten lines in that file). Textbook clean rebase, content unchanged. NOT merged, NOT pushed — merging waits on Opeyemi's word given to Rook directly.
-
-What it does: bin/obsrv.js answers --version and -v from package.json BEFORE it looks for out/ or the Electron binary, so the flag works on the machine where the build or the download is what broke. The built entry answers the same flag under Electron. --help lists it. Bare semver on stdout, nothing on stderr, exit 0.
-
-Evidence, measured not read:
-- RED first: parseArgs(['--version']) threw `unknown command: --version` — COMMAND, not flag, because the token is argv[0] and hit the command check rather than the flag loop.
-- GREEN: 1118/1118 unit, typecheck clean.
-- `node bin/obsrv.js --version` → 0.60.0 in a checkout with no out/ and no Electron binary present.
-- tests/unit/cliLauncher.test.ts pins that: launcher beside its own package.json, no out/, no node_modules, so every Electron route fails there and a version on stdout proves it never took one.
-- Not run: e2e (nothing in it touches this path).
-
-Also landed: README (Agent & CI line + Privacy and files paragraph naming all three places the version lives), issue template now says `obsrv --version` (0.61.0+), docs/readiness.md E2 → met 2026-09-14.
-
-Original card below.
-
-Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look.
-
----
-
 ## Backlog — 15
 
 *Not started, not yet picked.*
@@ -288,7 +259,7 @@ What C2's check actually asks and the register does not yet satisfy: read 0.56.0
 
 ---
 
-## Done — 21
+## Done — 22
 
 *Merged.*
 
@@ -354,6 +325,43 @@ README § Privacy and files — one outbound request (the daily version check), 
 [`e1`](../board/e1.md) · **E1** · readiness · owner: obsrv-a6
 
 .github/ISSUE_TEMPLATE/bug_report.yml — requires the JSON, asks for address, command, surface, version and host display. config.yml puts the limitations page in front. Merged c33ee74.
+
+### Make diagnostics reachable from the README
+
+[`e2`](../board/e2.md) · **E2** · readiness · owner: Rook
+
+MERGED 2026-09-14 on Opeyemi's word, pushed. E2 is MET.
+
+Verified here before pushing rather than taken on the branch's report. typecheck clean across all three configs; the version flag answers 0.60.0 on both `--version` and `-v`, bare semver on stdout, nothing on stderr, exit 0, matching package.json.
+
+The claim worth checking independently was "works where the build or the download is what broke", and my own checkout has out/ present, so a run here proves nothing about it. Built the case instead: everything npm ships (`files` is bin, out, skills, README, LICENSE, .claude-plugin, .mcp.json) minus out/ and node_modules.
+
+node bin/obsrv.js --version   ->  0.60.0, exit 0   node bin/obsrv.js snap ...    ->  exit 1, "out/main/cli.js is missing"
+
+The second line is what makes the first mean anything: without a control showing the environment really is broken, a version answer could just be a working install. First attempt at this was WRONG and would have reported a defect — I copied only bin/obsrv.js, it crashed on `require('./electronPath.js')` at line 14, and that looked like the version check being unreachable behind a missing module. bin/electronPath.js is committed and inside `files`, so no real install lacks it. I had constructed an install npm could never produce.
+
+TWO PATHS NOW ANSWER THE SAME QUESTION, which in this project is usually where a defect lives, so it was checked rather than assumed: bin/obsrv.js reads `../package.json` from bin/, cliVersion() reads `../../package.json` from out/main/. The same repo-root file, identical inside app.asar, with app.getVersion() as the fallback. They agree by construction rather than by being kept in step.
+
+REBASED THREE TIMES while waiting: 717e924, 43b110e, cfe22c5, content unchanged throughout. The card tracked it as `feat/cli-version (as of ...)` and stayed true across all three — the convention earning itself rather than being argued for. The last rebase was checked for having preserved Kenya's C5 edit to docs/readiness.md, since both branches touched that file: intact, and the branch's diff turns out to touch only the E2 section.
+
+DELIVERED 2026-09-14 by Rook, into Review. Branch `feat/cli-version` (as of 43b110e, rebased onto 403717b), worktree .claude/worktrees/rook-cli-version. THE BRANCH IS THE ADDRESS; the sha is a timestamp and does not survive a rebase — this is the second sha, the first being 717e924.
+
+That rebase is also the convention's first observed instance rather than a predicted one, and Henry found it by looking at the worktree rather than by being told, so it is worth saying how it was checked. A file-count comparison is NOT sufficient: `git diff 717e924 43b110e` spans every main commit in between and shows 15 files, which proves nothing either way. The check that settles it is each commit's OWN patch: `diff <(git show --format=\"\" A) <(git show --format=\"\" B)`. Result here — identical but for one blob index and one hunk offset in src/cli/main.ts (@@ -1556 becomes @@ -1566, because main moved ten lines in that file). Textbook clean rebase, content unchanged. NOT merged, NOT pushed — merging waits on Opeyemi's word given to Rook directly.
+
+What it does: bin/obsrv.js answers --version and -v from package.json BEFORE it looks for out/ or the Electron binary, so the flag works on the machine where the build or the download is what broke. The built entry answers the same flag under Electron. --help lists it. Bare semver on stdout, nothing on stderr, exit 0.
+
+Evidence, measured not read:
+- RED first: parseArgs(['--version']) threw `unknown command: --version` — COMMAND, not flag, because the token is argv[0] and hit the command check rather than the flag loop.
+- GREEN: 1118/1118 unit, typecheck clean.
+- `node bin/obsrv.js --version` → 0.60.0 in a checkout with no out/ and no Electron binary present.
+- tests/unit/cliLauncher.test.ts pins that: launcher beside its own package.json, no out/, no node_modules, so every Electron route fails there and a version on stdout proves it never took one.
+- Not run: e2e (nothing in it touches this path).
+
+Also landed: README (Agent & CI line + Privacy and files paragraph naming all three places the version lives), issue template now says `obsrv --version` (0.61.0+), docs/readiness.md E2 → met 2026-09-14.
+
+Original card below.
+
+Partly met by D2/D3: the log's location is now reachable from the README and the issue template. The gap that remains is that there is no `obsrv --version` — where a CLI user would look.
 
 ### Release notes and a register for 0.61.0's three breaking changes
 
@@ -570,4 +578,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 13 readiness, 4 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 12 readiness, 4 bugs, 7 chores, among the open cards.*
