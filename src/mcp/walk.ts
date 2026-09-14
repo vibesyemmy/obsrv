@@ -57,6 +57,8 @@ export interface WalkOutcome {
    * tools' output shape pins.
    */
   documentLocked?: boolean
+  /** The page's height at the walk's first step; the caller compares it with the height measured afterwards. */
+  pageHeightAtStart?: number
   /**
    * And what the app measured holding it, for `walkCoverageNote` — which
    * stops hedging about a cause once one has been named. The headless walk
@@ -117,6 +119,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   // The offset the last scroll reached. A `next` that lands where the page
   // already was has no more page to show — the end, whatever `atEnd` says —
   // so a one-screen page is zero screenfuls, not twelve dwells at offset 0.
+  let heightAtStart: number | undefined
   let documentLocked = false
   let blocked: WalkBlocked | undefined
   let panelWalked = false
@@ -159,6 +162,10 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       }
       // As the headless walk: the document's overflow when the walk stopped.
       documentLocked = r['hidden'] === true
+      // The height the page had when the walk began. Compared against what the
+      // measurement reports afterwards, it answers whether the page grew —
+      // which this sentence used to infer from `documentLocked` and get wrong.
+      if (typeof r['pageHeight'] === 'number' && heightAtStart === undefined) heightAtStart = r['pageHeight'] as number
       // The page is locked and the only scroller left is a dialog's panel:
       // the screenfuls below belong to the dialog, not the page. An app older
       // than the field sends nothing, and gets no sentence.
@@ -209,7 +216,13 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   }
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
-  return { walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom }, notes, documentLocked, ...(blocked === undefined ? {} : { blocked }) }
+  return {
+    walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom },
+    notes,
+    documentLocked,
+    ...(blocked === undefined ? {} : { blocked }),
+    ...(heightAtStart === undefined ? {} : { pageHeightAtStart: heightAtStart }),
+  }
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */

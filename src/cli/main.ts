@@ -636,12 +636,14 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     let walked: Walked | undefined
     let documentLocked: boolean | undefined
     let blocked: WalkBlocked | undefined
+    let heightAtStart: number | undefined
     if ((options.audit || options.lint) && options.walk !== false) {
       const w = await walkHeadless(target)
       for (const n of w.notes) warn(`warning: ${n}`)
       walked = w.walked
       documentLocked = w.documentLocked
       blocked = w.blocked
+      heightAtStart = w.pageHeightAtStart
     }
     const auditReport = options.audit ? await target.auditPage() : undefined
     const lintReport = options.lint ? await target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)) : undefined
@@ -675,6 +677,10 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     const coverage = walkCoverageNote(walked, applied.height / spec.textScale, Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) * scale, {
       documentLocked,
       blocked,
+      grew:
+        heightAtStart === undefined
+          ? undefined
+          : Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) > heightAtStart,
     })
     if (coverage !== null) warn(`warning: ${coverage}`)
     return {
@@ -1083,6 +1089,8 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
       documentLocked: walk.documentLocked,
       blocked: walk.blocked,
+      // Raw page px on both sides: the note's own pageHeightPx is scaled.
+      grew: walk.pageHeightAtStart === undefined ? undefined : report.pageHeight > walk.pageHeightAtStart,
     })
     if (coverage !== null) human(`warning: ${coverage}`)
     const t = result.summary.targets
@@ -1216,6 +1224,8 @@ async function runLint(cmd: LintCommand): Promise<void> {
     const coverage = walkCoverageNote(walk.walked, applied.height / cmd.spec.textScale, report.pageHeight * result.layoutScale, {
       documentLocked: walk.documentLocked,
       blocked: walk.blocked,
+      // Raw page px on both sides: the note's own pageHeightPx is scaled.
+      grew: walk.pageHeightAtStart === undefined ? undefined : report.pageHeight > walk.pageHeightAtStart,
     })
     if (coverage !== null) human(`warning: ${coverage}`)
     const s = result.summary

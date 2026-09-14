@@ -188,3 +188,30 @@ describe('walkCoverageNote beside a named wall', () => {
     ).toContain('a modal or a locked scroll held the page')
   })
 })
+
+describe('the cause is measured, not inferred', () => {
+  const walked = { screenfuls: 2, atEnd: true }
+
+  it('says the page grew when the measurement is taller than the walk found it', () => {
+    const note = walkCoverageNote(walked, 768, 8000, { documentLocked: true, grew: true })
+    // `documentLocked` is true here and is deliberately ignored: it is the
+    // inference that got app-shell-grows wrong on the headless surface.
+    expect(note).toContain('the page grew as it was walked')
+    expect(note).not.toContain('a modal or a locked scroll held the page, or')
+  })
+
+  it('says something held it when the page did not grow', () => {
+    const note = walkCoverageNote(walked, 768, 8000, { documentLocked: false, grew: false })
+    // And `documentLocked: false` is ignored the other way: that is the
+    // inference that made live claim a static page behind a dialog had grown.
+    expect(note).toContain('did not grow while it was walked, so something held it')
+    expect(note).not.toContain('a feed that extends as you scroll')
+  })
+
+  it('keeps the old hedge when nobody measured', () => {
+    // An older app sends no height, and a sentence that states a fact nobody
+    // took is worse than one that admits it does not know.
+    const note = walkCoverageNote(walked, 768, 8000, { documentLocked: true })
+    expect(note).toContain('a modal or a locked scroll held the page, or it grew after the walk')
+  })
+})

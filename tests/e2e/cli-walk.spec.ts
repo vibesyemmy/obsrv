@@ -120,10 +120,16 @@ test('a page held by a consent layer: the walk sees no page to cross, and the me
   expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
   expect(m.pageHeight).toBeGreaterThan(3000)
   expect(m.summary.targets.count).toBeGreaterThanOrEqual(3)
-  expect(m.warnings.join(' ')).toMatch(/the walk saw the end after 0 screenfuls .* but the page measures \d+ CSS px .*modal or a locked scroll/)
+  // The cause is now measured rather than offered as a disjunction: the walk
+  // records the page's height at its first step and the note compares it with
+  // the height measured afterwards. locked.html does not grow, so the sentence
+  // says a lock held it rather than hedging between the two.
+  expect(m.warnings.join(' ')).toMatch(
+    /the walk saw the end after 0 screenfuls .* but the page measures \d+ CSS px .*did not grow while it was walked, so something held it/,
+  )
   const l = await runCli(['lint', fixture('locked.html'), '--preset', 'laptop-768'])
   expect(l.code, l.stderr).toBe(0)
-  expect(JSON.parse(l.stdout).warnings.join(' ')).toMatch(/modal or a locked scroll held the page/)
+  expect(JSON.parse(l.stdout).warnings.join(' ')).toMatch(/did not grow while it was walked, so something held it/)
 })
 
 test('a page that hides its overflow with nothing to scroll says so, instead of reading as one screen', async () => {
