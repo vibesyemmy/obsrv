@@ -1,0 +1,83 @@
+# B5 on a second desk.
+#
+# B5 asked whether the same page measured twice answers the same and got zero
+# over fixtures — on one laptop, with the harness thrown away. A zero from one
+# desk cannot separate "the tool does not drift" from "this desk does not make
+# it drift", and this repo has already shipped one result that turned out to be
+# about a monitor rather than a machine: the Retina trio failed whenever the
+# built-in 2x display was alone and passed whenever a 1x monitor was attached
+# (docs/e2e-flakes.md), which was recorded for two days as "fails on this
+# laptop, passes on CI" — the wrong axis.
+#
+# So this runs the committed fixture sweep on the CI runner, which is a
+# genuinely different desk: different silicon, and a display that never moves.
+# That fixed display is exactly why CI is useful here and also why it cannot
+# finish the job — one unchanging desk is a second sample, not a range.
+#
+# It is deliberately NOT part of the CI job. This is a measurement, not a gate:
+# a difference between desks is the result the card asks for, and a result that
+# turns a pull request red is a result people learn to route around. The
+# artefact carries the desk beside every number so two runs can be compared at
+# all.
+#
+# Run it: Actions → "B5 fixture sweep (second desk)" → Run workflow. It also
+# runs weekly, because a number nobody has taken twice is a number from one
+# moment as well as from one desk.
+
+name: B5 fixture sweep (second desk)
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Runs per case (the original used five)
+        default: '5'
+      all:
+        description: Every fixture rather than the core twelve
+        type: boolean
+        default: false
+  schedule:
+    - cron: '17 6 * * 1' # Mondays, early, out of the way of anyone's push
+  pull_request:
+    # Only when the harness itself moves — which is also how the first
+    # second-desk number gets taken, since `workflow_dispatch` is offered only
+    # for workflows already on the default branch. A changed harness is exactly
+    # when the measurement is worth retaking, and on any other pull request
+    # this stays quiet rather than adding 20 minutes of macOS CI to it.
+    paths:
+      - scripts/b5-fixture-sweep.js
+      - .github/workflows/b5-sweep.yml
+
+jobs:
+  sweep:
+    name: fixtures × runs, with the desk recorded
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Sweep
+        run: node scripts/b5-fixture-sweep.js --runs ${{ github.event.inputs.runs || '5' }} ${{ github.event.inputs.all == 'true' && '--all' || '' }} --out b5-sweep-ci.json
+
+      - name: The desk this ran on
+        # In the log as well as in the artefact: the number is unreadable
+        # without it, and a log is what someone opens first.
+        run: node -e "const r=require('./b5-sweep-ci.json');console.log(JSON.stringify(r.desk,null,1));console.log(JSON.stringify(r.totals,null,1))"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: b5-sweep-ci
+          path: b5-sweep-ci.json
+          retention-days: 90
