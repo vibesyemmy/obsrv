@@ -14,12 +14,21 @@ semantics for phone presets — with optional cheap-panel simulation
 emulation only changes the viewport; Obsrv changes the rasterisation, which is
 where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
-**Written against Obsrv 0.61.0 (2026-09-14).** `obsrv --version`, or any MCP
-reply's `version`, says what you have. Where they differ, the reply is right
-and this page is out of date: field names and note wording have moved under
-unchanged tool names before, and `docs/breaking-changes.md` in the repo is the
-list of what moved. A skill with no version on it cannot be seen to be stale,
-which is how it goes stale unnoticed.
+**Written against `main` with 0.61.0's changes in, 2026-09-14. The newest
+release is 0.60.0, so this page is currently *ahead* of what `npx -y getobsrv`
+installs.** What you have: `obsrv --version` on the CLI, or `obsrv_drive`'s
+`version` field — it is the only reply that carries one, so do not go looking
+for `version` on a snap or an audit.
+
+A difference points two ways and they are not the same problem. **Older than
+the version named here** — the page describes behaviour you do not have yet;
+every such claim below is marked (`0.61.0+`, "moved in 0.61.0"), so read those
+as future and the rest as current. **Newer** — the page is behind and the
+reply is right, since field names and note wording have moved under unchanged
+tool names before; `docs/breaking-changes.md` in the repo lists what moved.
+
+A skill with no version on it cannot be seen to be stale, which is how it goes
+stale unnoticed.
 
 ## Commands
 
