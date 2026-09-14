@@ -38,15 +38,6 @@ on:
         default: false
   schedule:
     - cron: '17 6 * * 1' # Mondays, early, out of the way of anyone's push
-  push:
-    # This branch only, and it is here to be removed before merge. PR #1 is the
-    # first pull request this repository has ever had, and it produced no
-    # workflow runs at all — `event=pull_request` has a total count of zero
-    # across the repo's history, so "CI runs on every PR" had never actually
-    # been observed, only read off a trigger line. A push to this branch is the
-    # one path left to take the second desk's number, and whether it runs is
-    # itself the measurement of which half of that is broken.
-    branches: [chore/ci-second-host]
   pull_request:
     # Only when the harness itself moves — which is also how the first
     # second-desk number gets taken, since `workflow_dispatch` is offered only

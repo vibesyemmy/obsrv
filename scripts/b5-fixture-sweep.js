@@ -152,15 +152,22 @@ function leaves(value, path = '', out = {}) {
 const TIMING = /(^|\.)(ms|settledMs|generatedAt|elapsed|durationMs|startedAt|finishedAt)$|Ms$/
 const PATHY = /(^|\.)(out|url|path|file|files(\[|\.)|href)$/
 
-/** Which leaves differ across runs, classified. */
+/**
+ * Which leaves differ across runs, classified — and for result leaves, WHAT
+ * they differed between. The first version recorded only the key names, which
+ * was enough to say a desk diverged and not enough to say how: CI reported
+ * `pageHeight` moving on a page named for growing as it is walked, and the
+ * numbers were in the artefact of a run that had already finished.
+ */
 function compare(runs) {
   const keys = new Set(runs.flatMap(r => Object.keys(r)))
-  const moved = { timing: [], path: [], result: [] }
+  const moved = { timing: [], path: [], result: [], values: {} }
   for (const key of keys) {
     const seen = runs.map(r => JSON.stringify(r[key]))
     if (seen.every(v => v === seen[0])) continue
     const kind = TIMING.test(key) ? 'timing' : PATHY.test(key) ? 'path' : 'result'
     moved[kind].push(key)
+    if (kind === 'result') moved.values[key] = seen.map(v => (v === undefined ? 'absent' : String(v).slice(0, 160)))
   }
   return moved
 }
