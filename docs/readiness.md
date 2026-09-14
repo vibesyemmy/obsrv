@@ -88,7 +88,25 @@ text, 14 device px for thin text, 15% or 25 elements for the shadow share.
 The output calls them provisional, which is honest and leaves a reader unable
 to disagree on any ground but taste.
 *Check:* one short section per threshold — what it derives from, what it was
-calibrated against, and what would move it. **Status: not met.**
+calibrated against, and what would move it. **Status: met 2026-09-14 —
+[`docs/thresholds.md`](thresholds.md), linked from the README, the limitations
+page, `audit.md` and `lint.md`.** Each of the seven judged numbers answers the
+three questions, and the page opens by sorting them into the kinds that can be
+argued with at all: borrowed from a published standard (the WCAG ratios —
+argue upstream), calibrated against real output (the shadow share's
+1.9/3.8/7.7/15.4/23/50/77% sweep, the motion probe's 0-4 s table), reasoned
+but never calibrated, or definitional (a sub-pixel edge is arithmetic).
+
+**Writing it found the answer to its own question, and then the answer was
+measured.** The page named **thin text at 14 device px** as the weakest number
+in the tool — a mechanism, no table — and predicted it would be B4's largest
+source of noise. It was swept the same day across nine public sites, and the
+prediction was wrong: at 14 the rule fires on **one site in nine**, and what
+it flags clusters at 8-11 px weight 300 with nothing between 12 and 14, so
+moving the line from 12 to 14 changes two findings. 14 sits on a plateau
+rather than a cliff, which is a defence of it that did not exist that morning.
+The number that still rests on unpublished evidence is the tap-target 7 mm,
+and the page now says so instead.
 
 **B4. The noise ratio is measured, not assumed.** zalando.de answered 143
 targets with **103 under 7 mm**. If most of those are not things anyone would
@@ -164,11 +182,19 @@ designs this week — it is load-bearing and nowhere stated.
 breaking change is announced before 1.0. **Status: not met.**
 
 **C2. Breaking changes are named as such.** `url` changed meaning for live
-callers in 0.60.0 — reasonable pre-1.0, and legible only because the release
-notes led with it. That was a choice each time rather than a rule.
+callers in **0.59.0** — reasonable pre-1.0, and legible only because the
+release notes led with it. That was a choice each time rather than a rule.
+(This entry said 0.60.0 until 2026-09-14. `git tag --contains` on the commit
+says 0.59.0, and the v0.59.0 release body carries the heading. A register is
+worth having partly because the memory of which release broke what is the
+first thing to go.)
 *Check:* the policy from C1 applied to the last five releases retroactively;
 anything that broke a caller appears in its notes under a heading that says
-so. **Status: partly met, by habit rather than rule.**
+so. **Status: partly met — the register now exists
+([`docs/breaking-changes.md`](breaking-changes.md), linked from the README),
+holding 0.59.0's change and 0.61.0's three. The retroactive pass over the last
+five releases has not been done, and C1's policy does not exist yet, so the
+check is not satisfied.**
 
 **C3. The skill describes the tools that exist.** `skills/obsrv-screens/SKILL.md`
 is what an agent reads instead of the README, and it has drifted before.
@@ -222,18 +248,35 @@ client drives the window: navigates anywhere, clicks, scrolls, captures. The
 control file is loopback with a token and a single-instance lock, and there
 is a consent bar — a defensible model that no public user can currently read.
 *Check:* one page describing the surface, the consent, and how to turn it
-off. **Status: not met.**
+off. **Status: met 2026-09-14 — [`docs/agent-control.md`](agent-control.md),
+linked from the README and from the limitations page.** Every command the
+control server accepts, the four gates in front of it (loopback bind, Origin
+refused, JSON content type required, constant-time token), the consent bar and
+the fact that "Allow for this session" writes nothing to disk, and the
+`0600` discovery file — including the boundary it does *not* cross: anything
+running as you can read that token while control is on.
 
 **D3. What leaves the machine, and what is written where.** Nothing is
 uploaded; PNGs, report HTML and logs are written locally, some to
 `os.tmpdir()` (see A4).
-*Check:* a paragraph in the README stating both. **Status: not met.**
+*Check:* a paragraph in the README stating both. **Status: met 2026-09-14 —
+the README's *Privacy and files* section.** One outbound request of the app's
+own (the daily version check), every file it writes named with its directory,
+and the log stated for what it does *not* record: it carries GPU and window
+events, not the addresses visited.
 
 ---
 
 ## E. A stranger can report a bug
 
-**E1. Somewhere to report it, that asks for what we need.** `.github/` holds
+**E1. Somewhere to report it, that asks for what we need.** **Met 2026-09-14
+— [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml).**
+A GitHub issue form that requires the JSON and asks for the address, the exact
+command, which of the three surfaces answered, the version, and the host
+display — the last because some of what Obsrv draws depends on it, as the
+`fit-cap` and `onion-skin` failures showed. It warns that the JSON carries the
+URLs and page text before you paste it, and `config.yml` points at the
+limitations page first. Previously: `.github/` held
 a workflow and nothing else: no issue template, no CONTRIBUTING, no
 SECURITY.md. A report without the JSON answer and the version is
 unactionable, and a template is the cheapest way to always get both.
@@ -242,7 +285,13 @@ URL and the JSON. **Status: not met.**
 
 **E2. Diagnostics are reachable.** The log file's location and the running
 version, documented where someone looking for them will be.
-*Check:* find both from the README alone. **Status: unknown.**
+*Check:* find both from the README alone. **Status: partly met 2026-09-14.**
+The log's location is now in the README's *Privacy and files* section and in
+the issue template. The running version is reachable from the app (Settings →
+Updates), from a live `status` reply, and from `npm ls -g getobsrv` — but
+**there is no `obsrv --version`**, which is the obvious place a CLI user
+looks. Found while writing the template (E1), which says so rather than
+telling people to run a flag that does not exist.
 
 ---
 

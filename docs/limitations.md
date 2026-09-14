@@ -114,10 +114,12 @@ and they should not be quoted as if they were.
 ### The millimetre thresholds are provisional
 
 7 mm for tap targets and 2 mm for text are the defaults, and both are tunable.
-They are **not** calibrated against a published standard, and nothing yet
-records what they were chosen from. Treat a finding as "this is small on this
-screen, in millimetres" — which is exact — rather than as "this fails a
-standard", which is not a claim Obsrv is currently entitled to make.
+They are **not** calibrated against a published standard. What each one does
+derive from, what it was checked against and what would move it is set out in
+[**the thresholds page**](thresholds.md) — including which of them has no
+calibration at all. Treat a finding as "this is small on this screen, in
+millimetres" — which is exact — rather than as "this fails a standard", which
+is not a claim Obsrv is currently entitled to make.
 
 ### Captures cap at 4,096 device pixels
 
@@ -196,10 +198,13 @@ without caveats.
 
 ## What this page does not cover
 
-- **What an agent can do to your machine** when agent control is on — the
-  control surface, the consent bar, and how to turn it off.
-- **What leaves your machine**, and where files are written.
+Three neighbouring questions have their own pages now:
 
-Both are owed their own sections and do not have them yet. Nothing is uploaded
-anywhere; PNGs, report HTML and logs are written locally, some under
-`os.tmpdir()`. That is the short answer until the long one is written.
+- [**What an agent can do to your machine**](agent-control.md) — every command
+  the control surface accepts, the four gates in front of it, the consent bar,
+  and how to turn it off.
+- [**Privacy and files**](../README.md#privacy-and-files) — the one outbound
+  request the app makes, and every file it writes.
+- [**Breaking changes**](breaking-changes.md) — anything that has been renamed,
+  moved key, or changed meaning, newest first. Obsrv is pre-1.0: these keep
+  happening, and the promise is that they are named.

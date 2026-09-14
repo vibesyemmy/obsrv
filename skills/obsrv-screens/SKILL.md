@@ -177,6 +177,16 @@ narrate it. `obsrv_snap { fullPage: true }` for a whole-page raster;
 Don't declare frontend work done on visual grounds until step 2 has actually
 happened on the matrix snaps.
 
+## After upgrading Obsrv, restart the session
+
+MCP tool output schemas are `additionalProperties: false`, so a session that
+listed the tools before an upgrade holds the old shape. A release that adds a
+field or an enum value can then make that session reject a reply that is
+correct — it surfaces as a validation error naming a field or a value, on a
+call that worked before, and it reads as a bug in Obsrv rather than as a stale
+schema. Start a new conversation, or reconnect the MCP server.
+`docs/breaking-changes.md` in the repo says which releases need it.
+
 ## Caveats
 
 - `lint` cannot see a sub-pixel *border*: Chromium snaps one up to a whole

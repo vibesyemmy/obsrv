@@ -36,6 +36,12 @@ is `obsrv_audit`, same inputs.
 
 ## The thresholds, and why they are provisional
 
+> Every judged number in Obsrv — these two, thin text, contrast, the shadow
+> share and the motion probe — is gathered in
+> [**docs/thresholds.md**](thresholds.md), with what it derives from, what it
+> was calibrated against, and what would move it.
+
+
 - **Targets, 7 mm** on the shorter side. Apple's 44 pt is 6.9 mm on a 163 ppi
   screen; Google's 48 dp is 9 mm; WCAG 2.5.8's 24 CSS px is the legal floor
   and says nothing about millimetres. 7 sits between the platform guides.
