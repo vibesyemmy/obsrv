@@ -407,8 +407,10 @@ crashed targets and lost WebGL contexts, so a bug report arrives with evidence
 
 See [**what an agent can do to your machine**](docs/agent-control.md) for the
 agent-control surface in full, [**what Obsrv cannot
-do**](docs/limitations.md) for the measurement's limits, and [**the
-thresholds**](docs/thresholds.md) for where every judged number comes from.
+do**](docs/limitations.md) for the measurement's limits, [**the
+thresholds**](docs/thresholds.md) for where every judged number comes from, and
+[**breaking changes**](docs/breaking-changes.md) for anything that has moved or
+been renamed.
 
 ## Known v1 limits
 
