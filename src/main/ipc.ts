@@ -291,9 +291,16 @@ export function registerIpc(ctx: AppContext): () => void {
     }
     return applied
   }
-  handle(IPC.navigate, (e, url: string) => {
+  // Under the same budget the agent's navigate uses, and for the same reason:
+  // `navigateBoth` resolves on `did-finish-load`, which a page that keeps
+  // loading ads never reaches. The toolbar *awaits this* before it syncs the
+  // address field (`Toolbar.go`, `EmptyState`), so an unbounded answer leaves
+  // the user looking at a loaded page with the address they typed still
+  // pending, forever. Answer with the page as it stands instead; the string
+  // is what this channel has always returned.
+  handle(IPC.navigate, async (e, url: string) => {
     assertRenderer(e)
-    return navigateBoth(url)
+    return (await navigateWithin(url)).url
   })
   /**
    * How long an agent's `navigate` waits for both panes to finish loading
