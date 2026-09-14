@@ -175,9 +175,35 @@ rotate ads, split traffic and lazy-load on timing).
 Then the fixtures again across two released versions, since drift between
 releases is the same defect on a longer clock — the walk count changing in
 0.60.0 was deliberate, and a number alone would not have said so.
-**Status: met, measured 2026-09-14
-(`docs/research/2026-09-14-b5-repeatability.md`).** Fixtures: **0 of 3,375 fields
-moved**, 33 cases × 5 runs, quiet and with the machine saturated, the
+**Status: MET ON ONE DESK, and a second desk disagrees — 2026-09-14
+(`docs/research/2026-09-14-b5-repeatability.md`).** Downgraded from *met* the
+same evening it was claimed. The fixture zero below is real and was taken on
+one machine; Kenya ran the same sweep on CI, five runs each side, like for
+like:
+
+    this laptop   Apple M4 Pro, 14 cores, 1x ultrawide    result fields moved: 0    182 s
+    CI            Apple M1 (Virtual), 3 cores             result fields moved: 4    225 s
+
+Errors zero on both sides, the comparator saw every planted difference on both
+sides, 1,061 leaves per run and per-case leaf counts identical across desks —
+so the two sides measured the same thing and got different answers. Both
+diverging cases are `grows-as-walked.html`: `pageHeight`,
+`summary.text.count` and `warnings[0]` on audit, `warnings[0]` on lint. **A
+page that extends as it is scrolled does not answer the same twice on a slow
+three-core VM, and does on a fast laptop.**
+
+What the values moved *between* is not yet known — the first sweep recorded
+key names only, and the harness now records distinct values per moved leaf.
+Not characterised here rather than guessed at.
+
+So the criterion is not met as written. "The same page measured twice answers
+the same" is true of this desk and false of a slower one, which means every
+before-and-after measured against the zero inherits the machine it was taken
+on. The original claim was mine and single-host, and single-host was exactly
+the objection `ci-second-host` was raised to test. It tested it, and the answer
+came back against the claim.
+
+Fixtures, on this laptop: **0 of 3,375 fields moved**, 33 cases × 5 runs, quiet and with the machine saturated, the
 comparator proved able to see planted differences first. Real sites:
 **0 of 49 on berkshirehathaway.com** — a real site over the real internet with
 nothing different — while bbc.com and stripe.com moved in geometry only, the
