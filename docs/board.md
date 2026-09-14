@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*45 cards, 23 open, 17 of those unclaimed.*
+*47 cards, 25 open, 19 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Next — 8
+## Next — 10
 
 *Picked, not claimed — start here.*
 
@@ -135,6 +135,40 @@ HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT
 WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
 
 Worktree off current main (403717b), finish into Review, merging waits on Opeyemi's word given to Rook directly. Rook's board writes are refused (bug-board-access), so it reports and Henry moves the card.
+
+### A log line cannot be attributed to the dev app or the installed one
+
+[`bug-log-attribution`](../board/bug-log-attribution.md) · bug · *unclaimed*
+
+Found by Rook 2026-09-14 while measuring A4's isolation, and confirmed here with a direct Electron probe.
+
+`scripts/devLane.js:126` passes `--user-data-dir`, so the dev profile is genuinely separate from the installed app's. But that flag does NOT move `logs`. Measured:
+
+--user-data-dir     moves userData, sessionData, crashDumps — NOT appData, logs, cache     CFFIXED_USER_HOME   moves home, userData, appData, logs, cache — NOT temp
+
+So the dev app and the installed app both write `~/Library/Logs/Obsrv/obsrv.log` unless `OBSRV_TEST=1`.
+
+Not a defect on its own — nothing is lost or corrupted. The cost is that **a line in that log does not say which of the two wrote it**, and this project has had two Obsrvs running side by side all day. Anyone debugging from the log while a dev build exists is reading an interleaving they cannot separate, and the log is what `docs/limitations.md` and the issue template both point people at.
+
+The obvious fix is to move `logs` for the dev lane too. The less obvious and possibly better one is to stamp the line: a log that names its own writer stays readable even when someone runs a third instance the flag does not know about. That is the [[read-the-output-not-the-code]] principle — a sentence should name its own subject rather than depend on the reader knowing the context it was produced in.
+
+Related: the same measurement produced `chore-electron-sandbox-note`, and the general fact is that Electron on macOS ignores `HOME` entirely.
+
+### userData grows without bound — 1.3 GB, 94% of it Chromium cache
+
+[`bug-userdata-unbounded`](../board/bug-userdata-unbounded.md) · bug · *unclaimed*
+
+Measured by Rook 2026-09-14 on this machine's real profile while scoping A4.
+
+~/Library/Application Support/Obsrv    1.3 GB total       Cache                                936 MB       Code Cache                           338 MB
+
+Nothing prunes either. They are Chromium's own caches for every page Obsrv has ever rendered, and Obsrv renders arbitrary third-party pages by design — so this grows with use in a way an ordinary app's does not, and faster for the people who use the tool most.
+
+**Filed separately from A4 deliberately.** A4 asks what an install leaves behind after an uninstall; this is what normal USE accumulates while the tool is working correctly. Folding it into A4 would let a criterion about residue absorb a defect about growth, and the two have different fixes and different urgency. A4's own residue finding — the 128 MB Electron zip in `~/Library/Caches/electron/` that survives `npm rm -g getobsrv` — stays on A4, because that one genuinely is uninstall residue.
+
+What is NOT yet known, and should be established before choosing a fix, because the obvious fix is a cap and the obvious cap is wrong if the cache is load-bearing: whether these caches make repeat measurements of the same page faster or more consistent. Obsrv's whole product is that two measurements of the same page agree (B5), so a cache that quietly improves repeatability is not free to delete. Measure the effect on a repeat snap before capping anything.
+
+The related limits question: `docs/limitations.md` says what Obsrv cannot measure and `README.md` has a *Privacy and files* section naming where files live. Neither says this directory grows without limit, which a user would want to know before it is 1.3 GB.
 
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
@@ -595,4 +629,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 12 readiness, 4 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 12 readiness, 6 bugs, 7 chores, among the open cards.*
