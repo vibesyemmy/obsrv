@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*51 cards, 29 open, 22 of those unclaimed.*
+*51 cards, 27 open, 22 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -259,87 +259,6 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 ---
 
-## Review — 2
-
-*Finished, waiting on the maintainer to merge.*
-
-### Check the skill describes the tools that exist
-
-[`c3`](../board/c3.md) · **C3** · readiness · owner: Kenya
-
-DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c3-skill-audit` (as of the tip; THE BRANCH IS THE ADDRESS, the sha is a timestamp). Cut from 0893bd7. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Claimed by editing this file, which is the first card claimed under the repo board rather than through Henry.
-
-STATUS: PARTLY MET, and the unchecked part is named below rather than rounded up. The same precedent as C5.
-
-WHAT WAS CHECKED, EACH AGAINST THE CODE RATHER THAN AGAINST THE PROSE'S PLAUSIBILITY. Nine claims read out of SKILL.md and looked up in src/:
-- the eight tool names — all registered (Henry's up-front measurement, confirmed)
-- `mode` / `why` values (requested, headless-only, no-display, declined, launch-timeout) — match the enum at server.ts:345 exactly
-- `obsrv_report` and `obsrv_diff` have no `mode` or `why` field — true; neither key exists in either output shape
-- the 1.5 MiB inline cap — MAX_INLINE_IMAGE_BYTES = 1_572_864 (lib.ts:16)
-- "at most 200 findings listed" — server.ts:1360 and :1661
-- 7 mm taps / 2 mm text — DEFAULT_TAP_MM, DEFAULT_TEXT_MM (cli/audit.ts:23)
-- diff's 2048px CSS viewport limit — server.ts:1201
-- the eight throttle preset ids — shared/throttle.ts:42-49, all eight, spelled as the skill spells them
-- the render-slot wait landing "in its warnings or notes" — matches server.ts:145
-
-THREE DEFECTS FOUND, ALL OF THE PREDICTED SHAPE: stable tool name, moved behaviour, nothing fails.
-
-1. `unsettledReason` was enumerated in Caveats as animating / timeout / uncovered / blank / loading — five of the six. `"resizing"` was missing, and it is the LIVE-ONLY value, in the one place the live Review section sends a reader to for that field. It became real earlier the same day (c5-elevated), so the skill was wrong about the thing this room had just proved. Now documented with what provokes it: a viewport that keeps moving for the whole budget, not a capture that followed a preset change.
-
-2. `obsrv --version` was absent from Commands, which is where a CLI user looks. It has existed since the E2 merge. Added with the property that makes it worth having — it answers before the build or the Electron binary is looked for, so it works on the machine where one of those is what broke.
-
-3. NO VERSION MARKER ANYWHERE IN THE FILE, which is the finding under the other two rather than a nitpick. Nothing in the skill said which surface it was written against, so no reader could tell the 0.60.0-era prose from the current shape, and neither defect above could have been noticed by reading. Now: "Written against Obsrv 0.61.0 (2026-09-14)", with `obsrv --version` and any MCP reply's `version` named as the check and docs/breaking-changes.md as the list of what moves under stable names.
-
-ONE ADDITION THAT IS NOT A DEFECT FIX: the warnings-vs-notes rule (warnings is about the page, notes is about the call) is now stated in The MCP tools, with the 0.61.0 move of the live walk's sentences named. The skill was not wrong here — it never told anyone to read the old location — but it gave an agent nothing to decide with, and this is the field that moved most recently.
-
-NOT CHECKED, AND THIS IS WHAT KEEPS IT AT PARTLY MET: the skill is 265 lines of prose and nine claims were verified against source. The Review (live) walkthrough, the regression loop, and the diff caveats were read for staleness but not executed. A claim about what a tool SAYS can only be settled by running it, which is C5's standard, and by that standard this card is an inventory rather than a proof. The honest next step is running the Review (live) sequence end to end against the current build and checking each sentence it produces.
-
-REVIEW ROUND 1, Henry on 452b212: two findings, both in the FIX rather than in what it fixed, both confirmed against source by Kenya before changing anything, both corrected.
-
-(1) "or any MCP reply's `version`" was FALSE. `version: z.string()` appears exactly once in src/mcp/server.ts — line 707, inside driveOutputShape. Seven of the eight tools do not carry it, so an agent told this reads a snap reply, finds nothing, and concludes it has an old Obsrv: the exact failure the paragraph was added to prevent. It is also C3's own shape — a sentence true of one tool, stated of all — introduced while closing three of the same kind. Now: `obsrv --version`, or `obsrv_drive`'s `version` field, named as the only reply that carries one.
-
-(2) The staleness rule was ONE-DIRECTIONAL and today only the other direction is true. The header said "written against 0.61.0" and "where they differ, the reply is right and this page is out of date". But package.json is 0.60.0 and docs/breaking-changes.md still marks 0.61.0 unreleased, so every reader's version differs by being OLDER, and the rule told them the page was stale when the page is ahead of their install. A version mismatch fits two facts — the page is behind the tool, or ahead of it — and the rule named only the first. Now the header says the page is ahead of the current release and spells out both directions, with the marked claims (`0.61.0+`) as the ones to read as future.
-
-THE TRAP, KEPT VISIBLE because Henry nearly published it as a result and it is the same one from note-inventory.md: the eight-of-eight tool count is a MENTION count. It says the skill mentions lint; it says nothing about whether what it says about lint is true. Two of the three defects above are inside sentences about tools that count as present. A completeness number over a document measures the index, not the content.
-
-### Install, use, uninstall — then list what remains
-
-[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
-
-ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
-
-Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
-
-HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
-
-WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
-
-STARTED 2026-09-14 evening, branch `chore/a4-install-remains` off 9134567. Claimed by editing this file, which is the mechanism now — Rook's board writes were never a permission (bug-board-access, dissolved).
-
-SCOPE THIS PASS, Opeyemi's call: the CLI and MCP surfaces — a global npm install into a throwaway prefix, a real CLI run, an MCP server run, `install-skill` — all under a disposable HOME. The desktop app half (an unsigned DMG built locally, mounted, run, removed) waits on a separate yes, and is where `settings.json`, `history.json`, `tabs.json` and `obsrv.log` live, so the criterion is not fully answered until it is done.
-
-FOUND BEFORE RUNNING ANYTHING, by reading: this card and docs/readiness.md:50 both name `~/.obsrv` as where the app's state lives. NOTHING in the source writes there. The app uses Electron's `app.getPath('userData')` (`~/Library/Application Support/Obsrv`, per ipc.ts for settings/history/tabs/control.json) and `app.getPath('logs')` (`~/Library/Logs/Obsrv`, per main/log.ts). `~/.obsrv-dev` is the dev lane (scripts/devLane.js), and `~/.claude/skills` is install-skill's target. So the criterion has been pointing at a path that may not exist — the "I looked in the wrong place" half of its own warning, sitting inside the check.
-
-GATE BEFORE ANY INSTALL: prove the isolated HOME is actually honoured before trusting a single path in the result. Setting the variable is not evidence it was used, and a reading from a contaminated HOME is indistinguishable from a clean one. If Electron ignores HOME for some paths, that finding outranks this card — every isolated-lane assumption in the project, the dev lane included, rests on it.
-
-INTO REVIEW 2026-09-14, branch `chore/a4-install-remains` off 9134567. Full write-up: docs/research/2026-09-14-a4-install-remains.md. Real profile counted before and after (22,251 entries in ~/Library/Application Support/Obsrv, unchanged; all five sentinel paths identical), so "nothing of Opeyemi's was touched" is evidence rather than an assurance.
-
-THE GATE FAILED, AND THAT IS THE BIGGEST FINDING. Electron on macOS IGNORES HOME for home/userData/appData/logs/cache — os.homedir() follows it, Chromium does not. A HOME-only sandbox writes into the real profile while every Node-level check reports the fake path. CFFIXED_USER_HOME moves them; --user-data-dir moves userData/sessionData/crashDumps but NOT logs, so the dev lane and the installed app share one ~/Library/Logs/Obsrv/obsrv.log. Neither lever moves app.getPath('temp'). Anything in this repo that isolates by HOME needs re-checking.
-
-THE CRITERION NAMED A PATH NOTHING WRITES. `~/.obsrv` does not exist on a machine that has run Obsrv for weeks, and no source writes it. Corrected in docs/readiness.md.
-
-WHAT REMAINS after `npm rm -g getobsrv`: 128 MB, and it is ~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip — put there by @electron/get on first run, outside node_modules, removed by nothing, documented nowhere. Plus ~/.claude/skills/obsrv-screens (correct, but install-skill has no removal and nothing says it survives). CLEAN, measured on a real render and a real MCP handshake: no obsrv-cli-* and no obsrv-mcp-* entry left anywhere.
-
-APP HALF DONE 2026-09-14 on Opeyemi's word, same branch. Unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under CFFIXED_USER_HOME, a page loaded by typing its URL, quit cleanly, bundle deleted. Isolation read from INSIDE the running app (app.getPath) rather than inferred afterwards. Real profile counted before and after: 22,251 entries, unchanged.
-
-THE RESULT IS THAT A4 IS NOT MET. Deleting Obsrv.app removes exactly one thing: the app. 87 entries after one page load, 86 after deleting the bundle. What stays: settings.json, tabs.json, obsrv.log, the whole Chromium profile (Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches) and — the one that matters — history.json, the addresses visited in the app. The README says history.json holds them; nothing says it outlives the app, and there is no uninstall command.
-
-ALSO MEASURED: control.json (port, token, pid, 0600) is removed on a clean quit and SURVIVES a SIGKILL — proved deliberately with both, since two runs differing in one thing is a hypothesis. Harmless to discovery (a dead pid reads as no app) but it then survives the uninstall too.
-
-TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute, so nobody testing a local build reproduces the README's "damaged" dialog. And electron-builder signed it with `Restack Dev` and reported success — docs/signing.md step 3's warning, reproduced without trying. That one belongs to a1.
-
----
-
 ## Backlog — 16
 
 *Not started, not yet picked.*
@@ -488,7 +407,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Done — 22
+## Done — 24
 
 *Merged.*
 
@@ -634,6 +553,51 @@ CAVEAT ON THE MERGE, recorded because it is the day's own lesson: pushed while C
 
 NOT observed: `answeredBoth` returning false for a row carrying an error. The branch it feeds IS observed; the predicate has not been seen to fire on a real error.
 
+### Check the skill describes the tools that exist
+
+[`c3`](../board/c3.md) · **C3** · readiness · owner: Kenya
+
+MERGED 2026-09-14 on Opeyemi's word, as 83392d6 on main. Verified before pushing: typecheck clean, 1121/1121 unit, board:check green, and both review fixes confirmed present in the merged SKILL.md rather than assumed to have survived the conflict resolution.
+
+C3 STAYS PARTLY MET. The skill now names the version it was written against, documents `obsrv --version`, carries the warnings-versus-notes rule and the live-only `resizing` clause. What it does not do is discharge the criterion: the skill is one document, and C3 is about whether what we tell agents matches what the tools do.
+
+REVIEW ROUND 1 found two defects and both were in the FIX, none in the audit. That asymmetry is the finding. Nine claims read against source came back clean; four paragraphs written from freshly-learned material did not, and one of them committed the exact family the card existed to close — a sentence true of `obsrv_drive` alone, stated of all eight tools, written into the fix for three sentences of that kind.
+
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c3-skill-audit` (as of the tip; THE BRANCH IS THE ADDRESS, the sha is a timestamp). Cut from 0893bd7. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Claimed by editing this file, which is the first card claimed under the repo board rather than through Henry.
+
+STATUS: PARTLY MET, and the unchecked part is named below rather than rounded up. The same precedent as C5.
+
+WHAT WAS CHECKED, EACH AGAINST THE CODE RATHER THAN AGAINST THE PROSE'S PLAUSIBILITY. Nine claims read out of SKILL.md and looked up in src/:
+- the eight tool names — all registered (Henry's up-front measurement, confirmed)
+- `mode` / `why` values (requested, headless-only, no-display, declined, launch-timeout) — match the enum at server.ts:345 exactly
+- `obsrv_report` and `obsrv_diff` have no `mode` or `why` field — true; neither key exists in either output shape
+- the 1.5 MiB inline cap — MAX_INLINE_IMAGE_BYTES = 1_572_864 (lib.ts:16)
+- "at most 200 findings listed" — server.ts:1360 and :1661
+- 7 mm taps / 2 mm text — DEFAULT_TAP_MM, DEFAULT_TEXT_MM (cli/audit.ts:23)
+- diff's 2048px CSS viewport limit — server.ts:1201
+- the eight throttle preset ids — shared/throttle.ts:42-49, all eight, spelled as the skill spells them
+- the render-slot wait landing "in its warnings or notes" — matches server.ts:145
+
+THREE DEFECTS FOUND, ALL OF THE PREDICTED SHAPE: stable tool name, moved behaviour, nothing fails.
+
+1. `unsettledReason` was enumerated in Caveats as animating / timeout / uncovered / blank / loading — five of the six. `"resizing"` was missing, and it is the LIVE-ONLY value, in the one place the live Review section sends a reader to for that field. It became real earlier the same day (c5-elevated), so the skill was wrong about the thing this room had just proved. Now documented with what provokes it: a viewport that keeps moving for the whole budget, not a capture that followed a preset change.
+
+2. `obsrv --version` was absent from Commands, which is where a CLI user looks. It has existed since the E2 merge. Added with the property that makes it worth having — it answers before the build or the Electron binary is looked for, so it works on the machine where one of those is what broke.
+
+3. NO VERSION MARKER ANYWHERE IN THE FILE, which is the finding under the other two rather than a nitpick. Nothing in the skill said which surface it was written against, so no reader could tell the 0.60.0-era prose from the current shape, and neither defect above could have been noticed by reading. Now: "Written against Obsrv 0.61.0 (2026-09-14)", with `obsrv --version` and any MCP reply's `version` named as the check and docs/breaking-changes.md as the list of what moves under stable names.
+
+ONE ADDITION THAT IS NOT A DEFECT FIX: the warnings-vs-notes rule (warnings is about the page, notes is about the call) is now stated in The MCP tools, with the 0.61.0 move of the live walk's sentences named. The skill was not wrong here — it never told anyone to read the old location — but it gave an agent nothing to decide with, and this is the field that moved most recently.
+
+NOT CHECKED, AND THIS IS WHAT KEEPS IT AT PARTLY MET: the skill is 265 lines of prose and nine claims were verified against source. The Review (live) walkthrough, the regression loop, and the diff caveats were read for staleness but not executed. A claim about what a tool SAYS can only be settled by running it, which is C5's standard, and by that standard this card is an inventory rather than a proof. The honest next step is running the Review (live) sequence end to end against the current build and checking each sentence it produces.
+
+REVIEW ROUND 1, Henry on 452b212: two findings, both in the FIX rather than in what it fixed, both confirmed against source by Kenya before changing anything, both corrected.
+
+(1) "or any MCP reply's `version`" was FALSE. `version: z.string()` appears exactly once in src/mcp/server.ts — line 707, inside driveOutputShape. Seven of the eight tools do not carry it, so an agent told this reads a snap reply, finds nothing, and concludes it has an old Obsrv: the exact failure the paragraph was added to prevent. It is also C3's own shape — a sentence true of one tool, stated of all — introduced while closing three of the same kind. Now: `obsrv --version`, or `obsrv_drive`'s `version` field, named as the only reply that carries one.
+
+(2) The staleness rule was ONE-DIRECTIONAL and today only the other direction is true. The header said "written against 0.61.0" and "where they differ, the reply is right and this page is out of date". But package.json is 0.60.0 and docs/breaking-changes.md still marks 0.61.0 unreleased, so every reader's version differs by being OLDER, and the rule told them the page was stale when the page is ahead of their install. A version mismatch fits two facts — the page is behind the tool, or ahead of it — and the rule named only the first. Now the header says the page is ahead of the current release and spells out both directions, with the marked claims (`0.61.0+`) as the ones to read as future.
+
+THE TRAP, KEPT VISIBLE because Henry nearly published it as a result and it is the same one from note-inventory.md: the eight-of-eight tool count is a MENTION count. It says the skill mentions lint; it says nothing about whether what it says about lint is true. Two of the three defects above are inside sentences about tools that count as present. A completeness number over a document measures the index, not the content.
+
 ### Regenerate the public board as part of cutting a release
 
 [`chore-board-on-release`](../board/chore-board-on-release.md) · chore · *unclaimed*
@@ -658,6 +622,48 @@ Three options, roughly in order of how much they are worth:
 - Export the board to a committed JSON alongside the markdown, so the generator has a repo-local source and only the export needs a session. Then `npm run board` is reproducible by anyone and the drift check is trivial.
 
 The third is the one that makes the file honest rather than merely fresh, and it is the one worth the time.
+
+### Install, use, uninstall — then list what remains
+
+[`a4`](../board/a4.md) · **A4** · readiness · owner: Rook
+
+MERGED 2026-09-14 on Opeyemi's word, as 89b17f4 on main. Verified before pushing: typecheck clean across all three configs, 1121/1121 unit, board:check green.
+
+THE CARD IS DONE AND THE CRITERION IS NOT MET, and those are different things. The work asked for was to measure what remains; it was measured, on a real packaged build. A4 in docs/readiness.md reads NOT met, and the remaining work lives in bug-history-survives-uninstall, chore-uninstall-path and bug-control-json-crash-stale rather than in this card. Closing the card does not close the criterion.
+
+docs/board.md conflicted on the merge and was resolved by regenerating, which is the first time the rule in scripts/build-board.js's header was exercised on main rather than on a branch. It held.
+
+ASSIGNED to Rook 2026-09-14 evening as gap work while A1 is parked on Opeyemi. Chosen because the card says in its own words that the check has NEVER BEEN RUN — which is what Rook asked for, work that measures something nobody has measured rather than restating it — and because it sits in the launcher and headless path Rook is warmest on after e2. It also tests e2's own territory from the other end: e2 made the CLI answer on a machine where the build or the download is what broke; a4 asks what a fresh install actually puts on that machine and what survives removing it.
+
+Temp leak closed by src/shared/pruneTemp.ts. ~/.obsrv and the Electron profile untouched by that fix; nobody has measured what is left behind.
+
+HARD CONSTRAINT, and it is the reason this card has sat unclaimed safely: DO NOT uninstall from, or delete, the real ~/.obsrv, the real Electron profile, or anything under Opeyemi's own HOME. He uses this machine and the dev lane lives there. Run the whole cycle under an ISOLATED HOME — the same move Kenya used for the dev lane with OBSRV_DEV_HOME — so install, first run, and uninstall all happen somewhere disposable and the measurement is of a fresh machine rather than of this one. A reading taken from a HOME that has run Obsrv for weeks answers a different question and would look identical.
+
+WHAT DONE LOOKS LIKE: a list, per surface, of what exists on disk after install, after one real use, and after uninstall — with the paths named. The interesting number is the third one. A finding of `nothing remains` is a real result and needs the same evidence as a finding of `these four paths remain`, because an empty list fits both `it cleaned up` and `I looked in the wrong place`.
+
+STARTED 2026-09-14 evening, branch `chore/a4-install-remains` off 9134567. Claimed by editing this file, which is the mechanism now — Rook's board writes were never a permission (bug-board-access, dissolved).
+
+SCOPE THIS PASS, Opeyemi's call: the CLI and MCP surfaces — a global npm install into a throwaway prefix, a real CLI run, an MCP server run, `install-skill` — all under a disposable HOME. The desktop app half (an unsigned DMG built locally, mounted, run, removed) waits on a separate yes, and is where `settings.json`, `history.json`, `tabs.json` and `obsrv.log` live, so the criterion is not fully answered until it is done.
+
+FOUND BEFORE RUNNING ANYTHING, by reading: this card and docs/readiness.md:50 both name `~/.obsrv` as where the app's state lives. NOTHING in the source writes there. The app uses Electron's `app.getPath('userData')` (`~/Library/Application Support/Obsrv`, per ipc.ts for settings/history/tabs/control.json) and `app.getPath('logs')` (`~/Library/Logs/Obsrv`, per main/log.ts). `~/.obsrv-dev` is the dev lane (scripts/devLane.js), and `~/.claude/skills` is install-skill's target. So the criterion has been pointing at a path that may not exist — the "I looked in the wrong place" half of its own warning, sitting inside the check.
+
+GATE BEFORE ANY INSTALL: prove the isolated HOME is actually honoured before trusting a single path in the result. Setting the variable is not evidence it was used, and a reading from a contaminated HOME is indistinguishable from a clean one. If Electron ignores HOME for some paths, that finding outranks this card — every isolated-lane assumption in the project, the dev lane included, rests on it.
+
+INTO REVIEW 2026-09-14, branch `chore/a4-install-remains` off 9134567. Full write-up: docs/research/2026-09-14-a4-install-remains.md. Real profile counted before and after (22,251 entries in ~/Library/Application Support/Obsrv, unchanged; all five sentinel paths identical), so "nothing of Opeyemi's was touched" is evidence rather than an assurance.
+
+THE GATE FAILED, AND THAT IS THE BIGGEST FINDING. Electron on macOS IGNORES HOME for home/userData/appData/logs/cache — os.homedir() follows it, Chromium does not. A HOME-only sandbox writes into the real profile while every Node-level check reports the fake path. CFFIXED_USER_HOME moves them; --user-data-dir moves userData/sessionData/crashDumps but NOT logs, so the dev lane and the installed app share one ~/Library/Logs/Obsrv/obsrv.log. Neither lever moves app.getPath('temp'). Anything in this repo that isolates by HOME needs re-checking.
+
+THE CRITERION NAMED A PATH NOTHING WRITES. `~/.obsrv` does not exist on a machine that has run Obsrv for weeks, and no source writes it. Corrected in docs/readiness.md.
+
+WHAT REMAINS after `npm rm -g getobsrv`: 128 MB, and it is ~/Library/Caches/electron/<sha>/electron-v43.7.0-darwin-arm64.zip — put there by @electron/get on first run, outside node_modules, removed by nothing, documented nowhere. Plus ~/.claude/skills/obsrv-screens (correct, but install-skill has no removal and nothing says it survives). CLEAN, measured on a real render and a real MCP handshake: no obsrv-cli-* and no obsrv-mcp-* entry left anywhere.
+
+APP HALF DONE 2026-09-14 on Opeyemi's word, same branch. Unsigned arm64 DMG built from this tree, mounted, copied into a disposable home's Applications, launched under CFFIXED_USER_HOME, a page loaded by typing its URL, quit cleanly, bundle deleted. Isolation read from INSIDE the running app (app.getPath) rather than inferred afterwards. Real profile counted before and after: 22,251 entries, unchanged.
+
+THE RESULT IS THAT A4 IS NOT MET. Deleting Obsrv.app removes exactly one thing: the app. 87 entries after one page load, 86 after deleting the bundle. What stays: settings.json, tabs.json, obsrv.log, the whole Chromium profile (Cookies, Local Storage, Session Storage, Trust Tokens, TransportSecurity, the caches) and — the one that matters — history.json, the addresses visited in the app. The README says history.json holds them; nothing says it outlives the app, and there is no uninstall command.
+
+ALSO MEASURED: control.json (port, token, pid, 0600) is removed on a clean quit and SURVIVES a SIGKILL — proved deliberately with both, since two runs differing in one thing is a hypothesis. Harmless to discovery (a dead pid reads as no app) but it then survives the uninstall too.
+
+TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute, so nobody testing a local build reproduces the README's "damaged" dialog. And electron-builder signed it with `Restack Dev` and reported success — docs/signing.md step 3's warning, reproduced without trying. That one belongs to a1.
 
 ### Record what the thresholds were calibrated against
 
@@ -807,4 +813,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 12 readiness, 9 bugs, 8 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 10 readiness, 9 bugs, 8 chores, among the open cards.*
