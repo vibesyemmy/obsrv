@@ -28,6 +28,12 @@ Both panes stay in lock-step (scroll, navigation) and the 1x pane is fully inter
   fit), and are shown at true physical size — usually a small, dense render on a
   desktop monitor, exactly like the phone in your hand.
 
+> **macOS only, and the app is not yet signed** — macOS will call the DMG
+> "damaged" on first launch until you clear its quarantine flag (below).
+> [**What Obsrv cannot do**](docs/limitations.md) is the full boundary: what
+> the measurement does not see, where the numbers stop being exact, and how it
+> behaves on a page that keeps moving. Worth two minutes before you install.
+
 ## Quickstart
 
 **The desktop app** — download the DMG for your chip from
