@@ -35,6 +35,14 @@ test.beforeAll(async () => {
   // A pane the phone fits in with room to spare, so that a cap that moved
   // would show: at true size the phone is a fraction of the pane.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setContentSize(1900, 1100))
+  // Wait for the resize to land before anything reads a pane width. Seen once,
+  // 2026-09-14, in a three-spec run: the fit assertions came back 218 where the
+  // window's own size says 368, and passed on the retry — the shape of a layout
+  // read against a window that was still the launch size. One observation, so
+  // this removes the race rather than claiming to have explained the failure.
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getContentSize()[0]))
+    .toBe(1900)
   await page.click('.panes-target')
   await choose(app, page, '.preset-select', 'android-65')
   await expect.poll(() => page.locator('.target-canvas').evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(0)
