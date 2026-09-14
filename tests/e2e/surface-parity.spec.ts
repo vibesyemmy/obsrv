@@ -350,3 +350,51 @@ test('every surface difference is one with a written reason', () => {
       `docs/research/2026-09-14-c4-field-sweep.md is where the reasoning goes.\n${report}`,
   ).toBe('')
 })
+
+/**
+ * And the other direction, which is the one that fails quietly.
+ *
+ * The test above fails when a difference has no reason. Nothing failed when a
+ * reason had no difference — so an entry meant either "these surfaces still
+ * differ here, and here is why" or "they stopped differing and nobody removed
+ * the row", with no way to tell them apart. Give that a few releases and the
+ * table is a list of things that *used* to differ, read by the next person as
+ * a list of things that do. The comment at the head of EXPLAINED already
+ * claims it "cannot go stale without going red"; this is what makes that true.
+ *
+ * It also makes the table self-pruning: closing a divergence now forces its
+ * own exemption out, rather than leaving it to be noticed.
+ */
+test('every written reason still describes a real difference', () => {
+  // A tool that errored on every page produced no divergences, and calling its
+  // exemptions stale would blame the table for the run. Only tools that
+  // actually compared somewhere can testify about their own rows — which is
+  // what `surface` is for: a row of zero divergences fits both "they agree"
+  // and "only one surface answered", and the witness separates them.
+  const answeredBoth = (r: Row): boolean =>
+    r.headlessError === undefined &&
+    r.liveError === undefined &&
+    Object.keys((r.surface.headless ?? {}) as Record<string, unknown>).length > 0 &&
+    Object.keys((r.surface.live ?? {}) as Record<string, unknown>).length > 0
+
+  const toolsCompared = new Set(rows.filter(answeredBoth).map(r => r.tool))
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (!answeredBoth(row)) continue
+    for (const d of row.divergences) {
+      // The same skip the test above applies, so a path it never counts as a
+      // divergence is not then counted as a reason without one.
+      if (d.path.endsWith('pngPath')) continue
+      seen.add(`${row.tool}\t${d.path}`)
+    }
+  }
+
+  const stale = EXPLAINED.filter(e => toolsCompared.has(e.tool) && !seen.has(`${e.tool}\t${e.path}`))
+  const report = stale.map(e => `  ${e.tool} ${e.path}\n    reason on file: ${e.why}`).join('\n')
+  expect(
+    report,
+    'A row in EXPLAINED excuses a difference the surfaces no longer have. If it was fixed, delete the row — ' +
+      'leaving it turns the table into a record of the past that reads as a record of the present.' +
+      `\n${report}`,
+  ).toBe('')
+})
