@@ -641,17 +641,21 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // What `audit` and `lint` ask on their own, `report` asks too, or its
     // page is the one place this goes unsaid. One wait covers both: the
     // second pass is 15 ms, the wait is the price (shared/pageMotion).
-    if (auditReport !== undefined) {
+    // `auditPage()` answers null on a page that never replied, so this is a
+    // null check and not an `undefined` one: the caller below already reads
+    // it that way, and there is nothing to compare against a page that gave
+    // no first measurement.
+    if (auditReport != null) {
       const motion = await motionAfter(auditBoxes(auditReport), () => target.auditPage(), auditBoxes)
       const note = motion === null ? null : pageMovedNote('audit', motion, motion.afterMs)
       if (note !== null) warn(`warning: ${note}`)
     }
-    if (lintReport !== undefined) {
+    if (lintReport != null) {
       const motion = await motionAfter(
         lintBoxes(lintReport),
         () => target.lintPage(1 / (spec.deviceScaleFactor * spec.textScale)),
         lintBoxes,
-        auditReport === undefined ? MOTION_PROBE_MS : 0,
+        auditReport == null ? MOTION_PROBE_MS : 0,
       )
       const note = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
       if (note !== null) warn(`warning: ${note}`)
