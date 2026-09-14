@@ -16,12 +16,27 @@ named, not that they stop.
 
 ---
 
-## 0.61.0 — *unreleased, pending review*
+## 0.61.0 — *unreleased*
 
 > Three at once, all found by the surface-parity sweep (C4) rather than by a
 > user. Each corrects a case where the two surfaces answered differently, so
 > the break is the fix: code written against one surface's spelling was
 > already wrong on the other.
+
+> ### Restart your MCP session after upgrading to 0.61.0
+>
+> Not optional for this release, and the reason is worth reading once because
+> it applies to every future one. MCP tool output schemas are
+> `additionalProperties: false`. A client that listed the tools **before** the
+> upgrade is holding the old shape, and this release both adds fields and adds
+> an enum value — so that client can reject a reply that is entirely correct.
+>
+> **What it looks like when it bites:** a validation error on a capture or a
+> measurement that worked yesterday, naming a field or a value rather than a
+> page. It reads as a bug in Obsrv. It is a stale schema, and a new session
+> fixes it.
+>
+> In Claude Code: start a new conversation, or reconnect the MCP server.
 
 ### `snap` live: `presetId` and `profileId` are gone — use `preset` and `profile`
 
@@ -61,15 +76,20 @@ was still changing size, so the page had not finished reflowing to the screen
 it is being measured on. That is a real state and it is only reachable live;
 it used to be reported as `timeout`, which said the wrong thing.
 
-**What breaks, and it is the least obvious of the three:** MCP tool output
-schemas are `additionalProperties: false`, and a client session that listed the
-tools **before** upgrading is holding the old enum. When a live capture then
-answers `"resizing"`, that session can reject a reply that is perfectly
-correct — and the failure looks like a capture bug rather than a stale schema.
+**What breaks, and it is the least obvious of the three:** a client session
+that listed the tools **before** upgrading is holding the old enum, and can
+reject a live capture that answers `"resizing"` — see the restart note at the
+top of this release.
 
-**What to do:** **restart the session** (in Claude Code, start a new
-conversation or reconnect the MCP server) after upgrading. This applies to any
-release that adds an enum value or a field, not only this one.
+**Why it ships anyway**, since a new enum value is the kind of change a project
+can always defer: the alternative is to keep reporting this state as
+`timeout`, which is what it did until now and is a false answer — the budget
+did not run out on a page that would not settle, the pane had not finished
+resizing. Folding it back in would reintroduce exactly the one-name-two-answers
+problem the rest of this release exists to remove. Decided 2026-09-14 rather
+than arrived at.
+
+**What to do:** restart the session after upgrading.
 
 ### Also in 0.61.0, not breaking
 
@@ -78,7 +98,7 @@ the live surface names what held a page instead of listing three things it
 might have been; live `inspect` gains the landing and status sentences that
 `audit` and `lint` already had; headless `snap` answers `url`; and both
 surfaces answer `deviceScaleFactor`. Those are additions to fields already
-declared — but see the session-restart note above, which applies to them too.
+declared, and the restart note above covers them too.
 
 ---
 
