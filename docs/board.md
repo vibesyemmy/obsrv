@@ -40,6 +40,154 @@ learned the hard way and written down:
 
 ---
 
+## Backlog — 16
+
+*Raised, not yet picked.*
+
+### sync.spec.ts:165 went flaky once on the loop-breaker test
+
+[`flake-sync-165`](../board/flake-sync-165.md) · bug · *unclaimed*
+
+Reported by obsrv-e7 from its full-suite run, 2026-09-14: 'quick legitimate reversals are not a loop' failed once and passed on retry. That is the test obsrv-a6 was working around earlier the same day - a new test dropped into sync.spec made it fail half its runs because the file shares one app and the loop breaker counts reversals within LOOP_WINDOW_MS (3 s); the remedy was moving that test to its own file (sync-mirror-mark.spec.ts), not timing the handover.
+
+So this is the same fragility showing without an added test, which means the shared-app coupling in sync.spec is closer to the edge than the fix implied. Worth knowing before anyone adds another test to that file. Not reproduced by obsrv-a6; six consecutive runs were clean after the split.
+
+### Note inventory: every note seen to fire on a real page
+
+[`c5`](../board/c5.md) · **C5** · readiness · *unclaimed*
+
+The 2026-09-13 sweep did this for notes and found gaps; never completed.
+
+### Written compatibility policy
+
+[`c1`](../board/c1.md) · **C1** · readiness · *unclaimed*
+
+MCP output schemas are additionalProperties:false, so adding a field breaks sessions that listed tools earlier. Policy must say what may change before 1.0.
+
+### Name breaking changes as such, by rule not habit
+
+[`c2`](../board/c2.md) · **C2** · readiness · *unclaimed*
+
+Partly met by habit. url changed meaning for live callers in 0.59.0.
+
+### Auto-update: reach the new version without leaving the app
+
+[`a2`](../board/a2.md) · **A2** · readiness · *unclaimed*
+
+The updater checks GitHub daily and offers the release page; it never installs. Someone on 0.57.0 has no way to know.
+
+### Cold-machine first run, on each surface
+
+[`a3`](../board/a3.md) · **A3** · readiness · *unclaimed*
+
+Never done on a machine that has never run Obsrv. Read the output as a stranger would.
+
+### Close or write down the remaining known gaps
+
+[`b2`](../board/b2.md) · **B2** · readiness · *unclaimed*
+
+Settle gap closed 2026-09-14. Still open: the dialog note has never fired on a live site across four runs; whether to enter open shadow roots is undecided.
+
+### Measure the noise ratio with two independent classifiers
+
+[`b4`](../board/b4.md) · **B4** · readiness · *unclaimed*
+
+zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
+
+### A live run that turns up nothing user-visible
+
+[`b1`](../board/b1.md) · **B1** · readiness · *unclaimed*
+
+Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
+
+### A mirrored redirect's second commit can still be counted as an arrival
+
+[`bug-arrivals`](../board/bug-arrivals.md) · **B2** · bug · *unclaimed*
+
+Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
+
+### A suite that measured nothing must be as loud as two suites at once
+
+[`chore-guard`](../board/chore-guard.md) · chore · *unclaimed*
+
+SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
+
+HALF ONE — refuse to start a suite while another is running. Two concurrent suites in one worktree made both greens untrustworthy and cost a full afternoon.
+
+THE HARD PART, and the reason a naive lock file is worse than nothing: the guard must distinguish ANOTHER SUITE RUNNING from A STALE LOCK LEFT BY A SUITE THAT DIED. Those are identical from a lock file alone. A guard that refuses on a stale lock gets its lock deleted by the first person who hits it, and then nobody trusts it again. Whatever it checks — a pid, a port, a live process — the refusal text must SAY WHICH OF THE TWO IT FOUND.
+
+HALF TWO — a suite that passed having measured nothing is indistinguishable from one that passed having checked everything. obsrv-a6 hit this with a -g filtered run; Henry hit the same shape verifying the surface-parity staleness check, which passed green on a planted stale row because filtering had starved the rows it compares. The fix there was a vacuity guard (surface-parity.spec.ts:368) that fails when the comparison had no evidence. Generalise it.
+
+Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
+
+So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
+
+### `orientation: landscape` produces a portrait screen on every desktop preset
+
+[`bug-orientation-name`](../board/bug-orientation-name.md) · **C2** · bug · *unclaimed*
+
+src/shared/calibration.ts:40 — the flag names which STORED form to use (as-listed, or rotated a quarter turn), not the shape you get. 1080p-24 is stored 1920x1080, so the default gives landscape and `orientation: 'landscape'` rotates it to 1080x1920. `screenShape` then correctly reports 'portrait' beside it; both fields are right and answer different questions (comment at calibration.ts:37). cli/args.ts:190-200 documents all of it. Not a behaviour bug — a name that inverts its plain meaning. Evidence it costs: obsrv-e7 hit it on 2026-09-14 while hunting C4 parity defects, measured two different viewports without noticing, and was about to file it as a parity defect. Renaming is a breaking change to a public flag and an MCP field, so it is C2's to schedule, not a quiet fix.
+
+### Drag tabs to re-arrange them, as every browser does
+
+[`feat-tab-reorder`](../board/feat-tab-reorder.md) · chore · *unclaimed*
+
+Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
+
+### A dev app exited between 18:42 and 19:13 with no explicit stop
+
+[`bug-dev-app-exited`](../board/bug-dev-app-exited.md) · bug · *unclaimed*
+
+Observed by Kenya 2026-09-14. **Titled for what was seen rather than for a mechanism, at Kenya's insistence — it declined to let this be filed as "the lane reaps idle apps" because the code says otherwise and that would have been a second claim inferred from mechanism within the hour.** Nobody knows why this app exited. That is the card.
+
+TIMELINE, local time:
+
+- ~17:55 — Kenya deliberately killed pid 65770
+- then     relaunched with `--no-build`, got pid 2299
+- 18:42:47 — the shared log's last write (`window hidden; target rasterisation paused` / `window shown; … resumed`, repeatedly)
+- 19:13 — pid 2299 gone, noticed incidentally while checking something else
+
+So it died inside that half hour, after logging normally.
+
+WHY THIS IS SURPRISING RATHER THAN EXPECTED, verified in the source rather than taken from the report:
+
+- `scripts/lane.js:59` spawns the app `detached: true, stdio: 'ignore'` and calls `.unref()`. It is in its own process group and should outlive the shell that launched it.
+- Nothing in `scripts/lane.js`, `scripts/devLane.js` or `src/main/controlServer.ts` reaps an idle app. The only kills are the explicit stop path — `devLane.js:157` SIGTERM, `devLane.js:167` SIGKILL after a grace. The `process.kill(pid, 0)` at `devLane.js:133` is a liveness probe, not a kill.
+
+A LEAD, TO BE HELD LOOSELY: the last lines are occlusion transitions — the same macOS desk state the visibility and log specs skip over. That is a place to look, not a cause, and Kenya flagged it as exactly the kind of lead someone will harden into an explanation if it is written down carelessly.
+
+WHAT CANNOT BE SAID: whether it crashed, was killed from outside the lane, or exited cleanly. The lane app writes to the shared `~/Library/Logs/Obsrv/obsrv.log` with no field naming its writer, so its own exit line — if it wrote one — is indistinguishable from the installed app's.
+
+**Which makes this card blocked on [[bug-log-attribution]] in practice.** Investigating it means reading a log that cannot say which process produced a line. Stamping the line should land first, or whoever takes this spends the effort and comes back with the same two-facts absence.
+
+COST TO REPRODUCE: a relaunch and an idle half hour, spent watching a process rather than driving anything. Kenya will take it if Opeyemi wants it chased; otherwise it sits here with the timeline intact.
+
+Bears on documentation: nobody should write "the dev app stays up" in `docs/` until this is understood. It is the kind of sentence that becomes a support answer.
+
+### Apply the breaking-changes policy to the last five releases
+
+[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · *unclaimed*
+
+What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depends on C1: the policy defining what counts has not been written, and applying an unwritten policy retroactively is how a register becomes a matter of taste.
+
+### control.json survives a crash and then survives the uninstall
+
+[`bug-control-json-crash-stale`](../board/bug-control-json-crash-stale.md) · bug · *unclaimed*
+
+Measured by Rook 2026-09-14, and the way it was measured is the part worth copying.
+
+Rook's first packaged-app run threw before `close()` and left a `control.json`; the clean run did not. **Two runs differing in one thing is a hypothesis, not a finding**, so it ran both deliberately with agent control on: a clean quit removes the file, `SIGKILL` leaves it — port, token, pid, mode `0600`.
+
+Not a functional defect on its own. Discovery already treats a dead pid as no app (see `single-instance`), so a stale file does not mislead the MCP server or another instance.
+
+The cost is that it is a **token on disk with no owner**, and it then survives deleting the app along with everything else in `bug-history-survives-uninstall`. A loopback token is low-value — it is bound to a port nothing is listening on — but "low-value credential left behind indefinitely after the program that made it is gone" is the sort of sentence that is easier to fix than to defend.
+
+Cheapest fix is a sweep at startup rather than a handler at exit: a crash is by definition the case where the exit path did not run, so anything that relies on shutdown cannot close this. The app already knows how to judge a dead pid; the same check can delete rather than only ignore.
+
+Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for the removal question this feeds into.
+
+---
+
 ## Next — 9
 
 *Picked, not claimed — start here.*
@@ -234,154 +382,6 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
-
----
-
-## Backlog — 16
-
-*Not started, not yet picked.*
-
-### sync.spec.ts:165 went flaky once on the loop-breaker test
-
-[`flake-sync-165`](../board/flake-sync-165.md) · bug · *unclaimed*
-
-Reported by obsrv-e7 from its full-suite run, 2026-09-14: 'quick legitimate reversals are not a loop' failed once and passed on retry. That is the test obsrv-a6 was working around earlier the same day - a new test dropped into sync.spec made it fail half its runs because the file shares one app and the loop breaker counts reversals within LOOP_WINDOW_MS (3 s); the remedy was moving that test to its own file (sync-mirror-mark.spec.ts), not timing the handover.
-
-So this is the same fragility showing without an added test, which means the shared-app coupling in sync.spec is closer to the edge than the fix implied. Worth knowing before anyone adds another test to that file. Not reproduced by obsrv-a6; six consecutive runs were clean after the split.
-
-### Note inventory: every note seen to fire on a real page
-
-[`c5`](../board/c5.md) · **C5** · readiness · *unclaimed*
-
-The 2026-09-13 sweep did this for notes and found gaps; never completed.
-
-### Written compatibility policy
-
-[`c1`](../board/c1.md) · **C1** · readiness · *unclaimed*
-
-MCP output schemas are additionalProperties:false, so adding a field breaks sessions that listed tools earlier. Policy must say what may change before 1.0.
-
-### Name breaking changes as such, by rule not habit
-
-[`c2`](../board/c2.md) · **C2** · readiness · *unclaimed*
-
-Partly met by habit. url changed meaning for live callers in 0.59.0.
-
-### Auto-update: reach the new version without leaving the app
-
-[`a2`](../board/a2.md) · **A2** · readiness · *unclaimed*
-
-The updater checks GitHub daily and offers the release page; it never installs. Someone on 0.57.0 has no way to know.
-
-### Cold-machine first run, on each surface
-
-[`a3`](../board/a3.md) · **A3** · readiness · *unclaimed*
-
-Never done on a machine that has never run Obsrv. Read the output as a stranger would.
-
-### Close or write down the remaining known gaps
-
-[`b2`](../board/b2.md) · **B2** · readiness · *unclaimed*
-
-Settle gap closed 2026-09-14. Still open: the dialog note has never fired on a live site across four runs; whether to enter open shadow roots is undecided.
-
-### Measure the noise ratio with two independent classifiers
-
-[`b4`](../board/b4.md) · **B4** · readiness · *unclaimed*
-
-zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
-
-### A live run that turns up nothing user-visible
-
-[`b1`](../board/b1.md) · **B1** · readiness · *unclaimed*
-
-Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
-
-### A mirrored redirect's second commit can still be counted as an arrival
-
-[`bug-arrivals`](../board/bug-arrivals.md) · **B2** · bug · *unclaimed*
-
-Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
-
-### A suite that measured nothing must be as loud as two suites at once
-
-[`chore-guard`](../board/chore-guard.md) · chore · *unclaimed*
-
-SCOPE WIDENED 2026-09-14 on obsrv-91's argument, which is right: this card and the evidence-assertion are two halves of one thing, and building them apart gets one of them wrong.
-
-HALF ONE — refuse to start a suite while another is running. Two concurrent suites in one worktree made both greens untrustworthy and cost a full afternoon.
-
-THE HARD PART, and the reason a naive lock file is worse than nothing: the guard must distinguish ANOTHER SUITE RUNNING from A STALE LOCK LEFT BY A SUITE THAT DIED. Those are identical from a lock file alone. A guard that refuses on a stale lock gets its lock deleted by the first person who hits it, and then nobody trusts it again. Whatever it checks — a pid, a port, a live process — the refusal text must SAY WHICH OF THE TWO IT FOUND.
-
-HALF TWO — a suite that passed having measured nothing is indistinguishable from one that passed having checked everything. obsrv-a6 hit this with a -g filtered run; Henry hit the same shape verifying the surface-parity staleness check, which passed green on a planted stale row because filtering had starved the rows it compares. The fix there was a vacuity guard (surface-parity.spec.ts:368) that fails when the comparison had no evidence. Generalise it.
-
-Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
-
-So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
-
-### `orientation: landscape` produces a portrait screen on every desktop preset
-
-[`bug-orientation-name`](../board/bug-orientation-name.md) · **C2** · bug · *unclaimed*
-
-src/shared/calibration.ts:40 — the flag names which STORED form to use (as-listed, or rotated a quarter turn), not the shape you get. 1080p-24 is stored 1920x1080, so the default gives landscape and `orientation: 'landscape'` rotates it to 1080x1920. `screenShape` then correctly reports 'portrait' beside it; both fields are right and answer different questions (comment at calibration.ts:37). cli/args.ts:190-200 documents all of it. Not a behaviour bug — a name that inverts its plain meaning. Evidence it costs: obsrv-e7 hit it on 2026-09-14 while hunting C4 parity defects, measured two different viewports without noticing, and was about to file it as a parity defect. Renaming is a breaking change to a public flag and an MCP field, so it is C2's to schedule, not a quiet fix.
-
-### Drag tabs to re-arrange them, as every browser does
-
-[`feat-tab-reorder`](../board/feat-tab-reorder.md) · chore · *unclaimed*
-
-Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
-
-### A dev app exited between 18:42 and 19:13 with no explicit stop
-
-[`bug-dev-app-exited`](../board/bug-dev-app-exited.md) · bug · *unclaimed*
-
-Observed by Kenya 2026-09-14. **Titled for what was seen rather than for a mechanism, at Kenya's insistence — it declined to let this be filed as "the lane reaps idle apps" because the code says otherwise and that would have been a second claim inferred from mechanism within the hour.** Nobody knows why this app exited. That is the card.
-
-TIMELINE, local time:
-
-- ~17:55 — Kenya deliberately killed pid 65770
-- then     relaunched with `--no-build`, got pid 2299
-- 18:42:47 — the shared log's last write (`window hidden; target rasterisation paused` / `window shown; … resumed`, repeatedly)
-- 19:13 — pid 2299 gone, noticed incidentally while checking something else
-
-So it died inside that half hour, after logging normally.
-
-WHY THIS IS SURPRISING RATHER THAN EXPECTED, verified in the source rather than taken from the report:
-
-- `scripts/lane.js:59` spawns the app `detached: true, stdio: 'ignore'` and calls `.unref()`. It is in its own process group and should outlive the shell that launched it.
-- Nothing in `scripts/lane.js`, `scripts/devLane.js` or `src/main/controlServer.ts` reaps an idle app. The only kills are the explicit stop path — `devLane.js:157` SIGTERM, `devLane.js:167` SIGKILL after a grace. The `process.kill(pid, 0)` at `devLane.js:133` is a liveness probe, not a kill.
-
-A LEAD, TO BE HELD LOOSELY: the last lines are occlusion transitions — the same macOS desk state the visibility and log specs skip over. That is a place to look, not a cause, and Kenya flagged it as exactly the kind of lead someone will harden into an explanation if it is written down carelessly.
-
-WHAT CANNOT BE SAID: whether it crashed, was killed from outside the lane, or exited cleanly. The lane app writes to the shared `~/Library/Logs/Obsrv/obsrv.log` with no field naming its writer, so its own exit line — if it wrote one — is indistinguishable from the installed app's.
-
-**Which makes this card blocked on [[bug-log-attribution]] in practice.** Investigating it means reading a log that cannot say which process produced a line. Stamping the line should land first, or whoever takes this spends the effort and comes back with the same two-facts absence.
-
-COST TO REPRODUCE: a relaunch and an idle half hour, spent watching a process rather than driving anything. Kenya will take it if Opeyemi wants it chased; otherwise it sits here with the timeline intact.
-
-Bears on documentation: nobody should write "the dev app stays up" in `docs/` until this is understood. It is the kind of sentence that becomes a support answer.
-
-### Apply the breaking-changes policy to the last five releases
-
-[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · *unclaimed*
-
-What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depends on C1: the policy defining what counts has not been written, and applying an unwritten policy retroactively is how a register becomes a matter of taste.
-
-### control.json survives a crash and then survives the uninstall
-
-[`bug-control-json-crash-stale`](../board/bug-control-json-crash-stale.md) · bug · *unclaimed*
-
-Measured by Rook 2026-09-14, and the way it was measured is the part worth copying.
-
-Rook's first packaged-app run threw before `close()` and left a `control.json`; the clean run did not. **Two runs differing in one thing is a hypothesis, not a finding**, so it ran both deliberately with agent control on: a clean quit removes the file, `SIGKILL` leaves it — port, token, pid, mode `0600`.
-
-Not a functional defect on its own. Discovery already treats a dead pid as no app (see `single-instance`), so a stale file does not mislead the MCP server or another instance.
-
-The cost is that it is a **token on disk with no owner**, and it then survives deleting the app along with everything else in `bug-history-survives-uninstall`. A loopback token is low-value — it is bound to a port nothing is listening on — but "low-value credential left behind indefinitely after the program that made it is gone" is the sort of sentence that is easier to fix than to defend.
-
-Cheapest fix is a sweep at startup rather than a handler at exit: a crash is by definition the case where the exit path did not run, so anything that relies on shutdown cannot close this. The app already knows how to judge a dead pid; the same check can delete rather than only ignore.
-
-Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for the removal question this feeds into.
 
 ---
 

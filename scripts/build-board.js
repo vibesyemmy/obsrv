@@ -60,11 +60,15 @@ const stamp = stampAt === -1 ? '' : (process.argv[stampAt + 1] ?? '')
 const htmlAt = process.argv.indexOf('--html')
 const htmlOut = htmlAt === -1 ? OUT_HTML : (process.argv[htmlAt + 1] ?? OUT_HTML)
 
+// Left to right is the order work actually travels: raised, picked, claimed,
+// finished, merged. Backlog leads because that is where a card starts — it was
+// fourth until 2026-09-14, which put the beginning of the pipeline after its
+// middle and made the columns read as a priority list rather than a flow.
 const COLUMNS = [
+  { id: 'backlog', name: 'Backlog', blurb: 'Raised, not yet picked.' },
   { id: 'next', name: 'Next', blurb: 'Picked, not claimed — start here.' },
   { id: 'doing', name: 'Doing', blurb: 'Claimed. Someone is on it.' },
   { id: 'review', name: 'Review', blurb: 'Finished, waiting on the maintainer to merge.' },
-  { id: 'backlog', name: 'Backlog', blurb: 'Not started, not yet picked.' },
   { id: 'done', name: 'Done', blurb: 'Merged.' },
 ]
 const KIND = { readiness: 'readiness', bug: 'bug', chore: 'chore' }

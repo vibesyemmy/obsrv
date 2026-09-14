@@ -440,6 +440,17 @@ been renamed.
 carrying the criterion it closes and the file or commit that defines done.
 Cards in *Next* are the ones worth starting.
 
+The board itself is [`board/`](board) — one markdown file per card. **Claim one
+by editing its file**: set `owner:` and `column: doing`, run `npm run board`,
+and open a pull request with both changes. There is no separate tracker to
+update and nobody to ask for access. `npm run board` regenerates two views from
+those cards, and CI fails if either has drifted from them:
+
+| | |
+|---|---|
+| [`docs/board.md`](docs/board.md) | the readable list — renders here on GitHub |
+| `docs/board.html` | a Kanban page: columns, owners, click a card for its evidence. GitHub shows HTML as source, so open it from a clone — `open docs/board.html` on macOS |
+
 ## Known v1 limits
 
 - Rendering truth is the host OS's 1x rasteriser (macOS today). Windows ClearType at 1x
