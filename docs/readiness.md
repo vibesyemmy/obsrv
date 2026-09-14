@@ -182,11 +182,19 @@ designs this week — it is load-bearing and nowhere stated.
 breaking change is announced before 1.0. **Status: not met.**
 
 **C2. Breaking changes are named as such.** `url` changed meaning for live
-callers in 0.60.0 — reasonable pre-1.0, and legible only because the release
-notes led with it. That was a choice each time rather than a rule.
+callers in **0.59.0** — reasonable pre-1.0, and legible only because the
+release notes led with it. That was a choice each time rather than a rule.
+(This entry said 0.60.0 until 2026-09-14. `git tag --contains` on the commit
+says 0.59.0, and the v0.59.0 release body carries the heading. A register is
+worth having partly because the memory of which release broke what is the
+first thing to go.)
 *Check:* the policy from C1 applied to the last five releases retroactively;
 anything that broke a caller appears in its notes under a heading that says
-so. **Status: partly met, by habit rather than rule.**
+so. **Status: partly met — the register now exists
+([`docs/breaking-changes.md`](breaking-changes.md), linked from the README),
+holding 0.59.0's change and 0.61.0's three. The retroactive pass over the last
+five releases has not been done, and C1's policy does not exist yet, so the
+check is not satisfied.**
 
 **C3. The skill describes the tools that exist.** `skills/obsrv-screens/SKILL.md`
 is what an agent reads instead of the README, and it has drifted before.

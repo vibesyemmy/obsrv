@@ -198,10 +198,13 @@ without caveats.
 
 ## What this page does not cover
 
-Two neighbouring questions have their own pages now:
+Three neighbouring questions have their own pages now:
 
 - [**What an agent can do to your machine**](agent-control.md) — every command
   the control surface accepts, the four gates in front of it, the consent bar,
   and how to turn it off.
 - [**Privacy and files**](../README.md#privacy-and-files) — the one outbound
   request the app makes, and every file it writes.
+- [**Breaking changes**](breaking-changes.md) — anything that has been renamed,
+  moved key, or changed meaning, newest first. Obsrv is pre-1.0: these keep
+  happening, and the promise is that they are named.
