@@ -448,8 +448,8 @@ those cards, and CI fails if either has drifted from them:
 
 | | |
 |---|---|
-| [`docs/board.md`](docs/board.md) | the readable list — renders here on GitHub |
-| `docs/board.html` | a Kanban page: columns, owners, click a card for its evidence. GitHub shows HTML as source, so open it from a clone — `open docs/board.html` on macOS |
+| [**vibesyemmy.github.io/obsrv**](https://vibesyemmy.github.io/obsrv/) | the Kanban view — columns, owners, click a card for its full evidence. Rebuilt from `board/` on every push to `main`, so it is never a stale copy of anything |
+| [`docs/board.md`](docs/board.md) | the same cards as a readable list, rendering here on GitHub |
 
 ## Known v1 limits
 
