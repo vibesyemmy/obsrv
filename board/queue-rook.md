@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: run 18 (report & diff) · a1 on Opeyemi · c2-retroactive done"
+title: "QUEUE — Rook: run 18 started · a1 on Opeyemi · c2-retroactive done"
 column: next
 kind: chore
 owner: "Rook"
@@ -13,7 +13,7 @@ epitaph — *"the queue went stale within hours of being written"* — which was
 
 **NOW**
 
-1. `b1-report-diff` — **ROUTED** 2026-09-15, waiting on Rook's own user. Run 18: exercise
+1. `b1-report-diff` — **STARTED** on Opeyemi's go-ahead, 2026-09-15. Run 18: exercise
    `obsrv_report` and `obsrv_diff`, which run 17 excluded explicitly. Rook asked for this one
    and the reason is on the card — it is B1's only *documented* gap rather than a merely
    unexamined one, and Rook's coldness on these two surfaces expires the moment it runs them.

@@ -1,13 +1,32 @@
 ---
 title: "Run 18: exercise report and diff, the two surfaces run 17 excluded"
-column: next
+column: doing
 kind: readiness
 owner: "Rook"
 criterion: B1
 order: 19
 ---
 
-ROUTED TO ROOK 2026-09-15 on Opeyemi's word, pending Rook's own go-ahead in Rook's session.
+**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
+
+**Two things carried over from `b1` that should shape the site list before anything is run.**
+
+The two shapes run 17 planned and did not reach are *a retail image grid* and *a docs site with
+a sticky sidebar*. Both are named rather than incidental: an image grid is where `diff`'s ink
+deltas and row ratios have the most to say, and a sticky sidebar is a non-host scroller, which
+is the shape that produced 48 unpinnable findings once already. Starting there spends run 17's
+own planning rather than re-deciding it.
+
+**And `b1`'s rule about sites, which applies with more force to a report run:** *fresh sites,
+not the ones previous runs used, or the run measures whether known defects are still fixed
+rather than whether unknown ones exist.* `report` composes snap, audit, diff and lint into one
+page, so running it over a site a previous run already combed produces a document full of
+findings somebody has read before — which reads like coverage and is recognition.
+
+**What B1 actually asks, since this card is a piece of it:** B1 is met when a run finds
+*nothing* user-visible. Runs 13 through 16 each found something, each smaller than the last.
+So the honest deliverable here is either new cards or the sentence *this run found nothing
+user-visible in report and diff*, which nobody has yet been able to write about any surface.
 
 **This is the successor to `b1`, scoped to the half of it that is documented rather than merely
 unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed:
