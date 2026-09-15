@@ -1,10 +1,31 @@
 ---
 title: "Fixing the stale echo is a decision about what `issued` means"
-column: doing
+column: review
 kind: bug
 owner: "Rook"
 order: 38
 ---
+
+**IN REVIEW — branch `fix/stale-issued-echo` (as of a76a910), "A mirrored commit retires its own record, where nothing did before".** Unit 1144/1144, typecheck clean, sync + sync-trace + sync-mirror-mark 16 green including both loop-breaker fixtures. Merging waits on Opeyemi's word to Rook directly.
+
+**The cause, now explained rather than only located:** a mirrored commit never reached `mirror()` at all, so `issued['target']` had no echo path — only luck, or the 10 s bound, could clear it.
+
+**THE NUMBERS, AND THE SECOND LINE IS THE ONE ROOK LED WITH:**
+
+    before the fix   113 runs   4 failures, all sync.spec:165
+    after the fix    160 runs   1 failure,  sync.spec:138 — none at :165
+
+`:165` is **0 in 160** where it was **4 in 113**. The consequence has stopped.
+
+**`:138` failed once after the change and Rook will not claim innocence.** Its own reasoning — the change only ever DELETES records, so it can make fewer commits look like echoes, meaning more mirroring rather than less, which cannot suppress an emission. Against that: `:138` failed 0 times in 113 before and 1 time in 160 after. **One against zero is not a difference**, and Rook declined to treat "my reasoning says it is unrelated" as evidence on a card that is a story about reasoning being wrong twice.
+
+The `:138` shape is genuinely different: `expect(seen.length).toBeGreaterThanOrEqual(1)` at `sync.spec.ts:161` — the target emitted NO `url-changed` at all during the window, where `:165` is a stalled mirror. The trace printed nothing, because the test never reaches the step loop that dumps it.
+
+**A MEASUREMENT CORRECTION THAT APPLIES BEYOND THIS CARD.** Rook's 160 runs were `--retries=0`, so every occurrence counts. CI runs `--retries=1`, so a failure that passes on retry leaves a green run and a `1 flaky` line nobody greps. **The "five of ten reds" on `bug-ci-main-red-37pct` is a FLOOR, not a rate** — and the two sets of numbers are not comparable.
+
+**AND THE TITLE IS THE FINDING.** `sync.spec.ts:138` is called *"a redirecting page leaves no stale expectation behind"*, and `redirect.html`'s comment says the same. Both are two years older than the bug. **The test named for the cause was passing while the cause was broken** — it asserts that the target FOLLOWED, which it does whenever the record happens to get retired by luck. It never checked that the record was gone.
+
+**ONE MORE FROM THE BATCH, because it is `chore-guard`'s subject caught by habit rather than by tooling.** Rook's first attempt at the 160-run batch silently did not run: zsh fails a glob with no matches, `rm -f fixed-FAILED-*.log` returned non-zero, the `&&` chain died, and the loop reported **"0 failures" having never executed**. Noticed only because Rook went looking for the per-run logs that should have existed.
 
 ASSIGNED TO ROOK 2026-09-15 on Opeyemi's word. Owner set here so claiming costs no pull request.
 
