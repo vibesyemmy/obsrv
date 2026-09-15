@@ -478,6 +478,24 @@ remote: - Required status check "typecheck · unit · shader parity · e2e" is e
 
 **That output is worth reading twice, because it is tonight's defect wearing a new coat.** The remote announces the required check in the register of a refusal — and then reports the push succeeded, two lines later. Anyone skimming a push for red text would conclude they had been blocked. Anyone skimming for the ref update would conclude the check had passed. It is neither: it is a warning that an admin bypassed a rule, printed in the shape of an error. **The PR gate itself is UNEXERCISED** — nobody has watched it refuse a pull request, so by this repo's own standard it is a claim rather than a check until the next PR tests it. Said here rather than discovered later.
 
+## enforce_admins turned ON, 2026-09-15, on Opeyemi's word
+
+The gap named above — that an admin pushing directly is not gated — is now closed. The full rule in force:
+
+required check : typecheck · unit · shader parity · e2e     strict         : false     enforce_admins : TRUE     PR required    : false
+
+**What this costs, and it is not small: direct pushes to `main` are now effectively impossible for everyone.** A push carries a commit that has never been checked, so the required check cannot have passed for it, so the push is refused. Every session has been updating the board by committing to `main` and pushing — that route is gone, and card edits now travel by pull request like everything else.
+
+**The deadlock to watch for, because it is this card's sibling and the two are now wired together.** `bug-suite-absent-on-conflict` measured that a conflicting pull request gets no `pull_request` run at all — GitHub cannot compute `refs/pull/N/merge` while it conflicts — so the required check never arrives. With `enforce_admins: false` an admin could clear that. With it true, nobody can: the PR waits for a check that cannot be scheduled. And board conflicts are the NORMAL state here, because `docs/board.md` and `docs/board.html` are generated from every card and any two branches touching any card collide once `main` moves.
+
+The escape is a rebase, which regenerates the board and clears the conflict, which lets the run be scheduled. That works. It is now mandatory rather than merely wise, and it is the only way out.
+
+**Recovery, written down because a rule nobody can undo in one step is a rule that will be undone in a panic:**
+
+gh api -X DELETE repos/vibesyemmy/obsrv/branches/main/protection/enforce_admins
+
+Branch protection settings remain editable by an admin regardless of `enforce_admins` — the setting gates pushes to the branch, not changes to the rule. So this is reversible in one command by anyone who could have bypassed it anyway, which is the honest description of what the setting buys: it removes the *accidental* bypass, not the deliberate one.
+
 ### The target emits no url-changed at all — a second shape, and the test named for it
 
 [`bug-sync138-no-url-changed`](../board/bug-sync138-no-url-changed.md) · bug · owner: Kenya
