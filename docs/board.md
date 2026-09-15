@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*58 cards, 28 open, 21 of those unclaimed.*
+*58 cards, 28 open, 20 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -164,7 +164,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 11
+## Next — 10
 
 *Picked, not claimed — start here.*
 
@@ -417,9 +417,50 @@ Options, none obviously right:
 
 **Do not close this on a green PR.** A PR whose checks are present proves nothing about the conflicting case — that is the exact error `bug-pr-checks-absent` was closed with, and this card exists because of it.
 
+---
+
+## Doing — 2
+
+*Claimed. Someone is on it.*
+
+### Three sessions were sharing one working tree
+
+[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
+
+Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
+
+`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
+
+RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
+
+Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
+
+OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
 ### The target emits no url-changed at all — a second shape, and the test named for it
 
-[`bug-sync138-no-url-changed`](../board/bug-sync138-no-url-changed.md) · bug · *unclaimed*
+[`bug-sync138-no-url-changed`](../board/bug-sync138-no-url-changed.md) · bug · owner: Kenya
+
+ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word, **on Rook's own recommendation that someone come to this file cold** — offered against its own interest, and the reason is the point of the assignment rather than politeness. Two models of that file were held tonight and both were wrong; the session that just built a correct one is also the one most primed to see it again.
+
+**SO THIS CARD SEPARATES WHAT WAS OBSERVED FROM WHAT WAS INFERRED, and the inferences are Rook's to discard rather than Kenya's to inherit.**
+
+**Observed, and safe to build on:**
+
+- One failure in 160 post-fix runs, at `sync.spec.ts:161`: `expect(seen.length).toBeGreaterThanOrEqual(1)`. The target emitted **no `url-changed` at all** during the window.
+- `mirrorTrace()` printed nothing for it — the test never reaches the step loop that dumps the trace.
+- `sync.spec:138` failed **0 times in 113 runs before** the stale-echo fix and **1 time in 160 after**.
+- It also flaked once on CI (`run 34929956587`, main @ 4ee2bf9), failing then passing on retry, leaving a green run and a `1 flaky` line.
+- Those batches were `--retries=0`; CI is `--retries=1`. The two sets of numbers are not comparable, and any CI-derived rate is a floor.
+
+**Inferred, by Rook, and explicitly NOT established:**
+
+- That the stale-echo fix is innocent of this. Its argument: the change only ever DELETES records, so it can cause more mirroring and never less, and therefore cannot suppress an emission. Rook itself refused to treat this as evidence — one against zero is not a difference.
+- That this is a different fault from `:165` rather than the same one wearing another shape. The shapes differ as observed; whether the causes do is open.
+
+**What is genuinely different about the investigation:** `:165` was solved by an instrument that answered *which branch did the decision take*. This failure never reaches a decision — nothing is emitted. So `mirrorTrace()` does not reach it, and whatever answers *why did nothing emit* is a different instrument. Building it is likely most of the work, as it was last time.
+
+**And the title is still the finding.** *"A redirecting page leaves no stale expectation behind"* — the test is named for the invariant, `redirect.html`'s comment says the same, both are two years older than the bug, and the test was passing while the invariant was broken because it asserts the target FOLLOWED rather than that the record was GONE. Whatever this card finds, the same question is worth asking of it: does the assertion check the thing the title claims?
 
 Raised 2026-09-15 by Rook, from its own post-fix batch, and deliberately NOT folded into `bug-stale-issued-echo`.
 
@@ -438,26 +479,6 @@ The target emitted **no `url-changed` at all** during the window. That is a diff
 **What the investigation needs that the last one did not:** `mirrorTrace()` does not reach this failure. Whatever instrument answers "why did nothing emit" is a different one from "which branch did the decision take", and building it is most of the work — as it was last time.
 
 **A measurement note that applies to any counting here:** Rook's batches are `--retries=0` so every occurrence counts; CI is `--retries=1` so an occurrence that passes on retry leaves a green run and a `1 flaky` line. Numbers from the two are not comparable, and CI-derived rates are floors.
-
----
-
-## Doing — 1
-
-*Claimed. Someone is on it.*
-
-### Three sessions were sharing one working tree
-
-[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
-
-Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
-
-`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
-
-RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
-
-Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
-
-OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
 
 ---
 

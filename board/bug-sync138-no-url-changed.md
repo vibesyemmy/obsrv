@@ -1,9 +1,31 @@
 ---
 title: "The target emits no url-changed at all — a second shape, and the test named for it"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
 order: 40
 ---
+
+ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word, **on Rook's own recommendation that someone come to this file cold** — offered against its own interest, and the reason is the point of the assignment rather than politeness. Two models of that file were held tonight and both were wrong; the session that just built a correct one is also the one most primed to see it again.
+
+**SO THIS CARD SEPARATES WHAT WAS OBSERVED FROM WHAT WAS INFERRED, and the inferences are Rook's to discard rather than Kenya's to inherit.**
+
+**Observed, and safe to build on:**
+
+- One failure in 160 post-fix runs, at `sync.spec.ts:161`: `expect(seen.length).toBeGreaterThanOrEqual(1)`. The target emitted **no `url-changed` at all** during the window.
+- `mirrorTrace()` printed nothing for it — the test never reaches the step loop that dumps the trace.
+- `sync.spec:138` failed **0 times in 113 runs before** the stale-echo fix and **1 time in 160 after**.
+- It also flaked once on CI (`run 34929956587`, main @ 4ee2bf9), failing then passing on retry, leaving a green run and a `1 flaky` line.
+- Those batches were `--retries=0`; CI is `--retries=1`. The two sets of numbers are not comparable, and any CI-derived rate is a floor.
+
+**Inferred, by Rook, and explicitly NOT established:**
+
+- That the stale-echo fix is innocent of this. Its argument: the change only ever DELETES records, so it can cause more mirroring and never less, and therefore cannot suppress an emission. Rook itself refused to treat this as evidence — one against zero is not a difference.
+- That this is a different fault from `:165` rather than the same one wearing another shape. The shapes differ as observed; whether the causes do is open.
+
+**What is genuinely different about the investigation:** `:165` was solved by an instrument that answered *which branch did the decision take*. This failure never reaches a decision — nothing is emitted. So `mirrorTrace()` does not reach it, and whatever answers *why did nothing emit* is a different instrument. Building it is likely most of the work, as it was last time.
+
+**And the title is still the finding.** *"A redirecting page leaves no stale expectation behind"* — the test is named for the invariant, `redirect.html`'s comment says the same, both are two years older than the bug, and the test was passing while the invariant was broken because it asserts the target FOLLOWED rather than that the record was GONE. Whatever this card finds, the same question is worth asking of it: does the assertion check the thing the title claims?
 
 Raised 2026-09-15 by Rook, from its own post-fix batch, and deliberately NOT folded into `bug-stale-issued-echo`.
 
