@@ -1,6 +1,6 @@
 ---
 title: "The e2e suite still vanishes on a conflicting PR, and its absence is silent"
-column: next
+column: review
 kind: bug
 owner: "Rook"
 order: 39
@@ -59,3 +59,23 @@ Options, none obviously right:
 **What would settle the choice:** how often a PR here is conflicting at the moment someone wants to read its checks. Two data points so far and both were conflicting, which is suggestive and is not a rate.
 
 **Do not close this on a green PR.** A PR whose checks are present proves nothing about the conflicting case — that is the exact error `bug-pr-checks-absent` was closed with, and this card exists because of it.
+
+INTO REVIEW 2026-09-15, branch `fix/suite-absence-loud`, commit 6b23d27. Unit 1156/1156, typecheck clean, board:check green. **VERIFIED ON A GENUINELY CONFLICTING PULL REQUEST, which this card says is the only verification that counts.**
+
+THE PROBE, and it is deleted now. Two throwaway branches off the fix branch changed the same line of a scratch file, and PR #5 was opened from one to the other — a real conflict without moving main. `mergeable=CONFLICTING state=DIRTY`, and `gh pr checks 5` listed:
+
+    A suite run exists for this commit   pending -> fail 3m33s
+    The board matches the cards ...      pass 9s
+    (no CI check at all)
+
+So the bug reproduced exactly — ci.yml scheduled nothing — and the new check refused rather than said nothing. Both branches and the PR are gone.
+
+HALF ONE, the silence: .github/workflows/suite-answer.yml, `push` on ALL branches, the one trigger a conflict cannot take away. Seconds on ubuntu; the 17-minute macOS suite's schedule is untouched, because the diagnosis was never that the suite fails to run. Opeyemi chose this over making the suite unconditional.
+
+TWO THINGS MEASURED RATHER THAN ASSUMED, either of which would have made it useless. A `pull_request` run is listed against the pull request's HEAD sha, not the merge sha — PR #4's head 1ce283f lists `CI event=pull_request` beside `Board event=push`. And push and pull_request fire together, so a single read would report a race as an absence; it polls for 200 s. A branch with no open PR passes: nobody is reading its checks yet, and a guard that cries wolf stops being one.
+
+HALF TWO, the rot: scripts/knownReds.js + docs/known-reds.txt + `npm run reds:check`, wired into the same always-runs job — the list exists so a reviewer can clear a red WITHOUT the suite, so it must be verified without the suite too. Rows are keyed by test TITLE, never file:line. The check fails when a row names no test, and the refusal blames the list rather than the suite. An empty list is a legitimate state and reads differently from one whose rows all went stale. Six unit tests, driven red first.
+
+NOT DONE, and it is Opeyemi's rather than mine: making this a REQUIRED check is branch protection in GitHub settings. This can fail; it cannot block.
+
+AND THE RATE THIS CARD ASKED FOR IS NOT RECOVERABLE. `gh pr list` reports `mergeable: UNKNOWN` for merged pull requests, so how often a PR here was conflicting when someone wanted to read its checks cannot be reconstructed after the fact. Three data points now (PR #2, Kenya's rebases, PR #5) and all were conflicting, which is suggestive and still is not a rate. Worth recording going forward rather than inventing.
