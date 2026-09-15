@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*59 cards, 23 open, 17 of those unclaimed.*
+*59 cards, 23 open, 16 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -272,7 +272,27 @@ Related: the same measurement produced `chore-electron-sandbox-note`, and the ge
 
 ### userData grows without bound — 1.3 GB, 94% of it Chromium cache
 
-[`bug-userdata-unbounded`](../board/bug-userdata-unbounded.md) · bug · *unclaimed*
+[`bug-userdata-unbounded`](../board/bug-userdata-unbounded.md) · bug · owner: Kenya
+
+ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go.
+
+**Chosen because the card's centre is a genuine unknown rather than a known fix waiting to be typed**, which is what Kenya asked for: *whether these caches make repeat measurements of the same page faster or more consistent.* Nobody has measured it, the obvious fix is a cap, and a cap is wrong if the cache is load-bearing.
+
+**AND A CONNECTION NOBODY HAS DRAWN, offered as a hypothesis and not a finding.** B5 was downgraded the same night to *"met on one desk, and a second desk disagrees"* — 0 result fields moved on this laptop, 4 on CI, both diverging cases on `grows-as-walked.html`. That was read as a speed difference: 14 cores against a three-core VM.
+
+**But the two desks also differ in cache state, and nobody controlled for it.** CI starts from a fresh runner every run — cold Chromium cache, every asset fetched. This laptop carries 1.3 GB of warm cache, 936 MB of it `Cache`. So the B5 comparison was warm-against-cold as much as fast-against-slow, and `grows-as-walked.html` is precisely the fixture where load timing decides what the walk sees.
+
+If the cache affects repeatability, it could account for part of that disagreement without CPU speed entering into it. **That is a guess with a mechanism, at the weight the margin hypothesis had before it died** — and the instrument to settle it already exists: `scripts/b5-fixture-sweep.js`, Kenya's own, which is a tool rather than a model and carries no assumption about the answer.
+
+**What would settle it**, and the null is a real result either way:
+
+- The fixture sweep run twice on one desk — once with the profile's cache warm, once with it cleared — and the moved-field counts compared. Same machine, same speed, one variable.
+- If the counts differ, the cache is load-bearing for B5 and a cap needs a number chosen against that rather than against disk space. It would also mean B5's desk comparison has a confound in it that should go on `ci-second-host`.
+- If they do not differ, the cache is free to bound and the 1.3 GB is a straightforward growth defect — and B5's desk disagreement stays attributed where it is.
+
+Either way it is a measurement someone can finish, and it decides a fix rather than performing one.
+
+**The documentation half is separable and cheap:** neither `docs/limitations.md` nor the README's *Privacy and files* section says this directory grows without limit, which a user would want to know before it is 1.3 GB. That can ship whatever the measurement finds.
 
 Measured by Rook 2026-09-14 on this machine's real profile while scoping A4.
 
