@@ -487,9 +487,26 @@ describe('parseInspectReport', () => {
   }
   it('copies a good report field by field', () => {
     const r = parseInspectReport(good)!
-    expect(r).toEqual(good)
+    // `opacity` is supplied by the parser when the page omits it: a page that
+    // says nothing about opacity is fully opaque.
+    expect(r).toEqual({ ...good, opacity: 1 })
     expect(r).not.toBe(good)
     expect(r.color).not.toBe(good.color)
+  })
+
+  it('carries an opacity the page reports, and defaults an absent one to opaque', () => {
+    // It cannot be read off the colour — computed `color` stays #ffffff under
+    // `opacity: .62` — so the report carries it or the greying reaches nothing.
+    expect(parseInspectReport({ ...good, opacity: 0.62 })!.opacity).toBe(0.62)
+    expect(parseInspectReport(good)!.opacity).toBe(1)
+  })
+
+  it('drops a report whose opacity is impossible, rather than clamping it', () => {
+    // The rule the rest of this parser follows: a page saying something that
+    // cannot be true is not patched into something that can.
+    for (const bad of [-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY, '0.5', null]) {
+      expect(parseInspectReport({ ...good, opacity: bad })).toBeNull()
+    }
   })
   it('keeps an image background as null with its note', () => {
     expect(parseInspectReport({ ...good, background: null, backgroundNote: 'image' })?.background).toBeNull()

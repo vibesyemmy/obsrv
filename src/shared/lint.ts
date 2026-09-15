@@ -34,6 +34,13 @@ export interface LintText {
   fontFamily: string
   color: RGBA
   /**
+   * The element's effective `opacity` — the product down its ancestor chain.
+   * Not in `color`: computed `color` stays #ffffff under `opacity: .62`, so a
+   * page that greys its secondary text that way was judged as though it had
+   * not (docs/research/2026-09-15-contrast-figure.md).
+   */
+  opacity: number
+  /**
    * The colour under the text, composited down from the nearest opaque
    * ancestor; null when an image or gradient is in the way, in which case
    * no rule here can say what the pixels are.
@@ -203,6 +210,17 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   // branch of the tree, which a walk up the ancestors never met. Off the
   // viewport the stack is empty and the ancestors stand in.
   const PAINTED = new Set(['IMG', 'VIDEO', 'CANVAS', 'PICTURE', 'SVG', 'IFRAME', 'OBJECT', 'EMBED'])
+  // The product of `opacity` down the ancestor chain: `opacity` composites a
+  // whole subtree, so a parent's .5 greys its children whatever they declare.
+  const effectiveOpacity = (el: Element): number => {
+    let o = 1
+    for (let node: Element | null = el; node !== null; node = node.parentElement) {
+      const v = Number.parseFloat(getComputedStyle(node).opacity)
+      if (Number.isFinite(v)) o *= Math.min(1, Math.max(0, v))
+    }
+    return o
+  }
+
   const backgroundOf = (el: Element, cs: CSSStyleDeclaration, r: DOMRect): { background: RGBA | null; note: 'computed' | 'image' } => {
     let under: Element[] | null = null
     const x = r.left + r.width / 2
@@ -275,6 +293,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
             fontWeight: parseInt(cs.fontWeight, 10) || 400,
             fontFamily: cs.fontFamily.split(',')[0]?.replace(/["']/g, '').trim() ?? '',
             color: parseColor(cs.color) ?? [0, 0, 0, 1],
+            opacity: effectiveOpacity(el),
             background: bg.background,
             backgroundNote: bg.note,
           })

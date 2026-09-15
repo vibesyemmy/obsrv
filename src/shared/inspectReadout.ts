@@ -1,5 +1,5 @@
 import { ppi as ppiOf } from './calibration'
-import { cssPxToMm, effectiveContrast, hex } from './contrast'
+import { cssPxToMm, effectiveContrast, hex, paintedColor } from './contrast'
 import type { InspectReport } from './inspect'
 import { layoutScale, layoutScaleNote } from './layoutScale'
 import type { PanelParams } from './types'
@@ -66,7 +66,16 @@ export interface InspectReadout {
   /** The same box in millimetres on this screen; null without a diagonal. */
   rectMm: { width: number; height: number } | null
   font: { px: number; mm: number | null; weight: number; family: string }
+  /** The colour as the page states it: computed `color`, alpha discarded. */
   color: string
+  /**
+   * The colour the screen actually shows — the stated colour after its own
+   * alpha and the element's effective `opacity`, composited onto the
+   * background. Equal to `color` whenever the text is fully opaque, which is
+   * most of the time; different is the case worth seeing, and it is the colour
+   * the contrast figures describe.
+   */
+  colorPainted: string
   /** Null when an image or gradient is under the text. */
   background: string | null
   backgroundNote: 'computed' | 'image'
@@ -114,11 +123,23 @@ export function inspectReadout(
   const firstClass = report.classes.split(/\s+/).find(c => c.length > 0)
   const element = `${report.tag}${report.id ? `#${report.id}` : ''}${firstClass ? `.${firstClass}` : ''}`
 
+  // What the screen shows, and the note when that is not what the page says.
+  // Without a background nothing can be composited, so the stated colour is
+  // the only answer available and the readout does not pretend otherwise.
+  const painted =
+    report.background === null ? hex(report.color) : hex(paintedColor(report.color, report.background, report.opacity))
+  const paintedNote =
+    painted === hex(report.color)
+      ? null
+      : `the page states ${hex(report.color)} and the screen shows ${painted}: ${
+          report.opacity < 1 ? `an opacity of ${round(report.opacity, 2)}` : 'the colour\u2019s own alpha'
+        } composites it onto the background, and the contrast figures are of what is shown`
+
   let contrast: InspectContrast | null = null
   if (report.background !== null) {
     const large = isLargeText(report.fontSizePx, report.fontWeight)
     const threshold = large ? 3 : 4.5
-    const c = effectiveContrast(report.color, report.background, panel.params, panel.vision?.matrix)
+    const c = effectiveContrast(report.color, report.background, panel.params, panel.vision?.matrix, report.opacity)
     contrast = {
       asIs: round(c.asIs, 2),
       onPanel: round(c.onPanel, 2),
@@ -152,11 +173,12 @@ export function inspectReadout(
     rectMm: ppi === null ? null : { width: boxMm(report.rect.width)!, height: boxMm(report.rect.height)! },
     font: { px: report.fontSizePx, mm: fontMm, weight: report.fontWeight, family: report.fontFamily },
     color: hex(report.color),
+    colorPainted: painted,
     background: report.background === null ? null : hex(report.background),
     backgroundNote: report.backgroundNote,
     contrast,
     ppi: ppi === null ? null : Math.round(ppi),
     layoutScale: round(scale, 4),
-    notes: scaleNote === null ? [] : [scaleNote],
+    notes: [scaleNote, paintedNote].filter((n): n is string => n !== null),
   }
 }
