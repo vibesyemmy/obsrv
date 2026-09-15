@@ -45,7 +45,11 @@ concurrency:
 
 jobs:
   check:
-    name: The board matches the cards it is generated from
+    # The name is what people read on a pull request, so it says what this
+    # actually does now. It used to be "The board matches the cards it is
+    # generated from", which was true while the views were committed and became
+    # a lie the moment they were not — on the most-read string in the file.
+    name: Every card can be read and rendered
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
