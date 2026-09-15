@@ -1,6 +1,6 @@
 ---
 title: "The contrast figure disagrees with the colours printed beside it"
-column: doing
+column: review
 kind: bug
 owner: "Rook"
 order: 4
@@ -36,3 +36,21 @@ WHAT RESTS ON IT: 242 `contrast-on-panel` findings on that one page, 217 of them
 WHERE TO START, and the thing this card exists to prevent: do not fix the arithmetic. Both numbers are produced by code that believes it is right, and one of them is. Establish which half is lying first — a fixture with a known composited stack (translucent layer over a known colour) and a known computed background, where the two answers differ by construction, will say. `src/shared/inspectReadout.ts` is where both surfaces get their figures, so a unit test there can hold whichever answer turns out to be correct.
 
 Unowned. Rook found it and did not take it: run 17's card is B1, and a third session arriving at this file cold is worth more than the finder's two hypotheses.
+
+INTO REVIEW 2026-09-15, branch `fix/contrast-figure`, commits 3152d6c (the measurement) and f8d734f (the fix), both on origin. Unit 1171/1171, typecheck clean across three configs. Write-up: docs/research/2026-09-15-contrast-figure.md.
+
+**THE RATIO WAS THE RIGHT HALF. THE PRINTED COLOUR WAS THE WRONG ONE** — the opposite of how run 17 framed it, and both hypotheses the finder brought were wrong. The card's instruction not to fix the arithmetic first is what made that findable.
+
+HOW IT WAS SETTLED, one level below both hypotheses: six tests against figures computed from the published formula rather than from the implementation. black/white 21.00, #ffffff on #0c0c0c 19.56, #0b0c0c on #d2e2f1 14.82, order-independent. All green on the EXISTING code — so the arithmetic was innocent and the value handed to it was what differed. No compositing hypothesis was needed to get there.
+
+A fixture grid (tests/fixtures/contrast-alpha.html) then separated TWO defects, and direction was never the boundary — backgrounds composite correctly in both directions. gov.uk's text was opaque and lobste.rs's translucent, which is all that made two samples look like a light-on-dark split.
+
+DEFECT A: a translucent text colour was composited for the ratio and printed with its alpha discarded. Fixed by `paintedColor`, which both halves now share so they cannot drift apart again. lobste.rs reads `#ffffff` stated, `#a0a0a0` painted, 7.5:1 — and an independent sample of the snap's own pixels in that rect gives #a1a1a1, one unit off for antialiasing.
+
+DEFECT B: `opacity` is not in the computed colour, so it reached neither half and text greyed that way was judged as though it were white. The probe now takes the product down the ancestor chain. The fixture case that reported 19.56 reports 7.72 — a wrong VERDICT corrected, not merely a misleading colour.
+
+LINT NEEDED SEPARATE WIRING, which the card said to check rather than assume. Its message now names the painted colour and says when the page states another, and its "as stated" became "on a reference display" — which is what that number is.
+
+Opaque cases are unchanged (19.56, 14.82, no note), so no existing verdict moves except the ones that were wrong.
+
+TWO THINGS WORTH KEEPING. Both payload whitelists gained the field and drop a report whose opacity is outside 0..1 rather than clamping it, per the rule the rest of ipcPayloads.ts follows. And the verification ran through this worktree's OWN CLI: the obsrv-dev MCP tool announced it was serving the shared checkout at abb508f, which is the only reason a false green was avoided.
