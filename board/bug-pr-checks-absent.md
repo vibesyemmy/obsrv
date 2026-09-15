@@ -1,10 +1,12 @@
 ---
 title: "A conflicting PR runs no CI at all — and board PRs conflict by design"
-column: review
+column: done
 kind: bug
 owner: "Henry"
 order: 36
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as 450d5f9 on main. Confirmed after the merge rather than before it: the main push fired **Board**, **Board on Pages** and **CI** as three separate workflows, Board went green on main, and `ci.yml` no longer carries `board:check` — moved rather than duplicated.
 
 FIXED 2026-09-15 on Opeyemi's word — he chose the concurrency route. **Both halves, because the first alone fixes nothing observable.**
 
