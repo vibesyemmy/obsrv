@@ -1,6 +1,6 @@
 ---
 title: "Apply the breaking-changes policy to the last five releases"
-column: review
+column: done
 kind: readiness
 owner: "Rook"
 criterion: C2
@@ -115,3 +115,32 @@ THE CASE THAT LOOKED STRONGEST WENT THE OTHER WAY. 0.57.0's "the answer names th
 THE REGISTER GAINS ONE ENTRY, and it records a check rather than a change: "checked and clean" and "never checked" are different facts and an absent entry does not distinguish them. It states its own two limits (the nested gap, and behaviour changes invisible to a name list) rather than implying a completeness it does not have.
 
 FOR THE POLICY, three things the write-up asks for: decide A2 (is a new MCP tool breaking, given the reasoning that makes an added field breaking does not obviously carry) and A4 (a new enum value on the CLI rather than MCP), and say in compatibility.md what retroactive application means, since this is the first time it was tried and will not be the last.
+
+MERGED 2026-09-15 on Opeyemi's word, `c27f06d`. Verified on the merged tree rather than either
+side of it: build first, typecheck exit 0 across three configs, 1181/1181 unit, `board:check`
+green. `docs/board.md` and `docs/board.html` conflicted and were REGENERATED; every card merged
+cleanly.
+
+**The card was taken for the hole rather than the entries, and the hole is what it produced.**
+Four silent releases checked, none breaking. The finding: **the policy is younger than every
+release it was applied to** — none of `compatibility.md`, `breaking-changes.md` or
+`thresholds.md` is in the tree at any of the five tags. Two clauses cannot be satisfied
+backwards, and 0.58.0 moved a threshold while breaching nothing because there was no file to
+move. Decided in `compatibility.md` at `87800a6`, with two other questions the pass surfaced.
+
+**The claim the policy leads with was checked for the first time.** `additionalProperties: false`
+cannot be established by reading — the schemas are zod shapes the SDK converts and the string
+appears nowhere in `src/`. Rook asked the built server over stdio. It is true. It had been
+asserted for a day.
+
+**Two of four instruments were vacuous and the register says so**, so whether a field was added
+deeper than a shape's top level is UNCHECKED rather than silently assumed complete.
+
+**And the strongest candidate went the other way**, which is the result least likely to have
+survived if the card had been taken to produce entries: 0.57.0 reads like `url`'s meaning
+changing early, and its own commit message shows the author already choosing notes over field
+changes because of the `additionalProperties` constraint, before that constraint was written
+down. The policy described existing practice more than it introduced a rule.
+
+Henry wrote the policy and did not review it; Rook did not write it and did. That separation is
+the only reason the three gaps were found rather than confirmed.
