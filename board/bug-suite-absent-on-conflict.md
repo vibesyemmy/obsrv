@@ -1,10 +1,22 @@
 ---
 title: "The e2e suite still vanishes on a conflicting PR, and its absence is silent"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 39
 ---
+
+MERGED 2026-09-15 on Opeyemi's word. Verified before pushing: typecheck exit 0 across three configs, 1156/1156 unit, board:check green, reds:check green.
+
+**And `reds:check` was watched refusing**, because a guard nobody has watched refuse is a claim and this card is about exactly that. A row naming no test was planted:
+
+    exit 1, and the refusal blames the LIST rather than the suite —
+    "A row goes stale when its test is fixed, renamed or removed — and a fixed
+     test is the commonest cause, which makes these the rows most likely to be
+     quoted to excuse a red that can no longer happen. Delete the row, or
+     correct the title. This is the list being wrong, not the suite."
+
+Row removed, exit 0 again. That message is the difference between a guard and an obstacle: it says which of the two things is broken, which is the same property the suite lock has.
 
 ASSIGNED TO ROOK 2026-09-15 on Opeyemi's word. **Left in Next rather than Doing because Rook also holds `b1`, and the sequencing is Rook's to decide — it knows whether the live run has started and Henry does not.** Move it to Doing when it starts.
 
