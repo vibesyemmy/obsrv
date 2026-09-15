@@ -54,6 +54,18 @@ branches, then: `chore/signing`, which is real and blocked on Opeyemi, and
 `fix/suite-absence-loud`, which is a ghost and should be deleted or merged empty so it stops
 asking. That is Opeyemi's call, not a session's.
 
+**RESOLVED 2026-09-15: Opeyemi said delete, and it is deleted**, remote and local. Checked
+before deleting rather than after, because a deletion cannot be checked afterwards: exactly one
+commit became unreachable, `4bd6ba130a8046b04f9e2993da8b07d4b6629a02`, and the only line that
+existed on it and not on main was the superseded false one — *"Both branches and the PR are
+gone"* — which Rook had already corrected in `70209df`. Its real content, the `KEPT ON PURPOSE`
+paragraph, is on main verbatim. No worktree held the branch.
+
+The full sha is written above so the commit stays recoverable from GitHub for as long as it
+keeps unreachable objects, which is the only reason a sha belongs in prose. **`chore/signing` is
+now genuinely the only unmerged branch in the repository** — a sentence I wrote once before it
+was true.
+
 **Why this card keeps going stale, stated so the next rewrite is shorter:** a queue is a claim
 about several other cards, and nothing regenerates it when they move. `npm run board` checks
 that the VIEWS match the cards; it cannot check that a card's prose matches another card's
