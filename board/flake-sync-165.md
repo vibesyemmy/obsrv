@@ -5,6 +5,22 @@ kind: bug
 owner: "Rook"
 ---
 
+**DECISION TRACE BUILT, AND EVERY BRANCH FORCED BEFORE ANY OF IT WAS BELIEVED** — `tests/e2e/sync-trace.spec.ts`, Rook, 2026-09-15. Still hunting: 25 runs with the trace, 0 failures, 60 more running.
+
+**Four of five branches watched firing on purpose:** `issued`, `echo`, `already-there`, `trip`.
+
+**The near-miss is the reason this mattered.** Rook's first attempt at `already-there` did not fire — loading the same URL into the *mirrored* pane is an echo and exits a branch earlier. It only reaches `already-there` when the SOURCE pane reloads: the bus never issued that pane anything, so it is not an echo, and the decision runs on to find the other pane already there. **Had the branch not been forced deliberately, the trace would have shipped with a line that never prints, and its absence would have been read as meaning something.**
+
+**`pane-destroyed` CANNOT be forced, and the spec says so in those words.** Destroying a pane means tearing down the tab session the rest of the file shares — a destroyed pane is a tab that has gone, not a pane sitting idle. So, for anyone reading a trace: **absence of `pane-destroyed` means nothing; absence of the other four means they did not happen.** A known blind spot, named in the instrument rather than left for a reader to trip over.
+
+**The instrument-perturbation risk, flagged by Rook rather than waited for:** `note()` now runs on every mirror, and 25 clean runs against a measured ~7% (2 in 28) is roughly a 1-in-6 coincidence. Not yet evidence the trace moved the fault, and not yet evidence it did not. 60 more runs are what settles it.
+
+**THREE OUTCOMES, AND THE TRACE DECIDES BETWEEN THEM WITHOUT ANYONE ARGUING.** Rook's hypothesis, offered explicitly at the weight the margin hypothesis had an hour before it died:
+
+- `target -> native echo hairline.html` — **Rook is right.** At step 2 the test loads HAIRLINE into `target`; the mirror begins with `retire('target', HAIRLINE, now)`, and HAIRLINE is a URL the bus issued into `target` during the PREVIOUS test, which leaves both panes on hairline.html. A surviving entry makes `retire` return true, the decision takes `echo`, and it returns before any URL comparison runs. Asymmetric for a concrete reason: `native` is the pane whose leftovers get swept, `target` carries a stale HAIRLINE from the test before. It usually does not happen because step 1's mirror of TALL retires everything sent at or before TALL, sweeping the stale entry — so the fault needs that sweep to have missed.
+- `already-there` — **Henry's guess is right**, that `other.getURL() === url` compared against a superseded URL or a pane mid-commit.
+- `issued`, with native still never moving — **both are wrong and the fault is downstream of the decision entirely**, in the load rather than in the choosing. Rook's note: this is the outcome neither proposed, and it is not the least likely.
+
 **THE MARGIN IS NOT THE MECHANISM. The premise of this card is dead, killed by the first measurement taken against it — 2026-09-15, Rook.**
 
 A readout on the loop breaker's own state (`sync.loopState()`, reads state and changes none), taken at the instant the test starts:
