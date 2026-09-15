@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*62 cards, 21 open, 14 of those unclaimed.*
+*66 cards, 24 open, 18 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -134,7 +134,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 8
+## Next — 12
 
 *Picked, not claimed — start here.*
 
@@ -282,6 +282,76 @@ THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `movin
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
 
+### The report's central image is altered and only stderr says so
+
+[`bug-report-edit-invisible`](../board/bug-report-edit-invisible.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. Verified independently by Henry in the source. **Unowned.**
+
+**An MCP caller cannot learn that the image its findings are pinned to was edited — and `compatibility.md` tells it not to look in the one place the fact appears.** That is the finding. The stderr gap below is the mechanism, not the headline: a reader who stops early should come away with *the caller cannot know*, not *a warning went to the wrong stream*.
+
+Rook, who found it, asked for this ordering after reading the first version: leading with the stream understates it.
+
+**Every `report` alters the capture its findings are pinned to, and tells nobody who can hear it.** Chrome stuck to the viewport is hidden for the bands after the first — on uniqlo, two fixed elements totalling **160 CSS px removed from every band** of the overview the "Where the problems are" section is built from. That is correct behaviour and a good design: it shows the page once rather than repeating a sticky header, and recovers the rows behind it.
+
+The defect is that the sentence saying it happened **never reaches the artefact**. It is absent from the HTML, absent from `screens[].warnings`, and therefore absent from every MCP caller's reply.
+
+**The mechanism, exact and verified at the line:** `human()` is stderr-only — `src/cli/main.ts:95-97`, three lines, `process.stderr.write` and nothing else. The stuck-chrome sentence uses it at `src/cli/main.ts:484`. The truncation warnings beside it use `warn()`, at `:589` and `:599`, and those **do** reach `warnings[]`. Same file, same function, adjacent branches — and the one that never joins the list is the one saying the image was edited.
+
+**Rook's control is what makes this a finding rather than a guess:** the truncation warning reaches the HTML *on the same page*, so the artefact renders its warnings faithfully. Nothing is broken about the rendering. This sentence simply never becomes a warning.
+
+## Why this is a correctness problem and not a reporting gap
+
+`docs/compatibility.md`, contract 4: *"Human-readable text on stderr is not a contract and may be reworded at any time; if you are parsing it, parse the JSON instead."*
+
+**So the only place this fact appears is the one place the project instructs callers to ignore — and an MCP client never sees stderr at all.** A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. The policy and the defect point in opposite directions, and the policy is right; the classification is wrong.
+
+**The starkest instance, on docs.astro.build:** `warnings` is `[]` for both screens while stderr carried two sentences each. An empty array reads as *nothing to say about this capture*. The list is not broken — it is working exactly as written, which is the harder kind of silence to find and the reason this needed someone reading a surface nobody had examined.
+
+## What a fix has to decide, because it is not simply "call warn instead"
+
+`human()` exists for a reason: not every sentence a person wants on a terminal belongs in a machine list, and `compatibility.md` makes **adding a field** to an MCP reply a breaking change while leaving the *contents* of an existing array free to grow. So moving a sentence from `human()` to `warn()` is cheap on the MCP surface and is the likely fix — but the question to answer first is which sentences are **facts about the artefact** rather than progress notes.
+
+The test that separates them, proposed rather than settled: **would a caller reasoning about the output be wrong without it?** The stuck-chrome sentence passes that test — the image is not what it appears to be. "Captured in 3 bands of 768 CSS px" probably does not.
+
+Audit every `human()` call in `src/cli/main.ts` against that question rather than fixing this one instance, because one instance fixed is the same class shipped.
+
+## Not yet known
+
+Whether the overview's pins and crops **land** where the findings are. Run 18 established only that the page explains what it could not locate — not that what it did locate is in the right place. If a pin is placed against unedited coordinates while the image lost 160 px per band, that is a second defect hiding behind this one, and it is untested either way.
+
+### `diff` calls its band deltas noise and leaves its headline numbers standing
+
+[`bug-diff-disowns-its-numbers`](../board/bug-diff-disowns-its-numbers.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. **Unowned.**
+
+On an unsettled page `diff` prints:
+
+the band deltas below are frame-to-frame noise, not evidence about rasterisation
+
+and **above that sentence**, from the same two mismatched frames:
+
+inkCoverage.delta  -0.0991     rows.ratio          0.4934
+
+Those are the two numbers a person actually quotes. The disclaimer names *the bands* and reaches only downward, so the headline figures — which are comparisons between the same two frames the sentence has just called incomparable — stand unqualified.
+
+**The control is what makes it a finding rather than a quibble.** On a static page: `settled` true, `findings` empty, and those two numbers print in **exactly the same shape**. So nothing in the output distinguishes *these mean something* from *these are noise* except one sentence with the wrong scope. A reader who trusts the numbers and skims the prose gets a confident wrong answer; a reader who reads the prose still has no instruction about the two figures above it.
+
+**Why this is the house defect rather than a typo.** `docs/read-the-output-not-the-code` says a sentence must name its own subject and key off a fact it measured, not off a neighbouring sentence. This sentence keys off its own *position* — "below" — which is the most fragile subject a sentence can have, because a layout change silently re-scopes it.
+
+## What a fix has to get right
+
+**Not simply moving the sentence above the numbers.** Position is the bug; another position is not the cure. The disclaimer should name the figures it invalidates, or `settled: false` should suppress or mark the figures themselves, so the qualification travels with the data rather than with the page.
+
+Whichever is chosen, note that `settled` is already in the output: a caller *can* do this correctly today. The question is what the tool says to someone who does not.
+
+## The measurement trap this one sits next to
+
+Both documented `diff` limits refuse correctly and exit **2** with empty stdout. Rook first read those exit codes as **0**, having taken `$?` after a pipe into `tail` — `$?` is the *last* command's status, so `obsrv diff … | tail` reports `tail`'s success whatever `diff` did.
+
+That is the fourth instance in one session of a check with no subject, and the first with no filename involved. It is in `CONTRIBUTING.md` under *A check that looked at nothing passes*. Anyone testing a fix here should read exit codes without a pipe.
+
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
 [`bug-walk-coverage-diverges`](../board/bug-walk-coverage-diverges.md) · **C4** · bug · owner: obsrv-e7
@@ -297,6 +367,24 @@ FIXTURE NOW IN THE REPO: tests/fixtures/app-shell-grows.html (merged 586caab) �
 Handed to obsrv-e7 to run through the C4 parity harness, which catches exactly this asymmetry (a note-bearing array present on one surface and empty on the other) and is how the panel silence and the inspect gap both surfaced. obsrv-e7's read: if live really never fires the coverage note on an app shell, it is a seventh defect rather than a footnote to the sixth.
 
 Cause still open: the `hidden` divergence, the two walks scrolling differently, or the growth being timing-dependent. obsrv-a6's one-off comparison could not separate them.
+
+### The report says "full page: warning: full page is…"
+
+[`bug-report-doubled-warning-prefix`](../board/bug-report-doubled-warning-prefix.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. **Unowned.** The smallest of the three and the cheapest to fix; filed separately so it is not carried along inside a card about something else and then forgotten when that card closes.
+
+In the report's HTML, where a designer reads it:
+
+full page: warning: full page is 10374 CSS px tall…
+
+The warning already opens with `warning: full page is`, and the report prefixes `full page: `. So it says the subject twice and carries a bare `warning:` in the middle of a sentence rather than at the start of one.
+
+**Why it is worth a card rather than a quiet fix.** The sentences are the product — the whole argument of `docs/read-the-output-not-the-code` — and this is the one place in run 18 where a sentence reads as though nobody had looked at it in the surface a user actually reads. The cause is almost certainly that the string was written for stderr, where the `warning:` prefix earns its place, and is then reused in HTML where the section heading already supplies the subject.
+
+**So the fix to look for is not this string.** It is whether a warning's text is composed once for two destinations that need different openings. If it is, the same doubling will exist wherever else a prefixed warning is embedded under a heading, and fixing this instance ships the class.
+
+Check the other warnings the report embeds before editing this one.
 
 ### There is no supported way to remove Obsrv's data
 
@@ -314,6 +402,59 @@ Two shapes, and the lighter one may be enough:
 **Prefer the list first.** It is the part that makes the privacy statement true, it can ship immediately, and it is the specification the command would have to implement anyway. A command written before the list exists is a command whose completeness nobody can check.
 
 Whoever takes the command: `a4`'s write-up (`docs/research/2026-09-14-a4-install-remains.md`) is the inventory, measured on a real packaged build rather than reasoned from the code.
+
+### The inspector closes, then re-opens 500 ms later — and it defeats the retry
+
+[`bug-devtools-toggle-reopens`](../board/bug-devtools-toggle-reopens.md) · bug · *unclaimed*
+
+FILED 2026-09-15 by Henry, from CI run `34956013490` (PR #10). **Unowned.**
+
+`tests/e2e/devtools.spec.ts:92` — *"a toggle that arrives while the inspector is opening is applied when it opens, not dropped"* — failed **both attempts** on a macOS runner.
+
+## What actually failed, which is not what it looks like at a glance
+
+The test clicks the `target-devtools` menu item **twice in one tick**, so the inspector opens and then closes. It then checks twice:
+
+108  await expect.poll(opened, { timeout: 10_000 }).toBe(false)   ← PASSED     111  await new Promise(r => setTimeout(r, 500))     112  expect(await opened()).toBe(false)                            ← FAILED: Received true
+
+**The close poll succeeded. The inspector then re-opened within 500 ms.**
+
+That matters because the obvious reading is wrong. The test's own comment records a previous CI failure — *"0.59.0's bump run, devtools.spec:92 failing its close poll twice at 10 s"* — and that was the poll at 108 timing out, a slow-machine race. **This is the opposite end of the test.** Line 112 exists for a different reason, stated in the line above it: *"And it stays closed: the pending toggle is one, not a queue that re-opens behind it."*
+
+So the failure is the guard admitting a **third** state change from two clicks, which is the specific defect the test was written to catch — not the timing flake its comment describes. Henry initially reported this as the same symptom as 0.59.0 and was wrong; the line number in the error is what separates them, and it is worth reading before excusing this as known.
+
+## Why it is not simply a flake, stated as evidence rather than conviction
+
+- **It defeated `--retries=1`.** `ci.yml` carries that retry expressly to absorb flakes on
+loaded runners. A failure that survives it is outside what the current mitigation covers.
+- **The test is designed to be speed-independent.** Two clicks in one tick put the second inside
+the open window *by construction, whatever the machine's speed* — that is the comment's own
+claim, and this failure is a counterexample to it or to the guard.
+- **It passed on `main` this morning**, before tonight's log regression, so it is not
+consistently broken either.
+
+Intermittent and real are not exclusive. A race that resolves the wrong way occasionally is both.
+
+## What is NOT known, and should be established before a fix is designed
+
+- **Whether the re-open is the second click arriving late, or a third event entirely.** The
+guard is meant to collapse a pending toggle to one; if what arrives at 500 ms is the *second*
+click being replayed, that is a queue. If it is something else, the guard is not the subject.
+- **Whether this reproduces off CI.** Nobody has seen it on a desk. `OBSRV_TEST=1` and a loaded
+machine may be required, which makes it a candidate for the fixture-sweep treatment rather
+than for staring at the code.
+- **How often.** One double-failure is one observation. `bug-sync138-no-url-changed` is the
+cautionary case: a flake seen once, six clean runs after, and a sizing decision nobody had
+made. Do not hunt this until someone decides how many runs would settle it — the interval on
+one observation is enormous.
+
+## Do not put it on the known-reds list yet
+
+`docs/known-reds.txt` is currently **empty**, which is a legitimate state meaning nothing is excused. Adding a row here would excuse a red that may be a real defect, and the list's own header says a row exists for *a reason already understood*. This reason is not understood; only the symptom is. A row now would convert an open question into a permission.
+
+## The general point, for `CONTRIBUTING.md` if it survives scrutiny
+
+A test's own comment describing a past failure is the **most** persuasive thing available when the same test fails again, and that is exactly what makes it dangerous. The comment here is accurate, about the same test, from the same CI, and describes a different failure. Read the line number in the error before reading the comment.
 
 ### CI on main fails about one run in three, from at least three different tests
 
@@ -383,60 +524,9 @@ Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the m
 
 ---
 
-## Doing — 3
+## Doing — 2
 
 *Claimed. Someone is on it.*
-
-### Run 18: exercise report and diff, the two surfaces run 17 excluded
-
-[`b1-report-diff`](../board/b1-report-diff.md) · **B1** · readiness · owner: Rook
-
-**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
-
-**Two things carried over from `b1` that should shape the site list before anything is run.**
-
-The two shapes run 17 planned and did not reach are *a retail image grid* and *a docs site with a sticky sidebar*. Both are named rather than incidental: an image grid is where `diff`'s ink deltas and row ratios have the most to say, and a sticky sidebar is a non-host scroller, which is the shape that produced 48 unpinnable findings once already. Starting there spends run 17's own planning rather than re-deciding it.
-
-**And `b1`'s rule about sites, which applies with more force to a report run:** *fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.* `report` composes snap, audit, diff and lint into one page, so running it over a site a previous run already combed produces a document full of findings somebody has read before — which reads like coverage and is recognition.
-
-**What B1 actually asks, since this card is a piece of it:** B1 is met when a run finds *nothing* user-visible. Runs 13 through 16 each found something, each smaller than the last. So the honest deliverable here is either new cards or the sentence *this run found nothing user-visible in report and diff*, which nobody has yet been able to write about any surface.
-
-**This is the successor to `b1`, scoped to the half of it that is documented rather than merely unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed: two of eight planned sites; obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout."*
-
-**Rook asked for this one, and the reason it gave is the reason it is the right card:** run 17 *excluded* report and diff explicitly and said so, which makes this the only gap on B1 that is **documented rather than merely unexamined**. An unexamined gap might be fine. A documented one is a promise somebody made to check later.
-
-**Rook is still cold on exactly these two and no longer cold on the rest**, which is a narrower qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply again after this run.
-
-## What this card does NOT close, so nobody reads it as B1 met
-
-Two of eight planned sites, and **anything live in the app**. Run 17 was headless throughout; this run is scoped to two surfaces, not to the criterion. B1 stays open after this lands, and saying so here is cheaper than discovering it from a readiness table that overstates.
-
-## The trap this card is most likely to die of
-
-**Running the tools is not exercising them.** A run that invokes `obsrv_report` and `obsrv_diff`, gets output, and reports "covered" has measured that the commands exit zero. The product is the sentences they produce, and the question is whether a developer reading them cold would act correctly. Run 17's value was reading, not invoking.
-
-**So pre-register the vacuity check, which is house style now** (`CONTRIBUTING.md`, from Kenya's cache experiment): before running, name the result that would mean *this run did not exercise report and diff*. Candidates worth deciding in advance — a report whose findings sections are empty on every site, a diff that errors on every page for a reason unrelated to the page, or a run where every finding read was one `audit` had already produced and `report` merely re-displayed.
-
-## Known limits, verified in the code rather than recalled, so a limit is not filed as a bug
-
-- **`diff` is 1x presets only.** Dense presets (phones) and CSS viewports over 2048px exit with
-an error — `src/mcp/server.ts:1201`. That error is correct behaviour; whether it *reads* as
-correct behaviour to someone who hit it by accident is exactly the kind of thing this run is
-for.
-- **Device pixels are capped at 4096 per axis**, so a tall full-page capture is clamped and the
-CSS budget shrinks as density rises — `src/mcp/server.ts:275` and `:299`.
-- **`diff` on an animating page compares two different frames.** Check `settled` in the output:
-when false the band deltas are frame-to-frame noise, and the findings are supposed to say so
-rather than interpret them. Whether they do is a finding.
-- **`diff` cannot say "the hairline vanished".** It reports ink deltas and row ratios; a 0.5px
-hairline renders one device row at 1x *and* 2x. Vanishing is judged by reading the PNG, and
-the output should not imply otherwise.
-
-## The standing hazard that has cost two sessions a false result
-
-**Build before running.** `npx playwright test` and the MCP tools run the built `out/`, not `src/`. Two false failures in one evening came from this, both plausible-looking. If something surprises you, check the build before you check the code.
-
-Constraints are Rook's own and unchanged: own worktree off current main, Review rather than main, merge on Opeyemi's word direct to Rook, design to him before writing.
 
 ### A green check set can include a suite that has not finished
 
@@ -477,6 +567,24 @@ That is not an argument for flipping `enforce_admins` on. Doing so blocks every 
 remote: - Required status check "typecheck · unit · shader parity · e2e" is expected.     To https://github.com/vibesyemmy/obsrv.git        96d5d41..ae2a252  main -> main
 
 **That output is worth reading twice, because it is tonight's defect wearing a new coat.** The remote announces the required check in the register of a refusal — and then reports the push succeeded, two lines later. Anyone skimming a push for red text would conclude they had been blocked. Anyone skimming for the ref update would conclude the check had passed. It is neither: it is a warning that an admin bypassed a rule, printed in the shape of an error. **The PR gate itself is UNEXERCISED** — nobody has watched it refuse a pull request, so by this repo's own standard it is a claim rather than a check until the next PR tests it. Said here rather than discovered later.
+
+## enforce_admins turned ON, 2026-09-15, on Opeyemi's word
+
+The gap named above — that an admin pushing directly is not gated — is now closed. The full rule in force:
+
+required check : typecheck · unit · shader parity · e2e     strict         : false     enforce_admins : TRUE     PR required    : false
+
+**What this costs, and it is not small: direct pushes to `main` are now effectively impossible for everyone.** A push carries a commit that has never been checked, so the required check cannot have passed for it, so the push is refused. Every session has been updating the board by committing to `main` and pushing — that route is gone, and card edits now travel by pull request like everything else.
+
+**The deadlock to watch for, because it is this card's sibling and the two are now wired together.** `bug-suite-absent-on-conflict` measured that a conflicting pull request gets no `pull_request` run at all — GitHub cannot compute `refs/pull/N/merge` while it conflicts — so the required check never arrives. With `enforce_admins: false` an admin could clear that. With it true, nobody can: the PR waits for a check that cannot be scheduled. And board conflicts are the NORMAL state here, because `docs/board.md` and `docs/board.html` are generated from every card and any two branches touching any card collide once `main` moves.
+
+The escape is a rebase, which regenerates the board and clears the conflict, which lets the run be scheduled. That works. It is now mandatory rather than merely wise, and it is the only way out.
+
+**Recovery, written down because a rule nobody can undo in one step is a rule that will be undone in a panic:**
+
+gh api -X DELETE repos/vibesyemmy/obsrv/branches/main/protection/enforce_admins
+
+Branch protection settings remain editable by an admin regardless of `enforce_admins` — the setting gates pushes to the branch, not changes to the rule. So this is reversible in one command by anyone who could have bypassed it anyway, which is the honest description of what the setting buys: it removes the *accidental* bypass, not the deliberate one.
 
 ### The target emits no url-changed at all — a second shape, and the test named for it
 
@@ -561,96 +669,91 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 *Finished, waiting on the maintainer to merge.*
 
-### Measure the noise ratio with two independent classifiers
+### Run 18: exercise report and diff, the two surfaces run 17 excluded
 
-[`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
+[`b1-report-diff`](../board/b1-report-diff.md) · **B1** · readiness · owner: Rook
 
-zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
+**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
 
-ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go. Kenya asked to be routed by need and stated no preference on subject; this is the need.
+**Two things carried over from `b1` that should shape the site list before anything is run.**
 
-**Why this card is the need.** It is a readiness criterion, it is unowned, and until today it was one sentence long — nobody has started it. Its own text says *"B5 now makes this interpretable"*, and B5 became interpretable this week through Kenya's work: first the downgrade to one desk, then the structural result that every CLI run is cold by construction, which removed the confound Henry had put beside it. The card was waiting on something that has now happened.
+The two shapes run 17 planned and did not reach are *a retail image grid* and *a docs site with a sticky sidebar*. Both are named rather than incidental: an image grid is where `diff`'s ink deltas and row ratios have the most to say, and a sticky sidebar is a non-host scroller, which is the shape that produced 48 unpinnable findings once already. Starting there spends run 17's own planning rather than re-deciding it.
 
-**Why Kenya, and it is not availability.** The whole card turns on the word INDEPENDENT, and the failure mode is two classifiers that agree because they share a mechanism rather than because the finding is real. Kenya found exactly that defect in its own instrument today — the B5 fixture server sends `cache-control: no-store`, a second independent block on the thing being measured, and Kenya's own words were *"I built one of them myself without noticing."* Nobody on this board has more recently paid for that lesson.
+**And `b1`'s rule about sites, which applies with more force to a report run:** *fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.* `report` composes snap, audit, diff and lint into one page, so running it over a site a previous run already combed produces a document full of findings somebody has read before — which reads like coverage and is recognition.
 
-**The counter-argument, stated rather than left for someone to raise.** Kenya established B5, and B4 is interpretable because of B5. That is a stake. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but it is not nothing, and if B4 comes out flattering to B5 that coincidence should be stated in the write-up rather than left for a reader to notice.
+**What B1 actually asks, since this card is a piece of it:** B1 is met when a run finds *nothing* user-visible. Runs 13 through 16 each found something, each smaller than the last. So the honest deliverable here is either new cards or the sentence *this run found nothing user-visible in report and diff*, which nobody has yet been able to write about any surface.
 
-**What the card actually asks.** zalando.de answered 143 findings. Nobody has established how many a developer would act on, so "143 findings" is currently a number with no denominator — it could be a thorough audit or a noisy one and the output reads identically. The ratio is the product claim.
+**This is the successor to `b1`, scoped to the half of it that is documented rather than merely unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed: two of eight planned sites; obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout."*
 
-**The traps, named in advance because this card is about a measurement being meaningful:**
+**Rook asked for this one, and the reason it gave is the reason it is the right card:** run 17 *excluded* report and diff explicitly and said so, which makes this the only gap on B1 that is **documented rather than merely unexamined**. An unexamined gap might be fine. A documented one is a promise somebody made to check later.
 
-- **Independence is the whole thing.** Two classifiers that read the same rubric, or that both
-key off Obsrv's own severity or grouping, measure Obsrv's self-consistency rather than the
-noise ratio. State what makes the two independent BEFORE running, and say how it could fail.
-- **A classifier that sees the finding's own prose is reading an argument.** Obsrv's sentences
-are written to be persuasive about why something matters — that is the product. Deciding
-"would a developer act on this" from the sentence rather than from the page tests the writing.
-- **Agreement has the two-facts shape.** High agreement fits *the findings are clearly real* and
-- both classifiers share a blind spot*. Low agreement fits *the findings are noisy* and *the
-question was ambiguous*. Decide in advance which reading each outcome gets, or the result will
-be interpreted after the fact in whichever direction is convenient.
-- **One site is one site.** zalando.de is a heavy commercial page; a noise ratio from it is not
-a noise ratio for the tool. Say what the number covers.
+**Rook is still cold on exactly these two and no longer cold on the rest**, which is a narrower qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply again after this run.
 
-**Pre-register the vacuity check, which is Kenya's own practice and the reason it is asked for here.** Kenya wrote down beforehand what would make the userData cache arms meaningless, and it caught both warm arms being vacuous at 4 KB and 12 KB — without it, two clean zeros would have read as "the cache does not matter" and a cap would have shipped on nothing. The equivalent here: name, before running, the result that would mean *this experiment did not measure the noise ratio*, and make the run report that rather than a number.
+## What this card does NOT close, so nobody reads it as B1 met
 
-Depends on nothing. B5's state is recorded on `readiness.md` and on `bug-userdata-unbounded`.
+Two of eight planned sites, and **anything live in the app**. Run 17 was headless throughout; this run is scoped to two surfaces, not to the criterion. B1 stays open after this lands, and saying so here is cheaper than discovering it from a readiness table that overstates.
 
----
+## The trap this card is most likely to die of
 
-**CLAIMED 2026-09-15 by Kenya on Opeyemi's word. PROTOCOL PRE-REGISTERED BELOW, BEFORE ANY DATA WAS COLLECTED — this section is committed first on purpose, so the record shows the readings were fixed before the numbers existed.**
+**Running the tools is not exercising them.** A run that invokes `obsrv_report` and `obsrv_diff`, gets output, and reports "covered" has measured that the commands exit zero. The product is the sentences they produce, and the question is whether a developer reading them cold would act correctly. Run 17's value was reading, not invoking.
 
-**THE STAKE, STATED FIRST.** Kenya established B5, and B4's own text says it is interpretable *because* of B5. That is a stake in the outcome. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but if B4 comes out flattering to B5, the write-up says so rather than waiting for a reader to notice.
+**So pre-register the vacuity check, which is house style now** (`CONTRIBUTING.md`, from Kenya's cache experiment): before running, name the result that would mean *this run did not exercise report and diff*. Candidates worth deciding in advance — a report whose findings sections are empty on every site, a diff that errors on every page for a reason unrelated to the page, or a run where every finding read was one `audit` had already produced and `report` merely re-displayed.
 
-**WHAT INDEPENDENCE CAN AND CANNOT MEAN HERE, before it is claimed.** The criterion asks for classifiers who did not write the rules. That part is satisfiable: neither classifier chose the 7 mm / 2 mm thresholds, which predate both. The part that is NOT satisfiable is deeper independence — both classifiers are Claude sessions and share training, so they share a mechanism. **Two raters agreeing is therefore weak evidence for a finding being real and strong evidence only that the two agree.** This will be published as a limit beside the number, not discovered afterwards.
+## Known limits, verified in the code rather than recalled, so a limit is not filed as a bug
 
-**BLINDING.** Neither classifier sees Obsrv's warning sentences, group summaries, or any of its prose. Each sees only page facts from the finding: `kind`, the element's selector, its text content, its rect, and the measured millimetres. A classifier reading the tool's own sentence would be grading Obsrv's persuasiveness rather than the page, which is the second trap this card names.
+- **`diff` is 1x presets only.** Dense presets (phones) and CSS viewports over 2048px exit with
+an error — `src/mcp/server.ts:1201`. That error is correct behaviour; whether it *reads* as
+correct behaviour to someone who hit it by accident is exactly the kind of thing this run is
+for.
+- **Device pixels are capped at 4096 per axis**, so a tall full-page capture is clamped and the
+CSS budget shrinks as density rises — `src/mcp/server.ts:275` and `:299`.
+- **`diff` on an animating page compares two different frames.** Check `settled` in the output:
+when false the band deltas are frame-to-frame noise, and the findings are supposed to say so
+rather than interpret them. Whether they do is a finding.
+- **`diff` cannot say "the hairline vanished".** It reports ink deltas and row ratios; a 0.5px
+hairline renders one device row at 1x *and* 2x. Vanishing is judged by reading the PNG, and
+the output should not imply otherwise.
 
-**SITES:** three, for variety rather than convenience — zalando.de (heavy commercial, the card's own example), bbc.com/news (content, ads, rotation), berkshirehathaway.com (plain HTML, no ads, B5's static control). Preset `android-65`, because tap-target millimetres are a phone question.
+## The standing hazard that has cost two sessions a false result
 
-**SAMPLE:** up to 40 findings per site, drawn deterministically (fixed stride over the full list, seed recorded), because hand-classifying every finding on three sites is not the experiment and a stated sample beats an unstated one. The sampling rule is fixed here so it cannot be adjusted after seeing results.
+**Build before running.** `npx playwright test` and the MCP tools run the built `out/`, not `src/`. Two false failures in one evening came from this, both plausible-looking. If something surprises you, check the build before you check the code.
 
-**LABELS:** `would-act` / `would-not-act` / `unclear`, one per finding, per classifier, independently.
+Constraints are Rook's own and unchanged: own worktree off current main, Review rather than main, merge on Opeyemi's word direct to Rook, design to him before writing.
 
-**THE READINGS, FIXED NOW because agreement has the two-facts shape in BOTH directions:**
+INTO REVIEW 2026-09-15, branch `chore/b1-report-diff`. Write-up: docs/research/2026-09-15-live-run-18.md. Built first, per the standing hazard.
 
-- **High agreement, high would-act** → the findings are mostly actionable. Published WITH the shared-mechanism caveat, because this is the outcome the caveat most threatens.
-- **High agreement, low would-act** → the tool is noisy at these thresholds, and the ratio is the finding. This is the outcome that most flatters nobody and is therefore the easiest to trust.
-- **Low agreement (say a disagreement rate above ~25%)** → "would a developer act on this" is not well enough defined to publish a ratio at all, and the honest result is that the criterion needs a sharper question rather than a number. **In that case no ratio is published as if it were stable** — a disagreed-upon ratio quoted alone is exactly the kind of figure that reads as measurement and is not.
+**THE PRE-REGISTERED VACUITY CHECK PASSED: the run exercised both surfaces.** uniqlo gave 21 audit and 1 diff finding at laptop-768; diff completed on two pages and refused a third for a stated reason; all three findings quote sentences no other surface emits. Naming that condition before running is what makes the result mean anything.
 
-**ONE SITE IS ONE SITE.** 143 findings from zalando.de is a heavy commercial page, not the tool. Three sites is three sites. Whatever comes out is a statement about these pages at this preset, and the write-up will say that in those words.
+F1 — `diff` INVALIDATES ITS BAND DELTAS AND LEAVES ITS HEADLINE NUMBERS STANDING. On an unsettled page it says "the band deltas below are frame-to-frame noise, not evidence about rasterisation" — while `inkCoverage.delta` (-0.0991) and `rows.ratio` (0.4934) print ABOVE that sentence and are comparisons between the same two mismatched frames. A static control settles it: settled true, findings empty, and those two numbers print in exactly the same shape. The only thing separating "these mean something" from "these are noise" is one sentence that names the bands alone — and not the two numbers a person would quote.
 
----
+F2 — THE REPORT'S CENTRAL IMAGE IS ALTERED AND THE SENTENCE SAYING SO IS THE ONE THAT NEVER REACHES THE ARTEFACT. Every report prints "hid chrome stuck to the viewport for the bands after the first: ..." to stderr — on uniqlo, two fixed elements totalling 160 CSS px removed from every band after the first of the capture the "Where the problems are" overview is built from. It is absent from the HTML, absent from screens[].warnings, and therefore absent from any MCP caller's reply. Mechanism, exact: warningSink's `warn()` pushes to the machine list AND prints; `human()` only prints. The truncation warning beside it uses `warn` and DOES reach the HTML — verified on the same page — so the artefact renders its warnings faithfully and this one simply never joins them. On docs.astro.build the consequence is starker: warnings is [] for both screens while stderr carried two sentences each, and an empty array reads as "nothing to say about this capture".
 
-**RESULT 2026-09-15, Kenya. Branch `docs/b4-noise-ratio`. NO RATIO IS PUBLISHED, which is the outcome the protocol fixed in advance for this case — see `b42baca`, committed before any data existed.**
+F3 — "full page: warning: full page is 10374 CSS px tall..." — the warning already begins "warning: full page is" and the report prefixes "full page: ". Says it twice, carries a bare "warning:" mid-sentence, and is in the HTML where a designer reads it.
 
-**The disagreement rate is 57%, and 52% under the fairest collapse. Cohen's κ = −0.07: agreement no better than chance.** The pre-registered rule was that anything above ~25% publishes no ratio, because a disagreed-upon ratio quoted alone reads as measurement and is not. It is not published.
+WHAT HELD, and it is most of the run: both documented diff limits refuse correctly, explain themselves in terms someone who hit them by accident would act on, exit 2 (the documented ArgError code) with empty stdout. `report` names the comparison it did not do (`diffSkipped`, and the same sentence in the HTML rather than an empty section). The motion warning is a model sentence.
 
-A / B                        n     would-act / would-act       34     would-not-act / would-act   33     would-act / unclear          7     would-not-act / unclear      4     unclear / would-act          1
+ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I first read those exit codes as 0, having taken `$?` after a pipe into `tail`. Re-measured without the pipe: 2. Third instance of the same family in one session.
 
-per site   zalando 2/39 (5%)   bbc 1/9 (11%)   berkshire 31/31 (100%)
+WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
 
-**WHAT THE DISAGREEMENT IS ABOUT, which is worth more than the ratio would have been.** Agreement is total where the page is badly broken and near zero where it is marginal. berkshirehathaway.com has no viewport meta tag, is drawn at 0.37x, and every text element lands near 1 mm — both raters say act on all 31. zalando.de is under the thresholds by modest margins, and there the metric rater says "under 7 mm, act" while the semantic rater says "that is an icon font's ligature name (`star_filled`), a conventional footer link, or one styling decision seen 28 times".
+F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
 
-So **the noise ratio is not a property of the tool. It is a property of the page, and of who is asked.** On an obviously broken page the question has one answer; on a heavy commercial page it has as many answers as there are raters.
+**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and `b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three verified defects living only on a done card and in a research document is a record kept where nobody reads it, which is this week's defect applied to its own findings.
 
-**A DEFECT IN THIS EXPERIMENT'S OWN DESIGN, reported rather than left in the number.** Classifier B is severity-only and therefore *cannot express* `would-not-act` — every sampled finding is under threshold by construction, so its label space is act/unclear. A's 37 would-not-acts can never be matched, which inflates the 57%. The binary collapse above (B's unclear counted as not-act) is the fairer figure at 52%, and κ is computed on that. The direction of the finding survives both framings; the headline rate does not, and should not be quoted alone.
+- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
+caller, not a reporting gap.
+- `bug-diff-disowns-its-numbers` — F1.
+- `bug-report-doubled-warning-prefix` — F3.
 
-**CONTAMINATION, DECLARED:** B's rules were written after their author had seen the sample and A's labels. The mitigation is that they touch only numbers — no text semantics, no element-role reasoning — so the only channel from A to B is the cutoff, and the cutoff is a fraction of thresholds that predate both.
+Each names what a fix has to decide rather than the one line to change, because all three are instances of a class and fixing the instance ships the class.
 
-**THE STAKE, AS PROMISED IN THE PROTOCOL:** Kenya established B5, and B4 leans on B5. This result does not flatter B5 — it does not bear on it either way — so the stake did not have to be discounted. Saying so because the protocol said it would be said whichever way it came out.
+**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs them next should be someone else."* Recorded here so the next router does not re-spend an asset that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
 
-**POST-HOC, AND NOT PART OF THE PRE-REGISTERED PROTOCOL — findings can be true AND redundant.** Berkshire's 31 all follow from one missing viewport tag; zalando's 28 brand links are one styling decision. A's 41 would-act findings collapse to about **6 distinct changes** (zalando 2, bbc 3, berkshire 1). A reader who acts on a report acts on causes, not on rows.
-
-**WHAT B4 SHOULD ASK INSTEAD, since "would a developer act on this finding" has now been shown not to carry a number:** how many DISTINCT CHANGES a report implies, against how many rows it prints. That question has one answer per page rather than one per rater — 79 rows, ~6 changes, on these three pages — and it measures the thing the criterion was worried about: that a first run teaches the reader to skim.
-
-**METHOD:** `obsrv audit --preset android-65` on three sites; up to 40 findings per site by fixed stride over the full list (zalando 78 findings stride 2, bbc 9 stride 1, berkshire 31 stride 1) = 79 sampled. Blinded records: kind, selector, text, rect, millimetres. No Obsrv prose in front of either rater. Raw labels and both rubrics are in the branch's scratch files and the numbers above are reproducible from `/tmp/b4-*.json` with the sampler in the commit.
-
-**ONE SITE IS ONE SITE, AND THREE IS THREE.** This is a statement about these pages at this preset.
+**And the step Rook named as the one it skipped, which is worth more than the findings:** it read the code and the output for two hours and did not think to read `compatibility.md` — a document it had read twice that same day — against the behaviour. That omission is what kept F2 looking like a reporting gap. *Reading the thing under test against the thing that says how it must behave* is now a step to plan for rather than to remember.
 
 ---
 
-## Done — 41
+## Done — 42
 
 *Merged.*
 
@@ -1239,6 +1342,95 @@ TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute,
 [`b3`](../board/b3.md) · **B3** · readiness · owner: obsrv-a6
 
 docs/thresholds.md — seven judged numbers, each answering what it derives from / was calibrated against / would move it, sorted into standard-borrowed, calibrated, reasoned-only, and definitional. Linked from README, limitations, audit.md, lint.md. Merged 1e1594a.
+
+### Measure the noise ratio with two independent classifiers
+
+[`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
+
+zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
+
+ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go. Kenya asked to be routed by need and stated no preference on subject; this is the need.
+
+**Why this card is the need.** It is a readiness criterion, it is unowned, and until today it was one sentence long — nobody has started it. Its own text says *"B5 now makes this interpretable"*, and B5 became interpretable this week through Kenya's work: first the downgrade to one desk, then the structural result that every CLI run is cold by construction, which removed the confound Henry had put beside it. The card was waiting on something that has now happened.
+
+**Why Kenya, and it is not availability.** The whole card turns on the word INDEPENDENT, and the failure mode is two classifiers that agree because they share a mechanism rather than because the finding is real. Kenya found exactly that defect in its own instrument today — the B5 fixture server sends `cache-control: no-store`, a second independent block on the thing being measured, and Kenya's own words were *"I built one of them myself without noticing."* Nobody on this board has more recently paid for that lesson.
+
+**The counter-argument, stated rather than left for someone to raise.** Kenya established B5, and B4 is interpretable because of B5. That is a stake. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but it is not nothing, and if B4 comes out flattering to B5 that coincidence should be stated in the write-up rather than left for a reader to notice.
+
+**What the card actually asks.** zalando.de answered 143 findings. Nobody has established how many a developer would act on, so "143 findings" is currently a number with no denominator — it could be a thorough audit or a noisy one and the output reads identically. The ratio is the product claim.
+
+**The traps, named in advance because this card is about a measurement being meaningful:**
+
+- **Independence is the whole thing.** Two classifiers that read the same rubric, or that both
+key off Obsrv's own severity or grouping, measure Obsrv's self-consistency rather than the
+noise ratio. State what makes the two independent BEFORE running, and say how it could fail.
+- **A classifier that sees the finding's own prose is reading an argument.** Obsrv's sentences
+are written to be persuasive about why something matters — that is the product. Deciding
+"would a developer act on this" from the sentence rather than from the page tests the writing.
+- **Agreement has the two-facts shape.** High agreement fits *the findings are clearly real* and
+- both classifiers share a blind spot*. Low agreement fits *the findings are noisy* and *the
+question was ambiguous*. Decide in advance which reading each outcome gets, or the result will
+be interpreted after the fact in whichever direction is convenient.
+- **One site is one site.** zalando.de is a heavy commercial page; a noise ratio from it is not
+a noise ratio for the tool. Say what the number covers.
+
+**Pre-register the vacuity check, which is Kenya's own practice and the reason it is asked for here.** Kenya wrote down beforehand what would make the userData cache arms meaningless, and it caught both warm arms being vacuous at 4 KB and 12 KB — without it, two clean zeros would have read as "the cache does not matter" and a cap would have shipped on nothing. The equivalent here: name, before running, the result that would mean *this experiment did not measure the noise ratio*, and make the run report that rather than a number.
+
+Depends on nothing. B5's state is recorded on `readiness.md` and on `bug-userdata-unbounded`.
+
+---
+
+**CLAIMED 2026-09-15 by Kenya on Opeyemi's word. PROTOCOL PRE-REGISTERED BELOW, BEFORE ANY DATA WAS COLLECTED — this section is committed first on purpose, so the record shows the readings were fixed before the numbers existed.**
+
+**THE STAKE, STATED FIRST.** Kenya established B5, and B4's own text says it is interpretable *because* of B5. That is a stake in the outcome. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but if B4 comes out flattering to B5, the write-up says so rather than waiting for a reader to notice.
+
+**WHAT INDEPENDENCE CAN AND CANNOT MEAN HERE, before it is claimed.** The criterion asks for classifiers who did not write the rules. That part is satisfiable: neither classifier chose the 7 mm / 2 mm thresholds, which predate both. The part that is NOT satisfiable is deeper independence — both classifiers are Claude sessions and share training, so they share a mechanism. **Two raters agreeing is therefore weak evidence for a finding being real and strong evidence only that the two agree.** This will be published as a limit beside the number, not discovered afterwards.
+
+**BLINDING.** Neither classifier sees Obsrv's warning sentences, group summaries, or any of its prose. Each sees only page facts from the finding: `kind`, the element's selector, its text content, its rect, and the measured millimetres. A classifier reading the tool's own sentence would be grading Obsrv's persuasiveness rather than the page, which is the second trap this card names.
+
+**SITES:** three, for variety rather than convenience — zalando.de (heavy commercial, the card's own example), bbc.com/news (content, ads, rotation), berkshirehathaway.com (plain HTML, no ads, B5's static control). Preset `android-65`, because tap-target millimetres are a phone question.
+
+**SAMPLE:** up to 40 findings per site, drawn deterministically (fixed stride over the full list, seed recorded), because hand-classifying every finding on three sites is not the experiment and a stated sample beats an unstated one. The sampling rule is fixed here so it cannot be adjusted after seeing results.
+
+**LABELS:** `would-act` / `would-not-act` / `unclear`, one per finding, per classifier, independently.
+
+**THE READINGS, FIXED NOW because agreement has the two-facts shape in BOTH directions:**
+
+- **High agreement, high would-act** → the findings are mostly actionable. Published WITH the shared-mechanism caveat, because this is the outcome the caveat most threatens.
+- **High agreement, low would-act** → the tool is noisy at these thresholds, and the ratio is the finding. This is the outcome that most flatters nobody and is therefore the easiest to trust.
+- **Low agreement (say a disagreement rate above ~25%)** → "would a developer act on this" is not well enough defined to publish a ratio at all, and the honest result is that the criterion needs a sharper question rather than a number. **In that case no ratio is published as if it were stable** — a disagreed-upon ratio quoted alone is exactly the kind of figure that reads as measurement and is not.
+
+**ONE SITE IS ONE SITE.** 143 findings from zalando.de is a heavy commercial page, not the tool. Three sites is three sites. Whatever comes out is a statement about these pages at this preset, and the write-up will say that in those words.
+
+---
+
+**RESULT 2026-09-15, Kenya. Branch `docs/b4-noise-ratio`. NO RATIO IS PUBLISHED, which is the outcome the protocol fixed in advance for this case — see `b42baca`, committed before any data existed.**
+
+**The disagreement rate is 57%, and 52% under the fairest collapse. Cohen's κ = −0.07: agreement no better than chance.** The pre-registered rule was that anything above ~25% publishes no ratio, because a disagreed-upon ratio quoted alone reads as measurement and is not. It is not published.
+
+A / B                        n     would-act / would-act       34     would-not-act / would-act   33     would-act / unclear          7     would-not-act / unclear      4     unclear / would-act          1
+
+per site   zalando 2/39 (5%)   bbc 1/9 (11%)   berkshire 31/31 (100%)
+
+**WHAT THE DISAGREEMENT IS ABOUT, which is worth more than the ratio would have been.** Agreement is total where the page is badly broken and near zero where it is marginal. berkshirehathaway.com has no viewport meta tag, is drawn at 0.37x, and every text element lands near 1 mm — both raters say act on all 31. zalando.de is under the thresholds by modest margins, and there the metric rater says "under 7 mm, act" while the semantic rater says "that is an icon font's ligature name (`star_filled`), a conventional footer link, or one styling decision seen 28 times".
+
+So **the noise ratio is not a property of the tool. It is a property of the page, and of who is asked.** On an obviously broken page the question has one answer; on a heavy commercial page it has as many answers as there are raters.
+
+**A DEFECT IN THIS EXPERIMENT'S OWN DESIGN, reported rather than left in the number.** Classifier B is severity-only and therefore *cannot express* `would-not-act` — every sampled finding is under threshold by construction, so its label space is act/unclear. A's 37 would-not-acts can never be matched, which inflates the 57%. The binary collapse above (B's unclear counted as not-act) is the fairer figure at 52%, and κ is computed on that. The direction of the finding survives both framings; the headline rate does not, and should not be quoted alone.
+
+**CONTAMINATION, DECLARED:** B's rules were written after their author had seen the sample and A's labels. The mitigation is that they touch only numbers — no text semantics, no element-role reasoning — so the only channel from A to B is the cutoff, and the cutoff is a fraction of thresholds that predate both.
+
+**THE STAKE, AS PROMISED IN THE PROTOCOL:** Kenya established B5, and B4 leans on B5. This result does not flatter B5 — it does not bear on it either way — so the stake did not have to be discounted. Saying so because the protocol said it would be said whichever way it came out.
+
+**POST-HOC, AND NOT PART OF THE PRE-REGISTERED PROTOCOL — findings can be true AND redundant.** Berkshire's 31 all follow from one missing viewport tag; zalando's 28 brand links are one styling decision. A's 41 would-act findings collapse to about **6 distinct changes** (zalando 2, bbc 3, berkshire 1). A reader who acts on a report acts on causes, not on rows.
+
+**WHAT B4 SHOULD ASK INSTEAD, since "would a developer act on this finding" has now been shown not to carry a number:** how many DISTINCT CHANGES a report implies, against how many rows it prints. That question has one answer per page rather than one per rater — 79 rows, ~6 changes, on these three pages — and it measures the thing the criterion was worried about: that a first run teaches the reader to skim.
+
+**METHOD:** `obsrv audit --preset android-65` on three sites; up to 40 findings per site by fixed stride over the full list (zalando 78 findings stride 2, bbc 9 stride 1, berkshire 31 stride 1) = 79 sampled. Blinded records: kind, selector, text, rect, millimetres. No Obsrv prose in front of either rater. Raw labels and both rubrics are in the branch's scratch files and the numbers above are reproducible from `/tmp/b4-*.json` with the sampler in the commit.
+
+**ONE SITE IS ONE SITE, AND THREE IS THREE.** This is a statement about these pages at this preset.
+
+MERGED 2026-09-15 on Opeyemi's word, `933ccb7` (PR #8). Column moved to done here rather than in the merge commit — the merge landed the content and left the card in Review, which is the convention this board keeps and I missed. Kenya was told rather than left to find a merged card sitting in Review and wonder what had gone wrong.
 
 ### A live run that turns up nothing user-visible
 
@@ -2179,4 +2371,4 @@ A record kept where nobody reads it, on the card about a check that runs where n
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 8 readiness, 9 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 7 readiness, 13 bugs, 4 chores, among the open cards.*

@@ -1,6 +1,6 @@
 ---
 title: "Run 18: exercise report and diff, the two surfaces run 17 excluded"
-column: doing
+column: review
 kind: readiness
 owner: "Rook"
 criterion: B1
@@ -88,3 +88,44 @@ surprises you, check the build before you check the code.
 
 Constraints are Rook's own and unchanged: own worktree off current main, Review rather than
 main, merge on Opeyemi's word direct to Rook, design to him before writing.
+
+INTO REVIEW 2026-09-15, branch `chore/b1-report-diff`. Write-up: docs/research/2026-09-15-live-run-18.md. Built first, per the standing hazard.
+
+**THE PRE-REGISTERED VACUITY CHECK PASSED: the run exercised both surfaces.** uniqlo gave 21 audit and 1 diff finding at laptop-768; diff completed on two pages and refused a third for a stated reason; all three findings quote sentences no other surface emits. Naming that condition before running is what makes the result mean anything.
+
+F1 — `diff` INVALIDATES ITS BAND DELTAS AND LEAVES ITS HEADLINE NUMBERS STANDING. On an unsettled page it says "the band deltas below are frame-to-frame noise, not evidence about rasterisation" — while `inkCoverage.delta` (-0.0991) and `rows.ratio` (0.4934) print ABOVE that sentence and are comparisons between the same two mismatched frames. A static control settles it: settled true, findings empty, and those two numbers print in exactly the same shape. The only thing separating "these mean something" from "these are noise" is one sentence that names the bands alone — and not the two numbers a person would quote.
+
+F2 — THE REPORT'S CENTRAL IMAGE IS ALTERED AND THE SENTENCE SAYING SO IS THE ONE THAT NEVER REACHES THE ARTEFACT. Every report prints "hid chrome stuck to the viewport for the bands after the first: ..." to stderr — on uniqlo, two fixed elements totalling 160 CSS px removed from every band after the first of the capture the "Where the problems are" overview is built from. It is absent from the HTML, absent from screens[].warnings, and therefore absent from any MCP caller's reply. Mechanism, exact: warningSink's `warn()` pushes to the machine list AND prints; `human()` only prints. The truncation warning beside it uses `warn` and DOES reach the HTML — verified on the same page — so the artefact renders its warnings faithfully and this one simply never joins them. On docs.astro.build the consequence is starker: warnings is [] for both screens while stderr carried two sentences each, and an empty array reads as "nothing to say about this capture".
+
+F3 — "full page: warning: full page is 10374 CSS px tall..." — the warning already begins "warning: full page is" and the report prefixes "full page: ". Says it twice, carries a bare "warning:" mid-sentence, and is in the HTML where a designer reads it.
+
+WHAT HELD, and it is most of the run: both documented diff limits refuse correctly, explain themselves in terms someone who hit them by accident would act on, exit 2 (the documented ArgError code) with empty stdout. `report` names the comparison it did not do (`diffSkipped`, and the same sentence in the HTML rather than an empty section). The motion warning is a model sentence.
+
+ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I first read those exit codes as 0, having taken `$?` after a pipe into `tail`. Re-measured without the pipe: 2. Third instance of the same family in one session.
+
+WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
+
+F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
+
+**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and
+`b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three
+verified defects living only on a done card and in a research document is a record kept where
+nobody reads it, which is this week's defect applied to its own findings.
+
+- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
+  caller, not a reporting gap.
+- `bug-diff-disowns-its-numbers` — F1.
+- `bug-report-doubled-warning-prefix` — F3.
+
+Each names what a fix has to decide rather than the one line to change, because all three are
+instances of a class and fixing the instance ships the class.
+
+**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs
+them next should be someone else."* Recorded here so the next router does not re-spend an asset
+that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
+
+**And the step Rook named as the one it skipped, which is worth more than the findings:** it read
+the code and the output for two hours and did not think to read `compatibility.md` — a document
+it had read twice that same day — against the behaviour. That omission is what kept F2 looking
+like a reporting gap. *Reading the thing under test against the thing that says how it must
+behave* is now a step to plan for rather than to remember.
