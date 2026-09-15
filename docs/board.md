@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*66 cards, 24 open, 18 of those unclaimed.*
+*67 cards, 24 open, 19 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -134,7 +134,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 12
+## Next — 13
 
 *Picked, not claimed — start here.*
 
@@ -456,6 +456,62 @@ one observation is enormous.
 
 A test's own comment describing a past failure is the **most** persuasive thing available when the same test fails again, and that is exactly what makes it dangerous. The comment here is accurate, about the same test, from the same CI, and describes a different failure. Read the line number in the error before reading the comment.
 
+### Two e2e flakes defeated the retry in one night, and a flake now blocks every merge
+
+[`bug-flakes-gate-the-gate`](../board/bug-flakes-gate-the-gate.md) · bug · *unclaimed*
+
+FILED 2026-09-15 by Henry. **Unowned.** This is a measurement and a consequence, not a diagnosis — nobody has found the cause of either flake, and this card deliberately does not propose a fix.
+
+## What happened, twice, in one evening
+
+Two different e2e tests failed **both attempts** on CI, each on a tree that cannot have caused them:
+
+| test | where | tree | outcome | |---|---|---|---| | `devtools.spec.ts:92` | PR #10, first run | six regex assertions in `log.spec.ts` | passed on re-run | | `stall.spec.ts:42` | `933ccb7` on main | **docs only** — `board/b4.md`, `docs/board.*`, `docs/readiness.md` | unexplained |
+
+The second is the decisive one. **`933ccb7` changed no source and no tests.** A source test failing on it is a flake or an environmental condition by elimination, not by argument.
+
+Both are separate from the night's one *real* red: `log.spec.ts:39/64/76`, which the writer-tag change genuinely broke and which `86d7fc4` fixed. That one is not part of this card, and is named here only so a later reader does not fold three unrelated reds into one story.
+
+## Why this is now structural rather than an annoyance
+
+`ci.yml` became a required check tonight, and `enforce_admins` was turned on shortly after. The combination means:
+
+- a flake **blocks a merge** rather than producing a red anyone can weigh;
+- clearing it costs a fresh **~14-minute macOS suite**;
+- and **no admin can override it** — that was the point of `enforce_admins`, and it is working
+as designed.
+
+`bug-merge-before-suite-answers` predicted one cost of requiring the check: a conflicting PR gets no `pull_request` run, so its required check can never arrive. **It did not predict this one.** Noise now gates the gate, and the same setting that removes the accidental bypass also removes the deliberate one.
+
+**Two independent instances in one evening is the measurement.** It is not a rate — see below — but it is enough to say `--retries=1` is under-specified for this suite, because the retry exists precisely to absorb this class and it absorbed neither.
+
+## What is NOT known, and must not be assumed
+
+- **The cause of either.** `stall.spec.ts:42` is *"a subframe load on a healthy page is not a
+stall"*. A stall is defined by elapsed time, so a loaded runner is the obvious suspect — but
+nothing in that file admits to timing sensitivity, and "obvious suspect" is how the contrast
+figure and the B5 cache confound both went wrong this week.
+- **Whether they share a cause.** Two flakes in one night on a busy runner may be one condition
+or two. Nobody has looked.
+- **The rate.** Two observations are two observations. `bug-sync138-no-url-changed` is the
+standing lesson: one flake, six clean runs after, and a sizing decision nobody made — the
+interval on a handful of observations is enormous. **Do not start a hunt before someone
+decides how many runs would settle it, and what that costs in macOS minutes.**
+
+## Deliberately not done
+
+- **No rows added to `docs/known-reds.txt`.** That list is empty, which is a legitimate state,
+and its header says a row is for *a reason already understood*. Here only the symptom is.
+Excusing these would convert two open questions into standing permission, on exactly the
+suite that now gates every merge.
+- **No change to `--retries=1`.** Raising it would reduce the blocking without anyone learning
+why the tests fail, and a retry count chosen to hide a flake is a threshold set against
+inconvenience rather than against evidence.
+
+## The options, stated so the decision is visible rather than drifted into
+
+Whoever takes this should put the choice to Opeyemi rather than pick: **live with it** and re-run when it bites; **raise the retry** and accept a quieter suite that hides more; **quarantine** the two tests behind a known-reds row once a cause is understood; or **fix the flakes**, which is the only option that does not trade information for convenience and the only one nobody has costed.
+
 ### CI on main fails about one run in three, from at least three different tests
 
 [`bug-ci-main-red-37pct`](../board/bug-ci-main-red-37pct.md) · **B5** · bug · *unclaimed*
@@ -665,95 +721,7 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 ---
 
-## Review — 1
-
-*Finished, waiting on the maintainer to merge.*
-
-### Run 18: exercise report and diff, the two surfaces run 17 excluded
-
-[`b1-report-diff`](../board/b1-report-diff.md) · **B1** · readiness · owner: Rook
-
-**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
-
-**Two things carried over from `b1` that should shape the site list before anything is run.**
-
-The two shapes run 17 planned and did not reach are *a retail image grid* and *a docs site with a sticky sidebar*. Both are named rather than incidental: an image grid is where `diff`'s ink deltas and row ratios have the most to say, and a sticky sidebar is a non-host scroller, which is the shape that produced 48 unpinnable findings once already. Starting there spends run 17's own planning rather than re-deciding it.
-
-**And `b1`'s rule about sites, which applies with more force to a report run:** *fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.* `report` composes snap, audit, diff and lint into one page, so running it over a site a previous run already combed produces a document full of findings somebody has read before — which reads like coverage and is recognition.
-
-**What B1 actually asks, since this card is a piece of it:** B1 is met when a run finds *nothing* user-visible. Runs 13 through 16 each found something, each smaller than the last. So the honest deliverable here is either new cards or the sentence *this run found nothing user-visible in report and diff*, which nobody has yet been able to write about any surface.
-
-**This is the successor to `b1`, scoped to the half of it that is documented rather than merely unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed: two of eight planned sites; obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout."*
-
-**Rook asked for this one, and the reason it gave is the reason it is the right card:** run 17 *excluded* report and diff explicitly and said so, which makes this the only gap on B1 that is **documented rather than merely unexamined**. An unexamined gap might be fine. A documented one is a promise somebody made to check later.
-
-**Rook is still cold on exactly these two and no longer cold on the rest**, which is a narrower qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply again after this run.
-
-## What this card does NOT close, so nobody reads it as B1 met
-
-Two of eight planned sites, and **anything live in the app**. Run 17 was headless throughout; this run is scoped to two surfaces, not to the criterion. B1 stays open after this lands, and saying so here is cheaper than discovering it from a readiness table that overstates.
-
-## The trap this card is most likely to die of
-
-**Running the tools is not exercising them.** A run that invokes `obsrv_report` and `obsrv_diff`, gets output, and reports "covered" has measured that the commands exit zero. The product is the sentences they produce, and the question is whether a developer reading them cold would act correctly. Run 17's value was reading, not invoking.
-
-**So pre-register the vacuity check, which is house style now** (`CONTRIBUTING.md`, from Kenya's cache experiment): before running, name the result that would mean *this run did not exercise report and diff*. Candidates worth deciding in advance — a report whose findings sections are empty on every site, a diff that errors on every page for a reason unrelated to the page, or a run where every finding read was one `audit` had already produced and `report` merely re-displayed.
-
-## Known limits, verified in the code rather than recalled, so a limit is not filed as a bug
-
-- **`diff` is 1x presets only.** Dense presets (phones) and CSS viewports over 2048px exit with
-an error — `src/mcp/server.ts:1201`. That error is correct behaviour; whether it *reads* as
-correct behaviour to someone who hit it by accident is exactly the kind of thing this run is
-for.
-- **Device pixels are capped at 4096 per axis**, so a tall full-page capture is clamped and the
-CSS budget shrinks as density rises — `src/mcp/server.ts:275` and `:299`.
-- **`diff` on an animating page compares two different frames.** Check `settled` in the output:
-when false the band deltas are frame-to-frame noise, and the findings are supposed to say so
-rather than interpret them. Whether they do is a finding.
-- **`diff` cannot say "the hairline vanished".** It reports ink deltas and row ratios; a 0.5px
-hairline renders one device row at 1x *and* 2x. Vanishing is judged by reading the PNG, and
-the output should not imply otherwise.
-
-## The standing hazard that has cost two sessions a false result
-
-**Build before running.** `npx playwright test` and the MCP tools run the built `out/`, not `src/`. Two false failures in one evening came from this, both plausible-looking. If something surprises you, check the build before you check the code.
-
-Constraints are Rook's own and unchanged: own worktree off current main, Review rather than main, merge on Opeyemi's word direct to Rook, design to him before writing.
-
-INTO REVIEW 2026-09-15, branch `chore/b1-report-diff`. Write-up: docs/research/2026-09-15-live-run-18.md. Built first, per the standing hazard.
-
-**THE PRE-REGISTERED VACUITY CHECK PASSED: the run exercised both surfaces.** uniqlo gave 21 audit and 1 diff finding at laptop-768; diff completed on two pages and refused a third for a stated reason; all three findings quote sentences no other surface emits. Naming that condition before running is what makes the result mean anything.
-
-F1 — `diff` INVALIDATES ITS BAND DELTAS AND LEAVES ITS HEADLINE NUMBERS STANDING. On an unsettled page it says "the band deltas below are frame-to-frame noise, not evidence about rasterisation" — while `inkCoverage.delta` (-0.0991) and `rows.ratio` (0.4934) print ABOVE that sentence and are comparisons between the same two mismatched frames. A static control settles it: settled true, findings empty, and those two numbers print in exactly the same shape. The only thing separating "these mean something" from "these are noise" is one sentence that names the bands alone — and not the two numbers a person would quote.
-
-F2 — THE REPORT'S CENTRAL IMAGE IS ALTERED AND THE SENTENCE SAYING SO IS THE ONE THAT NEVER REACHES THE ARTEFACT. Every report prints "hid chrome stuck to the viewport for the bands after the first: ..." to stderr — on uniqlo, two fixed elements totalling 160 CSS px removed from every band after the first of the capture the "Where the problems are" overview is built from. It is absent from the HTML, absent from screens[].warnings, and therefore absent from any MCP caller's reply. Mechanism, exact: warningSink's `warn()` pushes to the machine list AND prints; `human()` only prints. The truncation warning beside it uses `warn` and DOES reach the HTML — verified on the same page — so the artefact renders its warnings faithfully and this one simply never joins them. On docs.astro.build the consequence is starker: warnings is [] for both screens while stderr carried two sentences each, and an empty array reads as "nothing to say about this capture".
-
-F3 — "full page: warning: full page is 10374 CSS px tall..." — the warning already begins "warning: full page is" and the report prefixes "full page: ". Says it twice, carries a bare "warning:" mid-sentence, and is in the HTML where a designer reads it.
-
-WHAT HELD, and it is most of the run: both documented diff limits refuse correctly, explain themselves in terms someone who hit them by accident would act on, exit 2 (the documented ArgError code) with empty stdout. `report` names the comparison it did not do (`diffSkipped`, and the same sentence in the HTML rather than an empty section). The motion warning is a model sentence.
-
-ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I first read those exit codes as 0, having taken `$?` after a pipe into `tail`. Re-measured without the pipe: 2. Third instance of the same family in one session.
-
-WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
-
-F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
-
-**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and `b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three verified defects living only on a done card and in a research document is a record kept where nobody reads it, which is this week's defect applied to its own findings.
-
-- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
-caller, not a reporting gap.
-- `bug-diff-disowns-its-numbers` — F1.
-- `bug-report-doubled-warning-prefix` — F3.
-
-Each names what a fix has to decide rather than the one line to change, because all three are instances of a class and fixing the instance ships the class.
-
-**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs them next should be someone else."* Recorded here so the next router does not re-spend an asset that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
-
-**And the step Rook named as the one it skipped, which is worth more than the findings:** it read the code and the output for two hours and did not think to read `compatibility.md` — a document it had read twice that same day — against the behaviour. That omission is what kept F2 looking like a reporting gap. *Reading the thing under test against the thing that says how it must behave* is now a step to plan for rather than to remember.
-
----
-
-## Done — 42
+## Done — 43
 
 *Merged.*
 
@@ -1336,6 +1304,92 @@ THE RESULT IS THAT A4 IS NOT MET. Deleting Obsrv.app removes exactly one thing: 
 ALSO MEASURED: control.json (port, token, pid, 0600) is removed on a clean quit and SURVIVES a SIGKILL — proved deliberately with both, since two runs differing in one thing is a hypothesis. Harmless to discovery (a dead pid reads as no app) but it then survives the uninstall too.
 
 TWO ASIDES, neither A4's: the locally built DMG carries no quarantine attribute, so nobody testing a local build reproduces the README's "damaged" dialog. And electron-builder signed it with `Restack Dev` and reported success — docs/signing.md step 3's warning, reproduced without trying. That one belongs to a1.
+
+### Run 18: exercise report and diff, the two surfaces run 17 excluded
+
+[`b1-report-diff`](../board/b1-report-diff.md) · **B1** · readiness · owner: Rook
+
+**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
+
+**Two things carried over from `b1` that should shape the site list before anything is run.**
+
+The two shapes run 17 planned and did not reach are *a retail image grid* and *a docs site with a sticky sidebar*. Both are named rather than incidental: an image grid is where `diff`'s ink deltas and row ratios have the most to say, and a sticky sidebar is a non-host scroller, which is the shape that produced 48 unpinnable findings once already. Starting there spends run 17's own planning rather than re-deciding it.
+
+**And `b1`'s rule about sites, which applies with more force to a report run:** *fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.* `report` composes snap, audit, diff and lint into one page, so running it over a site a previous run already combed produces a document full of findings somebody has read before — which reads like coverage and is recognition.
+
+**What B1 actually asks, since this card is a piece of it:** B1 is met when a run finds *nothing* user-visible. Runs 13 through 16 each found something, each smaller than the last. So the honest deliverable here is either new cards or the sentence *this run found nothing user-visible in report and diff*, which nobody has yet been able to write about any surface.
+
+**This is the successor to `b1`, scoped to the half of it that is documented rather than merely unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed: two of eight planned sites; obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout."*
+
+**Rook asked for this one, and the reason it gave is the reason it is the right card:** run 17 *excluded* report and diff explicitly and said so, which makes this the only gap on B1 that is **documented rather than merely unexamined**. An unexamined gap might be fine. A documented one is a promise somebody made to check later.
+
+**Rook is still cold on exactly these two and no longer cold on the rest**, which is a narrower qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply again after this run.
+
+## What this card does NOT close, so nobody reads it as B1 met
+
+Two of eight planned sites, and **anything live in the app**. Run 17 was headless throughout; this run is scoped to two surfaces, not to the criterion. B1 stays open after this lands, and saying so here is cheaper than discovering it from a readiness table that overstates.
+
+## The trap this card is most likely to die of
+
+**Running the tools is not exercising them.** A run that invokes `obsrv_report` and `obsrv_diff`, gets output, and reports "covered" has measured that the commands exit zero. The product is the sentences they produce, and the question is whether a developer reading them cold would act correctly. Run 17's value was reading, not invoking.
+
+**So pre-register the vacuity check, which is house style now** (`CONTRIBUTING.md`, from Kenya's cache experiment): before running, name the result that would mean *this run did not exercise report and diff*. Candidates worth deciding in advance — a report whose findings sections are empty on every site, a diff that errors on every page for a reason unrelated to the page, or a run where every finding read was one `audit` had already produced and `report` merely re-displayed.
+
+## Known limits, verified in the code rather than recalled, so a limit is not filed as a bug
+
+- **`diff` is 1x presets only.** Dense presets (phones) and CSS viewports over 2048px exit with
+an error — `src/mcp/server.ts:1201`. That error is correct behaviour; whether it *reads* as
+correct behaviour to someone who hit it by accident is exactly the kind of thing this run is
+for.
+- **Device pixels are capped at 4096 per axis**, so a tall full-page capture is clamped and the
+CSS budget shrinks as density rises — `src/mcp/server.ts:275` and `:299`.
+- **`diff` on an animating page compares two different frames.** Check `settled` in the output:
+when false the band deltas are frame-to-frame noise, and the findings are supposed to say so
+rather than interpret them. Whether they do is a finding.
+- **`diff` cannot say "the hairline vanished".** It reports ink deltas and row ratios; a 0.5px
+hairline renders one device row at 1x *and* 2x. Vanishing is judged by reading the PNG, and
+the output should not imply otherwise.
+
+## The standing hazard that has cost two sessions a false result
+
+**Build before running.** `npx playwright test` and the MCP tools run the built `out/`, not `src/`. Two false failures in one evening came from this, both plausible-looking. If something surprises you, check the build before you check the code.
+
+Constraints are Rook's own and unchanged: own worktree off current main, Review rather than main, merge on Opeyemi's word direct to Rook, design to him before writing.
+
+INTO REVIEW 2026-09-15, branch `chore/b1-report-diff`. Write-up: docs/research/2026-09-15-live-run-18.md. Built first, per the standing hazard.
+
+**THE PRE-REGISTERED VACUITY CHECK PASSED: the run exercised both surfaces.** uniqlo gave 21 audit and 1 diff finding at laptop-768; diff completed on two pages and refused a third for a stated reason; all three findings quote sentences no other surface emits. Naming that condition before running is what makes the result mean anything.
+
+F1 — `diff` INVALIDATES ITS BAND DELTAS AND LEAVES ITS HEADLINE NUMBERS STANDING. On an unsettled page it says "the band deltas below are frame-to-frame noise, not evidence about rasterisation" — while `inkCoverage.delta` (-0.0991) and `rows.ratio` (0.4934) print ABOVE that sentence and are comparisons between the same two mismatched frames. A static control settles it: settled true, findings empty, and those two numbers print in exactly the same shape. The only thing separating "these mean something" from "these are noise" is one sentence that names the bands alone — and not the two numbers a person would quote.
+
+F2 — THE REPORT'S CENTRAL IMAGE IS ALTERED AND THE SENTENCE SAYING SO IS THE ONE THAT NEVER REACHES THE ARTEFACT. Every report prints "hid chrome stuck to the viewport for the bands after the first: ..." to stderr — on uniqlo, two fixed elements totalling 160 CSS px removed from every band after the first of the capture the "Where the problems are" overview is built from. It is absent from the HTML, absent from screens[].warnings, and therefore absent from any MCP caller's reply. Mechanism, exact: warningSink's `warn()` pushes to the machine list AND prints; `human()` only prints. The truncation warning beside it uses `warn` and DOES reach the HTML — verified on the same page — so the artefact renders its warnings faithfully and this one simply never joins them. On docs.astro.build the consequence is starker: warnings is [] for both screens while stderr carried two sentences each, and an empty array reads as "nothing to say about this capture".
+
+F3 — "full page: warning: full page is 10374 CSS px tall..." — the warning already begins "warning: full page is" and the report prefixes "full page: ". Says it twice, carries a bare "warning:" mid-sentence, and is in the HTML where a designer reads it.
+
+WHAT HELD, and it is most of the run: both documented diff limits refuse correctly, explain themselves in terms someone who hit them by accident would act on, exit 2 (the documented ArgError code) with empty stdout. `report` names the comparison it did not do (`diffSkipped`, and the same sentence in the HTML rather than an empty section). The motion warning is a model sentence.
+
+ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I first read those exit codes as 0, having taken `$?` after a pipe into `tail`. Re-measured without the pipe: 2. Third instance of the same family in one session.
+
+WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
+
+F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
+
+**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and `b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three verified defects living only on a done card and in a research document is a record kept where nobody reads it, which is this week's defect applied to its own findings.
+
+- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
+caller, not a reporting gap.
+- `bug-diff-disowns-its-numbers` — F1.
+- `bug-report-doubled-warning-prefix` — F3.
+
+Each names what a fix has to decide rather than the one line to change, because all three are instances of a class and fixing the instance ships the class.
+
+**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs them next should be someone else."* Recorded here so the next router does not re-spend an asset that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
+
+**And the step Rook named as the one it skipped, which is worth more than the findings:** it read the code and the output for two hours and did not think to read `compatibility.md` — a document it had read twice that same day — against the behaviour. That omission is what kept F2 looking like a reporting gap. *Reading the thing under test against the thing that says how it must behave* is now a step to plan for rather than to remember.
+
+MERGED 2026-09-15 on Opeyemi's word, `6f35647` (PR #9). Column moved here rather than in the merge commit, batched onto the next board change instead of spending a fourteen-minute suite on a one-word frontmatter edit — which is what a required check costs for bookkeeping now.
+
+Second time tonight a card merged while sitting in Review; `b4` was the first. The convention is that a card closes in the commit that merges it, and with direct pushes to `main` gone that convention now has a price attached. Worth noticing rather than absorbing: if closing a card costs a suite, cards will stop being closed.
 
 ### Record what the thresholds were calibrated against
 
@@ -2371,4 +2425,4 @@ A record kept where nobody reads it, on the card about a check that runs where n
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 7 readiness, 13 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 6 readiness, 14 bugs, 4 chores, among the open cards.*

@@ -1,6 +1,6 @@
 ---
 title: "Run 18: exercise report and diff, the two surfaces run 17 excluded"
-column: review
+column: done
 kind: readiness
 owner: "Rook"
 criterion: B1
@@ -129,3 +129,12 @@ the code and the output for two hours and did not think to read `compatibility.m
 it had read twice that same day — against the behaviour. That omission is what kept F2 looking
 like a reporting gap. *Reading the thing under test against the thing that says how it must
 behave* is now a step to plan for rather than to remember.
+
+MERGED 2026-09-15 on Opeyemi's word, `6f35647` (PR #9). Column moved here rather than in the
+merge commit, batched onto the next board change instead of spending a fourteen-minute suite on
+a one-word frontmatter edit — which is what a required check costs for bookkeeping now.
+
+Second time tonight a card merged while sitting in Review; `b4` was the first. The convention is
+that a card closes in the commit that merges it, and with direct pushes to `main` gone that
+convention now has a price attached. Worth noticing rather than absorbing: if closing a card
+costs a suite, cards will stop being closed.
