@@ -6,7 +6,22 @@ owner: "Henry"
 order: 36
 ---
 
-MERGED 2026-09-15 on Opeyemi's word, as 450d5f9 on main. Confirmed after the merge rather than before it: the main push fired **Board**, **Board on Pages** and **CI** as three separate workflows, Board went green on main, and `ci.yml` no longer carries `board:check` — moved rather than duplicated.
+MERGED 2026-09-15 on Opeyemi's word, as 450d5f9 on main.
+
+**CLOSING NOTE CORRECTED, on Kenya's push-back, and the correction matters more than the closure.** This originally read "confirmed after the merge too". **What was confirmed is the BOARD CHECK.** The full suite was not, and the suite is the job whose absence costs a reviewer something.
+
+Four minutes after this card closed, PR #2 hit the same mechanism: `gh pr checks 2` showed the board check and nothing else, one run for the head sha, `CONFLICTING` because main had moved to 154c8e3. The e2e job — the entire point of that PR, it being the first machine that would exercise the branch — was never scheduled.
+
+**So the fix is real and narrow.** Measured across every workflow:
+
+    board.yml      push: ALL branches                 fixed — cannot expire
+    ci.yml         push: main only + pull_request     STILL EXPIRES
+    b5-sweep.yml   no push trigger + pull_request     STILL EXPIRES
+    pages.yml      push: main only                    no PR dependency
+
+The general case — any workflow gated on `pull_request` inherits the expiry — is `bug-suite-absent-on-conflict`. This card fixed one instance of it and its title promises the class.
+
+**And the cost is being paid by someone else:** Kenya has now rebased three times on this branch and twice on the last, *"all of them to buy a CI run rather than to resolve anything real."*
 
 FIXED 2026-09-15 on Opeyemi's word — he chose the concurrency route. **Both halves, because the first alone fixes nothing observable.**
 
