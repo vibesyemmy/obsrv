@@ -129,6 +129,54 @@ non-empty about the thing it is watching — a line count, a SHA, a row — and
 read that number. The non-empty reading is the evidence. The clean one is only
 meaningful once you have seen the check has something to look at.
 
+### When you report what passed, name what you did not run
+
+The most respectable form of this defect is a green number.
+
+`main` was red for fifty minutes and twelve consecutive CI runs because a branch
+changed the format of a log line and was merged on *"1181/1181 unit, typecheck
+clean"*. Both figures were true. Neither had anything to say about the change,
+because the only thing that exercises the log's format end to end is the e2e
+suite — which nobody ran, including the person who changed the format and the
+person who merged it.
+
+**A reader cannot tell a suite that was green from one that was never started.**
+So the report has to say. "Unit and typecheck green; e2e not run" is a different
+sentence from "unit and typecheck green", and only one of them is honest about
+what is still unknown.
+
+The rule that follows, and it is thirty seconds: **run the suite that covers what
+you touched before you report a number.** A file named after the thing you
+changed — `log.spec.ts` for a change to the log — is not a subtle hint.
+
+### A log can tell the truth in a form that reads as a different truth
+
+The traps above are commands misreporting their own status. This one is not: the
+artefact is honest and the *reading* fails, which makes it harder to catch and
+means the fix is different.
+
+In `gh run view --log-failed`:
+
+- **A spec is mentioned without being asserted about.** `browser-identity.spec.ts`
+  appeared five times in two different failure logs with zero failures in either.
+  Grepping the log for spec names once produced the same wrong file for seven
+  consecutive runs.
+- **A ✘ marks a flaky first attempt exactly as it marks a real failure.** CI runs
+  `--retries=1`, so a test that fails then passes prints both. Two tests read as
+  failures that way in one investigation.
+
+Neither is fixed by reading more carefully. **Count ✓ against ✘ per test**, and
+treat "never printed a ✓" as the definition of failed:
+
+```bash
+for t in log.spec.ts:39 mcp.spec.ts:137; do
+  echo "$t ✘=$(grep -c "✘.*$t" run.log) ✓=$(grep -c "✓.*$t" run.log)"
+done
+```
+
+Then read Playwright's own tally — `3 failed, 2 flaky, 521 passed` — and check
+your count against it before believing either.
+
 ### Write down what would make the run meaningless, before running it
 
 The practice above catches a check with no subject after the fact. This one

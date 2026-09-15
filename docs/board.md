@@ -288,6 +288,10 @@ So: per page, store each surface's probe verdict and whether values were compare
 
 FOUND BY ROOK in run 18, 2026-09-15. Verified independently by Henry in the source. **Unowned.**
 
+**An MCP caller cannot learn that the image its findings are pinned to was edited — and `compatibility.md` tells it not to look in the one place the fact appears.** That is the finding. The stderr gap below is the mechanism, not the headline: a reader who stops early should come away with *the caller cannot know*, not *a warning went to the wrong stream*.
+
+Rook, who found it, asked for this ordering after reading the first version: leading with the stream understates it.
+
 **Every `report` alters the capture its findings are pinned to, and tells nobody who can hear it.** Chrome stuck to the viewport is hidden for the bands after the first — on uniqlo, two fixed elements totalling **160 CSS px removed from every band** of the overview the "Where the problems are" section is built from. That is correct behaviour and a good design: it shows the page once rather than repeating a sticky header, and recovers the rows behind it.
 
 The defect is that the sentence saying it happened **never reaches the artefact**. It is absent from the HTML, absent from `screens[].warnings`, and therefore absent from every MCP caller's reply.
