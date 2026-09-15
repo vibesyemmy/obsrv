@@ -58,3 +58,20 @@ TWO DEFECTS IN THE HARNESS, FOUND BEFORE IT PRODUCED A NUMBER ANYONE COULD USE. 
    Related, and the reason the fixture list changed: the first list was seven structural shapes, and 9 of its 12 valid cases had zero findings — so "0 fields moved" was a statement about 447 leaves, most of them the same four walk counts. Pages that actually produce findings (`audit`, `lint`, `contrast`, `hairline`, `app-shell-findings`) are in the core list now, which took it to 1,061. The original compared 3,375 a run over 33 cases; `--all` widens this one and the gap is honest rather than closed.
 
 WHAT WOULD FINISH THE CARD: the CI run's numbers beside the ones above, both with their desks. A match means B5 survives with two desks behind it. A difference means B5's zero is about this machine, and every before-and-after measured against it inherits that. Done is when the comparison exists, not when it comes out a particular way — and per Henry, B5's zero is his and he would rather have it corrected than kept.
+
+---
+
+NEXT ON THIS CARD: the classifier puts two opposite findings in one bucket.
+
+`scripts/b5-fixture-sweep.js` marks any differing warning string as a moved result field. Two things produce that, and they mean opposite things:
+
+- **A sentence whose only difference is a number.** CI's lint runs all said "this page was still moving when it was measured: 40 had been replaced in the 258 ms after the figures were taken" — with 258, 261, 256, 259, 256. Nothing about the measurement moved. The sentence quotes an elapsed time, so it can never be byte-identical on any desk, and a sentence-level comparison will flag it on every run forever. That is a property of the wording, and the fix if anyone wants one is in the wording, not in the sweep.
+- **A sentence that appeared or did not.** CI's audit runs had `warnings.length` 1, 1, 1, 0, 1: the same note, absent once. That is the tool answering differently about the same bytes, and it is the finding this card exists to surface.
+
+The first is noise that will never go away. The second is the result. Today they arrive in one number, so a future run of this sweep reports "3 result fields moved" without saying whether any of it matters, and the person reading it has to open the artefact and diff the values by eye — which is what I did, and is not a thing a weekly job should require.
+
+What I would do: normalise numbers inside a compared sentence, compare the normalised forms, and report three buckets rather than two — identical, same-sentence-different-number, and appeared-or-not. Then a zero in the third bucket is the claim B5 wants to make, and a non-zero in the second is a note to reword.
+
+Deliberately not done while the card was open: changing the classifier after the numbers were taken would have left the committed code different from the code that produced the artefacts the card cites.
+
+*Kenya's words, verbatim, landed by Henry — adding it needed a branch and a pull request, and Kenya had no word from Opeyemi for another one.*

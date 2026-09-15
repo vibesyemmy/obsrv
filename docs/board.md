@@ -612,6 +612,23 @@ WHAT WOULD FINISH THE CARD: the CI run's numbers beside the ones above, both wit
 
 ---
 
+NEXT ON THIS CARD: the classifier puts two opposite findings in one bucket.
+
+`scripts/b5-fixture-sweep.js` marks any differing warning string as a moved result field. Two things produce that, and they mean opposite things:
+
+- **A sentence whose only difference is a number.** CI's lint runs all said "this page was still moving when it was measured: 40 had been replaced in the 258 ms after the figures were taken" — with 258, 261, 256, 259, 256. Nothing about the measurement moved. The sentence quotes an elapsed time, so it can never be byte-identical on any desk, and a sentence-level comparison will flag it on every run forever. That is a property of the wording, and the fix if anyone wants one is in the wording, not in the sweep.
+- **A sentence that appeared or did not.** CI's audit runs had `warnings.length` 1, 1, 1, 0, 1: the same note, absent once. That is the tool answering differently about the same bytes, and it is the finding this card exists to surface.
+
+The first is noise that will never go away. The second is the result. Today they arrive in one number, so a future run of this sweep reports "3 result fields moved" without saying whether any of it matters, and the person reading it has to open the artefact and diff the values by eye — which is what I did, and is not a thing a weekly job should require.
+
+What I would do: normalise numbers inside a compared sentence, compare the normalised forms, and report three buckets rather than two — identical, same-sentence-different-number, and appeared-or-not. Then a zero in the third bucket is the claim B5 wants to make, and a non-zero in the second is a note to reword.
+
+Deliberately not done while the card was open: changing the classifier after the numbers were taken would have left the committed code different from the code that produced the artefacts the card cites.
+
+*Kenya's words, verbatim, landed by Henry — adding it needed a branch and a pull request, and Kenya had no word from Opeyemi for another one.*
+
+---
+
 ## Done — 26
 
 *Merged.*
