@@ -1323,3 +1323,5 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 ---
 
 *Regenerate with `npm run board`. Counts above: 10 readiness, 11 bugs, 7 chores, among the open cards.*
+
+<!-- deliberately stale: proving board.yml refuses -->
