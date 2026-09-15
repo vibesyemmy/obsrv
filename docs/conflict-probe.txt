@@ -1,0 +1,1 @@
+probe: the HEAD version of a line two branches both change
