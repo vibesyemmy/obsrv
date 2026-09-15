@@ -1,0 +1,52 @@
+# docs/board.md and docs/board.html are generated from board/. This fails when
+# they disagree, which is the only reason the generated files can be trusted:
+# the artifact snapshot they replaced went stale in six hours, then ten
+# minutes, then twenty, and nothing noticed any of them.
+#
+# IT RUNS ON PUSH TO EVERY BRANCH, AND THAT IS THE WHOLE POINT. It used to be a
+# step inside ci.yml, which runs on `pull_request` — and a pull_request workflow
+# runs against `refs/pull/N/merge`, which GitHub cannot compute while the PR
+# conflicts. So the check was absent on exactly the pull requests that needed
+# it: board.md and board.html are generated from every card, so any two branches
+# touching any card conflict on them once main moves, and a conflicting PR is
+# where a hand-resolution happens. It ran on the clean ones, which did not need
+# it. Kenya found this on PR #1, the first pull request this repository ever
+# had: `event=pull_request` total_count was 0 against 267 pushes.
+#
+# A branch push always happens and has no merge ref to compute, so this cannot
+# expire the way a PR's checks silently did.
+#
+# Known gap, stated rather than left to be discovered: a pull request from a
+# FORK pushes to the fork, not here, so this does not run for one. This repo has
+# had no fork PRs; when it does, ci.yml's pull_request trigger is what covers
+# them, and only when they are mergeable.
+name: Board
+
+on:
+  push:
+  workflow_dispatch:
+
+# Newest wins per ref, except on main — see ci.yml for why main is excluded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: The board matches the cards it is generated from
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # No `npm ci`: the generator is plain Node with no dependencies, so an
+      # install would be a minute spent on nothing. That is also why this is
+      # its own workflow rather than a step in the macOS suite — it is seconds
+      # on ubuntu, and it should answer on a branch whether or not the full
+      # suite is worth running there.
+      - name: npm run board:check
+        run: npm run board:check

@@ -48,6 +48,15 @@ on:
       - scripts/b5-fixture-sweep.js
       - .github/workflows/b5-sweep.yml
 
+# Newest wins per ref, EXCEPT on main. Cancelling a superseded run on a branch
+# saves a runner and loses nothing; cancelling one on main would destroy a
+# per-commit CI outcome, and this project counts those — `bug-ci-main-red-37pct`
+# is a tally of which commits went red. A guard that improves throughput by
+# deleting the evidence is the wrong trade here.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   sweep:
     name: fixtures × runs, with the desk recorded
