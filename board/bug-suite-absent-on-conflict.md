@@ -80,7 +80,9 @@ THE PROBE. Its branches are deleted; the pull request is KEPT ON PURPOSE as http
     The board matches the cards ...      pass 9s
     (no CI check at all)
 
-So the bug reproduced exactly — ci.yml scheduled nothing — and the new check refused rather than said nothing. Both branches and the PR are gone.
+So the bug reproduced exactly — ci.yml scheduled nothing — and the new check refused rather than said nothing. Both throwaway branches are gone; the pull request is not, and is kept deliberately — see above.
+
+CORRECTED 2026-09-15 by Rook. That last clause read "Both branches and the PR are gone" for several hours, six lines below the paragraph saying the pull request is KEPT ON PURPOSE. I wrote it when I expected to close the probe and left it standing when Opeyemi decided to keep #5; the ported paragraph above was added around it rather than over it. Two sentences on one card, each plausible alone, saying opposite things about the same artefact — on the card about a check whose absence said nothing. Found by reading the card on main rather than by anyone hitting it.
 
 HALF ONE, the silence: .github/workflows/suite-answer.yml, `push` on ALL branches, the one trigger a conflict cannot take away. Seconds on ubuntu; the 17-minute macOS suite's schedule is untouched, because the diagnosis was never that the suite fails to run. Opeyemi chose this over making the suite unconditional.
 

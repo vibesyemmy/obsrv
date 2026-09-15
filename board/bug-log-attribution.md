@@ -1,6 +1,6 @@
 ---
 title: "A log line cannot be attributed to the dev app or the installed one"
-column: doing
+column: review
 kind: bug
 owner: "Rook"
 order: 28
@@ -61,3 +61,23 @@ Not a defect on its own — nothing is lost or corrupted. The cost is that **a l
 The obvious fix is to move `logs` for the dev lane too. The less obvious and possibly better one is to stamp the line: a log that names its own writer stays readable even when someone runs a third instance the flag does not know about. That is the [[read-the-output-not-the-code]] principle — a sentence should name its own subject rather than depend on the reader knowing the context it was produced in.
 
 Related: the same measurement produced `chore-electron-sandbox-note`, and the general fact is that Electron on macOS ignores `HOME` entirely.
+
+INTO REVIEW 2026-09-15, branch `fix/log-attribution`. Unit 1181/1181, typecheck clean across three configs. Write-up: docs/research/2026-09-15-log-attribution.md.
+
+OBSERVED, not argued — two Obsrv processes, two profiles, one log, under an isolated CFFIXED_USER_HOME:
+
+    2026-09-15T08:35:16.755Z info  dev:dc1b#2942   obsrv 0.60.0 starting: ... unpackaged
+    2026-09-15T08:35:23.771Z info  lane:rook#2963  obsrv 0.60.0 starting: ... unpackaged
+    lines per writer: 2 dev:dc1b#2942 · 2 lane:rook#2963
+
+Opeyemi's real ~/Library/Logs/Obsrv/obsrv.log was 882 lines, sha b205b72b, before and after.
+
+THE IDENTITY IS THE PROFILE AND THE PROCESS, NOT THE BUILD, and that was Henry's catch before a line was written: two lanes off one commit are the same code and different Obsrvs, and a build tag would call them one writer — the exact failure the stamp exists to prevent. `userData` is what distinguishes instances (it is what --user-data-dir moves) and the pid distinguishes two runs of one profile. Two unit tests hold precisely those cases.
+
+THE TAG: `app#pid` packaged · `lane:<label>#pid` or `lane:<mark>#pid` · `test#pid` under OBSRV_TEST · `dev:<mark>#pid` for anything else, where <mark> is four hex of the profile path. That last row is why moving the lane's logs was the wrong fix: it is the instance neither flag knows about, including `npm run dev` and the installed app running beside a lane.
+
+WHAT IT DOES NOT DO, stated rather than implied: it cannot attribute a single existing line, and it does not establish that interleaving ever happened — that stays unknowable from the artefact and was deliberately not investigated, per this card's own correction.
+
+This unblocks `bug-dev-app-exited`, which could not be investigated while a line could not name its writer.
+
+ONE THING FROM RUNNING IT, since it is the same family: a check of mine printed "(no stray app processes above)" directly beneath two processes that were still running. A sentence keyed off nothing, in the session that spent the night on that defect. Killed, then verified by counting rather than asserting.
