@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*62 cards, 21 open, 14 of those unclaimed.*
+*65 cards, 24 open, 17 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -134,7 +134,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 8
+## Next — 11
 
 *Picked, not claimed — start here.*
 
@@ -282,6 +282,72 @@ THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `movin
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
 
+### The report's central image is altered and only stderr says so
+
+[`bug-report-edit-invisible`](../board/bug-report-edit-invisible.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. Verified independently by Henry in the source. **Unowned.**
+
+**Every `report` alters the capture its findings are pinned to, and tells nobody who can hear it.** Chrome stuck to the viewport is hidden for the bands after the first — on uniqlo, two fixed elements totalling **160 CSS px removed from every band** of the overview the "Where the problems are" section is built from. That is correct behaviour and a good design: it shows the page once rather than repeating a sticky header, and recovers the rows behind it.
+
+The defect is that the sentence saying it happened **never reaches the artefact**. It is absent from the HTML, absent from `screens[].warnings`, and therefore absent from every MCP caller's reply.
+
+**The mechanism, exact and verified at the line:** `human()` is stderr-only — `src/cli/main.ts:95-97`, three lines, `process.stderr.write` and nothing else. The stuck-chrome sentence uses it at `src/cli/main.ts:484`. The truncation warnings beside it use `warn()`, at `:589` and `:599`, and those **do** reach `warnings[]`. Same file, same function, adjacent branches — and the one that never joins the list is the one saying the image was edited.
+
+**Rook's control is what makes this a finding rather than a guess:** the truncation warning reaches the HTML *on the same page*, so the artefact renders its warnings faithfully. Nothing is broken about the rendering. This sentence simply never becomes a warning.
+
+## Why this is a correctness problem and not a reporting gap
+
+`docs/compatibility.md`, contract 4: *"Human-readable text on stderr is not a contract and may be reworded at any time; if you are parsing it, parse the JSON instead."*
+
+**So the only place this fact appears is the one place the project instructs callers to ignore — and an MCP client never sees stderr at all.** A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. The policy and the defect point in opposite directions, and the policy is right; the classification is wrong.
+
+**The starkest instance, on docs.astro.build:** `warnings` is `[]` for both screens while stderr carried two sentences each. An empty array reads as *nothing to say about this capture*. The list is not broken — it is working exactly as written, which is the harder kind of silence to find and the reason this needed someone reading a surface nobody had examined.
+
+## What a fix has to decide, because it is not simply "call warn instead"
+
+`human()` exists for a reason: not every sentence a person wants on a terminal belongs in a machine list, and `compatibility.md` makes **adding a field** to an MCP reply a breaking change while leaving the *contents* of an existing array free to grow. So moving a sentence from `human()` to `warn()` is cheap on the MCP surface and is the likely fix — but the question to answer first is which sentences are **facts about the artefact** rather than progress notes.
+
+The test that separates them, proposed rather than settled: **would a caller reasoning about the output be wrong without it?** The stuck-chrome sentence passes that test — the image is not what it appears to be. "Captured in 3 bands of 768 CSS px" probably does not.
+
+Audit every `human()` call in `src/cli/main.ts` against that question rather than fixing this one instance, because one instance fixed is the same class shipped.
+
+## Not yet known
+
+Whether the overview's pins and crops **land** where the findings are. Run 18 established only that the page explains what it could not locate — not that what it did locate is in the right place. If a pin is placed against unedited coordinates while the image lost 160 px per band, that is a second defect hiding behind this one, and it is untested either way.
+
+### `diff` calls its band deltas noise and leaves its headline numbers standing
+
+[`bug-diff-disowns-its-numbers`](../board/bug-diff-disowns-its-numbers.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. **Unowned.**
+
+On an unsettled page `diff` prints:
+
+the band deltas below are frame-to-frame noise, not evidence about rasterisation
+
+and **above that sentence**, from the same two mismatched frames:
+
+inkCoverage.delta  -0.0991     rows.ratio          0.4934
+
+Those are the two numbers a person actually quotes. The disclaimer names *the bands* and reaches only downward, so the headline figures — which are comparisons between the same two frames the sentence has just called incomparable — stand unqualified.
+
+**The control is what makes it a finding rather than a quibble.** On a static page: `settled` true, `findings` empty, and those two numbers print in **exactly the same shape**. So nothing in the output distinguishes *these mean something* from *these are noise* except one sentence with the wrong scope. A reader who trusts the numbers and skims the prose gets a confident wrong answer; a reader who reads the prose still has no instruction about the two figures above it.
+
+**Why this is the house defect rather than a typo.** `docs/read-the-output-not-the-code` says a sentence must name its own subject and key off a fact it measured, not off a neighbouring sentence. This sentence keys off its own *position* — "below" — which is the most fragile subject a sentence can have, because a layout change silently re-scopes it.
+
+## What a fix has to get right
+
+**Not simply moving the sentence above the numbers.** Position is the bug; another position is not the cure. The disclaimer should name the figures it invalidates, or `settled: false` should suppress or mark the figures themselves, so the qualification travels with the data rather than with the page.
+
+Whichever is chosen, note that `settled` is already in the output: a caller *can* do this correctly today. The question is what the tool says to someone who does not.
+
+## The measurement trap this one sits next to
+
+Both documented `diff` limits refuse correctly and exit **2** with empty stdout. Rook first read those exit codes as **0**, having taken `$?` after a pipe into `tail` — `$?` is the *last* command's status, so `obsrv diff … | tail` reports `tail`'s success whatever `diff` did.
+
+That is the fourth instance in one session of a check with no subject, and the first with no filename involved. It is in `CONTRIBUTING.md` under *A check that looked at nothing passes*. Anyone testing a fix here should read exit codes without a pipe.
+
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 
 [`bug-walk-coverage-diverges`](../board/bug-walk-coverage-diverges.md) · **C4** · bug · owner: obsrv-e7
@@ -297,6 +363,24 @@ FIXTURE NOW IN THE REPO: tests/fixtures/app-shell-grows.html (merged 586caab) �
 Handed to obsrv-e7 to run through the C4 parity harness, which catches exactly this asymmetry (a note-bearing array present on one surface and empty on the other) and is how the panel silence and the inspect gap both surfaced. obsrv-e7's read: if live really never fires the coverage note on an app shell, it is a seventh defect rather than a footnote to the sixth.
 
 Cause still open: the `hidden` divergence, the two walks scrolling differently, or the growth being timing-dependent. obsrv-a6's one-off comparison could not separate them.
+
+### The report says "full page: warning: full page is…"
+
+[`bug-report-doubled-warning-prefix`](../board/bug-report-doubled-warning-prefix.md) · bug · *unclaimed*
+
+FOUND BY ROOK in run 18, 2026-09-15. **Unowned.** The smallest of the three and the cheapest to fix; filed separately so it is not carried along inside a card about something else and then forgotten when that card closes.
+
+In the report's HTML, where a designer reads it:
+
+full page: warning: full page is 10374 CSS px tall…
+
+The warning already opens with `warning: full page is`, and the report prefixes `full page: `. So it says the subject twice and carries a bare `warning:` in the middle of a sentence rather than at the start of one.
+
+**Why it is worth a card rather than a quiet fix.** The sentences are the product — the whole argument of `docs/read-the-output-not-the-code` — and this is the one place in run 18 where a sentence reads as though nobody had looked at it in the surface a user actually reads. The cause is almost certainly that the string was written for stderr, where the `warning:` prefix earns its place, and is then reused in HTML where the section heading already supplies the subject.
+
+**So the fix to look for is not this string.** It is whether a warning's text is composed once for two destinations that need different openings. If it is, the same doubling will exist wherever else a prefixed warning is embedded under a heading, and fixing this instance ships the class.
+
+Check the other warnings the report embeds before editing this one.
 
 ### There is no supported way to remove Obsrv's data
 
@@ -596,6 +680,19 @@ ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I
 WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
 
 F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
+
+**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and `b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three verified defects living only on a done card and in a research document is a record kept where nobody reads it, which is this week's defect applied to its own findings.
+
+- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
+caller, not a reporting gap.
+- `bug-diff-disowns-its-numbers` — F1.
+- `bug-report-doubled-warning-prefix` — F3.
+
+Each names what a fix has to decide rather than the one line to change, because all three are instances of a class and fixing the instance ships the class.
+
+**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs them next should be someone else."* Recorded here so the next router does not re-spend an asset that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
+
+**And the step Rook named as the one it skipped, which is worth more than the findings:** it read the code and the output for two hours and did not think to read `compatibility.md` — a document it had read twice that same day — against the behaviour. That omission is what kept F2 looking like a reporting gap. *Reading the thing under test against the thing that says how it must behave* is now a step to plan for rather than to remember.
 
 ### Measure the noise ratio with two independent classifiers
 
@@ -2215,4 +2312,4 @@ A record kept where nobody reads it, on the card about a check that runs where n
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 8 readiness, 9 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 8 readiness, 12 bugs, 4 chores, among the open cards.*

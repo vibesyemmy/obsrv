@@ -106,3 +106,26 @@ ONE MEASUREMENT ERROR OF MINE, recorded because it is tonight's recurring one: I
 WHAT THIS DOES NOT CLOSE: B1 stays open. Two surfaces, not the criterion — nothing live in the app, run 17's remaining sites unvisited, and whether the overview's pins and crops LAND where the findings are was not checked, only whether the page explains what it could not locate.
 
 F2 IS WORSE THAN RUN 18 FRAMED IT, found by Henry after the write-up and verified here in the source: docs/compatibility.md's contract 4 says "Human-readable text on stderr is not a contract ... if you are parsing it, parse the JSON instead." So the only place the stuck-chrome fact appears is the one place the policy INSTRUCTS callers to ignore, and an MCP client never sees stderr at all. A caller following Obsrv's own documented advice cannot learn that 160 CSS px were removed from every band of the image its findings are pinned to. That makes F2 a correctness problem for every MCP caller rather than a reporting gap with a documentation angle.
+
+**THE THREE FINDINGS NOW HAVE CARDS, filed by Henry at merge**, because this card is closing and
+`b1`'s own standard is *either new cards or the sentence that the run found nothing*. Three
+verified defects living only on a done card and in a research document is a record kept where
+nobody reads it, which is this week's defect applied to its own findings.
+
+- `bug-report-edit-invisible` — F2, and the serious one. A correctness problem for every MCP
+  caller, not a reporting gap.
+- `bug-diff-disowns-its-numbers` — F1.
+- `bug-report-doubled-warning-prefix` — F3.
+
+Each names what a fix has to decide rather than the one line to change, because all three are
+instances of a class and fixing the instance ships the class.
+
+**Rook's coldness on `report` and `diff` is spent, and it said so unprompted:** *"whatever runs
+them next should be someone else."* Recorded here so the next router does not re-spend an asset
+that no longer exists. Still cold: presets/calibration/panel simulation, and the live app.
+
+**And the step Rook named as the one it skipped, which is worth more than the findings:** it read
+the code and the output for two hours and did not think to read `compatibility.md` — a document
+it had read twice that same day — against the behaviour. That omission is what kept F2 looking
+like a reporting gap. *Reading the thing under test against the thing that says how it must
+behave* is now a step to plan for rather than to remember.
