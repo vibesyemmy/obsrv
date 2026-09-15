@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: c2-retroactive routed · a1 on Opeyemi · log-attribution merged"
+title: "QUEUE — Rook: c2-retroactive started · a1 on Opeyemi · log-attribution merged"
 column: next
 kind: chore
 owner: "Rook"
@@ -13,8 +13,10 @@ epitaph — *"the queue went stale within hours of being written"* — which was
 
 **NOW**
 
-1. `c2-retroactive` — ROUTED, waiting on Rook's own user. Apply `docs/compatibility.md` to
-   0.56.0–0.60.0. See that card for why Rook and for the three framings obsrv-91 left on it.
+1. `c2-retroactive` — **STARTED** on Opeyemi's go-ahead, 2026-09-15. Apply
+   `docs/compatibility.md` to 0.56.0–0.60.0. The card carries the reconnaissance: four of the
+   five releases have no register entry at all, and 0.58.0 is both the largest diff in the
+   range and silent.
 2. `bug-log-attribution` — **MERGED** `6f19f9b` on Opeyemi's word, card done. It carried
    `70209df` too, Rook's catch of a contradiction Henry introduced on
    `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;

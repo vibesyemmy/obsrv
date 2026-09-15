@@ -1,6 +1,6 @@
 ---
 title: "Apply the breaking-changes policy to the last five releases"
-column: next
+column: doing
 kind: readiness
 owner: "Rook"
 criterion: C2
@@ -9,6 +9,41 @@ order: 32
 
 **ROUTED TO ROOK 2026-09-15 on Opeyemi's word.** Pending Rook's own go-ahead in Rook's own
 session — routing is not a start, and this card is in Next until Rook's user says go.
+
+**GO-AHEAD FROM OPEYEMI 2026-09-15.** Rook starts. Own worktree off current main, Review not
+main, merge on Opeyemi's word direct to Rook, design to him before writing.
+
+**Reconnaissance done before handing it over, so the card does not start with a survey.** The
+register currently has entries for exactly two versions: `0.59.0`, and `0.61.0` marked
+unreleased. **Four of the five releases in scope are silent** — 0.56.0, 0.57.0, 0.58.0, 0.60.0
+— which is precisely the state obsrv-91 said to read hardest, because a release with no entry
+fits *nothing broke* and *nobody looked* equally well.
+
+Ranked by how much changed under that silence, `src/` only:
+
+| release | diff | register |
+|---|---|---|
+| 0.56.0 | 5 files, +69 −8 | silent |
+| 0.57.0 | 9 files, +222 −27 | silent |
+| **0.58.0** | **10 files, +463 −38** | **silent** |
+| 0.59.0 | 11 files, +329 −50 | has an entry |
+| 0.60.0 | 1 file, +47 −2 | silent |
+
+**0.58.0 is the largest diff in the range and has no entry at all.** 0.59.0 is immediately
+after it, is comparable in size, and *did* get one — so the pair is the natural place to start:
+the same author, the same fortnight, one release documented and its larger neighbour not.
+
+0.60.0 at one file is the cheapest to clear and the most likely to be genuinely empty. Clearing
+it is still worth doing explicitly, because "we checked and it was clean" and "we never checked"
+are the two facts this whole card exists to separate.
+
+**Start from the CLI's stdout key set**, per obsrv-91: it is asserted exactly at
+`cli.spec.ts:79` — `Object.keys(json).sort()` against ten literal fields — which makes it the
+one contract a retroactive read can *verify* rather than argue. Note `0.61.0`'s existing entry
+already records that surface gaining `url`, so the mechanism is known to bite here.
+
+The four contracts are unequal and a read that only checks MCP replies will miss three of them.
+See `docs/compatibility.md`.
 
 **Why Rook, on evidence rather than availability.** The task is reading prose against code with
 no code to hide behind, and the failure mode is a clean result that means nobody asked hard
