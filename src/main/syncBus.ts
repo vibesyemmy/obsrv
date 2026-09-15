@@ -27,8 +27,10 @@ export interface SyncBus {
    * run was to tripping it — only whether it had tripped. A spec that makes
    * exactly `LOOP_ALTERNATIONS` reversals passes or fails on how much of
    * `LOOP_WINDOW_MS` was left when it started, and that margin was invisible:
-   * `sync.spec.ts:165` fails on CI in five of ten red runs and has never
-   * reproduced on this desk, which is a difference nobody could measure.
+   * `sync.spec.ts:165` failed on CI in five of ten red runs, and the margin was
+   * the first thing anyone measured about it. It turned out to be a constant —
+   * 106-111 ms of a 3,000 ms window, on every run — and the fault was
+   * elsewhere entirely (`docs/research/2026-09-15-sync-165-stale-echo.md`).
    *
    * Reads state, changes none. It exists for tests and costs production
    * nothing, which is the trade this project has already made for
@@ -233,7 +235,23 @@ export function attachSyncBus(
   // break. Dropped here rather than at the source, which used to withhold the
   // event from everyone (see `TargetSource`'s `url-changed`).
   const onTargetNav = (url: string, inPage: boolean, mirrored: boolean): void => {
-    if (mirrored) return
+    if (mirrored) {
+      // The commit of a load this bus issued: not news, and not mirrored back.
+      // But it is still that load ARRIVING, and the record of it exists only
+      // to recognise this moment — so retire it here, where the native pane's
+      // equivalent commit retires its own through `mirror()`'s echo.
+      //
+      // Left unretired, the record outlives the load that justified it and the
+      // target's next genuine navigation to the same URL matches it, is called
+      // an echo, and is never mirrored: flake-sync-165, four failures in 113
+      // runs, and `redirect.html`'s comment since 2026-09-03 saying this shape
+      // must not "leave a stale expectation behind".
+      //
+      // A commit, not a promise: the load is over when the document is here,
+      // which is the same fact `mirror()` uses for the other pane.
+      retire('target', url, Date.now())
+      return
+    }
     mirror('target', url, inPage)
   }
 
