@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*60 cards, 23 open, 17 of those unclaimed.*
+*60 cards, 23 open, 16 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -282,7 +282,29 @@ So: per page, store each surface's probe verdict and whether values were compare
 
 ### A log line cannot be attributed to the dev app or the installed one
 
-[`bug-log-attribution`](../board/bug-log-attribution.md) · bug · *unclaimed*
+[`bug-log-attribution`](../board/bug-log-attribution.md) · bug · owner: Rook
+
+ROUTED TO ROOK 2026-09-15 by need, pending Opeyemi's word in Rook's own session. Rook asked to be routed by need rather than fit and explicitly deprioritised its own preference; this is that.
+
+**WHY THIS ONE, over the alternatives that looked louder.**
+
+`bug-ci-main-red-37pct` is nearly self-answering now: main's last nine completed CI runs are **8 green, 1 red**, against the 37% the card was written from. Two of the three top contributors were fixed tonight. That card wants a re-measurement, not a session.
+
+`c1` is the real blocker among the readiness cards — Rook spotted that `c2` and `c2-retroactive` both depend on a compatibility policy nobody has written, and `c1` IS that policy. But a policy is a decision about what Obsrv promises, which makes it Opeyemi's to shape rather than a card to hand out.
+
+**This card blocks another one**, which none of the others do: `bug-dev-app-exited` cannot be investigated while a log line cannot say which process wrote it. Whoever chases that process death reads an interleaving they cannot separate, and comes back with the same two-facts absence.
+
+**AND THE PATTERN IS ALREADY PROVEN IN THIS REPO, WHICH IS THE ARGUMENT FOR THE FIX.** Rook filed `bug-lane-serves-another-tree` an hour ago on exactly the observation that *the lane's reply says which tree it serves, and that sentence caught a false green twice tonight* — once for Rook, once for Kenya. The stamp works. The log has no stamp at all.
+
+So this is not "design a way to tell instances apart". It is: **do in `obsrv.log` what the lane reply already does, and which has already saved two sessions from recording a green that was about something else.**
+
+The two cards are the same family pointed at different artefacts — the lane says which tree, the log says nothing at all — and the one with a working precedent is this one.
+
+**What the card already establishes, so it need not be rediscovered:** `scripts/devLane.js:126` passes `--user-data-dir`, which moves `userData` and NOT `logs`; `src/main/log.ts:22` opens `join(app.getPath('logs'), 'obsrv.log')` and line 21 redirects only under `OBSRV_TEST=1`. So a dev-lane app and an installed app write the same file. Measured, not inferred.
+
+**And what is NOT established, kept from the card's own correction:** whether they have actually interleaved. The log format has no field naming a writer, so "no lines mention the lane" fits *the lane never wrote* and *it wrote and nothing identifies it* equally. That absence is unreadable by anyone, including the sessions that produced it — which is the defect, stated better than the first draft stated it.
+
+**Which also settles the shape of the fix.** Moving `logs` for the dev lane helps future runs, leaves every existing line unattributable, and does nothing for a third instance the flag does not know about — including the installed app, the one most likely to be running beside a lane. Stamp the line.
 
 CORRECTED 2026-09-14, an hour after filing, because the card asserted more than had been measured. Kenya caught it and the objection lands on this card's own principle.
 
