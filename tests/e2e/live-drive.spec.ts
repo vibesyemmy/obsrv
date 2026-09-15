@@ -1060,6 +1060,13 @@ test('a pane still being resized when the budget runs out is captured as moving,
   // about the other has swapped them, and that is a defect on any desk.
   const margin = `label=${body.unsettledReason} sizes=${sizes.size} quietAtEnd=${quietAtTheEnd}ms applied=${applied} capture=${finished - started}ms`
   test.info().annotations.push({ type: 'settle verdict', description: margin })
+  // And to stdout, which is the half that reaches a CI log. The annotation
+  // alone was invisible: `reporter: [['list']]` does not print annotations, so
+  // the first green from the three-core runner — the machine this test was
+  // rewritten for — arrived as a tick and a duration, and could not say which
+  // branch it took. A record kept where nobody reads it is not a record, and
+  // this one was written into the mechanism built to stop exactly that.
+  console.log(`settle verdict: ${margin}`)
   if (body.unsettledReason === 'resizing') {
     expect(body.warnings.some(w => w.includes('still resizing')), margin).toBe(true)
     expect(body.warnings.some(w => w.includes('keeps painting steadily')), margin).toBe(false)
