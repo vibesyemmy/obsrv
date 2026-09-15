@@ -14,6 +14,12 @@ compile, and the first sign is an answer that reads wrong.
 **Obsrv is pre-1.0.** These will keep happening; the promise is that they are
 named, not that they stop.
 
+[**`compatibility.md`**](compatibility.md) is the rule this register is kept
+by: what may change in a minor, what may not, and how a break is announced. It
+also carries the constraint that decides most of them — on the MCP surface,
+**adding** a field is breaking, because every output schema is
+`additionalProperties: false`.
+
 ---
 
 ## 0.61.0 — *unreleased*

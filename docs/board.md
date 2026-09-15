@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*60 cards, 23 open, 16 of those unclaimed.*
+*60 cards, 22 open, 15 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Backlog — 12
+## Backlog — 11
 
 *Raised, not yet picked.*
 
@@ -49,12 +49,6 @@ learned the hard way and written down:
 [`c5`](../board/c5.md) · **C5** · readiness · *unclaimed*
 
 The 2026-09-13 sweep did this for notes and found gaps; never completed.
-
-### Written compatibility policy
-
-[`c1`](../board/c1.md) · **C1** · readiness · *unclaimed*
-
-MCP output schemas are additionalProperties:false, so adding a field breaks sessions that listed tools earlier. Policy must say what may change before 1.0.
 
 ### Name breaking changes as such, by rule not habit
 
@@ -559,7 +553,7 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 ---
 
-## Done — 37
+## Done — 38
 
 *Merged.*
 
@@ -1023,6 +1017,26 @@ REVIEW ROUND 1, Henry on 452b212: two findings, both in the FIX rather than in w
 (2) The staleness rule was ONE-DIRECTIONAL and today only the other direction is true. The header said "written against 0.61.0" and "where they differ, the reply is right and this page is out of date". But package.json is 0.60.0 and docs/breaking-changes.md still marks 0.61.0 unreleased, so every reader's version differs by being OLDER, and the rule told them the page was stale when the page is ahead of their install. A version mismatch fits two facts — the page is behind the tool, or ahead of it — and the rule named only the first. Now the header says the page is ahead of the current release and spells out both directions, with the marked claims (`0.61.0+`) as the ones to read as future.
 
 THE TRAP, KEPT VISIBLE because Henry nearly published it as a result and it is the same one from note-inventory.md: the eight-of-eight tool count is a MENTION count. It says the skill mentions lint; it says nothing about whether what it says about lint is true. Two of the three defects above are inside sentences about tools that count as present. A completeness number over a document measures the index, not the content.
+
+### Written compatibility policy
+
+[`c1`](../board/c1.md) · **C1** · readiness · *unclaimed*
+
+WRITTEN 2026-09-15 on Opeyemi's word: `docs/compatibility.md`. C1 met.
+
+**It leads with the thing the card named, because it is the load-bearing fact and it was nowhere stated:** every MCP output schema is `additionalProperties: false`, so **adding** a field is a breaking change. That inverts the rule most projects run on — additive is safe — and it is why three designs were decided the way they were this week.
+
+**Four contracts, and the page says they are not equally strict:** MCP replies (strictest, additive breaks); the CLI's stdout key set (a contract because the suite asserts it exactly with `Object.keys(json).sort()`, so assume someone else's tests do too); the control server; and exit codes — with human-readable stderr explicitly **not** a contract, and a note to parse the JSON instead.
+
+**What a minor may change** — fields, enum values, tools, flags, note *wording*, judged thresholds. **What a patch may change** — none of it; a patch that has to touch a contract is a minor. **What will not move without being named** — the meaning of a field, the shape of a reply, an exit code, or a documented threshold without `thresholds.md` moving with it.
+
+**And what "named" means**, which is the part that makes the register worth keeping: an entry giving *what breaks*, *what to do*, and *why it ships anyway*. The third is not decoration — **a break with no stated benefit is one nobody weighed.**
+
+**THIS UNBLOCKS `c2-retroactive`**, which said in its own text that applying an unwritten policy retroactively is how a register becomes a matter of taste. The policy now exists, so reading 0.56.0–0.60.0 against it is a defensible exercise rather than a judgement call. `c2` too.
+
+**One thing deliberately left as a decision rather than answered:** at 1.0 the MCP schema problem needs *solving* rather than announcing — most likely by the schemas ceasing to be `additionalProperties: false`. The page says that belongs on the board rather than in a sentence, and nobody has made that call.
+
+MCP output schemas are additionalProperties:false, so adding a field breaks sessions that listed tools earlier. Policy must say what may change before 1.0.
 
 ### Regenerate the public board as part of cutting a release
 
@@ -1815,4 +1829,4 @@ AND THE RATE THIS CARD ASKED FOR IS NOT RECOVERABLE. `gh pr list` reports `merge
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 9 readiness, 10 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 8 readiness, 10 bugs, 4 chores, among the open cards.*

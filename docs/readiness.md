@@ -232,7 +232,17 @@ Half the users are agents, and they read schemas rather than prose.
 upgrade rejects a result carrying a new key. That constraint decided three
 designs this week — it is load-bearing and nowhere stated.
 *Check:* a page saying what may change in a minor, what may not, and how a
-breaking change is announced before 1.0. **Status: not met.**
+breaking change is announced before 1.0. **Status: met 2026-09-15 —
+[`docs/compatibility.md`](compatibility.md).** It leads with the constraint
+rather than burying it: on the MCP surface **adding** a field is breaking,
+which inverts the rule most projects run on and is the thing that decided three
+designs this week. It names the four contracts and says they are not equally
+strict — MCP replies, the CLI's stdout key set (asserted exactly by the suite),
+the control server, and exit codes, with stderr prose explicitly not a
+contract. It says what a minor may change, that a patch may change none of it,
+what will not change without being named, and what "named" means: an entry
+giving what breaks, what to do, and **why it ships anyway** — a break with no
+stated benefit being one nobody weighed.
 
 **C2. Breaking changes are named as such.** `url` changed meaning for live
 callers in **0.59.0** — reasonable pre-1.0, and legible only because the
