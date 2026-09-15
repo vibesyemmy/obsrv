@@ -12,27 +12,54 @@ what follows exists because of that.
 The work is [`board/`](board), one markdown file per card. **Claim a card by
 editing its file**: set `owner:` and `column: doing`, then
 
+and open a pull request with **only the card**. There is no separate tracker and
+nobody to ask for access.
+
+**The generated views are not committed.** `docs/board.md` and
+`docs/board.html` are gitignored. Build them when you want to look:
+
 ```bash
-npm run board          # regenerates docs/board.md and docs/board.html
+npm run board          # writes both, locally, for you
 ```
 
-and open a pull request with both the card and the regenerated files. There is
-no separate tracker and nobody to ask for access.
+Anyone outside the repo reads [the published board](https://vibesyemmy.github.io/obsrv/),
+which `pages.yml` builds from `main` on every push. **Never commit either file.**
 
-`npm run board:check` runs on **every push to every branch** and fails if the
-generated views disagree with the cards. It is deliberately not a step inside
-the main suite: a `pull_request` workflow runs against `refs/pull/N/merge`,
-which GitHub cannot compute while a PR conflicts — so a check that lived there
-would be absent on exactly the pull requests most likely to need it.
+### Why they are not committed, because the old rule was in this file for weeks
 
-**When `docs/board.md` or `docs/board.html` conflicts on a rebase, regenerate
-it. Never hand-resolve it.** They are generated from every card, so any two
-branches touching any card conflict on them once `main` moves — this is the
-normal state of a second contributor, not an edge case. Take either side, run
-`npm run board`, and let the cards decide.
+They used to be, and the rule here was *"when a generated view conflicts on a
+rebase, regenerate it, never hand-resolve it"*. It was correct and everybody
+knew it, and it still cost a night: every branch touching any card conflicted
+with every other branch touching any card, on two files that are derived. One
+session conflicted six times inside a single multi-commit rebase; one pull
+request was rebased three times; and one of those rebases **pushed conflict
+markers to `main`**, because the rule has an exception — cards, which must be
+resolved by hand — and the exception is the one that got applied by mistake at
+the tired end of a rebase.
 
-**A conflict in a card itself is different and needs a decision.** The rule
-above is about generated files. If two people edited the same card, read both.
+**A conflict whose resolution is always "recompute it" is not a conflict. It is
+a merge driver nobody wrote, paid for once per branch.** Deleting the stored
+copy is the version of that fix with no rule to remember.
+
+What it costs, so it reads as a trade rather than a win: a reader browsing the
+repo tree sees no board file and has to follow a link, and `board:check` can no
+longer compare anything.
+
+`npm run board:check` runs on **every push to every branch** and now fails only
+if a card cannot be read or rendered — a missing frontmatter block, a broken
+field. The failure names the card. It is deliberately not a step inside the main
+suite: a `pull_request` workflow runs against `refs/pull/N/merge`, which GitHub
+cannot compute while a PR conflicts, so a check living there would be absent on
+exactly the pull requests most likely to need it.
+
+**`board:check` cannot tell you a card says what you think it says.** It never
+could. It renders the cards; it does not read them. A card whose `column`
+regressed in a rebase passes it cleanly — that is how two cards reached `main`
+sitting in Review on the day this changed. After a multi-commit rebase, read the
+frontmatter of every card you touched.
+
+**A conflict in a card still needs a decision.** If two people edited the same
+card, read both. Nothing regenerates that.
 
 Merging is the maintainer's. A card in Review is finished and waiting on them,
 not on help.

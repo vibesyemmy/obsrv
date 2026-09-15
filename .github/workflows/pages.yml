@@ -7,11 +7,18 @@
 # means the published page is whatever `board/` said at the commit it was
 # built from, and nobody has to remember anything.
 #
-# It is generated FRESH from the cards rather than serving the committed
-# docs/board.html, so the page carries the commit it was built from in its own
-# stamp. Those two are the same content — `board.yml`'s `board:check` is what
-# guarantees that, on every push to every branch — but a build from source can
-# state its provenance and a copied file cannot.
+# It is generated FRESH from the cards, and since 2026-09-15 there is nothing
+# else it could serve: the generated views are gitignored rather than committed,
+# because every branch touching any card conflicted with every other on two
+# derived files. So this workflow is now the ONLY published copy of the board,
+# which raises what it is worth rather than lowering it — a build from source
+# can state the commit it came from in its own stamp, and a copied file cannot.
+#
+# The consequence to keep in view: if this workflow breaks, the board becomes
+# unreadable to anyone outside the repo, where before they could fall back on
+# the committed markdown. The cards are still all there and still the source of
+# truth — `board/`, one file each — so nothing is lost, but the convenient view
+# is gone until this is fixed.
 name: Board on Pages
 
 on:

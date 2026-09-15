@@ -36,3 +36,10 @@ obsrv-*/
 
 # The suite lock (scripts/suiteLock.js): one running suite per worktree.
 .obsrv-suite.lock/
+
+# Generated from board/ by scripts/build-board.js. Not committed since
+# 2026-09-15: every branch touching any card conflicted with every other on
+# these two derived files, always resolved by regenerating. Run `npm run board`
+# to build them locally; pages.yml publishes them from main on every push.
+docs/board.md
+docs/board.html

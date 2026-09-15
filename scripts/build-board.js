@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Renders docs/board.md from the cards in board/.
 //
-//   npm run board          rewrite docs/board.md from board/
-//   npm run board:check    fail if docs/board.md is not what board/ produces
+//   npm run board          write docs/board.md and docs/board.html from board/
+//   npm run board:check    fail if any card cannot be read or rendered
 //
 // The cards ARE the board. One file per card in board/, each with a small
-// frontmatter block and its evidence as the body; docs/board.md is generated
-// from them and committed beside them.
+// frontmatter block and its evidence as the body. docs/board.md and
+// docs/board.html are generated from them and are NOT committed — they are
+// gitignored, built locally when you want to look, and published to Pages from
+// `main` on every push.
 //
 // It did not start that way, and the reason it moved is the point. The board
 // used to live in a Claude Artifact with a shared database, and this file
@@ -24,23 +26,39 @@
 //     addressee to share with. A board only one participant can write is a
 //     board that is accurate only while that participant is awake.
 //
-// Both problems are gone by construction here rather than by discipline. The
-// cards and the generated file live in the same commit, so `--check` in CI
-// fails on a stale snapshot instead of trusting anyone to remember; and the
-// repo is writable by everyone who can open a pull request, which is everyone.
+// Both problems are gone by construction here rather than by discipline: the
+// cards live in the repo, and the repo is writable by everyone who can open a
+// pull request, which is everyone.
 //
 // Claiming a card is now editing its file. That is the whole mechanism.
 //
-// WHEN docs/board.md CONFLICTS ON A REBASE, REGENERATE IT — NEVER HAND-RESOLVE.
-// It will conflict on any branch that touches a card while main moves, because
-// two people generated the same file from different card sets. Resolving the
-// markers by hand produces a board that matches neither side and belongs to
-// nobody: the one artefact here with no source is the generated one. Take
-// either side, run `npm run board`, and let the cards decide. `--check` is
-// what stops a hand-resolved file reaching main, and it runs on pull requests
-// as well as pushes, which is the half that matters — a check that only ran on
-// main would tell you the board was broken after it was broken. First hit by
-// Kenya rebasing c3, who regenerated rather than merging and was right to.
+// THE GENERATED VIEWS ARE NOT COMMITTED, AND THAT IS THE SECOND LESSON.
+// They were, until 2026-09-15. Every branch that touched any card conflicted
+// with every other branch that touched any card, on two files that are DERIVED
+// — and every one of those conflicts was resolved the same way: run this
+// script. In one night: one session conflicted six times inside a single
+// multi-commit rebase, one pull request was rebased three times, and one of
+// those rebases pushed conflict markers to main, because the standing rule
+// ("regenerate, never hand-resolve") has an exception for cards and the
+// exception is the one that got applied by mistake at the tired end of a
+// rebase.
+//
+// A conflict whose resolution is always "recompute it" is not a conflict. It
+// is a merge driver nobody wrote, paid for once per branch. Kenya made that
+// argument with the count behind it; Opeyemi took the larger of the two fixes.
+//
+// So: `docs/board.md` and `docs/board.html` are gitignored. `npm run board`
+// writes them for you locally. `pages.yml` builds them fresh from `main` on
+// every push and publishes them, which is how anyone outside the repo reads
+// the board. Nobody ever rebases for a file they did not write.
+//
+// WHAT `--check` MEANS NOW, because its old meaning is gone. It used to compare
+// the committed views against the cards, which is meaningless once nothing is
+// committed. It now parses every card and renders both views in memory, and
+// fails if any card cannot be read — a missing frontmatter block, a broken
+// field, a column nothing knows. The failure names the card. That is a smaller
+// promise than the old one and it is the whole of what is left to promise:
+// staleness is impossible when there is no stored copy to go stale.
 const { readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { join, dirname } = require('node:path')
 
@@ -364,32 +382,21 @@ if (!check) {
   process.exit(0)
 }
 
-// --check is the part that makes staleness impossible rather than merely
-// discouraged. A generated file nobody compares is a generated file that
-// starts lying the first time someone edits a card and forgets the command.
-// Both generated files are checked. The HTML is as capable of drifting as the
-// markdown, and a Kanban page that silently disagrees with the cards is worse
-// than no Kanban page — it is the thing people glance at.
-let bad = false
-for (const [path, want, label] of [[OUT, rendered, 'docs/board.md'], [OUT_HTML, renderHtml(''), 'docs/board.html']]) {
-  let got = ''
-  try {
-    got = readFileSync(path, 'utf8')
-  } catch {
-    console.error(`board: ${label} does not exist. Run \`npm run board\`.`)
-    bad = true
-    continue
-  }
-  if (got === want) continue
-  const a = got.split('\n')
-  const b = want.split('\n')
-  const at = a.findIndex((l, i) => l !== b[i])
-  console.error(`board: ${label} does NOT match board/. Run \`npm run board\` and commit the result.`)
-  console.error(`  first difference at line ${at + 1}:`)
-  console.error(`    committed: ${JSON.stringify((a[at] ?? '<end of file>').slice(0, 160))}`)
-  console.error(`    board/:    ${JSON.stringify((b[at] ?? '<end of file>').slice(0, 160))}`)
-  bad = true
-}
-if (bad) process.exit(1)
-console.error(`board: docs/board.md and docs/board.html match board/ (${cards.length} cards)`)
+// --check renders both views and throws away the result. Nothing is compared
+// against a stored copy, because there is no stored copy: the views are
+// gitignored and built on demand. What is left to catch is a card that cannot
+// be rendered at all, and that is worth catching here rather than in the Pages
+// deploy, where the failure would be a broken publish instead of a refused
+// push.
+//
+// Reaching this line already means every card parsed — `parseCard` throws on a
+// card with no frontmatter block, naming the file — and that both views
+// rendered without throwing. Watched refusing on 2026-09-15 with a planted
+// card carrying no frontmatter: exit 1, and the message named the card.
+//
+// It is deliberately a small promise. The old --check could be defeated by
+// forgetting to commit; this one cannot be defeated by forgetting anything,
+// because the only copy anyone reads is built from the cards every time.
+renderHtml('')
+console.error(`board: ${cards.length} cards render (nothing is compared — the views are not committed)`)
 process.exit(0)
