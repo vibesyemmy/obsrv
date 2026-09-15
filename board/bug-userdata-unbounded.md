@@ -1,6 +1,6 @@
 ---
 title: "userData grows without bound — 1.3 GB, 94% of it Chromium cache"
-column: review
+column: done
 kind: bug
 owner: "Kenya"
 order: 29
@@ -78,3 +78,18 @@ The 1 MiB arm was never constrained by its own cap; two unbound numbers landed e
 
 **VERIFIED:** typecheck clean across all three configs; unit 1171 passed in 67 files; the app builds and runs with the switch in the built output.
 
+MERGED 2026-09-15 on Opeyemi's word, `d184a1e`, closing PR #6. `docs/board.html` conflicted and
+was REGENERATED rather than hand-resolved; both sides were then checked to have survived rather
+than assumed.
+
+Verified on the MERGED tree rather than on either side of it, and before pushing: build first,
+typecheck exit 0 across three configs, 1181/1181 unit, `board:check` green. **Merged with the
+PR's e2e suite still in progress**, which is stated rather than glossed — this repo has twice
+shipped on a suite that did not finish. Everything else on the PR had passed, including Kenya's
+own fixtures-by-runs sweep at 4m8s.
+
+**The card asked for an order, and the order is what made the fix correct rather than lucky:**
+establish whether the cache is load-bearing, THEN choose a number. It is not — ~14 ms of load on
+a small static page and zero result fields moved, warm or cold, across five pairs. So the cap
+answers to disk space. A cap was always the obvious fix; without this it would have been the
+right fix for the wrong reason, and nobody would have known which.
