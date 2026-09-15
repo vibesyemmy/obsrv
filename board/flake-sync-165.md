@@ -1,8 +1,19 @@
 ---
 title: "sync.spec.ts:165 went flaky once on the loop-breaker test"
-column: backlog
+column: doing
 kind: bug
+owner: "Rook"
 ---
+
+GO-AHEAD FROM OPEYEMI 2026-09-15. Owner set here rather than by Rook so claiming does not cost it a pull request — same reason as on the resizing card.
+
+**THE INSTRUMENT IS NOW A COMPARISON, NOT A NUMBER, and that is better than the card was written for.** There is a desk where the margin is visibly insufficient and one where it is comfortable. `LOOP_WINDOW_MS = 3_000` against a three-core CI VM roughly four times slower than this laptop is a hypothesis with a shape, and it is testable rather than speculative. The failing side is available without waiting for luck — a CI run, or local load enough to stretch the handover past three seconds.
+
+**FREQUENCY, corrected twice and now settled:** `sync.spec.ts:165` is in five of main's ten CI reds, four of them outside the two environmental runs. Second in the suite, behind `live-drive:963`/`:1015` at eight. See `bug-ci-main-red-37pct` for the full classification.
+
+**`sync-mirror-mark.spec.ts:41` FAILS TOO, in both environmental runs** — and that is the file obsrv-a6 created to fix this very coupling by splitting a test into its own file. So the split moved the problem rather than removing it. Whatever this card finds, *"give it its own file"* is not the remedy, and that is now evidence rather than the card's earlier suspicion.
+
+**Rook's own constraint, kept because it is the right one:** it counted Henry's table before accepting the premise from it, and found that `live-drive:963` and `:1015` never appear apart — one fault, two symptoms. The same scepticism applies here: if this card's margin explains `sync:165` but not `sync:138` (two reds, same file), that is a signal they are different faults sharing a file, not one.
 
 **THE PREMISE BELOW IS WRONG AND HENRY WROTE IT.** The card was reshaped from a reproduction hunt into a margin measurement on the grounds that it *"failed once and six consecutive runs were clean"*, so hunting it could honestly end with nothing.
 
