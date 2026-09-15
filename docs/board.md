@@ -190,7 +190,27 @@ That is the dangerous half. A wrong-identity signature does not fail — it succ
 
 So docs/signing.md is right and is not sufficient: a warning in a document is read once, and this needs a check that fires every time. Whoever takes A1 should treat "assert the signing identity is the one intended, and fail the build otherwise" as part of the work rather than a follow-up.
 
-Blocked on Apple issuing a Developer ID Application certificate. The cert in ~/Documents/obsrv-signing is Apple Distribution (Voicify Limited) — wrong type. Wiring waits on chore/signing.
+**STATUS, measured 2026-09-15 rather than carried forward.** The line this replaces said *"Blocked on Apple issuing a Developer ID Application certificate. The cert in ~/Documents/obsrv-signing is Apple Distribution (Voicify Limited) — wrong type."* **That is no longer true and had been stale for a day.** Apple issued it; the card did not notice.
+
+~/Documents/obsrv-signing/developerID_application.cer         Developer ID Application: Voicify Limited (NDXPR623CF)     <- the right certificate, present     ~/Documents/obsrv-signing/distribution.cer         Apple Distribution: Voicify Limited (NDXPR623CF)           <- the wrong one, also present
+
+Read from the files with `openssl x509 -subject`, not from a recollection of which was downloaded.
+
+**WHAT IS ACTUALLY LEFT — three things, and only one of them is engineering.**
+
+**1. The G2 intermediate is not installed.** `security find-certificate -c "Developer ID Certification Authority"` returns nothing in any keychain. Without it the chain does not build, so the leaf cannot be used even though it is sitting on disk. It is a **public** download from Apple and not account-gated — Rook said so and offered to fetch it; Opeyemi is trying his account route first. Smallest blocker on the card.
+
+**2. `codesign` still sees only one identity.** `security find-identity -v -p codesigning` → `F446C3A9… "Restack Dev"`, 1 valid identity. The Developer ID leaf is not usable until it and its private key are imported together as a p12 — **and that step needs Opeyemi's password, so no session can do it.** It is not blocked on anyone's time but his.
+
+**3. The identity question is unanswered and is a decision, not a task.** The app would be signed as **Voicify Limited**, which is what Gatekeeper shows users, while `copyright` says Opeyemi Ajagbe and CI would hold Voicify's private key.
+
+**ALREADY SETTLED, so nobody re-opens it:** the keypair matches. Public-key SHA-256 of the cert's `-pubkey` against each `.key` — `obsrv-developer-id.key` (the 21:30 pair) matches the Developer ID leaf at `53c1b7ae`; the 21:34 pair is a different keypair at `1cd2c04d`. Rook established that by measurement before anyone warned about it.
+
+**AND `chore/signing` STILL MERGES CLEAN, re-measured on today's main** rather than trusting the earlier figure, which is what Rook's own caveat asked for:
+
+base                        3521bc8, 2026-08-29     commits on main since       539     conflicts if merged today   0
+
+Wiring waits on `chore/signing`, which is ready whenever the identity is.
 
 ### QUEUE — Rook: chore-guard now · flake-sync-165 next · a1 on Opeyemi
 
