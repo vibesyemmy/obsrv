@@ -1,8 +1,9 @@
 ---
 title: "A suite that measured nothing must be as loud as two suites at once"
-column: next
+column: review
 kind: chore
 order: 25
+owner: "Rook"
 ---
 
 FREE AS OF 2026-09-14 evening. obsrv-91 raised it with its user twice and got silence rather than a refusal, then released it rather than hold a card against a maybe while someone else was free and wanting it: "mine only in the sense that nobody else has it, which is not a claim on a card." If its user later says take it, it will ask what is left rather than start a second copy, and Henry hears before it touches anything.
@@ -26,3 +27,15 @@ HALF TWO — a suite that passed having measured nothing is indistinguishable fr
 Kenya's find is the third instance in one day and belongs in the same fix: live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run of it dies on `Cannot read properties of undefined (reading 'token')` — which reads like a bug in whatever test you just wrote.
 
 So: a concurrent suite, a stale lock, and a run that asserted nothing are three ways to get a green that means nothing, and the guard should name which one it is looking at in all three cases.
+
+INTO REVIEW 2026-09-14, branch `chore/suite-guard` off 4b46a49. Write-up with every message copied from a real run: docs/research/2026-09-14-suite-guard.md. 1141/1141 unit, typecheck clean across all three configs.
+
+THE STALE-LOCK OBSERVATION, which obsrv-91 said was the difference between a guard and a green light, was made rather than designed. A real `npm test` started, SIGKILLed mid-run so no exit path could run, the lock left behind, and the next suite's first words recorded verbatim: "taking over a stale lock from the unit suite — pid 25891, which is no longer running. It died 16s ago without releasing." A dead holder is taken over, not refused — refusing on a corpse is what gets the lock deleted by hand.
+
+AND THE FIRST VERSION OF THAT MESSAGE WAS WRONG, which only running it could show. It said "It died 0s ago" about a suite killed ten seconds earlier: the caller had no age to hand and passed a literal 0. A sentence keying off nothing, in the one message whose job is to be believed. The age now travels out of the lock file with the takeover, and a 42-second dead holder is asserted in tests/unit/suiteLock.test.ts so it cannot quietly become a constant again.
+
+HALF ONE: scripts/suiteLock.js + scripts/suite.js, one lock per worktree over all three suites — the interference is BETWEEN them, since test:e2e rewrites out/ while the CLI specs read it. Atomic mkdir, holder file, process.kill(pid,0), the pattern bin/electronPath.js already uses for the install lock. Live holders are refused with pid and age; the refusal says in words that it is a live holder and not a leftover file.
+
+HALF TWO: src/shared/established.ts. Kenya's live-drive.spec case before and after, same -g command — before `TypeError: Cannot read properties of undefined (reading 'port')`, after `info (the control port and token) was never established: this file's first test did not run in this suite`. The first names the app, the second names the run. surface-parity.spec.ts's vacuity assertion — the only one anyone had written — now takes its wording from noEvidenceMessage so the next one is not discovered the same way; observed still firing under -g.
+
+WHAT IT DOES NOT DO, stated because an unaudited file looks identical to an audited one: mcp.spec.ts and rendering.spec.ts also accumulate module-level state and have NOT been checked against this. noEvidenceMessage existing is not the same as its being used. Also a residual takeover race (two processes seeing the same dead holder; the loser is refused on the re-read rather than serialised) — electronPath.js's takeover mutex is the heavier pattern if it ever shows up. It has not.

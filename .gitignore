@@ -33,3 +33,6 @@ tests/browser/__screenshots__/
 # (the agent sandbox sets it to the repo root); the unit tests clean up after
 # themselves, so anything left is a crashed run's.
 obsrv-*/
+
+# The suite lock (scripts/suiteLock.js): one running suite per worktree.
+.obsrv-suite.lock/
