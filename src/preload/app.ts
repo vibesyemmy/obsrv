@@ -142,6 +142,7 @@ const api: ObsrvApi = {
   addTab: () => ipcRenderer.invoke(IPC.addTab),
   closeTab: id => ipcRenderer.send(IPC.closeTab, id),
   activateTab: id => ipcRenderer.send(IPC.activateTab, id),
+  moveTab: (id, toIndex) => ipcRenderer.send(IPC.moveTab, { id, toIndex }),
   onTabsChanged: cb => subscribe<TabSnapshot>(IPC.tabsChanged, cb),
 }
 

@@ -97,5 +97,6 @@ export const IPC = {
   addTab: 'obsrv:add-tab',
   closeTab: 'obsrv:close-tab',
   activateTab: 'obsrv:activate-tab',
+  moveTab: 'obsrv:move-tab',
   tabsChanged: 'obsrv:tabs-changed',
 } as const

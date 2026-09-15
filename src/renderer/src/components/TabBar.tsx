@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { canAddTab, tabTitle } from '../../../shared/tabList'
 import { useAgentActivity } from '../hooks/useAgentActivity'
@@ -14,7 +15,11 @@ import { Icon } from './Icon'
  * of Chromium renderers it built), so an optimistic strip would be inventing
  * ids that no session answers to.
  *
- * Reordering is deliberately absent from this first cut — see the spec.
+ * Dragging a tab re-orders the strip, and takes that same round trip: the drop
+ * sends `moveTab` and the strip moves when the snapshot returns. Identity is
+ * the id, and `TabManager.activeIndex` is derived from it, so a re-order can
+ * shuffle the list without the active tab changing or `tabs.json` coming back
+ * pointing at whatever slid into the old position.
  */
 export function TabBar() {
   const tabOrder = useStore(useShallow(s => s.tabOrder))
@@ -29,16 +34,42 @@ export function TabBar() {
 
   const canAdd = canAddTab(tabOrder.length, maxTabs)
 
+  // Drag state is local and deliberately not in the store: it lives for the
+  // length of one gesture, and main is told once, at the drop. The strip
+  // re-orders when the `tabsChanged` snapshot comes back — the same round trip
+  // every other tab command takes, so a drop that main refuses leaves the
+  // strip as it was rather than showing a move that did not happen.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const endDrag = useCallback(() => {
+    setDragId(null)
+    setOverIndex(null)
+  }, [])
+  const drop = useCallback(
+    (index: number) => {
+      if (dragId !== null) window.obsrv.moveTab(dragId, index)
+      endDrag()
+    },
+    [dragId, endDrag],
+  )
+
   return (
     <div className="chrome-row chrome-tabs">
       <div className="tabs" role="tablist" aria-label="Open tabs">
-        {tabOrder.map(id => (
+        {tabOrder.map((id, index) => (
           <Tab
             key={id}
             id={id}
+            index={index}
             active={id === activeId}
             driven={driving && id === activeId}
             busy={agentActive}
+            dragging={dragId === id}
+            over={overIndex === index && dragId !== null && dragId !== id}
+            onDragStart={setDragId}
+            onDragEnd={endDrag}
+            onDragOver={setOverIndex}
+            onDrop={drop}
           />
         ))}
       </div>
@@ -72,6 +103,13 @@ function Tab({
   active,
   driven,
   busy,
+  index,
+  dragging,
+  over,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
 }: {
   id: string
   active: boolean
@@ -79,6 +117,14 @@ function Tab({
   driven: boolean
   /** A command arrived in the last ~3 s; only ever shown on a driven tab. */
   busy: boolean
+  /** This tab's position in the strip, which is what a drop lands on. */
+  index: number
+  dragging: boolean
+  over: boolean
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  onDragOver: (index: number) => void
+  onDrop: (index: number) => void
 }) {
   // Subscribed per tab, so a background tab's title landing re-renders that
   // one entry rather than the whole strip.
@@ -88,7 +134,30 @@ function Tab({
   })
 
   return (
-    <div className={`tab${driven ? ' driven' : ''}${driven && busy ? ' busy' : ''}`}>
+    <div
+      className={`tab${driven ? ' driven' : ''}${driven && busy ? ' busy' : ''}${dragging ? ' dragging' : ''}${over ? ' drop-before' : ''}`}
+      // The whole tab is the drag handle, which is what every browser does —
+      // the label is a button, so dragging from it would otherwise be a
+      // text-selection gesture.
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox refuses to start a drag with an empty data transfer.
+        e.dataTransfer.setData('text/plain', id)
+        onDragStart(id)
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={e => {
+        // Without this the drop never fires: the default is "no".
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        onDragOver(index)
+      }}
+      onDrop={e => {
+        e.preventDefault()
+        onDrop(index)
+      }}
+    >
       <button
         className="tab-label"
         type="button"

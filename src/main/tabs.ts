@@ -2,7 +2,7 @@ import { ipcMain, type BrowserWindow, type IpcMainEvent, type WebContents } from
 import type { Rect } from '../shared/api'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_SETTINGS } from '../shared/presets'
-import { canAddTab, closeTab, type TabSnapshot } from '../shared/tabList'
+import { canAddTab, closeTab, moveTab, type TabSnapshot } from '../shared/tabList'
 import { attachFrameBus, type FrameBus } from './frameBus'
 import { TabSession } from './tabSession'
 
@@ -221,6 +221,24 @@ export class TabManager {
     // Chromium reports a cursor only when it changes, and the incoming
     // tab's may not change for a while: send what it last said.
     this.toRenderer(IPC.targetCursor, { tabId: id, cursor: next.target.getCursor() })
+  }
+
+  /**
+   * Re-orders the strip. Nothing about which tab is active changes: `this.id`
+   * is an id and `activeIndex` is derived from it, so the index that reaches
+   * `tabs.json` follows the tab to its new position rather than naming
+   * whatever slid into the old one.
+   *
+   * No pane is touched — the sessions are the same sessions, in a different
+   * order — so unlike `activate` and `close` there is nothing to show, hide or
+   * re-point. The snapshot is the whole effect.
+   */
+  move(id: string, toIndex: number): void {
+    const next = moveTab([...this.list], id, toIndex)
+    if (next.length === this.list.length && next.every((t, i) => t === this.list[i])) return
+    this.list.length = 0
+    this.list.push(...next)
+    this.onTabsChanged()
   }
 
   close(id: string): void {

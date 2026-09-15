@@ -1,7 +1,45 @@
 import { describe, expect, it } from 'vitest'
-import { closeTab, tabTitle, canAddTab } from '../../src/shared/tabList'
+import { closeTab, moveTab, tabTitle, canAddTab } from '../../src/shared/tabList'
 
 const list = (...ids: string[]) => ids.map(id => ({ id }))
+const ids = (tabs: { id: string }[]) => tabs.map(t => t.id)
+
+describe('moveTab', () => {
+  it('moves a tab to the right, closing the gap behind it', () => {
+    expect(ids(moveTab(list('a', 'b', 'c', 'd'), 'a', 2))).toEqual(['b', 'c', 'a', 'd'])
+  })
+
+  it('moves a tab to the left', () => {
+    expect(ids(moveTab(list('a', 'b', 'c', 'd'), 'd', 1))).toEqual(['a', 'd', 'b', 'c'])
+  })
+
+  it('dropping a tab where it already is changes nothing', () => {
+    expect(ids(moveTab(list('a', 'b', 'c'), 'b', 1))).toEqual(['a', 'b', 'c'])
+  })
+
+  it('clamps a destination past either end rather than dropping the tab', () => {
+    // A drag can end past the last tab; losing one because the pointer went
+    // too far is the worst outcome available here.
+    expect(ids(moveTab(list('a', 'b', 'c'), 'a', 99))).toEqual(['b', 'c', 'a'])
+    expect(ids(moveTab(list('a', 'b', 'c'), 'c', -5))).toEqual(['c', 'a', 'b'])
+  })
+
+  it('leaves the list alone when the id is not in it', () => {
+    expect(ids(moveTab(list('a', 'b'), 'zz', 0))).toEqual(['a', 'b'])
+  })
+
+  it('keeps every tab exactly once, whatever the move', () => {
+    // The failure this guards is silent: a splice that inserts before removing
+    // duplicates one tab and drops another, and the strip still looks like a
+    // strip of tabs.
+    for (const from of ['a', 'b', 'c', 'd']) {
+      for (const to of [-1, 0, 1, 2, 3, 4]) {
+        const moved = ids(moveTab(list('a', 'b', 'c', 'd'), from, to))
+        expect([...moved].sort()).toEqual(['a', 'b', 'c', 'd'])
+      }
+    }
+  })
+})
 
 describe('closeTab', () => {
   it('activates the tab to the right when closing the active one', () => {

@@ -27,6 +27,28 @@ export function closeTab<T extends TabRef>(tabs: T[], closeId: string, activeId:
   return { tabs: next, activeId: neighbour.id }
 }
 
+/**
+ * Re-orders the strip, moving `moveId` to `toIndex`.
+ *
+ * Identity is the id, not the position — which is why nothing here touches the
+ * active tab. `TabManager.activeIndex` is *derived* (`findIndex` on the active
+ * id) rather than stored, so the index that reaches `tabs.json` follows the
+ * tab wherever it has been dragged, and the reorder cannot strand it.
+ *
+ * The destination is clamped rather than rejected: a drag can end past the end
+ * of the strip, and losing a tab because the pointer went too far is the worst
+ * outcome available here. Removing before inserting, for the same reason — the
+ * other order duplicates the dragged tab and drops whatever it landed on, and
+ * a strip with a tab twice in it still looks like a strip of tabs.
+ */
+export function moveTab<T extends TabRef>(tabs: T[], moveId: string, toIndex: number): T[] {
+  const from = tabs.findIndex(t => t.id === moveId)
+  if (from === -1) return tabs
+  const rest = tabs.filter(t => t.id !== moveId)
+  const to = Math.max(0, Math.min(rest.length, Math.trunc(toIndex)))
+  return [...rest.slice(0, to), tabs[from]!, ...rest.slice(to)]
+}
+
 export function canAddTab(count: number, max: number): boolean {
   return count < max
 }
