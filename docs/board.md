@@ -632,7 +632,15 @@ THE NEW GUARD WAS WATCHED FAILING, not only passing. Stalling the cycle before t
 
 VERIFIED: typecheck clean across all three configs; live-drive 45 passed, 58.1 s, twice.
 
-NOT VERIFIED, and it is the half that matters: this desk only ever takes the `resizing` branch. The `animating` branch is what CI exercises and what the eight reds were, and no run on a slow desk has gone through this code yet. A green here is the less interesting half of the evidence.
+VERIFIED ON THE SLOW DESK AS PASSING, AND UNVERIFIED AS TO WHICH PATH — two different sentences, and the second is the one that matters. CI run 34929603720, head 314bca6, event pull_request, conclusion success: `live-drive:969` passed in 17.0 s on the three-core runner, the machine where the old assertion failed 8 of 10 times. So the rewrite survives the desk that broke its predecessor.
+
+What that green CANNOT say is whether the capture came back `resizing` or `animating`, which was the entire point of recording the label. The margin went into `test.info().annotations`, and `reporter: [['list']]` — the reporter CI runs — does not print annotations. The CI log carried a tick and a duration.
+
+A record kept where nobody reads it is not a record, and this instance was authored inside the mechanism built to prevent it. Fixed by printing the margin to stdout beside the annotation, which the list reporter does carry:
+
+settle verdict: label=resizing sizes=8 quietAtEnd=0ms applied=214 capture=8149ms
+
+That is this desk. The next CI run is the first one that will say which branch a slow desk takes. `grep -rn "annotations.push" tests` returns one hit — this test — so nothing else in the suite is invisible for the same reason.
 
 AND THE CASCADE IS UNCHANGED, which is useful. The stalled-cycle run failed 2 tests, not 1: `:963` and `:1015` again. So the pairing does not depend on WHICH assertion fails in the first test. Per Rook's constraint: if this makes `:963` deterministic on CI and `:1015` keeps failing, that is evidence the cascade is a separate fault rather than a consequence.
 
