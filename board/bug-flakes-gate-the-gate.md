@@ -258,6 +258,33 @@ watching, and read that number* — applied to a thing that runs for hours inste
 the same morning, by the same session that then walked into it three more times. Writing a trap
 down does not stop you walking into it; a heartbeat that prints `rows=0` does.
 
+## CORRECTION: `mcp.spec:137` is not a flake and this card said it was
+
+This card counted `mcp.spec.ts:137` as its centrepiece — *failed first attempt in five of five,
+then six, then seven captured runs; a consistent failure being concealed by a retry.* The
+concealment was real. **The cause was not what this card implied.**
+
+Its error was finally opened on 2026-09-15:
+
+    McpError: MCP error -32602: Structured content does not match the tool's output schema:
+      data/readout must NOT have additional properties
+
+`obsrv_inspect` emits `colorPainted`; the MCP output schema for `readout` does not allow it. A
+reproducible product defect, filed as `bug-inspect-readout-schema`, diagnosed to the line.
+
+**So one of this card's strongest data points belongs to a different card, and the honest tally
+here is smaller:** three tests defeating the retry on trees that could not cause them, plus one
+test that was never a flake at all and was counted four times without anyone reading its message.
+
+**What that says about the method this card recommends.** Counting ✓ against ✘ per test answers
+*is this a real failure or a retry rescue*. It answered correctly every time. It cannot answer
+*why*, and nothing in the practice prompts the next question — so a reproducible bug sat behind a
+green summary line for a day, counted repeatedly, never read.
+
+**A test that fails identically on every run is not flaky. It is reproducible** — the easiest
+kind of defect to fix, and the easiest to mistake for noise while a retry keeps rescuing it.
+Add to the practice: **when a test recurs in the tally, open its error once.**
+
 ## Still not known
 
 The cause of any of the four. Whether they share one. Whether `mcp.spec:137` failing first-time
