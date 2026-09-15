@@ -1,9 +1,41 @@
 ---
-title: "sync.spec.ts:165 went flaky once on the loop-breaker test"
-column: doing
+title: "A genuine navigation mistaken for an echo — sync:165 diagnosed, not fixed"
+column: review
 kind: bug
 owner: "Rook"
 ---
+
+**FOUND. Branch `fix/sync-loop-margin` (as of f027a74), in Review — 1141/1141 unit, typecheck clean, board:check green. Merging waits on Opeyemi's word to Rook directly.**
+
+**The mechanism: a genuine navigation is mistaken for an echo.** The previous test loads `redirect.html`, which does `location.replace('hairline.html')`. The bus issues that replacement into `target` and records it in `issued['target']`. Normally target's own commit comes back as an echo and RETIRES the record — sometimes that commit does not arrive before the next test starts. `ISSUED_MAX_AGE_MS` is **10 s** while the whole file runs in about **3 s**, so nothing prunes it. The next test's genuine load of hairline.html into target then matches the stale record, `retire()` calls it an echo, and `mirror()` returns **before any URL comparison runs**. Native sits on tall.html until the 5 s poll gives up.
+
+**Two failing traces and two passing ones differ by exactly one line:**
+
+    passing   +2571 native->target issued hairline.html
+              +2577 target->native echo   hairline.html   <- retires the record
+              +2684 native->target issued tall.html
+              +2797 target->native issued hairline.html   <- step 2 mirrors, correct
+
+    failing   +2726 native->target issued hairline.html
+                    (the retiring echo never arrives)
+              +2838 native->target issued tall.html
+              +2952 target->native echo   hairline.html   <- read as an echo, nothing mirrored
+
+**WHAT ROOK HAD WRONG, in its own words and worth keeping.** It expected the stale entry to be swept by step 1's mirror of TALL. It is not — and in the PASSING runs it is not swept either. What saves a passing run is that the record was retired earlier, by its own echo. **So the fault is not a missing sweep; it is a missing echo.** The hypothesis named the right exit for the wrong reason, and only the trace separated those.
+
+Henry's guess — `other.getURL() === url` comparing a superseded URL — was one exit too late: the decision never reaches it.
+
+**THE FIXTURE KNEW.** `tests/fixtures/redirect.html` carries this comment, written long before any of this:
+
+> *Commits this URL, then replaces it: the client-side redirect shape SyncBus must survive without leaving a stale expectation behind.*
+
+It leaves one about 4% of the time. The fixture named exactly what to test for and nothing ever checked it.
+
+**Numbers, replacing every premise this card was written on:** margin 106–111 ms over 28 runs against a 3,000 ms window — a constant cannot explain a 4% event. **4 failures in 113 runs** on an idle fast machine, so not a slow-VM fault; six-core load left step times indistinguishable from idle. The directionality falls out of the previous test driving the native pane — **nothing in the bus is asymmetric, the test order is.**
+
+**NOT FIXED, DELIBERATELY.** Verified: the `syncBus.ts` changes are pure instrumentation — `loopState()`, `mirrorTrace()`, the `MirrorDecision` type, a trips counter. Read-only, no behaviour change. The fix is `bug-stale-issued-echo`, because it is a decision rather than a tidy-up.
+
+Write-up with the reproduction: `docs/research/2026-09-15-sync-165-stale-echo.md`.
 
 **DECISION TRACE BUILT, AND EVERY BRANCH FORCED BEFORE ANY OF IT WAS BELIEVED** — `tests/e2e/sync-trace.spec.ts`, Rook, 2026-09-15. Still hunting: 25 runs with the trace, 0 failures, 60 more running.
 

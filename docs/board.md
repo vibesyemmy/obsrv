@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*55 cards, 28 open, 20 of those unclaimed.*
+*56 cards, 29 open, 21 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -164,7 +164,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 10
+## Next — 11
 
 *Picked, not claimed — start here.*
 
@@ -443,15 +443,195 @@ Those are not contradictory — B5 measured fixtures, these are live e2e — but
 
 Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the measurement this argues for. `chore-guard` is about greens that mean nothing; this is reds that mean nothing, which is the same disease.
 
+### Fixing the stale echo is a decision about what `issued` means
+
+[`bug-stale-issued-echo`](../board/bug-stale-issued-echo.md) · bug · *unclaimed*
+
+Split out of `flake-sync-165` at Rook's insistence, and the insistence is right: this is a decision with a cost attached, not a tidy-up to append to the card that found it.
+
+**The fault**, diagnosed and reproduced — see `flake-sync-165` and `docs/research/2026-09-15-sync-165-stale-echo.md`. A client-side redirect leaves a record in `issued[pane]` that is normally retired by its own echo. When that echo does not arrive, `ISSUED_MAX_AGE_MS` (10 s) will not prune it inside a 3 s test file, and the NEXT genuine load of the same URL is read as an echo. `mirror()` returns before comparing anything. About 4% of runs.
+
+**Three candidates, all of which change what "echo" means for a superseded load:**
+
+- **Retire on any new document**, not only on an echo.
+- **Bound the record's age below a test file's length** — which is choosing a number, and the current number was presumably chosen for a reason nobody has written down.
+- **Make the record identify the load rather than the URL**, so a second genuine load of the same address is distinguishable from the first one coming back.
+
+**WHY THIS NEEDS A DECISION AND NOT A PATCH.** The `issued` map exists to stop the panes chasing each other. Loosening what counts as an echo is loosening the thing that prevents the loop — and the cost of getting that wrong is on the record: **the 252-load loop of 2026-09-03**. Whoever takes this should have that incident in front of them before choosing, because each candidate trades a stale expectation for a weaker loop guard, and the third is the only one that plausibly does not.
+
+**The instrument already exists**, which is most of the work: `mirrorTrace()` and `sync-trace.spec.ts` land with `flake-sync-165` and will say which branch any candidate takes. Whoever fixes this can watch the fix change the branch rather than inferring it from a green suite.
+
+**And the same discipline applies to the fix as to the trace:** four of the five mirror branches can be forced deliberately and `pane-destroyed` cannot — the spec says so in those words. Absence of `pane-destroyed` in a trace means nothing; absence of the other four means they did not happen.
+
 ---
 
-## Doing — 3
+## Doing — 2
 
 *Claimed. Someone is on it.*
 
-### sync.spec.ts:165 went flaky once on the loop-breaker test
+### Three sessions were sharing one working tree
+
+[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
+
+Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
+
+`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
+
+RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
+
+Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
+
+OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+### The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds
+
+[`bug-resizing-test-flaky-ci`](../board/bug-resizing-test-flaky-ci.md) · **C5** · bug · owner: Kenya
+
+ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
+
+**THE RATE BELOW IS WRONG. It is not "about 1 run in 4" — it is EIGHT OF TEN.** That figure came from Henry's first count over four runs. All ten of main's reds are now classified (`bug-ci-main-red-37pct`), and `live-drive:963` is in eight of them. It is the most frequent failure in the suite, ahead of `sync.spec:165` at five.
+
+**AND IT HAS A PARTNER IT HAS NEVER BEEN SEEN WITHOUT.** `live-drive:1015` appears in the same eight runs, eight for eight. Rook's observation, and it is a stronger constraint on the cause than either failure alone: this is one fault producing two symptoms, not two flaky tests that happen to agree. Counting them separately makes live-drive read as twice as noisy as it is.
+
+The second symptom is the `info` cascade — `:1015` dies with `TypeError: Cannot read properties of undefined (reading 'token')` because `:963` left the shared app broken. So the second failure names the app when the first is what broke. Rook's `established.ts` in `chore-guard` makes that legible; it does not stop it.
+
+**KENYA'S DIRECTION FOR THE FIX, in its own terms, and it is the reason this is Kenya's card.**
+
+The wrong fix is loosening the assertion to accept either verdict, and the reason is sharper than "it asserts less": `expect(reason).toMatch(/resizing|animating/)` **would pass on a run where the cycle never started** — which is exactly what `expect(applied).toBeGreaterThan(20)` was written to catch. The loosening would un-catch the thing the test already catches.
+
+**Assert the DISCRIMINATOR, not the label.** What distinguishes the two verdicts is whether the pane's viewport was still changing at the budget — a fact the test can measure directly by reading the viewport across the capture, rather than inferring from which branch the settle loop reached first. The label then becomes an observation the test records alongside its margin: how close the loop came to the other verdict.
+
+> A test that asserts the state and records the label survives a faster host; one that asserts the label is asserting a race.
+
+**WHAT THE FAILURE ACTUALLY IS, since it is not a broken provocation.** `expect(applied).toBeGreaterThan(20)` PASSES on the failing runs. The eight-preset cycle really runs; the pane really is being resized. Both labels are true of it — it IS resizing and it IS repainting — and which one `settleTarget` reports depends on which condition it reaches first, which depends on host speed. CI is a three-core VM; this laptop is a 14-core M4 Pro.
+
+So this is the same shape as B5 and the Retina trio: a result about the machine, wearing the costume of a result about the code. Kenya has now met it three times in two days and caught it twice.
+
+**main is RED as of c494f7c.** Found 2026-09-14 by Henry while checking something else — not by anyone watching CI, which is its own finding.
+
+`tests/e2e/live-drive.spec.ts:963` — the test that proved `unsettledReason: 'resizing'` is reachable — fails on CI, and its failure poisons the rest of the file.
+
+expected  { settled: false, unsettledReason: "resizing"  }     received  { settled: false, unsettledReason: "animating" }     at live-drive.spec.ts:1003, both attempts
+
+**It is FLAKY, not broken.** The same test ran and PASSED on three earlier CI runs — 9e95410, bc29277, 4b46a49 — and failed on c494f7c, whose diff is board files and generated docs only and cannot have caused it. One failure in four observed CI runs.
+
+**The vacuity guard held, which is what makes this diagnosable.** `expect(applied).toBeGreaterThan(20)` PASSED, so the eight-preset cycle really did run; the pane was genuinely being resized. The settle loop simply reached `animating` before it reached `resizing`. Without that guard this would look like a cycle that failed to start, and the fix would have been aimed at the wrong thing.
+
+**THE SHAPE, and it is the day's:** a result that is about the machine, presented as a result about the code. `resizing` and `animating` are both true of a pane being cycled through eight viewports — it is resizing AND the page is repainting — and which one the loop reports depends on which condition it hits first, which depends on host speed. Kenya measured 3/3 locally; several CI runs agreed; this one did not.
+
+This does NOT undo Kenya's finding. `resizing` is reachable and has been observed many times. What is not established is that this test *deterministically* provokes it, and the card that claimed it fires said nothing about the margin.
+
+**THE CASCADE, which is the expensive half.** When :963 fails, the next test (`:1015`, the blank-page capture) dies with `TypeError: Cannot read properties of undefined (reading 'token')` — the exact `info` failure Kenya documented and Rook has just written a message for in `chore/suite-guard`. So one flaky test takes the file with it, and the second failure names the app when the cause is the first test. Rook's `established.ts` makes that cascade LEGIBLE; it does not stop it.
+
+**What would settle it,** and the wrong fix is to loosen the assertion to accept either value — that would make the test pass while asserting nothing, which is the defect `chore-guard` exists to prevent:
+
+- Measure the margin, as `flake-sync-165` now asks for its own case: across runs, how close does the settle loop come to the other verdict? A number, available every run.
+- Then either make the provocation dominate on any host, or assert the discriminator that actually distinguishes the two — the pane's size changing, which is the thing being tested, rather than the label the loop happened to choose.
+
+Related: `ci-second-host` is the card about exactly this question and Kenya has it open as PR #1. This failure is evidence for that card, arriving before it merged.
+
+---
+
+## Review — 2
+
+*Finished, waiting on the maintainer to merge.*
+
+### Run the suite on a host unlike this laptop, more than once a release
+
+[`ci-second-host`](../board/ci-second-host.md) · **B5** · chore · owner: Kenya
+
+THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
+
+this laptop   Apple M4 Pro, 14 cores, 1x ultrawide      result fields moved: 0   182 s     CI            Apple M1 (Virtual), 3 cores                result fields moved: 3   225 s                   errors 0 and comparator control passed on both desks                   1,061 leaves a run, per-case leaf counts identical across desks
+
+Both diverging cases are `grows-as-walked.html`, and the values say two different things.
+
+**A NOTE THAT SOMETIMES DOES NOT FIRE.** On audit, `warnings.length` was 1, 1, 1, **0**, 1 across the five CI runs. The missing one is the page-is-still-moving note: "this page was still moving when it was measured: 40 had been replaced in the 254 ms after the figures were taken". On a 3-core VM that note fires four times in five. This is a real result difference and it is the one that matters: the tool's own warning about an unstable page is itself unstable there.
+
+**A SENTENCE THAT EMBEDS A DURATION.** On lint, the same note fired all five times and its text still differed: 258 ms, 261 ms, 256 ms, 259 ms, 256 ms. Nothing about the page's measurement changed; the sentence quotes an elapsed time. A warning that embeds a duration can never be byte-identical across runs, so any sentence-level comparison flags it forever — on this desk too, if the note fired here at all.
+
+**AND THE DIVERGENCE ITSELF VARIES.** The first CI run moved `pageHeight`, `summary.text.count` and `warnings[0]`; the second moved `warnings.length` and `warnings[0]` on audit and `warnings[0]` on lint. Same desk, same tree, different set. So "4 fields" and "3 fields" are both samples of a range rather than a figure, and the card records both rather than the tidier one.
+
+NEXT, AND DELIBERATELY NOT DONE HERE: the classifier should separate "a sentence whose only difference is an embedded number" from "a sentence that appeared or did not". They are one bucket today, and they are opposite findings — the first is a wording property, the second is the tool answering differently. I did not change it after the numbers were taken, because the committed code should be the code that produced the artefacts on the card.
+
+---
+
+CLAIMED 2026-09-14 evening by Kenya, on Opeyemi's word given in his own session. IN DOING, not Review: the card is done when the COMPARISON EXISTS, and the second desk has not run yet. What exists is the harness that lets it, and one desk's numbers from it.
+
+WHAT IS BUILT.
+
+`scripts/b5-fixture-sweep.js` — the fixture half of the B5 sweep, committed. The original harness was five scratch files, thrown away on the grounds that the method was the thing to keep (docs/research/2026-09-14-b5-repeatability.md, "Reproducing it"). That is true for a method and false for a comparison: two desks cannot be compared unless both ran the same code, so this is the method made runnable rather than described.
+
+It serves every fixture from memory so each run gets byte-identical bytes, runs `audit` and `lint` N times per fixture, flattens each reply to leaves, and classifies anything that moved as timing, path or result. It carries the original's vacuity guard — plant a raised count, a dropped finding and a changed sentence into the saved runs, and fail if the comparator cannot see them.
+
+AND IT RECORDS THE DESK, which the original could not have known to do. `bug-retina` is why: three assertions recorded for two days as "fails on this laptop, passes on CI" turned out to track WHICH MONITOR WAS PLUGGED IN. Two hosts differing only in hardware tell you nothing if neither wrote down its display state. Every report carries CPU, cores, platform, and on macOS the `Resolution` / `UI Looks like` / `Main Display` lines that separate a 1x desk from a 2x one.
+
+`.github/workflows/b5-sweep.yml` — the sweep on macos-14: different silicon, and a display that never moves. That fixed display is why CI is a useful second desk and also why it cannot finish the job — one unchanging desk is a second sample, not a range. Deliberately NOT part of the CI gate: a difference between desks is the result this card asks for, and a result that turns a pull request red is one people learn to route around. It runs weekly, on dispatch, and on a pull request that touches the harness itself — which is also how the first CI number gets taken, since `workflow_dispatch` is only offered for workflows already on the default branch.
+
+THIS DESK, 2026-09-14 (baseline to compare CI against):
+
+24 cases × 3 runs, preset laptop-768, Apple M4 Pro, 14 cores     main display 3440x1440, UI Looks like 3440x1440 — a 1x desk     result fields moved: 0 across 0 cases     errors: 0    comparator control: saw every planted difference     1,061 leaves compared per run, 109 s
+
+That 0 agrees with the published fixture number, on the same machine that produced it, which is the weakest possible confirmation and is stated as such. The card turns on what CI answers.
+
+TWO DEFECTS IN THE HARNESS, FOUND BEFORE IT PRODUCED A NUMBER ANYONE COULD USE. Both are on the card because both are the failure this whole criterion is about.
+
+1. THE FIRST SMOKE RUN REPORTED A PERFECT GREEN OVER FOURTEEN CASES THAT HAD ALL FAILED TO LOAD. "result fields moved: 0" and "the comparator saw every planted difference", with every case carrying `load did not finish within 30000 ms` and 30 leaves where a real run has 50-180. Cause: `spawnSync` blocks the event loop that the fixture server runs on, so every run waited out its load budget against a server that could not answer until that run finished. Now async.
+
+THE PLANTED-DIFFERENCE CONTROL PASSED THROUGHOUT, and was right to: plants go into the saved leaves, so they still differ when every run is equally empty. The control proves the comparator is not blind. It cannot prove there was anything to look at. So there is now a SECOND guard — each run must show it measured the page — and it checks the thing the first one structurally cannot.
+
+2. THE SECOND GUARD THEN OVER-TRIGGERED, discarding `animated-tall` because its reply says "nothing to measure: the page had no visible text and no targets". That is a legitimate case, and in the original sweep five such cases were the STRONGEST result: their explanatory notes were byte-identical across all five runs. Only a load that never arrived makes a run empty of evidence rather than empty of findings.
+
+Related, and the reason the fixture list changed: the first list was seven structural shapes, and 9 of its 12 valid cases had zero findings — so "0 fields moved" was a statement about 447 leaves, most of them the same four walk counts. Pages that actually produce findings (`audit`, `lint`, `contrast`, `hairline`, `app-shell-findings`) are in the core list now, which took it to 1,061. The original compared 3,375 a run over 33 cases; `--all` widens this one and the gap is honest rather than closed.
+
+WHAT WOULD FINISH THE CARD: the CI run's numbers beside the ones above, both with their desks. A match means B5 survives with two desks behind it. A difference means B5's zero is about this machine, and every before-and-after measured against it inherits that. Done is when the comparison exists, not when it comes out a particular way — and per Henry, B5's zero is his and he would rather have it corrected than kept.
+
+---
+
+NEXT ON THIS CARD: the classifier puts two opposite findings in one bucket.
+
+`scripts/b5-fixture-sweep.js` marks any differing warning string as a moved result field. Two things produce that, and they mean opposite things:
+
+- **A sentence whose only difference is a number.** CI's lint runs all said "this page was still moving when it was measured: 40 had been replaced in the 258 ms after the figures were taken" — with 258, 261, 256, 259, 256. Nothing about the measurement moved. The sentence quotes an elapsed time, so it can never be byte-identical on any desk, and a sentence-level comparison will flag it on every run forever. That is a property of the wording, and the fix if anyone wants one is in the wording, not in the sweep.
+- **A sentence that appeared or did not.** CI's audit runs had `warnings.length` 1, 1, 1, 0, 1: the same note, absent once. That is the tool answering differently about the same bytes, and it is the finding this card exists to surface.
+
+The first is noise that will never go away. The second is the result. Today they arrive in one number, so a future run of this sweep reports "3 result fields moved" without saying whether any of it matters, and the person reading it has to open the artefact and diff the values by eye — which is what I did, and is not a thing a weekly job should require.
+
+What I would do: normalise numbers inside a compared sentence, compare the normalised forms, and report three buckets rather than two — identical, same-sentence-different-number, and appeared-or-not. Then a zero in the third bucket is the claim B5 wants to make, and a non-zero in the second is a note to reword.
+
+Deliberately not done while the card was open: changing the classifier after the numbers were taken would have left the committed code different from the code that produced the artefacts the card cites.
+
+*Kenya's words, verbatim, landed by Henry — adding it needed a branch and a pull request, and Kenya had no word from Opeyemi for another one.*
+
+### A genuine navigation mistaken for an echo — sync:165 diagnosed, not fixed
 
 [`flake-sync-165`](../board/flake-sync-165.md) · bug · owner: Rook
+
+**FOUND. Branch `fix/sync-loop-margin` (as of f027a74), in Review — 1141/1141 unit, typecheck clean, board:check green. Merging waits on Opeyemi's word to Rook directly.**
+
+**The mechanism: a genuine navigation is mistaken for an echo.** The previous test loads `redirect.html`, which does `location.replace('hairline.html')`. The bus issues that replacement into `target` and records it in `issued['target']`. Normally target's own commit comes back as an echo and RETIRES the record — sometimes that commit does not arrive before the next test starts. `ISSUED_MAX_AGE_MS` is **10 s** while the whole file runs in about **3 s**, so nothing prunes it. The next test's genuine load of hairline.html into target then matches the stale record, `retire()` calls it an echo, and `mirror()` returns **before any URL comparison runs**. Native sits on tall.html until the 5 s poll gives up.
+
+**Two failing traces and two passing ones differ by exactly one line:**
+
+passing   +2571 native->target issued hairline.html               +2577 target->native echo   hairline.html   <- retires the record               +2684 native->target issued tall.html               +2797 target->native issued hairline.html   <- step 2 mirrors, correct
+
+failing   +2726 native->target issued hairline.html                     (the retiring echo never arrives)               +2838 native->target issued tall.html               +2952 target->native echo   hairline.html   <- read as an echo, nothing mirrored
+
+**WHAT ROOK HAD WRONG, in its own words and worth keeping.** It expected the stale entry to be swept by step 1's mirror of TALL. It is not — and in the PASSING runs it is not swept either. What saves a passing run is that the record was retired earlier, by its own echo. **So the fault is not a missing sweep; it is a missing echo.** The hypothesis named the right exit for the wrong reason, and only the trace separated those.
+
+Henry's guess — `other.getURL() === url` comparing a superseded URL — was one exit too late: the decision never reaches it.
+
+**THE FIXTURE KNEW.** `tests/fixtures/redirect.html` carries this comment, written long before any of this:
+
+> *Commits this URL, then replaces it: the client-side redirect shape SyncBus must survive without leaving a stale expectation behind.*
+
+It leaves one about 4% of the time. The fixture named exactly what to test for and nothing ever checked it.
+
+**Numbers, replacing every premise this card was written on:** margin 106–111 ms over 28 runs against a 3,000 ms window — a constant cannot explain a 4% event. **4 failures in 113 runs** on an idle fast machine, so not a slow-VM fault; six-core load left step times indistinguishable from idle. The directionality falls out of the previous test driving the native pane — **nothing in the bus is asymmetric, the test order is.**
+
+**NOT FIXED, DELIBERATELY.** Verified: the `syncBus.ts` changes are pure instrumentation — `loopState()`, `mirrorTrace()`, the `MirrorDecision` type, a trips counter. Read-only, no behaviour change. The fix is `bug-stale-issued-echo`, because it is a decision rather than a tidy-up.
+
+Write-up with the reproduction: `docs/research/2026-09-15-sync-165-stale-echo.md`.
 
 **DECISION TRACE BUILT, AND EVERY BRANCH FORCED BEFORE ANY OF IT WAS BELIEVED** — `tests/e2e/sync-trace.spec.ts`, Rook, 2026-09-15. Still hunting: 25 runs with the trace, 0 failures, 60 more running.
 
@@ -545,140 +725,6 @@ Context that makes this worth doing rather than shelving: obsrv-a6's remedy for 
 Reported by obsrv-e7 from its full-suite run, 2026-09-14: 'quick legitimate reversals are not a loop' failed once and passed on retry. That is the test obsrv-a6 was working around earlier the same day - a new test dropped into sync.spec made it fail half its runs because the file shares one app and the loop breaker counts reversals within LOOP_WINDOW_MS (3 s); the remedy was moving that test to its own file (sync-mirror-mark.spec.ts), not timing the handover.
 
 So this is the same fragility showing without an added test, which means the shared-app coupling in sync.spec is closer to the edge than the fix implied. Worth knowing before anyone adds another test to that file. Not reproduced by obsrv-a6; six consecutive runs were clean after the split.
-
-### Three sessions were sharing one working tree
-
-[`chore-worktree-discipline`](../board/chore-worktree-discipline.md) · chore · owner: Henry
-
-Found 2026-09-14 when Kenya joined the room and reported being in /Users/opeyemiajagbe/Documents/Projects/Obsrv on main at f470827 — the same checkout Henry was mid-edit in, and the same one Rook described in the room at the older HEAD a5c1a3c. Kenya also saw its branch change under it (test/explained-table-staleness -> main), which was Henry merging and checking out main in that tree an hour earlier.
-
-`git worktree list` showed only two worktrees, neither belonging to Rook or Kenya — so up to three sessions on one tree, which is the hazard Rook itself flagged in the room before anyone hit it, and which has cost this project a rebuild before (a `git checkout -- .` from one session dropped another's uncommitted work).
-
-RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own worktree (Rook /tmp/obsrv-rook on feat/cli-version, Kenya /tmp/obsrv-kenya on docs/c5-note-inventory). Henry stays in the main checkout as the one already mid-change. obsrv-e7 has worked from /private/tmp/obsrv-c4-sweep all day, so the pattern is proven.
-
-Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
-
-OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
-
-### The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds
-
-[`bug-resizing-test-flaky-ci`](../board/bug-resizing-test-flaky-ci.md) · **C5** · bug · owner: Kenya
-
-ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
-
-**THE RATE BELOW IS WRONG. It is not "about 1 run in 4" — it is EIGHT OF TEN.** That figure came from Henry's first count over four runs. All ten of main's reds are now classified (`bug-ci-main-red-37pct`), and `live-drive:963` is in eight of them. It is the most frequent failure in the suite, ahead of `sync.spec:165` at five.
-
-**AND IT HAS A PARTNER IT HAS NEVER BEEN SEEN WITHOUT.** `live-drive:1015` appears in the same eight runs, eight for eight. Rook's observation, and it is a stronger constraint on the cause than either failure alone: this is one fault producing two symptoms, not two flaky tests that happen to agree. Counting them separately makes live-drive read as twice as noisy as it is.
-
-The second symptom is the `info` cascade — `:1015` dies with `TypeError: Cannot read properties of undefined (reading 'token')` because `:963` left the shared app broken. So the second failure names the app when the first is what broke. Rook's `established.ts` in `chore-guard` makes that legible; it does not stop it.
-
-**KENYA'S DIRECTION FOR THE FIX, in its own terms, and it is the reason this is Kenya's card.**
-
-The wrong fix is loosening the assertion to accept either verdict, and the reason is sharper than "it asserts less": `expect(reason).toMatch(/resizing|animating/)` **would pass on a run where the cycle never started** — which is exactly what `expect(applied).toBeGreaterThan(20)` was written to catch. The loosening would un-catch the thing the test already catches.
-
-**Assert the DISCRIMINATOR, not the label.** What distinguishes the two verdicts is whether the pane's viewport was still changing at the budget — a fact the test can measure directly by reading the viewport across the capture, rather than inferring from which branch the settle loop reached first. The label then becomes an observation the test records alongside its margin: how close the loop came to the other verdict.
-
-> A test that asserts the state and records the label survives a faster host; one that asserts the label is asserting a race.
-
-**WHAT THE FAILURE ACTUALLY IS, since it is not a broken provocation.** `expect(applied).toBeGreaterThan(20)` PASSES on the failing runs. The eight-preset cycle really runs; the pane really is being resized. Both labels are true of it — it IS resizing and it IS repainting — and which one `settleTarget` reports depends on which condition it reaches first, which depends on host speed. CI is a three-core VM; this laptop is a 14-core M4 Pro.
-
-So this is the same shape as B5 and the Retina trio: a result about the machine, wearing the costume of a result about the code. Kenya has now met it three times in two days and caught it twice.
-
-**main is RED as of c494f7c.** Found 2026-09-14 by Henry while checking something else — not by anyone watching CI, which is its own finding.
-
-`tests/e2e/live-drive.spec.ts:963` — the test that proved `unsettledReason: 'resizing'` is reachable — fails on CI, and its failure poisons the rest of the file.
-
-expected  { settled: false, unsettledReason: "resizing"  }     received  { settled: false, unsettledReason: "animating" }     at live-drive.spec.ts:1003, both attempts
-
-**It is FLAKY, not broken.** The same test ran and PASSED on three earlier CI runs — 9e95410, bc29277, 4b46a49 — and failed on c494f7c, whose diff is board files and generated docs only and cannot have caused it. One failure in four observed CI runs.
-
-**The vacuity guard held, which is what makes this diagnosable.** `expect(applied).toBeGreaterThan(20)` PASSED, so the eight-preset cycle really did run; the pane was genuinely being resized. The settle loop simply reached `animating` before it reached `resizing`. Without that guard this would look like a cycle that failed to start, and the fix would have been aimed at the wrong thing.
-
-**THE SHAPE, and it is the day's:** a result that is about the machine, presented as a result about the code. `resizing` and `animating` are both true of a pane being cycled through eight viewports — it is resizing AND the page is repainting — and which one the loop reports depends on which condition it hits first, which depends on host speed. Kenya measured 3/3 locally; several CI runs agreed; this one did not.
-
-This does NOT undo Kenya's finding. `resizing` is reachable and has been observed many times. What is not established is that this test *deterministically* provokes it, and the card that claimed it fires said nothing about the margin.
-
-**THE CASCADE, which is the expensive half.** When :963 fails, the next test (`:1015`, the blank-page capture) dies with `TypeError: Cannot read properties of undefined (reading 'token')` — the exact `info` failure Kenya documented and Rook has just written a message for in `chore/suite-guard`. So one flaky test takes the file with it, and the second failure names the app when the cause is the first test. Rook's `established.ts` makes that cascade LEGIBLE; it does not stop it.
-
-**What would settle it,** and the wrong fix is to loosen the assertion to accept either value — that would make the test pass while asserting nothing, which is the defect `chore-guard` exists to prevent:
-
-- Measure the margin, as `flake-sync-165` now asks for its own case: across runs, how close does the settle loop come to the other verdict? A number, available every run.
-- Then either make the provocation dominate on any host, or assert the discriminator that actually distinguishes the two — the pane's size changing, which is the thing being tested, rather than the label the loop happened to choose.
-
-Related: `ci-second-host` is the card about exactly this question and Kenya has it open as PR #1. This failure is evidence for that card, arriving before it merged.
-
----
-
-## Review — 1
-
-*Finished, waiting on the maintainer to merge.*
-
-### Run the suite on a host unlike this laptop, more than once a release
-
-[`ci-second-host`](../board/ci-second-host.md) · **B5** · chore · owner: Kenya
-
-THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
-
-this laptop   Apple M4 Pro, 14 cores, 1x ultrawide      result fields moved: 0   182 s     CI            Apple M1 (Virtual), 3 cores                result fields moved: 3   225 s                   errors 0 and comparator control passed on both desks                   1,061 leaves a run, per-case leaf counts identical across desks
-
-Both diverging cases are `grows-as-walked.html`, and the values say two different things.
-
-**A NOTE THAT SOMETIMES DOES NOT FIRE.** On audit, `warnings.length` was 1, 1, 1, **0**, 1 across the five CI runs. The missing one is the page-is-still-moving note: "this page was still moving when it was measured: 40 had been replaced in the 254 ms after the figures were taken". On a 3-core VM that note fires four times in five. This is a real result difference and it is the one that matters: the tool's own warning about an unstable page is itself unstable there.
-
-**A SENTENCE THAT EMBEDS A DURATION.** On lint, the same note fired all five times and its text still differed: 258 ms, 261 ms, 256 ms, 259 ms, 256 ms. Nothing about the page's measurement changed; the sentence quotes an elapsed time. A warning that embeds a duration can never be byte-identical across runs, so any sentence-level comparison flags it forever — on this desk too, if the note fired here at all.
-
-**AND THE DIVERGENCE ITSELF VARIES.** The first CI run moved `pageHeight`, `summary.text.count` and `warnings[0]`; the second moved `warnings.length` and `warnings[0]` on audit and `warnings[0]` on lint. Same desk, same tree, different set. So "4 fields" and "3 fields" are both samples of a range rather than a figure, and the card records both rather than the tidier one.
-
-NEXT, AND DELIBERATELY NOT DONE HERE: the classifier should separate "a sentence whose only difference is an embedded number" from "a sentence that appeared or did not". They are one bucket today, and they are opposite findings — the first is a wording property, the second is the tool answering differently. I did not change it after the numbers were taken, because the committed code should be the code that produced the artefacts on the card.
-
----
-
-CLAIMED 2026-09-14 evening by Kenya, on Opeyemi's word given in his own session. IN DOING, not Review: the card is done when the COMPARISON EXISTS, and the second desk has not run yet. What exists is the harness that lets it, and one desk's numbers from it.
-
-WHAT IS BUILT.
-
-`scripts/b5-fixture-sweep.js` — the fixture half of the B5 sweep, committed. The original harness was five scratch files, thrown away on the grounds that the method was the thing to keep (docs/research/2026-09-14-b5-repeatability.md, "Reproducing it"). That is true for a method and false for a comparison: two desks cannot be compared unless both ran the same code, so this is the method made runnable rather than described.
-
-It serves every fixture from memory so each run gets byte-identical bytes, runs `audit` and `lint` N times per fixture, flattens each reply to leaves, and classifies anything that moved as timing, path or result. It carries the original's vacuity guard — plant a raised count, a dropped finding and a changed sentence into the saved runs, and fail if the comparator cannot see them.
-
-AND IT RECORDS THE DESK, which the original could not have known to do. `bug-retina` is why: three assertions recorded for two days as "fails on this laptop, passes on CI" turned out to track WHICH MONITOR WAS PLUGGED IN. Two hosts differing only in hardware tell you nothing if neither wrote down its display state. Every report carries CPU, cores, platform, and on macOS the `Resolution` / `UI Looks like` / `Main Display` lines that separate a 1x desk from a 2x one.
-
-`.github/workflows/b5-sweep.yml` — the sweep on macos-14: different silicon, and a display that never moves. That fixed display is why CI is a useful second desk and also why it cannot finish the job — one unchanging desk is a second sample, not a range. Deliberately NOT part of the CI gate: a difference between desks is the result this card asks for, and a result that turns a pull request red is one people learn to route around. It runs weekly, on dispatch, and on a pull request that touches the harness itself — which is also how the first CI number gets taken, since `workflow_dispatch` is only offered for workflows already on the default branch.
-
-THIS DESK, 2026-09-14 (baseline to compare CI against):
-
-24 cases × 3 runs, preset laptop-768, Apple M4 Pro, 14 cores     main display 3440x1440, UI Looks like 3440x1440 — a 1x desk     result fields moved: 0 across 0 cases     errors: 0    comparator control: saw every planted difference     1,061 leaves compared per run, 109 s
-
-That 0 agrees with the published fixture number, on the same machine that produced it, which is the weakest possible confirmation and is stated as such. The card turns on what CI answers.
-
-TWO DEFECTS IN THE HARNESS, FOUND BEFORE IT PRODUCED A NUMBER ANYONE COULD USE. Both are on the card because both are the failure this whole criterion is about.
-
-1. THE FIRST SMOKE RUN REPORTED A PERFECT GREEN OVER FOURTEEN CASES THAT HAD ALL FAILED TO LOAD. "result fields moved: 0" and "the comparator saw every planted difference", with every case carrying `load did not finish within 30000 ms` and 30 leaves where a real run has 50-180. Cause: `spawnSync` blocks the event loop that the fixture server runs on, so every run waited out its load budget against a server that could not answer until that run finished. Now async.
-
-THE PLANTED-DIFFERENCE CONTROL PASSED THROUGHOUT, and was right to: plants go into the saved leaves, so they still differ when every run is equally empty. The control proves the comparator is not blind. It cannot prove there was anything to look at. So there is now a SECOND guard — each run must show it measured the page — and it checks the thing the first one structurally cannot.
-
-2. THE SECOND GUARD THEN OVER-TRIGGERED, discarding `animated-tall` because its reply says "nothing to measure: the page had no visible text and no targets". That is a legitimate case, and in the original sweep five such cases were the STRONGEST result: their explanatory notes were byte-identical across all five runs. Only a load that never arrived makes a run empty of evidence rather than empty of findings.
-
-Related, and the reason the fixture list changed: the first list was seven structural shapes, and 9 of its 12 valid cases had zero findings — so "0 fields moved" was a statement about 447 leaves, most of them the same four walk counts. Pages that actually produce findings (`audit`, `lint`, `contrast`, `hairline`, `app-shell-findings`) are in the core list now, which took it to 1,061. The original compared 3,375 a run over 33 cases; `--all` widens this one and the gap is honest rather than closed.
-
-WHAT WOULD FINISH THE CARD: the CI run's numbers beside the ones above, both with their desks. A match means B5 survives with two desks behind it. A difference means B5's zero is about this machine, and every before-and-after measured against it inherits that. Done is when the comparison exists, not when it comes out a particular way — and per Henry, B5's zero is his and he would rather have it corrected than kept.
-
----
-
-NEXT ON THIS CARD: the classifier puts two opposite findings in one bucket.
-
-`scripts/b5-fixture-sweep.js` marks any differing warning string as a moved result field. Two things produce that, and they mean opposite things:
-
-- **A sentence whose only difference is a number.** CI's lint runs all said "this page was still moving when it was measured: 40 had been replaced in the 258 ms after the figures were taken" — with 258, 261, 256, 259, 256. Nothing about the measurement moved. The sentence quotes an elapsed time, so it can never be byte-identical on any desk, and a sentence-level comparison will flag it on every run forever. That is a property of the wording, and the fix if anyone wants one is in the wording, not in the sweep.
-- **A sentence that appeared or did not.** CI's audit runs had `warnings.length` 1, 1, 1, 0, 1: the same note, absent once. That is the tool answering differently about the same bytes, and it is the finding this card exists to surface.
-
-The first is noise that will never go away. The second is the result. Today they arrive in one number, so a future run of this sweep reports "3 result fields moved" without saying whether any of it matters, and the person reading it has to open the artefact and diff the values by eye — which is what I did, and is not a thing a weekly job should require.
-
-What I would do: normalise numbers inside a compared sentence, compare the normalised forms, and report three buckets rather than two — identical, same-sentence-different-number, and appeared-or-not. Then a zero in the third bucket is the claim B5 wants to make, and a non-zero in the second is a note to reword.
-
-Deliberately not done while the card was open: changing the classifier after the numbers were taken would have left the committed code different from the code that produced the artefacts the card cites.
-
-*Kenya's words, verbatim, landed by Henry — adding it needed a branch and a pull request, and Kenya had no word from Opeyemi for another one.*
 
 ---
 
@@ -1214,4 +1260,4 @@ Commit 7d811f8. Withholding url-changed made sync.spec depend on a race; clean m
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 10 readiness, 11 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 10 readiness, 12 bugs, 7 chores, among the open cards.*
