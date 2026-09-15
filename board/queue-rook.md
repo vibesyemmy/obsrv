@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: c2-retroactive routed · log-attribution in review · a1 on Opeyemi"
+title: "QUEUE — Rook: c2-retroactive routed · a1 on Opeyemi · log-attribution merged"
 column: next
 kind: chore
 owner: "Rook"
@@ -15,8 +15,11 @@ epitaph — *"the queue went stale within hours of being written"* — which was
 
 1. `c2-retroactive` — ROUTED, waiting on Rook's own user. Apply `docs/compatibility.md` to
    0.56.0–0.60.0. See that card for why Rook and for the three framings obsrv-91 left on it.
-2. `bug-log-attribution` — IN REVIEW, branch `fix/log-attribution` @ 334164d, pushed and
-   fetch-confirmed. Merge is Opeyemi's. Unblocks `bug-dev-app-exited`.
+2. `bug-log-attribution` — **MERGED** `6f19f9b` on Opeyemi's word, card done. It carried
+   `70209df` too, Rook's catch of a contradiction Henry introduced on
+   `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;
+   Rook flagged in advance that taking it would mean reading output produced by its own
+   change, and asked to be held to being slower to believe it.
 
 **BLOCKED, and not on anything Rook can do**
 
@@ -39,10 +42,22 @@ Rook reported four branches with Opeyemi. Two of those are already merged: `fix/
 landed at `7feb26b` and the card closed at `f57924b`, and the contrast work landed at `d66d047`
 and `7d57872`. The only unmerged branches in the repository are `fix/log-attribution`,
 `chore/signing`, and the stale tail of `fix/suite-absence-loud` — whose one leftover commit was
-Opeyemi's own, pushed after the merge, and has now been ported to main by hand.
+Opeyemi's own, pushed after the merge, and has now been ported to main by hand. As of `6f19f9b`
+the only unmerged branch left is `chore/signing`, which is a1's and blocked on Opeyemi.
 
 **Why this card keeps going stale, stated so the next rewrite is shorter:** a queue is a claim
 about several other cards, and nothing regenerates it when they move. `npm run board` checks
 that the VIEWS match the cards; it cannot check that a card's prose matches another card's
 column. Every line above is therefore a hand-maintained duplicate of state that lives elsewhere,
 and the honest fix is fewer lines here, not more frequent updates.
+
+**It went stale again inside the hour, and the instance is worth more than the correction.**
+The paragraph below was written at 09:0x saying a queue card is a hand-maintained duplicate of
+state that lives elsewhere. `bug-log-attribution` merged at 09:5x and this card immediately
+said IN REVIEW, at a commit (`334164d`) that was no longer even the branch tip — Rook had
+pushed `70209df` after reporting. Two separate staleness defects in one line, in the card whose
+subject is that line going stale, written by the person who had just written that it would.
+
+Nothing here is a reason to update more often. It is a reason for this card to be shorter: the
+only lines above that cannot be read off another card are the routing decisions and the "not
+Rook's unless asked" list. Everything else is a copy, and `npm run board` cannot check a copy.

@@ -1,6 +1,6 @@
 ---
 title: "A log line cannot be attributed to the dev app or the installed one"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 28
@@ -81,3 +81,32 @@ WHAT IT DOES NOT DO, stated rather than implied: it cannot attribute a single ex
 This unblocks `bug-dev-app-exited`, which could not be investigated while a line could not name its writer.
 
 ONE THING FROM RUNNING IT, since it is the same family: a check of mine printed "(no stray app processes above)" directly beneath two processes that were still running. A sentence keyed off nothing, in the session that spent the night on that defect. Killed, then verified by counting rather than asserting.
+
+MERGED 2026-09-15 on Opeyemi's word, `6f19f9b`, no conflicts. Verified here before pushing
+rather than taken from the branch's own report: build first (a stale `out/` has produced two
+false results in this repo), then typecheck exit 0 across three configs, 1181/1181 unit with
+`logWriter.test.ts` green at 10, `board:check` green.
+
+**What I checked that a passing suite does not tell you: whether the tests test the thing.**
+Two of the ten hold the trap directly — *"distinguishes two lanes that share a commit, which a
+build tag would not"* and *"distinguishes two runs of ONE profile, which a profile tag alone
+would not"*. Both directions, which is what makes `userData` + pid the right identity rather
+than a plausible one.
+
+**What I did NOT independently observe, said plainly because this card is about attribution.**
+I did not see the stamp in a live log myself. `initLog()` is called only from
+`src/main/index.ts`, so the CLI writes no log at all and a CLI run cannot exercise it — my
+first attempt to observe it found an empty sandbox, which is correct behaviour and not a
+finding. Rook observed it, with two processes and two profiles against one shared log under an
+isolated `CFFIXED_USER_HOME`, and that observation stands as the card's evidence rather than
+anything of mine.
+
+**And the check I ran before that one was vacuous, which belongs here rather than nowhere.** I
+compared Opeyemi's real log before and after, and it reported `0 -> 0 lines, sha "" -> ""` —
+because I had the filename wrong (`main.log`; it is `obsrv.log`). A pass that meant *the file I
+was watching does not exist*, on the card about lines that cannot say who wrote them. Re-run
+against the real path it reads 882 lines and `b205b72b` before and after, unchanged — which
+matches Rook's figure exactly, and is only worth quoting because the check can now be seen to
+have something to look at.
+
+Unblocks `bug-dev-app-exited`.
