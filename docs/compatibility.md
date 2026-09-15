@@ -20,6 +20,12 @@ This inverts the rule most projects run on, where additive is safe. It is why
 three separate designs were decided this week the way they were, and it was
 nowhere written down until now.
 
+**Checked on the wire, 2026-09-15, because everything below rests on it.** The
+schemas are `zod` shapes that the MCP SDK converts, so `additionalProperties`
+appears nowhere in `src/` and cannot be grepped — this page asserted the
+constraint for a day before anyone asked the built server over stdio whether it
+was true. It is. See `docs/research/2026-09-15-c2-retroactive.md`.
+
 **What it looks like when it bites:** a validation error on a capture or a
 measurement that worked yesterday, naming a field or a value rather than a
 page. It reads as a bug in Obsrv. It is a stale schema.
@@ -110,6 +116,59 @@ and diff the keys against a reply you kept.
   you have not seen is a state Obsrv learned to name.
 - **Restart the session after upgrading.** Always, not only when the notes say
   so.
+
+## Three things this policy did not say, decided here
+
+Each of these was found by applying the policy rather than by reading it, which
+is the only way this kind of gap is found. The reasoning is exposed so it can be
+overruled rather than inherited.
+
+### Applying this backwards produces a record, not an announcement
+
+**Every document in this policy is younger than every release before 0.61.0.**
+Measured, not recalled: `compatibility.md`, `breaking-changes.md` and
+`thresholds.md` are all absent from the tree at `v0.56.0` through `v0.60.0`.
+
+Two clauses therefore cannot be satisfied backwards, and pretending otherwise
+would make the register dishonest:
+
+- **"the release notes say it too"** cannot be met at all. The notes shipped.
+- **A documented threshold moving without `thresholds.md` moving with it** cannot
+  be violated by a release that predates the file. 0.58.0 moved a threshold and
+  did not breach this rule, because there was nothing to move.
+
+So: **a retroactive pass produces a RECORD — an entry in the register saying
+what was found — and never an ANNOUNCEMENT.** A record may state that a release
+was checked and nothing was found, and it should, because *checked and clean*
+and *never checked* are different facts that an absent entry does not
+distinguish. What a record may not do is imply that anyone was told at the time.
+
+### A new MCP tool is not breaking; a new field still is
+
+The two look alike and are not, and the difference is the mechanism rather than
+the size. A field is breaking because an old client validates a reply against a
+schema it already holds, and `additionalProperties: false` rejects the key. **A
+new tool never appears in a reply to a call the old client makes** — it does not
+know the tool exists, so it never calls it, and nothing it does validate has
+changed.
+
+The cost is the opposite one: the tool is *invisible* until the client lists the
+tools again. That is a restart note, not a breaking change, and it belongs in
+the release notes for that reason rather than in the register.
+
+### A new enum value is breaking on MCP and not on the CLI
+
+Same value, two contracts, opposite answers — which is the clearest illustration
+on this page that the four surfaces are not one surface.
+
+On **MCP** it is breaking: the enum is in the schema the client is holding, and
+a value outside it fails validation.
+
+On the **CLI's stdout** it is not. That contract is the key *set*, and a new
+value does not change the keys. A caller switching exhaustively on values can
+still be surprised, which is why this page already says to treat an unknown enum
+value as unknown rather than as an error — but that is advice to callers, not a
+break to announce.
 
 ## After 1.0
 
