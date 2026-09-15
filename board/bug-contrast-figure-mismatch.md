@@ -1,9 +1,23 @@
 ---
 title: "The contrast figure disagrees with the colours printed beside it"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
 order: 4
 ---
+
+ASSIGNED TO ROOK 2026-09-15 on Opeyemi's word — **and deliberately against Rook's own recommendation**, which was that a session arriving at `inspectReadout.ts` cold is worth more than the finder's two hypotheses. That argument was good and Opeyemi chose otherwise; it is not being ignored, it is being overruled by the person whose call it is. The cold-reader argument has been honoured twice this week (`bug-sync138`, and this card's own filing), so it is a judgement about this card rather than a rejection of the principle.
+
+**What the finder's advantage is here, since that is what the override is buying:** Rook has the run-17 output in hand — 242 contrast-on-panel findings on one page, 217 of them white-on-black — and knows which pages produced the right answer and which the wrong one. A cold reader would have to reproduce that before starting.
+
+**The standing warning on the card applies to its own owner: do not fix the arithmetic first.** Both numbers come from code that believes it is right, and establishing which half lies is a measurement. The two hypotheses Rook already holds are the thing most likely to steer that measurement, and the card asks for the boundary to be established rather than assumed:
+
+    #ffffff on #0c0c0c   WCAG 19.56   tool says 7.5     wrong
+    #0b0c0c on #d2e2f1   WCAG 14.82   tool says 14.82   exactly right
+
+Both verified independently by Henry. A 7.5 against white implies a background luminance of 0.0900, which is about `#545454` — consistent with a ratio taken against a composited background while the sentence prints the computed `background-color`, or the reverse. **That is a hypothesis with a number attached, not a finding.** `backgroundNote: "computed"` appears in both the right and the wrong case, so that field does not currently separate them.
+
+Right on dark-on-light and wrong on light-on-dark **in these two cases**. Whether that is the real boundary is the first thing to measure.
 
 Found in run 17 (2026-09-15, docs/research/2026-09-15-live-run-17.md). **The most serious thing that run turned up, because contrast is what this product is for.**
 
