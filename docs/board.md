@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*60 cards, 21 open, 14 of those unclaimed.*
+*60 cards, 21 open, 13 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Backlog — 10
+## Backlog — 9
 
 *Raised, not yet picked.*
 
@@ -73,12 +73,6 @@ Never done on a machine that has never run Obsrv. Read the output as a stranger 
 [`b2`](../board/b2.md) · **B2** · readiness · *unclaimed*
 
 Settle gap closed 2026-09-14. Still open: the dialog note has never fired on a live site across four runs; whether to enter open shadow roots is undecided.
-
-### Measure the noise ratio with two independent classifiers
-
-[`b4`](../board/b4.md) · **B4** · readiness · *unclaimed*
-
-zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
 
 ### A mirrored redirect's second commit can still be counted as an arrival
 
@@ -140,7 +134,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 8
+## Next — 9
 
 *Picked, not claimed — start here.*
 
@@ -287,6 +281,41 @@ THE LESSON. This machine read 1080 twice on every local run, so the comparison w
 THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `moving` flag with src/shared/pageMotion.ts, which already answers 'was this page holding still' on both surfaces. obsrv-e7's objection, correct: THE PROBE ANSWERS PER-RUN TOO — a page that moves slowly, or only while loading, reads as still on a fast host, which is how `moves` got past everyone. A probe that silently decides whether to compare values gives a green that fits two facts again, harder to spot because nothing names it.
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
+
+### Measure the noise ratio with two independent classifiers
+
+[`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
+
+zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
+
+ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go. Kenya asked to be routed by need and stated no preference on subject; this is the need.
+
+**Why this card is the need.** It is a readiness criterion, it is unowned, and until today it was one sentence long — nobody has started it. Its own text says *"B5 now makes this interpretable"*, and B5 became interpretable this week through Kenya's work: first the downgrade to one desk, then the structural result that every CLI run is cold by construction, which removed the confound Henry had put beside it. The card was waiting on something that has now happened.
+
+**Why Kenya, and it is not availability.** The whole card turns on the word INDEPENDENT, and the failure mode is two classifiers that agree because they share a mechanism rather than because the finding is real. Kenya found exactly that defect in its own instrument today — the B5 fixture server sends `cache-control: no-store`, a second independent block on the thing being measured, and Kenya's own words were *"I built one of them myself without noticing."* Nobody on this board has more recently paid for that lesson.
+
+**The counter-argument, stated rather than left for someone to raise.** Kenya established B5, and B4 is interpretable because of B5. That is a stake. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but it is not nothing, and if B4 comes out flattering to B5 that coincidence should be stated in the write-up rather than left for a reader to notice.
+
+**What the card actually asks.** zalando.de answered 143 findings. Nobody has established how many a developer would act on, so "143 findings" is currently a number with no denominator — it could be a thorough audit or a noisy one and the output reads identically. The ratio is the product claim.
+
+**The traps, named in advance because this card is about a measurement being meaningful:**
+
+- **Independence is the whole thing.** Two classifiers that read the same rubric, or that both
+key off Obsrv's own severity or grouping, measure Obsrv's self-consistency rather than the
+noise ratio. State what makes the two independent BEFORE running, and say how it could fail.
+- **A classifier that sees the finding's own prose is reading an argument.** Obsrv's sentences
+are written to be persuasive about why something matters — that is the product. Deciding
+"would a developer act on this" from the sentence rather than from the page tests the writing.
+- **Agreement has the two-facts shape.** High agreement fits *the findings are clearly real* and
+- both classifiers share a blind spot*. Low agreement fits *the findings are noisy* and *the
+question was ambiguous*. Decide in advance which reading each outcome gets, or the result will
+be interpreted after the fact in whichever direction is convenient.
+- **One site is one site.** zalando.de is a heavy commercial page; a noise ratio from it is not
+a noise ratio for the tool. Say what the number covers.
+
+**Pre-register the vacuity check, which is Kenya's own practice and the reason it is asked for here.** Kenya wrote down beforehand what would make the userData cache arms meaningless, and it caught both warm arms being vacuous at 4 KB and 12 KB — without it, two clean zeros would have read as "the cache does not matter" and a cap would have shipped on nothing. The equivalent here: name, before running, the result that would mean *this experiment did not measure the noise ratio*, and make the run report that rather than a number.
+
+Depends on nothing. B5's state is recorded on `readiness.md` and on `bug-userdata-unbounded`.
 
 ### The two walks cover a growing page differently — 3 screenfuls against 8
 

@@ -129,6 +129,37 @@ non-empty about the thing it is watching — a line count, a SHA, a row — and
 read that number. The non-empty reading is the evidence. The clean one is only
 meaningful once you have seen the check has something to look at.
 
+### Write down what would make the run meaningless, before running it
+
+The practice above catches a check with no subject after the fact. This one
+catches it in advance, and it is the only thing on this page that has been seen
+to work on a measurement nobody would otherwise have doubted.
+
+**Before an experiment, state the result that would mean *this did not measure
+what I think it measured* — and make the run report that instead of a number.**
+
+It was written down before a cache experiment and then earned itself twice in
+one run:
+
+- Both warm arms came back at 4 KB and 12 KB of profile, because the CLI
+  deletes its profile after every invocation. The arms were vacuous. Without
+  the pre-registered check, two clean zeros would have read as *the cache does
+  not matter* and a cap would have shipped on nothing.
+- A first pass used a 1 MiB cap and produced 1032 KB, read as pinned at the
+  ceiling. The 256 MiB control produced 948 KB from the same work — so neither
+  arm was bound by its cap and the "result" was noise, in the direction the
+  author wanted. At 128 KiB it is 140 KB against 948, which is the real
+  evidence.
+
+The second one generalises past caches: **a test whose control is not bound by
+the thing under test can only produce a coincidence.** Before believing that a
+limit, a threshold or a flag did something, check that the control was free to
+differ — and by how much.
+
+Both failures were found by the person who built the experiment, which is the
+only reason they were found at all. Neither would have shown up as a failing
+test.
+
 ## Three commands that lie about themselves
 
 Each of these cost this project time, and all three have the same shape: the
