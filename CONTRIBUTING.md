@@ -101,6 +101,34 @@ until you have watched the same query return non-zero on something you know is
 there. `grep` is line-based and this repo's prose is hard-wrapped, so a
 multi-word phrase check on a doc is a coin flip.
 
+### A check that looked at nothing passes
+
+Sharper than the corollary above, because it is not about zero — it is about a
+check whose *subject* is missing. It does not fail. It passes.
+
+Four of these landed in two days, from three different sessions:
+
+- A before/after comparison of a log file reported `0 -> 0 lines, sha "" -> ""`.
+  The filename was wrong — `main.log`, when it is `obsrv.log` — so the clean
+  result meant *the file I am watching does not exist*. It was produced on the
+  card about log lines that cannot name their writer.
+- `gh run list --commit <short-sha>` returned no rows while four runs existed,
+  so a hundred-second watch concluded the workflows had never triggered.
+- `grep -c` exited 1 on a count of zero and killed an `&&` chain, and the exit
+  code read afterwards belonged to `grep`.
+- A zsh glob that matched nothing killed a 160-run loop, which then reported
+  "0 failures" having never executed.
+
+One sentence covers all four: **a check that cannot distinguish "nothing
+happened" from "I looked at nothing" is not a check.** One had a filename, one
+had a SHA, one had an exit code, one had a glob.
+
+The practice that catches it is cheap and is the same one as watching a guard
+refuse. Before quoting a clean result, make the check report something
+non-empty about the thing it is watching — a line count, a SHA, a row — and
+read that number. The non-empty reading is the evidence. The clean one is only
+meaningful once you have seen the check has something to look at.
+
 ## Three commands that lie about themselves
 
 Each of these cost this project time, and all three have the same shape: the

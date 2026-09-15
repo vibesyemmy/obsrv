@@ -42,8 +42,17 @@ Rook reported four branches with Opeyemi. Two of those are already merged: `fix/
 landed at `7feb26b` and the card closed at `f57924b`, and the contrast work landed at `d66d047`
 and `7d57872`. The only unmerged branches in the repository are `fix/log-attribution`,
 `chore/signing`, and the stale tail of `fix/suite-absence-loud` — whose one leftover commit was
-Opeyemi's own, pushed after the merge, and has now been ported to main by hand. As of `6f19f9b`
-the only unmerged branch left is `chore/signing`, which is a1's and blocked on Opeyemi.
+Opeyemi's own, pushed after the merge, and has now been ported to main by hand.
+
+**And that hand-port leaves a trap, corrected here within minutes of writing the opposite.** I
+first wrote that `chore/signing` was the only unmerged branch left after `6f19f9b`. It is not.
+`fix/suite-absence-loud` still reports UNMERGED and always will, because I copied `4bd6ba1`'s
+text onto main instead of merging the commit — so the content is on main and the commit is not
+an ancestor of it. Git cannot tell those apart and will keep flagging the branch, which is an
+invitation for the next person to re-investigate a thing already resolved. Two unmerged
+branches, then: `chore/signing`, which is real and blocked on Opeyemi, and
+`fix/suite-absence-loud`, which is a ghost and should be deleted or merged empty so it stops
+asking. That is Opeyemi's call, not a session's.
 
 **Why this card keeps going stale, stated so the next rewrite is shorter:** a queue is a claim
 about several other cards, and nothing regenerates it when they move. `npm run board` checks
