@@ -1,9 +1,30 @@
 ---
 title: "A conflicting PR runs no CI at all — and board PRs conflict by design"
-column: next
+column: review
 kind: bug
+owner: "Henry"
 order: 36
 ---
+
+FIXED 2026-09-15 on Opeyemi's word — he chose the concurrency route. **Both halves, because the first alone fixes nothing observable.**
+
+**Half one, concurrency.** Groups added to `ci.yml` and `b5-sweep.yml`; `pages.yml` already had one. Keyed on workflow and ref, and the non-obvious part is what does NOT get cancelled:
+
+    cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+Cancelling a superseded run on a branch saves a runner and loses nothing. Cancelling one on **main** would destroy a per-commit CI outcome — and this project counts those; `bug-ci-main-red-37pct` is a tally of which commits went red. A guard that improves throughput by deleting the evidence is the wrong trade here, and the default idiom (`cancel-in-progress: true`) would have made it silently.
+
+This is preparatory. On its own it changes nothing a reviewer would see: no double-run currently exists, Kenya's having come from a temporary `push` trigger since removed. It is what stops half two creating the duplicate artefacts Kenya produced by hand.
+
+**Half two, and this is what closes the bug: `board.yml`, `board:check` on push to EVERY branch.** Lifted out of `ci.yml` rather than added beside it, so it runs once rather than twice.
+
+A branch push always happens and has no merge ref to compute, so the check cannot expire the way a PR's silently did. `ci.yml` keeps its `pull_request` trigger for everything else; the board check no longer depends on a PR being mergeable.
+
+Ubuntu, no `npm ci` — the generator is plain Node with no dependencies, so it answers in seconds on a branch whether or not the macOS suite is worth running there.
+
+**KNOWN GAP, written into the workflow rather than left to be discovered:** a pull request from a FORK pushes to the fork, not here, so `board.yml` does not run for one. This repo has had no fork PRs. When it does, `ci.yml`'s `pull_request` trigger covers them — and only when they are mergeable, which is the original bug, narrowed to a case that has never occurred.
+
+**NOT YET OBSERVED, and the card does not close until it is.** The same discipline this card was diagnosed with: push a branch whose board is deliberately stale and watch `board.yml` go red, and push a conflicting PR and confirm the check is present anyway. A guard nobody has watched refuse is a claim. `pages.yml`'s stale reference to `ci.yml`'s board:check was corrected in passing.
 
 **THE SENTENCE THAT NAMES THE BUG, Kenya's, and it replaces the framing below.** Not *"a conflicting PR runs nothing"* — that describes a mechanism. What a reviewer experiences is:
 

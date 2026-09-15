@@ -9,9 +9,9 @@
 #
 # It is generated FRESH from the cards rather than serving the committed
 # docs/board.html, so the page carries the commit it was built from in its own
-# stamp. Those two are the same content — CI's `board:check` in ci.yml is what
-# guarantees that — but a build from source can state its provenance and a
-# copied file cannot.
+# stamp. Those two are the same content — `board.yml`'s `board:check` is what
+# guarantees that, on every push to every branch — but a build from source can
+# state its provenance and a copied file cannot.
 name: Board on Pages
 
 on:
