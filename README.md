@@ -443,7 +443,13 @@ Cards in *Next* are the ones worth starting.
 The board itself is [`board/`](board) — one markdown file per card. **Claim one
 by editing its file**: set `owner:` and `column: doing`, run `npm run board`,
 and open a pull request with both changes. There is no separate tracker to
-update and nobody to ask for access. `npm run board` regenerates two views from
+update and nobody to ask for access.
+
+[**CONTRIBUTING.md**](CONTRIBUTING.md) is worth ten minutes first. It is not a
+style guide — it is the list of traps that have actually cost this project
+time, including the two that produce *false test failures* and the one rule
+that matters most here: a check nobody has watched refuse is a claim, not a
+check. `npm run board` regenerates two views from
 those cards, and CI fails if either has drifted from them:
 
 | | |

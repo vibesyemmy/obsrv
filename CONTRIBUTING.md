@@ -1,0 +1,157 @@
+# Contributing to Obsrv
+
+This is not a style guide. It is the list of things that have actually cost
+this project time — each one found by someone losing an hour to it, and each
+one written down so the next person loses none.
+
+Several sessions, human and agent, work on this repository at once. Most of
+what follows exists because of that.
+
+## The board
+
+The work is [`board/`](board), one markdown file per card. **Claim a card by
+editing its file**: set `owner:` and `column: doing`, then
+
+```bash
+npm run board          # regenerates docs/board.md and docs/board.html
+```
+
+and open a pull request with both the card and the regenerated files. There is
+no separate tracker and nobody to ask for access.
+
+`npm run board:check` runs on **every push to every branch** and fails if the
+generated views disagree with the cards. It is deliberately not a step inside
+the main suite: a `pull_request` workflow runs against `refs/pull/N/merge`,
+which GitHub cannot compute while a PR conflicts — so a check that lived there
+would be absent on exactly the pull requests most likely to need it.
+
+**When `docs/board.md` or `docs/board.html` conflicts on a rebase, regenerate
+it. Never hand-resolve it.** They are generated from every card, so any two
+branches touching any card conflict on them once `main` moves — this is the
+normal state of a second contributor, not an edge case. Take either side, run
+`npm run board`, and let the cards decide.
+
+**A conflict in a card itself is different and needs a decision.** The rule
+above is about generated files. If two people edited the same card, read both.
+
+Merging is the maintainer's. A card in Review is finished and waiting on them,
+not on help.
+
+## Work in your own worktree
+
+**Never edit the shared checkout if anyone else might be in it.**
+
+```bash
+git worktree add /tmp/obsrv-<yourname> -b <your-branch>
+```
+
+On 2026-09-14 three sessions were in one checkout at once, one of them
+mid-edit. Another saw its branch change underneath it — someone else had
+merged and checked out `main` in that tree. A `git checkout -- .` from one
+session has dropped another's uncommitted work before.
+
+**The git stash stack is shared across all worktrees.** A bare `git stash pop`
+in yours can take someone else's work. Make a WIP commit instead, or
+`git stash push -u -m` with a unique tag and apply it by sha.
+
+## Build before you test
+
+```bash
+npm run build
+```
+
+**`npx playwright test` runs the built `out/`, not `src/`.** So do the MCP
+tools. Changing source and running the suite tests the *previous* build, and
+the failure that produces looks exactly like a real one.
+
+This caught two different sessions in one evening. One built an instrument,
+ran the suite, and saw the very test it was investigating fail — a real bug,
+falsely reproduced, on the first attempt, with a plausible message. The other
+merged a branch adding a method, ran the suite, got `move is not a function`,
+and nearly reported the merge broken. The build was a day older than the
+source.
+
+If a failure surprises you, check the build before you check the code.
+
+## Verify by watching it fail
+
+This is the one rule that matters most here.
+
+**A check nobody has watched refuse is a claim, not a check.** Before trusting
+a guard, an assertion or a new test, break the thing it guards on purpose and
+watch it go red. Then put it back.
+
+Real instances from a single week:
+
+- A staleness check passed on a deliberately planted stale row — because the
+  run was filtered and the check had no rows to compare. A pass fits *checked
+  and fine* and *had nothing to check*.
+- A spec asserting the right tab returns after a restart passed against a
+  deliberately broken save, because the tab under test was at position 0,
+  where the stored index is accidentally correct whatever the code does.
+- A test asserted `unsettledReason: 'resizing'`, a label decided by a race.
+  It passed on a fast laptop and failed 8 of 10 runs on a slow CI runner.
+  Assert the *state*; record the label.
+- A guard written to stop CI runs being cancelled cancelled three of them.
+  `cancel-in-progress: false` protects a run that is *in progress*, not one
+  still *pending*.
+
+A corollary for numbers: a query returning zero is not evidence of absence
+until you have watched the same query return non-zero on something you know is
+there. `grep` is line-based and this repo's prose is hard-wrapped, so a
+multi-word phrase check on a doc is a coin flip.
+
+## Testing
+
+```bash
+npm run typecheck     # three tsconfigs — this is what CI runs
+npm test              # unit
+npm run test:e2e      # builds, then drives the real Electron app
+```
+
+Only one suite may run at a time per worktree; a second is refused, and the
+refusal says whether it found a live suite or a lock left by one that died.
+`OBSRV_SUITE_NO_LOCK=1` exists for the nested case only.
+
+`-g` filtering is not safe everywhere. Some spec files establish shared state
+in their first test, and a filtered run skips it — you will get a message
+saying so rather than a crash, but the run is not the same conditions as a
+full-file one.
+
+## Isolating a run from your own machine
+
+**Setting `HOME` does not sandbox an Electron app on macOS.** `os.homedir()`
+follows it; every `app.getPath()` ignores it and resolves into your real
+profile. So a run that believes it is sandboxed writes to your real data *and*
+produces a clean-looking result — the failure and the success are identical
+from outside.
+
+```
+--user-data-dir=<p>     moves userData, sessionData, crashDumps
+CFFIXED_USER_HOME=<p>   moves home, userData, appData, logs, cache
+```
+
+Neither moves `app.getPath('temp')`. Before trusting any sandbox, prove the
+app *wrote* inside it — "I set the variable" is a claim about the harness, not
+about the app.
+
+For testing a branch through the dev lane without a release, see
+[`docs/dev-lane`](docs) and `npm run lane -- --status`.
+
+## Writing it down
+
+Obsrv's output is sentences, and the sentences are the product. Two things
+follow:
+
+**A sentence must name its own subject** and key off a fact it measured, not
+off a neighbouring sentence. Two notes in one reply have contradicted each
+other — *"the page never moved"* directly above *"the page grew as it was
+walked"* — because the second inferred what the first had measured.
+
+**Name the two facts a silence would be produced by.** If they are opposite
+facts, the silence is a defect rather than a quiet success. A tool that says
+nothing when all is well and nothing when it cannot see is not reassuring.
+
+Commit messages here are long on purpose. They carry what a card cannot: a
+card can be edited by anyone, a commit travels with the change. If you find
+something while fixing something else, put it in the message.
