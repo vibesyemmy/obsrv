@@ -50,7 +50,7 @@ So:
 
 1. The previous test loads `redirect.html`, which does `location.replace('hairline.html')`. The bus issues that replacement into `target` and records it in `issued['target']`.
 2. Normally `target`'s own commit of it comes back as an echo, which retires the record.
-3. Sometimes that commit does not arrive before the next test starts. `ISSUED_MAX_AGE_MS` is **10 s**, and the whole file runs in about 3 s, so the age bound never prunes within a file — the record simply waits.
+3. Sometimes nothing retires the record — see *Why the record survived*, below, which corrects this step. `ISSUED_MAX_AGE_MS` is **10 s**, and the whole file runs in about 3 s, so the age bound never prunes within a file: the record simply waits.
 4. The next test loads `hairline.html` into `target` for real. `retire()` finds the stale record, calls the commit an echo, and returns **before any mirror is issued**. `native` sits on `tall.html` until the 5 s poll gives up.
 
 The direction — always target→native, never the reverse, on both desks — falls
@@ -76,10 +76,66 @@ It does leave one, about 4% of the time.
   one bus is not cured by moving a test to another file; it is cured by
   retiring the record.
 
-## What a fix would have to decide
+## Why the record survived — the part the first write-up could not explain
 
-Not done here — this card was to measure, and the choice below changes
-behaviour the rest of the bus depends on:
+The paragraph above said the retiring commit "does not arrive". That was the
+observation; the cause is four lines above the decision:
+
+```ts
+const onTargetNav = (url, inPage, mirrored) => {
+  if (mirrored) return          // the commit of a load the bus issued
+  mirror('target', url, inPage)
+}
+```
+
+**A mirrored load's commit in the target never reaches `mirror()` at all**, so
+it never becomes an echo and never retires anything. The native pane's
+equivalent commit does — it arrives as `did-navigate` and goes through the
+decision — which is why the two panes behave differently and why the failure is
+always target→native.
+
+So a record in `issued['target']` had exactly two ways out: a *genuine* target
+commit of the same URL (`retire()` inside `mirror()`), or the 10-second age
+bound. A run passed when the target's own page-driven commit happened to match
+the record; it failed when nothing did. That is the coin-flip.
+
+This is also why the two earlier attempts to force the state in the live app
+both failed: superseding a mirrored load leaves a record, but the *next* genuine
+target commit sweeps it before the test can look.
+
+## The fix
+
+`onTargetNav` retires the record when the mirrored commit arrives, in the same
+place the native pane's echo does it:
+
+```ts
+if (mirrored) {
+  retire('target', url, Date.now())
+  return
+}
+```
+
+The load is over when its document is here. That is the same fact `mirror()`
+already uses for the other pane, so this makes the echo test *more* precise
+rather than loosening it — it does not buy a stale expectation back at the price
+of a weaker loop guard, which is what ranked it above the alternatives.
+
+**Driven from `tests/unit/syncBus.test.ts`**, which drives the bus directly with
+fake panes. The states that matter are ones the live app reaches by luck; here
+they are set. The failing case reproduces in 4 ms rather than in 113 e2e runs,
+and two companion tests hold the behaviour the 2026-09-03 design bought: a
+mirrored commit that *does* come back is still an echo, and a superseded load's
+commit is still not news.
+
+One thing that harness taught immediately: a fake firing two loads inside the
+same millisecond makes the second sweep the first, because `retire` drops
+everything sent "at or before". Real loads are milliseconds apart, so the clock
+in the harness moves. A test that had left it still would have been testing an
+arrangement the app never produces.
+
+## What the alternatives would have cost
+
+Not taken:
 
 - **Retire on any new document, not only on an echo.** `issued[from].clear()`
   already runs for a cross-document commit, but only *after* the echo check
@@ -89,9 +145,12 @@ behaviour the rest of the bus depends on:
 - **Bound the record's age to something shorter than a test file.** 10 s is
   longer than any legitimate in-flight load; 1–2 s would prune the stale record
   before the next test. It is the smallest change and the least principled.
-- **Make the record identify the load**, not just the URL, so a later genuine
-  commit of the same URL cannot match an earlier issue. Most correct, largest
-  change.
+- **Make the record carry an identity of its own** — a token matched at the
+  commit — so a later genuine commit of the same URL could not match an earlier
+  issue. This was ranked first on the card and is what the fix above amounts to,
+  arrived at more cheaply: the commit *is* the load's identity, once the
+  mirrored commit is allowed to retire its own record. A token would add
+  bookkeeping to say what the arrival already says.
 
 ## How to reproduce
 

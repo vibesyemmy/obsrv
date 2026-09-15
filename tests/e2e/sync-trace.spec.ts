@@ -18,6 +18,7 @@ import type { MirrorBranch, MirrorDecision } from '../../src/main/syncBus'
  */
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
+const REDIRECT = pathToFileURL(resolve(__dirname, '../fixtures/redirect.html')).href
 const LOOP = pathToFileURL(resolve(__dirname, '../fixtures/loop.html')).href
 
 let app: ElectronApplication
@@ -81,6 +82,45 @@ test('the loop fixture records trip, and the trace says so rather than only the 
   expect(trip?.detail).toMatch(/alternations=\d+/)
   const state = await app.evaluate(() => (globalThis as any).__obsrv.sync.loopState())
   expect(state.trips).toBeGreaterThan(0)
+})
+
+test('a load whose commit never comes back does not leave a record that swallows the next one', async () => {
+  // flake-sync-165, reduced to its bones. The bus issues a load into a pane and
+  // records it so that load's own commit is recognised as an echo rather than
+  // mirrored back. When that commit does not arrive, the record used to sit
+  // there — nothing prunes inside ISSUED_MAX_AGE_MS — and the NEXT genuine
+  // commit of the same URL in that pane matched it, was called an echo, and
+  // was never mirrored. Four failures in 113 runs of sync.spec.
+  //
+  // In sync.spec it arrives by luck — `redirect.html` replaces its own URL and
+  // the replacement's commit in `target` sometimes lands after the next test
+  // has started. Waiting for luck is not a regression test, so the state is
+  // forced here instead: issue a mirrored load into `target` and supersede it
+  // before it can commit. A superseded load's commit never arrives, which is
+  // the same fact the redirect produces by accident.
+  await load('native', REDIRECT)
+  await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
+
+  // Fire, do not await: the second load must reach the bus before `target`
+  // commits the first, or nothing is superseded and the record retires
+  // normally.
+  await app.evaluate((_e, [a, b]: [string, string]) => {
+    const g = globalThis as any
+    void g.__obsrv.native.load(a)
+    setTimeout(() => void g.__obsrv.native.load(b), 20)
+  }, [HAIRLINE, TALL] as [string, string])
+  await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: TALL, target: TALL })
+
+  // `target` now carries a record for a HAIRLINE load that never committed.
+  // This is a genuine navigation, not that load's echo.
+  await load('target', HAIRLINE)
+
+  // The assertion is on the DECISION, not on the outcome. A fix that stopped
+  // the failure by never reaching the decision — a shorter age bound, say —
+  // would look identical here from the panes alone.
+  await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
+  const last = (await trace()).filter(d => d.from === 'target' && d.url === HAIRLINE).at(-1)
+  expect(last?.branch).toBe('issued')
 })
 
 /**
