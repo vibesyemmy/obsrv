@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*58 cards, 24 open, 17 of those unclaimed.*
+*59 cards, 25 open, 18 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -152,7 +152,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 10
+## Next — 11
 
 *Picked, not claimed — start here.*
 
@@ -215,6 +215,28 @@ Updated 2026-09-14 evening. Two of three delivered, and the order changed — Op
 1. c5-elevated — DELIVERED into Review, 6b7acb4. Inverted the card's own fallback: `resizing` fires, keep the value. 2. bug-retina — DELIVERED into Review, cf52dc8, and it corrected the card's premise. See that card. 3. c3 — does skills/obsrv-screens/SKILL.md describe the tools that exist. NOT started; Kenya is putting it to Opeyemi before picking it up.
 
 Henry asked Kenya to SPLIT docs/c5-note-inventory into two branches so bug-retina can merge first — it makes every other local run cheaper to read, so it is worth more merged before people run suites than after. Sequencing only; both still wait on Opeyemi's word given to Kenya directly.
+
+### The contrast figure disagrees with the colours printed beside it
+
+[`bug-contrast-figure-mismatch`](../board/bug-contrast-figure-mismatch.md) · bug · *unclaimed*
+
+Found in run 17 (2026-09-15, docs/research/2026-09-15-live-run-17.md). **The most serious thing that run turned up, because contrast is what this product is for.**
+
+`https://lobste.rs/`, `laptop-768-11`, headless. `obsrv_lint` and `obsrv_inspect` agree with each other and neither agrees with arithmetic:
+
+a.upvoter   color #ffffff   background #0c0c0c   contrast.asIs 7.5
+
+**White on `#0c0c0c` is 19.6:1 by the WCAG 2 formula, not 7.5:1.**
+
+THE FORMULA IS NOT GENERALLY BROKEN, which is what makes this worth a card rather than a one-line fix. On `https://www.gov.uk/browse/benefits` the same tool reports `#0b0c0c on #d2e2f1 → 14.82:1` and the formula gives 14.81:1. It is right on dark-text-on-light and wrong on light-text-on-dark, at least in these two cases — whether that split is the real boundary is the first thing to measure, not to assume.
+
+A ratio of 7.5 for white text implies a background luminance near 0.09, which is about `#545454`: a mid grey. So the likely mechanism is that the ratio is computed against a **composited** background while the sentence prints the element's **computed `background-color`**, or the reverse. `backgroundNote: "computed"` appears in both the right and the wrong case, so that field does not currently distinguish them.
+
+WHAT RESTS ON IT: 242 `contrast-on-panel` findings on that one page, 217 of them plain white-on-black reported as "passes on the display it was designed on, fails on this one". If the 7.5 is wrong, that sentence is wrong 217 times in one reply, on the rule the product is named for. If the 7.5 is right, then the colours printed beside it are wrong and every one of those findings names a colour pair the reader cannot verify.
+
+WHERE TO START, and the thing this card exists to prevent: do not fix the arithmetic. Both numbers are produced by code that believes it is right, and one of them is. Establish which half is lying first — a fixture with a known composited stack (translucent layer over a known colour) and a known computed background, where the two answers differ by construction, will say. `src/shared/inspectReadout.ts` is where both surfaces get their figures, so a unit test there can hold whichever answer turns out to be correct.
+
+Unowned. Rook found it and did not take it: run 17's card is B1, and a third session arriving at this file cold is worth more than the finder's two hypotheses.
 
 ### Whatever decides, something else must notice when the decision changes
 
@@ -439,34 +461,9 @@ Options, none obviously right:
 
 ---
 
-## Doing — 2
+## Doing — 1
 
 *Claimed. Someone is on it.*
-
-### A live run that turns up nothing user-visible
-
-[`b1`](../board/b1.md) · **B1** · readiness · owner: Rook
-
-ASSIGNED TO ROOK 2026-09-15, on Opeyemi's word, and chosen for what it needs rather than what suits the taker. Rook asked for exactly that.
-
-**WHY THIS ONE.** Tonight produced seven merged cards and every one was the harness or the plumbing — the suite lock, the mirror trace, the sync bus, the tab strip, the board, CI itself. **None of it touched what the product actually does.** `report`, `lint`, `audit`, the MCP server, presets and calibration have not been read or exercised by anyone in two days, and B1 is the criterion that says they work. It has never been met.
-
-**AND IT WANTS SOMEONE COLD, which is the same argument that put `bug-sync138` with Kenya.** `docs/read-the-output-not-the-code` says the warnings ARE the product, and that the way to check a sentence is to have a peer read it cold. Rook has never read the audit or lint output. That is not a gap to work around here — it is the qualification.
-
-**IT IS NOT A CARD THAT MERGES, and that is the point.** B1 is met when a run finds nothing. Runs 13, 14, 15 and 16 each found something, each smaller than the last, and 2026-09-13 alone produced four defects that had reached users. So the deliverable is a live run over a fresh set of sites and the dev-server shapes, and then either a set of new cards or the sentence "this run found nothing user-visible", which nobody has been able to write yet.
-
-Finding something is the likely outcome and is a success. Finding nothing is the criterion.
-
-**WHAT WOULD MAKE THE RUN WORTH TRUSTING**, given everything this week has been about:
-
-- Fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.
-- Read every sentence the tools emit, not only the ones that look wrong. A sentence that is individually plausible and wrong in company is this project's commonest defect, and it is invisible to anyone scanning for errors.
-- A finding needs a page and a reply, not a recollection — the same standard applied to every card tonight.
-- And the thing tonight kept teaching: `npx playwright test` and the MCP tools run the BUILT `out/`. Two separate sessions produced false results from a stale build in one evening. Build first.
-
-Prior runs are in `docs/research/`. Worth reading what runs 13–16 found before starting, to avoid re-finding them and to know what "smaller than the last" has meant.
-
-Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
 
 ### The target emits no url-changed at all — a second shape, and the test named for it
 
@@ -544,6 +541,53 @@ Which is the account the empty array could not give: the bus decided, issued the
 **AND ONE THING I GOT WRONG, recorded because it nearly became a false reproduction.** The first run after building the instrument failed two tests, one of them this card's. It was not the flake: `npx playwright test` runs against the built `out/`, and I had changed `src/` without rebuilding, so the test ran against a build with no `commitTrace` in it. Had I reported that as a reproduction it would have been a real bug, falsely reproduced, on the first attempt.
 
 **NOT DONE, and it is the card's own question:** whether the assertion checks what the title claims. `seen.length >= 1` is still the only witness that the target moved at all — the poll that follows passes trivially, because the target is already on HAIRLINE from the previous step, so "followed and came back" and "never moved" are the same observation to it. Anything that makes this test green should be checked against that before it is believed.
+
+---
+
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
+
+### A live run that turns up nothing user-visible
+
+[`b1`](../board/b1.md) · **B1** · readiness · owner: Rook
+
+ASSIGNED TO ROOK 2026-09-15, on Opeyemi's word, and chosen for what it needs rather than what suits the taker. Rook asked for exactly that.
+
+**WHY THIS ONE.** Tonight produced seven merged cards and every one was the harness or the plumbing — the suite lock, the mirror trace, the sync bus, the tab strip, the board, CI itself. **None of it touched what the product actually does.** `report`, `lint`, `audit`, the MCP server, presets and calibration have not been read or exercised by anyone in two days, and B1 is the criterion that says they work. It has never been met.
+
+**AND IT WANTS SOMEONE COLD, which is the same argument that put `bug-sync138` with Kenya.** `docs/read-the-output-not-the-code` says the warnings ARE the product, and that the way to check a sentence is to have a peer read it cold. Rook has never read the audit or lint output. That is not a gap to work around here — it is the qualification.
+
+**IT IS NOT A CARD THAT MERGES, and that is the point.** B1 is met when a run finds nothing. Runs 13, 14, 15 and 16 each found something, each smaller than the last, and 2026-09-13 alone produced four defects that had reached users. So the deliverable is a live run over a fresh set of sites and the dev-server shapes, and then either a set of new cards or the sentence "this run found nothing user-visible", which nobody has been able to write yet.
+
+Finding something is the likely outcome and is a success. Finding nothing is the criterion.
+
+**WHAT WOULD MAKE THE RUN WORTH TRUSTING**, given everything this week has been about:
+
+- Fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.
+- Read every sentence the tools emit, not only the ones that look wrong. A sentence that is individually plausible and wrong in company is this project's commonest defect, and it is invisible to anyone scanning for errors.
+- A finding needs a page and a reply, not a recollection — the same standard applied to every card tonight.
+- And the thing tonight kept teaching: `npx playwright test` and the MCP tools run the BUILT `out/`. Two separate sessions produced false results from a stale build in one evening. Build first.
+
+Prior runs are in `docs/research/`. Worth reading what runs 13–16 found before starting, to avoid re-finding them and to know what "smaller than the last" has meant.
+
+Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
+
+RUN 17 DONE 2026-09-15, branch `chore/b1-live-run`. Write-up: docs/research/2026-09-15-live-run-17.md. **B1 IS NOT MET — five findings**, and three of them are the defect class the criterion names: a sentence plausible alone and wrong beside its neighbour.
+
+F5, and the serious one because contrast is what the product is for: THE CONTRAST FIGURE DISAGREES WITH THE COLOURS PRINTED BESIDE IT. lobste.rs, `a.upvoter`: colour #ffffff, background #0c0c0c, contrast.asIs 7.5 — from both lint and inspect. White on #0c0c0c is 19.6:1 by the WCAG formula. The formula is not generally broken: on gov.uk the same tool reports #0b0c0c on #d2e2f1 as 14.82 and the formula gives 14.81. A 7.5 for white text implies a background near #545454, so the ratio is likely computed against a composited background while the sentence prints the computed background-color, or the reverse. 242 contrast-on-panel findings on that page rest on it, 217 of them plain white-on-black.
+
+F1: every text link is exempt from the tap-target measure, not only those in running text. gov.uk targets.count 8 on a 4,678 px page of link lists; lwn.net on a phone: 214 texts measured, ONE target. Settled on a fixture (layoutScale 1, no warnings): 7 interactive elements, targets.count 2. audit.ts:183 skips any A with display:inline that has text. The code comment is honest ("when the link *is* text"); the TOOL DESCRIPTION says "inline links in running text", which is the narrower WCAG rule and not what runs.
+
+F4: the app-shell walk warning contradicts the finding printed beside it — "anything below the first screen was not brought into view before measuring", above a finding at y=1552 that lives inside the very panel the walk scrolled. The sentence was written for the CAPTURE path, where it is true; on the walk it is false. One sentence serving two surfaces.
+
+F3: one element, two colours, one run — stripe.com's hero reported as #81b81a (fails as stated) by the contrast rule and #000eff (passes as stated) by contrast-on-panel, same rect, no stacked sibling. B2's limitation from a new side: the motion probe keys off BOXES, so a colour that animates while the geometry holds still is a page it calls settled.
+
+F2: obsrv_inspect returns found:true, rect 0x0 and a full readout — font, colour, contrast, passesAsIs — for a hidden element, with notes:[]. audit skips zero-size elements; inspect does not say when it hit one.
+
+WHAT HELD, named so it is not lost: the 503 warning on openstreetmap ("the figures are of the error page it sent"), caniuse's shadow-DOM declaration (188 of 238 text elements unmeasured, said out loud), stripe's text-on-gradient and 1:1 skips matching their `skipped` counts, and the no-viewport-meta warning, which stopped me misreading my own fixture.
+
+NOT COVERED, stated rather than assumed: two of eight planned sites (a retail image grid, a docs site with a sticky sidebar); obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout.
 
 ---
 
@@ -1618,4 +1662,4 @@ Split out of `flake-sync-165` at Rook's insistence, and the insistence is right:
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 10 readiness, 10 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 10 readiness, 11 bugs, 4 chores, among the open cards.*
