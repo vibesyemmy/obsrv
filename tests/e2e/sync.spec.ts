@@ -169,18 +169,62 @@ test('quick legitimate reversals are not a loop: three navigations back and fort
   // the load it was mirrored — and these do not: each navigation is a
   // person's (or a spec's), so every one of them must reach the other pane.
   const CONTRAST = pathToFileURL(resolve(__dirname, '../fixtures/contrast.html')).href
+
+  // What this test inherits from the one before it, read from the breaker's
+  // own clock rather than timed from out here.
+  //
+  // The breaker trips on two reversals inside LOOP_WINDOW_MS, and `alternations`
+  // only resets once the gap since the last mirror reaches that window. This
+  // test makes three back-and-forth navigations — two reversals, exactly the
+  // trip count — so it passes only because the window has expired since the
+  // previous test's last mirror. How much of the window is left when it starts
+  // is therefore the whole margin, and nothing has ever measured it.
+  const inherited = await app.evaluate(() => (globalThis as { __obsrv?: any }).__obsrv.sync.loopState())
+  const marginMs = inherited.sinceLastMirrorMs
+  console.log(
+    `[loop-margin] sinceLastMirror=${marginMs === null ? 'never' : `${marginMs}ms`} ` +
+      `window=${inherited.windowMs}ms alternations=${inherited.alternations} ` +
+      `spare=${marginMs === null ? 'n/a' : `${marginMs - inherited.windowMs}ms`}`,
+  )
+  expect(typeof inherited.windowMs).toBe('number')
+
   const steps: [pane: 'native' | 'target', url: string][] = [
     ['native', TALL],
     ['target', HAIRLINE],
     ['native', CONTRAST],
     ['target', TALL],
   ]
+  const stepMs: number[] = []
+  const dump = async (why: string): Promise<void> => {
+    const t = await app.evaluate(() => (globalThis as { __obsrv?: any }).__obsrv.sync.mirrorTrace().slice())
+    const t0 = t.length > 0 ? t[0].at : 0
+    console.log(`[mirror-trace] ${why}`)
+    for (const d of t as any[]) {
+      console.log(`  +${String(d.at - t0).padStart(5)}ms ${d.from}->${d.from === 'native' ? 'target' : 'native'} ${d.branch}${d.inPage ? ' inPage' : ''} ${d.url.split('/').pop()} ${d.detail}`)
+    }
+  }
   for (const [pane, url] of steps) {
+    const began = Date.now()
     await app.evaluate(async (_electron, [p, u]: [string, string]) => {
       await (globalThis as any).__obsrv[p].load(u)
     }, [pane, url] as [string, string])
-    await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: url, target: url })
+    try {
+      await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: url, target: url })
+    } catch (e) {
+      // The assertion says the panes disagree. It cannot say which of
+      // `mirror()`'s five exits left them that way, and all five look the same
+      // from here. Print the decisions before failing.
+      await dump(`step ${pane} -> ${url.split('/').pop()} did not settle`)
+      throw e
+    }
+    stepMs.push(Date.now() - began)
   }
+  // What the breaker did while the test ran, against the 5 s each step is
+  // given. A trip and a slow mirror both end as "the target sat on the page it
+  // already showed"; only these two numbers separate them.
+  if (process.env.OBSRV_TRACE_PASSES === '1') await dump('passed — for comparison against a failure')
+  const after = await app.evaluate(() => (globalThis as { __obsrv?: any }).__obsrv.sync.loopState())
+  console.log(`[loop-after] trips=${after.trips} alternations=${after.alternations} steps=${stepMs.join(',')}ms budget=5000ms`)
 })
 
 async function expectLoopBrokenOnce(loopUrl: string): Promise<void> {

@@ -20,8 +20,43 @@ export interface SyncBus {
    * and calls this. See the spec's global-channel section.
    */
   onScroll(e: IpcMainEvent, raw: unknown): void
+  /**
+   * The loop breaker's own view of itself, for measurement.
+   *
+   * The breaker's state is a closure, so nothing outside could see how close a
+   * run was to tripping it — only whether it had tripped. A spec that makes
+   * exactly `LOOP_ALTERNATIONS` reversals passes or fails on how much of
+   * `LOOP_WINDOW_MS` was left when it started, and that margin was invisible:
+   * `sync.spec.ts:165` fails on CI in five of ten red runs and has never
+   * reproduced on this desk, which is a difference nobody could measure.
+   *
+   * Reads state, changes none. It exists for tests and costs production
+   * nothing, which is the trade this project has already made for
+   * `exposeForTests`.
+   */
+  loopState(): { sinceLastMirrorMs: number | null; alternations: number; windowMs: number; trips: number }
+  /**
+   * The last `TRACE_MAX` decisions `mirror()` took. For reading a failure, not
+   * for asserting on in normal specs.
+   */
+  mirrorTrace(): readonly MirrorDecision[]
   detach(): void
 }
+
+/** Which exit `mirror()` took. Every one of them looks identical from outside: the other pane did not move. */
+export type MirrorBranch = 'echo' | 'pane-destroyed' | 'already-there' | 'trip' | 'issued'
+
+export interface MirrorDecision {
+  at: number
+  from: 'native' | 'target'
+  url: string
+  inPage: boolean
+  branch: MirrorBranch
+  detail: string
+}
+
+/** Enough decisions to cover a spec's worth of navigation without growing without bound. */
+const TRACE_MAX = 64
 
 type Pane = 'native' | 'target'
 
@@ -90,6 +125,17 @@ export function attachSyncBus(
   let alternations = 0
   /** One line per loop episode, not per hop: reset with the count. */
   let loopWarned = false
+  /** How many times the breaker has tripped on this bus — a measurement's denominator, never a decision. */
+  let trips = 0
+  /**
+   * The last decisions `mirror()` took, for reading a failure afterwards.
+   *
+   * Every exit below ends the same way from outside — the other pane stays
+   * where it was — so "the mirror did not happen" fits five different facts
+   * and the assertion that catches it can name none of them. This is what
+   * separates them. It records what was decided; it decides nothing.
+   */
+  const trace: MirrorDecision[] = []
 
   /** Takes `url` out of the pane's issued set, and everything sent before it; false if it was not there. */
   function retire(pane: Pane, url: string, now: number): boolean {
@@ -102,6 +148,10 @@ export function attachSyncBus(
 
   function mirror(from: Pane, url: string, inPage: boolean): void {
     const now = Date.now()
+    const note = (branch: MirrorBranch, detail = ''): void => {
+      trace.push({ at: now, from, url, inPage, branch, detail })
+      if (trace.length > TRACE_MAX) trace.shift()
+    }
     const echo = retire(from, url, now)
     // Report every commit except the echo of one already reported — the
     // second pane committing the URL the first one was mirrored to (or both
@@ -113,7 +163,10 @@ export function attachSyncBus(
       lastReported = url
       onUrlChanged(url)
     }
-    if (echo) return
+    if (echo) {
+      note('echo')
+      return
+    }
 
     const to: Pane = from === 'native' ? 'target' : 'native'
     const other = from === 'native' ? target : native
@@ -123,7 +176,19 @@ export function attachSyncBus(
       issued[from].clear()
       armedAt[from] = 0
     }
-    if (other.webContents.isDestroyed() || other.webContents.getURL() === url) return
+    if (other.webContents.isDestroyed()) {
+      note('pane-destroyed')
+      return
+    }
+    // The two reasons this returns are not the same fact and must not share a
+    // line: a destroyed pane cannot be mirrored into, while a pane already on
+    // the URL needs no mirror. A trace that cannot tell them apart is the
+    // defect it exists to find.
+    const there = other.webContents.getURL()
+    if (there === url) {
+      note('already-there', there)
+      return
+    }
 
     // Only a bounce accumulates; anything else starts the count afresh.
     // Same-direction mirrors leave the count alone: a mirrored load commits
@@ -142,11 +207,14 @@ export function attachSyncBus(
     if (alternations >= LOOP_ALTERNATIONS) {
       if (!loopWarned) {
         loopWarned = true
+        trips++
         log.warn(`navigation mirror loop broken (${from} -> ${to}: ${url})`)
       }
+      note('trip', `alternations=${alternations}`)
       return
     }
 
+    note('issued', `other was ${there}`)
     issued[to].set(url, now)
     armedAt[to] = now
     // Into the target through the door that says who is loading: this commit
@@ -198,6 +266,17 @@ export function attachSyncBus(
       const pos = parseScrollPos(raw)
       if (!pos) return
       other.send(IPC.applyScroll, pos)
+    },
+    loopState() {
+      return {
+        sinceLastMirrorMs: lastMirror === null ? null : Date.now() - lastMirror.at,
+        alternations,
+        windowMs: LOOP_WINDOW_MS,
+        trips,
+      }
+    },
+    mirrorTrace() {
+      return trace
     },
     detach(): void {
       target.off('url-changed', onTargetNav)
