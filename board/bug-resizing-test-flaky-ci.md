@@ -1,6 +1,6 @@
 ---
 title: "The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds"
-column: doing
+column: review
 kind: bug
 owner: "Kenya"
 criterion: C5
@@ -51,3 +51,21 @@ This does NOT undo Kenya's finding. `resizing` is reachable and has been observe
 - Then either make the provocation dominate on any host, or assert the discriminator that actually distinguishes the two — the pane's size changing, which is the thing being tested, rather than the label the loop happened to choose.
 
 Related: `ci-second-host` is the card about exactly this question and Kenya has it open as PR #1. This failure is evidence for that card, arriving before it merged.
+
+DELIVERED 2026-09-15 by Kenya, into Review. Branch `fix/resizing-verdict-race` (THE BRANCH IS THE ADDRESS). Cut from 1695eb3. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly.
+
+THE TEST NOW ASSERTS THE STATE AND RECORDS THE LABEL.
+
+Asserted: `applied > 20`, unchanged, which is what catches a cycle that never started. Then the discriminator — the test samples the target's viewport through the control surface at the same 80 ms cadence `settleTarget` polls it, and requires more than four readings taken, more than three distinct sizes during the capture, and the last size change within 1.5 s of the capture returning. Then `settled: false`.
+
+Recorded, not asserted: which of `resizing` / `animating` came back, with its margin — distinct sizes, ms since the last change, applies, capture duration — pushed into a Playwright annotation so a CI log carries it.
+
+ONE INVARIANT KEPT ON THE LABEL, because it is a real one on any desk: the reply's name must match its own sentence. `resizing` with a "keeps painting steadily" warning, or the reverse, means the two have been swapped. Any OTHER name on a pane measurably still moving throws rather than widening a tolerance — `timeout` and `blank` would be saying something untrue there.
+
+THE NEW GUARD WAS WATCHED FAILING, not only passing. Stalling the cycle before the capture (1.5 s of applies, then stop, then shoot) took `sizes.size` to 0 and turned the test red. That run also exposed a diagnostic flaw in the first version: zero samples and a motionless pane both read as "no distinct sizes" and are opposite failures — the first says the test could not see, the second says there was nothing to see. They are separate assertions now, with separate messages.
+
+VERIFIED: typecheck clean across all three configs; live-drive 45 passed, 58.1 s, twice.
+
+NOT VERIFIED, and it is the half that matters: this desk only ever takes the `resizing` branch. The `animating` branch is what CI exercises and what the eight reds were, and no run on a slow desk has gone through this code yet. A green here is the less interesting half of the evidence.
+
+AND THE CASCADE IS UNCHANGED, which is useful. The stalled-cycle run failed 2 tests, not 1: `:963` and `:1015` again. So the pairing does not depend on WHICH assertion fails in the first test. Per Rook's constraint: if this makes `:963` deterministic on CI and `:1015` keeps failing, that is evidence the cascade is a separate fault rather than a consequence.

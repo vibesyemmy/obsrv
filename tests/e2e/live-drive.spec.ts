@@ -966,54 +966,114 @@ test('a page that never goes quiet is captured anyway, and says so', async () =>
   expect(whole.body).toMatchObject({ settled: false, unsettledReason: 'animating' })
 })
 
-test('a pane still being resized when the budget runs out is captured as resizing, and says so', async () => {
+test('a pane still being resized when the budget runs out is captured as moving, and names a motion that matches its warning', async () => {
   // The other half of the pair above: that test pins `resizing` to stay OFF a
   // page that is merely painting, and until this one existed the value had
-  // never been seen ON anything. It was admitted by the snap schema, asserted
-  // legal by mcp.spec, and produced by nothing — a name for a state no run had
-  // ever reached.
+  // never been seen ON anything — admitted by the snap schema, asserted legal
+  // by mcp.spec, produced by nothing.
   //
-  // Provoking it needs more than a resize. `settleTarget` ends on two EQUAL
-  // 80 ms viewport reads inside its 4 s budget, so flipping between two presets
-  // agrees on some pair almost at once and exits settled — measured, 30k flips
-  // deep, and it came back `animating`. Eight distinct viewports in rotation
-  // keep consecutive reads disagreeing for the whole budget, which is the only
-  // way through to `'resizing'`. The real-world shape is the same: a window
-  // dragged by its corner while a capture runs.
+  // It asserted `unsettledReason: 'resizing'` for a day and that was WRONG, in
+  // the way this repo has been wrong twice this week: it asserted a label that
+  // is decided by a race, and the race is decided by how fast the machine is.
+  // It failed 8 of main's 10 red CI runs on a three-core runner and passed
+  // every time on a 14-core laptop. Both labels are true of a pane cycled
+  // through eight viewports — it IS resizing and it IS repainting — and
+  // `settleTarget` reports whichever condition it reaches first.
+  //
+  // So this asserts the STATE and records the label. What distinguishes the
+  // two verdicts is whether the pane's viewport was still moving when the
+  // budget ran out, and that is a fact the test can measure for itself by
+  // sampling the viewport across the capture rather than inferring it from the
+  // branch the settle loop took. A test that asserts the state and records the
+  // label survives a faster host; one that asserts the label is asserting a
+  // race.
+  //
+  // What it must NOT become is `toMatch(/resizing|animating/)`. That passes on
+  // a run where the cycle never started, which is exactly what the `applied`
+  // guard below was written to catch — the loosening would un-catch the thing
+  // the test already catches. The state assertions are what keep it honest:
+  // they fail on a stalled cycle even though the label check would not.
   test.setTimeout(60_000)
   const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
   const nav = await call('navigate', { url: SOLID_RED })
   expect(nav.status).toBe(200)
 
-  let resizing = true
+  let cycling = true
   let applied = 0
   const spin = (async () => {
-    for (let i = 0; resizing; i++) {
+    for (let i = 0; cycling; i++) {
       const r = await call('setPreset', { id: CYCLE[i % CYCLE.length]! })
       if (r.status === 200) applied++
     }
   })()
+  // The same quantity `settleTarget` polls — the target's viewport — read
+  // through the control surface instead of from inside the loop, at the same
+  // 80 ms cadence. This is the discriminator: not which name came back, but
+  // whether the pane was still changing size when the shutter fired.
+  const seen: { at: number; size: string }[] = []
+  const sampler = (async () => {
+    while (cycling) {
+      const s = await call('status')
+      const v = s.body as { cssWidth?: number; cssHeight?: number }
+      seen.push({ at: Date.now(), size: `${v.cssWidth}x${v.cssHeight}` })
+      await new Promise(r => setTimeout(r, 80))
+    }
+  })()
+
   // Let the cycle get going, so the capture starts mid-resize rather than
   // racing the first apply.
   await new Promise(r => setTimeout(r, 400))
+  const started = Date.now()
   const shot = await call('captureTarget')
-  resizing = false
-  await spin
+  const finished = Date.now()
+  cycling = false
+  await Promise.all([spin, sampler])
 
   expect(shot.status).toBe(200)
   const body = shot.body as { ok: boolean; warnings: string[]; settled: boolean; unsettledReason?: string }
   expect(body.ok).toBe(true)
   // Enough applies to have covered the budget; a handful would mean the cycle
-  // stalled and the assertion below would be measuring something else.
+  // stalled and everything below would be measuring something else.
   expect(applied).toBeGreaterThan(20)
-  expect(body).toMatchObject({ settled: false, unsettledReason: 'resizing' })
-  expect(body.warnings.some(w => w.includes('still resizing'))).toBe(true)
-  // Named rather than blamed: a pane that cannot hold still is not the page
-  // painting, and the two warnings must not be swapped for each other.
-  expect(body.warnings.some(w => w.includes('keeps painting steadily'))).toBe(false)
+
+  const during = seen.filter(s => s.at >= started && s.at <= finished)
+  const sizes = new Set(during.map(s => s.size))
+  const lastChange = during.reduce((at, s, i) => (i > 0 && s.size !== during[i - 1]!.size ? s.at : at), started)
+  const quietAtTheEnd = finished - lastChange
+
+  // The state, asserted: the pane was changing size throughout the capture,
+  // and was still doing it when the capture returned. A stalled cycle fails
+  // these however the reply is labelled — verified by stalling one, which took
+  // `sizes.size` to 0 and turned the test red.
+  //
+  // The sample count is checked first and separately, because zero samples and
+  // a motionless pane both read as "no distinct sizes" and are different
+  // failures: the first says the test could not see, the second says there was
+  // nothing to see.
+  expect(during.length, 'the sampler took no readings during the capture').toBeGreaterThan(4)
+  expect(sizes.size).toBeGreaterThan(3)
+  expect(quietAtTheEnd).toBeLessThan(1_500)
+  expect(body.settled).toBe(false)
+
+  // The label, recorded rather than asserted — and checked against its own
+  // sentence, which IS an invariant: a reply that names one motion and warns
+  // about the other has swapped them, and that is a defect on any desk.
+  const margin = `label=${body.unsettledReason} sizes=${sizes.size} quietAtEnd=${quietAtTheEnd}ms applied=${applied} capture=${finished - started}ms`
+  test.info().annotations.push({ type: 'settle verdict', description: margin })
+  if (body.unsettledReason === 'resizing') {
+    expect(body.warnings.some(w => w.includes('still resizing')), margin).toBe(true)
+    expect(body.warnings.some(w => w.includes('keeps painting steadily')), margin).toBe(false)
+  } else if (body.unsettledReason === 'animating') {
+    expect(body.warnings.some(w => w.includes('keeps painting steadily')), margin).toBe(true)
+    expect(body.warnings.some(w => w.includes('still resizing')), margin).toBe(false)
+  } else {
+    // Any other name on a pane measurably still moving is the finding, not a
+    // tolerance to widen: `timeout` and `blank` say something untrue here.
+    throw new Error(`a pane still changing size was captured as ${String(body.unsettledReason)} — ${margin}`)
+  }
 
   // With the cycle stopped, the same page settles — the verdict was about the
-  // resizing, not about this fixture.
+  // motion, not about this fixture.
   const after = await call('captureTarget')
   expect((after.body as { unsettledReason?: string }).unsettledReason).not.toBe('resizing')
 })
