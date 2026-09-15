@@ -278,6 +278,8 @@ export interface ObsrvApi {
    */
   closeTab(id: string): void
   activateTab(id: string): void
+  /** Re-order the strip: put `id` at `toIndex`, clamped to the list. */
+  moveTab(id: string, toIndex: number): void
   /** A tab opened, closed, or came to the front. Carries the whole strip. */
   onTabsChanged(cb: (s: TabSnapshot) => void): () => void
 }

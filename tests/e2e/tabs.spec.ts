@@ -752,6 +752,57 @@ test.describe('tabs come back on relaunch', () => {
 
   const strip = (p: Page) => p.locator('.chrome-tabs [role="tab"]')
 
+  test('a re-ordered strip comes back re-ordered, with the same tab in front', async () => {
+    // The order is persisted and `activeIndex` is a POSITION in it, so a
+    // re-order that moved the list without the index following restores a
+    // different tab in front. That does not error: it opens a plausible page,
+    // which `tabsFile.ts` calls "a guess wearing the shape of a memory".
+    //
+    // The active tab is moved to position 1, NOT position 0. A first cut of
+    // this test moved it to the front, where a persisted `activeIndex: 0`
+    // happens to be correct whatever the code does — the assertion passed
+    // against a deliberately broken save. The tab in front must be able to be
+    // wrong for this to be evidence.
+    const home = dir()
+    const first = await launchApp([], {}, home)
+    const p1 = await rendererWindow(first)
+
+    await p1.evaluate(u => window.obsrv.navigate(u), TALL)
+    await expect(strip(p1).nth(0)).toHaveText('tall-fixture')
+    await p1.locator('.tab-new').click()
+    await expect(strip(p1)).toHaveCount(2)
+    await p1.evaluate(u => window.obsrv.navigate(u), LINK)
+    await expect(strip(p1).nth(1)).toHaveText('link-fixture')
+
+    // Back to the first tab, so the tab that moves is the active one.
+    await strip(p1).nth(0).click()
+    await expect(strip(p1).nth(0)).toHaveAttribute('aria-selected', 'true')
+
+    // Drag it to the END. Through the same `move` the drop reaches — the drag
+    // gesture is Chromium's and is not what is in doubt; the index surviving
+    // the shuffle and a restart is.
+    await first.evaluate(() => {
+      const g = globalThis as any
+      const ids = g.__obsrv.tabs.snapshot().tabs.map((t: { id: string }) => t.id)
+      g.__obsrv.tabs.move(ids[0], 1)
+    })
+    await expect(strip(p1).nth(0)).toHaveText('link-fixture')
+    await expect(strip(p1).nth(1)).toHaveText('tall-fixture')
+    await expect(strip(p1).nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
+    await first.close()
+
+    const second = await launchApp([], {}, home)
+    const p2 = await rendererWindow(second)
+    await expect(strip(p2)).toHaveCount(2)
+    await expect(strip(p2).nth(0)).toHaveText('link-fixture')
+    await expect(strip(p2).nth(1)).toHaveText('tall-fixture')
+    // The whole point: position 1, not the front.
+    await expect(strip(p2).nth(1)).toHaveAttribute('aria-selected', 'true')
+    await second.close()
+  })
+
   test('restores the urls, the screen and which tab was in front — and not the scroll', async () => {
     const home = dir()
     const first = await launchApp([], {}, home)
