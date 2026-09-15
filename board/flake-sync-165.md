@@ -1,9 +1,15 @@
 ---
 title: "A genuine navigation mistaken for an echo — sync:165 diagnosed, not fixed"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as f4c3d36 on main. Typecheck exit 0 across all three configs, 1141/1141 unit, board:check green, sync.spec + sync-trace.spec 10 passed in 15.3 s. "Not fixed" was verified rather than taken: syncBus.ts carries only loopState(), mirrorTrace(), the MirrorDecision type and a trips counter.
+
+**The card is Done and the bug is not.** The diagnosis is complete and the fix is `bug-stale-issued-echo`. A card closes when its work is done; the fault closes when the fault is gone.
+
+The title conflicted on merge and was resolved by JUDGEMENT rather than regeneration — the branch carried the original *"went flaky once on the loop-breaker test"*, which this work proves wrong on both counts. Worth noting against the generator's rule: *regenerate, never hand-resolve* is about the GENERATED files. A card is a source and needs a real decision.
 
 **FOUND. Branch `fix/sync-loop-margin` (as of f027a74), in Review — 1141/1141 unit, typecheck clean, board:check green. Merging waits on Opeyemi's word to Rook directly.**
 
