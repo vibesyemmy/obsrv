@@ -41,8 +41,8 @@ test('lives under the user-data directory in tests, and opens with the boot line
   // directory is where a test's writes belong.
   expect(logFile).toMatch(/obsrv-e2e-[^/]+\/logs\/obsrv\.log$/)
   const text = logText()
-  expect(text).toMatch(/^\d{4}-\d\d-\d\dT[\d:.]+Z info  obsrv \d+\.\d+\.\d+ starting: electron \d+/m)
-  expect(text).toMatch(/ info  gpu: compositing \S+, webgl \S+$/m)
+  expect(text).toMatch(/^\d{4}-\d\d-\d\dT[\d:.]+Z info  test#\d+ obsrv \d+\.\d+\.\d+ starting: electron \d+/m)
+  expect(text).toMatch(/ info  test#\d+ gpu: compositing \S+, webgl \S+$/m)
 })
 
 test('the window going hidden and coming back is on record, once per transition', async () => {
@@ -68,9 +68,9 @@ test('a GPU death, and what the renderer made of it, are on record', async () =>
   expect(gpu, 'a GPU helper to kill').toBeDefined()
   process.kill(Number(gpu!.trim().split(/\s+/)[0]), 'SIGKILL')
 
-  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ warn  GPU process gone \(killed, exit code 9\)/)
-  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ info  renderer: webgl context lost/)
-  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ info  renderer: webgl context restored/)
+  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ warn  test#\d+ GPU process gone \(killed, exit code 9\)/)
+  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ info  test#\d+ renderer: webgl context lost/)
+  await expect.poll(logText, { timeout: 10_000 }).toMatch(/ info  test#\d+ renderer: webgl context restored/)
 })
 
 test('a line from the renderer is one bounded line, whatever it sends', async () => {
@@ -79,7 +79,7 @@ test('a line from the renderer is one bounded line, whatever it sends', async ()
     window.obsrv.log('x'.repeat(5000))
     window.obsrv.log('')
   })
-  await expect.poll(logText).toMatch(/ info  renderer: one forged second entry$/m)
+  await expect.poll(logText).toMatch(/ info  test#\d+ renderer: one forged second entry$/m)
   expect(logText()).not.toMatch(/^forged/m)
   expect(logText()).not.toMatch(/x{300}/)
 })
