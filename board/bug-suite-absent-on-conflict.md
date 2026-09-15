@@ -5,6 +5,25 @@ kind: bug
 order: 39
 ---
 
+**UNOWNED AND FREE.** Offered to obsrv-91 2026-09-15; its user did not answer after three asks. It declined to hold it — *"an unanswered offer is not a claim"* — and asked that anyone who wants it take it. If its user surfaces after someone has started, it will ask what is left rather than open a second copy.
+
+**THE CARD'S FRAMING CHANGED, and the better version came from watching it work rather than from argument.** `3e6bbaf` went red on main; the failing test was `text-scale.spec.ts:251`, already on the classified list taken *before* that merge, so the red was pre-existing. That took ten seconds and did not need the suite to have run on the merge ref at all.
+
+obsrv-91's reframing, which supersedes its own earlier one: this is not *"restore the missing signal"*, it is ***"make the signal that exists interpretable."*** The expensive option is running a 17-minute macOS suite unconditionally. A reviewer who can tell a pre-existing red from a new one in ten seconds does not need it for most decisions.
+
+**AND THE HALF THAT ROTS, which obsrv-91 raised and is already true.** A classified list is a decision someone made at a moment, and nothing makes it notice when a test leaves the list — fixed, renamed, moved, deleted. That is the stale-`EXPLAINED`-row shape from 2026-09-14 exactly.
+
+It is not a future risk. **Three of seven rows on the existing list are already wrong, hours after it was made**, and they are the three whose tests were FIXED:
+
+    live-drive.spec.ts:963    now points at  expect(elapsed).toBeLessThan(2_900)     test moved to :969
+    live-drive.spec.ts:1015   now points at  while (cycling) {                       moved
+    sync.spec.ts:165          now points at  a comment                               test moved to :185
+    text-scale.spec.ts:251    still a real test                                      — the row actually used
+
+So the clearance of `3e6bbaf` was correct, and correct partly because that row happened not to have moved. The rows most likely to be cited as "known, pre-existing" are exactly the ones a fix makes stale.
+
+**Which names the fix: key on the test TITLE, not on `file:line`.** Titles survive edits and moves; line numbers do not survive the fix that makes a row obsolete. And something must FAIL when a row no longer matches a real test — otherwise in a month the list excuses reds that no longer exist and hides ones that do.
+
 Raised 2026-09-15 by Kenya, four minutes after `bug-pr-checks-absent` closed, having hit the same mechanism on PR #2.
 
 That card fixed the BOARD CHECK by making it push-triggered. It did not fix the class its title promised. Measured:

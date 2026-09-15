@@ -6,6 +6,12 @@ criterion: B5
 order: 37
 ---
 
+**THE CLASSIFIED LIST BELOW IS ALREADY PARTLY WRONG, measured 2026-09-15.** Three of its rows no longer point at a test — `live-drive.spec.ts:963`, `live-drive.spec.ts:1015` and `sync.spec.ts:165` — because the fixes moved them (to :969, and sync to :185). Hours, not months.
+
+The rows that go stale first are the ones whose tests were FIXED, which are exactly the rows someone would cite to excuse a red as pre-existing. Raised by obsrv-91 as a future risk on `bug-suite-absent-on-conflict`; it was already true when raised.
+
+**Key on the test TITLE, not on `file:line`**, and make something fail when a row stops matching a real test. Same shape and same fix as the stale `EXPLAINED` row in the surface-parity gate.
+
 **THE 37% HAS HOLES IN IT NOW, AND HENRY PUT THEM THERE.** 2026-09-15.
 
 The concurrency groups added in 450d5f9 cancelled three main CI runs — 154c8e3, 5eeb5f8, 4ee2bf9 — within minutes of landing. The guard was written to protect main from exactly that, with a comment above it saying so.
