@@ -152,7 +152,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 10
+## Next — 9
 
 *Picked, not claimed — start here.*
 
@@ -385,6 +385,37 @@ Those are not contradictory — B5 measured fixtures, these are live e2e — but
 
 Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the measurement this argues for. `chore-guard` is about greens that mean nothing; this is reds that mean nothing, which is the same disease.
 
+---
+
+## Doing — 3
+
+*Claimed. Someone is on it.*
+
+### A live run that turns up nothing user-visible
+
+[`b1`](../board/b1.md) · **B1** · readiness · owner: Rook
+
+ASSIGNED TO ROOK 2026-09-15, on Opeyemi's word, and chosen for what it needs rather than what suits the taker. Rook asked for exactly that.
+
+**WHY THIS ONE.** Tonight produced seven merged cards and every one was the harness or the plumbing — the suite lock, the mirror trace, the sync bus, the tab strip, the board, CI itself. **None of it touched what the product actually does.** `report`, `lint`, `audit`, the MCP server, presets and calibration have not been read or exercised by anyone in two days, and B1 is the criterion that says they work. It has never been met.
+
+**AND IT WANTS SOMEONE COLD, which is the same argument that put `bug-sync138` with Kenya.** `docs/read-the-output-not-the-code` says the warnings ARE the product, and that the way to check a sentence is to have a peer read it cold. Rook has never read the audit or lint output. That is not a gap to work around here — it is the qualification.
+
+**IT IS NOT A CARD THAT MERGES, and that is the point.** B1 is met when a run finds nothing. Runs 13, 14, 15 and 16 each found something, each smaller than the last, and 2026-09-13 alone produced four defects that had reached users. So the deliverable is a live run over a fresh set of sites and the dev-server shapes, and then either a set of new cards or the sentence "this run found nothing user-visible", which nobody has been able to write yet.
+
+Finding something is the likely outcome and is a success. Finding nothing is the criterion.
+
+**WHAT WOULD MAKE THE RUN WORTH TRUSTING**, given everything this week has been about:
+
+- Fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.
+- Read every sentence the tools emit, not only the ones that look wrong. A sentence that is individually plausible and wrong in company is this project's commonest defect, and it is invisible to anyone scanning for errors.
+- A finding needs a page and a reply, not a recollection — the same standard applied to every card tonight.
+- And the thing tonight kept teaching: `npx playwright test` and the MCP tools run the BUILT `out/`. Two separate sessions produced false results from a stale build in one evening. Build first.
+
+Prior runs are in `docs/research/`. Worth reading what runs 13–16 found before starting, to avoid re-finding them and to know what "smaller than the last" has meant.
+
+Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
+
 ### The e2e suite still vanishes on a conflicting PR, and its absence is silent
 
 [`bug-suite-absent-on-conflict`](../board/bug-suite-absent-on-conflict.md) · bug · owner: Rook
@@ -436,37 +467,6 @@ Options, none obviously right:
 **What would settle the choice:** how often a PR here is conflicting at the moment someone wants to read its checks. Two data points so far and both were conflicting, which is suggestive and is not a rate.
 
 **Do not close this on a green PR.** A PR whose checks are present proves nothing about the conflicting case — that is the exact error `bug-pr-checks-absent` was closed with, and this card exists because of it.
-
----
-
-## Doing — 2
-
-*Claimed. Someone is on it.*
-
-### A live run that turns up nothing user-visible
-
-[`b1`](../board/b1.md) · **B1** · readiness · owner: Rook
-
-ASSIGNED TO ROOK 2026-09-15, on Opeyemi's word, and chosen for what it needs rather than what suits the taker. Rook asked for exactly that.
-
-**WHY THIS ONE.** Tonight produced seven merged cards and every one was the harness or the plumbing — the suite lock, the mirror trace, the sync bus, the tab strip, the board, CI itself. **None of it touched what the product actually does.** `report`, `lint`, `audit`, the MCP server, presets and calibration have not been read or exercised by anyone in two days, and B1 is the criterion that says they work. It has never been met.
-
-**AND IT WANTS SOMEONE COLD, which is the same argument that put `bug-sync138` with Kenya.** `docs/read-the-output-not-the-code` says the warnings ARE the product, and that the way to check a sentence is to have a peer read it cold. Rook has never read the audit or lint output. That is not a gap to work around here — it is the qualification.
-
-**IT IS NOT A CARD THAT MERGES, and that is the point.** B1 is met when a run finds nothing. Runs 13, 14, 15 and 16 each found something, each smaller than the last, and 2026-09-13 alone produced four defects that had reached users. So the deliverable is a live run over a fresh set of sites and the dev-server shapes, and then either a set of new cards or the sentence "this run found nothing user-visible", which nobody has been able to write yet.
-
-Finding something is the likely outcome and is a success. Finding nothing is the criterion.
-
-**WHAT WOULD MAKE THE RUN WORTH TRUSTING**, given everything this week has been about:
-
-- Fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.
-- Read every sentence the tools emit, not only the ones that look wrong. A sentence that is individually plausible and wrong in company is this project's commonest defect, and it is invisible to anyone scanning for errors.
-- A finding needs a page and a reply, not a recollection — the same standard applied to every card tonight.
-- And the thing tonight kept teaching: `npx playwright test` and the MCP tools run the BUILT `out/`. Two separate sessions produced false results from a stale build in one evening. Build first.
-
-Prior runs are in `docs/research/`. Worth reading what runs 13–16 found before starting, to avoid re-finding them and to know what "smaller than the last" has meant.
-
-Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
 
 ### The target emits no url-changed at all — a second shape, and the test named for it
 

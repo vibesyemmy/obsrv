@@ -1,0 +1,103 @@
+# Whether the e2e suite answered for this commit — and a refusal when it did not.
+#
+# THE BUG THIS EXISTS FOR. `ci.yml` runs the suite on `push` to main and on
+# `pull_request`. A pull request that CONFLICTS has no merge ref, so no
+# `pull_request` run is ever scheduled: on PR #2, `gh pr checks 2` listed the
+# board check and nothing else. The suite did not fail. It was never asked, and
+# nothing said so — the same silence this repository keeps finding, wearing a
+# workflow's clothes. A reviewer sees checks, sees green, and is reading a page
+# that does not contain the answer they think it contains.
+#
+# WHY NOT RUN THE SUITE ON EVERY BRANCH PUSH. That is ~17 minutes of macOS CI on
+# every work-in-progress commit, and it would double against `pull_request`
+# rather than dedupe: `refs/heads/x` and `refs/pull/N/merge` are different refs
+# and land in different concurrency groups. The diagnosis was never that the
+# suite fails to run. It is that its absence is silent. So this makes the
+# absence loud and leaves the suite's schedule alone.
+#
+# It runs on `push` for ALL branches, the one trigger a conflict cannot take
+# away, and costs seconds on ubuntu.
+#
+# MEASURED, because the check would be worthless if it were the other way: a
+# `pull_request` run is listed against the pull request's HEAD sha, not the
+# merge sha. PR #4's head 1ce283f lists `CI event=pull_request` beside
+# `Board event=push`, so asking for this sha's runs finds the suite's.
+#
+# WHAT A RED HERE MEANS, because a check that is misread is worse than none: not
+# that the suite failed. That no suite run exists for this exact sha, so nothing
+# here has been tested. On a conflicting pull request that is the normal state
+# until the conflict is resolved, and it is deliberate.
+name: Suite answered
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  answered:
+    name: A suite run exists for this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Beside this check rather than in the suite, and for the same reason the
+      # board check is its own workflow: the list exists so a reviewer can clear
+      # a red WITHOUT the suite, so it has to be verified without the suite too.
+      # No `npm ci` — plain Node, no dependencies.
+      - name: The known-red list still names real tests
+        run: npm run reds:check
+
+      - name: Ask whether the suite has answered for this sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Only a commit someone is asking others to read is gated. A branch
+          # with no pull request is work in progress, and failing every push of
+          # it would teach everyone to ignore this check — which is how a guard
+          # stops being one. The board check answers on those pushes; this one
+          # has nothing to say until there is a review to mislead.
+          prs=$(gh pr list --head "$REF_NAME" --state open --json number -q 'length')
+          if [ "$prs" -eq 0 ] && [ "$REF_NAME" != "main" ]; then
+            echo "No open pull request for $REF_NAME — nobody is reading checks for this commit yet."
+            exit 0
+          fi
+
+          # `gh run list` rather than the checks API: a run that was never
+          # scheduled has no check to list, which is the whole problem.
+          #
+          # Polled rather than read once. The push and pull_request events fire
+          # together, so the suite's run may not be registered when this starts;
+          # reading once would report a race as an absence, and this check is
+          # worth nothing if it cries wolf.
+          for attempt in $(seq 1 10); do
+            runs=$(gh run list --workflow ci.yml --commit "$SHA" --json status,conclusion,databaseId --limit 20)
+            count=$(echo "$runs" | jq 'length')
+            if [ "$count" -gt 0 ]; then
+              echo "ci.yml has $count run(s) for $SHA:"
+              echo "$runs" | jq -r '.[] | "  \(.databaseId) \(.status) \(.conclusion // "-")"'
+              echo "The suite was asked about this commit. Whether it passed is ci.yml's answer, not this one."
+              exit 0
+            fi
+            echo "attempt $attempt: no ci.yml run for $SHA yet"
+            sleep 20
+          done
+
+          echo "::error::No ci.yml run exists for $SHA after 200s — the suite has not been asked about this commit, so nothing here is tested. This is NOT a suite failure. On a conflicting pull request it is the normal state until the conflict is resolved: GitHub schedules no pull_request run without a merge ref, and this check exists so that absence is loud rather than silent."
+          exit 1

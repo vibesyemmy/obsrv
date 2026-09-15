@@ -1,0 +1,21 @@
+# Known reds: e2e tests that are failing for a reason already understood, so a
+# reviewer can clear them in seconds instead of waiting 17 minutes for a macOS
+# suite to say what is already known.
+#
+# One row per line:
+#
+#     test title :: why it is excused
+#
+# Keyed by the test's TITLE, never by file:line. A title survives the edit that
+# moves a test; a line number is invalidated by the very fix that makes the row
+# obsolete. Three of the seven rows on the first version of this list were
+# wrong within hours, and they were the three whose tests had been fixed.
+#
+# `npm run reds:check` FAILS when a row no longer names a real test, because a
+# list that quietly stops matching excuses reds that cannot happen and hides
+# ones that can. Delete a row the moment its test is fixed — that is the point
+# of the check, not an annoyance it causes.
+#
+# An empty list is a legitimate state and means nothing is currently excused.
+# It is not the same as a list whose rows have all gone stale, and the check
+# tells those apart.

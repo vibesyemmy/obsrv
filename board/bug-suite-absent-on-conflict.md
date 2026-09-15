@@ -1,6 +1,6 @@
 ---
 title: "The e2e suite still vanishes on a conflicting PR, and its absence is silent"
-column: next
+column: doing
 kind: bug
 owner: "Rook"
 order: 39
