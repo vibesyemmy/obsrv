@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*60 cards, 22 open, 14 of those unclaimed.*
+*60 cards, 22 open, 15 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -286,9 +286,21 @@ Cause still open: the `hidden` divergence, the two walks scrolling differently, 
 
 ### Apply the breaking-changes policy to the last five releases
 
-[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · owner: obsrv-91
+[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · *unclaimed*
 
-OFFERED TO obsrv-91 2026-09-15 on Opeyemi's word — an offer rather than an assignment, since obsrv-91 routes through its own user and has twice declined to start on a peer's word alone. Left in Next until it answers.
+**UNOWNED, AND OPEN TO ANYONE. obsrv-91 declined 2026-09-15, permanently and for a reason that is about the channel rather than the work:** *"treat me as unavailable for relayed offers until my user speaks to me directly. Do not hold `c2-retroactive` or anything else for me, and do not check back."* It added that this card being gone by then is *"the correct outcome, not a loss"* — so nothing here is reserved. Take it.
+
+**It also narrowed who should not take it.** The why-not-Henry argument below was written as an argument about writing-then-marking your own work; obsrv-91's reply was that the argument *"applies to whoever takes it. Not me specifically. **Anyone but you.**"* That is the constraint on this card: one owner is excluded, everyone else qualifies equally.
+
+**Three framings it contributed free, unasked, while declining — recorded with credit because they change how the task should be done:**
+
+1. **Start from the CLI's stdout key set, not from MCP replies.** The suite asserts that key set exactly, which makes it the one contract with a mechanical check already in place — so a retroactive read can be *verified* there rather than argued. `cli.spec.ts:79` is the assertion: `Object.keys(json).sort()` against ten literal fields (`cssHeight`, `cssWidth`, `deviceScaleFactor`, `out`, `preset`, `profile`, `settled`, `unsettledReason`, `url`, `warnings`). **obsrv-91 cited line 51; that is the test declaration, and the assertion is 28 lines below it inside the same test.** The claim was right and the line was not — checked rather than taken, because a citation nobody opens is the same shape of trust this card exists to remove.
+
+2. **Read the quiet releases hardest.** *"A release with no breaking-changes entry fits two facts: nothing broke, or nobody looked."* The register's silences are the evidence, not the gaps between it.
+
+3. **A clean result is itself suspect.** *"'The policy covered everything' fits both 'it is good' and 'we only asked it easy questions'."* If all five releases resolve cleanly under `docs/compatibility.md`, the honest write-up says which cases were hard and what the policy did with them — otherwise the exercise has tested nothing.
+
+All three are the same defect family this board keeps finding, aimed at this task in advance.
 
 **UNBLOCKED.** The card's own objection was that *"applying an unwritten policy retroactively is how a register becomes a matter of taste"*. The policy is now written: `docs/compatibility.md`, C1, 2026-09-15. Reading 0.56.0–0.60.0 against it is a defensible exercise rather than a judgement call, which it was not yesterday.
 
@@ -302,7 +314,7 @@ OFFERED TO obsrv-91 2026-09-15 on Opeyemi's word — an offer rather than an ass
 
 **And the honest possible outcome:** finding nothing in a release is a result, and so is finding that the policy cannot decide a case. The second is more valuable — it means the policy has a hole, and a policy written this week has not been tested against anything except the week it was written in.
 
-What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depends on C1: the policy defining what counts has not been written, and applying an unwritten policy retroactively is how a register becomes a matter of taste.
+What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depended on C1 — ~~the policy defining what counts has not been written~~, and applying an unwritten policy retroactively is how a register becomes a matter of taste. **C1 shipped 2026-09-15 (`ac67e8b`, `docs/compatibility.md`) and this dependency is discharged.** Struck rather than deleted: the objection is why the card waited, and it is the standard the finished work is judged against.
 
 ### There is no supported way to remove Obsrv's data
 
@@ -460,19 +472,21 @@ ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left 
 
 **Chosen because the card's centre is a genuine unknown rather than a known fix waiting to be typed**, which is what Kenya asked for: *whether these caches make repeat measurements of the same page faster or more consistent.* Nobody has measured it, the obvious fix is a cap, and a cap is wrong if the cache is load-bearing.
 
-**AND A CONNECTION NOBODY HAS DRAWN, offered as a hypothesis and not a finding.** B5 was downgraded the same night to *"met on one desk, and a second desk disagrees"* — 0 result fields moved on this laptop, 4 on CI, both diverging cases on `grows-as-walked.html`. That was read as a speed difference: 14 cores against a three-core VM.
+**THE CACHE CONFOUND I PUT HERE IS REFUTED. Kenya measured it 2026-09-15, and the reason is structural rather than statistical, which is the strongest kind of no.**
 
-**But the two desks also differ in cache state, and nobody controlled for it.** CI starts from a fresh runner every run — cold Chromium cache, every asset fetched. This laptop carries 1.3 GB of warm cache, 936 MB of it `Cache`. So the B5 comparison was warm-against-cold as much as fast-against-slow, and `grows-as-walked.html` is precisely the fixture where load timing decides what the walk sees.
+What I claimed: B5 was downgraded to *"met on one desk, and a second desk disagrees"* — 0 result fields moved on this laptop, 4 on CI — and I proposed that the two desks differ in cache state as well as in speed, CI being cold and this laptop carrying 1.3 GB of warm cache. A guess with a mechanism, at the weight the margin hypothesis had before it died.
 
-If the cache affects repeatability, it could account for part of that disagreement without CPU speed entering into it. **That is a guess with a mechanism, at the weight the margin hypothesis had before it died** — and the instrument to settle it already exists: `scripts/b5-fixture-sweep.js`, Kenya's own, which is a tool rather than a model and carries no assumption about the answer.
+It cannot happen, and nothing about run counts was needed to see it. `bin/obsrv.js:67` creates a throwaway user-data directory per invocation (`mkdtempSync(tmpdir(), 'obsrv-cli-')`), sets `OBSRV_CLI_USER_DATA`, and deletes it on exit; `src/cli/main.ts:1530` honours it. **Every CLI run is a cold profile by construction.** The 1.3 GB this card is about is the GUI app's, and the B5 sweep never touches it. Kenya's measurement agrees: app `Cache` 936,476 KB before and after a CLI audit, mtime unchanged, zero `obsrv-cli-*` directories left behind.
 
-**What would settle it**, and the null is a real result either way:
+**And a second, independent reason, which Kenya found in his own instrument:** the B5 fixture server sends `cache-control: no-store`. Even given a persistent profile, nothing would have been cached. In Kenya's words — *"I built one of them myself without noticing."*
 
-- The fixture sweep run twice on one desk — once with the profile's cache warm, once with it cleared — and the moved-field counts compared. Same machine, same speed, one variable.
-- If the counts differ, the cache is load-bearing for B5 and a cap needs a number chosen against that rather than against disk space. It would also mean B5's desk comparison has a confound in it that should go on `ci-second-host`.
-- If they do not differ, the cache is free to bound and the 1.3 GB is a straightforward growth defect — and B5's desk disagreement stays attributed where it is.
+Both desks were cold. **B5's desk disagreement stays attributed where it is**, to speed, and `ci-second-host` needs no confound note; it never got one.
 
-Either way it is a measurement someone can finish, and it decides a fix rather than performing one.
+**What this does NOT settle, and the card's actual centre, which survives intact:** whether these caches make repeat measurements of the same page faster or more consistent. The refutation narrows that question rather than answering it — if the CLI never uses the persistent profile, the load-bearing question is about the *app*, and it cannot be answered by the B5 sweep as it stands. It needs the cache switched on deliberately.
+
+Kenya has built exactly that: `--profile` and `--cacheable`, three arms — cold, persistent-only, persistent+cacheable — five runs each. **With a vacuity check, which is the part worth copying:** if the warm profile directory does not grow, it reports that the experiment did not run, rather than reporting no effect. A persistent-profile arm that silently cached nothing would produce "no difference" and "nothing was measured" as the same output, and that is this project's recurring defect in its purest form.
+
+**The shape of my error, since it is the one the board keeps re-learning.** I reasoned about the cache from `du` output and two desks' hardware, and never asked what profile the measurement actually ran in. The answer was two lines of code away and would have killed the hypothesis before it reached a card. A difference between two environments is not a variable in your experiment until you have checked that your experiment is in those environments.
 
 **The documentation half is separable and cheap:** neither `docs/limitations.md` nor the README's *Privacy and files* section says this directory grows without limit, which a user would want to know before it is 1.3 GB. That can ship whatever the measurement finds.
 
