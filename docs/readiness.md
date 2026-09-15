@@ -135,34 +135,66 @@ rather than a cliff, which is a defence of it that did not exist that morning.
 The number that still rests on unpublished evidence is the tap-target 7 mm,
 and the page now says so instead.
 
-**B4. The noise ratio is measured, not assumed.** zalando.de answered 143
-targets with **103 under 7 mm**. If most of those are not things anyone would
-change, a first run teaches the reader to skim, and every true finding after
-that is cheaper to ignore.
-*Check:* three real sites, every finding classified *would act* / *would
-not*, the ratio published — **classified by someone who did not write the
-rules**, because the same result read two ways is the defect this list keeps
-producing: a ratio scored by the rules' author fits "the rules are good" and
-"the scorer wrote the rules" equally well, and the number cannot separate
-them. Two classifiers, their disagreement rate published beside the ratio,
-and neither of them the person who chose the thresholds. **Status: measured 2026-09-15, and
-NO RATIO IS PUBLISHED** — the two classifiers disagreed on 57% of findings
-(52% under the fairest collapse, Cohen's κ = −0.07, no better than chance).
-The protocol fixed in advance that anything above ~25% publishes no number,
-because a disagreed-upon ratio quoted alone reads as measurement and is not.
+**B4. A report's rows do not outnumber the changes it implies.** zalando.de
+answered 143 targets with **103 under 7 mm**. If most of those are not things
+anyone would change, a first run teaches the reader to skim, and every true
+finding after that is cheaper to ignore. **That concern is the criterion; the
+statistic below is only how it is caught.**
+*Check:* three real sites, and for each, two counts published side by side —
+**rows printed** and **distinct changes those rows imply**, where a distinct
+change is one edit that would clear every row following from it. A page whose
+28 rows are one styling decision seen 28 times counts as one change against
+28 rows; a page whose every row needs its own edit counts as many. Published
+per page, never averaged: the ratio differs by an order of magnitude between
+a page with a missing viewport tag and a heavy commercial page, and an
+average would be true of neither.
 
-What the disagreement says is worth more than the ratio would have been:
-agreement was **total where the page is badly broken and near zero where it is
-marginal** — 31 of 31 on a page with no viewport tag, 2 of 39 on a heavy
-commercial page. The noise ratio is a property of the page and of who is
-asked, not of the tool.
+*Why this replaced the previous check, rather than being an easier version of
+it.* B4 used to ask for every finding classified *would act* / *would not*
+and the ratio published, scored by two classifiers who did not write the
+rules. **That was measured on 2026-09-15 and cannot be satisfied.** Two
+classifiers over 79 blinded findings from three sites — one semantic, one
+deterministic and severity-only — disagreed on 57% of them, 52% under the
+fairest collapse, **Cohen's κ = −0.07: agreement no better than chance**. The
+stopping rule had been committed before the data existed, so no ratio was
+published.
 
-The question that would carry a number, and B4 should probably become it:
-**how many distinct changes a report implies against how many rows it prints.**
-On these three pages, 79 sampled findings collapsed to about 6 changes. That
-has one answer per page rather than one per rater, and it measures what the
-criterion was actually worried about — that a first run teaches the reader to
-skim. Depends on B5: a ratio measured against a moving quantity says nothing.
+The disagreement was the finding. Agreement was **total where a page is badly
+broken and near zero where it is marginal** — 31 of 31 on a page with no
+viewport tag, 2 of 39 on a heavy commercial page, where the metric says
+"under 7 mm" and a reader says "icon font ligature, conventional footer link,
+one styling decision seen 28 times". *Would a developer act on this* has a
+different answer per rater on exactly the pages the criterion was worried
+about, so it cannot carry a number. *How many changes do these rows imply*
+has one answer per page.
+
+*What guards the new measure, stated because the old one's guard is being
+dropped and dropping a guard silently is the defect this list keeps finding.*
+The two-classifier rule existed because a ratio scored by the rules' author
+fits "the rules are good" and "the scorer wrote the rules" equally well.
+Counting distinct changes is less exposed to that — collapsing rows to causes
+is closer to arithmetic than to judgement, and the grouping is checkable by a
+reader with the report in front of them — but **it is not immune, and nothing
+automatic guards it.** Two people will still group 143 rows differently at the
+margins. What the criterion requires instead is that **the grouping be
+published with the counts** — which rows were collapsed into which change —
+so a disagreeing reader can regroup them rather than having to trust the
+number. A count whose grouping is not shown does not satisfy this criterion.
+
+**Status: measured 2026-09-15, and the criterion was rewritten because of what
+the measurement found — not met, not unknown, and not a failed measurement.**
+The old check was measured soundly and the measurement showed the question was
+wrong. This list has no other word for that state; C1 reached it from a
+different direction the same week. The new check has **not** been run: the
+counts exist for three pages as a by-product of the old measurement (79 rows,
+about 6 changes) and were not collected under this check's own rules, which
+require the grouping published alongside.
+
+*This rewrite was written by the session that ran the measurement and proposed
+the replacement, on Opeyemi's decision. It should be read by someone who did
+not run b4 before it is treated as settled — that is wanted rather than
+optional.* Depends on B5: a count measured against a moving quantity says
+nothing.
 
 **B5. The same page measured twice answers the same.** Nothing on this list
 matters more and nobody has ever checked it. A user's first real use is a

@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*67 cards, 24 open, 19 of those unclaimed.*
+*67 cards, 25 open, 19 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -721,7 +721,118 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 ---
 
-## Done — 43
+## Review — 1
+
+*Finished, waiting on the maintainer to merge.*
+
+### B4 rewritten: rows printed against changes implied
+
+[`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
+
+zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
+
+ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go. Kenya asked to be routed by need and stated no preference on subject; this is the need.
+
+**Why this card is the need.** It is a readiness criterion, it is unowned, and until today it was one sentence long — nobody has started it. Its own text says *"B5 now makes this interpretable"*, and B5 became interpretable this week through Kenya's work: first the downgrade to one desk, then the structural result that every CLI run is cold by construction, which removed the confound Henry had put beside it. The card was waiting on something that has now happened.
+
+**Why Kenya, and it is not availability.** The whole card turns on the word INDEPENDENT, and the failure mode is two classifiers that agree because they share a mechanism rather than because the finding is real. Kenya found exactly that defect in its own instrument today — the B5 fixture server sends `cache-control: no-store`, a second independent block on the thing being measured, and Kenya's own words were *"I built one of them myself without noticing."* Nobody on this board has more recently paid for that lesson.
+
+**The counter-argument, stated rather than left for someone to raise.** Kenya established B5, and B4 is interpretable because of B5. That is a stake. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but it is not nothing, and if B4 comes out flattering to B5 that coincidence should be stated in the write-up rather than left for a reader to notice.
+
+**What the card actually asks.** zalando.de answered 143 findings. Nobody has established how many a developer would act on, so "143 findings" is currently a number with no denominator — it could be a thorough audit or a noisy one and the output reads identically. The ratio is the product claim.
+
+**The traps, named in advance because this card is about a measurement being meaningful:**
+
+- **Independence is the whole thing.** Two classifiers that read the same rubric, or that both
+key off Obsrv's own severity or grouping, measure Obsrv's self-consistency rather than the
+noise ratio. State what makes the two independent BEFORE running, and say how it could fail.
+- **A classifier that sees the finding's own prose is reading an argument.** Obsrv's sentences
+are written to be persuasive about why something matters — that is the product. Deciding
+"would a developer act on this" from the sentence rather than from the page tests the writing.
+- **Agreement has the two-facts shape.** High agreement fits *the findings are clearly real* and
+- both classifiers share a blind spot*. Low agreement fits *the findings are noisy* and *the
+question was ambiguous*. Decide in advance which reading each outcome gets, or the result will
+be interpreted after the fact in whichever direction is convenient.
+- **One site is one site.** zalando.de is a heavy commercial page; a noise ratio from it is not
+a noise ratio for the tool. Say what the number covers.
+
+**Pre-register the vacuity check, which is Kenya's own practice and the reason it is asked for here.** Kenya wrote down beforehand what would make the userData cache arms meaningless, and it caught both warm arms being vacuous at 4 KB and 12 KB — without it, two clean zeros would have read as "the cache does not matter" and a cap would have shipped on nothing. The equivalent here: name, before running, the result that would mean *this experiment did not measure the noise ratio*, and make the run report that rather than a number.
+
+Depends on nothing. B5's state is recorded on `readiness.md` and on `bug-userdata-unbounded`.
+
+---
+
+**CLAIMED 2026-09-15 by Kenya on Opeyemi's word. PROTOCOL PRE-REGISTERED BELOW, BEFORE ANY DATA WAS COLLECTED — this section is committed first on purpose, so the record shows the readings were fixed before the numbers existed.**
+
+**THE STAKE, STATED FIRST.** Kenya established B5, and B4's own text says it is interpretable *because* of B5. That is a stake in the outcome. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but if B4 comes out flattering to B5, the write-up says so rather than waiting for a reader to notice.
+
+**WHAT INDEPENDENCE CAN AND CANNOT MEAN HERE, before it is claimed.** The criterion asks for classifiers who did not write the rules. That part is satisfiable: neither classifier chose the 7 mm / 2 mm thresholds, which predate both. The part that is NOT satisfiable is deeper independence — both classifiers are Claude sessions and share training, so they share a mechanism. **Two raters agreeing is therefore weak evidence for a finding being real and strong evidence only that the two agree.** This will be published as a limit beside the number, not discovered afterwards.
+
+**BLINDING.** Neither classifier sees Obsrv's warning sentences, group summaries, or any of its prose. Each sees only page facts from the finding: `kind`, the element's selector, its text content, its rect, and the measured millimetres. A classifier reading the tool's own sentence would be grading Obsrv's persuasiveness rather than the page, which is the second trap this card names.
+
+**SITES:** three, for variety rather than convenience — zalando.de (heavy commercial, the card's own example), bbc.com/news (content, ads, rotation), berkshirehathaway.com (plain HTML, no ads, B5's static control). Preset `android-65`, because tap-target millimetres are a phone question.
+
+**SAMPLE:** up to 40 findings per site, drawn deterministically (fixed stride over the full list, seed recorded), because hand-classifying every finding on three sites is not the experiment and a stated sample beats an unstated one. The sampling rule is fixed here so it cannot be adjusted after seeing results.
+
+**LABELS:** `would-act` / `would-not-act` / `unclear`, one per finding, per classifier, independently.
+
+**THE READINGS, FIXED NOW because agreement has the two-facts shape in BOTH directions:**
+
+- **High agreement, high would-act** → the findings are mostly actionable. Published WITH the shared-mechanism caveat, because this is the outcome the caveat most threatens.
+- **High agreement, low would-act** → the tool is noisy at these thresholds, and the ratio is the finding. This is the outcome that most flatters nobody and is therefore the easiest to trust.
+- **Low agreement (say a disagreement rate above ~25%)** → "would a developer act on this" is not well enough defined to publish a ratio at all, and the honest result is that the criterion needs a sharper question rather than a number. **In that case no ratio is published as if it were stable** — a disagreed-upon ratio quoted alone is exactly the kind of figure that reads as measurement and is not.
+
+**ONE SITE IS ONE SITE.** 143 findings from zalando.de is a heavy commercial page, not the tool. Three sites is three sites. Whatever comes out is a statement about these pages at this preset, and the write-up will say that in those words.
+
+---
+
+**RESULT 2026-09-15, Kenya. Branch `docs/b4-noise-ratio`. NO RATIO IS PUBLISHED, which is the outcome the protocol fixed in advance for this case — see `b42baca`, committed before any data existed.**
+
+**The disagreement rate is 57%, and 52% under the fairest collapse. Cohen's κ = −0.07: agreement no better than chance.** The pre-registered rule was that anything above ~25% publishes no ratio, because a disagreed-upon ratio quoted alone reads as measurement and is not. It is not published.
+
+A / B                        n     would-act / would-act       34     would-not-act / would-act   33     would-act / unclear          7     would-not-act / unclear      4     unclear / would-act          1
+
+per site   zalando 2/39 (5%)   bbc 1/9 (11%)   berkshire 31/31 (100%)
+
+**WHAT THE DISAGREEMENT IS ABOUT, which is worth more than the ratio would have been.** Agreement is total where the page is badly broken and near zero where it is marginal. berkshirehathaway.com has no viewport meta tag, is drawn at 0.37x, and every text element lands near 1 mm — both raters say act on all 31. zalando.de is under the thresholds by modest margins, and there the metric rater says "under 7 mm, act" while the semantic rater says "that is an icon font's ligature name (`star_filled`), a conventional footer link, or one styling decision seen 28 times".
+
+So **the noise ratio is not a property of the tool. It is a property of the page, and of who is asked.** On an obviously broken page the question has one answer; on a heavy commercial page it has as many answers as there are raters.
+
+**A DEFECT IN THIS EXPERIMENT'S OWN DESIGN, reported rather than left in the number.** Classifier B is severity-only and therefore *cannot express* `would-not-act` — every sampled finding is under threshold by construction, so its label space is act/unclear. A's 37 would-not-acts can never be matched, which inflates the 57%. The binary collapse above (B's unclear counted as not-act) is the fairer figure at 52%, and κ is computed on that. The direction of the finding survives both framings; the headline rate does not, and should not be quoted alone.
+
+**CONTAMINATION, DECLARED:** B's rules were written after their author had seen the sample and A's labels. The mitigation is that they touch only numbers — no text semantics, no element-role reasoning — so the only channel from A to B is the cutoff, and the cutoff is a fraction of thresholds that predate both.
+
+**THE STAKE, AS PROMISED IN THE PROTOCOL:** Kenya established B5, and B4 leans on B5. This result does not flatter B5 — it does not bear on it either way — so the stake did not have to be discounted. Saying so because the protocol said it would be said whichever way it came out.
+
+**POST-HOC, AND NOT PART OF THE PRE-REGISTERED PROTOCOL — findings can be true AND redundant.** Berkshire's 31 all follow from one missing viewport tag; zalando's 28 brand links are one styling decision. A's 41 would-act findings collapse to about **6 distinct changes** (zalando 2, bbc 3, berkshire 1). A reader who acts on a report acts on causes, not on rows.
+
+**WHAT B4 SHOULD ASK INSTEAD, since "would a developer act on this finding" has now been shown not to carry a number:** how many DISTINCT CHANGES a report implies, against how many rows it prints. That question has one answer per page rather than one per rater — 79 rows, ~6 changes, on these three pages — and it measures the thing the criterion was worried about: that a first run teaches the reader to skim.
+
+**METHOD:** `obsrv audit --preset android-65` on three sites; up to 40 findings per site by fixed stride over the full list (zalando 78 findings stride 2, bbc 9 stride 1, berkshire 31 stride 1) = 79 sampled. Blinded records: kind, selector, text, rect, millimetres. No Obsrv prose in front of either rater. Raw labels and both rubrics are in the branch's scratch files and the numbers above are reproducible from `/tmp/b4-*.json` with the sampler in the commit.
+
+**ONE SITE IS ONE SITE, AND THREE IS THREE.** This is a statement about these pages at this preset.
+
+MERGED 2026-09-15 on Opeyemi's word, `933ccb7` (PR #8). Column moved to done here rather than in the merge commit — the merge landed the content and left the card in Review, which is the convention this board keeps and I missed. Kenya was told rather than left to find a merged card sitting in Review and wonder what had gone wrong.
+
+**The column went back to `review` here, deliberately.** The measurement merged at `933ccb7` and was rightly `done`; the criterion rewrite below has not merged, so the card again carries unmerged work. A `done` card holding an unmerged section would be the same defect the board keeps finding — a state that is true of one half and read as true of the whole.
+
+---
+
+**CRITERION REWRITTEN 2026-09-15, on Opeyemi's decision given in Kenya's own session.** `docs/readiness.md`'s B4 block is replaced: *A report's rows do not outnumber the changes it implies.* Three sites, two counts per site published side by side — rows printed, and distinct changes those rows imply — **per page, never averaged**, because the ratio differs by an order of magnitude between a page with a missing viewport tag and a heavy commercial page.
+
+**THE CONCERN IS THE CRITERION; THE STATISTIC IS ONLY HOW IT IS CAUGHT.** That is stated in the rewrite rather than left to be inferred. B4 exists because 143 targets with 103 under 7 mm teaches a reader to skim, and every true finding after that is cheaper to ignore. A replacement measure that could not catch that would be a different criterion wearing B4's number.
+
+**THE OLD CHECK'S GUARD IS BEING DROPPED AND THE REWRITE SAYS SO.** Two classifiers existed because a ratio scored by the rules' author fits "the rules are good" and "the scorer wrote the rules" equally well. Counting distinct changes is less exposed — collapsing rows to causes is closer to arithmetic than judgement — **but it is not immune and nothing automatic guards it.** So the criterion now requires the GROUPING be published with the counts: which rows collapsed into which change. A count whose grouping is not shown does not satisfy it. That is a weaker guard than a second rater and it is named as such rather than quietly omitted.
+
+**A THIRD STATUS, because neither "met" nor "unknown" is true.** The old check was measured soundly and the measurement showed the question was wrong. The register has no word for that. C1 reached the same state from a different direction this week — a criterion whose problem was its own wording rather than the product — which suggests the register needs the word rather than that these two were unlucky.
+
+**AND THE NEW CHECK HAS NOT BEEN RUN.** The 79 rows / ~6 changes figure is a by-product of the OLD measurement and was not collected under the new rules, which require the grouping published alongside. Recorded as not-yet-measured rather than allowed to read as a first result, because a number produced under one protocol and quoted under another is exactly the kind of figure this card spent the day refusing to publish.
+
+**THE ASYMMETRY, ON THE CARD SO THE NEXT READER KNOWS IT IS WANTED RATHER THAN OPTIONAL.** The substitute measure is Kenya's, from Kenya's result, and Kenya wrote the criterion that blesses it. Opeyemi decided the substance, so the judgement is his and this is execution — but wording carries choices. **This rewrite should be read by someone who did not run b4 before it is treated as settled.**
+
+---
+
+## Done — 42
 
 *Merged.*
 
@@ -1396,95 +1507,6 @@ Second time tonight a card merged while sitting in Review; `b4` was the first. T
 [`b3`](../board/b3.md) · **B3** · readiness · owner: obsrv-a6
 
 docs/thresholds.md — seven judged numbers, each answering what it derives from / was calibrated against / would move it, sorted into standard-borrowed, calibrated, reasoned-only, and definitional. Linked from README, limitations, audit.md, lint.md. Merged 1e1594a.
-
-### Measure the noise ratio with two independent classifiers
-
-[`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
-
-zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
-
-ROUTED TO KENYA 2026-09-15, pending Opeyemi's word in Kenya's own session. Left in Next until he says go. Kenya asked to be routed by need and stated no preference on subject; this is the need.
-
-**Why this card is the need.** It is a readiness criterion, it is unowned, and until today it was one sentence long — nobody has started it. Its own text says *"B5 now makes this interpretable"*, and B5 became interpretable this week through Kenya's work: first the downgrade to one desk, then the structural result that every CLI run is cold by construction, which removed the confound Henry had put beside it. The card was waiting on something that has now happened.
-
-**Why Kenya, and it is not availability.** The whole card turns on the word INDEPENDENT, and the failure mode is two classifiers that agree because they share a mechanism rather than because the finding is real. Kenya found exactly that defect in its own instrument today — the B5 fixture server sends `cache-control: no-store`, a second independent block on the thing being measured, and Kenya's own words were *"I built one of them myself without noticing."* Nobody on this board has more recently paid for that lesson.
-
-**The counter-argument, stated rather than left for someone to raise.** Kenya established B5, and B4 is interpretable because of B5. That is a stake. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but it is not nothing, and if B4 comes out flattering to B5 that coincidence should be stated in the write-up rather than left for a reader to notice.
-
-**What the card actually asks.** zalando.de answered 143 findings. Nobody has established how many a developer would act on, so "143 findings" is currently a number with no denominator — it could be a thorough audit or a noisy one and the output reads identically. The ratio is the product claim.
-
-**The traps, named in advance because this card is about a measurement being meaningful:**
-
-- **Independence is the whole thing.** Two classifiers that read the same rubric, or that both
-key off Obsrv's own severity or grouping, measure Obsrv's self-consistency rather than the
-noise ratio. State what makes the two independent BEFORE running, and say how it could fail.
-- **A classifier that sees the finding's own prose is reading an argument.** Obsrv's sentences
-are written to be persuasive about why something matters — that is the product. Deciding
-"would a developer act on this" from the sentence rather than from the page tests the writing.
-- **Agreement has the two-facts shape.** High agreement fits *the findings are clearly real* and
-- both classifiers share a blind spot*. Low agreement fits *the findings are noisy* and *the
-question was ambiguous*. Decide in advance which reading each outcome gets, or the result will
-be interpreted after the fact in whichever direction is convenient.
-- **One site is one site.** zalando.de is a heavy commercial page; a noise ratio from it is not
-a noise ratio for the tool. Say what the number covers.
-
-**Pre-register the vacuity check, which is Kenya's own practice and the reason it is asked for here.** Kenya wrote down beforehand what would make the userData cache arms meaningless, and it caught both warm arms being vacuous at 4 KB and 12 KB — without it, two clean zeros would have read as "the cache does not matter" and a cap would have shipped on nothing. The equivalent here: name, before running, the result that would mean *this experiment did not measure the noise ratio*, and make the run report that rather than a number.
-
-Depends on nothing. B5's state is recorded on `readiness.md` and on `bug-userdata-unbounded`.
-
----
-
-**CLAIMED 2026-09-15 by Kenya on Opeyemi's word. PROTOCOL PRE-REGISTERED BELOW, BEFORE ANY DATA WAS COLLECTED — this section is committed first on purpose, so the record shows the readings were fixed before the numbers existed.**
-
-**THE STAKE, STATED FIRST.** Kenya established B5, and B4's own text says it is interpretable *because* of B5. That is a stake in the outcome. It is weaker than the one that kept `c2-retroactive` away from Henry — B4 measures a different quantity and does not mark B5's homework — but if B4 comes out flattering to B5, the write-up says so rather than waiting for a reader to notice.
-
-**WHAT INDEPENDENCE CAN AND CANNOT MEAN HERE, before it is claimed.** The criterion asks for classifiers who did not write the rules. That part is satisfiable: neither classifier chose the 7 mm / 2 mm thresholds, which predate both. The part that is NOT satisfiable is deeper independence — both classifiers are Claude sessions and share training, so they share a mechanism. **Two raters agreeing is therefore weak evidence for a finding being real and strong evidence only that the two agree.** This will be published as a limit beside the number, not discovered afterwards.
-
-**BLINDING.** Neither classifier sees Obsrv's warning sentences, group summaries, or any of its prose. Each sees only page facts from the finding: `kind`, the element's selector, its text content, its rect, and the measured millimetres. A classifier reading the tool's own sentence would be grading Obsrv's persuasiveness rather than the page, which is the second trap this card names.
-
-**SITES:** three, for variety rather than convenience — zalando.de (heavy commercial, the card's own example), bbc.com/news (content, ads, rotation), berkshirehathaway.com (plain HTML, no ads, B5's static control). Preset `android-65`, because tap-target millimetres are a phone question.
-
-**SAMPLE:** up to 40 findings per site, drawn deterministically (fixed stride over the full list, seed recorded), because hand-classifying every finding on three sites is not the experiment and a stated sample beats an unstated one. The sampling rule is fixed here so it cannot be adjusted after seeing results.
-
-**LABELS:** `would-act` / `would-not-act` / `unclear`, one per finding, per classifier, independently.
-
-**THE READINGS, FIXED NOW because agreement has the two-facts shape in BOTH directions:**
-
-- **High agreement, high would-act** → the findings are mostly actionable. Published WITH the shared-mechanism caveat, because this is the outcome the caveat most threatens.
-- **High agreement, low would-act** → the tool is noisy at these thresholds, and the ratio is the finding. This is the outcome that most flatters nobody and is therefore the easiest to trust.
-- **Low agreement (say a disagreement rate above ~25%)** → "would a developer act on this" is not well enough defined to publish a ratio at all, and the honest result is that the criterion needs a sharper question rather than a number. **In that case no ratio is published as if it were stable** — a disagreed-upon ratio quoted alone is exactly the kind of figure that reads as measurement and is not.
-
-**ONE SITE IS ONE SITE.** 143 findings from zalando.de is a heavy commercial page, not the tool. Three sites is three sites. Whatever comes out is a statement about these pages at this preset, and the write-up will say that in those words.
-
----
-
-**RESULT 2026-09-15, Kenya. Branch `docs/b4-noise-ratio`. NO RATIO IS PUBLISHED, which is the outcome the protocol fixed in advance for this case — see `b42baca`, committed before any data existed.**
-
-**The disagreement rate is 57%, and 52% under the fairest collapse. Cohen's κ = −0.07: agreement no better than chance.** The pre-registered rule was that anything above ~25% publishes no ratio, because a disagreed-upon ratio quoted alone reads as measurement and is not. It is not published.
-
-A / B                        n     would-act / would-act       34     would-not-act / would-act   33     would-act / unclear          7     would-not-act / unclear      4     unclear / would-act          1
-
-per site   zalando 2/39 (5%)   bbc 1/9 (11%)   berkshire 31/31 (100%)
-
-**WHAT THE DISAGREEMENT IS ABOUT, which is worth more than the ratio would have been.** Agreement is total where the page is badly broken and near zero where it is marginal. berkshirehathaway.com has no viewport meta tag, is drawn at 0.37x, and every text element lands near 1 mm — both raters say act on all 31. zalando.de is under the thresholds by modest margins, and there the metric rater says "under 7 mm, act" while the semantic rater says "that is an icon font's ligature name (`star_filled`), a conventional footer link, or one styling decision seen 28 times".
-
-So **the noise ratio is not a property of the tool. It is a property of the page, and of who is asked.** On an obviously broken page the question has one answer; on a heavy commercial page it has as many answers as there are raters.
-
-**A DEFECT IN THIS EXPERIMENT'S OWN DESIGN, reported rather than left in the number.** Classifier B is severity-only and therefore *cannot express* `would-not-act` — every sampled finding is under threshold by construction, so its label space is act/unclear. A's 37 would-not-acts can never be matched, which inflates the 57%. The binary collapse above (B's unclear counted as not-act) is the fairer figure at 52%, and κ is computed on that. The direction of the finding survives both framings; the headline rate does not, and should not be quoted alone.
-
-**CONTAMINATION, DECLARED:** B's rules were written after their author had seen the sample and A's labels. The mitigation is that they touch only numbers — no text semantics, no element-role reasoning — so the only channel from A to B is the cutoff, and the cutoff is a fraction of thresholds that predate both.
-
-**THE STAKE, AS PROMISED IN THE PROTOCOL:** Kenya established B5, and B4 leans on B5. This result does not flatter B5 — it does not bear on it either way — so the stake did not have to be discounted. Saying so because the protocol said it would be said whichever way it came out.
-
-**POST-HOC, AND NOT PART OF THE PRE-REGISTERED PROTOCOL — findings can be true AND redundant.** Berkshire's 31 all follow from one missing viewport tag; zalando's 28 brand links are one styling decision. A's 41 would-act findings collapse to about **6 distinct changes** (zalando 2, bbc 3, berkshire 1). A reader who acts on a report acts on causes, not on rows.
-
-**WHAT B4 SHOULD ASK INSTEAD, since "would a developer act on this finding" has now been shown not to carry a number:** how many DISTINCT CHANGES a report implies, against how many rows it prints. That question has one answer per page rather than one per rater — 79 rows, ~6 changes, on these three pages — and it measures the thing the criterion was worried about: that a first run teaches the reader to skim.
-
-**METHOD:** `obsrv audit --preset android-65` on three sites; up to 40 findings per site by fixed stride over the full list (zalando 78 findings stride 2, bbc 9 stride 1, berkshire 31 stride 1) = 79 sampled. Blinded records: kind, selector, text, rect, millimetres. No Obsrv prose in front of either rater. Raw labels and both rubrics are in the branch's scratch files and the numbers above are reproducible from `/tmp/b4-*.json` with the sampler in the commit.
-
-**ONE SITE IS ONE SITE, AND THREE IS THREE.** This is a statement about these pages at this preset.
-
-MERGED 2026-09-15 on Opeyemi's word, `933ccb7` (PR #8). Column moved to done here rather than in the merge commit — the merge landed the content and left the card in Review, which is the convention this board keeps and I missed. Kenya was told rather than left to find a merged card sitting in Review and wonder what had gone wrong.
 
 ### A live run that turns up nothing user-visible
 
@@ -2425,4 +2447,4 @@ A record kept where nobody reads it, on the card about a check that runs where n
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 6 readiness, 14 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 7 readiness, 14 bugs, 4 chores, among the open cards.*
