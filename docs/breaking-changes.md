@@ -136,6 +136,43 @@ declared, and the restart note above covers them too.
 
 ---
 
+## 0.56.0 – 0.58.0, and 0.60.0 — checked, and nothing found to name
+
+Applied retroactively 2026-09-15 under [`compatibility.md`](compatibility.md);
+working in [`docs/research/2026-09-15-c2-retroactive.md`](research/2026-09-15-c2-retroactive.md),
+with the decision rules written down before any diff was read.
+
+**This entry exists because "checked and clean" and "never checked" are
+different facts and an absent entry does not distinguish them.** Four of these
+five releases were silent here until today, and the silence said nothing about
+which they were.
+
+What was verified per release, not argued: the CLI's stdout key set (asserted
+exactly by the suite, unchanged at nine keys), the top level of every MCP
+output shape (unchanged), the control server's command list (unchanged, thirty),
+and the CLI's exit codes (unchanged). What shipped in those releases was
+sentences, a page's HTTP status reaching the answer, and one threshold gaining a
+companion count in 0.58.0 — all of which the policy permits in a minor without
+an entry.
+
+**Two limits of that check, stated because they bound what this entry claims.**
+Whether a field was added *deeper* than the top level of a schema is
+**unchecked**: the instrument written for it produced the same answer at every
+release including one with a known change, so it was discarded rather than
+believed. And a command's *behaviour* changing while its name and reply shape
+stay put is not visible to any of these checks — the same blindness that makes
+a meaning change "the worst of them" in the policy.
+
+**And the policy is younger than the releases it was applied to.**
+`compatibility.md` was written 2026-09-15, `breaking-changes.md` and
+`thresholds.md` on 2026-09-14; none existed at 0.60.0. So the rule about a
+documented threshold moving with `thresholds.md` could not be broken by 0.58.0,
+and the requirement to announce in the release notes cannot be met backwards at
+all. Retroactive application produces a record, not an announcement. The
+research page says what that implies for the policy text.
+
+---
+
 ## 0.59.0 — `url` means the address you asked for
 
 `url` meant two different things depending on which surface answered: the

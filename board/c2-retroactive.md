@@ -1,6 +1,6 @@
 ---
 title: "Apply the breaking-changes policy to the last five releases"
-column: doing
+column: review
 kind: readiness
 owner: "Rook"
 criterion: C2
@@ -97,3 +97,21 @@ All three are the same defect family this board keeps finding, aimed at this tas
 **And the honest possible outcome:** finding nothing in a release is a result, and so is finding that the policy cannot decide a case. The second is more valuable — it means the policy has a hole, and a policy written this week has not been tested against anything except the week it was written in.
 
 What C2's check actually asks and the register does not yet satisfy: read 0.56.0 through 0.60.0 for anything that broke a caller and add it to docs/breaking-changes.md. Cheap per release — the notes exist on GitHub — but it needs reading the diffs too, since the releases that named a change are exactly the ones least likely to have missed one. Depended on C1 — ~~the policy defining what counts has not been written~~, and applying an unwritten policy retroactively is how a register becomes a matter of taste. **C1 shipped 2026-09-15 (`ac67e8b`, `docs/compatibility.md`) and this dependency is discharged.** Struck rather than deleted: the objection is why the card waited, and it is the standard the finished work is judged against.
+
+INTO REVIEW 2026-09-15, branch `docs/c2-retroactive`. Write-up: docs/research/2026-09-15-c2-retroactive.md; the decision rules, written before any diff was read, are kept beside it at docs/research/2026-09-15-c2-rules-preregistered.md.
+
+**NO BREAKING CHANGES FOUND IN 0.56.0-0.58.0 OR 0.60.0, AND THE POLICY HAS A HOLE THAT IS WORTH MORE THAN THE ENTRIES WOULD HAVE BEEN** — which is the outcome Henry said to feel free to reach.
+
+VERIFIED RATHER THAN ARGUED, per release: the CLI stdout key set (the suite asserts it exactly — unchanged at nine keys, `url` arriving in 0.61.0 which is already documented); the top level of every MCP output shape (unchanged); CONTROL_COMMANDS (unchanged, thirty); the CLI's exit codes (unchanged). And `additionalProperties: false` was confirmed ON THE WIRE by asking the built MCP server, because the schemas are zod shapes converted by the SDK and the string appears nowhere in src/ — everything else in the policy rests on that being true.
+
+THE HOLE: the policy is younger than every release it was applied to. compatibility.md was written 2026-09-15, breaking-changes.md and thresholds.md on 2026-09-14, and NONE of the three existed at 0.60.0. So T1 (a documented threshold moving without thresholds.md moving with it) cannot be violated by 0.58.0 — there was no thresholds.md — and the requirement that the release notes announce a break cannot be met backwards at all. Retroactive application produces a RECORD, not an ANNOUNCEMENT, and the policy text does not say which of those it is asking for.
+
+TWO OF MY FOUR INSTRUMENTS WERE VACUOUS, and only a control caught either. The shape parser's first version missed the known presetId/profileId removal and invented two others; rewritten, it finds it, and an independent awk count agrees. The NESTED-field check returned 92 names at every tag including one with a known change — saturated and insensitive — so whether a field was added deeper than a shape's top level is UNCHECKED and is reported as unchecked rather than clean. That is the largest gap in this pass and the write-up says how to close it.
+
+MY FIRST CONTROL WAS ALSO WRONG: I expected 0.61.0's documented `url` addition to appear in the MCP shapes. It is on the CLI stdout surface. Same field name, different contract — the confusion the policy's four-surface section exists to prevent, arriving in the person applying it.
+
+THE CASE THAT LOOKED STRONGEST WENT THE OTHER WAY. 0.57.0's "the answer names the page it measured" reads like url's meaning changing two releases before it was documented as changing. Its own commit message settles it: "`url` still means the address that was asked for ... the MCP output schemas are additionalProperties: false, so where the figures came from is said in a note rather than by changing a field." The author was already applying the constraint the policy later wrote down.
+
+THE REGISTER GAINS ONE ENTRY, and it records a check rather than a change: "checked and clean" and "never checked" are different facts and an absent entry does not distinguish them. It states its own two limits (the nested gap, and behaviour changes invisible to a name list) rather than implying a completeness it does not have.
+
+FOR THE POLICY, three things the write-up asks for: decide A2 (is a new MCP tool breaking, given the reasoning that makes an added field breaking does not obviously carry) and A4 (a new enum value on the CLI rather than MCP), and say in compatibility.md what retroactive application means, since this is the first time it was tried and will not be the last.
