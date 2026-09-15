@@ -1,10 +1,23 @@
 ---
 title: "The contrast figure disagrees with the colours printed beside it"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 4
 ---
+
+MERGED 2026-09-15 on Opeyemi's word. typecheck 0, 1171/1171, board:check and reds:check green.
+
+**Exercised through the CLI against the fix's own fixture rather than only through its tests:**
+
+    #c7  opacity 0.62     color #ffffff   colorPainted #a3a3a3   asIs 7.72
+         note: "the page states #ffffff and the screen shows #a3a3a3: an opacity of
+                0.62 composites it onto the background, and the contrast figures are
+                of what is shown"
+    #c1  opaque           19.59, unchanged, no note
+    #c2  opaque           19.56, unchanged, no note
+
+**One detail found while checking the arithmetic, benign and worth knowing.** The ratio is computed from the EXACT composite and the colour is printed rounded to 8-bit hex: white at 0.62 over `#0c0c0c` composites to 162.66, which gives 7.72, and prints as `#a3a3a3`, which recomputes to 7.75. So anyone verifying the tool by recomputing from the printed hex gets a small mismatch that is rounding rather than a defect — a 0.03 residue of the same shape this card was about, on the correct side of it. The number is more precise than the colour beside it, which is the right direction.
 
 ASSIGNED TO ROOK 2026-09-15 on Opeyemi's word — **and deliberately against Rook's own recommendation**, which was that a session arriving at `inspectReadout.ts` cold is worth more than the finder's two hypotheses. That argument was good and Opeyemi chose otherwise; it is not being ignored, it is being overruled by the person whose call it is. The cold-reader argument has been honoured twice this week (`bug-sync138`, and this card's own filing), so it is a judgement about this card rather than a rejection of the principle.
 
