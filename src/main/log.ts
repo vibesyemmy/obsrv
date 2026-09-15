@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import { openLogFile, type LogFile, type LogLevel } from '../shared/logFile'
+import { openLogFile, writerTag, type LogFile, type LogLevel } from '../shared/logFile'
 
 /**
  * The app log: `~/Library/Logs/Obsrv/obsrv.log` on macOS, where Console.app's
@@ -19,7 +19,17 @@ let file: LogFile | null = null
 /** Opens the log. Called once, before `ready`, so boot itself is on record. */
 export function initLog(): string {
   if (process.env.OBSRV_TEST === '1') app.setAppLogsPath(join(app.getPath('userData'), 'logs'))
-  file = openLogFile(join(app.getPath('logs'), 'obsrv.log'))
+  // Every line says which Obsrv wrote it. `--user-data-dir` moves the profile
+  // and not the log, so a dev lane and the installed app share this file and
+  // nothing in a line used to separate them — see `writerTag`, and
+  // board/bug-log-attribution.md for why moving the lane's logs was not the fix.
+  const writer = writerTag({
+    userData: app.getPath('userData'),
+    pid: process.pid,
+    packaged: app.isPackaged,
+    env: process.env,
+  })
+  file = openLogFile(join(app.getPath('logs'), 'obsrv.log'), undefined, writer)
   return file.path
 }
 
