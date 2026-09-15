@@ -48,6 +48,16 @@ learned the hard way and written down:
 
 [`flake-sync-165`](../board/flake-sync-165.md) · bug · *unclaimed*
 
+**THE PREMISE BELOW IS WRONG AND HENRY WROTE IT.** The card was reshaped from a reproduction hunt into a margin measurement on the grounds that it *"failed once and six consecutive runs were clean"*, so hunting it could honestly end with nothing.
+
+**It is not rare. `sync.spec.ts:165` appears in five of main's ten CI failures** — four outside the two environmental runs. The six clean runs were on this laptop; CI is a three-core VM roughly four times slower. That is `ci-second-host`'s thesis, and Henry failed to apply it to a card written an hour after correcting the identical error elsewhere.
+
+The margin measurement is still the right instrument and is now better founded: there is a desk where the margin is visibly insufficient and one where it is comfortable, so it is a COMPARISON rather than a single number. `LOOP_WINDOW_MS = 3_000` against a machine four times slower is a hypothesis with a shape and is testable rather than speculative. The failing side is available without waiting for luck — a CI run, or local load enough to stretch the handover past three seconds.
+
+And `sync-mirror-mark.spec.ts:41` — the file obsrv-a6 created to fix this by splitting the test out — fails on CI too. The split moved the problem. Whatever this card finds, "give it its own file" is not the remedy.
+
+It is second in frequency rather than first: `live-drive:963`/`:1015` is eight of ten. See `bug-ci-main-red-37pct`.
+
 QUEUED FOR ROOK 2026-09-14 on Opeyemi's word, behind `chore-guard`. Not started.
 
 **RESHAPED FROM A HUNT INTO A MEASUREMENT, because a hunt for this can honestly end with nothing.** It failed once and six consecutive runs were clean afterwards. "Reproduce it" is a done-condition that may never be reachable, and chasing it would burn a session to report an absence — which this project has spent the day learning not to read as evidence.
@@ -416,6 +426,22 @@ Related: `ci-second-host` is the card about exactly this question and Kenya has 
 
 [`bug-pr-checks-absent`](../board/bug-pr-checks-absent.md) · bug · *unclaimed*
 
+**THE SENTENCE THAT NAMES THE BUG, Kenya's, and it replaces the framing below.** Not *"a conflicting PR runs nothing"* — that describes a mechanism. What a reviewer experiences is:
+
+> **The PR's CI state silently expires, without anyone touching the PR, and no event says the checks went away.**
+
+A green check from ten minutes ago and no check at all look identical in `gh pr checks` output to anyone not reading an absence. Nothing fires, nothing is marked, and the PR page does not say it used to know something. That is this project's oldest defect — a silence that fits two facts — arriving in the review surface.
+
+Kenya watched it happen three times on PR #1 without touching the branch.
+
+**WHAT CAUSES IT, narrowed — and the narrow version is the useful one.** Kenya first reported that main moving to `43409d6` (a readiness-only commit) had conflicted its branch, and concluded that any commit at all is enough. Checked, and it is not:
+
+43409d6   docs/readiness.md only          NOT in the PR — cannot conflict it     178d36c   docs/board.md, docs/board.html  both in the PR — this is what did it
+
+`43409d6` was merely where main's HEAD sat when Kenya looked, which is a different thing from what moved underneath it. Kenya re-checked and agreed, noting it had been wrong *in the direction that made the bug look worse than it is*.
+
+**So only commits touching the generated board files conflict a board-touching branch, and pausing card edits is a REAL mitigation rather than a futile one.** Henry's pause worked; it simply arrived one commit late, `178d36c` having already been pushed when he decided to stop. That matters because the wider version implies nothing helps, and would have argued for abandoning the generated files — which is the wrong turn named at the bottom of this card.
+
 Found by Kenya 2026-09-14 on PR #1, the first pull request this repository has ever had. Cause identified by Henry; **the positive half is not yet observed** — see the test below.
 
 **THE OBSERVATION**, Kenya's, checked rather than inferred:
@@ -463,6 +489,18 @@ Related: `chore-guard` is the card about a green that means nothing. This is an 
 ### CI on main fails about one run in three, from at least three different tests
 
 [`bug-ci-main-red-37pct`](../board/bug-ci-main-red-37pct.md) · **B5** · bug · *unclaimed*
+
+**ALL TEN NOW CLASSIFIED, which the card asked for.** Counts over every red run, not a sample:
+
+live-drive:963     8 of 10        live-drive:1015   8 of 10   — the same eight, always together     sync.spec:165      5              sync.spec:138     2         — 7 for sync.spec as a file     devtools:92  2   devtools:116  2   sync-mirror-mark:41  2   stall  2   panes  2     cli-walk:173, cli-snap-tiled:65, select:54, tabs:266, throttle-live:55, text-scale:251   1 each
+
+**`live-drive:963` and `:1015` are one fault, not two** — Rook's observation, and it holds eight for eight. They never appear apart. Counting them separately makes live-drive read as twice as noisy as it is, and it is already the dominant failure in the suite by a distance: eight of ten reds against sync:165's five.
+
+Henry got this wrong twice before it was right. First by sampling only the first failing test in three of the ten runs and presenting those rows beside seven complete ones, which understated live-drive by three. Then, before that, by a grep that matched the first test in the log rather than the failing one and returned `browser-identity.spec.ts:41` for all seven runs — every row identical was the tell, and it is the same grep trap this project wrote down six hours earlier.
+
+**TWO RUNS ARE A DIFFERENT CLASS.** `735f60f` (six specs) and `b89ec67` (seven) had unrelated specs failing at once — not six independent flakes, one environmental failure taking the run with it. Both contain `devtools:116` and `sync-mirror-mark:41`, which is a shared signature worth chasing. Excluding those two runs makes live-drive MORE dominant, not less: seven of eight, while sync:165 drops to four.
+
+**`sync-mirror-mark.spec.ts:41` fails in both of them**, and that is the file created to fix the sync coupling by splitting a test into its own file. The split moved the problem rather than removing it — so "put it in its own file" is not the remedy for whatever `flake-sync-165` finds.
 
 **Measured 2026-09-14 ~21:50, and it supersedes the single-test framing on `bug-resizing-test-flaky-ci`.** Henry reported "main is red" about one flaky test. It is not one test and it is not occasional.
 

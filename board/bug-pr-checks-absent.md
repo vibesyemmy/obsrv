@@ -5,6 +5,23 @@ kind: bug
 order: 36
 ---
 
+**THE SENTENCE THAT NAMES THE BUG, Kenya's, and it replaces the framing below.** Not *"a conflicting PR runs nothing"* — that describes a mechanism. What a reviewer experiences is:
+
+> **The PR's CI state silently expires, without anyone touching the PR, and no event says the checks went away.**
+
+A green check from ten minutes ago and no check at all look identical in `gh pr checks` output to anyone not reading an absence. Nothing fires, nothing is marked, and the PR page does not say it used to know something. That is this project's oldest defect — a silence that fits two facts — arriving in the review surface.
+
+Kenya watched it happen three times on PR #1 without touching the branch.
+
+**WHAT CAUSES IT, narrowed — and the narrow version is the useful one.** Kenya first reported that main moving to `43409d6` (a readiness-only commit) had conflicted its branch, and concluded that any commit at all is enough. Checked, and it is not:
+
+    43409d6   docs/readiness.md only          NOT in the PR — cannot conflict it
+    178d36c   docs/board.md, docs/board.html  both in the PR — this is what did it
+
+`43409d6` was merely where main's HEAD sat when Kenya looked, which is a different thing from what moved underneath it. Kenya re-checked and agreed, noting it had been wrong *in the direction that made the bug look worse than it is*.
+
+**So only commits touching the generated board files conflict a board-touching branch, and pausing card edits is a REAL mitigation rather than a futile one.** Henry's pause worked; it simply arrived one commit late, `178d36c` having already been pushed when he decided to stop. That matters because the wider version implies nothing helps, and would have argued for abandoning the generated files — which is the wrong turn named at the bottom of this card.
+
 Found by Kenya 2026-09-14 on PR #1, the first pull request this repository has ever had. Cause identified by Henry; **the positive half is not yet observed** — see the test below.
 
 **THE OBSERVATION**, Kenya's, checked rather than inferred:
