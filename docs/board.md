@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*58 cards, 24 open, 18 of those unclaimed.*
+*58 cards, 24 open, 17 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -387,7 +387,17 @@ Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the m
 
 ### The e2e suite still vanishes on a conflicting PR, and its absence is silent
 
-[`bug-suite-absent-on-conflict`](../board/bug-suite-absent-on-conflict.md) · bug · *unclaimed*
+[`bug-suite-absent-on-conflict`](../board/bug-suite-absent-on-conflict.md) · bug · owner: Rook
+
+ASSIGNED TO ROOK 2026-09-15 on Opeyemi's word. **Left in Next rather than Doing because Rook also holds `b1`, and the sequencing is Rook's to decide — it knows whether the live run has started and Henry does not.** Move it to Doing when it starts.
+
+If they are taken in an order, Henry's view is that this one goes first and `b1` after: `b1` is a long run that produces cards, this is a decision that affects everyone's workflow tonight — every pull request anyone opens hits it. But if the live run is already underway, interrupting it to design a workflow change is worse than finishing it.
+
+**Two things to read before designing, both of which arrived after the card was written and both of which change it.**
+
+**The framing is obsrv-91's, and it supersedes obsrv-91's own earlier one.** Not *"restore the missing signal"* — ***"make the signal that exists interpretable."*** When `3e6bbaf` went red on main, the failing test was checked against a classified list taken before the merge, found on it, and cleared as pre-existing in ten seconds. That decision did not need the suite to have run on the merge ref at all. The expensive option is a 17-minute macOS suite made unconditional; a reviewer who can separate a pre-existing red from a new one may not need it for most decisions.
+
+**And the cheap option has a rot the expensive one does not.** A classified list is a decision made at a moment, and nothing makes it notice when a test leaves it. Three of seven rows were already wrong hours after the list was made — and they were the rows whose tests had been FIXED, which is to say the rows most likely to be cited to excuse a red. Key on the test TITLE rather than `file:line`, and make something FAIL when a row stops matching a real test. Otherwise the list excuses reds that no longer exist and hides ones that do, which is worse than no list.
 
 **UNOWNED AND FREE.** Offered to obsrv-91 2026-09-15; its user did not answer after three asks. It declined to hold it — *"an unanswered offer is not a claim"* — and asked that anyone who wants it take it. If its user surfaces after someone has started, it will ask what is left rather than open a second copy.
 
