@@ -145,9 +145,24 @@ rules**, because the same result read two ways is the defect this list keeps
 producing: a ratio scored by the rules' author fits "the rules are good" and
 "the scorer wrote the rules" equally well, and the number cannot separate
 them. Two classifiers, their disagreement rate published beside the ratio,
-and neither of them the person who chose the thresholds. **Status: unknown —
-never measured.** Depends on B5: a ratio measured against a moving quantity
-says nothing.
+and neither of them the person who chose the thresholds. **Status: measured 2026-09-15, and
+NO RATIO IS PUBLISHED** — the two classifiers disagreed on 57% of findings
+(52% under the fairest collapse, Cohen's κ = −0.07, no better than chance).
+The protocol fixed in advance that anything above ~25% publishes no number,
+because a disagreed-upon ratio quoted alone reads as measurement and is not.
+
+What the disagreement says is worth more than the ratio would have been:
+agreement was **total where the page is badly broken and near zero where it is
+marginal** — 31 of 31 on a page with no viewport tag, 2 of 39 on a heavy
+commercial page. The noise ratio is a property of the page and of who is
+asked, not of the tool.
+
+The question that would carry a number, and B4 should probably become it:
+**how many distinct changes a report implies against how many rows it prints.**
+On these three pages, 79 sampled findings collapsed to about 6 changes. That
+has one answer per page rather than one per rater, and it measures what the
+criterion was actually worried about — that a first run teaches the reader to
+skim. Depends on B5: a ratio measured against a moving quantity says nothing.
 
 **B5. The same page measured twice answers the same.** Nothing on this list
 matters more and nobody has ever checked it. A user's first real use is a
