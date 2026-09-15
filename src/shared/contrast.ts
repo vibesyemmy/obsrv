@@ -54,9 +54,44 @@ export interface EffectiveContrast {
   onPanel: number
 }
 
-export function effectiveContrast(color: RGBA, background: RGBA, params: PanelParams, vision?: Matrix3): EffectiveContrast {
+/**
+ * The colour the screen actually shows for this text: its own alpha and the
+ * effective `opacity` of its ancestor chain, composited onto what is under it.
+ *
+ * This is what the ratio has always been computed from — `over(color, bg)` —
+ * and what was never printed. A readout that states `#ffffff` beside a ratio
+ * of 7.72 invites the reader to check the arithmetic, find 19.56, and conclude
+ * the tool is broken; the tool was describing `#a3a3a3`. Measured on
+ * lobste.rs, whose upvoter paints #a1a1a1 and was reported as white
+ * (docs/research/2026-09-15-contrast-figure.md).
+ *
+ * `opacity` multiplies the colour's own alpha rather than replacing it: a page
+ * may use both, and the two compose.
+ */
+export function paintedColor(color: RGBA, background: RGBA, opacity = 1): RGB {
   const bg = over(background, [255, 255, 255])
-  const fg = over(color, bg)
+  const a = Math.min(1, Math.max(0, opacity)) * Math.min(1, Math.max(0, color[3]))
+  return over([color[0], color[1], color[2], a], bg)
+}
+
+/**
+ * `opacity` is the element's effective opacity — the product down its ancestor
+ * chain — and defaults to 1, so every existing caller keeps its answer.
+ *
+ * It belongs here rather than in the caller because an `opacity` that greys
+ * text changes what a reader sees and therefore what the verdict should be:
+ * before this, `color: #fff` under `opacity: .62` on #0c0c0c was judged 19.56,
+ * a ratio of a white that is not on the screen.
+ */
+export function effectiveContrast(
+  color: RGBA,
+  background: RGBA,
+  params: PanelParams,
+  vision?: Matrix3,
+  opacity = 1,
+): EffectiveContrast {
+  const bg = over(background, [255, 255, 255])
+  const fg = paintedColor(color, background, opacity)
   return {
     asIs: contrastRatio(fg, bg),
     onPanel: contrastRatio(onPanel(fg, params, vision), onPanel(bg, params, vision)),

@@ -44,6 +44,12 @@ export interface InspectReport {
   background: RGBA | null
   backgroundNote: 'computed' | 'image'
   /**
+   * The element's effective `opacity` — the product down its ancestor chain,
+   * 1 when nothing sets it. Separate from the colour's own alpha, which is in
+   * `color`; a page can use both and they multiply.
+   */
+  opacity: number
+  /**
    * The layout viewport's width, in the page's own CSS px. A page with no
    * viewport meta tag under a phone preset lays out 980 wide and is drawn
    * scaled to fit, so the box and the font above are larger than they are
@@ -106,6 +112,18 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
 
   const cs = getComputedStyle(el)
   const color = parseColor(cs.color) ?? [0, 0, 0, 1]
+
+  // The element's EFFECTIVE opacity: the product down its ancestor chain,
+  // because `opacity` composites a whole subtree and a parent's .5 greys its
+  // children whatever they declare. It is not in the colour — computed
+  // `color` stays #ffffff under `opacity: .62` — so it has to be gathered
+  // here or it reaches nothing: before this, text greyed that way was judged
+  // as though it were white (docs/research/2026-09-15-contrast-figure.md).
+  let opacity = 1
+  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    const o = Number.parseFloat(getComputedStyle(node).opacity)
+    if (Number.isFinite(o)) opacity *= Math.min(1, Math.max(0, o))
+  }
 
   const r = el.getBoundingClientRect()
   // What is painted under the text: the stack at a point inside its box,
@@ -176,6 +194,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     color,
     background,
     backgroundNote: note,
+    opacity,
     viewportWidth: innerWidth,
   }
 }

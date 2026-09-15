@@ -1,4 +1,4 @@
-import { effectiveContrast, hex, relativeLuminance } from '../shared/contrast'
+import { effectiveContrast, hex, paintedColor, relativeLuminance } from '../shared/contrast'
 import { droppedEntriesNote } from '../shared/droppedEntries'
 import { layoutScale, layoutScaleNote } from '../shared/layoutScale'
 import type { LintEdgeKind, LintRect, LintReport, LintObjectFit } from '../shared/lint'
@@ -361,10 +361,20 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
       textOnImages++
       continue
     }
-    const c = effectiveContrast(t.color, t.background, panel.params, panel.vision?.matrix)
+    const c = effectiveContrast(t.color, t.background, panel.params, panel.vision?.matrix, t.opacity)
     const large = isLargeText(t.fontSizePx, t.fontWeight)
     const threshold = large ? 3 : 4.5
-    const fg = hex(t.color)
+    // The colour the screen shows, not the one the page states: the figures
+    // below are of the painted colour, and naming the stated one beside them
+    // invited a reader to check the arithmetic and find it wrong.
+    const painted = paintedColor(t.color, t.background, t.opacity)
+    const fg = hex(painted)
+    // Named only when it differs, and it differs exactly when the page's own
+    // colour is not what anyone sees: a translucent colour, or an opacity. A
+    // reader who checks `#a0a0a0 on #0c0c0c is 7.5:1` against the stylesheet
+    // finds #ffffff there, and this is the sentence that stops that reading
+    // like an error in the figure.
+    const statedClause = hex(t.color) === fg ? '' : ` (the page states ${hex(t.color)}; this is what the screen shows)`
     const bg = hex(t.background)
     // Text with no contrast at all is not failing a threshold: a reveal mask's
     // duplicate, a decorative shadow layer, or a bug. Counted, not judged.
@@ -386,7 +396,7 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
         onPanel: round(c.onPanel, 2),
         threshold,
         largeText: large,
-        message: `${fg} on ${bg} is ${round(c.asIs, 2)}:1 as stated; WCAG AA asks ${threshold}:1 of text this size`,
+        message: `${fg} on ${bg} is ${round(c.asIs, 2)}:1; WCAG AA asks ${threshold}:1 of text this size${statedClause}`,
       })
     } else if (c.onPanel < threshold) {
       groups['contrast-on-panel'].push({
@@ -403,8 +413,8 @@ export function lintFindings(report: LintReport, screen: LintScreen, panel: Lint
         threshold,
         largeText: large,
         message:
-          `${fg} on ${bg} is ${round(c.asIs, 2)}:1 as stated and ${round(c.onPanel, 2)}:1 on ${panel.profileLabel}` +
-          `${panel.vision ? ` with ${panel.vision.label}` : ''}: passes on the display it was designed on, fails on this one`,
+          `${fg} on ${bg} is ${round(c.asIs, 2)}:1 on a reference display and ${round(c.onPanel, 2)}:1 on ${panel.profileLabel}` +
+          `${panel.vision ? ` with ${panel.vision.label}` : ''}: passes on the display it was designed on, fails on this one${statedClause}`,
       })
     }
   }
