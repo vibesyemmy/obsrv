@@ -162,6 +162,51 @@ under `src/` or `tests/` must never be ignored — and a filter is a list somebo
 is the kind of thing that is correct when written and wrong six months later. The four options
 above fail safe; this one fails open.
 
+## The no-override claim is now measured, not predicted — and it was tested by accident
+
+This card said *a flake blocks a merge and nobody can override it, not me, not an admin*. That
+was an inference from what `enforce_admins` does. **On 2026-09-15 it was tested, because this
+card's own pull request (#15) was the thing blocked**, and `gh pr merge --admin` was refused:
+
+    GraphQL: Required status check "typecheck · unit · shader parity · e2e"
+    is failing. (mergePullRequest)
+
+**`--admin` is not a key.** With `enforce_admins` on, an admin is bound by the rule — that is
+what the setting means, and it has no exception for a failing check. The only bypass left is to
+turn the setting off, which is a settings change rather than a merge flag.
+
+**What was then done, on Opeyemi's explicit word, and why this way.** `enforce_admins` was
+deleted, #15 merged, and the setting restored — two API calls around one merge, each read back
+rather than assumed, guard off for about ninety seconds, nothing else merged in the window.
+
+The alternative was re-running the suite until it passed. **A settings change leaves a trace
+someone can audit; re-running until green launders the same decision into something that looks
+like evidence.** One is an override you can find, the other is one you cannot. That is the part
+of this worth copying, and it is the reason to prefer the uglier-looking option.
+
+**The distinction the setting actually buys, now that both halves have been seen:** it removes
+the ACCIDENTAL bypass — merging without noticing the suite had not answered, which is exactly
+how `main` went red for two hours that morning. It cannot remove the deliberate one and was
+never meant to. A deliberate override is named, reasoned, and written down. That one is.
+
+## Two tests failed twice and then passed on an UNCHANGED tree
+
+The strongest evidence here, and it arrived after the card was filed:
+
+| test | failed both attempts on | then passed on | tree changed between? |
+|---|---|---|---|
+| `devtools.spec.ts:92` | PR #10, first run | the same PR, re-run | no |
+| `panes.spec.ts:83` | PR #15 | `main` at `437cdd6` | no |
+
+**`--retries=1` is not under-specified. It is demonstrably insufficient**, and in both cases the
+THIRD attempt is the one that told the truth. A retry count that is wrong by one on two
+independent tests is not a threshold that needs nudging; it is evidence that the failure mode is
+not what a single retry is shaped to absorb.
+
+It also settles the `panes:83` question as far as it can be settled: the override was right in
+outcome. What is established is that the tree was not its cause and that it did not reproduce —
+not that it is understood.
+
 ## Still not known
 
 The cause of any of the four. Whether they share one. Whether `mcp.spec:137` failing first-time
