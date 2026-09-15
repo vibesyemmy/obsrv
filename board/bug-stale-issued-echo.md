@@ -1,10 +1,18 @@
 ---
 title: "Fixing the stale echo is a decision about what `issued` means"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 38
 ---
+
+MERGED 2026-09-15 on Opeyemi's word. Verified before pushing: typecheck exit 0 across all three configs, 1144/1144 unit, and sync + sync-trace + sync-mirror-mark 11 passed in 19.2 s.
+
+**Four lines of behaviour against 149 of unit test.** `mirror()` returned on the mirrored path without retiring what it had issued; it now retires before returning.
+
+**The card is Done and one failure is unexplained.** `bug-sync138-no-url-changed` carries it, and Rook's refusal to call its own change innocent is the reason that is a separate card rather than a footnote here.
+
+**This is the 2026-09-03 fault arriving from the other side.** That commit made every issued URL an echo because a superseded load's commit was being read as a new document — 252 loads. Today a genuine load was read as a superseded commit. One missing distinction, two opposite symptoms, and the fix is the one the history argued for.
 
 **IN REVIEW — branch `fix/stale-issued-echo` (as of a76a910), "A mirrored commit retires its own record, where nothing did before".** Unit 1144/1144, typecheck clean, sync + sync-trace + sync-mirror-mark 16 green including both loop-breaker fixtures. Merging waits on Opeyemi's word to Rook directly.
 
