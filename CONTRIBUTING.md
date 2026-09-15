@@ -101,6 +101,38 @@ until you have watched the same query return non-zero on something you know is
 there. `grep` is line-based and this repo's prose is hard-wrapped, so a
 multi-word phrase check on a doc is a coin flip.
 
+## Two commands that lie about themselves
+
+Both of these cost this project time in one night, and both have the same
+shape: the command does its job, prints the right answer, and misreports it
+somewhere nobody is looking.
+
+**`grep -c` exits 1 when the count is zero.**
+
+```bash
+echo hello | grep -c nomatch   # prints 0, exits 1
+```
+
+So `grep -c ... && next-thing` silently does not run `next-thing`, and any
+exit code you read afterwards belongs to `grep`. This produced a reported
+`check=1` that was grep's status rather than the check's, noticed only because
+the number was implausible. A zsh glob that matches nothing does the same to an
+`&&` chain — one killed a 160-run loop that then reported "0 failures" having
+never executed.
+
+Do not chain on a counting command. Capture the count, then test it.
+
+**`gh` reports `mergeable: UNKNOWN` for a MERGED pull request.**
+
+It is not a value that is still settling — it is the value a merged PR has
+permanently. A wait keyed on mergeability therefore hangs forever *on success*,
+which is the worst direction for a wait to fail. One session spent an hour
+polling two pull requests that had merged before the poll was ten minutes old.
+
+Terminate on `state` or `mergedAt`, never on `mergeable`. And note the
+consequence for measurement: how often a PR was conflicting cannot be
+reconstructed after it merges, so it has to be recorded as it happens.
+
 ## Testing
 
 ```bash
