@@ -24,13 +24,29 @@ on:
   pull_request:
   workflow_dispatch:
 
-# Newest wins per ref, EXCEPT on main. Cancelling a superseded run on a branch
-# saves a runner and loses nothing; cancelling one on main would destroy a
-# per-commit CI outcome, and this project counts those — `bug-ci-main-red-37pct`
-# is a tally of which commits went red. A guard that improves throughput by
-# deleting the evidence is the wrong trade here.
+# Newest wins per ref on a branch; on main, EVERY COMMIT GETS ITS OWN GROUP so
+# nothing there can be superseded at all.
+#
+# The obvious form of this is `group: <workflow>-<ref>` with
+# `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and it is what
+# was written here first. It does not work, and the way it fails is worth the
+# paragraph: `cancel-in-progress` only protects a run that is IN PROGRESS. A run
+# still PENDING — queued for a macOS runner, which is most of them here — is
+# cancelled by a newer arrival in the same group whatever that flag says. Three
+# main runs (154c8e3, 5eeb5f8, 4ee2bf9) were cancelled that way within minutes,
+# by the guard written to stop exactly that, with a comment above it claiming it
+# would not happen. Measured, not reasoned: `gh run list` showed them cancelled.
+#
+# Putting the sha in the group on main means a main run is never in a group with
+# another main run, so there is nothing to supersede it. Branches keep sharing a
+# group and cancelling, which is what you want there.
+#
+# Why it matters beyond tidiness: a cancelled run is a commit with NO CI answer,
+# which is worse than a red one — `bug-ci-main-red-37pct` is a tally of which
+# commits went red, and a hole in it is indistinguishable from a commit nobody
+# broke.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:

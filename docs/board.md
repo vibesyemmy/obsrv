@@ -335,6 +335,18 @@ Whoever takes the command: `a4`'s write-up (`docs/research/2026-09-14-a4-install
 
 [`bug-ci-main-red-37pct`](../board/bug-ci-main-red-37pct.md) · **B5** · bug · *unclaimed*
 
+**THE 37% HAS HOLES IN IT NOW, AND HENRY PUT THEM THERE.** 2026-09-15.
+
+The concurrency groups added in 450d5f9 cancelled three main CI runs — 154c8e3, 5eeb5f8, 4ee2bf9 — within minutes of landing. The guard was written to protect main from exactly that, with a comment above it saying so.
+
+**How it fails is the part to keep:** `cancel-in-progress` only protects a run that is IN PROGRESS. A run still PENDING — queued for a macOS runner, which is most of them here — is cancelled by a newer arrival in the same group whatever the flag says. Three commits pushed in quick succession each killed a queued predecessor.
+
+Fixed by putting the sha in the group on main, so a main run is never in a group with another main run and there is nothing to supersede it.
+
+**Why it belongs on THIS card: a cancelled run is a commit with NO CI answer, which is worse than a red one.** This card is a tally of which commits went red, and a hole in it is indistinguishable from a commit nobody broke — the same two-facts shape the card is about, introduced into the card's own evidence by the person keeping it.
+
+So the 27-run window and the 10 failures stand as measured BEFORE 450d5f9. Any recount that spans it has to treat cancelled runs as missing data rather than as passes.
+
 **ALL TEN NOW CLASSIFIED, which the card asked for.** Counts over every red run, not a sample:
 
 live-drive:963     8 of 10        live-drive:1015   8 of 10   — the same eight, always together     sync.spec:165      5              sync.spec:138     2         — 7 for sync.spec as a file     devtools:92  2   devtools:116  2   sync-mirror-mark:41  2   stall  2   panes  2     cli-walk:173, cli-snap-tiled:65, select:54, tabs:266, throttle-live:55, text-scale:251   1 each

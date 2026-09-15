@@ -26,9 +26,11 @@ on:
   push:
   workflow_dispatch:
 
-# Newest wins per ref, except on main — see ci.yml for why main is excluded.
+# Newest wins per ref on a branch; on main every commit gets its own group, so
+# nothing there can be superseded. See ci.yml for why the obvious form of this
+# silently cancelled three main runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
