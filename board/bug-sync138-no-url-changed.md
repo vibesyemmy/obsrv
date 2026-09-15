@@ -52,3 +52,36 @@ The target emitted **no `url-changed` at all** during the window. That is a diff
 **What the investigation needs that the last one did not:** `mirrorTrace()` does not reach this failure. Whatever instrument answers "why did nothing emit" is a different one from "which branch did the decision take", and building it is most of the work — as it was last time.
 
 **A measurement note that applies to any counting here:** Rook's batches are `--retries=0` so every occurrence counts; CI is `--retries=1` so an occurrence that passes on retry leaves a green run and a `1 flaky` line. Numbers from the two are not comparable, and CI-derived rates are floors.
+
+---
+
+**INSTRUMENT BUILT 2026-09-15 by Kenya, into Review. Branch `fix/sync138-absence-instrument`. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. THE CAUSE IS NOT FOUND; this makes the next failure legible and nothing more.**
+
+`TargetSource.commitTrace()` records every main-frame commit and whether the pane said anything about it — and when it did not, which rule silenced it. There are two such rules and both are invisible from outside: `internal` (the recreation's own `about:blank`) and `restoring` (Obsrv re-loading the page it was already showing after a density change).
+
+So the four facts a silence used to fit are now separable:
+
+    mirror trace empty            the bus never saw the native commit
+    mirror trace 'trip'           the breaker suppressed the mirror
+    mirror trace 'already-there'  the panes were judged in step
+    commit trace EMPTY            nothing committed in the target at all
+    commit trace said: false      a commit happened and was silenced, with the rule named
+
+`sync.spec.ts:138` now reads both traces on every run and carries them in the assertion message, so the one failure in 160 explains itself instead of printing nothing. `mirrorTrace()` was never reached on this path — the test fails before the step loop that dumps it — which is why the card said the instrument was pointed the wrong way.
+
+**WATCHED WORKING, because an instrument nobody has seen fire is worth what the note nobody had seen fire was worth.** Forcing the silent-commit path (a temporary env gate, since reverted) produced this on the failure:
+
+    mirror:  native -> hairline  branch "issued"  (other was redirect.html)
+             native -> redirect  branch "issued"  (other was hairline.html)
+    commits: 6 x did-navigate, said: false, why: "restoring"
+
+Which is the account the empty array could not give: the bus decided, issued the mirror, the target committed six times, and every commit was deliberately silent.
+
+**DID NOT REPRODUCE.** 40 file-runs, 400 test-executions, `--retries=0`: all passed. At one in 160 that is about a one-in-five chance of catching it, so this is not evidence the flake is gone and is not evidence the instrument works on the real shape — only on the forced one. Rook ran separate invocations; `--repeat-each` re-runs inside one process, so the two batches are not equivalent and mine is the weaker of the two.
+
+**A HARNESS FACT, since it differs from live-drive.spec:** `-g` filtering works on `sync.spec.ts` — its app is created in a per-file `beforeAll` with no dependency on a previous test having run. `live-drive.spec.ts` sets `info` in its first test and dies under `-g`.
+
+**AND ONE THING I GOT WRONG, recorded because it nearly became a false reproduction.** The first run after building the instrument failed two tests, one of them this card's. It was not the flake: `npx playwright test` runs against the built `out/`, and I had changed `src/` without rebuilding, so the test ran against a build with no `commitTrace` in it. Had I reported that as a reproduction it would have been a real bug, falsely reproduced, on the first attempt.
+
+**NOT DONE, and it is the card's own question:** whether the assertion checks what the title claims. `seen.length >= 1` is still the only witness that the target moved at all — the poll that follows passes trivially, because the target is already on HAIRLINE from the previous step, so "followed and came back" and "never moved" are the same observation to it. Anything that makes this test green should be checked against that before it is believed.
+

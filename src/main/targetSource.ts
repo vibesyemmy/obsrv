@@ -45,6 +45,21 @@ export interface TargetSourceEventMap {
   navigating: []
 }
 
+/**
+ * One main-frame commit, and what this pane did about it. `said: false` names
+ * the reason; a commit that produced an event carries none.
+ */
+export interface CommitRecord {
+  at: number
+  url: string
+  kind: 'did-navigate' | 'in-page'
+  said: boolean
+  /** Why nothing was emitted: the fact that is invisible from outside. */
+  why?: 'internal' | 'restoring'
+  /** Marked on the event as the mirror's own commit, rather than the page moving. */
+  mirroring?: boolean
+}
+
 export interface AppliedViewport {
   width: number
   height: number
@@ -53,6 +68,8 @@ export interface AppliedViewport {
 
 /** net::ERR_ABORTED — ordinary navigation cancellation, not a failure. */
 const ERR_ABORTED = -3
+/** Commits kept for reading a silence afterwards; the same bound `SyncBus`'s mirror trace uses. */
+const COMMIT_TRACE_MAX = 64
 
 /** Spec §4.3 rate cap. */
 const DEFAULT_FPS = 30
@@ -242,6 +259,24 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * withheld, and only for the mirror's own load.
    */
   private mirroring = false
+  /**
+   * Every main-frame commit this pane saw, and whether it said anything about
+   * it.
+   *
+   * `mirrorTrace()` answers which branch a mirror decision took. It cannot
+   * answer this card's question, because a pane that emits no `url-changed`
+   * at all never reaches a decision — an instrument that reports a taken path
+   * cannot report a path not taken (`bug-sync138-no-url-changed`). Silence
+   * here fits at least four facts: nothing committed, a commit was swallowed
+   * as `internal` plumbing, one was withheld as a `restoring` re-load, or one
+   * was emitted and the listener was attached too late to hear it. From
+   * outside they are identical.
+   *
+   * So every commit is recorded with what happened to it, including the ones
+   * that produce no event. An empty log and a log full of `internal` are
+   * different findings; today they look the same.
+   */
+  private readonly commits: CommitRecord[] = []
   /** The HTTP status of the last main-frame document that committed, and the address it was for. */
   private lastStatus: { code: number; text: string; url: string } = { code: 0, text: '', url: '' }
   private disposed = false
@@ -352,13 +387,20 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // running the document before Chromium's own restore of it lands;
       // saying it again here is cheap and closes most of that window.
       if (this.throttle !== NO_THROTTLE) void this.applyThrottle()
-      if (this.internal) return
+      if (this.internal) {
+        this.record({ at: Date.now(), url, kind: 'did-navigate', said: false, why: 'internal' })
+        return
+      }
       // The status of the document that committed — the last one, after any
       // redirects, on the main frame alone, which is the document that gets
       // measured. A scheme with no HTTP status (file://, about:blank) gives 0.
       this.lastStatus = { code: httpResponseCode ?? 0, text: httpStatusText ?? '', url }
       this.intendedUrl = url
-      if (this.restoring) return
+      if (this.restoring) {
+        this.record({ at: Date.now(), url, kind: 'did-navigate', said: false, why: 'restoring' })
+        return
+      }
+      this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: this.mirroring })
       // Marked rather than withheld. Withholding it made whether a consumer
       // ever heard about a mirrored commit depend on a race: `mirroring` is
       // only true while `load()` is in flight, so a client-side redirect
@@ -369,8 +411,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       this.emit('url-changed', url, false, this.mirroring)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
+      if (isMainFrame && this.internal) this.record({ at: Date.now(), url, kind: 'in-page', said: false, why: 'internal' })
       if (isMainFrame && !this.internal) {
         this.intendedUrl = url
+        this.record({ at: Date.now(), url, kind: 'in-page', said: true })
         // Never the mirroring flag: an in-page commit was always reported and
         // always mirrored back, `mirroring` or not, and marking it would stop
         // the bus mirroring it (`onTargetNav` drops what is marked). Three
@@ -525,6 +569,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
   getThrottle(): ThrottleProfile {
     return this.throttle
+  }
+
+  /** Keeps the last `COMMIT_TRACE_MAX`; records what happened, decides nothing. */
+  private record(entry: CommitRecord): void {
+    this.commits.push(entry)
+    if (this.commits.length > COMMIT_TRACE_MAX) this.commits.shift()
+  }
+
+  /**
+   * Every main-frame commit this pane saw, and whether it said anything.
+   *
+   * Read it when a consumer heard no `url-changed` and expected one: an EMPTY
+   * log says nothing committed, so the question is upstream of this pane; a
+   * log of `said: false` entries says a commit happened and was deliberately
+   * silent, and names which rule silenced it. Those are opposite findings and
+   * the absence of an event cannot tell them apart.
+   */
+  commitTrace(): readonly CommitRecord[] {
+    return this.commits
   }
 
   private async applyThrottle(): Promise<string | null> {

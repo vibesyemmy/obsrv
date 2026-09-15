@@ -158,8 +158,28 @@ test('a redirecting page leaves no stale expectation behind', async () => {
     g.__obsrv.target.off('url-changed', g.__onUrl)
     return g.__seen
   })
-  expect(seen.length).toBeGreaterThanOrEqual(1)
-  expect(seen.at(-1)).toBe(HAIRLINE)
+  // Both traces, read whether or not this run fails, so the one run in 160
+  // that sees nothing carries its own explanation. The failure is an ABSENCE —
+  // no `url-changed` at all — and an absence is what neither an assertion nor
+  // a taken-path trace can account for: `mirrorTrace()` says which branch a
+  // mirror decision took, and says nothing when no decision was reached.
+  //
+  // The pair separates facts that look identical from out here:
+  //   mirror trace empty          the bus never saw the native commit
+  //   mirror trace says 'trip'    the breaker suppressed the mirror
+  //   'already-there'             the panes were judged in step
+  //   commits empty               nothing committed in the target at all
+  //   commits with said: false    a commit happened and was silenced, and why
+  const why = await app.evaluate(() => {
+    const g = globalThis as any
+    return {
+      mirror: g.__obsrv.sync.mirrorTrace().slice(-8),
+      commits: g.__obsrv.target.commitTrace().slice(-8),
+    }
+  })
+  const account = JSON.stringify(why)
+  expect(seen.length, `the target emitted no url-changed. ${account}`).toBeGreaterThanOrEqual(1)
+  expect(seen.at(-1), account).toBe(HAIRLINE)
 })
 
 test('quick legitimate reversals are not a loop: three navigations back and forth within a second all mirror', async () => {
