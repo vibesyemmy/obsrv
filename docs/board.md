@@ -441,6 +441,14 @@ OPEN: this is currently a convention announced in a chat room, which is the weak
 
 [`bug-sync138-no-url-changed`](../board/bug-sync138-no-url-changed.md) · bug · owner: Kenya
 
+**START HERE — Kenya's framing, promoted above the evidence because it decides what the first day of work is.**
+
+> `:165` was answered by an instrument that reports WHICH BRANCH a decision took. This card has no decision — nothing was emitted. So the question is why an emission that should have happened did not, and **an instrument that reports a taken path cannot answer about a path not taken.**
+
+That is the same shape as everything else this week: an absence that two facts fit, with no instrument pointed at the absence. `mirrorTrace()` is not a smaller version of what this needs; it is the wrong direction. Building the right one is likely most of the work, as it was last time.
+
+The second thing to keep, and it is Rook's: it separated observed from inferred, then refused to call its own fix innocent on one-against-zero. **The honest form of "my change is innocent" is "nothing here can tell you yet."**
+
 ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word, **on Rook's own recommendation that someone come to this file cold** — offered against its own interest, and the reason is the point of the assignment rather than politeness. Two models of that file were held tonight and both were wrong; the session that just built a correct one is also the one most primed to see it again.
 
 **SO THIS CARD SEPARATES WHAT WAS OBSERVED FROM WHAT WAS INFERRED, and the inferences are Rook's to discard rather than Kenya's to inherit.**
@@ -556,6 +564,16 @@ Deliberately not done while the card was open: changing the classifier after the
 ### The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds
 
 [`bug-resizing-test-flaky-ci`](../board/bug-resizing-test-flaky-ci.md) · **C5** · bug · owner: Kenya
+
+**TWO PASSES ON THE SLOW DESK, AND BOTH ARE UNREADABLE.** The rewritten test has now passed twice on the three-core runner where its predecessor failed 8 of 10: 17.0 s on PR head 314bca6, 13.2 s on the merge commit 4ee2bf9 with main's CI green.
+
+Neither log says which branch the capture took. The label and margin go to `test.info().annotations`, and Playwright's `line` reporter — the one CI runs — does not print annotations. So the fix is demonstrated and the thing it was written to record is still invisible.
+
+`fix/settle-margin-visible` (as of a34a321) fixes that with a `console.log` beside the annotation, verified under the reporter CI actually uses rather than by the test still passing:
+
+settle verdict: label=resizing sizes=8 quietAtEnd=0ms applied=214 capture=8149ms
+
+Committed, unpushed, waiting on Opeyemi. Until it lands, every green on this test is consistent with either branch.
 
 ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
 

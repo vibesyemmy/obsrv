@@ -6,6 +6,14 @@ owner: "Kenya"
 order: 40
 ---
 
+**START HERE — Kenya's framing, promoted above the evidence because it decides what the first day of work is.**
+
+> `:165` was answered by an instrument that reports WHICH BRANCH a decision took. This card has no decision — nothing was emitted. So the question is why an emission that should have happened did not, and **an instrument that reports a taken path cannot answer about a path not taken.**
+
+That is the same shape as everything else this week: an absence that two facts fit, with no instrument pointed at the absence. `mirrorTrace()` is not a smaller version of what this needs; it is the wrong direction. Building the right one is likely most of the work, as it was last time.
+
+The second thing to keep, and it is Rook's: it separated observed from inferred, then refused to call its own fix innocent on one-against-zero. **The honest form of "my change is innocent" is "nothing here can tell you yet."**
+
 ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word, **on Rook's own recommendation that someone come to this file cold** — offered against its own interest, and the reason is the point of the assignment rather than politeness. Two models of that file were held tonight and both were wrong; the session that just built a correct one is also the one most primed to see it again.
 
 **SO THIS CARD SEPARATES WHAT WAS OBSERVED FROM WHAT WAS INFERRED, and the inferences are Rook's to discard rather than Kenya's to inherit.**

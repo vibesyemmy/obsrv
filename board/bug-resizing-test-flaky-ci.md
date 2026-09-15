@@ -7,6 +7,16 @@ criterion: C5
 order: 35
 ---
 
+**TWO PASSES ON THE SLOW DESK, AND BOTH ARE UNREADABLE.** The rewritten test has now passed twice on the three-core runner where its predecessor failed 8 of 10: 17.0 s on PR head 314bca6, 13.2 s on the merge commit 4ee2bf9 with main's CI green.
+
+Neither log says which branch the capture took. The label and margin go to `test.info().annotations`, and Playwright's `line` reporter — the one CI runs — does not print annotations. So the fix is demonstrated and the thing it was written to record is still invisible.
+
+`fix/settle-margin-visible` (as of a34a321) fixes that with a `console.log` beside the annotation, verified under the reporter CI actually uses rather than by the test still passing:
+
+    settle verdict: label=resizing sizes=8 quietAtEnd=0ms applied=214 capture=8149ms
+
+Committed, unpushed, waiting on Opeyemi. Until it lands, every green on this test is consistent with either branch.
+
 ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
 
 **THE RATE BELOW IS WRONG. It is not "about 1 run in 4" — it is EIGHT OF TEN.** That figure came from Henry's first count over four runs. All ten of main's reds are now classified (`bug-ci-main-red-37pct`), and `live-drive:963` is in eight of them. It is the most frequent failure in the suite, ahead of `sync.spec:165` at five.
