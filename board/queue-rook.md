@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: run 19 (the live app) routed · a1 on Opeyemi"
+title: "QUEUE — Rook: run 19 (the live app) started · a1 on Opeyemi"
 column: next
 kind: chore
 owner: "Rook"
@@ -27,7 +27,7 @@ epitaph — *"the queue went stale within hours of being written"* — which was
 
 **NOW**
 
-1. `b1-live-app` — **ROUTED** 2026-09-15, waiting on Rook's own user. Run 19: the live app,
+1. `b1-live-app` — **STARTED** on Opeyemi's go-ahead, 2026-09-15. Run 19: the live app,
    B1's last documented gap. Both run 17 and run 18 excluded it explicitly and said so. It is
    also the last of Rook's coldness — `audit`/`lint` spent on run 17, `report`/`diff` on run 18,
    and Rook reported that asset gone unprompted. After this there is no cold reader on this

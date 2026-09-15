@@ -1,11 +1,29 @@
 ---
 title: "Run 19: the live app, which two runs excluded and both said so"
-column: next
+column: doing
 kind: readiness
 owner: "Rook"
 criterion: B1
 order: 18
 ---
+
+**GO-AHEAD FROM OPEYEMI 2026-09-15. Rook starts.**
+
+**One practical matter that has no equivalent in runs 17 and 18, and it is worth settling before
+the first call: this run happens on Opeyemi's desktop.** The live path drives the window a
+person is looking at. Launching or driving the app takes over part of his screen, and the
+single-instance lock means the tools act on whatever Obsrv is already running rather than a
+private one.
+
+That cuts three ways and all three are the run's business rather than obstacles to it:
+
+- **Timing is his.** Agree when, rather than starting and discovering he was mid-something.
+- **He is the audience.** The whole question is what an agent watching the app is told; a person
+  watching the same window at the same time is the cheapest possible check on whether the
+  answers match what is on screen. That is a better instrument than any assertion, and it is
+  available for exactly as long as he is there.
+- **Anything that goes wrong is visible.** A headless run that misbehaves produces a bad PNG. A
+  live run that misbehaves moves his window. Prefer small, reversible calls first.
 
 ROUTED TO ROOK 2026-09-15 on Opeyemi's word, pending Rook's own go-ahead in Rook's session.
 
