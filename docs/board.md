@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*61 cards, 20 open, 14 of those unclaimed.*
+*62 cards, 21 open, 14 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -134,7 +134,7 @@ Related: `a4` for the full inventory, and `bug-history-survives-uninstall` for t
 
 ---
 
-## Next — 9
+## Next — 10
 
 *Picked, not claimed — start here.*
 
@@ -194,7 +194,7 @@ base                        3521bc8, 2026-08-29     commits on main since       
 
 Wiring waits on `chore/signing`, which is ready whenever the identity is.
 
-### QUEUE — Rook: c2-retroactive started · a1 on Opeyemi · log-attribution merged
+### QUEUE — Rook: run 18 (report & diff) · a1 on Opeyemi · c2-retroactive done
 
 [`queue-rook`](../board/queue-rook.md) · chore · owner: Rook
 
@@ -202,7 +202,7 @@ REWRITTEN 2026-09-15 against measured state, not recollection. The previous vers
 
 **NOW**
 
-1. `c2-retroactive` — **STARTED** on Opeyemi's go-ahead, 2026-09-15. Apply    `docs/compatibility.md` to 0.56.0–0.60.0. The card carries the reconnaissance: four of the    five releases have no register entry at all, and 0.58.0 is both the largest diff in the    range and silent. 2. `bug-log-attribution` — **MERGED** `6f19f9b` on Opeyemi's word, card done. It carried    `70209df` too, Rook's catch of a contradiction Henry introduced on    `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;    Rook flagged in advance that taking it would mean reading output produced by its own    change, and asked to be held to being slower to believe it.
+1. `b1-report-diff` — **ROUTED** 2026-09-15, waiting on Rook's own user. Run 18: exercise    `obsrv_report` and `obsrv_diff`, which run 17 excluded explicitly. Rook asked for this one    and the reason is on the card — it is B1's only *documented* gap rather than a merely    unexamined one, and Rook's coldness on these two surfaces expires the moment it runs them. 2. `c2-retroactive` — **DONE**, merged `c27f06d`. Found three gaps in the policy rather than    confirming it, because the author did not review it. 2. `bug-log-attribution` — **MERGED** `6f19f9b` on Opeyemi's word, card done. It carried    `70209df` too, Rook's catch of a contradiction Henry introduced on    `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;    Rook flagged in advance that taking it would mean reading output produced by its own    change, and asked to be held to being slower to believe it.
 
 **BLOCKED, and not on anything Rook can do**
 
@@ -281,6 +281,49 @@ THE LESSON. This machine read 1080 twice on every local run, so the comparison w
 THE DESIGN, argued between both sessions. obsrv-a6 proposed replacing the `moving` flag with src/shared/pageMotion.ts, which already answers 'was this page holding still' on both surfaces. obsrv-e7's objection, correct: THE PROBE ANSWERS PER-RUN TOO — a page that moves slowly, or only while loading, reads as still on a fast host, which is how `moves` got past everyone. A probe that silently decides whether to compare values gives a green that fits two facts again, harder to spot because nothing names it.
 
 So: per page, store each surface's probe verdict and whether values were compared; assert that the value-compared set equals the expected set. A page that silently stops being compared goes red; so does one that starts. Take the UNION across surfaces — if either says moving, it was moving. KEEP THE FLAG as an override: a fixture whose purpose is motion should not depend on a probe agreeing about it on the day. Probe for discovery, flag for what we can state.
+
+### Run 18: exercise report and diff, the two surfaces run 17 excluded
+
+[`b1-report-diff`](../board/b1-report-diff.md) · **B1** · readiness · owner: Rook
+
+ROUTED TO ROOK 2026-09-15 on Opeyemi's word, pending Rook's own go-ahead in Rook's session.
+
+**This is the successor to `b1`, scoped to the half of it that is documented rather than merely unexamined.** Run 17 ended with, in its own words: *"NOT COVERED, stated rather than assumed: two of eight planned sites; obsrv_report and obsrv_diff not exercised at all; nothing run live in the app — this run was headless throughout."*
+
+**Rook asked for this one, and the reason it gave is the reason it is the right card:** run 17 *excluded* report and diff explicitly and said so, which makes this the only gap on B1 that is **documented rather than merely unexamined**. An unexamined gap might be fine. A documented one is a promise somebody made to check later.
+
+**Rook is still cold on exactly these two and no longer cold on the rest**, which is a narrower qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply again after this run.
+
+## What this card does NOT close, so nobody reads it as B1 met
+
+Two of eight planned sites, and **anything live in the app**. Run 17 was headless throughout; this run is scoped to two surfaces, not to the criterion. B1 stays open after this lands, and saying so here is cheaper than discovering it from a readiness table that overstates.
+
+## The trap this card is most likely to die of
+
+**Running the tools is not exercising them.** A run that invokes `obsrv_report` and `obsrv_diff`, gets output, and reports "covered" has measured that the commands exit zero. The product is the sentences they produce, and the question is whether a developer reading them cold would act correctly. Run 17's value was reading, not invoking.
+
+**So pre-register the vacuity check, which is house style now** (`CONTRIBUTING.md`, from Kenya's cache experiment): before running, name the result that would mean *this run did not exercise report and diff*. Candidates worth deciding in advance — a report whose findings sections are empty on every site, a diff that errors on every page for a reason unrelated to the page, or a run where every finding read was one `audit` had already produced and `report` merely re-displayed.
+
+## Known limits, verified in the code rather than recalled, so a limit is not filed as a bug
+
+- **`diff` is 1x presets only.** Dense presets (phones) and CSS viewports over 2048px exit with
+an error — `src/mcp/server.ts:1201`. That error is correct behaviour; whether it *reads* as
+correct behaviour to someone who hit it by accident is exactly the kind of thing this run is
+for.
+- **Device pixels are capped at 4096 per axis**, so a tall full-page capture is clamped and the
+CSS budget shrinks as density rises — `src/mcp/server.ts:275` and `:299`.
+- **`diff` on an animating page compares two different frames.** Check `settled` in the output:
+when false the band deltas are frame-to-frame noise, and the findings are supposed to say so
+rather than interpret them. Whether they do is a finding.
+- **`diff` cannot say "the hairline vanished".** It reports ink deltas and row ratios; a 0.5px
+hairline renders one device row at 1x *and* 2x. Vanishing is judged by reading the PNG, and
+the output should not imply otherwise.
+
+## The standing hazard that has cost two sessions a false result
+
+**Build before running.** `npx playwright test` and the MCP tools run the built `out/`, not `src/`. Two false failures in one evening came from this, both plausible-looking. If something surprises you, check the build before you check the code.
+
+Constraints are Rook's own and unchanged: own worktree off current main, Review rather than main, merge on Opeyemi's word direct to Rook, design to him before writing.
 
 ### Measure the noise ratio with two independent classifiers
 
@@ -2070,4 +2113,4 @@ A record kept where nobody reads it, on the card about a check that runs where n
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 7 readiness, 9 bugs, 4 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 8 readiness, 9 bugs, 4 chores, among the open cards.*

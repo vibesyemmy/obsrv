@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: c2-retroactive started · a1 on Opeyemi · log-attribution merged"
+title: "QUEUE — Rook: run 18 (report & diff) · a1 on Opeyemi · c2-retroactive done"
 column: next
 kind: chore
 owner: "Rook"
@@ -13,10 +13,12 @@ epitaph — *"the queue went stale within hours of being written"* — which was
 
 **NOW**
 
-1. `c2-retroactive` — **STARTED** on Opeyemi's go-ahead, 2026-09-15. Apply
-   `docs/compatibility.md` to 0.56.0–0.60.0. The card carries the reconnaissance: four of the
-   five releases have no register entry at all, and 0.58.0 is both the largest diff in the
-   range and silent.
+1. `b1-report-diff` — **ROUTED** 2026-09-15, waiting on Rook's own user. Run 18: exercise
+   `obsrv_report` and `obsrv_diff`, which run 17 excluded explicitly. Rook asked for this one
+   and the reason is on the card — it is B1's only *documented* gap rather than a merely
+   unexamined one, and Rook's coldness on these two surfaces expires the moment it runs them.
+2. `c2-retroactive` — **DONE**, merged `c27f06d`. Found three gaps in the policy rather than
+   confirming it, because the author did not review it.
 2. `bug-log-attribution` — **MERGED** `6f19f9b` on Opeyemi's word, card done. It carried
    `70209df` too, Rook's catch of a contradiction Henry introduced on
    `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;
