@@ -725,7 +725,7 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 *Finished, waiting on the maintainer to merge.*
 
-### B4 rewritten: rows printed against changes implied
+### B4 rewritten: a report says how many changes its rows imply
 
 [`b4`](../board/b4.md) · **B4** · readiness · owner: Kenya
 
@@ -829,6 +829,16 @@ MERGED 2026-09-15 on Opeyemi's word, `933ccb7` (PR #8). Column moved to done her
 **AND THE NEW CHECK HAS NOT BEEN RUN.** The 79 rows / ~6 changes figure is a by-product of the OLD measurement and was not collected under the new rules, which require the grouping published alongside. Recorded as not-yet-measured rather than allowed to read as a first result, because a number produced under one protocol and quoted under another is exactly the kind of figure this card spent the day refusing to publish.
 
 **THE ASYMMETRY, ON THE CARD SO THE NEXT READER KNOWS IT IS WANTED RATHER THAN OPTIONAL.** The substitute measure is Kenya's, from Kenya's result, and Kenya wrote the criterion that blesses it. Opeyemi decided the substance, so the judgement is his and this is execution — but wording carries choices. **This rewrite should be read by someone who did not run b4 before it is treated as settled.**
+
+**REVIEW ROUND 1, Henry, reading as someone who did not run b4 — one real defect, and it is the shape that killed the old B4.**
+
+The rewrite's first title was *A report's rows do not outnumber the changes it implies.* That is a claim with a truth value, and **the only data that exists violates it: 79 rows against about 6 changes, roughly 13 to 1.** It is also close to unsatisfiable in principle, since collapsing rows to causes yields fewer causes than rows nearly always. Meanwhile the *Check* stated no threshold at all — grepped, and there was no verdict rule anywhere in the block. So the criterion could be neither met nor unmet, only performed.
+
+**B4 dying of its own wording, twice in one day.** The old check asked for a statistic that cannot exist; the replacement asserted a ratio nobody measures against.
+
+**Resolved on Opeyemi's decision: it is a TRANSPARENCY criterion and now says so.** Retitled *A report says how many changes its rows imply.* Met by publishing the two counts and the grouping; failed by printing rows without saying how many changes they imply. **No acceptable ratio is stated, because nobody has the evidence to state one** — one night, three pages — and a threshold chosen so the figure already in hand passes is what `thresholds.md` exists to prevent. The 13:1 is published for a reader to judge rather than hidden inside a verdict. That is how the rest of the list reads: A4 asks what an install leaves behind and sets no number of files.
+
+**What Henry found holding, recorded because a review that only lists defects misreports itself:** the concern survives verbatim; *the concern is the criterion, the statistic is only how it is caught* makes the statistic replaceable without the criterion dying; per-page-never-averaged follows from the measurement; and the dropped guard is handled by requiring the grouping be published — *a count whose grouping is not shown does not satisfy this criterion* — which is falsifiable by any reader, where rater independence proved unobtainable in the very experiment that proposed it.
 
 ---
 

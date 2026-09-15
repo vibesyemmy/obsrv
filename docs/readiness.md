@@ -135,7 +135,7 @@ rather than a cliff, which is a defence of it that did not exist that morning.
 The number that still rests on unpublished evidence is the tap-target 7 mm,
 and the page now says so instead.
 
-**B4. A report's rows do not outnumber the changes it implies.** zalando.de
+**B4. A report says how many changes its rows imply.** zalando.de
 answered 143 targets with **103 under 7 mm**. If most of those are not things
 anyone would change, a first run teaches the reader to skim, and every true
 finding after that is cheaper to ignore. **That concern is the criterion; the
@@ -148,6 +148,20 @@ change is one edit that would clear every row following from it. A page whose
 per page, never averaged: the ratio differs by an order of magnitude between
 a page with a missing viewport tag and a heavy commercial page, and an
 average would be true of neither.
+
+**This is a transparency criterion, not a threshold, and the distinction is
+deliberate.** It is met by publishing the two counts and the grouping; it is
+failed by printing rows without saying how many changes they imply. **No
+acceptable ratio is stated, because nobody has the evidence to state one** —
+one night's data on three pages — and a threshold chosen so that the figure
+already in hand passes is precisely what `thresholds.md` exists to prevent.
+The first title this rewrite carried (*a report's rows do not outnumber the
+changes it implies*) asserted a bar the check never evaluated, and the only
+data that exists violates it at about 13 rows to one change. A criterion whose
+title claims what its check cannot decide is how B4 failed the first time; it
+is not going to be how it fails the second. The ratio is published for a reader
+to judge, which is how the rest of this list reads — A4 asks what an install
+leaves behind and does not set a number of files.
 
 *Why this replaced the previous check, rather than being an easier version of
 it.* B4 used to ask for every finding classified *would act* / *would not*
