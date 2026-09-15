@@ -9,7 +9,7 @@ Raised 2026-09-15 by Rook, out of `bug-contrast-figure-mismatch`, and filed unow
 
 **THE HAZARD.** The `obsrv-dev` MCP tools serve one lane per machine, and that lane serves whichever checkout built it. Measured while writing this card:
 
-    npm run lane -- --status   ->  main @ c7e57c4 · /Users/opeyemiajagbe/Documents/Projects/Obsrv
+    npm run lane -- --status   ->  main @ c7e57c4 · ~/Documents/Projects/Obsrv
     the caller                     .../Obsrv/.claude/worktrees/rook-cli-version
 
 So a session working in a worktree — which is the rule in CONTRIBUTING.md, not the exception — calls `obsrv-dev` tools and exercises **main, not its branch**. Nothing contradicts the assumption that it is testing its own work. The verification comes back green, and the green is about somebody else's code.
