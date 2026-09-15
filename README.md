@@ -401,6 +401,19 @@ the app), `tabs.json` (the session it restores), and — only while agent
 control is on — `control.json`, mode `0600`, holding the loopback port and
 token.
 
+**And it keeps Chromium's caches for every page it has rendered**, in the same
+directory. Obsrv renders arbitrary third-party pages by design, so this grows
+with use in a way an ordinary app's does not — and faster for the people who
+use it most. A working profile was measured at **1.3 GB, 915 MB of it
+`Cache`**, with nothing pruning it. The disk cache is now capped at 256 MiB;
+`Code Cache` is Chromium's own and is not, so the directory can still grow,
+just not without limit at the part that dominated it. Headless CLI runs are
+not part of this at all: each takes a throwaway profile and deletes it.
+
+A warm cache is worth about 14 ms of load time on a small page and changes
+nothing Obsrv measures — five cold/warm pairs moved zero result fields — so
+the cap costs latency and not correctness.
+
 **Removing Obsrv does not remove any of that.** Deleting `Obsrv.app` — dragging
 it to the Trash — removes the app and nothing else; `npm rm -g getobsrv`
 removes the CLI and nothing else. Measured on a fresh install: one page

@@ -24,6 +24,13 @@ log.info(
   `obsrv ${readAppVersion()} starting: electron ${process.versions.electron}, chrome ${process.versions.chrome}, ${process.platform} ${process.arch}${app.isPackaged ? '' : ', unpackaged'}`,
 )
 
+/**
+ * The disk-cache ceiling, in bytes. 256 MiB: about a quarter of what an
+ * unbounded profile was measured at, and far more than a day's work on a
+ * handful of sites needs warm.
+ */
+const DISK_CACHE_BYTES = 256 * 1024 * 1024
+
 /** The one visible window, for a second launch to bring to the front. */
 let mainWin: BrowserWindow | null = null
 /** How many second launches were refused this run; read by the e2e harness. */
@@ -105,6 +112,32 @@ function boot(): void {
 // from the GPU. Chromium's own crash limit (three, then software compositing)
 // still stands, and the canvas reports that case honestly.
 app.commandLine.appendSwitch('disable-domain-blocking-for-3d-apis')
+
+/**
+ * A ceiling on Chromium's disk cache, because nothing else prunes it.
+ *
+ * Obsrv renders arbitrary third-party pages by design, so this grows with use
+ * in a way an ordinary app's does not: measured at 1.3 GB on a working profile,
+ * 915 MB of it `Cache` (`bug-userdata-unbounded`). The headless CLI is not
+ * part of that — it takes a throwaway profile per run and deletes it — so
+ * every byte of it is the app's.
+ *
+ * The cap is chosen against DISK rather than against repeatability, and that
+ * order was measured rather than assumed, because a cache that quietly made
+ * measurements agree would not be free to delete. Five cold/warm pairs on one
+ * page, clearing and relaunching between rounds:
+ *
+ *   load    cold 51, 53, 51, 180, 52 ms      warm 37, 38, 38, 37, 38 ms
+ *   audit   cold ~265 ms                     warm ~265 ms
+ *   result fields moved between runs: 0, warm or cold, in every round
+ *
+ * So a warm cache buys about 14 ms of load on a small static page and changes
+ * nothing that is measured. Latency, not correctness — which is what makes a
+ * bound safe. It is deliberately generous: enough that ordinary repeat work on
+ * a handful of sites stays warm, small enough that a profile cannot reach a
+ * gigabyte of cache unnoticed.
+ */
+app.commandLine.appendSwitch('disk-cache-size', String(DISK_CACHE_BYTES))
 
 // The evidence a "target went blank" report needs and never had: which
 // process died, and why Chromium says it did. The GPU is the one that
