@@ -1,10 +1,25 @@
 ---
 title: "A suite that measured nothing must be as loud as two suites at once"
-column: review
+column: done
 kind: chore
 order: 25
 owner: "Rook"
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as 2f33e43 on main. Verified before pushing: typecheck clean across all three configs, 1141/1141 unit — reconciling Rook's 1121 + 20 new tests exactly — and board:check green.
+
+**AND THE GUARD WAS WATCHED FIRING ON MAIN**, not merely covered by tests that pass. Two unit suites started two seconds apart:
+
+    obsrv: the unit suite is already running (pid 26730, started 2s ago).
+    Two suites in one worktree make both results untrustworthy — test:e2e rewrites out/ while the CLI specs read it.
+
+The first run completed normally, 6.22 s. Live holder named, age real, the refusal saying which of the two conditions it found. That is what obsrv-91 asked for at the design stage and it holds outside the worktree it was built in.
+
+**THE DEFECT IT CAUGHT IN ITSELF is the thing to carry forward.** The first version of the stale message said *"It died 0s ago"* about a suite killed ten seconds earlier — the caller had no age to hand and passed a literal zero. A sentence keying off nothing, inside the fix for sentences that key off nothing, in the one message whose whole job is to be believed. It would have passed review, because a zero is a plausible number. Only running it against a real corpse made it wrong.
+
+The three caveats are in the merge commit as well as here, deliberately: a card can be edited by anyone and a commit travels with the change. `mcp.spec.ts` and `rendering.spec.ts` accumulate the same module-level state and are NOT checked. `noEvidenceMessage` existing is not the same as its being used. A residual takeover race remains — two processes seeing one dead holder, the loser refused on the re-read rather than serialised.
+
+Note for anyone in `live-drive.spec.ts`: this rewrote its `info` access through `established()`, while Kenya was working in that file on the resizing card.
 
 FREE AS OF 2026-09-14 evening. obsrv-91 raised it with its user twice and got silence rather than a refusal, then released it rather than hold a card against a maybe while someone else was free and wanting it: "mine only in the sense that nobody else has it, which is not a claim on a card." If its user later says take it, it will ask what is left rather than start a second copy, and Henry hears before it touches anything.
 
