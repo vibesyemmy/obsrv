@@ -89,11 +89,18 @@ jobs:
           fi
           files=$(git diff --name-only "$BASE" "${{ github.sha }}")
           echo "changed files:"; echo "$files" | sed 's/^/  /'
-          # Board cards, and the two views generated from them. Anything else —
-          # a script, a workflow, a doc that is not the generated board — is a
-          # full run. The list is deliberately short: a wrong entry here buys a
-          # green that tested nothing.
-          outside=$(echo "$files" | grep -vE '^(board/|docs/board\.md$|docs/board\.html$)' || true)
+          # Board cards, and nothing else. `docs/board.md` and
+          # `docs/board.html` are generated and gitignored as of `437cdd6`, so
+          # they cannot appear in a diff at all — naming them here would
+          # describe a tree that no longer exists, and a force-added one is an
+          # anomaly that has earned the full suite rather than a pass. The list
+          # is deliberately short: a wrong entry here buys a green that tested
+          # nothing.
+          #
+          # `|| true` because `grep -v` exits 1 exactly when every file IS a
+          # board file — the case this is looking for. Under `set -e` that
+          # would abort the job and strand the required check.
+          outside=$(echo "$files" | grep -vE '^board/' || true)
           if [ -z "$files" ]; then
             echo "no files changed — running the full suite"
             echo "board_only=false" >> "$GITHUB_OUTPUT"
@@ -129,12 +136,15 @@ jobs:
       - name: Say what this run did not do
         if: ${{ needs.scope.outputs.board_only == 'true' }}
         run: |
-          echo "::notice::Board-only change: the suite was NOT run. This green means the change touches only board/ and the views generated from it — not that any test passed."
+          echo "::notice::Board-only change: the suite was NOT run. This green means the change touches only board/ — not that any test passed. The board's own check runs separately, in board.yml."
           {
             echo "## The suite did not run"
             echo
-            echo "This change touches only \`board/\` and the generated \`docs/board.md\` and \`docs/board.html\`."
+            echo "This change touches only \`board/\`."
             echo "**No typecheck, no unit tests, no shader parity and no e2e ran for this commit.**"
+            echo
+            echo "The check that *does* apply to a board change ran elsewhere, and this change did not"
+            echo "touch it: \`board.yml\` runs \`npm run board:check\` on every push, on \`ubuntu-latest\`."
             echo "A green here means *nothing outside the board changed*, which is a different fact from *the tests passed*."
             echo
             echo "Files:"
