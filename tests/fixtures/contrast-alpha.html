@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>contrast grid</title>
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; }
+  .case { padding: 24px; }
+  /* 1. dark text on an opaque light background, both declared on the element */
+  #c1 { background: #ffffff; color: #0b0c0c; }
+  /* 2. light text on an opaque dark background, both declared on the element */
+  #c2 { background: #0c0c0c; color: #ffffff; }
+  /* 3. light text whose OWN background is transparent, over a dark parent.
+        The composite is the only possible answer; there is no declared
+        background-color on the element itself. */
+  #c3parent { background: #0c0c0c; }
+  #c3 { background: transparent; color: #ffffff; }
+  /* 4. light text over a TRANSLUCENT white veil on a dark parent. The composite
+        (#545454-ish) differs from every colour declared anywhere. */
+  #c4parent { background: #0c0c0c; }
+  #c4veil { background: rgba(255, 255, 255, 0.3); }
+  #c4 { background: transparent; color: #ffffff; }
+  /* 5. the same veil, inverted: dark text over a translucent black veil on
+        white. If the fault tracks direction, 5 and 4 disagree. */
+  #c5parent { background: #ffffff; }
+  #c5veil { background: rgba(0, 0, 0, 0.3); }
+  #c5 { background: transparent; color: #0b0c0c; }
+  /* 6. dark text, transparent own background, light opaque parent — the
+        mirror of case 3. */
+  #c6parent { background: #d2e2f1; }
+  #c6 { background: transparent; color: #0b0c0c; }
+</style>
+
+<div class="case" id="c1">case 1 — #0b0c0c on declared #ffffff</div>
+<div class="case" id="c2">case 2 — #ffffff on declared #0c0c0c</div>
+<div id="c3parent"><div class="case" id="c3">case 3 — #ffffff, own bg transparent, parent #0c0c0c</div></div>
+<div id="c4parent"><div id="c4veil"><div class="case" id="c4">case 4 — #ffffff over 30% white veil on #0c0c0c</div></div></div>
+<div id="c5parent"><div id="c5veil"><div class="case" id="c5">case 5 — #0b0c0c over 30% black veil on #ffffff</div></div></div>
+<div id="c6parent"><div class="case" id="c6">case 6 — #0b0c0c, own bg transparent, parent #d2e2f1</div></div>
+<style>
+  /* 7. white text under an element OPACITY on a dark parent. The computed
+        `color` stays #ffffff; the painted glyph is greyer. */
+  #c7parent { background: #0c0c0c; }
+  #c7 { color: #ffffff; opacity: 0.62; }
+  /* 8. the same greyness via a translucent text colour instead of opacity. */
+  #c8parent { background: #0c0c0c; }
+  #c8 { color: rgba(255, 255, 255, 0.62); }
+</style>
+<div id="c7parent"><div class="case" id="c7">case 7 — color #ffffff with opacity .62 on #0c0c0c</div></div>
+<div id="c8parent"><div class="case" id="c8">case 8 — color rgba(255,255,255,.62) on #0c0c0c</div></div>
