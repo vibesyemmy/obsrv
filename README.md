@@ -449,8 +449,10 @@ thresholds**](docs/thresholds.md) for where every judged number comes from, and
 [**breaking changes**](docs/breaking-changes.md) for anything that has moved or
 been renamed.
 
-**Want to help?** [**The board**](docs/board.md) is the open work, each card
-carrying the criterion it closes and the file or commit that defines done.
+**Want to help?** [**The board**](https://vibesyemmy.github.io/obsrv/) is the
+open work, each card carrying the criterion it closes and the file or commit
+that defines done. The cards themselves live in [`board/`](board) — one
+markdown file each, and the only source of truth.
 Cards in *Next* are the ones worth starting.
 
 The board itself is [`board/`](board) — one markdown file per card. **Claim one
@@ -468,7 +470,7 @@ those cards, and CI fails if either has drifted from them:
 | | |
 |---|---|
 | [**vibesyemmy.github.io/obsrv**](https://vibesyemmy.github.io/obsrv/) | the Kanban view — columns, owners, click a card for its full evidence. Rebuilt from `board/` on every push to `main`, so it is never a stale copy of anything |
-| [`docs/board.md`](docs/board.md) | the same cards as a readable list, rendering here on GitHub |
+| [`board/`](board) | the cards themselves, one markdown file each — the source the views are built from, and the only thing committed |
 
 ## Known v1 limits
 
