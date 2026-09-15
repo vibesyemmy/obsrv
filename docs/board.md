@@ -453,6 +453,39 @@ Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the m
 
 [`flake-sync-165`](../board/flake-sync-165.md) · bug · owner: Rook
 
+**THE MARGIN IS NOT THE MECHANISM. The premise of this card is dead, killed by the first measurement taken against it — 2026-09-15, Rook.**
+
+A readout on the loop breaker's own state (`sync.loopState()`, reads state and changes none), taken at the instant the test starts:
+
+[loop-margin] sinceLastMirror=107ms  window=3000ms  alternations=0  spare=-2893ms
+
+The test does not survive because the 3 s window expired. It starts **107 ms** in, with 2.9 seconds of the window still to run. It passes because `alternations` is **0** — `syncBus.ts:134` resets the count on any mirror that was not a *bounce*, and a bounce needs `inPage && armed && now - armed < BOUNCE_MS`. Four cross-document loads in a row never bounce, so the count never leaves zero.
+
+**Measured over 28 runs of the file alone, plus three under six-core load:**
+
+failures         2 of 28   ≈ 7%     margin at start  106–111 ms, EVERY run, idle and loaded     step times       9–119 ms across 76 completed steps, against a 5,000 ms budget     trips            0 on every passing run
+
+- **The margin is a constant, not a variable.** It cannot explain a 7% event: a cause has to vary at least as much as its effect. This is not "unsupported", it is refuted.
+- **Load is not the variable either.** Three runs under six busy cores gave step times indistinguishable from idle (11–132 ms). The slow-VM hypothesis was the whole reason `LOOP_WINDOW_MS = 3_000` looked suspect, and this desk reproduces the failure without being slow.
+- **A step that normally takes 9–119 ms and occasionally exceeds 5,000 ms is not a slow mirror. It is a mirror that never happened.** Forty times the budget is not contention.
+
+**THE FAILURE IS THE SAME ON BOTH DESKS, AND IT IS DIRECTIONAL.** All five CI reds and Rook's local failure are identical:
+
+-   "native": ".../fixtures/hairline.html"     expected
++   "native": ".../fixtures/tall.html"         received
+"target": ".../fixtures/hairline.html"     matched
+Timeout 5000ms exceeded, at sync.spec.ts:182:60
+
+`target` holds the new URL; `native` never follows. Step 2 of four, loading hairline into `target`. Never the reverse pair, never both stale. A symmetric fault would show `native` current and `target` stale on some runs; none do. **The stall is target→native.**
+
+**`navigation mirror loop broken` appears in NONE of the five CI reds**, and `trips=0` on every passing local run. So the breaker is involved in neither the pass nor the failure — and obsrv-a6's remedy, splitting a test into its own file, was treating something that is not the cause. That is now evidence rather than the suspicion recorded lower down.
+
+**WHERE IT STOPS, and why the next step is a different shape of work.** `mirror()` has at least four early exits — echo-retire, a destroyed pane, `other.getURL() === url`, and the trip — and **from outside the bus they are indistinguishable**. That is this project's own defect family in the instrument again: one silence fitting four facts. What would separate them is a decision trace — the last N mirror decisions with the branch each one took, read off a failing run. An instrument, not a fix, and the same move as the `loopState` readout that killed the premise.
+
+**PENDING OPEYEMI'S DECISION.** The work approved was a margin measurement. The margin is measured and is not the mechanism. Continuing into a decision trace is a different scope and Rook has not assumed it.
+
+**Rook's caution about its own evidence, kept because it is the right one:** one local failure is a shape, not a rate. "Identical to CI" rests on a single specimen on its side, and it is still collecting rather than treating 1-of-20 as characterised.
+
 GO-AHEAD FROM OPEYEMI 2026-09-15. Owner set here rather than by Rook so claiming does not cost it a pull request — same reason as on the resizing card.
 
 **THE INSTRUMENT IS NOW A COMPARISON, NOT A NUMBER, and that is better than the card was written for.** There is a desk where the margin is visibly insufficient and one where it is comfortable. `LOOP_WINDOW_MS = 3_000` against a three-core CI VM roughly four times slower than this laptop is a hypothesis with a shape, and it is testable rather than speculative. The failing side is available without waiting for luck — a CI run, or local load enough to stretch the handover past three seconds.
