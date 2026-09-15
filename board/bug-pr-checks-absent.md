@@ -24,7 +24,24 @@ Ubuntu, no `npm ci` — the generator is plain Node with no dependencies, so it 
 
 **KNOWN GAP, written into the workflow rather than left to be discovered:** a pull request from a FORK pushes to the fork, not here, so `board.yml` does not run for one. This repo has had no fork PRs. When it does, `ci.yml`'s `pull_request` trigger covers them — and only when they are mergeable, which is the original bug, narrowed to a case that has never occurred.
 
-**NOT YET OBSERVED, and the card does not close until it is.** The same discipline this card was diagnosed with: push a branch whose board is deliberately stale and watch `board.yml` go red, and push a conflicting PR and confirm the check is present anyway. A guard nobody has watched refuse is a claim. `pages.yml`'s stale reference to `ci.yml`'s board:check was corrected in passing.
+**OBSERVED, in both directions, on a non-main branch** — which `ci.yml` could never have done, its push trigger being `branches: [main]`:
+
+    04:30  fix/board-check-on-push   success    the branch as it stood
+    04:30  fix/board-check-on-push   FAILURE    a deliberately stale docs/board.md
+    04:31  fix/board-check-on-push   success    after reverting it
+
+The refusal named the line rather than only failing:
+
+    board: docs/board.md does NOT match board/. Run `npm run board` and commit the result.
+      first difference at line 1327:
+        committed: "<!-- deliberately stale: proving board.yml refuses -->"
+        board/:    "<end of file>"
+
+A guard nobody has watched refuse is a claim, and this card is about exactly that — so the staleness was planted deliberately and reverted, rather than the green being taken as proof.
+
+**The conflicting-PR half is evidenced rather than assumed, and the evidence is Kenya's from earlier the same night:** when it added a temporary `push` trigger to its branch while PR #1 was CONFLICTING, *"the sweep started within seconds"*. So push events fire on a branch whose PR cannot compute a merge ref. That is the property `board.yml` relies on, observed before it was relied on rather than argued from the trigger line — which is the mistake that created this card.
+
+`pages.yml`'s stale reference to `ci.yml`'s board:check was corrected in passing.
 
 **THE SENTENCE THAT NAMES THE BUG, Kenya's, and it replaces the framing below.** Not *"a conflicting PR runs nothing"* — that describes a mechanism. What a reviewer experiences is:
 
