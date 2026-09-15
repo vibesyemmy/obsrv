@@ -163,9 +163,10 @@ believed. And a command's *behaviour* changing while its name and reply shape
 stay put is not visible to any of these checks — the same blindness that makes
 a meaning change "the worst of them" in the policy.
 
-**And the policy is younger than the releases it was applied to.**
-`compatibility.md` was written 2026-09-15, `breaking-changes.md` and
-`thresholds.md` on 2026-09-14; none existed at 0.60.0. So the rule about a
+**And the policy is younger than the releases it was applied to.** None of
+`compatibility.md`, `breaking-changes.md` or `thresholds.md` is present in the
+tree at *any* of the five tags — the releases are 2026-09-12 and -13, the
+documents 2026-09-14 and -15. So the rule about a
 documented threshold moving with `thresholds.md` could not be broken by 0.58.0,
 and the requirement to announce in the release notes cannot be met backwards at
 all. Retroactive application produces a record, not an announcement. The

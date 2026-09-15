@@ -76,11 +76,26 @@ permitted in a minor.
 
 ## The hole: the policy is younger than everything it is being applied to
 
+All three files, absent from the tree at all five tags — checked at every tag
+rather than sampled:
+
 ```
-docs/thresholds.md        created 2026-09-14   absent at v0.58.0 and v0.60.0
-docs/breaking-changes.md  created 2026-09-14   absent at v0.56.0 and v0.60.0
-docs/compatibility.md     created 2026-09-15   absent at all five
+tag        compatibility  breaking-changes  thresholds
+v0.56.0    ABSENT         ABSENT            ABSENT
+v0.57.0    ABSENT         ABSENT            ABSENT
+v0.58.0    ABSENT         ABSENT            ABSENT
+v0.59.0    ABSENT         ABSENT            ABSENT
+v0.60.0    ABSENT         ABSENT            ABSENT
+
+releases 2026-09-12 and -13; the documents 2026-09-14 and -15
 ```
+
+**Corrected 2026-09-15.** The first version of this section sampled two tags per
+file — `thresholds.md` at v0.58.0 and v0.60.0, `breaking-changes.md` at v0.56.0
+and v0.60.0 — and presented the result as the finding. The conclusion held and
+the premise was narrower than stated, which is the direction a claim should not
+be wrong in: a reader would have taken it for a complete check. Henry checked
+presence at every tag and the fact is broader than I claimed.
 
 Two rules become undecidable rather than satisfied:
 
@@ -104,14 +119,18 @@ Recorded before reading; none was resolved by it, and two now have evidence.
 
 - **A1, whether a CLI stdout key addition earns an entry.** 0.61.0 answered it
   in practice — it has one — so the register is ahead of the policy text here.
-- **A2, whether a new MCP tool is breaking.** Untouched by this window and
-  still undecided by the text. A new tool does not appear in an old client's
-  replies, so the reasoning that makes an added *field* breaking does not
-  obviously carry.
+- **A2, whether a new MCP tool is breaking.** **Answered on main at `87800a6`:
+  it is not.** A new tool never appears in a reply to a call an old client
+  makes, so nothing it validates changed; the cost is invisibility until the
+  client lists tools again, which is a restart note. That is the reasoning this
+  page argued did not carry from the added-field case, and the policy now says
+  so.
 - **A3, a changed default that changes values rather than shape.** 0.58.0 is
   exactly this case and the policy permits it; that it was permitted without an
   entry is a decision the text makes, not an oversight.
-- **A4, a new enum value on the CLI rather than MCP.** Still unaddressed.
+- **A4, a new enum value on the CLI rather than MCP.** **Answered on main at
+  `87800a6`: breaking on MCP, not on the CLI** — which the policy now uses as
+  its clearest illustration that the four surfaces are not one.
 
 ## What a later pass should do
 
@@ -119,6 +138,8 @@ Recorded before reading; none was resolved by it, and two now have evidence.
   MCP server for its schemas rather than parsing source. That requires building
   old tags, which this pass judged too failure-prone to trust — a build failure
   would look like an absent schema.
-- Decide A2 and A4 in the policy text.
-- Say in `compatibility.md` what retroactive application means, since this card
-  is the first time it was tried and will not be the last.
+- Close A1, the only ambiguity still open: the register answers it in practice
+  (0.61.0 has an entry for a CLI key addition) and the policy text does not.
+
+A2, A4 and the meaning of retroactive application were all decided in
+`compatibility.md` at `87800a6`, after this pass and because of it.
