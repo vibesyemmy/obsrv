@@ -1,6 +1,6 @@
 ---
 title: "A log line cannot be attributed to the dev app or the installed one"
-column: next
+column: doing
 kind: bug
 owner: "Rook"
 order: 28
