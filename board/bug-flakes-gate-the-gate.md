@@ -207,6 +207,57 @@ It also settles the `panes:83` question as far as it can be settled: the overrid
 outcome. What is established is that the tree was not its cause and that it did not reproduce —
 not that it is understood.
 
+## The observation layer has the same defect as the thing observed
+
+This card is about CI signals that cannot be trusted. On 2026-09-15 the *watches built to read
+those signals* turned out to have the identical fault, and nobody noticed for hours.
+
+**Two background watches ran for 5h27m and 2h06m polling for runs that had already finished.**
+Both used `gh run list --commit` with an **abbreviated** SHA — `6f35647`, `78bd4a0` — which
+returns **zero rows and exit 0**, forever. The terminate condition read `.[0].status`, which was
+always empty, so neither could ever fire. Measured afterwards: short SHA → 0 rows; full SHA →
+`completed/success` for both.
+
+**Both runs had in fact succeeded, and both were reported correctly at the time** — because the
+answer was fetched by a different query (`gh run list --branch main -L 4`). That is the part
+worth keeping. **The instruments were dead and the reports were right**, so nothing surfaced the
+failure. Had anything actually depended on those watches, it would have waited forever for an
+event that had already happened — which is precisely the `mergeable: UNKNOWN` hang that cost a
+session an hour that same morning, arriving in the tooling built to avoid it.
+
+**Why it went unseen: a silent watch and a dead watch are indistinguishable.** Nothing
+distinguishes "still running, nothing yet" from "looping on a query that can never match".
+
+### The fix, and the version of it that would actually have caught this
+
+A heartbeat saying `alive` would **not** have caught it. The watch was alive. It was looking at
+nothing.
+
+**The heartbeat has to report the size of what it is looking at**, not that it is looking:
+
+```bash
+i=0
+while true; do
+  j=$(gh run list --commit "$(git rev-parse "$REF")" --workflow ci.yml \
+        --json status,conclusion 2>/dev/null)
+  rows=$(printf '%s' "$j" | jq -r 'length')
+  st=$(printf  '%s' "$j" | jq -r '.[0].status // empty')
+  cc=$(printf  '%s' "$j" | jq -r '.[0].conclusion // empty')
+  if [ "$st" = completed ] && [ -n "$cc" ]; then echo "RESULT: $cc"; break; fi
+  i=$((i + 1))
+  [ $((i % 10)) -eq 0 ] && echo "alive: poll $i, rows=$rows, status=${st:-none}"
+  sleep 45
+done
+```
+
+`rows=0` on the first heartbeat names the bug immediately. It is the same rule this repo already
+keeps for one-shot checks — *make the check report something non-empty about the thing it is
+watching, and read that number* — applied to a thing that runs for hours instead of once.
+
+**And use `git rev-parse`, never a short SHA.** That trap is already in `CONTRIBUTING.md`, written
+the same morning, by the same session that then walked into it three more times. Writing a trap
+down does not stop you walking into it; a heartbeat that prints `rows=0` does.
+
 ## Still not known
 
 The cause of any of the four. Whether they share one. Whether `mcp.spec:137` failing first-time
