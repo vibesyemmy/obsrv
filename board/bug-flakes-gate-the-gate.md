@@ -124,6 +124,44 @@ time. No change to `--retries` — raising it would hide more of exactly what ha
 found, and the honest move given this evidence is to consider **lowering it to zero** and seeing
 what the suite actually reports, which is a different proposal and belongs to whoever takes this.
 
+## A fifth option nobody had raised: stop running the suite on trees that cannot break it
+
+The four options above all try to make the suite more trustworthy. This one reduces how often
+its trustworthiness matters, and it is cheaper than any of them.
+
+**`ci.yml` has no paths filter at all** — measured, not assumed: zero `paths:` or `paths-ignore:`
+keys in the file. So a pull request changing two words in a markdown card runs the full
+~14-minute macOS e2e suite, and is gated by a suite in which one test fails first-time in 5 of 5
+observed runs. PR #14 is exactly that: a home-directory redaction in two cards, touching no
+source, no tests and no config, waiting on the Electron app to be driven.
+
+`board.yml` already demonstrates the shape — a fast job that runs on everything and does seconds
+of work on ubuntu, deliberately kept out of the macOS suite.
+
+**THE TRAP, which is why this is an option and not an obvious fix.** `ci.yml` is now a REQUIRED
+check. On GitHub, a workflow skipped by a paths filter does not report at all — and a required
+check that never reports leaves the pull request blocked, waiting for an answer that cannot
+come. That is precisely the deadlock `bug-suite-absent-on-conflict` measured from the other
+direction, and with `enforce_admins` on there is no override.
+
+So this option is not "add `paths-ignore`". It is "add `paths-ignore` **and** a job that always
+runs and reports success under the same required check name" — the standard workaround, and one
+this repo would be adopting sight-unseen. **Nobody here has tested that GitHub behaves as
+described**, and it should be watched refusing and watched passing before it is trusted, on a
+throwaway branch rather than on main. PR #5 is the precedent for keeping such a probe as
+evidence.
+
+**What it would and would not buy.** It would stop card edits, research write-ups and README
+changes paying for a suite they cannot break — which tonight is most of the traffic. It would
+not make `mcp.spec:137` pass, would not explain `vision:47`, and would not help a single change
+to `src/`. It narrows the blast radius of an unreliable suite; it does not repair it.
+
+**The risk to weigh honestly:** a filter that is too generous ships something untested. `docs/**`
+and `board/**` cannot affect the app. `scripts/**`, `package.json`, `.github/**` and anything
+under `src/` or `tests/` must never be ignored — and a filter is a list somebody maintains, which
+is the kind of thing that is correct when written and wrong six months later. The four options
+above fail safe; this one fails open.
+
 ## Still not known
 
 The cause of any of the four. Whether they share one. Whether `mcp.spec:137` failing first-time
