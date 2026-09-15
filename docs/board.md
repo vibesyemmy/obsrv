@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*58 cards, 28 open, 19 of those unclaimed.*
+*58 cards, 28 open, 18 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -40,7 +40,7 @@ learned the hard way and written down:
 
 ---
 
-## Backlog — 13
+## Backlog — 12
 
 *Raised, not yet picked.*
 
@@ -85,12 +85,6 @@ Settle gap closed 2026-09-14. Still open: the dialog note has never fired on a l
 [`b4`](../board/b4.md) · **B4** · readiness · *unclaimed*
 
 zalando.de answered 143 findings; nobody has established how many a developer would act on. B5 now makes this interpretable.
-
-### A live run that turns up nothing user-visible
-
-[`b1`](../board/b1.md) · **B1** · readiness · *unclaimed*
-
-Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
 
 ### A mirrored redirect's second commit can still be counted as an arrival
 
@@ -413,7 +407,7 @@ Options, none obviously right:
 
 ---
 
-## Doing — 2
+## Doing — 3
 
 *Claimed. Someone is on it.*
 
@@ -430,6 +424,31 @@ RESOLUTION ISSUED: nobody edits the shared checkout; each session takes its own 
 Also flagged: the git stash stack is SHARED across worktrees, so a bare `git stash pop` in one takes another's work. WIP commit, or stash push -u -m with a unique tag and apply by sha.
 
 OPEN: this is currently a convention announced in a chat room, which is the weakest possible enforcement — it survives exactly as long as the room's scrollback. Worth deciding whether it belongs in CONTRIBUTING or a pre-edit check.
+
+### A live run that turns up nothing user-visible
+
+[`b1`](../board/b1.md) · **B1** · readiness · owner: Rook
+
+ASSIGNED TO ROOK 2026-09-15, on Opeyemi's word, and chosen for what it needs rather than what suits the taker. Rook asked for exactly that.
+
+**WHY THIS ONE.** Tonight produced seven merged cards and every one was the harness or the plumbing — the suite lock, the mirror trace, the sync bus, the tab strip, the board, CI itself. **None of it touched what the product actually does.** `report`, `lint`, `audit`, the MCP server, presets and calibration have not been read or exercised by anyone in two days, and B1 is the criterion that says they work. It has never been met.
+
+**AND IT WANTS SOMEONE COLD, which is the same argument that put `bug-sync138` with Kenya.** `docs/read-the-output-not-the-code` says the warnings ARE the product, and that the way to check a sentence is to have a peer read it cold. Rook has never read the audit or lint output. That is not a gap to work around here — it is the qualification.
+
+**IT IS NOT A CARD THAT MERGES, and that is the point.** B1 is met when a run finds nothing. Runs 13, 14, 15 and 16 each found something, each smaller than the last, and 2026-09-13 alone produced four defects that had reached users. So the deliverable is a live run over a fresh set of sites and the dev-server shapes, and then either a set of new cards or the sentence "this run found nothing user-visible", which nobody has been able to write yet.
+
+Finding something is the likely outcome and is a success. Finding nothing is the criterion.
+
+**WHAT WOULD MAKE THE RUN WORTH TRUSTING**, given everything this week has been about:
+
+- Fresh sites, not the ones previous runs used, or the run measures whether known defects are still fixed rather than whether unknown ones exist.
+- Read every sentence the tools emit, not only the ones that look wrong. A sentence that is individually plausible and wrong in company is this project's commonest defect, and it is invisible to anyone scanning for errors.
+- A finding needs a page and a reply, not a recollection — the same standard applied to every card tonight.
+- And the thing tonight kept teaching: `npx playwright test` and the MCP tools run the BUILT `out/`. Two separate sessions produced false results from a stale build in one evening. Build first.
+
+Prior runs are in `docs/research/`. Worth reading what runs 13–16 found before starting, to avoid re-finding them and to know what "smaller than the last" has meant.
+
+Cannot be scheduled — met when a run finds nothing. Runs 13-16 each found something. docs/research/
 
 ### The target emits no url-changed at all — a second shape, and the test named for it
 
