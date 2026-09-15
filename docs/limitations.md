@@ -88,6 +88,35 @@ of a page and a measurement of its first screen.
 
 ## Where the numbers stop being exact
 
+### The app's profile grows with every page it renders
+
+Chromium caches what it fetches, and Obsrv renders arbitrary third-party pages
+by design — so the app's application-support directory grows with use, and
+fastest for the people who use it most. Measured on a working profile: **1.3 GB,
+915 MB of it `Cache`**, 338 MB `Code Cache`, with nothing pruning either.
+
+The disk cache is capped at 256 MiB from 0.62.0 (`src/main/index.ts`). `Code
+Cache` is Chromium's own and has no such switch, so the directory still grows —
+bounded where it was worst, not everywhere.
+
+**Why a cap is safe, since a cache that quietly improved agreement would not
+be free to delete:** measured before choosing the number, on one desk, five
+cold/warm pairs with the cache cleared and the app relaunched between rounds.
+A warm cache saved about 14 ms of load on a small static page (51 ms against
+37) and left the measurement itself unchanged — the audit phase flat at ~265 ms
+and **zero result fields moved between runs, warm or cold, in every round**.
+Latency, not correctness.
+
+What that does not cover, and nobody has measured: a heavy page with many
+assets, where the saving is presumably larger, and whether repeatability there
+depends on the cache. Real sites move on their own
+(`docs/research/2026-09-14-b5-repeatability.md`), which is what makes that
+harder to answer than it sounds.
+
+The headless CLI is not part of any of this: `bin/obsrv.js` gives each run a
+throwaway profile and deletes it afterwards, so a CLI run is always cold and
+leaves nothing behind.
+
 ### `lint` cannot see a sub-pixel border
 
 Chromium snaps `border-top: 0.5px` up to a whole device pixel at style time,

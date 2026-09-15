@@ -35,6 +35,28 @@ const flag = (name, fallback) => {
 }
 const RUNS = Number(flag('runs', 3))
 const PRESET = flag('preset', 'laptop-768')
+/**
+ * Where the CLI's Chromium profile lives, and whether fixtures may be cached.
+ *
+ * Both exist for one question: does a warm Chromium cache change what Obsrv
+ * measures? (`bug-userdata-unbounded` — the app's profile is 1.3 GB, 915 MB of
+ * it `Cache`, and a cap is the wrong fix if that cache is load-bearing for
+ * repeatability.)
+ *
+ * By default this sweep is COLD by construction, and that is not a choice this
+ * script made: `bin/obsrv.js` creates a throwaway user-data dir per invocation
+ * and deletes it afterwards (its own comment says why — Chromium flushes
+ * profile files after the last main-process JS runs). So every CLI run starts
+ * with an empty cache, on any desk.
+ *
+ * `--profile <dir>` runs the built CLI entry directly under Electron with
+ * OBSRV_CLI_USER_DATA set, which `src/cli/main.ts` honours, so the profile
+ * persists across runs. `--cacheable` serves fixtures with a year's max-age
+ * instead of `no-store`, since a cache cannot warm on responses it is
+ * forbidden to keep. Warm needs both.
+ */
+const PROFILE = flag('profile', '')
+const CACHEABLE = flags.includes('--cacheable')
 const OUT = flag('out', join(root, `b5-sweep-${process.platform}.json`))
 
 // The shapes drift would live in, from the original sweep's own list: pages
@@ -98,7 +120,7 @@ function serveFixtures() {
       res.writeHead(404).end()
       return
     }
-    res.writeHead(200, { 'content-type': hit.type, 'content-length': hit.body.length, 'cache-control': 'no-store' })
+    res.writeHead(200, { 'content-type': hit.type, 'content-length': hit.body.length, 'cache-control': CACHEABLE ? 'public, max-age=31536000, immutable' : 'no-store' })
     res.end(hit.body)
   })
   return new Promise(done => server.listen(0, '127.0.0.1', () => done({ server, port: server.address().port })))
@@ -203,7 +225,18 @@ function controlPasses(runs) {
  */
 function run(tool, url) {
   return new Promise(done => {
-    const child = spawn(process.execPath, [join(root, 'bin', 'obsrv.js'), tool, url, '--preset', PRESET], { env: { ...process.env } })
+    const argv = PROFILE
+      ? [join(root, 'out', 'main', 'cli.js'), '--', tool, url, '--preset', PRESET]
+      : [join(root, 'bin', 'obsrv.js'), tool, url, '--preset', PRESET]
+    // resolveElectron() answers { path }, not a path — the first run of this
+    // arm spawned the object and died before a single measurement.
+    const bin = PROFILE ? require(join(root, 'bin', 'electronPath.js')).resolveElectron().path : process.execPath
+    const env = { ...process.env }
+    if (PROFILE) {
+      env.OBSRV_CLI_USER_DATA = PROFILE
+      delete env.ELECTRON_RUN_AS_NODE
+    }
+    const child = spawn(bin, argv, { env })
     let out = ''
     let err = ''
     const timer = setTimeout(() => child.kill('SIGKILL'), 180_000)
@@ -294,6 +327,7 @@ async function main() {
     desk: desk(),
     preset: PRESET,
     runs: RUNS,
+    cache: { profile: PROFILE || 'throwaway per run (bin/obsrv.js)', cacheable: CACHEABLE },
     fixtures: FIXTURES,
     tools: TOOLS,
     elapsedMs: Date.now() - started,

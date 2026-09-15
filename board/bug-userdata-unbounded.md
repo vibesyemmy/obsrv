@@ -1,6 +1,6 @@
 ---
 title: "userData grows without bound — 1.3 GB, 94% of it Chromium cache"
-column: doing
+column: review
 kind: bug
 owner: "Kenya"
 order: 29
@@ -41,3 +41,40 @@ Nothing prunes either. They are Chromium's own caches for every page Obsrv has e
 What is NOT yet known, and should be established before choosing a fix, because the obvious fix is a cap and the obvious cap is wrong if the cache is load-bearing: whether these caches make repeat measurements of the same page faster or more consistent. Obsrv's whole product is that two measurements of the same page agree (B5), so a cache that quietly improves repeatability is not free to delete. Measure the effect on a repeat snap before capping anything.
 
 The related limits question: `docs/limitations.md` says what Obsrv cannot measure and `README.md` has a *Privacy and files* section naming where files live. Neither says this directory grows without limit, which a user would want to know before it is 1.3 GB.
+
+---
+
+**DELIVERED 2026-09-15 by Kenya, into Review. Branch `fix/userdata-cache-bound`. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly.**
+
+**THE CONFOUND IS DEAD, AND STRUCTURALLY RATHER THAN STATISTICALLY.** `bin/obsrv.js` creates a throwaway user-data dir per invocation and deletes it afterwards, and `src/cli/main.ts:1537` deletes it again in-process for direct invocations. So EVERY headless CLI run is cold by construction, on any desk. Measured rather than read off the source:
+
+    app Cache before a CLI audit   936,476 KB   mtime 1787493638
+    app Cache after                936,476 KB   mtime 1787493638
+    obsrv-cli-* dirs left behind   0
+
+The B5 fixture sweep never touched the 1.3 GB — that is the APP's profile. Both desks were cold, so `ci-second-host`'s desk attribution is NOT confounded this way and needs no correction.
+
+A second, independent reason it could not have been the variable, and this one was mine: the sweep's fixture server sends `cache-control: no-store`. A cache cannot warm on responses it is forbidden to keep. Two blocks on the same hypothesis, one of them built by the person testing it.
+
+**IS THE CACHE LOAD-BEARING? NO — measured, five cold/warm pairs.** Clearing `Cache`, `Code Cache` and the WebGPU cache and relaunching between rounds, then one cold measurement and two warm ones per round, on berkshirehathaway.com (B5's own static site, so movement is the cache rather than the page):
+
+    load    cold 51, 53, 51, 180, 52 ms      warm 37, 38, 38, 37, 38 ms
+    audit   cold ~265 ms                     warm ~265 ms
+    result fields moved, warm or cold        0, every round
+
+A warm cache buys ~14 ms of load and changes nothing that is measured. **So the cap is chosen against disk space, not against repeatability** — which is the order the card asked for and the reason it could not be decided from the armchair.
+
+**THE FIX:** `--disk-cache-size` at 256 MiB (`src/main/index.ts`). `Code Cache` is Chromium's own and has no such switch, so the directory still grows — bounded where it was worst (915 MB of 1.3 GB), not everywhere. Said plainly in both docs rather than implied.
+
+**THE CAP WAS VERIFIED BINDING, AND THE FIRST VERIFICATION WAS A COINCIDENCE I NEARLY KEPT.** Same page, five loads each:
+
+    cap 1 MiB     -> cache 1032 KB     read as "pinned at the ceiling". IT WAS NOT.
+    cap 256 MiB   -> cache  948 KB     the page only ever produces ~950 KB
+    cap 128 KiB   -> cache  140 KB     the switch binds, 7x smaller on identical work
+
+The 1 MiB arm was never constrained by its own cap; two unbound numbers landed either side of it and I read the one above as proof. A test whose control is not bound by the thing under test can only produce a coincidence, and this one pointed the way I wanted. The 128 KiB arm is the real evidence, and it exists because I ran a control.
+
+**DOCUMENTED** in both places the card named: README *Privacy and files* and `docs/limitations.md`, each with the measurement and with what it does not cover — a heavy page with many assets, where the saving is presumably larger and where nobody has measured whether repeatability depends on the cache. Real sites move on their own, which is what makes that harder than it sounds.
+
+**VERIFIED:** typecheck clean across all three configs; unit 1171 passed in 67 files; the app builds and runs with the switch in the built output.
+
