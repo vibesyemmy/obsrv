@@ -1,5 +1,5 @@
 ---
-title: "QUEUE — Rook: run 18 started · a1 on Opeyemi · c2-retroactive done"
+title: "QUEUE — Rook: run 19 (the live app) routed · a1 on Opeyemi"
 column: next
 kind: chore
 owner: "Rook"
@@ -24,6 +24,14 @@ epitaph — *"the queue went stale within hours of being written"* — which was
    `bug-suite-absent-on-conflict`. `bug-dev-app-exited` is unblocked by it and is unowned;
    Rook flagged in advance that taking it would mean reading output produced by its own
    change, and asked to be held to being slower to believe it.
+
+**NOW**
+
+1. `b1-live-app` — **ROUTED** 2026-09-15, waiting on Rook's own user. Run 19: the live app,
+   B1's last documented gap. Both run 17 and run 18 excluded it explicitly and said so. It is
+   also the last of Rook's coldness — `audit`/`lint` spent on run 17, `report`/`diff` on run 18,
+   and Rook reported that asset gone unprompted. After this there is no cold reader on this
+   board for any part of the product.
 
 **BLOCKED, and not on anything Rook can do**
 
