@@ -1,6 +1,6 @@
 ---
 title: "userData grows without bound — 1.3 GB, 94% of it Chromium cache"
-column: next
+column: doing
 kind: bug
 owner: "Kenya"
 order: 29
