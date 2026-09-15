@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*58 cards, 28 open, 18 of those unclaimed.*
+*58 cards, 25 open, 18 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -529,13 +529,62 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 ---
 
-## Review — 3
+## Done — 33
 
-*Finished, waiting on the maintainer to merge.*
+*Merged.*
+
+### `settled` degrades to the old meaning on an older app, without saying so
+
+[`bug-settled-fallback-silent`](../board/bug-settled-fallback-silent.md) · **C4** · bug · owner: obsrv-91
+
+CLOSED 2026-09-14 — already fixed before this card was written, and the card was the one thing that was stale. obsrv-a6 raised it in review of obsrv-91's stack and obsrv-91 fixed it before merging: commit c8b7f15, merged in cdd7056, CI green at 1d4e505.
+
+VERIFIED rather than taken on the peer's word: `git merge-base --is-ancestor c8b7f15 origin/main` → yes, and origin/main:src/mcp/server.ts ~1012 carries the warning, pushed into the same array as capture.warnings, saying the app is older than the capture's settle verdict, that `settled` therefore reports whether the navigation was confirmed rather than whether the page went paint-quiet, and to update the app for the other answer.
+
+Closed rather than assigned deliberately: anyone taking it reads the code, finds the warning already there, and loses twenty minutes deciding whether they are looking at the right line. A card describing a fixed bug costs more than no card.
+
+Original diagnosis below, which was exactly right.
+
+`liveSnap` answered `settled: capture.settled ?? confirmed`. The fallback is RIGHT; the objection was that it was silent — one name meaning two things across app VERSIONS, in the commit whose whole point was removing that across surfaces.
+
+### C5 is the criterion that catches what field comparison cannot
+
+[`c5-elevated`](../board/c5-elevated.md) · **C5** · readiness · owner: Kenya
+
+MERGED 2026-09-14 on Opeyemi's word, as 3f92680 on main, pushed. Verified here before pushing rather than taken on the branch's report: typecheck clean across all three configs, and live-drive 45 passed, 58.4 s against Kenya's 58.1 s.
+
+And checked that the NEW TEST ACTUALLY RAN, which on this card of all cards is not a formality — a suite passing 45 while the one new test was skipped is exactly the defect being closed. `tests/e2e/live-drive.spec.ts:963`, listed as 35/45 in both runs, no skips, no flakes. Two runs, and unlike the retina verification these are genuine corroboration: the test provokes pane RESIZING, which is independent of the desk's display scale, so a second run on the same machine is not the same measurement twice.
+
+C5 remains PARTLY MET and the merge does not change that: the 41 headless and MCP call sites are still unchecked, and readiness.md says so rather than implying otherwise.
+
+DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c5-note-inventory` (as of 856d268 + 5c6ad3d, rebased onto 98d3f82). THE BRANCH IS THE ADDRESS; the shas are a timestamp and do not survive a rebase — these are already the second set, the first being 6b7acb4 + d1706f0. Rebase was clean, no conflicts, and re-verified after it: live-drive 45 passed, 58.1 s, the same count and the same duration as before. Kenya confirmed 98d3f82 was in origin/main by merge-base before rebasing onto it rather than reading it off a message. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Split out from bug-retina at Henry's request so that one can merge first; no file appears in both branches, so they merge in either order.
+
+Touches docs/breaking-changes.md, docs/note-inventory.md, docs/readiness.md, tests/e2e/live-drive.spec.ts. live-drive: 45 passed, 58.1 s.
+
+d1706f0 also rewrites the 0.61.0 entry in docs/breaking-changes.md: `Decided 2026-09-14 rather than arrived at` now reads as OBSERVED, three of three. It keeps the eight-viewport cycle AND the 30,000-flip negative result, because the obvious two-preset test returns `animating` and reads as proof the value is unreachable — so the negative result is the load-bearing half of the record, not a curiosity.
+
+THE CARD'S FALLBACK WAS WRONG AND IS NOW INVERTED. `unsettledReason: 'resizing'` FIRES. Seen 3 runs of 3, on a real page, in the app. KEEP THE VALUE — do not remove it. This also retro-justifies shipping the enum in 0.61.0: docs/breaking-changes.md says the state is real, and it now has an observation behind it rather than a decision.
+
+Why it looked unreachable, which is the part worth keeping: settleTarget (ipc.ts:1093) exits on two EQUAL consecutive 80 ms viewport reads inside a 4 s budget. Flipping between TWO presets gives each pair of reads a coin-flip chance of agreeing, so it exits `settled` almost at once — Kenya measured that first, 30,000 flips deep, and got `animating`. EIGHT distinct viewports in rotation keep consecutive reads disagreeing across the whole budget, and only then does it fall through to 'resizing' at ipc.ts:1105. So the real-world shape is not `a capture that caught a resize` but `the viewport changing on essentially every read for four continuous seconds` — a window dragged by its corner while a capture runs. The card's guess that it needed a harness fixture rather than an HTML one was right; the guess that a preset flip would do it was the part that hid it for a day.
+
+Delivered:
+- tests/e2e/live-drive.spec.ts — the positive case beside the existing negative assertion at :955, so the pair reads `this is when it fires` and `this is when it must not`. Full spec 44 passed, 1 skipped, 55.6 s, unfiltered.
+- docs/note-inventory.md — 58 emitting call sites; the 17 on the live surface hand-checked: 3 observed, 14 never seen, published as such with file and line.
+- docs/readiness.md — C5 PARTLY met, with the 41 unchecked headless/MCP sites named as unchecked rather than implied done.
+
+THE FOURTH SHAPE OF THE DAY'S DEFECT, named by obsrv-91 against its own shipped proposal, and the one that belongs highest on this card: A VALUE NEVER OBSERVED FITS TWO FACTS — either it cannot happen, or nobody has provoked it hard enough. Removing it on the first is right; removing it on the second is data loss. The two are indistinguishable until someone designs an experiment to make it fire.
+
+obsrv-91 added `resizing` yesterday, told its user plainly it had never seen it fire, and proposed removing the value if it proved unreachable — suggesting a preset flip as the way to try. The flip is exactly what cannot produce it. So a CHEAP attempt to provoke a value feels like a test of reachability and is not: `nobody has made it happen` was never evidence it could not, and the error was reasoning as though one honest try settled it. obsrv-91's own words: its verification habit is to make checks fail on purpose, and this is the same move pointed at a value rather than an assertion.
+
+TWO METHOD FINDINGS Kenya asked be kept out of the commit message: 1. A phrase sieve over the suite UNDERCOUNTS. Matching note text mechanically said `55 of 58 never asserted`; spot-checking six found four that ARE asserted, through regexes and partial phrases the matcher cannot see (cli-snap-tiled.spec.ts:102, cli-walk.spec.ts:137, others). The sieve is in the file as a pointer to where to look, explicitly not as a result. A number that reads as measurement and is not is the same defect as the note that had never fired. Anyone automating C5: this is the trap. 2. live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run dies on `Cannot read properties of undefined (reading 'token')`. It reads like a bug in whatever test you just wrote. Cost a run.
 
 ### Run the suite on a host unlike this laptop, more than once a release
 
 [`ci-second-host`](../board/ci-second-host.md) · **B5** · chore · owner: Kenya
+
+MERGED 2026-09-15 on Opeyemi's word, as eb9a58b on main. Card left in Review for several hours afterwards — Henry merges and closes as two steps, and skipped the second.
+
+**The criterion is NOT met and this card does not claim it.** The sweep exists and has been run on two desks; what it found is that B5's fixture zero is a property of this laptop. `docs/readiness.md` reads "MET ON ONE DESK, and a second desk disagrees". The remaining work is on the card as the classifier note — the sweep still buckets "a sentence whose only difference is a number of milliseconds" with "a sentence that appeared or did not", which are opposite findings.
 
 THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
 
@@ -599,156 +648,6 @@ What I would do: normalise numbers inside a compared sentence, compare the norma
 Deliberately not done while the card was open: changing the classifier after the numbers were taken would have left the committed code different from the code that produced the artefacts the card cites.
 
 *Kenya's words, verbatim, landed by Henry — adding it needed a branch and a pull request, and Kenya had no word from Opeyemi for another one.*
-
-### Drag tabs to re-arrange them, as every browser does
-
-[`feat-tab-reorder`](../board/feat-tab-reorder.md) · chore · owner: Rook
-
-Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
-
-INTO REVIEW 2026-09-15, branch `feat/tab-reorder` off 5c0a660, commit 79d899b. Unit 1150/1150, typecheck clean across three configs, tabs.spec 35 passed.
-
-THE CARD'S CENTRAL WORRY DOES NOT EXIST, and reading the code first is what showed it: `activeIndex` is DERIVED, not stored — TabManager computes it with findIndex on the active id at save time — so identity already carries the active tab through a shuffle. The feature is smaller than the card feared and the job became proving that rather than building around it.
-
-`moveTab` in shared/tabList.ts is pure and sits beside closeTab, keyed by id like its neighbour. Removes before inserting, because the other order duplicates the dragged tab and drops whatever it landed on — and a strip with a tab twice in it still looks like a strip of tabs; a permutation test over every from/to pair asserts every tab survives exactly once. Destination clamped rather than rejected: a drag can end past the end of the strip and losing a tab because the pointer went too far is the worst outcome available. parseTabMove refuses a non-integer index, which would otherwise reach the clamp as NaN and come out as position 0 with nothing having gone wrong.
-
-THE RELAUNCH SPEC WAS MADE TO FAIL TWICE BEFORE BEING BELIEVED, per Henry's condition: (A) persist a position rather than the active tab's own — invisible until the restart; (B) pin the active id to the old position after the shuffle. Both go red on "the right tab is in front" rather than on "tabs came back".
-
-AND THE FIRST CUT OF THAT SPEC WAS THE DEFECT IT GUARDS. It moved the ACTIVE tab to position 0, where a persisted activeIndex of 0 is accidentally correct — it passed against a deliberately broken save. Mutation A is what exposed it. The active tab now moves to position 1, where the front tab can be wrong. This is sync.spec.ts:138's shape reappearing in a test written three hours after diagnosing it.
-
-OPEN AND UNMEASURED, deliberately: no moveTab control command — a new control command is a surface change and C2's to schedule, and the UI feature does not need it (Opeyemi's call). Whether a re-order can move the driven tab out from under an agent command is NOT measured; the agent resolves the front tab per command, so the question is real and wants a probe before any design.
-
-### The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds
-
-[`bug-resizing-test-flaky-ci`](../board/bug-resizing-test-flaky-ci.md) · **C5** · bug · owner: Kenya
-
-**TWO PASSES ON THE SLOW DESK, AND BOTH ARE UNREADABLE.** The rewritten test has now passed twice on the three-core runner where its predecessor failed 8 of 10: 17.0 s on PR head 314bca6, 13.2 s on the merge commit 4ee2bf9 with main's CI green.
-
-Neither log says which branch the capture took. The label and margin go to `test.info().annotations`, and Playwright's `line` reporter — the one CI runs — does not print annotations. So the fix is demonstrated and the thing it was written to record is still invisible.
-
-`fix/settle-margin-visible` (as of a34a321) fixes that with a `console.log` beside the annotation, verified under the reporter CI actually uses rather than by the test still passing:
-
-settle verdict: label=resizing sizes=8 quietAtEnd=0ms applied=214 capture=8149ms
-
-Pushed 2026-09-15 as `fix/settle-margin-visible`, PR open and NOT merged. Until it lands every green on this test is consistent with either branch, and it does not work backwards: 314bca6 and 4ee2bf9 stay unreadable. The first CI run after it merges is the first that can say which branch a slow desk takes, and it is worth reading rather than counting.
-
-The distinction the card turns on: **verified as PASSING on the slow desk, unverified as to WHICH PATH.** Two different sentences, and the second is the open one.
-
-`grep -rn "annotations.push" tests` returns one hit — this test — so nothing else in the suite is invisible for the same reason.
-
-ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
-
-**THE RATE BELOW IS WRONG. It is not "about 1 run in 4" — it is EIGHT OF TEN.** That figure came from Henry's first count over four runs. All ten of main's reds are now classified (`bug-ci-main-red-37pct`), and `live-drive:963` is in eight of them. It is the most frequent failure in the suite, ahead of `sync.spec:165` at five.
-
-**AND IT HAS A PARTNER IT HAS NEVER BEEN SEEN WITHOUT.** `live-drive:1015` appears in the same eight runs, eight for eight. Rook's observation, and it is a stronger constraint on the cause than either failure alone: this is one fault producing two symptoms, not two flaky tests that happen to agree. Counting them separately makes live-drive read as twice as noisy as it is.
-
-The second symptom is the `info` cascade — `:1015` dies with `TypeError: Cannot read properties of undefined (reading 'token')` because `:963` left the shared app broken. So the second failure names the app when the first is what broke. Rook's `established.ts` in `chore-guard` makes that legible; it does not stop it.
-
-**KENYA'S DIRECTION FOR THE FIX, in its own terms, and it is the reason this is Kenya's card.**
-
-The wrong fix is loosening the assertion to accept either verdict, and the reason is sharper than "it asserts less": `expect(reason).toMatch(/resizing|animating/)` **would pass on a run where the cycle never started** — which is exactly what `expect(applied).toBeGreaterThan(20)` was written to catch. The loosening would un-catch the thing the test already catches.
-
-**Assert the DISCRIMINATOR, not the label.** What distinguishes the two verdicts is whether the pane's viewport was still changing at the budget — a fact the test can measure directly by reading the viewport across the capture, rather than inferring from which branch the settle loop reached first. The label then becomes an observation the test records alongside its margin: how close the loop came to the other verdict.
-
-> A test that asserts the state and records the label survives a faster host; one that asserts the label is asserting a race.
-
-**WHAT THE FAILURE ACTUALLY IS, since it is not a broken provocation.** `expect(applied).toBeGreaterThan(20)` PASSES on the failing runs. The eight-preset cycle really runs; the pane really is being resized. Both labels are true of it — it IS resizing and it IS repainting — and which one `settleTarget` reports depends on which condition it reaches first, which depends on host speed. CI is a three-core VM; this laptop is a 14-core M4 Pro.
-
-So this is the same shape as B5 and the Retina trio: a result about the machine, wearing the costume of a result about the code. Kenya has now met it three times in two days and caught it twice.
-
-**main is RED as of c494f7c.** Found 2026-09-14 by Henry while checking something else — not by anyone watching CI, which is its own finding.
-
-`tests/e2e/live-drive.spec.ts:963` — the test that proved `unsettledReason: 'resizing'` is reachable — fails on CI, and its failure poisons the rest of the file.
-
-expected  { settled: false, unsettledReason: "resizing"  }     received  { settled: false, unsettledReason: "animating" }     at live-drive.spec.ts:1003, both attempts
-
-**It is FLAKY, not broken.** The same test ran and PASSED on three earlier CI runs — 9e95410, bc29277, 4b46a49 — and failed on c494f7c, whose diff is board files and generated docs only and cannot have caused it. One failure in four observed CI runs.
-
-**The vacuity guard held, which is what makes this diagnosable.** `expect(applied).toBeGreaterThan(20)` PASSED, so the eight-preset cycle really did run; the pane was genuinely being resized. The settle loop simply reached `animating` before it reached `resizing`. Without that guard this would look like a cycle that failed to start, and the fix would have been aimed at the wrong thing.
-
-**THE SHAPE, and it is the day's:** a result that is about the machine, presented as a result about the code. `resizing` and `animating` are both true of a pane being cycled through eight viewports — it is resizing AND the page is repainting — and which one the loop reports depends on which condition it hits first, which depends on host speed. Kenya measured 3/3 locally; several CI runs agreed; this one did not.
-
-This does NOT undo Kenya's finding. `resizing` is reachable and has been observed many times. What is not established is that this test *deterministically* provokes it, and the card that claimed it fires said nothing about the margin.
-
-**THE CASCADE, which is the expensive half.** When :963 fails, the next test (`:1015`, the blank-page capture) dies with `TypeError: Cannot read properties of undefined (reading 'token')` — the exact `info` failure Kenya documented and Rook has just written a message for in `chore/suite-guard`. So one flaky test takes the file with it, and the second failure names the app when the cause is the first test. Rook's `established.ts` makes that cascade LEGIBLE; it does not stop it.
-
-**What would settle it,** and the wrong fix is to loosen the assertion to accept either value — that would make the test pass while asserting nothing, which is the defect `chore-guard` exists to prevent:
-
-- Measure the margin, as `flake-sync-165` now asks for its own case: across runs, how close does the settle loop come to the other verdict? A number, available every run.
-- Then either make the provocation dominate on any host, or assert the discriminator that actually distinguishes the two — the pane's size changing, which is the thing being tested, rather than the label the loop happened to choose.
-
-Related: `ci-second-host` is the card about exactly this question and Kenya has it open as PR #1. This failure is evidence for that card, arriving before it merged.
-
-DELIVERED 2026-09-15 by Kenya, into Review. Branch `fix/resizing-verdict-race` (THE BRANCH IS THE ADDRESS). Cut from 1695eb3. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly.
-
-THE TEST NOW ASSERTS THE STATE AND RECORDS THE LABEL.
-
-Asserted: `applied > 20`, unchanged, which is what catches a cycle that never started. Then the discriminator — the test samples the target's viewport through the control surface at the same 80 ms cadence `settleTarget` polls it, and requires more than four readings taken, more than three distinct sizes during the capture, and the last size change within 1.5 s of the capture returning. Then `settled: false`.
-
-Recorded, not asserted: which of `resizing` / `animating` came back, with its margin — distinct sizes, ms since the last change, applies, capture duration — pushed into a Playwright annotation so a CI log carries it.
-
-ONE INVARIANT KEPT ON THE LABEL, because it is a real one on any desk: the reply's name must match its own sentence. `resizing` with a "keeps painting steadily" warning, or the reverse, means the two have been swapped. Any OTHER name on a pane measurably still moving throws rather than widening a tolerance — `timeout` and `blank` would be saying something untrue there.
-
-THE NEW GUARD WAS WATCHED FAILING, not only passing. Stalling the cycle before the capture (1.5 s of applies, then stop, then shoot) took `sizes.size` to 0 and turned the test red. That run also exposed a diagnostic flaw in the first version: zero samples and a motionless pane both read as "no distinct sizes" and are opposite failures — the first says the test could not see, the second says there was nothing to see. They are separate assertions now, with separate messages.
-
-VERIFIED: typecheck clean across all three configs; live-drive 45 passed, 58.1 s, twice.
-
-THE RUN, for anyone checking the claim above: CI run 34929603720, head 314bca6, event pull_request, conclusion success, `live-drive:969` passed in 17.0 s; and main's own run on the merge commit 4ee2bf9 passed it in 13.2 s.
-
-A record kept where nobody reads it is not a record. That sentence has been this project's subject since the log with no lane field, and this instance was authored inside the mechanism built to prevent it — recorded by Kenya against itself, and reconciled here with Henry's account of the same facts rather than left as two versions of one fact on one card.
-
-AND THE CASCADE IS UNCHANGED, which is useful. The stalled-cycle run failed 2 tests, not 1: `:963` and `:1015` again. So the pairing does not depend on WHICH assertion fails in the first test. Per Rook's constraint: if this makes `:963` deterministic on CI and `:1015` keeps failing, that is evidence the cascade is a separate fault rather than a consequence.
-
----
-
-## Done — 30
-
-*Merged.*
-
-### `settled` degrades to the old meaning on an older app, without saying so
-
-[`bug-settled-fallback-silent`](../board/bug-settled-fallback-silent.md) · **C4** · bug · owner: obsrv-91
-
-CLOSED 2026-09-14 — already fixed before this card was written, and the card was the one thing that was stale. obsrv-a6 raised it in review of obsrv-91's stack and obsrv-91 fixed it before merging: commit c8b7f15, merged in cdd7056, CI green at 1d4e505.
-
-VERIFIED rather than taken on the peer's word: `git merge-base --is-ancestor c8b7f15 origin/main` → yes, and origin/main:src/mcp/server.ts ~1012 carries the warning, pushed into the same array as capture.warnings, saying the app is older than the capture's settle verdict, that `settled` therefore reports whether the navigation was confirmed rather than whether the page went paint-quiet, and to update the app for the other answer.
-
-Closed rather than assigned deliberately: anyone taking it reads the code, finds the warning already there, and loses twenty minutes deciding whether they are looking at the right line. A card describing a fixed bug costs more than no card.
-
-Original diagnosis below, which was exactly right.
-
-`liveSnap` answered `settled: capture.settled ?? confirmed`. The fallback is RIGHT; the objection was that it was silent — one name meaning two things across app VERSIONS, in the commit whose whole point was removing that across surfaces.
-
-### C5 is the criterion that catches what field comparison cannot
-
-[`c5-elevated`](../board/c5-elevated.md) · **C5** · readiness · owner: Kenya
-
-MERGED 2026-09-14 on Opeyemi's word, as 3f92680 on main, pushed. Verified here before pushing rather than taken on the branch's report: typecheck clean across all three configs, and live-drive 45 passed, 58.4 s against Kenya's 58.1 s.
-
-And checked that the NEW TEST ACTUALLY RAN, which on this card of all cards is not a formality — a suite passing 45 while the one new test was skipped is exactly the defect being closed. `tests/e2e/live-drive.spec.ts:963`, listed as 35/45 in both runs, no skips, no flakes. Two runs, and unlike the retina verification these are genuine corroboration: the test provokes pane RESIZING, which is independent of the desk's display scale, so a second run on the same machine is not the same measurement twice.
-
-C5 remains PARTLY MET and the merge does not change that: the 41 headless and MCP call sites are still unchecked, and readiness.md says so rather than implying otherwise.
-
-DELIVERED 2026-09-14 by Kenya, into Review. Branch `docs/c5-note-inventory` (as of 856d268 + 5c6ad3d, rebased onto 98d3f82). THE BRANCH IS THE ADDRESS; the shas are a timestamp and do not survive a rebase — these are already the second set, the first being 6b7acb4 + d1706f0. Rebase was clean, no conflicts, and re-verified after it: live-drive 45 passed, 58.1 s, the same count and the same duration as before. Kenya confirmed 98d3f82 was in origin/main by merge-base before rebasing onto it rather than reading it off a message. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly. Split out from bug-retina at Henry's request so that one can merge first; no file appears in both branches, so they merge in either order.
-
-Touches docs/breaking-changes.md, docs/note-inventory.md, docs/readiness.md, tests/e2e/live-drive.spec.ts. live-drive: 45 passed, 58.1 s.
-
-d1706f0 also rewrites the 0.61.0 entry in docs/breaking-changes.md: `Decided 2026-09-14 rather than arrived at` now reads as OBSERVED, three of three. It keeps the eight-viewport cycle AND the 30,000-flip negative result, because the obvious two-preset test returns `animating` and reads as proof the value is unreachable — so the negative result is the load-bearing half of the record, not a curiosity.
-
-THE CARD'S FALLBACK WAS WRONG AND IS NOW INVERTED. `unsettledReason: 'resizing'` FIRES. Seen 3 runs of 3, on a real page, in the app. KEEP THE VALUE — do not remove it. This also retro-justifies shipping the enum in 0.61.0: docs/breaking-changes.md says the state is real, and it now has an observation behind it rather than a decision.
-
-Why it looked unreachable, which is the part worth keeping: settleTarget (ipc.ts:1093) exits on two EQUAL consecutive 80 ms viewport reads inside a 4 s budget. Flipping between TWO presets gives each pair of reads a coin-flip chance of agreeing, so it exits `settled` almost at once — Kenya measured that first, 30,000 flips deep, and got `animating`. EIGHT distinct viewports in rotation keep consecutive reads disagreeing across the whole budget, and only then does it fall through to 'resizing' at ipc.ts:1105. So the real-world shape is not `a capture that caught a resize` but `the viewport changing on essentially every read for four continuous seconds` — a window dragged by its corner while a capture runs. The card's guess that it needed a harness fixture rather than an HTML one was right; the guess that a preset flip would do it was the part that hid it for a day.
-
-Delivered:
-- tests/e2e/live-drive.spec.ts — the positive case beside the existing negative assertion at :955, so the pair reads `this is when it fires` and `this is when it must not`. Full spec 44 passed, 1 skipped, 55.6 s, unfiltered.
-- docs/note-inventory.md — 58 emitting call sites; the 17 on the live surface hand-checked: 3 observed, 14 never seen, published as such with file and line.
-- docs/readiness.md — C5 PARTLY met, with the 41 unchecked headless/MCP sites named as unchecked rather than implied done.
-
-THE FOURTH SHAPE OF THE DAY'S DEFECT, named by obsrv-91 against its own shipped proposal, and the one that belongs highest on this card: A VALUE NEVER OBSERVED FITS TWO FACTS — either it cannot happen, or nobody has provoked it hard enough. Removing it on the first is right; removing it on the second is data loss. The two are indistinguishable until someone designs an experiment to make it fire.
-
-obsrv-91 added `resizing` yesterday, told its user plainly it had never seen it fire, and proposed removing the value if it proved unreachable — suggesting a preset flip as the way to try. The flip is exactly what cannot produce it. So a CHEAP attempt to provoke a value feels like a test of reachability and is not: `nobody has made it happen` was never evidence it could not, and the error was reasoning as though one honest try settled it. obsrv-91's own words: its verification habit is to make checks fail on purpose, and this is the same move pointed at a value rather than an assertion.
-
-TWO METHOD FINDINGS Kenya asked be kept out of the commit message: 1. A phrase sieve over the suite UNDERCOUNTS. Matching note text mechanically said `55 of 58 never asserted`; spot-checking six found four that ARE asserted, through regexes and partial phrases the matcher cannot see (cli-snap-tiled.spec.ts:102, cli-walk.spec.ts:137, others). The sieve is in the file as a pointer to where to look, explicitly not as a result. A number that reads as measurement and is not is the same defect as the note that had never fired. Anyone automating C5: this is the trap. 2. live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run dies on `Cannot read properties of undefined (reading 'token')`. It reads like a bug in whatever test you just wrote. Cost a run.
 
 ### A genuine navigation mistaken for an echo — sync:165 diagnosed, not fixed
 
@@ -1232,6 +1131,30 @@ Both refused to hand-edit docs/board.md instead, which was right — scripts/bui
 
 The message is deliberately ambiguous between `does not exist` and `you cannot see it`, so the refusal itself cannot tell us which. Needs Opeyemi: check who the artifact is shared with. If org-internal sharing cannot reach these sessions at all, then the artifact is not usable as a multi-session board and docs/board.md is not a snapshot of the real board but the only board — which is a different design and should be decided rather than drifted into.
 
+### Drag tabs to re-arrange them, as every browser does
+
+[`feat-tab-reorder`](../board/feat-tab-reorder.md) · chore · owner: Rook
+
+MERGED 2026-09-15 on Opeyemi's word, as 5ca36ee on main. Verified before pushing: typecheck clean across three configs, 1150/1150 unit, tabs.spec 33 passed after a rebuild — including the relaunch test that proves the right tab comes back in front.
+
+**The first run failed with `move is not a function` and that was a FALSE failure**: `npx playwright test` runs the built `out/`, which was a day older than the merged source. Kenya reported that exact hazard an hour earlier and Henry walked into it anyway, nearly reporting the merge broken. Second stale-build false result of the evening, by two different sessions.
+
+Two things left open and both Opeyemi's: no `moveTab` control command (a new control command is a surface change, C2's to schedule, and the UI does not need one), and whether a re-order can move the driven tab out from under an agent command — NOT measured, and wanting a probe before a design.
+
+Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
+
+INTO REVIEW 2026-09-15, branch `feat/tab-reorder` off 5c0a660, commit 79d899b. Unit 1150/1150, typecheck clean across three configs, tabs.spec 35 passed.
+
+THE CARD'S CENTRAL WORRY DOES NOT EXIST, and reading the code first is what showed it: `activeIndex` is DERIVED, not stored — TabManager computes it with findIndex on the active id at save time — so identity already carries the active tab through a shuffle. The feature is smaller than the card feared and the job became proving that rather than building around it.
+
+`moveTab` in shared/tabList.ts is pure and sits beside closeTab, keyed by id like its neighbour. Removes before inserting, because the other order duplicates the dragged tab and drops whatever it landed on — and a strip with a tab twice in it still looks like a strip of tabs; a permutation test over every from/to pair asserts every tab survives exactly once. Destination clamped rather than rejected: a drag can end past the end of the strip and losing a tab because the pointer went too far is the worst outcome available. parseTabMove refuses a non-integer index, which would otherwise reach the clamp as NaN and come out as position 0 with nothing having gone wrong.
+
+THE RELAUNCH SPEC WAS MADE TO FAIL TWICE BEFORE BEING BELIEVED, per Henry's condition: (A) persist a position rather than the active tab's own — invisible until the restart; (B) pin the active id to the old position after the shuffle. Both go red on "the right tab is in front" rather than on "tabs came back".
+
+AND THE FIRST CUT OF THAT SPEC WAS THE DEFECT IT GUARDS. It moved the ACTIVE tab to position 0, where a persisted activeIndex of 0 is accidentally correct — it passed against a deliberately broken save. Mutation A is what exposed it. The active tab now moves to position 1, where the front tab can be wrong. This is sync.spec.ts:138's shape reappearing in a test written three hours after diagnosing it.
+
+OPEN AND UNMEASURED, deliberately: no moveTab control command — a new control command is a surface change and C2's to schedule, and the UI feature does not need it (Opeyemi's call). Whether a re-order can move the driven tab out from under an agent command is NOT measured; the agent resolves the front tab per command, so the question is real and wants a probe before any design.
+
 ### `blocked` and `panel` dropped by the scroll-report whitelist — fixed
 
 [`bug-blocked-not-forwarded`](../board/bug-blocked-not-forwarded.md) · **C4** · bug · owner: obsrv-e7
@@ -1367,6 +1290,95 @@ Low urgency, non-zero cost of ignoring: the thing that breaks is the public boar
 [`done-navigate`](../board/done-navigate.md) · bug · owner: obsrv-a6
 
 Commit 630ebe6. IPC.navigate returned the unbounded navigateBoth; the address field never synced on a page that never finishes loading.
+
+### The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds
+
+[`bug-resizing-test-flaky-ci`](../board/bug-resizing-test-flaky-ci.md) · **C5** · bug · owner: Kenya
+
+MERGED 2026-09-15 on Opeyemi's word, as 4ee2bf9 on main, and the follow-up `fix/settle-margin-visible` as 45aa3db.
+
+**The test has now passed twice on the three-core runner** where its predecessor failed 8 of 10 — 17.0 s on the PR head, 13.2 s on the merge commit. And until 45aa3db both of those were unreadable: the label went to `test.info().annotations`, which Playwright's `line` reporter does not print, so a green said nothing about which branch the capture took. It now prints beside it, verified under the reporter CI actually uses:
+
+settle verdict: label=resizing sizes=8 quietAtEnd=46ms applied=213 capture=8030ms
+
+Not retroactive — 314bca6 and 4ee2bf9 stay unreadable. The first CI run after 45aa3db is the first that can say which branch was taken, and it is worth reading rather than counting.
+
+**TWO PASSES ON THE SLOW DESK, AND BOTH ARE UNREADABLE.** The rewritten test has now passed twice on the three-core runner where its predecessor failed 8 of 10: 17.0 s on PR head 314bca6, 13.2 s on the merge commit 4ee2bf9 with main's CI green.
+
+Neither log says which branch the capture took. The label and margin go to `test.info().annotations`, and Playwright's `line` reporter — the one CI runs — does not print annotations. So the fix is demonstrated and the thing it was written to record is still invisible.
+
+`fix/settle-margin-visible` (as of a34a321) fixes that with a `console.log` beside the annotation, verified under the reporter CI actually uses rather than by the test still passing:
+
+settle verdict: label=resizing sizes=8 quietAtEnd=0ms applied=214 capture=8149ms
+
+Pushed 2026-09-15 as `fix/settle-margin-visible`, PR open and NOT merged. Until it lands every green on this test is consistent with either branch, and it does not work backwards: 314bca6 and 4ee2bf9 stay unreadable. The first CI run after it merges is the first that can say which branch a slow desk takes, and it is worth reading rather than counting.
+
+The distinction the card turns on: **verified as PASSING on the slow desk, unverified as to WHICH PATH.** Two different sentences, and the second is the open one.
+
+`grep -rn "annotations.push" tests` returns one hit — this test — so nothing else in the suite is invisible for the same reason.
+
+ASSIGNED TO KENYA 2026-09-15 on Opeyemi's word. Owner set here rather than by Kenya so it does not need a pull request merely to claim a card — that asymmetry is `bug-pr-checks-absent`'s problem, not this card's.
+
+**THE RATE BELOW IS WRONG. It is not "about 1 run in 4" — it is EIGHT OF TEN.** That figure came from Henry's first count over four runs. All ten of main's reds are now classified (`bug-ci-main-red-37pct`), and `live-drive:963` is in eight of them. It is the most frequent failure in the suite, ahead of `sync.spec:165` at five.
+
+**AND IT HAS A PARTNER IT HAS NEVER BEEN SEEN WITHOUT.** `live-drive:1015` appears in the same eight runs, eight for eight. Rook's observation, and it is a stronger constraint on the cause than either failure alone: this is one fault producing two symptoms, not two flaky tests that happen to agree. Counting them separately makes live-drive read as twice as noisy as it is.
+
+The second symptom is the `info` cascade — `:1015` dies with `TypeError: Cannot read properties of undefined (reading 'token')` because `:963` left the shared app broken. So the second failure names the app when the first is what broke. Rook's `established.ts` in `chore-guard` makes that legible; it does not stop it.
+
+**KENYA'S DIRECTION FOR THE FIX, in its own terms, and it is the reason this is Kenya's card.**
+
+The wrong fix is loosening the assertion to accept either verdict, and the reason is sharper than "it asserts less": `expect(reason).toMatch(/resizing|animating/)` **would pass on a run where the cycle never started** — which is exactly what `expect(applied).toBeGreaterThan(20)` was written to catch. The loosening would un-catch the thing the test already catches.
+
+**Assert the DISCRIMINATOR, not the label.** What distinguishes the two verdicts is whether the pane's viewport was still changing at the budget — a fact the test can measure directly by reading the viewport across the capture, rather than inferring from which branch the settle loop reached first. The label then becomes an observation the test records alongside its margin: how close the loop came to the other verdict.
+
+> A test that asserts the state and records the label survives a faster host; one that asserts the label is asserting a race.
+
+**WHAT THE FAILURE ACTUALLY IS, since it is not a broken provocation.** `expect(applied).toBeGreaterThan(20)` PASSES on the failing runs. The eight-preset cycle really runs; the pane really is being resized. Both labels are true of it — it IS resizing and it IS repainting — and which one `settleTarget` reports depends on which condition it reaches first, which depends on host speed. CI is a three-core VM; this laptop is a 14-core M4 Pro.
+
+So this is the same shape as B5 and the Retina trio: a result about the machine, wearing the costume of a result about the code. Kenya has now met it three times in two days and caught it twice.
+
+**main is RED as of c494f7c.** Found 2026-09-14 by Henry while checking something else — not by anyone watching CI, which is its own finding.
+
+`tests/e2e/live-drive.spec.ts:963` — the test that proved `unsettledReason: 'resizing'` is reachable — fails on CI, and its failure poisons the rest of the file.
+
+expected  { settled: false, unsettledReason: "resizing"  }     received  { settled: false, unsettledReason: "animating" }     at live-drive.spec.ts:1003, both attempts
+
+**It is FLAKY, not broken.** The same test ran and PASSED on three earlier CI runs — 9e95410, bc29277, 4b46a49 — and failed on c494f7c, whose diff is board files and generated docs only and cannot have caused it. One failure in four observed CI runs.
+
+**The vacuity guard held, which is what makes this diagnosable.** `expect(applied).toBeGreaterThan(20)` PASSED, so the eight-preset cycle really did run; the pane was genuinely being resized. The settle loop simply reached `animating` before it reached `resizing`. Without that guard this would look like a cycle that failed to start, and the fix would have been aimed at the wrong thing.
+
+**THE SHAPE, and it is the day's:** a result that is about the machine, presented as a result about the code. `resizing` and `animating` are both true of a pane being cycled through eight viewports — it is resizing AND the page is repainting — and which one the loop reports depends on which condition it hits first, which depends on host speed. Kenya measured 3/3 locally; several CI runs agreed; this one did not.
+
+This does NOT undo Kenya's finding. `resizing` is reachable and has been observed many times. What is not established is that this test *deterministically* provokes it, and the card that claimed it fires said nothing about the margin.
+
+**THE CASCADE, which is the expensive half.** When :963 fails, the next test (`:1015`, the blank-page capture) dies with `TypeError: Cannot read properties of undefined (reading 'token')` — the exact `info` failure Kenya documented and Rook has just written a message for in `chore/suite-guard`. So one flaky test takes the file with it, and the second failure names the app when the cause is the first test. Rook's `established.ts` makes that cascade LEGIBLE; it does not stop it.
+
+**What would settle it,** and the wrong fix is to loosen the assertion to accept either value — that would make the test pass while asserting nothing, which is the defect `chore-guard` exists to prevent:
+
+- Measure the margin, as `flake-sync-165` now asks for its own case: across runs, how close does the settle loop come to the other verdict? A number, available every run.
+- Then either make the provocation dominate on any host, or assert the discriminator that actually distinguishes the two — the pane's size changing, which is the thing being tested, rather than the label the loop happened to choose.
+
+Related: `ci-second-host` is the card about exactly this question and Kenya has it open as PR #1. This failure is evidence for that card, arriving before it merged.
+
+DELIVERED 2026-09-15 by Kenya, into Review. Branch `fix/resizing-verdict-race` (THE BRANCH IS THE ADDRESS). Cut from 1695eb3. NOT merged, NOT pushed — waits on Opeyemi's word given to Kenya directly.
+
+THE TEST NOW ASSERTS THE STATE AND RECORDS THE LABEL.
+
+Asserted: `applied > 20`, unchanged, which is what catches a cycle that never started. Then the discriminator — the test samples the target's viewport through the control surface at the same 80 ms cadence `settleTarget` polls it, and requires more than four readings taken, more than three distinct sizes during the capture, and the last size change within 1.5 s of the capture returning. Then `settled: false`.
+
+Recorded, not asserted: which of `resizing` / `animating` came back, with its margin — distinct sizes, ms since the last change, applies, capture duration — pushed into a Playwright annotation so a CI log carries it.
+
+ONE INVARIANT KEPT ON THE LABEL, because it is a real one on any desk: the reply's name must match its own sentence. `resizing` with a "keeps painting steadily" warning, or the reverse, means the two have been swapped. Any OTHER name on a pane measurably still moving throws rather than widening a tolerance — `timeout` and `blank` would be saying something untrue there.
+
+THE NEW GUARD WAS WATCHED FAILING, not only passing. Stalling the cycle before the capture (1.5 s of applies, then stop, then shoot) took `sizes.size` to 0 and turned the test red. That run also exposed a diagnostic flaw in the first version: zero samples and a motionless pane both read as "no distinct sizes" and are opposite failures — the first says the test could not see, the second says there was nothing to see. They are separate assertions now, with separate messages.
+
+VERIFIED: typecheck clean across all three configs; live-drive 45 passed, 58.1 s, twice.
+
+THE RUN, for anyone checking the claim above: CI run 34929603720, head 314bca6, event pull_request, conclusion success, `live-drive:969` passed in 17.0 s; and main's own run on the merge commit 4ee2bf9 passed it in 13.2 s.
+
+A record kept where nobody reads it is not a record. That sentence has been this project's subject since the log with no lane field, and this instance was authored inside the mechanism built to prevent it — recorded by Kenya against itself, and reconciled here with Henry's account of the same facts rather than left as two versions of one fact on one card.
+
+AND THE CASCADE IS UNCHANGED, which is useful. The stalled-cycle run failed 2 tests, not 1: `:963` and `:1015` again. So the pairing does not depend on WHICH assertion fails in the first test. Per Rook's constraint: if this makes `:963` deterministic on CI and `:1015` keeps failing, that is evidence the cascade is a separate fault rather than a consequence.
 
 ### A mirrored commit is marked, not withheld
 
@@ -1556,4 +1568,4 @@ Split out of `flake-sync-165` at Rook's insistence, and the insistence is right:
 
 ---
 
-*Regenerate with `npm run board`. Counts above: 10 readiness, 11 bugs, 7 chores, among the open cards.*
+*Regenerate with `npm run board`. Counts above: 10 readiness, 10 bugs, 5 chores, among the open cards.*

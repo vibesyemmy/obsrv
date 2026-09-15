@@ -1,10 +1,16 @@
 ---
 title: "Drag tabs to re-arrange them, as every browser does"
-column: review
+column: done
 kind: chore
 owner: "Rook"
 order: 28
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as 5ca36ee on main. Verified before pushing: typecheck clean across three configs, 1150/1150 unit, tabs.spec 33 passed after a rebuild — including the relaunch test that proves the right tab comes back in front.
+
+**The first run failed with `move is not a function` and that was a FALSE failure**: `npx playwright test` runs the built `out/`, which was a day older than the merged source. Kenya reported that exact hazard an hour earlier and Henry walked into it anyway, nearly reporting the merge broken. Second stale-build false result of the evening, by two different sessions.
+
+Two things left open and both Opeyemi's: no `moveTab` control command (a new control command is a surface change, C2's to schedule, and the UI does not need one), and whether a re-order can move the driven tab out from under an agent command — NOT measured, and wanting a probe before a design.
 
 Requested by Opeyemi 2026-09-14. Nothing today: TabBar.tsx has no draggable/onDragStart, and the control server has openTab/closeTab/activateTab but no moveTab. Order is positional — StoredTabs keeps a list plus an active index (shared/tabsFile.ts), and that file already documents how badly indices behave when the list shifts: dropping an entry shifts every index after it and can strand the active one. A reorder shifts the list on purpose, so it must move the active index with it and survive a restore; the tabs-come-back-on-relaunch spec is where that gets proved. Open questions for whoever takes it: whether an agent gets a moveTab command too (C2 — a new control command is a surface change), and whether reordering while agent control is on can move the driven tab out from under a command, since the agent acts on whichever tab is in front.
 

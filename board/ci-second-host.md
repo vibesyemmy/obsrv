@@ -1,10 +1,14 @@
 ---
 title: "Run the suite on a host unlike this laptop, more than once a release"
-column: review
+column: done
 kind: chore
 criterion: B5
 owner: "Kenya"
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as eb9a58b on main. Card left in Review for several hours afterwards — Henry merges and closes as two steps, and skipped the second.
+
+**The criterion is NOT met and this card does not claim it.** The sweep exists and has been run on two desks; what it found is that B5's fixture zero is a property of this laptop. `docs/readiness.md` reads "MET ON ONE DESK, and a second desk disagrees". The remaining work is on the card as the classifier note — the sweep still buckets "a sentence whose only difference is a number of milliseconds" with "a sentence that appeared or did not", which are opposite findings.
 
 THE COMPARISON EXISTS, which is what this card asked for, and it comes out against B5's published number. Five runs a side, same code, same fixtures, same preset:
 

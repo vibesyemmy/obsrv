@@ -1,11 +1,19 @@
 ---
 title: "The resizing verdict is a race the fast desk always wins — 8 of 10 CI reds"
-column: review
+column: done
 kind: bug
 owner: "Kenya"
 criterion: C5
 order: 35
 ---
+
+MERGED 2026-09-15 on Opeyemi's word, as 4ee2bf9 on main, and the follow-up `fix/settle-margin-visible` as 45aa3db.
+
+**The test has now passed twice on the three-core runner** where its predecessor failed 8 of 10 — 17.0 s on the PR head, 13.2 s on the merge commit. And until 45aa3db both of those were unreadable: the label went to `test.info().annotations`, which Playwright's `line` reporter does not print, so a green said nothing about which branch the capture took. It now prints beside it, verified under the reporter CI actually uses:
+
+    settle verdict: label=resizing sizes=8 quietAtEnd=46ms applied=213 capture=8030ms
+
+Not retroactive — 314bca6 and 4ee2bf9 stay unreadable. The first CI run after 45aa3db is the first that can say which branch was taken, and it is worth reading rather than counting.
 
 **TWO PASSES ON THE SLOW DESK, AND BOTH ARE UNREADABLE.** The rewritten test has now passed twice on the three-core runner where its predecessor failed 8 of 10: 17.0 s on PR head 314bca6, 13.2 s on the merge commit 4ee2bf9 with main's CI green.
 
