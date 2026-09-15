@@ -101,10 +101,10 @@ until you have watched the same query return non-zero on something you know is
 there. `grep` is line-based and this repo's prose is hard-wrapped, so a
 multi-word phrase check on a doc is a coin flip.
 
-## Two commands that lie about themselves
+## Three commands that lie about themselves
 
-Both of these cost this project time in one night, and both have the same
-shape: the command does its job, prints the right answer, and misreports it
+Each of these cost this project time, and all three have the same shape: the
+command does its job, prints a well-formed answer, and misreports something
 somewhere nobody is looking.
 
 **`grep -c` exits 1 when the count is zero.**
@@ -132,6 +132,26 @@ polling two pull requests that had merged before the poll was ten minutes old.
 Terminate on `state` or `mergedAt`, never on `mergeable`. And note the
 consequence for measurement: how often a PR was conflicting cannot be
 reconstructed after it merges, so it has to be recorded as it happens.
+
+**`gh run list --commit` returns nothing for an abbreviated SHA.**
+
+```bash
+gh run list --commit fbc273c                 # 0 rows, exit 0 — while four runs exist
+gh run list --commit $(git rev-parse HEAD)   # 4 rows
+```
+
+No error, no warning, exit 0. It is not a prefix match, and the empty result is
+indistinguishable from *this commit has no runs* — which is the exact question
+people use it to ask. One session watched a push for a hundred seconds this way
+and was about to report that the workflows had never triggered. All four had,
+and the first was green before the watch started.
+
+Pass `git rev-parse HEAD`, never the short form you read out of `git log`.
+
+Inside a workflow this is safe by construction — `github.sha` and `$GITHUB_SHA`
+are full-length — which is why `ci.yml`'s release gate and `suite-answer.yml`
+are unaffected. It bites in a terminal, where the short SHA is the one already
+in front of you.
 
 ## Testing
 
