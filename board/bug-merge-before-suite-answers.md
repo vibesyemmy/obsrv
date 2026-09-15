@@ -82,8 +82,17 @@ request can no longer be merged through the button until it is rebased, because 
 needs cannot be scheduled. Kenya has been rebasing all night to escape exactly that; it is now
 mandatory rather than merely wise.
 
-**Verified, and what was not.** The direct-push path is verified by this commit: it reached
-`main` under the new protection, which both proves admins are not gated and demonstrates the
-gap above rather than asserting it. **The PR gate itself is UNEXERCISED** — nobody has watched
+**Verified, and what was not.** The direct-push path is verified by the commit that added this
+section. It reached `main` under the new protection, and GitHub said this while allowing it:
+
+    remote: - Required status check "typecheck · unit · shader parity · e2e" is expected.
+    To https://github.com/vibesyemmy/obsrv.git
+       96d5d41..ae2a252  main -> main
+
+**That output is worth reading twice, because it is tonight's defect wearing a new coat.** The
+remote announces the required check in the register of a refusal — and then reports the push
+succeeded, two lines later. Anyone skimming a push for red text would conclude they had been
+blocked. Anyone skimming for the ref update would conclude the check had passed. It is neither:
+it is a warning that an admin bypassed a rule, printed in the shape of an error. **The PR gate itself is UNEXERCISED** — nobody has watched
 it refuse a pull request, so by this repo's own standard it is a claim rather than a check until
 the next PR tests it. Said here rather than discovered later.
