@@ -1,22 +1,48 @@
 ---
-title: "QUEUE — Rook: chore-guard now · flake-sync-165 next · a1 on Opeyemi"
+title: "QUEUE — Rook: c2-retroactive routed · log-attribution in review · a1 on Opeyemi"
 column: next
 kind: chore
 owner: "Rook"
 order: 2
 ---
 
-UPDATED 2026-09-14 evening.
+REWRITTEN 2026-09-15 against measured state, not recollection. The previous version had
+`chore-guard` IN PROGRESS and `flake-sync-165` QUEUED; both have been done for hours, and the
+card carried two stacked "UPDATED" sections contradicting each other. It also contained its own
+epitaph — *"the queue went stale within hours of being written"* — which was true again.
 
-1. `chore-guard` — IN PROGRESS. Rook's own first preference; obsrv-91 released it rather than hold it against a maybe. Read the stale-lock section before building: that branch needs an observation, not a design.
-2. `flake-sync-165` — QUEUED, on Opeyemi's word. Reshaped from a reproduction hunt into a margin measurement, because the flake was seen once and six runs were clean after; a hunt could end with nothing. The card now names the constants and the number to produce.
-3. `a1` — BLOCKED on Opeyemi: the design, the Voicify-versus-Opeyemi identity, and the credentials. Its first step is the `chore/signing` rebase, inside the card. Rook has read that branch; it merges clean today, 447 commits on, zero conflicts.
+**NOW**
 
-Not Rook's unless asked: the three a4 follow-ups. Rook declined them unprompted as "mine by provenance, not by right", and `chore-uninstall-path` in particular is a decision about what Obsrv promises rather than a cleanup.
+1. `c2-retroactive` — ROUTED, waiting on Rook's own user. Apply `docs/compatibility.md` to
+   0.56.0–0.60.0. See that card for why Rook and for the three framings obsrv-91 left on it.
+2. `bug-log-attribution` — IN REVIEW, branch `fix/log-attribution` @ 334164d, pushed and
+   fetch-confirmed. Merge is Opeyemi's. Unblocks `bug-dev-app-exited`.
 
-Updated 2026-09-14 evening, after the queue went stale within hours of being written — which is the failure mode this card is an instance of, not an exception to.
+**BLOCKED, and not on anything Rook can do**
 
-1. e2 — DELIVERED into Review, 717e924. See the e2 card.
-2. a1 — BLOCKED, and not on the certificate any more. Rook has a design with Opeyemi and waits on his yes. Two things need his decision, not Rook's: the design itself, and the IDENTITY — the app would be signed as Voicify Limited, which is what Gatekeeper shows users, while `copyright` says Opeyemi Ajagbe and CI would hold Voicify's private key. The remaining mechanical step needs Opeyemi to type a p12 password, so it cannot be finished by any session alone.
-   Already settled by measurement, so nobody re-opens it: the identity PAIRS. Public-key SHA-256 of the cert's -pubkey against each .key — obsrv-developer-id.key matches the Developer ID leaf at 53c1b7ae; the 21:34 pair is a different keypair at 1cd2c04d. And the G2 CA is a PUBLIC intermediate, not account-gated — Henry relayed the opposite to Opeyemi and has corrected it.
-3. bug-orientation-name — unstarted, and the next one to pick up when a1 is unblocked or if Rook wants work in the gap.
+3. `a1` — needs Opeyemi at a keyboard: the p12 password cannot be typed by any session, and the
+   Voicify-versus-Opeyemi identity is his decision, not an engineering one. Already settled by
+   measurement so nobody re-opens it: the keypair PAIRS (public-key SHA-256, `53c1b7ae`), and
+   the G2 intermediate is a PUBLIC download, not account-gated — Henry relayed the opposite and
+   has corrected it. `chore/signing` still merges clean.
+
+**NEXT IF THERE IS A GAP**
+
+4. `bug-orientation-name` — unstarted.
+
+**Not Rook's unless asked:** the three a4 follow-ups. Rook declined them unprompted as *"mine by
+provenance, not by right"*, and `chore-uninstall-path` is a decision about what Obsrv promises
+rather than a cleanup.
+
+**Merge state, measured rather than remembered, because Rook has been carrying a stale count.**
+Rook reported four branches with Opeyemi. Two of those are already merged: `fix/suite-absence-loud`
+landed at `7feb26b` and the card closed at `f57924b`, and the contrast work landed at `d66d047`
+and `7d57872`. The only unmerged branches in the repository are `fix/log-attribution`,
+`chore/signing`, and the stale tail of `fix/suite-absence-loud` — whose one leftover commit was
+Opeyemi's own, pushed after the merge, and has now been ported to main by hand.
+
+**Why this card keeps going stale, stated so the next rewrite is shorter:** a queue is a claim
+about several other cards, and nothing regenerates it when they move. `npm run board` checks
+that the VIEWS match the cards; it cannot check that a card's prose matches another card's
+column. Every line above is therefore a hand-maintained duplicate of state that lives elsewhere,
+and the honest fix is fewer lines here, not more frequent updates.

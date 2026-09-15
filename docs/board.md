@@ -1,6 +1,6 @@
 # The Obsrv board
 
-*60 cards, 22 open, 15 of those unclaimed.*
+*60 cards, 22 open, 14 of those unclaimed.*
 
 **This file is generated. The board is [`board/`](../board), one file per
 card — edit those.** `npm run board` regenerates this; CI runs
@@ -200,19 +200,29 @@ base                        3521bc8, 2026-08-29     commits on main since       
 
 Wiring waits on `chore/signing`, which is ready whenever the identity is.
 
-### QUEUE — Rook: chore-guard now · flake-sync-165 next · a1 on Opeyemi
+### QUEUE — Rook: c2-retroactive routed · log-attribution in review · a1 on Opeyemi
 
 [`queue-rook`](../board/queue-rook.md) · chore · owner: Rook
 
-UPDATED 2026-09-14 evening.
+REWRITTEN 2026-09-15 against measured state, not recollection. The previous version had `chore-guard` IN PROGRESS and `flake-sync-165` QUEUED; both have been done for hours, and the card carried two stacked "UPDATED" sections contradicting each other. It also contained its own epitaph — *"the queue went stale within hours of being written"* — which was true again.
 
-1. `chore-guard` — IN PROGRESS. Rook's own first preference; obsrv-91 released it rather than hold it against a maybe. Read the stale-lock section before building: that branch needs an observation, not a design. 2. `flake-sync-165` — QUEUED, on Opeyemi's word. Reshaped from a reproduction hunt into a margin measurement, because the flake was seen once and six runs were clean after; a hunt could end with nothing. The card now names the constants and the number to produce. 3. `a1` — BLOCKED on Opeyemi: the design, the Voicify-versus-Opeyemi identity, and the credentials. Its first step is the `chore/signing` rebase, inside the card. Rook has read that branch; it merges clean today, 447 commits on, zero conflicts.
+**NOW**
 
-Not Rook's unless asked: the three a4 follow-ups. Rook declined them unprompted as "mine by provenance, not by right", and `chore-uninstall-path` in particular is a decision about what Obsrv promises rather than a cleanup.
+1. `c2-retroactive` — ROUTED, waiting on Rook's own user. Apply `docs/compatibility.md` to    0.56.0–0.60.0. See that card for why Rook and for the three framings obsrv-91 left on it. 2. `bug-log-attribution` — IN REVIEW, branch `fix/log-attribution` @ 334164d, pushed and    fetch-confirmed. Merge is Opeyemi's. Unblocks `bug-dev-app-exited`.
 
-Updated 2026-09-14 evening, after the queue went stale within hours of being written — which is the failure mode this card is an instance of, not an exception to.
+**BLOCKED, and not on anything Rook can do**
 
-1. e2 — DELIVERED into Review, 717e924. See the e2 card. 2. a1 — BLOCKED, and not on the certificate any more. Rook has a design with Opeyemi and waits on his yes. Two things need his decision, not Rook's: the design itself, and the IDENTITY — the app would be signed as Voicify Limited, which is what Gatekeeper shows users, while `copyright` says Opeyemi Ajagbe and CI would hold Voicify's private key. The remaining mechanical step needs Opeyemi to type a p12 password, so it cannot be finished by any session alone.    Already settled by measurement, so nobody re-opens it: the identity PAIRS. Public-key SHA-256 of the cert's -pubkey against each .key — obsrv-developer-id.key matches the Developer ID leaf at 53c1b7ae; the 21:34 pair is a different keypair at 1cd2c04d. And the G2 CA is a PUBLIC intermediate, not account-gated — Henry relayed the opposite to Opeyemi and has corrected it. 3. bug-orientation-name — unstarted, and the next one to pick up when a1 is unblocked or if Rook wants work in the gap.
+3. `a1` — needs Opeyemi at a keyboard: the p12 password cannot be typed by any session, and the    Voicify-versus-Opeyemi identity is his decision, not an engineering one. Already settled by    measurement so nobody re-opens it: the keypair PAIRS (public-key SHA-256, `53c1b7ae`), and    the G2 intermediate is a PUBLIC download, not account-gated — Henry relayed the opposite and    has corrected it. `chore/signing` still merges clean.
+
+**NEXT IF THERE IS A GAP**
+
+4. `bug-orientation-name` — unstarted.
+
+**Not Rook's unless asked:** the three a4 follow-ups. Rook declined them unprompted as *"mine by provenance, not by right"*, and `chore-uninstall-path` is a decision about what Obsrv promises rather than a cleanup.
+
+**Merge state, measured rather than remembered, because Rook has been carrying a stale count.** Rook reported four branches with Opeyemi. Two of those are already merged: `fix/suite-absence-loud` landed at `7feb26b` and the card closed at `f57924b`, and the contrast work landed at `d66d047` and `7d57872`. The only unmerged branches in the repository are `fix/log-attribution`, `chore/signing`, and the stale tail of `fix/suite-absence-loud` — whose one leftover commit was Opeyemi's own, pushed after the merge, and has now been ported to main by hand.
+
+**Why this card keeps going stale, stated so the next rewrite is shorter:** a queue is a claim about several other cards, and nothing regenerates it when they move. `npm run board` checks that the VIEWS match the cards; it cannot check that a card's prose matches another card's column. Every line above is therefore a hand-maintained duplicate of state that lives elsewhere, and the honest fix is fewer lines here, not more frequent updates.
 
 ### QUEUE — Kenya: c5-elevated DONE · bug-retina DONE · c3 remains
 
@@ -286,11 +296,19 @@ Cause still open: the `hidden` divergence, the two walks scrolling differently, 
 
 ### Apply the breaking-changes policy to the last five releases
 
-[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · *unclaimed*
+[`c2-retroactive`](../board/c2-retroactive.md) · **C2** · readiness · owner: Rook
 
-**UNOWNED, AND OPEN TO ANYONE. obsrv-91 declined 2026-09-15, permanently and for a reason that is about the channel rather than the work:** *"treat me as unavailable for relayed offers until my user speaks to me directly. Do not hold `c2-retroactive` or anything else for me, and do not check back."* It added that this card being gone by then is *"the correct outcome, not a loss"* — so nothing here is reserved. Take it.
+**ROUTED TO ROOK 2026-09-15 on Opeyemi's word.** Pending Rook's own go-ahead in Rook's own session — routing is not a start, and this card is in Next until Rook's user says go.
 
-**It also narrowed who should not take it.** The why-not-Henry argument below was written as an argument about writing-then-marking your own work; obsrv-91's reply was that the argument *"applies to whoever takes it. Not me specifically. **Anyone but you.**"* That is the constraint on this card: one owner is excluded, everyone else qualifies equally.
+**Why Rook, on evidence rather than availability.** The task is reading prose against code with no code to hide behind, and the failure mode is a clean result that means nobody asked hard questions. Rook has now done the honest version of that twice in a week: on `bug-contrast-figure-mismatch` it measured instead of arguing and killed three hypotheses including Henry's, and on `bug-log-attribution` it declined to answer the question it could not answer — *"the stamp does not answer it backwards — it cannot attribute a single existing line, and the write-up says so in those words rather than letting the result imply more than it is."* That is the temperament this card needs, because *"I read five releases and found nothing"* is a result that looks identical whether it is true or lazy.
+
+**And Rook reported the defect against itself unprompted, in the same hour:** a check of its own printed *"(no stray app processes above)"* directly beneath two processes that were still running, and it said so in the write-up rather than quietly fixing it. Someone who volunteers that about their own output is the right reader for a register that nobody else will audit.
+
+**Rook did not write `docs/compatibility.md` and has no stake in it.** That is the point of the exclusion below, and it is the whole reason this card is not Henry's.
+
+**OFFERED TO obsrv-91 FIRST, AND DECLINED — recorded because obsrv-91 asked for it to be.** It declined permanently and for a reason about the channel rather than the work: *"treat me as unavailable for relayed offers until my user speaks to me directly. Do not hold `c2-retroactive` or anything else for me, and do not check back."* Nobody should route work to obsrv-91 through a peer until its own user speaks to it. It added that the card being gone by then is *"the correct outcome, not a loss."*
+
+**It also named the one exclusion that stands.** The why-not-Henry argument below was written about writing-then-marking your own work; obsrv-91's reply was that it *"applies to whoever takes it. Not me specifically. **Anyone but you.**"*
 
 **Three framings it contributed free, unasked, while declining — recorded with credit because they change how the task should be done:**
 
@@ -1839,7 +1857,7 @@ Options, none obviously right:
 
 INTO REVIEW 2026-09-15, branch `fix/suite-absence-loud`, commit 6b23d27. Unit 1156/1156, typecheck clean, board:check green. **VERIFIED ON A GENUINELY CONFLICTING PULL REQUEST, which this card says is the only verification that counts.**
 
-THE PROBE, and it is deleted now. Two throwaway branches off the fix branch changed the same line of a scratch file, and PR #5 was opened from one to the other — a real conflict without moving main. `mergeable=CONFLICTING state=DIRTY`, and `gh pr checks 5` listed:
+THE PROBE. Its branches are deleted; the pull request is KEPT ON PURPOSE as https://github.com/vibesyemmy/obsrv/pull/5, retitled from "PROBE ... (throwaway)" to what it demonstrates. GitHub does not let anyone delete a pull request, so the choice was never keep-or-delete — only whether #5 reads as litter or as evidence. It is the one public artefact a stranger can use to confirm this card's central claim, and this week has been a lesson in what happens to evidence kept where nobody can read it. Two throwaway branches off the fix branch changed the same line of a scratch file, and PR #5 was opened from one to the other — a real conflict without moving main. `mergeable=CONFLICTING state=DIRTY`, and `gh pr checks 5` listed:
 
 A suite run exists for this commit   pending -> fail 3m33s     The board matches the cards ...      pass 9s     (no CI check at all)
 
@@ -1854,6 +1872,10 @@ HALF TWO, the rot: scripts/knownReds.js + docs/known-reds.txt + `npm run reds:ch
 NOT DONE, and it is Opeyemi's rather than mine: making this a REQUIRED check is branch protection in GitHub settings. This can fail; it cannot block.
 
 AND THE RATE THIS CARD ASKED FOR IS NOT RECOVERABLE. `gh pr list` reports `mergeable: UNKNOWN` for merged pull requests, so how often a PR here was conflicting when someone wanted to read its checks cannot be reconstructed after the fact. Three data points now (PR #2, Kenya's rebases, PR #5) and all were conflicting, which is suggestive and still is not a rate. Worth recording going forward rather than inventing.
+
+**The sentence above was restored from a commit that never reached main, and the way it got lost is this card's own subject.** `4bd6ba1`, Opeyemi's, *"Keep the conflict probe's pull request as evidence, and say so on the card"* — pushed to `fix/suite-absence-loud` AFTER that branch had already merged. The branch is merged, so nothing watches it; the commit is pushed, so it looks kept. Main meanwhile said *"THE PROBE, and it is deleted now"*, which was false: PR #5 exists, deliberately, as the only public artefact a stranger can use to check this card.
+
+A record kept where nobody reads it, on the card about a check that runs where nobody sees it. Found 2026-09-15 by diffing merged branches against main rather than by anyone noticing.
 
 ---
 

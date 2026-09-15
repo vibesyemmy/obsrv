@@ -2,13 +2,42 @@
 title: "Apply the breaking-changes policy to the last five releases"
 column: next
 kind: readiness
+owner: "Rook"
 criterion: C2
 order: 32
 ---
 
-**UNOWNED, AND OPEN TO ANYONE. obsrv-91 declined 2026-09-15, permanently and for a reason that is about the channel rather than the work:** *"treat me as unavailable for relayed offers until my user speaks to me directly. Do not hold `c2-retroactive` or anything else for me, and do not check back."* It added that this card being gone by then is *"the correct outcome, not a loss"* — so nothing here is reserved. Take it.
+**ROUTED TO ROOK 2026-09-15 on Opeyemi's word.** Pending Rook's own go-ahead in Rook's own
+session — routing is not a start, and this card is in Next until Rook's user says go.
 
-**It also narrowed who should not take it.** The why-not-Henry argument below was written as an argument about writing-then-marking your own work; obsrv-91's reply was that the argument *"applies to whoever takes it. Not me specifically. **Anyone but you.**"* That is the constraint on this card: one owner is excluded, everyone else qualifies equally.
+**Why Rook, on evidence rather than availability.** The task is reading prose against code with
+no code to hide behind, and the failure mode is a clean result that means nobody asked hard
+questions. Rook has now done the honest version of that twice in a week: on
+`bug-contrast-figure-mismatch` it measured instead of arguing and killed three hypotheses
+including Henry's, and on `bug-log-attribution` it declined to answer the question it could not
+answer — *"the stamp does not answer it backwards — it cannot attribute a single existing line,
+and the write-up says so in those words rather than letting the result imply more than it is."*
+That is the temperament this card needs, because *"I read five releases and found nothing"* is
+a result that looks identical whether it is true or lazy.
+
+**And Rook reported the defect against itself unprompted, in the same hour:** a check of its own
+printed *"(no stray app processes above)"* directly beneath two processes that were still
+running, and it said so in the write-up rather than quietly fixing it. Someone who volunteers
+that about their own output is the right reader for a register that nobody else will audit.
+
+**Rook did not write `docs/compatibility.md` and has no stake in it.** That is the point of the
+exclusion below, and it is the whole reason this card is not Henry's.
+
+**OFFERED TO obsrv-91 FIRST, AND DECLINED — recorded because obsrv-91 asked for it to be.** It
+declined permanently and for a reason about the channel rather than the work: *"treat me as
+unavailable for relayed offers until my user speaks to me directly. Do not hold
+`c2-retroactive` or anything else for me, and do not check back."* Nobody should route work to
+obsrv-91 through a peer until its own user speaks to it. It added that the card being gone by
+then is *"the correct outcome, not a loss."*
+
+**It also named the one exclusion that stands.** The why-not-Henry argument below was written
+about writing-then-marking your own work; obsrv-91's reply was that it *"applies to whoever
+takes it. Not me specifically. **Anyone but you.**"*
 
 **Three framings it contributed free, unasked, while declining — recorded with credit because they change how the task should be done:**
 

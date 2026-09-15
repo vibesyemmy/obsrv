@@ -74,7 +74,7 @@ Options, none obviously right:
 
 INTO REVIEW 2026-09-15, branch `fix/suite-absence-loud`, commit 6b23d27. Unit 1156/1156, typecheck clean, board:check green. **VERIFIED ON A GENUINELY CONFLICTING PULL REQUEST, which this card says is the only verification that counts.**
 
-THE PROBE, and it is deleted now. Two throwaway branches off the fix branch changed the same line of a scratch file, and PR #5 was opened from one to the other — a real conflict without moving main. `mergeable=CONFLICTING state=DIRTY`, and `gh pr checks 5` listed:
+THE PROBE. Its branches are deleted; the pull request is KEPT ON PURPOSE as https://github.com/vibesyemmy/obsrv/pull/5, retitled from "PROBE ... (throwaway)" to what it demonstrates. GitHub does not let anyone delete a pull request, so the choice was never keep-or-delete — only whether #5 reads as litter or as evidence. It is the one public artefact a stranger can use to confirm this card's central claim, and this week has been a lesson in what happens to evidence kept where nobody can read it. Two throwaway branches off the fix branch changed the same line of a scratch file, and PR #5 was opened from one to the other — a real conflict without moving main. `mergeable=CONFLICTING state=DIRTY`, and `gh pr checks 5` listed:
 
     A suite run exists for this commit   pending -> fail 3m33s
     The board matches the cards ...      pass 9s
@@ -91,3 +91,13 @@ HALF TWO, the rot: scripts/knownReds.js + docs/known-reds.txt + `npm run reds:ch
 NOT DONE, and it is Opeyemi's rather than mine: making this a REQUIRED check is branch protection in GitHub settings. This can fail; it cannot block.
 
 AND THE RATE THIS CARD ASKED FOR IS NOT RECOVERABLE. `gh pr list` reports `mergeable: UNKNOWN` for merged pull requests, so how often a PR here was conflicting when someone wanted to read its checks cannot be reconstructed after the fact. Three data points now (PR #2, Kenya's rebases, PR #5) and all were conflicting, which is suggestive and still is not a rate. Worth recording going forward rather than inventing.
+
+**The sentence above was restored from a commit that never reached main, and the way it got
+lost is this card's own subject.** `4bd6ba1`, Opeyemi's, *"Keep the conflict probe's pull
+request as evidence, and say so on the card"* — pushed to `fix/suite-absence-loud` AFTER that
+branch had already merged. The branch is merged, so nothing watches it; the commit is pushed,
+so it looks kept. Main meanwhile said *"THE PROBE, and it is deleted now"*, which was false:
+PR #5 exists, deliberately, as the only public artefact a stranger can use to check this card.
+
+A record kept where nobody reads it, on the card about a check that runs where nobody sees it.
+Found 2026-09-15 by diffing merged branches against main rather than by anyone noticing.
