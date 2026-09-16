@@ -29,6 +29,8 @@ test.describe.configure({ timeout: 180_000 })
 
 let app: ElectronApplication
 let client: Client
+/** The server as `client` runs it; a test that needs a client of its own connects another the same way. */
+let serverTransport: () => StdioClientTransport
 
 test.beforeAll(async () => {
   app = await launchApp([], { OBSRV_AGENT_CONTROL: '1' })
@@ -36,15 +38,15 @@ test.beforeAll(async () => {
   const env = Object.fromEntries(
     Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined),
   )
-  client = new Client({ name: 'obsrv-mcp-live-spec', version: '0.0.0' })
-  await client.connect(
+  serverTransport = () =>
     new StdioClientTransport({
       command: process.execPath,
       args: [MCP_BIN],
       cwd: ROOT,
       env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME) },
-    }),
-  )
+    })
+  client = new Client({ name: 'obsrv-mcp-live-spec', version: '0.0.0' })
+  await client.connect(serverTransport())
 })
 
 test.afterAll(async () => {
@@ -89,6 +91,29 @@ test('obsrv_drive flips the preset and returns the confirming status', async () 
   await expect
     .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
     .toEqual({ width: 1920, height: 1080 })
+})
+
+test('an obsrv_drive reply passes its own output schema, checked the way a validating client checks it', async () => {
+  // bug-drive-reply-fails-its-own-schema: `drive` spreads the app's status
+  // into its reply, and three keys status gained were never declared, so every
+  // client that validates rejected every drive reply. `client` above never
+  // lists the tools, and the SDK validates only against a schema it has
+  // listed, so nothing in this file could see it. A client of its own, so the
+  // shared one is left as it is.
+  const validating = new Client({ name: 'obsrv-mcp-live-spec-validating', version: '0.0.0' })
+  await validating.connect(serverTransport())
+  try {
+    await validating.listTools()
+    // Not vacuous: the SDK holds a validator for the tool, so the reply below is checked against it.
+    const validator = (validating as unknown as { getToolOutputValidator(name: string): unknown }).getToolOutputValidator('obsrv_drive')
+    expect(validator).toBeDefined()
+    const r = (await validating.callTool({ name: 'obsrv_drive', arguments: { onionSkin: 0 } }, undefined, { timeout: CALL_TIMEOUT_MS })) as CallToolResult
+    expect(r.isError).toBeFalsy()
+    // And the keys that were undeclared are in what it checked.
+    expect(Object.keys(r.structuredContent ?? {})).toEqual(expect.arrayContaining(['visionType', 'visionSeverity', 'deviceScaleFactor']))
+  } finally {
+    await validating.close()
+  }
 })
 
 test('obsrv_drive sets the text scale; the page reflows and the status confirms it', async () => {

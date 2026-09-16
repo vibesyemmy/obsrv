@@ -164,6 +164,22 @@ only downward while `inkCoverage.delta` and `rows.ratio` stood above it
 unqualified. It now names those two fields. And the report's HTML no longer
 paints an unsettled ink delta red (`bug-diff-disowns-its-numbers`).
 
+### `obsrv_drive` gains `visionType`, `visionSeverity` and `deviceScaleFactor`
+
+`drive` answers with the app's whole status. During this release, status gained
+these three: the colour-vision simulation and the screen's density. The `drive`
+schema never listed them, and it is `additionalProperties: false`, so **every
+client that validates rejected every `drive` reply built from this tree**, not
+only a client holding an old schema (`bug-drive-reply-fails-its-own-schema`).
+They are declared now. No released version sent them: 0.60.0's status has none
+of the three.
+
+**What breaks:** a client session that listed the tools before upgrading holds
+the old `drive` schema and rejects the three new keys.
+
+**What to do:** restart the session after upgrading, as the note at the top of
+this release says.
+
 ### Also in 0.61.0, not breaking
 
 `blocked` and `panel` now survive the trip from the page to the live walk, so

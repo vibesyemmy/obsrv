@@ -1,8 +1,7 @@
 ---
 title: "Every `obsrv_drive` reply on `main` fails its own output schema"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 50
 ---
@@ -45,3 +44,24 @@ file.
 Declare the three in `driveOutputShape`, as the register already does for `deviceScaleFactor` on
 the other tools, and name them under 0.61.0. Then make the live file validate: `listTools()` in
 `beforeAll`, which is proposed in room #148 as its own step.
+
+## RESOLVED 2026-09-16 by Henry — the three keys are declared
+
+**The fix:** `visionType` (a string, `'none'` when off), `visionSeverity` (a number) and
+`deviceScaleFactor` (an optional number) are declared in `driveOutputShape`, each with a description
+that says what an older app reports. `drive` is the only tool that spreads `...status` into its
+reply, and on `main` every other key `parseControlStatus` returns was already declared, so these
+three are the whole set. The register names the addition under 0.61.0.
+
+**Where the keys came from, as Wren asked it to be recorded:** `deviceScaleFactor` from Wren's C4
+commit `5214d59`, which declared it for `snap` and `inspect`, and `visionType`/`visionSeverity`
+from `257e2db`. Wren's parity gate covered the tools that have two surfaces, and `drive` has only
+one. `schema:sweep` skips `drive` by design (Rook's read of #65). `mcp-live.spec.ts` never listed
+the tools. So nothing could see it.
+
+**Test:** `mcp-live.spec.ts`, *an obsrv_drive reply passes its own output schema…*, with its own
+`Client`, so the file's shared client is untouched until `listTools()` moves into `beforeAll` (Rook,
+step 2). It lists the tools, asserts that the SDK holds a validator for `obsrv_drive`, so the
+check can't be vacuous, calls `drive`, and asserts that the three keys are in what was checked.
+**Fix:** 4/4 with three `drive` neighbours. **Control, `main`'s `mcp/server.ts`:** failed with
+`McpError -32602 … data must NOT have additional properties`.
