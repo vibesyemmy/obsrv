@@ -59,6 +59,12 @@ describe('the root tsconfig reaches every project', () => {
     const script = pkg.scripts?.typecheck ?? ''
     // `--build` is the part that matters: `-p` on this root checks nothing.
     expect(script, `typecheck is "${script}"`).toMatch(/tsc\s+--build\s+tsconfig\.json/)
+    // `--noEmit` is not tidiness. `tsconfig.mcp.json` has an `outDir` and no
+    // `noEmit` of its own, because `build:mcp` needs to emit — so without this
+    // flag a command named "typecheck" REWRITES out/mcp/server.js, the very
+    // file a dev lane and `publicShape.test` spawn (measured: a planted 2020
+    // mtime came back as now). Found by Henry's read of #177.
+    expect(script, 'typecheck must not emit; it would rewrite the built MCP server').toMatch(/--noEmit/)
     expect(script, 'a per-project list can silently omit one; that is the defect this card is about').not.toMatch(/-p\s+tsconfig\./)
   })
 })

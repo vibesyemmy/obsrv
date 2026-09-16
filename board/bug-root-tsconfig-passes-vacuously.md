@@ -103,4 +103,19 @@ so does reverting the script.
 nothing. Anyone who types it gets the same worthless green. The file now says so in a comment at the
 top, which is the weakest part of this fix and worth knowing about rather than discovering.
 
-**Verified:** unit 1402/1402 across 89 files, typecheck exit 0, and the guard 3/3 with both controls red.
+### Correction from Henry's read: `--build` emits, and a typecheck must not
+
+`tsconfig.mcp.json` has an `outDir` and no `noEmit` of its own, because `build:mcp` needs to emit. So
+the first version of this fix made `npm run typecheck` **rewrite `out/mcp/server.js`** — the file a
+dev lane and `publicShape.test` spawn. Measured by planting a 2020 mtime on it and running the
+command: it came back as now.
+
+`tsc --build tsconfig.json --noEmit` fixes it, and each arm was re-run: clean tree exit 0 with the
+planted mtime **untouched**, and breaking `src/mcp` still exit 1 with 6 errors. The guard now pins
+`--noEmit` as well, so the emit cannot come back: dropping the flag turns it red.
+
+**A command named for having no side effects had one**, which is the same family as the rest of this
+card — and it was found by a reader who went and looked at the file's mtime rather than at the diff.
+
+**Verified:** unit 1402/1402 across 89 files, typecheck exit 0 and emitting nothing, guard 3/3 with
+all three controls red.
