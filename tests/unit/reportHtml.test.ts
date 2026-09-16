@@ -18,6 +18,7 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
   settled: true,
   audit: {
     ppi: 100.4,
+    layoutScale: 1,
     thresholds: { tapMm: 7, textMm: 2 },
     summary: {
       targets: { count: 2, under: 1, smallestPx: 24, smallestMm: 6.07 },
@@ -184,11 +185,12 @@ describe('reportHtml', () => {
     const withLint = screen({
       lint: {
         profile: 'budget-tn',
+        layoutScale: 1,
         thresholds: { thinPx: 14 },
         summary: { hairline: 0, 'thin-text': 0, contrast: 270, 'contrast-on-panel': 10, 'image-upscaled': 0, 'image-oversized': 0 },
         findings: [finding],
         groups: [{ rule: 'contrast', key: '#828282 on #f6f6ef', count: 270, exemplar: finding, elements: ['span.rank', 'span.sitebit', 'span.sitestr'] }],
-        skipped: { textOnImages: 3, invisibleText: 2 },
+        skipped: { textOnImages: 3, invisibleText: 2, spacers: 0 },
         truncated: { findings: 70, text: 0, edges: 0, images: 0 },
         warnings: ['the page has more elements than one report carries: 12 text elements, 0 edges and 0 images were counted but not measured'],
       },

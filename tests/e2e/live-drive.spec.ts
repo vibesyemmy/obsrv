@@ -98,6 +98,7 @@ test.beforeAll(async () => {
   await expect.poll(() => existsSync(controlFile)).toBe(true)
   const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
   if (!parsed) throw new Error(`the control file at ${controlFile} did not parse`)
+  if (isDisabledStance(parsed)) throw new Error(`the control file at ${controlFile} names no port: agent control is off`)
   info = parsed
 })
 test.afterAll(async () => {

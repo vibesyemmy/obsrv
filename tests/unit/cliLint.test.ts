@@ -23,6 +23,7 @@ const text = (parts: Partial<LintText>): LintText => ({
   fontWeight: 400,
   fontFamily: 'Arial',
   color: [0, 0, 0, 1],
+  opacity: 1,
   background: [255, 255, 255, 1],
   backgroundNote: 'computed',
   ...parts,

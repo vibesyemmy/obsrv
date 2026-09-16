@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { captureScale, captureScaleReason, skipWhenCapturesAreScaled } from './helpers/captureScale'
 import { decodePng, pixelAt } from './helpers/decodePng'
 import { openPanel } from './helpers/select'
@@ -83,7 +83,9 @@ test.beforeAll(async () => {
   const userData = await app.evaluate(({ app: a }) => a.getPath('userData'))
   const controlFile = join(userData, CONTROL_FILE_NAME)
   await expect.poll(() => existsSync(controlFile)).toBe(true)
-  info = parseControlFile(readFileSync(controlFile, 'utf8'))!
+  const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
+  if (!parsed || isDisabledStance(parsed)) throw new Error(`the control file at ${controlFile} names no port`)
+  info = parsed
   await page.fill('.url-form input', DPPX)
   await page.press('.url-form input', 'Enter')
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('document.title')), { timeout: 10_000 }).toBe('dppx')

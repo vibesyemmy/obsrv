@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { profileToParams } from '../../src/shared/panelSim'
-import { DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
+import { DEFAULT_ORIENTATION, DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
+import { DEFAULT_TEXT_SCALE } from '../../src/shared/textScale'
 import { tabTitle } from '../../src/shared/tabList'
 import {
   CUSTOM_PRESET_ID,
@@ -50,7 +51,7 @@ describe('selectScale', () => {
     expect(selectScale(useStore.getState())).toBe(FALLBACK_SCALE)
   })
   it('is exactly 2 for 1080p 27" on a 4K 27" host', () => {
-    useStore.setState({ host: HOST_4K, settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    useStore.setState({ host: HOST_4K, settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27, hostNits: 500 } })
     setTab({ presetId: '1080p-27' })
     expect(selectScale(useStore.getState())).toBeCloseTo(2, 10)
   })
@@ -67,7 +68,7 @@ describe('selectScale', () => {
     useStore.getState().setCustom({ diagonalInches: Number.NaN })
     expect(selectScale(useStore.getState())).toBe(FALLBACK_SCALE)
 
-    useStore.setState({ settings: { hostDiagonalInches: 0, hostNits: 500 } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 0, hostNits: 500 } })
     useStore.getState().setPreset('1080p-24')
     expect(selectScale(useStore.getState())).toBe(FALLBACK_SCALE)
   })
@@ -81,7 +82,7 @@ describe('selectScale', () => {
     useStore.getState().setCustom({ width: 1920, height: 1080, diagonalInches: 0 })
     expect(selectScaleIsFallback(useStore.getState())).toBe(true)
 
-    useStore.setState({ settings: { hostDiagonalInches: 0, hostNits: 500 } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 0, hostNits: 500 } })
     setTab({ presetId: '1080p-27' })
     expect(selectScaleIsFallback(useStore.getState())).toBe(true)
   })
@@ -247,7 +248,7 @@ describe('selectScale on a mobile preset', () => {
   it('is per device pixel: iPhone 6.1" on a 4K 27" host is ~0.35', () => {
     useStore.setState({
       host: HOST_4K,
-      settings: { hostDiagonalInches: 27, hostNits: 500 },
+      settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27, hostNits: 500 },
     })
     setTab({ presetId: 'iphone-61' })
     // hostPPI 163.18 / devicePPI 461.4
@@ -257,7 +258,7 @@ describe('selectScale on a mobile preset', () => {
 
 describe('selectPanelParams', () => {
   it('follows the profile and the host nits', () => {
-    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27, hostNits: 500 } })
     setTab({ profileId: 'budget-tn' })
     expect(selectPanelParams(useStore.getState())).toEqual(
       profileToParams(findProfile('budget-tn'), 500),
@@ -273,7 +274,7 @@ describe('selectPanelParams', () => {
       frc: true,
       nits: 150,
     }
-    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 500 } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27, hostNits: 500 } })
     useStore.getState().setProfileOverride(custom)
     expect(selectPanelParams(useStore.getState())).toEqual(profileToParams(custom, 500))
 
@@ -284,7 +285,7 @@ describe('selectPanelParams', () => {
     )
   })
   it('falls back to the default nits instead of throwing on bad settings', () => {
-    useStore.setState({ settings: { hostDiagonalInches: 27, hostNits: 0 } })
+    useStore.setState({ settings: { ...DEFAULT_SETTINGS, hostDiagonalInches: 27, hostNits: 0 } })
     setTab({ profileId: 'budget-tn' })
     expect(selectPanelParams(useStore.getState())).toEqual(
       profileToParams(findProfile('budget-tn'), DEFAULT_SETTINGS.hostNits),
@@ -543,7 +544,7 @@ describe('tabs', () => {
 
   describe('syncTabs', () => {
     /** What a session main just built reports: the same defaults `blankTab` has. */
-    const SCREEN = { presetId: '1080p-24', profileId: 'reference' }
+    const SCREEN = { presetId: '1080p-24', profileId: 'reference', orientation: DEFAULT_ORIENTATION, textScale: DEFAULT_TEXT_SCALE }
 
     it('adopts main\'s list, order and active tab, keeping each open tab\'s own screen', () => {
       const first = useStore.getState().activeId
@@ -578,11 +579,17 @@ describe('tabs', () => {
       // come back on the wrong screen — a different observation of the page.
       const first = useStore.getState().activeId
       useStore.getState().setPreset('1440p-27')
+      const own = useStore.getState().tabs[first]!
+      // Unlike the open tab's own, so a seed that dropped them, or an open tab
+      // that took them, reads as a change.
+      const restoredScreen = { orientation: 'landscape', textScale: 1.5 } as const
+      expect(own.orientation).not.toBe(restoredScreen.orientation)
+      expect(own.textScale).not.toBe(restoredScreen.textScale)
 
       useStore.getState().syncTabs({
         tabs: [
-          { id: first, url: 'https://a.test/', title: 'A', presetId: 'iphone-61', profileId: 'budget-tn' },
-          { id: 'restored', url: 'https://b.test/', title: 'B', presetId: 'laptop-768', profileId: 'budget-tn' },
+          { id: first, url: 'https://a.test/', title: 'A', presetId: 'iphone-61', profileId: 'budget-tn', ...restoredScreen },
+          { id: 'restored', url: 'https://b.test/', title: 'B', presetId: 'laptop-768', profileId: 'budget-tn', ...restoredScreen },
         ],
         activeId: first,
       })
@@ -590,11 +597,14 @@ describe('tabs', () => {
       const s = useStore.getState()
       expect(s.tabs.restored!.presetId).toBe('laptop-768')
       expect(s.tabs.restored!.profileId).toBe('budget-tn')
+      expect(s.tabs.restored!).toMatchObject(restoredScreen)
       // Seeding is for tabs the renderer does not know. For one it does, the
       // renderer is the authority — main's mirror is only an echo of an older
       // report of the very same value, and taking it back would fight the user.
       expect(s.tabs[first]!.presetId).toBe('1440p-27')
       expect(s.tabs[first]!.profileId).toBe('reference')
+      expect(s.tabs[first]!.orientation).toBe(own.orientation)
+      expect(s.tabs[first]!.textScale).toBe(own.textScale)
     })
 
     it('drops the tabs main no longer holds', () => {

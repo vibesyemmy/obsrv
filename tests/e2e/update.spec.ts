@@ -1,6 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
+import type { UpdateState } from '../../src/shared/types'
 import { launchApp, openSettings, rendererWindow } from './launch'
 
 /**
@@ -38,8 +39,7 @@ test.afterAll(async () => {
   await new Promise<void>(r => server.close(() => r()))
 })
 
-const check = (): Promise<Record<string, unknown>> =>
-  page.evaluate(() => window.obsrv.checkUpdate() as Promise<Record<string, unknown>>)
+const check = (): Promise<UpdateState> => page.evaluate(() => window.obsrv.checkUpdate())
 
 test('the boot check reports the newer release', async () => {
   await expect

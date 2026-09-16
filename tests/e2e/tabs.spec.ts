@@ -375,7 +375,13 @@ test.describe('the ui-state mirror belongs to the tab that reported it', () => {
           profileId: 'reference',
           viewMode: 'fit',
           panes: 'both',
+          orientation: 'portrait',
+          textScale: 1,
+          throttle: 'none',
+          onionSkin: 0,
           mode: 'url',
+          visionType: 'none',
+          visionSeverity: 1,
         }),
       { tabId, presetId },
     )
@@ -661,7 +667,7 @@ test.describe('the tab shortcuts are application-menu items', () => {
 
     // Closing the window keeps a way out, but not the one that belongs to tabs.
     const closeWindow = await app.evaluate(({ Menu }) => {
-      const flat: { role?: string; accelerator?: string }[] = []
+      const flat: { role?: string; accelerator?: string | null }[] = []
       const walk = (list: Electron.MenuItem[]): void => {
         for (const it of list) {
           flat.push({ role: it.role, accelerator: it.accelerator })
@@ -1025,7 +1031,7 @@ test.describe('the driven tab is marked while agent control is on', () => {
     const warn = await driven().evaluate(el =>
       getComputedStyle(el.ownerDocument.documentElement).getPropertyValue('--warn').trim(),
     )
-    const [r, g, b] = /rgba?\((\d+), (\d+), (\d+)/.exec(shadow)!.slice(1).map(Number)
+    const [r, g, b] = /rgba?\((\d+), (\d+), (\d+)/.exec(shadow)!.slice(1, 4).map(Number) as [number, number, number]
     const hex = `#${[r, g, b].map(n => n.toString(16).padStart(2, '0')).join('')}`
     expect(hex).toBe(warn.toLowerCase())
   })
