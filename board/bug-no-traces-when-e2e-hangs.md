@@ -54,7 +54,15 @@ than the one he first wrote:
 - across the **earlier attempts of all 17 re-run runs**, the longest was 25 minutes and none was
   cancelled.
 
-**So control 4 is the only job in this workflow's history ever to hit the 30-minute limit.**
+**So, as of a sweep at ≈17:55 WAT on 2026-09-16 covering 591 runs, control 4 is the only job in
+this workflow's history to have hit the 30-minute limit.** Re-read at 18:40 WAT against 607 runs:
+still only control 4, and still 17 re-run runs.
+
+**The date is not decoration.** An unqualified "ever" is exactly as time-bound as the population
+count warned about below, and a later reader finding 700 runs would otherwise have to work out
+whether the claim had been checked against their tree or mine. Two lines apart, the same mistake:
+the first draft of this section warned about drifting counts and then wrote an unbounded quantifier
+underneath it (Wren).
 
 Two things this does *not* say. **Why the other cancellations happened is not established** — they
 ended within 11 minutes, and nobody has looked at their causes, so do not write "superseded pushes
