@@ -24,6 +24,15 @@ the test `bug-report-edit-invisible` proposed and this audit applied: *would a c
 about the output be wrong without it?* Yes — and worse than the stuck-chrome case, because here a
 structured field actively asserts the false condition.
 
+**It is `bug-report-edit-invisible` with a different field** (Henry's framing, and the reason a
+reader who fixed one should recognise the other at once): the machine surface reports what was
+*asked for* rather than what *happened* — a reply confident about a state it did not verify —
+and the only place the truth appears is the stream callers are told to ignore.
+
+**And a fact about the surface, not about anyone's effort:** because a refusal cannot be forced
+from outside the process, this behaviour cannot be regression-tested today. Whatever fix lands,
+that sentence stays true until one of the routes below gives the test a subject.
+
 ## Why it was not fixed on the branch that found it
 
 The fix is `warn`-shaped — push `refused` into the `notes` (inspect) or `warnings` (audit, lint)
