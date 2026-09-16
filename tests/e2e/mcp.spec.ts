@@ -37,6 +37,22 @@ test.beforeAll(async () => {
       env: { ...env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json') },
     }),
   )
+  // Cache every tool's output schema before any test calls one.
+  //
+  // The SDK client validates a reply against the tool's output schema ONLY if
+  // it holds that schema, and it holds it only once `listTools()` has run
+  // (`client/index.js`: `getToolOutputValidator`, then `if (validator)`).
+  // Without this line the first test to call `tools/list` switches validation
+  // on for everything after it and nothing before it — and, worse, a
+  // Playwright RETRY re-runs only the failed test against a fresh client, so
+  // `tools/list` never runs and the retry is not validated at all.
+  //
+  // That is not hypothetical: `mcp.spec:137` failed its first attempt and
+  // passed on retry 82 times, and every one of those greens was a run with
+  // the check switched off. `--retries=1` was not absorbing a flake, it was
+  // removing the instrument. Filtering with `-g` does the same thing, which
+  // is how it was found.
+  await client.listTools()
 })
 
 test.afterAll(async () => {
