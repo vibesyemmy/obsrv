@@ -1,9 +1,29 @@
 ---
 title: "`controls.spec:85` silently requires the test before it, so every retry of it fails for the wrong reason"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
+waiting: ""
 order: 56
 ---
+
+## Claimed by Rook 2026-09-16, assigned by Henry, as a precondition for `bug-controls-blur-timeout`
+
+Not because I filed it. **Fixing this is what makes the blur bug reproducible at all.** The only
+repetition available today is the full local suite at **13.2 minutes** a run, against a failure that
+appears in 0 of the last 30 failed CI runs — hopeless. `:85` alone takes **3 seconds** (measured, on
+`main` at `9aca3d8`), so the moment it can pass alone, repetition goes from ~4 attempts an hour to
+hundreds, and a strategy I had correctly ruled out becomes the obvious one.
+
+**Two caveats, recorded before any loop runs so a clean result cannot be read as more than it is:**
+
+1. **Running `:85` alone is not the same experiment as running it in the file.** Fresh app, fresh
+   profile, none of the preceding state — and the hang was only ever seen in a full-file run. **A
+   clean loop is therefore weak evidence and exonerates nothing.**
+2. **The fix must not make the assertion vacuous.** Establish the precondition *inside* `:85` — enter
+   `54` at the top, the way `:71` does — rather than loosening line 97 to accept whatever it finds.
+   Loosening it would make the test pass alone and stop it testing anything, which is the same
+   defect family as an upload step that could not fail.
 
 FOUND BY ROOK 2026-09-16, while reproducing `bug-controls-blur-timeout` and reading why its retry
 failed in 428 ms when the first attempt took the full 30 s. **Unowned.**
@@ -77,3 +97,10 @@ so it passes alone and in order. Same for the other links in the chain.
 `npx playwright test controls.spec.ts -g "<the test's name>"` must pass on its own, and the file
 must still pass in order. Run each test in the file alone as well, since fixing one link can expose
 the next.
+
+**And a second arm, which is the one that matters** (Henry): passing alone is not enough, because
+the cheap way to achieve it is to stop asserting anything. **Line 97 must still go red when the
+commit does not happen.** Break the commit path deliberately — a variant where blur and Enter never
+reach the store — and the test must fail at the assertion rather than pass on whatever value happens
+to be there. Without that arm, this fix cannot be told from deleting the check, which is the failure
+mode `bug-trace-upload-errors-when-e2e-never-ran` was about.
