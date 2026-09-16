@@ -2,8 +2,8 @@
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
 column: doing
 kind: bug
-owner: "Rook"
-waiting: "Rook: back at 13:00 WAT; fix/inspect-colorpainted-schema is checked out in his worktree, unpushed"
+owner: "Kenya"
+waiting: ""
 order: 35
 ---
 
@@ -162,4 +162,21 @@ a retry keeps rescuing it.**
 ## What is still a decision rather than a finding
 
 Unchanged by the sweep: adding `colorPainted` to `readoutShape` is **itself breaking** on the MCP surface by `compatibility.md`'s inverted rule, so the fix is *add it and name it in the register*, or *stop emitting it on the MCP surface and keep it to the CLI*. That is a product question about who the painted colour is for, and the sweep's answer — **one field, not twenty** — is what the decision needed.
+
+---
+
+## FIXED 2026-09-16 by Kenya, on Opeyemi's decision (add it to the schema, relayed by Wren). **`colorPainted` is declared, and `mcp.spec:137` is green on its first attempt.**
+
+    colorPainted declared in readoutShape          src/mcp/server.ts
+    register entry under 0.61.0 with restart note  docs/breaking-changes.md
+    npm run schema:sweep                           0 disagreements, 8 tools (was 1)
+    playwright mcp.spec.ts --retries=0             29 passed, 50.8 s
+
+**One run, first attempt, retries off.** That is the measurement, and it is one run — it contradicts six passes reported earlier from a possibly stale build, which Rook is checking.
+
+**The register entry carries both halves, because one of them alone reads wrong.** Adding the field is breaking by `compatibility.md`: a session that listed the tools before this release rejects an `obsrv_inspect` reply outright. But the field has been on the wire since `f8d734f`, so **every validating client has been rejecting those replies all along.** It breaks stale sessions and un-breaks current ones. An entry with only the first half reads as a gratuitous break; only the second reads as a free fix.
+
+**And the mechanism the card first gave is corrected in the entry** (Henry's, verified against SDK 1.30.0): the server *does* validate its own reply — `safeParseAsync` against the zod shape — but `readoutShape` is a plain `z.object` and **zod's default strips unknown keys rather than failing**, so the server's check passed while the JSON Schema it publishes says `additionalProperties: false`. Two validators, one schema, opposite answers. **The rejection is always the client's**, which is why nothing server-side ever noticed.
+
+**Left undone deliberately: `.strict()` on the output shapes.** It would make the server's own check fail on an undeclared key, so every existing test that calls a tool through the server would catch a new field the day it lands — the floor-raise the sweep card asks for, almost free. It is also a behaviour change on the surface: the server would error where it silently passes today. **That is a decision rather than a tidy-up, and it belongs to Opeyemi**, not to the person who happened to be holding this card.
 

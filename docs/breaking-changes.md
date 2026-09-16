@@ -108,6 +108,37 @@ eight-viewport cycle rather than the obvious flip.
 
 **What to do:** restart the session after upgrading.
 
+### `obsrv_inspect`'s readout gains `colorPainted` — declared at last, and it was already being sent
+
+`InspectReadout` has carried `colorPainted` since `f8d734f` — the colour the
+screen actually shows, after the text's own alpha and the element's effective
+opacity, composited onto the background. It is the colour the contrast figures
+describe. **The MCP output schema never listed it**, and `readoutShape` is
+`additionalProperties: false` in the JSON Schema the server publishes.
+
+**What breaks:** a client session that listed the tools **before** this
+release rejects an `obsrv_inspect` reply outright — `-32602`, *structured
+content does not match the tool's output schema* — rather than reading an
+extra key it does not know. See the restart note at the top of this release.
+
+**What was already broken, which is why this is a fix and not only a break.**
+Adding the field to the schema is the breaking half; the field has been on the
+wire since `f8d734f` and **every validating client has been rejecting those
+replies ever since**. `tests/e2e/mcp.spec.ts:137` failed its first attempt in
+nine of nine observed runs and passed on retry each time, so the suite called
+it flaky and nobody read the error. An agent in the field got a protocol error
+instead of a measurement.
+
+**Why the server never noticed.** It does validate its own reply — SDK 1.30.0
+runs `safeParseAsync` against the zod output shape — but `readoutShape` is a
+plain `z.object`, and zod's default **strips** unknown keys rather than
+failing, so the server's check passed while the JSON Schema it published to
+clients said `additionalProperties: false`. Two validators, one schema,
+opposite answers. The rejection is always the client's.
+
+**What to do:** restart the session after upgrading. Nothing else changes —
+the field was already in the replies your client was refusing.
+
 ### The CLI's own JSON gains `url` — a third contract, not just the MCP replies
 
 `obsrv snap` prints JSON to stdout, and that key set is a contract: the suite

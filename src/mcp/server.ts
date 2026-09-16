@@ -1929,6 +1929,13 @@ const readoutShape = z
       family: z.string(),
     }),
     color: z.string().describe('Text colour, #rrggbb.'),
+    colorPainted: z
+      .string()
+      .describe(
+        'The colour the screen actually shows: the stated colour after its own alpha and the element\'s effective opacity, composited onto the ' +
+          'background. Equal to `color` when the text is fully opaque, which is most of the time; different is the case worth seeing, and it is ' +
+          'the colour the contrast figures describe.',
+      ),
     background: z.string().nullable().describe('The colour the text sits on, composited; null when an image or gradient is under it.'),
     backgroundNote: z.enum(['computed', 'image']),
     contrast: z
