@@ -1,14 +1,13 @@
 ---
 title: "Two source files contain literal control bytes, so every `grep` of them returns nothing"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 51
 ---
 
 FOUND BY ROOK 2026-09-16, while reading #85 cold — `grep` answered *"Binary file … matches"* for a
-file whose contents `Read` showed plainly. **Unowned.** Predates that PR; not Kenya's.
+file whose contents `Read` showed plainly. Predates that PR; not Kenya's.
 
 ## The defect
 
@@ -66,3 +65,24 @@ nowhere is a judgement, not a given.
 
 It touches `src/`, so it takes the full macOS suite. Henry has asked that it wait for the runner
 queue to drain (room #167) and intends to take it.
+
+## RESOLVED 2026-09-16 by Henry — escapes, the card's control, and a scan that keeps it so
+
+**The fix, with no change in behaviour:** `src/shared/ipcPayloads.ts:54` now reads
+`/[\x00-\x1f\x7f]+/g`, and `tests/unit/ipcPayloads.test.ts:686` ends its forged line with `\x00`.
+All 187 `ipcPayloads` unit tests pass unchanged.
+
+**The card's control, run as written:**
+
+| | before | after |
+| --- | --- | --- |
+| `grep -c "parseLogMessage" src/shared/ipcPayloads.ts` | nothing, exit 1 | **1**, exit 0 |
+| `grep -c "parseInspectReport" tests/unit/ipcPayloads.test.ts` | nothing, exit 1 | **14**, exit 0 |
+
+**The scan, and where it lives:** a unit test, `tests/unit/no-control-bytes.test.ts`. That's the
+engineering call on the card's open question. It isn't in `board:check`, which is about cards, and
+it isn't a new lint. It runs in the unit job CI already has. It walks the text files under `src/`,
+`tests/` and `scripts/` for bytes in `\x00-\x08\x0b\x0c\x0e-\x1f\x7f`, and fails naming file and
+line. **Its own control:** on `main`'s two files it failed and listed exactly
+`src/shared/ipcPayloads.ts:54` and `tests/unit/ipcPayloads.test.ts:686`. It also asserts that the
+walk reached more than 100 files, including those two, so a walk that found nothing can't pass.
