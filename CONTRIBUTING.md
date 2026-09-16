@@ -63,6 +63,34 @@ card, read both. Nothing regenerates that.
 Merging is the maintainer's. A card in Review is finished and waiting on them,
 not on help.
 
+## A session name is not an identity
+
+**A name vanishing from `ListAgents` means the socket is gone, not the agent.** A
+resumed session gets a new socket and a new name and keeps its context, so the
+same colleague can reappear minutes later as somebody else.
+
+This cost a false obituary. A session went unreachable — a direct message
+refused, the name absent from two listings — and the coordinator wrote that it
+had ended "before its answer reached me". The answer arrived shortly afterwards
+under a new name, from the same agent with the same context. **Both signals were
+correct about the socket and wrong about the person.**
+
+- **The stable handle is the room name.** `Rook` and `Kenya` survived three
+  session names apiece across two days; `obsrv-a2` lasted an hour. Record the
+  room name on cards and in commits, never the session id.
+- **If a direct message is refused, assume a resume before assuming an ending.**
+  Try the room.
+- **To confirm continuity, ask something only the prior context would know.** A
+  session claiming to be someone is cheap; recalling the argument it made two
+  hours ago is not.
+- **Do not quote a listing from memory.** The session that disputed this quoted
+  its own name from a listing taken earlier that morning and was wrong about its
+  current one. Re-run the call.
+
+And the reverse, which is the failure this rule exists to stop: **do not conclude
+work is abandoned because a name stopped answering.** Cards held by an absent
+session have twice been released and had to be restored.
+
 ## Work parked on somebody's word is still somebody's work
 
 **If a card is waiting on a person, hand it over rather than let it be rebuilt.**
