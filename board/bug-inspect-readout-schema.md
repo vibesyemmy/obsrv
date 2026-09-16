@@ -1,7 +1,8 @@
 ---
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
 order: 35
 ---
 
@@ -79,3 +80,35 @@ Four times this test's ✘/✓ marks were counted and its error never opened. Th
 prompted the next question. **A test that fails identically every run is not flaky — it is
 reproducible, which is the easiest kind of bug to fix and the easiest to mistake for noise when
 a retry keeps rescuing it.**
+
+---
+
+## SWEPT 2026-09-15 by Kenya, on assignment. **One instance on the paths exercised — and the card's mechanism is wrong in a way that makes this worse, not better.**
+
+**THE SERVER DOES NOT REJECT ITS OWN REPLY. THE CLIENT DOES.** This card says *"the shape is `additionalProperties: false`, so the server validates its own correct reply and rejects it."* Measured: a raw JSON-RPC client that does no validation **receives the reply with `colorPainted` in it**. The check lives at `node_modules/@modelcontextprotocol/sdk/dist/cjs/client/index.js:502` — `McpError(InvalidParams, "Structured content does not match the tool's output schema")` — and `server/mcp.js` has no such check at all.
+
+**So the defect is invisible from the server's side and breaks every client that validates.** `mcp.spec:137` fails because the SDK client validates; an agent in the field gets `-32602` for the same reason. Nothing server-side will ever notice, which is why it survived a day of being counted.
+
+## The sweep, and what it can and cannot say
+
+`scripts/schema-emit-sweep.js` (`npm run schema:sweep`) drives the real MCP server over stdio as a client does, calls every tool, and diffs **every key path the reply carries** against **every key path the tool's own `outputSchema` declares**:
+
+    obsrv_snap       ok
+    obsrv_diff       ok
+    obsrv_audit      ok
+    obsrv_lint       ok
+    obsrv_report     ok
+    obsrv_drive      skipped — launches and drives the visible app
+    obsrv_inspect    EMITS UNDECLARED KEYS    readout.colorPainted
+    obsrv_presets    ok
+
+**`lint` is clean**, which the card expected to be the first place to look because it shares `inspectReadout`. On the path exercised, it does not emit the field.
+
+**WHAT THIS CANNOT SEE, and it is the whole limit of the result:** a field emitted only on a code path these calls do not take. `colorPainted` is itself conditional. **A clean line means "no violation on the paths these calls exercise" — never "the schemas and the emitters agree."** The sweep is a floor, exactly as the flake tally was.
+
+**What would raise the floor:** calling each tool across the fixtures that exercise its branches rather than one fixture each, and running it in CI so a new field is caught the day it lands rather than by whoever next reads an error. Neither is done here.
+
+## What is still a decision rather than a finding
+
+Unchanged by the sweep: adding `colorPainted` to `readoutShape` is **itself breaking** on the MCP surface by `compatibility.md`'s inverted rule, so the fix is *add it and name it in the register*, or *stop emitting it on the MCP surface and keep it to the CLI*. That is a product question about who the painted colour is for, and the sweep's answer — **one field, not twenty** — is what the decision needed.
+
