@@ -233,9 +233,53 @@ const TOOLS: { tool: string; args: (url: string) => Record<string, unknown> }[] 
   { tool: 'obsrv_snap', args: (url) => ({ url }) },
 ]
 
+// --------------------------------------------------------- the motion probe
+
+/**
+ * What a reply lets us say about whether the page was moving when it was
+ * measured. Three values, and the third is the point.
+ *
+ * `src/shared/pageMotion.ts` re-measures the page 250 ms after the figures are
+ * taken and `pageMovedNote` turns that into a note — **but only when something
+ * moved.** It returns `null` for a still page, so the note's ABSENCE fits three
+ * facts, not one:
+ *
+ *   1. the probe ran and the page was still;
+ *   2. the probe ran and the page stopped answering — `motionAfter` returns
+ *      `null` on an empty re-measure, and no note is written;
+ *   3. the tool never probes. Only `audit` and `lint` call it.
+ *
+ * So there is no verdict here that means "this page was still". `quiet` means
+ * *nothing reported motion*, which is a statement about the reply and not about
+ * the page. Reading it as stillness is the mistake this whole card is about: a
+ * probe whose silence quietly decides whether values get compared, giving a
+ * green that fits two facts (lesson-agreement-two-facts).
+ */
+type MotionVerdict = 'moving' | 'quiet' | 'unknown'
+
+/** The tools that run the probe at all. The others cannot answer the question. */
+const PROBES = new Set(['obsrv_audit', 'obsrv_lint'])
+
+/** The opening words of `pageMovedNote`, which is the only positive signal there is. */
+const MOVED_NOTE = /this page was still moving when it was measured/
+
+const verdictOf = (tool: string, reply: unknown, notes: string[]): MotionVerdict => {
+  if (reply === undefined) return 'unknown'
+  if (!PROBES.has(tool)) return 'unknown'
+  return notes.some((n) => MOVED_NOTE.test(n)) ? 'moving' : 'quiet'
+}
+
 type Row = {
   page: string
   tool: string
+  /** Per surface, what the probe was able to say. See `MotionVerdict`. */
+  motion: { headless: MotionVerdict; live: MotionVerdict }
+  /**
+   * Whether this row's VALUES were compared, as opposed to only its shape.
+   * Recorded rather than inferred, because the whole defect this card comes
+   * from was a comparison that quietly did not happen.
+   */
+  valuesCompared: boolean
   /**
    * What each reply says it is. Without this a row of zero divergences fits
    * two opposite facts: the surfaces agree, or both calls reached the same
@@ -262,9 +306,23 @@ const notesIn = (v: unknown): string[] => {
 
 for (const page of PAGES) {
   test(`parity: ${page.name}`, async () => {
+    // Every tool is called first and the values compared afterwards, because
+    // the decision to compare is made ONCE PER PAGE from every verdict the page
+    // produced. Comparing as we went would let `audit` be compared and `lint`
+    // skipped on the same page in the same run, which is a compared set that
+    // cannot be stated, and stating it is the point.
+    const pending: { tool: string; row: Row; h: unknown; l: unknown }[] = []
     for (const { tool, args } of TOOLS) {
       const base = args(page.url())
-      const row: Row = { page: page.name, tool, surface: {}, divergences: [], notes: { headless: [], live: [] } }
+      const row: Row = {
+        page: page.name,
+        tool,
+        motion: { headless: 'unknown', live: 'unknown' },
+        valuesCompared: false,
+        surface: {},
+        divergences: [],
+        notes: { headless: [], live: [] },
+      }
       let h: unknown
       let l: unknown
       try {
@@ -288,12 +346,34 @@ for (const page of PAGES) {
         return Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]]))
       }
       row.surface = { headless: witness(h), live: witness(l) }
-      if (h !== undefined && l !== undefined) row.divergences = compare(h, l, page.moving === true)
+      row.motion = {
+        headless: verdictOf(tool, h, row.notes.headless),
+        live: verdictOf(tool, l, row.notes.live),
+      }
+      pending.push({ tool, row, h, l })
+    }
+
+    // The union, across both surfaces and every tool that can answer: if
+    // anything saw motion, the page was moving. One surface reading still while
+    // the other reads moving is exactly the `moves` case — 1080 against 1065 —
+    // and taking the union is what stops the still reader deciding.
+    const probeSaysMoving = pending.some((p) => p.row.motion.headless === 'moving' || p.row.motion.live === 'moving')
+    // The flag wins where we can state it; the probe only ever ADDS motion.
+    // A fixture whose purpose is movement must not depend on a probe agreeing
+    // about it on a fast host, which is how `moves` got past everyone.
+    const skipValues = page.moving === true || probeSaysMoving
+
+    for (const { tool, row, h, l } of pending) {
+      if (h !== undefined && l !== undefined) {
+        row.divergences = compare(h, l, skipValues)
+        row.valuesCompared = !skipValues
+      }
       rows.push(row)
       const tag = `${page.name}/${tool.replace('obsrv_', '')}`
       const surfaces = `${JSON.stringify(row.surface.headless)}|${JSON.stringify(row.surface.live)}`
+      const motion = `motion h=${row.motion.headless} l=${row.motion.live}${row.valuesCompared ? '' : ' VALUES NOT COMPARED'}`
       if (row.headlessError || row.liveError) console.log(`  ${tag}: ERROR h=${row.headlessError ?? '-'} l=${row.liveError ?? '-'}`)
-      else console.log(`  ${tag}: ${row.divergences.length} divergence(s) [${surfaces}]`)
+      else console.log(`  ${tag}: ${row.divergences.length} divergence(s) ${motion} [${surfaces}]`)
     }
     mkdirSync(dirname(OUT), { recursive: true })
     writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), rows }, null, 2))
@@ -340,6 +420,66 @@ const EXPLAINED: { tool: string; path: string; why: string }[] = [
     why: 'live only: the app can fail to confirm a navigation before a capture, which a headless render cannot',
   },
 ]
+
+/**
+ * The pages whose VALUES this sweep compares, stated rather than derived.
+ *
+ * Stated is the whole point, and it is the difference between this assertion
+ * and a tautology. If this list were computed from `PAGES[].moving`, removing
+ * that flag would move both sides together and nothing would go red — the
+ * check would agree with itself, which is the failure
+ * `lesson-agreement-two-facts` is named for. Written out, it disagrees:
+ *
+ *   • a page that stops being compared — the flag added, or the probe finding
+ *     motion on a page nobody flagged — is missing from the compared set, and
+ *     this fails;
+ *   • a page that starts being compared — the flag removed — appears in it, and
+ *     this fails too.
+ *
+ * `moves` is the only exclusion, and it is excluded because the fixture exists
+ * to move: it slides at 140 px/s, so its two reads are 15 px apart and which
+ * reader got the larger number says nothing about the surfaces.
+ *
+ * A page joining this corpus is expected to change this list. That edit is the
+ * point at which somebody states what they intend, which is cheaper than
+ * discovering months later that a page quietly stopped being compared.
+ */
+const VALUES_COMPARED_ON = [
+  'ordinary',
+  'shadow',
+  'panel-locked',
+  'dialog-locked',
+  'wall',
+  'tall',
+  'empty',
+  'redirect',
+  'status-404',
+]
+
+test('values were compared on exactly the pages this sweep says they are', () => {
+  // Pages that produced a comparable pair at all. A page whose calls all
+  // errored is absent from both sides rather than silently counted as skipped:
+  // it has its own failure, and reading it as "not compared" would let a broken
+  // page satisfy this assertion.
+  const comparable = new Set(rows.filter(r => r.headlessError === undefined && r.liveError === undefined).map(r => r.page))
+  const compared = [...new Set(rows.filter(r => r.valuesCompared).map(r => r.page))].sort()
+  const expected = VALUES_COMPARED_ON.filter(p => comparable.has(p)).sort()
+
+  // Said out loud whatever happens, so a green is legible as evidence rather
+  // than as an absence of complaint.
+  const verdicts = rows
+    .filter(r => r.motion.headless !== 'unknown' || r.motion.live !== 'unknown')
+    .map(r => `${r.page}/${r.tool.replace('obsrv_', '')} h=${r.motion.headless} l=${r.motion.live}`)
+  console.log(`  motion verdicts:\n    ${verdicts.join('\n    ')}`)
+  console.log(`  values compared on: ${compared.join(', ') || '(none)'}`)
+
+  // `quiet` is not `still`: the probe reports motion and says nothing
+  // otherwise, so this can only ever say which pages were SEEN moving.
+  const seenMoving = [...new Set(rows.filter(r => r.motion.headless === 'moving' || r.motion.live === 'moving').map(r => r.page))].sort()
+  console.log(`  seen moving by the probe: ${seenMoving.join(', ') || '(none)'}`)
+
+  expect(compared, 'a page has silently entered or left the value comparison; see the verdicts above').toEqual(expected)
+})
 
 test('every surface difference is one with a written reason', () => {
   const explained = new Set(EXPLAINED.map(e => `${e.tool}\t${e.path}`))
