@@ -1,6 +1,8 @@
 ---
 title: "`inspect`, `audit` and `lint` answer `throttle: <id>` after the throttle was refused"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 41
 ---
