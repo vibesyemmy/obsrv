@@ -1,6 +1,7 @@
 ---
 title: "`doing` cannot tell working from waiting, and the board has no word for it"
-column: next
+column: doing
+owner: "Henry"
 kind: chore
 order: 36
 ---
