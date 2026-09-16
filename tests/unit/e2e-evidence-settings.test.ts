@@ -13,6 +13,9 @@ import config from '../../playwright.config'
  * (71 failure attempts, not one). So the settings are checked where they are
  * set, together with what they depend on. A trace taken only on a retry is
  * never written in a run that does not retry.
+ *
+ * Not `video`: #29 chose the trace and a screenshot as the evidence and left
+ * video off. This guards that choice, not one it didn't make.
  */
 
 const ROOT = resolve(__dirname, '../..')
@@ -34,9 +37,15 @@ function effectiveUses(): { name: string; use: Use }[] {
   return projects.map(p => ({ name: p.name ?? '(unnamed project)', use: { ...top, ...((p.use ?? {}) as Use) } }))
 }
 
-/** Every `playwright test` invocation in CI, with the flags that override the config. */
+/**
+ * Every `playwright test` invocation in CI, with the flags that override the
+ * config. Shell continuations are joined first: a `--trace off` on the line
+ * after a trailing backslash is the same command, and a line-based scan missed
+ * it (Kenya's read of #137, measured). A YAML folded scalar (`run: >`) is not
+ * joined; ci.yml uses none.
+ */
 function ciInvocations(): { line: string; retries: number | undefined; trace: string | undefined }[] {
-  const yml = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8')
+  const yml = readFileSync(resolve(ROOT, '.github/workflows/ci.yml'), 'utf8').replace(/\\\n\s*/g, ' ')
   return yml
     .split('\n')
     .filter(l => /\bplaywright test\b/.test(l) && !l.trim().startsWith('#'))
