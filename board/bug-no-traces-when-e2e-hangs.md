@@ -1,8 +1,7 @@
 ---
 title: "A run that outlasts the job's 30 minutes uploads no traces — and that is the run you cannot read"
-column: doing
+column: done
 owner: "Rook"
-waiting: ""
 kind: bug
 order: 55
 ---
@@ -115,6 +114,112 @@ show what the app was doing is exactly the one not collected.
 exiting mid-test (*"Target page, context or browser has been closed"*, *"closed: sessions down"*),
 and it had no traces because run `34924677951` predates the `trace` setting entirely — not because
 the upload was skipped.
+
+## PARKED AS WON'T-FIX, 2026-09-16 — Henry's decision, with a trigger to reopen
+
+Taken **without** measuring what `trace: 'on'` costs, and the reasoning is worth keeping because it
+is the opposite of the usual one: **no figure would change the answer.** The event has never happened
+on its own — the only job in this workflow's history to reach the 30-minute limit is control 4, which
+I induced. A cost measurement would have told us the price of insuring against something that has not
+occurred.
+
+**Every cheaper shape is closed by the measurements below**, so parking this is not deferring a
+decision, it is recording that the options ran out:
+
+- a **killed run flushes nothing** — zero files, under both SIGTERM and SIGKILL;
+- **`trace: 'on-first-retry'`** never starts a trace on a run that is killed before any retry;
+- **`globalTimeout`** leaves one bookkeeping file, which is worse than nothing: non-empty, so
+  `if-no-files-found: error` stays silent and the upload goes **green** carrying nothing readable.
+
+**Reopen on: the first job-level CI timeout nobody induced.** At that point the question changes from
+"is this worth insuring against" to "does it recur", and `trace: 'on'` gets measured then — starting
+with whether a trace zip killed mid-write is readable at all, which is still unmeasured.
+
+## ALL THREE MEASURED, 2026-09-16 — and BOTH candidate shapes fall.
+
+Outcomes were written down before each ran (see the claim note above). **Read C before acting on A:**
+A on its own reads as "candidate 1 survives", and that was true for about twenty minutes, until C
+asked the question A does not answer.
+
+### A — a step killed by its own `timeout-minutes` reads `failure`
+
+[Run `35153858367`](https://github.com/vibesyemmy/obsrv/actions/runs/35153858367), a throwaway ubuntu
+job whose step slept 120 s under `timeout-minutes: 1`:
+
+    probe outcome=failure conclusion=failure
+
+**Both**, which matters because `outcome` is what an `if:` reads. **As pre-registered**, and it keeps
+candidate 1 alive: a step-level timeout does *not* end in the `cancelled` state that already uploads
+nothing.
+
+### B — `globalTimeout` leaves nothing worth reading, and would pass the check anyway
+
+A deliberately hung spec under `--global-timeout`, run locally:
+
+    playwright exit code     1
+    test-results/ contains   .last-run.json      ← one bookkeeping file, and nothing else
+
+No trace, no `error-context.md`. The hung test is reported as *"did not run"*.
+
+**Follow that through the gate now on main and the result is the defect this family started with.**
+Playwright exits 1, so the e2e step is `failure`; the gate fires; `test-results/` is **non-empty**, so
+`if-no-files-found: error` does **not** fire; the upload **succeeds** and attaches a bookkeeping JSON.
+A green upload step carrying nothing anyone can read — `bug-trace-upload-empty`, rebuilt by the fix
+for its sequel.
+
+**My pre-registration said "I expect it to leave something", and that was true and useless.** The
+clause that saved it was the one asking *whether any of it is a trace rather than only
+`error-context.md`* — without that, one file would have read as a pass. It also compounds with a gap
+already on this card: `trace` is `on-first-retry`, and `globalTimeout` prevents the retry, so that
+path cannot produce a trace by construction.
+
+**So candidate 2 is not merely dead, it is a trap**, and it is written here so nobody re-proposes it
+from the reasoning that made it attractive — "Playwright stopping itself should write what it has".
+It does not.
+
+### What A does NOT establish, and it is the next measurement
+
+`failure` answers the **gate** question, not the **artefact** question. A step killed by its own
+timeout is still a process killed from outside, so whether Playwright flushes anything useful before
+it dies is unmeasured — and this card's control demands the upload *attach whatever Playwright
+managed to write*, not merely run.
+
+**Next: a throwaway run with a step-level `timeout-minutes` below the job's 30 and a hung spec, then
+read `test-results/`.** If it holds only `.last-run.json`, candidate 1 lands in exactly the same trap
+as candidate 2 and both shapes on this card fall — which would be the most useful outcome available,
+because it says the fix is not in this direction at all.
+
+### C — measured, and that is exactly what happened: BOTH SHAPES FALL
+
+A killed Playwright run flushes **nothing**. A hung spec, killed mid-run by signal, both ways,
+because GitHub does not document which one a step timeout sends:
+
+    SIGTERM   playwright exit 143   files in test-results: 0
+    SIGKILL   playwright exit 137   files in test-results: 0
+
+**Zero files — not even the `.last-run.json` that `globalTimeout` leaves.** So candidate 1 ends a
+hung run with `e2e: failure`, the gate firing, an **empty** directory, and therefore the upload going
+**red on `if-no-files-found: error`** — loud, correct, and carrying no traces. It converts a silent
+absence of evidence into a noisy one. That is worth something, but it is not what this card asked
+for.
+
+**Three independent reasons the timeout direction cannot deliver a trace**, and any one of them is
+sufficient:
+
+1. **`trace: 'on-first-retry'`** (`playwright.config.ts:55`). A killed run never retries, so no trace
+   is ever started — already noted on this card, now decisive rather than a footnote.
+2. **`screenshot: 'only-on-failure'`**. A hung test is killed, not failed, so no screenshot either.
+3. **A killed process flushes nothing**, measured above, under both signals.
+
+**So the fix is not about when the run is killed. It is about what is being recorded while it runs.**
+Anyone returning to this card should start at `trace: 'on'` — continuous recording — and the first
+question there is whether a trace zip killed mid-write is readable at all, which is **unmeasured**
+and is the next thing to establish. `trace: 'on'` also costs time and disk on every run, for an event
+this card has measured at once in the workflow's history, so the trade wants stating before it is
+made.
+
+**This is the outcome the pre-registration named as most useful**, and it is: it says the direction
+is wrong, before anyone spent a day building in it.
 
 ## What a fix has to decide, and what it must measure first
 
