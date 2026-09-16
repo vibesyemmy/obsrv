@@ -54,11 +54,19 @@ setTimeout(() => {
       env: { ...env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json'), OBSRV_ELECTRON_PKG_DIR: stubDir },
     }),
   )
-  // Cache the output schemas, or nothing this file asserts about a reply's
-  // shape is actually checked — see chore-mcp-specs-validate-every-call.
-  await client.listTools()
   // The server is up before the download is done: the connection must not wait on it.
   expect(Date.now() - started).toBeLessThan(1_400)
+  // Cache the output schemas, or nothing this file asserts about a reply's
+  // shape is actually checked — see chore-mcp-specs-validate-every-call.
+  //
+  // AFTER the assertion above, deliberately. `started` is taken before
+  // `connect`, so a `listTools()` placed above would spend part of a 1,400 ms
+  // budget that exists to measure one thing — that connecting does not wait on
+  // the 1,500 ms stub download. It would still pass, and that is the problem:
+  // the margin narrows silently, and a red on a loaded runner would then accuse
+  // the connection of waiting on the download when the cost was a tools/list
+  // round trip (Henry, reading #128).
+  await client.listTools()
 })
 
 test.afterAll(async () => {
