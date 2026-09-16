@@ -89,6 +89,42 @@ test('closing it from inside an inspector dispatch, a beat after it opened, no l
   }
 })
 
+/**
+ * The target inspector's own lifecycle, in order, from this call on. The two
+ * guard tests below wait on these, not on `isDevToolsOpened()`: that answers
+ * for the request rather than the window, and both toggles are deferred a
+ * tick, so a poll for "closed" taken straight after the clicks reads the state
+ * before either toggle has run. It did, in every CI run of both tests until
+ * 2026-09-16 — each was decided by one sample 500 ms after the clicks, racing
+ * an open-then-close that takes 340 ms to 1.4 s on a runner, and a slow runner
+ * failed them exactly as a dropped close would (bug-devtools-toggle-reopens).
+ */
+const recordInspectorEvents = (): Promise<void> =>
+  app.evaluate(() => {
+    const g = globalThis as any
+    const wc = g.__obsrv.target.webContents
+    g.__inspectorEvents?.off()
+    const events: string[] = []
+    const onOpened = (): void => void events.push('opened')
+    const onClosed = (): void => void events.push('closed')
+    wc.on('devtools-opened', onOpened)
+    wc.on('devtools-closed', onClosed)
+    g.__inspectorEvents = {
+      events,
+      off: () => {
+        wc.off('devtools-opened', onOpened)
+        wc.off('devtools-closed', onClosed)
+      },
+    }
+  })
+/** From the first open: the inspector starts closed, so a close before it belongs to the test before. */
+const inspectorEvents = (): Promise<string[]> =>
+  app.evaluate(() => {
+    const events: string[] = (globalThis as any).__inspectorEvents.events
+    const first = events.indexOf('opened')
+    return first < 0 ? [] : events.slice(first)
+  })
+
 test('a toggle that arrives while the inspector is opening is applied when it opens, not dropped', async () => {
   // The in-flight guard used to *drop* such a toggle, which reads as a
   // click that did nothing: on a slow machine the window between
@@ -98,24 +134,31 @@ test('a toggle that arrives while the inspector is opening is applied when it op
   // inside that window by construction, whatever the machine's speed.
   const opened = (): Promise<boolean> =>
     app.evaluate(() => (globalThis as any).__obsrv.target.webContents.isDevToolsOpened())
+  await recordInspectorEvents()
   await app.evaluate(({ Menu }) => {
     const item = Menu.getApplicationMenu()!.getMenuItemById('target-devtools')!
     item.click()
     item.click()
   })
   // Two toggles, so it opens and then closes — the second is honoured once
-  // the window exists rather than vanishing.
-  await expect.poll(opened, { timeout: 10_000 }).toBe(false)
+  // the window exists rather than vanishing. Waiting on the events waits for
+  // the window, however long the machine takes to make one.
+  await expect.poll(inspectorEvents, { timeout: 10_000 }).toEqual(['opened', 'closed'])
   // And it stays closed: the pending toggle is one, not a queue that
-  // re-opens behind it.
+  // re-opens behind it. Timed from the close, not the clicks — a re-open
+  // queued behind it is requested as the close settles, and the request
+  // flag shows a request at once.
   await new Promise(r => setTimeout(r, 500))
+  expect(await inspectorEvents()).toEqual(['opened', 'closed'])
   expect(await opened()).toBe(false)
+  await app.evaluate(() => (globalThis as any).__inspectorEvents.off())
   expect(await app.evaluate(() => 1 + 1)).toBe(2)
 })
 
 test('a third toggle while one is already pending does not stack up', async () => {
   const opened = (): Promise<boolean> =>
     app.evaluate(() => (globalThis as any).__obsrv.target.webContents.isDevToolsOpened())
+  await recordInspectorEvents()
   await app.evaluate(({ Menu }) => {
     const item = Menu.getApplicationMenu()!.getMenuItemById('target-devtools')!
     item.click()
@@ -124,7 +167,9 @@ test('a third toggle while one is already pending does not stack up', async () =
   })
   // Open, then one pending close — the third click collapses into the
   // second rather than queueing a re-open behind it.
-  await expect.poll(opened, { timeout: 10_000 }).toBe(false)
+  await expect.poll(inspectorEvents, { timeout: 10_000 }).toEqual(['opened', 'closed'])
   await new Promise(r => setTimeout(r, 500))
+  expect(await inspectorEvents()).toEqual(['opened', 'closed'])
   expect(await opened()).toBe(false)
+  await app.evaluate(() => (globalThis as any).__inspectorEvents.off())
 })

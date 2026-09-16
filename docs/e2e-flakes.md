@@ -467,6 +467,30 @@ tick and refuses a second toggle while an open is in flight (that second
 toggle used to re-open, for the same flag-versus-window reason). The spec
 now runs the crashing sequence itself, twice, as a regression test.
 
+## `devtools.spec`: the guard tests were decided by one sample racing the open
+
+The two tests of that guard, `:92` (two clicks) and `:116` (three), each
+failed 9 of 181 CI tries between 2026-09-13 and 09-16, four times through
+the retry. It was filed as the inspector closing and then re-opening. It
+never did.
+
+Every try, passing or failing, finished in 505–648 ms around a 500 ms
+sleep, while a real open-then-close takes at least 337 ms on a runner
+(`:31`, which waits on the events). So the 10 s close poll was satisfied
+before either toggle had run: both are deferred a tick, and
+`isDevToolsOpened()` answers for the request. The verdict was the one
+sample 500 ms after the clicks, racing the open and the held close. A slow
+runner read `true` there exactly as a dropped close would.
+
+Fixed in the spec, not the app: both tests wait on the target's
+`devtools-opened` / `devtools-closed` events and time "stays closed" from
+the close. Against sabotaged builds of `menu.ts`, delaying the held close
+by 700 ms fails the old tests and passes the new ones; dropping the held
+toggle, or queueing a re-open behind the close, fails both.
+
+**Read the duration beside the error, not only the line.** A 10 s poll that
+finishes in a tenth of a second on every run waited for nothing.
+
 ## `sync.spec`: the redirect test, two failure modes
 
 Mode one, seen in the v0.22.1 tag run: `seen.length >= 1` against zero — the

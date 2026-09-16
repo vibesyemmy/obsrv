@@ -1,12 +1,66 @@
 ---
-title: "The inspector closes, then re-opens 500 ms later — and it defeats the retry"
-column: doing
+title: "The devtools guard tests were decided by one sample racing the inspector's open — the close poll never saw a close"
+column: done
 owner: "Henry"
 kind: bug
 order: 33
 ---
 
-FILED 2026-09-15 by Henry, from CI run `34956013490` (PR #10). **Unowned.**
+FILED 2026-09-15 by Henry, from CI run `34956013490` (PR #10).
+
+## RESOLVED 2026-09-16 by Henry — the reading below is wrong, and the log it was filed from said so
+
+**The inspector never closed and re-opened. The close poll at `:108` has never observed a close,
+in any CI run, passing or failing.**
+
+Swept every CI attempt since the test landed on 2026-09-13: 334 attempts, 178 reached
+`devtools.spec`.
+
+- **`:92` — 181 tries, 9 failed. Every try took 505–624 ms, and the test sleeps 500 ms.** The
+  10 s close poll was satisfied within ~124 ms every time.
+- **A real open-then-close never took under 337 ms** — `:31`, which waits on the events: 178
+  passing tries, median 540 ms, p95 964 ms, max 1.4 s.
+- So the poll read `false` **before either toggle had run.** Both are deferred a tick, and
+  `isDevToolsOpened()` answers for the request, not the window (`docs/e2e-flakes.md`). Measured
+  locally: the poll was satisfied after 2–10 ms; the close arrives at ~360 ms.
+- **Each try was decided by one sample 500 ms after the clicks**, racing an open-then-held-close
+  of 340 ms to 1.4 s. A slow runner reads `true` there exactly as a dropped close would.
+- **`:116` — three clicks — has the same shape and failed 9 of 181 too**, never carded or
+  counted. In four runs the retry failed as well; 10 of the 14 runs with a failure were on `main`.
+
+**The run this card was filed from carried the answer:** its two failed tries took **523 and 529
+ms**. The line number was read and the duration beside it was not. *A check that looked at nothing
+passes* is already in `CONTRIBUTING.md`; this card is an instance of it.
+
+### The fix, and the controls that make it one
+
+Both tests now record the target's `devtools-opened` / `devtools-closed` events, poll until exactly
+`opened, closed` however slow the machine, and check it stays that way 500 ms **after the close**,
+with the request flag false. **No product change**: tracing the guard, two or three clicks have no
+re-open path, and nothing measured here points at one.
+
+The committed spec, run against sabotaged builds of `src/main/menu.ts` (retries off; the old tests
+through an identical harness):
+
+| build | old tests | new tests |
+| --- | --- | --- |
+| real | pass — poll satisfied in 2–10 ms | pass — close seen at ~360 ms |
+| held close delayed 700 ms: a slow runner, made deterministic | **fail** | **pass** |
+| held toggle dropped | fail | fail — stuck at `opened` |
+| re-open queued behind the close | fail | fail — an event after the close |
+
+The second row is the one that separates them. The last two show the new tests still catch what
+the guard exists to prevent.
+
+### What is still not known
+
+**Whether any of the 18 failures was a real re-open.** The durations cannot tell a slow cycle from
+a close and re-open inside the same 500 ms, so that is ruled out by the code and by parsimony, not
+by the logs. The new tests fail on one. If they never do, that is the evidence.
+
+---
+
+*The original filing follows, kept as the record of the reading.*
 
 `tests/e2e/devtools.spec.ts:92` — *"a toggle that arrives while the inspector is opening is
 applied when it opens, not dropped"* — failed **both attempts** on a macOS runner.
@@ -20,7 +74,8 @@ and then closes. It then checks twice:
     111  await new Promise(r => setTimeout(r, 500))
     112  expect(await opened()).toBe(false)                            ← FAILED: Received true
 
-**The close poll succeeded. The inspector then re-opened within 500 ms.**
+**The close poll succeeded. The inspector then re-opened within 500 ms.** *(Wrong — see the top:
+the poll succeeded before anything had opened.)*
 
 That matters because the obvious reading is wrong. The test's own comment records a previous CI
 failure — *"0.59.0's bump run, devtools.spec:92 failing its close poll twice at 10 s"* — and
