@@ -1,6 +1,6 @@
 ---
 title: "The product routes a warning by matching its own prose"
-column: doing
+column: done
 kind: bug
 owner: "Rook"
 order: 37
@@ -155,3 +155,39 @@ reply for exactly that.
 
 **Both were found by someone reading the code for a different reason.** Neither was found by the
 policy.
+
+## CLOSED by Rook, 2026-09-16 — #49 (`95f450f`), plus the follow-up below
+
+`main.ts` routes on `explainedByCutLoad(reason)`. `onWarn` carries `(message, reason)`; all five
+`capture.ts` call sites pass the `unsettledReason` they already set on the line above. The regex
+is gone. Nothing reaches `warnings[]` — the reason is a callback argument consumed at the routing
+site and discarded — so no output schema gained a field and no register entry was owed.
+
+**Behaviour-identical, asserted rather than claimed.** The characterization test drives all four
+reasons through `captureQuiescent` and checks `explainedByCutLoad` against the verdict the prose
+match gave each of them, recorded as data rather than as a live copy of the old regex.
+
+**The control is what closes it.** Rewording `capture.ts`'s animating sentence to *"page painted
+continuously for"* moved `animating` from suppressed to kept before the fix, with `tsc` clean and
+nothing thrown. After it: the routing tests pass, a real cut-load snap still suppresses the
+capture warning, and the only red is `cliCapture.test.ts:110`'s `toMatch(/painting steadily/)` —
+a test that deliberately pins a sentence, **going red loudly where the product used to go wrong
+quietly.**
+
+## The follow-up, and why the first version was worse
+
+Henry's review point, taken: **the `never` default no longer throws.** The exhaustiveness is
+entirely the `const unrouted: never = reason` assignment's doing at compile time — **measured**,
+by adding `'stalled'` to the union and watching `tsc` fail at that line, then reversing it. The
+`throw` added nothing to that and made a *warning router* capable of taking down a capture.
+
+And the fallback is now `return false` — **keep the sentence.** A router that cannot classify a
+warning should let it through, not suppress it and not crash. This card is about a warning going
+missing quietly; the first fix could have made one go missing loudly, which is better but still
+the wrong answer.
+
+## What the sweep settled, for the next reader
+
+One instance in `src/`, not a class — four shapes over 87 files and 23,671 lines, two validated
+by controls that fired and two narrowed on a filter with its own control. `tests/` excluded on
+purpose: a spec matching prose is the contract checker, not a caller.
