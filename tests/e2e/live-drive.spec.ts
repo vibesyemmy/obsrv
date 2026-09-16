@@ -370,7 +370,13 @@ test('focusWindow answers ok and fronts the window (takes the desk: CI, or local
     focused = await app.evaluate(() => (globalThis as any).__obsrv.win.isFocused())
     if (!focused) await new Promise(res => setTimeout(res, 100))
   }
-  test.skip(!focused, 'the runner did not grant window focus')
+  // On CI, an assertion: the runner does grant focus (this test passed there
+  // before #141 and after its fix), so a skip there would blame the runner for
+  // whatever actually stopped the fronting. #141's first head skipped here on
+  // every CI run with the suite green (Wren's read). Locally it skips, since a
+  // desk may refuse focus for reasons of its own.
+  if (process.env['CI']) expect(focused, 'focusWindow did not make the window key on CI, where the runner grants focus').toBe(true)
+  else test.skip(!focused, 'the runner did not grant window focus')
 })
 
 test('setPixelExact pins the footer magnification to the host scale', async () => {
