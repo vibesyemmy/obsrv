@@ -1,6 +1,8 @@
 ---
 title: "A test that skips on CI turns a regression green, and nothing states which skips are expected"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 61
 ---
