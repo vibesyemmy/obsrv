@@ -1,6 +1,8 @@
 ---
 title: "`groupsOnly` empties `findings` and `truncated` says nothing was cut"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 47
 ---
