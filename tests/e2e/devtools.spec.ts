@@ -147,7 +147,9 @@ test('a toggle that arrives while the inspector is opening is applied when it op
   // And it stays closed: the pending toggle is one, not a queue that
   // re-opens behind it. Timed from the close, not the clicks — a re-open
   // queued behind it is requested as the close settles, and the request
-  // flag shows a request at once.
+  // flag shows a request at once. That earliness is the property that made
+  // the old poll read nothing; here it is what makes 500 ms enough, so the
+  // flag stays in this check rather than being swapped for the events.
   await new Promise(r => setTimeout(r, 500))
   expect(await inspectorEvents()).toEqual(['opened', 'closed'])
   expect(await opened()).toBe(false)
