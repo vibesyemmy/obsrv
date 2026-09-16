@@ -29,7 +29,8 @@
     "board": "node scripts/build-board.js",
     "board:check": "node scripts/build-board.js --check",
     "test:e2e:run": "npm run build && playwright test",
-    "reds:check": "node scripts/knownReds.js --check"
+    "reds:check": "node scripts/knownReds.js --check",
+    "schema:sweep": "node scripts/schema-emit-sweep.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",
