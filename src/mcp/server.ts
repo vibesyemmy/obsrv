@@ -10,6 +10,7 @@ import { pruneTempDirs } from '../shared/pruneTemp'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
@@ -1117,6 +1118,15 @@ function stampLaneResults(target: McpServer, stamp: string): void {
   ;(target as unknown as { registerTool: Register }).registerTool = wrapped
 }
 if (devMode()) stampLaneResults(server, laneStamp(devLane().laneLabel(REPO_ROOT), devLane().serverStamp(REPO_ROOT), REPO_ROOT))
+
+/**
+ * Under `OBSRV_TEST=1`, every tool registered after this checks its own reply
+ * against its own output schema and fails the call on a key the schema does
+ * not declare (`strictOutput.ts`). Wrapped here, before the first
+ * `registerTool` below, so no tool can forget — and outside the `devMode()`
+ * fence above, because the suite runs on the ordinary build.
+ */
+rejectUndeclaredKeysUnderTest(server)
 
 server.registerTool(
   'obsrv_snap',

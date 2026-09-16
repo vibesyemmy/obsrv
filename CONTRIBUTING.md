@@ -386,6 +386,23 @@ app, `focusWindow` and `overlay-focus.spec` (which launches with
 `app.focus()` on the app under test; use `win.showInactive()`, or gate it the
 same way and say so in its name.
 
+**The server checks its own replies under test.** Every MCP tool compares the
+keys it emits against the keys its own output schema declares, nested ones
+included, and fails the call on a key that is not declared — naming the tool
+and the full path. It runs under `OBSRV_TEST=1`, and under
+`OBSRV_STRICT_OUTPUT=1` for the specs that drive a live app, which cannot set
+`OBSRV_TEST` because that refuses to launch one. Users never see it: strict in
+production would turn a slipped key into an error for every client, including
+the many that do not validate and work today.
+
+It exists because the client-side check cannot be relied on — the SDK validates
+only when it has cached the schema through `listTools()`, and a failing test
+replaces the Playwright worker, leaving every test after it unvalidated. Three
+undeclared keys shipped that way in one week. If you add a field to a reply,
+add it to the tool's output shape in the same commit or the suite will tell you.
+`OBSRV_TEST_UNDECLARED_KEY=<tool>` injects one deliberately, which is how the
+suite proves the check is running rather than merely green.
+
 `-g` filtering is not safe everywhere. Some spec files establish shared state
 in their first test, and a filtered run skips it — you will get a message
 saying so rather than a crash, but the run is not the same conditions as a

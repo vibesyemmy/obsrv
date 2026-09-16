@@ -84,7 +84,9 @@ test.beforeAll(async () => {
       command: process.execPath,
       args: [MCP_BIN],
       cwd: ROOT,
-      env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME) },
+      // Live surface: OBSRV_TEST=1 would refuse to launch the app, so the
+      // server's undeclared-key check is switched on by its second fence.
+      env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME), OBSRV_STRICT_OUTPUT: '1' },
     }),
   )
   // Cache the output schemas before the first call. Without this the SDK

@@ -43,7 +43,12 @@ test.beforeAll(async () => {
       command: process.execPath,
       args: [MCP_BIN],
       cwd: ROOT,
-      env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME) },
+      // The live surface cannot set OBSRV_TEST=1 — that refuses to launch the
+      // app — so the server's own undeclared-key check is switched on by its
+      // second fence. Without this line every `obsrv_drive` and live `snap`
+      // reply in this file goes unchecked, which is the surface the sweep
+      // skips and where two of the three shipped breaks lived.
+      env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME), OBSRV_STRICT_OUTPUT: '1' },
     })
   client = new Client({ name: 'obsrv-mcp-live-spec', version: '0.0.0' })
   await client.connect(serverTransport())
@@ -846,4 +851,50 @@ test('a redirect is not reported as the page navigating after it loaded', async 
     server.closeAllConnections()
     await new Promise<void>(r => server.close(() => r()))
   }
+})
+
+/**
+ * `chore-strict-output-under-test`, on the surface it was written for.
+ *
+ * `obsrv_drive` spreads the whole app status into its reply, and two of the
+ * three shipped undeclared keys lived on this surface — which is also the one
+ * `schema-emit-sweep.js` skips by design, because it cannot drive a visible
+ * app. So a check that could not reach here would have missed the place it was
+ * needed most while reading as though it covered everything.
+ *
+ * This test exists because that nearly happened: fenced on `OBSRV_TEST=1`
+ * alone, the check was off in this whole file (that variable refuses to launch
+ * the app), and a run of 16 `obsrv_drive` tests with a deliberate undeclared
+ * key injected passed all 16.
+ */
+test('the server rejects an undeclared key on the live drive surface, where the sweep cannot look', async () => {
+  const base = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
+  const userData = await app.evaluate(({ app: a }) => a.getPath('userData'))
+  const poisoned = new Client({ name: 'obsrv-live-strict-spec', version: '0.0.0' })
+  await poisoned.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [MCP_BIN],
+      cwd: ROOT,
+      env: {
+        ...base,
+        OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME),
+        OBSRV_STRICT_OUTPUT: '1',
+        OBSRV_TEST_UNDECLARED_KEY: 'obsrv_drive',
+      },
+    }),
+  )
+  try {
+    const r = (await poisoned.callTool({ name: 'obsrv_drive', arguments: {} })) as CallToolResult
+    expect(r.isError).toBe(true)
+    const text = (r.content as { text?: string }[]).map(c => c.text ?? '').join('\n')
+    expect(text).toContain('obsrv_drive emitted 1 key its own output schema does not declare')
+    expect(text).toContain('obsrvTestUndeclaredKey')
+  } finally {
+    await poisoned.close()
+  }
+  // And the ordinary client, on the same app, is unaffected: the poison is one
+  // server's, not the app's.
+  const clean = await call('obsrv_drive', {})
+  expect(clean.isError, JSON.stringify(clean.content)).toBeFalsy()
 })
