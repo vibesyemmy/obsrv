@@ -1,7 +1,8 @@
 ---
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
-column: next
+column: doing
 owner: "Henry"
+waiting: ""
 kind: bug
 order: 0
 ---
