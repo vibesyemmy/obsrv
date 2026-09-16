@@ -30,15 +30,27 @@ the warning routes down the other branch; a person reading the output sees a sen
 place or not at all, with no error anywhere. **A rewording is the most likely change to this code
 and the least likely to be noticed breaking it.**
 
-## It is live in the blast radius of the trio work
+## The trio was checked against this and does not break it
 
-`bug-report-edit-invisible` and `bug-report-doubled-warning-prefix` are being fixed by moving
-labelling into the sink and stripping pre-composed literals. **That work reshapes warning strings
-and their routing.** Whoever does it should know this regex exists before touching the path, not
-after a suite goes strange.
+**Checked by Rook at the lines, and recorded here so the next reader does not re-derive it.** The
+trio strips the `warning: ` literal only — it rewords nothing. The messages `:363` matches on come
+from `capture.ts:257` and `:272` and are **already bare**, and the one `capture.ts` literal the
+trio strips (`:286`, the uncovered-frame warning) does not contain "kept painting". **The regex
+keeps matching after that change.**
 
-Not a reason to fold it into the trio — it is a different root and folding it would hide it — but
-a reason to read this card first.
+That is a false alarm removed rather than a hazard downgraded, and the distinction matters: a card
+that cries wolf about a specific change stops being read about the general one.
+
+## The hazard that remains, which is not about the trio
+
+**Any future rewording of the sentence at `capture.ts:257` or `:272` silently breaks this.** That
+is not hypothetical: `read-the-output-not-the-code` commits this project to rewording warnings
+whenever they get clearer, and "kept painting" is ordinary prose nobody would think twice about
+improving.
+
+The trio happens to be safe. **The next change to those sentences is the one to worry about**, and
+it will not announce itself — there is no test, no type, and no comment at `capture.ts` saying a
+regex forty lines away depends on the wording.
 
 ## What the fix has to decide
 
