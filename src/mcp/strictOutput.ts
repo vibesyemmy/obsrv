@@ -80,12 +80,19 @@ type ListHandler = (request: unknown, extra: unknown) => Promise<{ tools?: { nam
  *
  * Read once, lazily: the list handler exists only after the first tool is
  * registered, and every tool is registered before any call arrives.
+ *
+ * Null does not mean "carry on unchecked" — the caller fails every
+ * schema-declaring call — so the warning says that rather than saying the
+ * check is off, which is what it used to say and was no longer true.
  */
 async function publishedPaths(server: unknown, warn: (line: string) => void): Promise<Map<string, Set<string>> | null> {
   const low = (server as { server?: { _requestHandlers?: Map<string, ListHandler> } }).server
   const handler = low?._requestHandlers?.get('tools/list')
   if (handler === undefined) {
-    warn('obsrv: strict output check DISABLED — the server exposes no tools/list handler to read its published schemas from')
+    warn(
+      'obsrv: strict output check cannot read the published schemas (the server exposes no tools/list handler); ' +
+        'every tool that declares an output schema fails its calls under OBSRV_TEST / OBSRV_STRICT_OUTPUT until it can',
+    )
     return null
   }
   try {
@@ -99,7 +106,10 @@ async function publishedPaths(server: unknown, warn: (line: string) => void): Pr
     }
     return out
   } catch (e) {
-    warn(`obsrv: strict output check DISABLED — reading the published schemas failed: ${e instanceof Error ? e.message : String(e)}`)
+    warn(
+      `obsrv: strict output check cannot read the published schemas (${e instanceof Error ? e.message : String(e)}); ` +
+        'every tool that declares an output schema fails its calls under OBSRV_TEST / OBSRV_STRICT_OUTPUT until it can',
+    )
     return null
   }
 }

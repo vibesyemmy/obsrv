@@ -403,6 +403,15 @@ add it to the tool's output shape in the same commit or the suite will tell you.
 `OBSRV_TEST_UNDECLARED_KEY=<tool>` injects one deliberately, which is how the
 suite proves the check is running rather than merely green.
 
+**A check's own coverage needs a reader who didn't write it.** That check shipped
+twice with a hole its author could not see: fenced on `OBSRV_TEST` alone it was
+switched off across the entire live surface, where two of the three keys it was
+written for had lived (16 poisoned `obsrv_drive` tests passed); and its e2e arms
+poison one tool by name, so a tool dropping out of the published list was
+silently unchecked and every arm stayed green. Both were found by someone else
+reading it. When you add a check, say plainly which runs it does **not** cover
+and ask for a cold read of that, not of the code.
+
 `-g` filtering is not safe everywhere. Some spec files establish shared state
 in their first test, and a filtered run skips it — you will get a message
 saying so rather than a crash, but the run is not the same conditions as a

@@ -118,7 +118,14 @@ describe('a tool the published list does not carry', () => {
     rejectUndeclaredKeysUnderTest(s.target, warn)
     ;(s.target.registerTool as (n: unknown, c: unknown, h: unknown) => void)('obsrv_x', { outputSchema: {} }, async () => reply({ a: 1 }))
     await expect(s.call('obsrv_x')).rejects.toThrow(/published tool list could not be read/)
-    expect(warnings.join('\n')).toContain('strict output check DISABLED')
+    // The stderr line has to describe what actually happens. It said "DISABLED"
+    // after the behaviour changed to failing the call, so whoever arrived by
+    // that route was told the check was off while their calls were failing
+    // (@Wren's read of #135). Asserted so it cannot drift again.
+    const said = warnings.join('\n')
+    expect(said).toContain('cannot read the published schemas')
+    expect(said).toContain('fails its calls')
+    expect(said).not.toContain('DISABLED')
   })
 
   it('still passes a tool that promised no schema, even then', async () => {
