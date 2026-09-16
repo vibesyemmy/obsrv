@@ -15,9 +15,9 @@ import { pathToFileURL } from 'node:url'
 const BIN = resolve(__dirname, '../../bin/obsrv.js')
 const fixture = (name: string): string => pathToFileURL(resolve(__dirname, `../fixtures/${name}`)).href
 
-function runCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+function runCli(args: string[], env: Record<string, string> = {}): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((done, fail) => {
-    const child = spawn(process.execPath, [BIN, ...args], { cwd: resolve(__dirname, '../..') })
+    const child = spawn(process.execPath, [BIN, ...args], { cwd: resolve(__dirname, '../..'), env: { ...process.env, ...env } })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', d => (stdout += d))
@@ -60,6 +60,26 @@ test('a page that fits one surface is one band, and --tiled alone is refused', a
   const bad = await runCli(['snap', fixture('audit.html'), '--preset', 'laptop-768', '--tiled', '--out', out])
   expect(bad.code).toBe(2)
   expect(bad.stderr).toContain('--tiled goes with --full-page')
+})
+
+test('the viewport-height warning waits for the page to take the taller surface, however slow the resize', async () => {
+  // bug-viewport-warning-race: on a loaded runner the re-measure beat the
+  // reflow, found nothing moved, and the warning stayed silent about the page
+  // it exists for (run 35075624029, both tries). The resize is slowed on
+  // purpose here rather than hoping for a slow runner.
+  const args = ['snap', fixture('viewport-units.html'), '--preset', 'laptop-768', '--full-page', '--single-surface', '--out', join(outDir, 'vu-slow.png')]
+  const slow = await runCli(args, { OBSRV_TEST: '1', OBSRV_TEST_RESIZE_DELAY_MS: '600' })
+  expect(slow.code, slow.stderr).toBe(0)
+  const warned = (JSON.parse(slow.stdout).warnings as string[]).join(' ')
+  expect(warned).toMatch(/lays out against the viewport height/)
+  expect(warned).not.toMatch(/had not taken/)
+
+  // Slower than the wait: it says it did not measure, and claims nothing either way.
+  const tooSlow = await runCli(args, { OBSRV_TEST: '1', OBSRV_TEST_RESIZE_DELAY_MS: '3000' })
+  expect(tooSlow.code, tooSlow.stderr).toBe(0)
+  const said = (JSON.parse(tooSlow.stdout).warnings as string[]).join(' ')
+  expect(said).toMatch(/had not taken the \d+ CSS px surface within 2 s, so whether it lays out against the viewport height was not measured/)
+  expect(said).not.toMatch(/this page lays out against the viewport height/)
 })
 
 test('a page sized against the viewport is warned about on one surface, and not when tiled', async () => {
