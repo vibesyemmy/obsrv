@@ -103,6 +103,9 @@ const machine = (json: unknown): Promise<void> =>
   })
 
 const sleep = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms))
+/** How long a full-page capture waits for the page to take its taller surface before measuring it. */
+const GROWN_SURFACE_BUDGET_MS = 2_000
+const GROWN_SURFACE_POLL_MS = 25
 
 function encodePng(img: RGBAImage): Buffer {
   // Chromium's bitmap layout (BGRA on this stack — verified against a solid
@@ -604,6 +607,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
                 `(device pixels are capped at 4096 per axis)`,
             )
           }
+          const innerHeightNow = async (): Promise<number> => Number(await target.webContents.executeJavaScript('innerHeight'))
+          const innerBefore = await innerHeightNow()
           target.setViewport(applied.width, wanted, spec.deviceScaleFactor, spec.mobile)
           cssHeight = wanted
           // One surface means a viewport as tall as the page, and a page that
@@ -611,17 +616,36 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           // `100vh` hero is the screen's height on the screen and the whole
           // surface's height here. Measured rather than assumed — the page is
           // asked again, and only a page that actually moved is warned about.
-          const grownHeight = Math.ceil(
-            (await target.webContents.executeJavaScript(
-              'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
-            )) as number,
-          )
-          if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
+          //
+          // Asked again once the page has the taller surface, not straight
+          // after asking for it: the resize reaches the page later, and on a
+          // loaded runner a read taken at once saw the old size, found nothing
+          // moved, and the warning stayed silent about the layout it exists
+          // for (bug-viewport-warning-race). The page's own `innerHeight`
+          // changing is the fact waited on — not a sleep.
+          let surfaceTaken = wanted === applied.height
+          for (const deadline = Date.now() + GROWN_SURFACE_BUDGET_MS; !surfaceTaken && Date.now() < deadline; ) {
+            if ((await innerHeightNow()) !== innerBefore) surfaceTaken = true
+            else await sleep(GROWN_SURFACE_POLL_MS)
+          }
+          if (!surfaceTaken) {
             warn(
-              `this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
-                `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
-                `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
+              `the page had not taken the ${wanted} CSS px surface within ${GROWN_SURFACE_BUDGET_MS / 1000} s, so whether it ` +
+                `lays out against the viewport height was not measured`,
             )
+          } else {
+            const grownHeight = Math.ceil(
+              (await target.webContents.executeJavaScript(
+                'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
+              )) as number,
+            )
+            if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
+              warn(
+                `this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
+                  `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
+                  `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
+              )
+            }
           }
         }
       }
