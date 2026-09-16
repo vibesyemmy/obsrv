@@ -66,6 +66,64 @@ window that is not key (`focusWindow` is refused on macOS 14+ unless the front a
 is the OS and is already on record); or the commit path the field uses does not run without a
 real focus change.
 
+## READ THIS BEFORE REPRODUCING: `:85` cannot pass alone, for a reason unrelated to the blur
+
+Found by Rook 2026-09-16 from run `34995218008`'s own log and artefact, after claiming the card.
+**It invalidates the obvious way to reproduce this**, which is the way I was about to take.
+
+The two attempts in that run failed **differently**, and only the first is this card's bug:
+
+| attempt | where | what |
+| --- | --- | --- |
+| first | line **99**, `await field.blur()` | `locator.blur: Timeout 30000ms exceeded` (30.0 s) |
+| retry #1 | line **97**, the assertion *before* it | `hostDiagonalInches` expected 54, **received 27** (428 ms) |
+
+**The retry never reached the blur.** Line 97 asserts `hostDiagonalInches: 54`, and nothing in
+`:85` sets 54 — the *previous* test does (`a bigger host diagonal means a smaller magnification`,
+line 71, which ends on 54). A retry runs the failed test alone in a fresh worker, that worker
+launches a fresh app, and a fresh app has the default: **27**, from `src/shared/presets.ts:16`.
+So `:85` run alone fails at line 97 every time, deterministically, and it always would have.
+
+Three consequences:
+
+1. **`-g` on `:85` alone cannot reproduce this bug.** It fails 428 ms in, at a different line, for
+   a different reason. Anyone who runs it that way and sees red will think they have the repro.
+   That is the false positive this note exists to prevent — and it is **measured, not predicted**:
+   run locally on `main` at `9aca3d8`, `-g "a field commits on blur or Enter, never on a keystroke"`
+   fails at `controls.spec.ts:97:34` with expected 54, received 27 — the same pair CI's retry got.
+2. **"Failed both tries" does not mean what the board's rule usually means here.** The rule —
+   `bug-flakes-gate-the-gate`'s, and it is a good rule — reads ✘ on both tries as *deterministic,
+   not flaky*. In this case the second ✘ is manufactured by the retry mechanism meeting a
+   test-order dependency, so it says nothing about whether the blur timeout is deterministic. The
+   blur failure has been seen **once**.
+3. **The test-order dependency is a defect in its own right**, independent of the blur. A test that
+   silently requires its predecessor is one reordering away from failing for a reason nobody will
+   connect to the change that caused it. Worth its own card; not this one's to fix.
+
+## What is known about the timeout itself
+
+- **Playwright's `locator.blur()` is not a plain DOM call.** In `playwright-core`'s bundle it is
+  `frame.blur()` → `_retryWithProgressIfNotConnected(… handle._blur())`, and `_blur` is
+  `evaluateInUtility(([injected, node]) => injected.blurNode(node))`. So the timeout is an
+  **`evaluate` that never returned**, not a missing element.
+- **The call log shows one resolution and then silence** — `locator resolved to <input … class="host-diagonal num"/>`, nothing after. A spinning `_retryWithProgressIfNotConnected` would have
+  re-queried and said so. That points at the evaluate itself hanging rather than at the retry loop,
+  though it does not prove it.
+- **A synchronous IPC in the blur→commit path is ruled out:** `sendSync` appears nowhere in `src/`.
+  `onBlur` calls `commit()`, which is plain arithmetic plus `onCommit`.
+- **There is no page snapshot to inspect.** The artefact holds only `error-context.md` — the run
+  predates the `trace` setting doing anything useful — so what the DOM looked like at the moment of
+  the hang is not recorded. See `bug-no-traces-when-e2e-hangs` for the related gap.
+
+## How rare it is
+
+`locator.blur` appears **zero** times in the last 30 failed CI runs. The detector was validated
+against `34995218008` first, where it correctly finds one — a sweep that has never seen a positive
+is worth nothing until you show it can produce one.
+
+So **repetition alone is not a viable strategy**: at this rate a local loop would need to be very
+long to expect a single hit, and a green run of any length says almost nothing.
+
 ## What a fix has to do first
 
 **Reproduce it alone.** If `:85` only fails in a full run, that is a finding in itself and points
