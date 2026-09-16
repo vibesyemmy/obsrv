@@ -158,7 +158,15 @@ async function main() {
     process.stdout.write(`${r.tool.padEnd(16)} ${r.status.padEnd(28)} ${r.detail}\n`)
   }
   const bad = rows.filter(r => r.status !== 'ok' && r.status !== 'skipped')
-  process.stdout.write(`\n${bad.length} tool(s) with a schema/emit disagreement, ${rows.length} examined.\n`)
+  const skipped = rows.filter(r => r.status === 'skipped')
+  // Swept and skipped counted apart, because one number covering both says
+  // more than it measured: `obsrv_drive` is skipped by construction, and it is
+  // where three undeclared keys were found the same day a summary line read
+  // "0 disagreements, 8 examined".
+  process.stdout.write(
+    `\n${bad.length} tool(s) with a schema/emit disagreement. ` +
+      `${rows.length - skipped.length} swept, ${skipped.length} skipped by design (${skipped.map(r => r.tool).join(', ') || 'none'}).\n`,
+  )
   process.stdout.write('A clean line means no violation on the paths THESE calls exercise — not that the schemas and the emitters agree.\n')
   process.exit(0)
 }

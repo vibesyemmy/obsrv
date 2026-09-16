@@ -340,7 +340,13 @@ test('obsrv_inspect (headless, no app): the grey caption by selector, in millime
   const m = r.structuredContent as {
     mode: string
     found: boolean
-    readout: { element: string; font: { px: number; mm: number }; color: string; contrast: { asIs: number; onPanel: number; panel: string } }
+    readout: {
+      element: string
+      font: { px: number; mm: number }
+      color: string
+      colorPainted: string
+      contrast: { asIs: number; onPanel: number; panel: string }
+    }
   }
   expect(m.mode).toBe('headless')
   expect(m.found).toBe(true)
@@ -348,6 +354,10 @@ test('obsrv_inspect (headless, no app): the grey caption by selector, in millime
   expect(m.readout.font.px).toBe(13)
   expect(m.readout.font.mm).toBeCloseTo(3.29, 1)
   expect(m.readout.color).toBe('#6b7280')
+  // The VALUE, not the absence of an error. A field declared in the schema and
+  // never populated passes :137 — that test only proves the reply validates.
+  // #grey is fully opaque, so the painted colour is the stated one.
+  expect(m.readout.colorPainted).toBe('#6b7280')
   expect(m.readout.contrast.panel).toBe('budget-tn')
   expect(m.readout.contrast.onPanel).toBeLessThan(m.readout.contrast.asIs)
 

@@ -2,8 +2,8 @@
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
 column: doing
 kind: bug
-owner: "Rook"
-waiting: "Rook: back at 13:00 WAT; fix/inspect-colorpainted-schema is checked out in his worktree, unpushed"
+owner: "Kenya"
+waiting: ""
 order: 35
 ---
 
@@ -162,4 +162,44 @@ a retry keeps rescuing it.**
 ## What is still a decision rather than a finding
 
 Unchanged by the sweep: adding `colorPainted` to `readoutShape` is **itself breaking** on the MCP surface by `compatibility.md`'s inverted rule, so the fix is *add it and name it in the register*, or *stop emitting it on the MCP surface and keep it to the CLI*. That is a product question about who the painted colour is for, and the sweep's answer — **one field, not twenty** — is what the decision needed.
+
+---
+
+## FIXED 2026-09-16 by Kenya, on Opeyemi's decision (add it to the schema, relayed by Wren). **`colorPainted` is declared, and `mcp.spec:137` is green on its first attempt.**
+
+    colorPainted declared in readoutShape          src/mcp/server.ts
+    register entry under 0.61.0 with restart note  docs/breaking-changes.md
+    npm run schema:sweep                           0 disagreements: 7 swept, drive skipped by design
+    playwright mcp.spec.ts --retries=0             29 passed, 50.8 s
+
+**One run, first attempt, retries off.** That is the measurement, and it is one run — it contradicts six passes reported earlier from a possibly stale build, which Rook is checking.
+
+**The register entry carries both halves, because one of them alone reads wrong.** Adding the field is breaking by `compatibility.md`: a session that listed the tools before this release rejects an `obsrv_inspect` reply outright. But the field has been on the wire since `f8d734f`, so **every validating client has been rejecting those replies all along.** It breaks stale sessions and un-breaks current ones. An entry with only the first half reads as a gratuitous break; only the second reads as a free fix.
+
+**And the mechanism the card first gave is corrected in the entry** (Henry's, verified against SDK 1.30.0): the server *does* validate its own reply — `safeParseAsync` against the zod shape — but `readoutShape` is a plain `z.object` and **zod's default strips unknown keys rather than failing**, so the server's check passed while the JSON Schema it publishes says `additionalProperties: false`. Two validators, one schema, opposite answers. **The rejection is always the client's**, which is why nothing server-side ever noticed.
+
+**Left undone deliberately: `.strict()` on the output shapes.** It would make the server's own check fail on an undeclared key, so every existing test that calls a tool through the server would catch a new field the day it lands — the floor-raise the sweep card asks for, almost free. It is also a behaviour change on the surface: the server would error where it silently passes today. **That is a decision rather than a tidy-up, and it belongs to Opeyemi**, not to the person who happened to be holding this card.
+
+## AND THE FLAKE QUESTION IS CLOSED: `:137` WAS DETERMINISTIC, AND THE RETRY REMOVED THE CHECK
+
+Rook's finding (#146), verified here in the spec. **The SDK client only validates a reply when it has cached that tool's output schema, which happens on `listTools()` — `mcp.spec.ts:49`.**
+
+So:
+
+- a **full-file** first attempt has validation on, and `:137` failed — every time, in nine of nine observed runs;
+- a **retry** re-runs only the failed test. `beforeAll` builds a fresh client, `:49` does not re-run, no schema is cached, **nothing validates**, and the test passes.
+
+**The retry was not absorbing a flake. It was removing the check.** `:137` was reproducible all along, which is the easiest kind of bug to fix and the easiest to file as noise.
+
+**The same trap catches a verifier.** Rook's six `--retries=0` passes came from `-g` runs filtered to one test, which excluded `:49`; on the same build, unfiltered, it failed instantly with the card's exact `-32602`. Not a stale build — `out/mcp/server.js` was stamped in the same task. **Anyone verifying this with `-g` gets six greens and should not believe them.**
+
+## The assertion now proves arrival, not absence of an error
+
+`:137` only proves the reply validates. **A field declared in the schema and never populated passes it.** So `mcp.spec.ts:314` — which already inspects `#grey` — now asserts the value: `expect(m.readout.colorPainted).toBe('#6b7280')`, the stated colour, because `#grey` is fully opaque. Rook's suggestion, written before it stopped; taken.
+
+**Full file, unfiltered, `--retries=0`: 29 passed, 50.4 s.**
+
+**A correction to this card's own number, from Rook's cold review.** It first read *"0 disagreements, 8 tools (was 1)"*. **`obsrv_drive` is not among the eight** — the sweep skips it by construction (`scripts/schema-emit-sweep.js`: it launches and drives the visible app). So the count included a tool it did not check, and **drive is exactly where Henry then found three undeclared keys.**
+
+The script's own last line kept the qualifier and the card's summary dropped it, which is where a reader looks. **Fixed at the source rather than in the prose:** the sweep now prints `7 swept, 1 skipped by design (obsrv_drive)`, so the next person cannot copy a number that covers a tool nobody swept.
 
