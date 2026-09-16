@@ -1,11 +1,15 @@
 ---
 title: "Make the server reject its own undeclared key — under OBSRV_TEST only"
-column: next
+column: doing
 kind: chore
+owner: "Kenya"
+waiting: ""
 order: 36
 ---
 
-FILED 2026-09-16 by Kenya, from Henry's proposal (#154 and DM). **Unowned; Kenya wants it if Wren routes it that way.**
+FILED 2026-09-16 by Kenya, from Henry's proposal (#154 and DM). **CLAIMED BY KENYA 2026-09-16**, on Henry's routing (#164), with Henry's fold-in from #156: the sweep
+skips `obsrv_drive` by design, and a server that rejects its own undeclared key checks every `drive`
+call the suite makes — reaching the one surface the sweep cannot see.
 
 ## The class, which three instances in one day have now demonstrated
 
