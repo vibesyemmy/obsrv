@@ -291,8 +291,18 @@ const MOVED_NOTE_OPENING = ((): string => {
   // counts baked in — a matcher that only ever matches a note reporting exactly
   // one moved element, and long enough to walk straight past the guard below.
   // A wrong matcher that looks right is the failure this whole card is about.
+  // The two samples vary the TOOL as well as the figures, and that is not
+  // decoration (Henry again, on #144). `verdictOf` reads both `obsrv_audit`'s
+  // notes and `obsrv_lint`'s. With today's prose the prefix stops at the first
+  // number, well before "The audit/lint is of one moment", so a matcher built
+  // from two `audit` samples happens to match lint too — by luck, not design.
+  // A reword that moved the tool name ahead of the first varying number would
+  // bake "audit" into the prefix, and **lint's half of the probe would go blind
+  // while audit's kept working**: a partial blindness, which is harder to spot
+  // than a total one. Varying the tool makes the prefix unable to contain
+  // either name.
   const a = pageMovedNote('audit', { moved: 1, changed: 0, compared: 1, maxPx: 1 }, MOTION_PROBE_MS) ?? ''
-  const b = pageMovedNote('audit', { moved: 3, changed: 0, compared: 9, maxPx: 7 }, MOTION_PROBE_MS) ?? ''
+  const b = pageMovedNote('lint', { moved: 3, changed: 0, compared: 9, maxPx: 7 }, MOTION_PROBE_MS) ?? ''
   let i = 0
   while (i < a.length && i < b.length && a[i] === b[i]) i++
   return a.slice(0, i)
