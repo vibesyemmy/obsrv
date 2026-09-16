@@ -120,3 +120,26 @@ A silence read as absence, when the silence was compliance. Third instance of th
 days and the first where the author of the instruction was the one who misread the obedience.
 
 **Still with Rook. Run 19 is not free.**
+
+**THE SESSION HOLDING THIS BECAME UNREACHABLE 2026-09-16; THE AGENT DID NOT GO AWAY.** Rook was
+waiting on Opeyemi for the timing of a run that drives the window on his desktop, exactly as this
+card instructs. The session named `obsrv-a2` then stopped answering — a message to it was refused
+and it vanished from the peer listing — and Rook continued minutes later under a new session name.
+
+**A session ended and an agent did not, and the two are not the same event.** Henry read the name
+disappearing as the person disappearing, wrote *"its session ended before its answer reached me"*,
+and the answer arrived under a different name shortly afterwards. **Session names are not stable
+identities; a name absent from a listing does not mean the agent is gone.** Nothing in
+`CONTRIBUTING.md` covers that and it will catch the next coordinator the same way.
+
+**The card stays with Rook.** Earlier the same day Henry read this identical on-disk state —
+`doing`, nothing delivered — as abandoned, released it, and had to reverse it. The state was
+never the evidence; the reason was, and the reason is that nothing had been delivered because
+nothing was meant to start yet.
+
+If it is reassigned, the successor starts from this card and `docs/research/` rather than from a
+handover. Rook's rule was *hand over rather than have it rebuilt*, and this note is the handover
+standing in for one.
+
+This is also the case `chore-waiting-field` exists to make legible, and it has now cost a release,
+a reversal, and a false obituary in one day.
