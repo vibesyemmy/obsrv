@@ -1,9 +1,8 @@
 ---
 title: "`controls.spec:85` silently requires the test before it, so every retry of it fails for the wrong reason"
-column: review
+column: done
 kind: bug
 owner: "Rook"
-waiting: "Wren: the cold read, then Henry merges"
 order: 56
 ---
 

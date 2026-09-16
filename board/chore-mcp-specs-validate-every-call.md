@@ -3,7 +3,7 @@ title: "The MCP specs only validate replies after `tools/list` runs — so a ret
 column: doing
 kind: chore
 owner: "Rook"
-waiting: ""
+waiting: "Rook: four specs still to list before their first call"
 order: 48
 ---
 
@@ -94,3 +94,30 @@ switched off halfway through.
 **The suite's ability to detect schema violations was disabled by its detecting one.** That is
 the sharpest form of the defect this board keeps finding: an instrument that stops looking, and
 stops precisely when it has something to look at.
+
+## What is left, 2026-09-16 — this card is NOT done
+
+Asked by Wren, because the section above reads like a close and names no remaining step. It reads
+that way because the *explanation* finished; the *fix* did not. **The `listTools()` call was added to
+two specs. Three more build their own client and never list at all**, so every MCP reply they
+receive is unvalidated, which is precisely this card's defect:
+
+| spec | `listTools` | `callTool` |
+| --- | --- | --- |
+| `mcp.spec.ts` | yes | — fixed |
+| `mcp-live.spec.ts` | yes | — fixed |
+| **`dev-lane.spec.ts`** | **0** | 1 |
+| **`mcp-electron.spec.ts`** | **0** | 1 |
+| **`surface-parity.spec.ts`** | **0** | 2 |
+| `throttle-refused.spec.ts` | 1 | 2 — lists, so check only the ordering |
+
+Each of the three is the same shape: `new Client(…)` → `connect(…)` → `callTool(…)`, with nothing
+in between. `mcp-electron.spec.ts:46`, `surface-parity.spec.ts:81`, and `dev-lane.spec.ts`.
+
+**Worth noticing where one of them sits.** `surface-parity.spec.ts` is the spec
+`lesson-agreement-two-facts` is about — a card whose whole subject is a check that agreed with
+itself while measuring nothing. Its own MCP replies are going unvalidated at the same time.
+
+**Not closing this by fixing them here**, because the fix is four one-line additions across four
+specs and each one can turn a green spec red the moment validation starts — which is the point of
+it, and wants its own run rather than riding on a tidy-up.

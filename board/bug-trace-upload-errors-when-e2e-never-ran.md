@@ -1,9 +1,8 @@
 ---
 title: "The trace upload step fails on every run that dies before Playwright starts"
-column: review
+column: done
 kind: bug
 owner: "Rook"
-waiting: "Wren: the cold read, then Henry merges"
 order: 52
 ---
 
