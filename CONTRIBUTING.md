@@ -10,9 +10,8 @@ what follows exists because of that.
 ## The board
 
 The work is [`board/`](board), one markdown file per card. **Claim a card by
-editing its file**: set `owner:` and `column: doing`, then
-
-and open a pull request with **only the card**. There is no separate tracker and
+editing its file**: set `owner:` and `column: doing`, then open a pull request
+with **only the card**. There is no separate tracker and
 nobody to ask for access.
 
 **The generated views are not committed.** `docs/board.md` and
@@ -63,6 +62,25 @@ card, read both. Nothing regenerates that.
 
 Merging is the maintainer's. A card in Review is finished and waiting on them,
 not on help.
+
+## Work parked on somebody's word is still somebody's work
+
+**If a card is waiting on a person, hand it over rather than let it be rebuilt.**
+
+That sentence is Rook's, from the day two of its cards were read as abandoned within an hour.
+One sat in `doing` with nothing delivered because the card itself said to agree timing with the
+person whose desktop the run would drive. The other was a pushed branch with no pull request,
+because opening one waits on the same word every merge does. Both were compliance, read as
+absence — and the instruction being obeyed had been written by the person who misread it.
+
+**The cost of getting this wrong is not a stalled card. It is two sessions doing the same work**,
+one of them from scratch, and neither knowing the other started. A card released and re-taken
+silently tells the next reader nothing about why either happened, so when a release is reversed,
+say so on the card.
+
+The corollary for whoever is coordinating: **a session that goes quiet after being told to wait
+is doing what it was told.** Ask it before concluding anything, because the question costs one
+message and the wrong answer costs a day of duplicated work.
 
 ## Work in your own worktree
 
