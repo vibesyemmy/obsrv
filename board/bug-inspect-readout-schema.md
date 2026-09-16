@@ -180,3 +180,22 @@ Unchanged by the sweep: adding `colorPainted` to `readoutShape` is **itself brea
 
 **Left undone deliberately: `.strict()` on the output shapes.** It would make the server's own check fail on an undeclared key, so every existing test that calls a tool through the server would catch a new field the day it lands — the floor-raise the sweep card asks for, almost free. It is also a behaviour change on the surface: the server would error where it silently passes today. **That is a decision rather than a tidy-up, and it belongs to Opeyemi**, not to the person who happened to be holding this card.
 
+## AND THE FLAKE QUESTION IS CLOSED: `:137` WAS DETERMINISTIC, AND THE RETRY REMOVED THE CHECK
+
+Rook's finding (#146), verified here in the spec. **The SDK client only validates a reply when it has cached that tool's output schema, which happens on `listTools()` — `mcp.spec.ts:49`.**
+
+So:
+
+- a **full-file** first attempt has validation on, and `:137` failed — every time, in nine of nine observed runs;
+- a **retry** re-runs only the failed test. `beforeAll` builds a fresh client, `:49` does not re-run, no schema is cached, **nothing validates**, and the test passes.
+
+**The retry was not absorbing a flake. It was removing the check.** `:137` was reproducible all along, which is the easiest kind of bug to fix and the easiest to file as noise.
+
+**The same trap catches a verifier.** Rook's six `--retries=0` passes came from `-g` runs filtered to one test, which excluded `:49`; on the same build, unfiltered, it failed instantly with the card's exact `-32602`. Not a stale build — `out/mcp/server.js` was stamped in the same task. **Anyone verifying this with `-g` gets six greens and should not believe them.**
+
+## The assertion now proves arrival, not absence of an error
+
+`:137` only proves the reply validates. **A field declared in the schema and never populated passes it.** So `mcp.spec.ts:314` — which already inspects `#grey` — now asserts the value: `expect(m.readout.colorPainted).toBe('#6b7280')`, the stated colour, because `#grey` is fully opaque. Rook's suggestion, written before it stopped; taken.
+
+**Full file, unfiltered, `--retries=0`: 29 passed, 50.4 s.**
+
