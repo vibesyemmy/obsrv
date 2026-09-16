@@ -1,6 +1,6 @@
 ---
 title: "The two walks cover a growing page differently — 3 screenfuls against 8"
-column: next
+column: backlog
 kind: bug
 criterion: C4
 order: 31
@@ -54,3 +54,10 @@ handler. Testing it needs a visible app (the dev lane), which this pass didn't u
 **Not a fix to make on this evidence.** Taking `atEnd` after a frame would make both walks follow
 this fixture to its full height and silence the note the fixture exists to raise. Whether that's
 right is a design question, and nothing observed today asks it.
+
+**MOVED TO BACKLOG 2026-09-16 (Wren's call, Henry's hand): blocked, not dropped.** The only open
+hypothesis needs a visible app, and nothing can safely provide one yet. **Unblocked by either:**
+`bug-lane-serves-another-tree` (so the shared dev lane can be pointed at a tree without surprising
+another session), or a visible-app session on Opeyemi's desk. **The next step when unblocked:**
+walk `tests/fixtures/app-shell-grows.html` live in a visible window at `laptop-768`, and compare
+with the table above.
