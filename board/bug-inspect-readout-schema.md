@@ -21,8 +21,14 @@ room #84/#99 — a reader should weigh it as a handover summary, not as Kenya's 
 - **The decision is made: add the field.** Opeyemi, to Wren, 2026-09-16: add `colorPainted` to
   `obsrv_inspect`'s output schema, name it in `docs/breaking-changes.md`, ship the restart note.
   The second option below (stop emitting it on MCP) is **not** being taken.
-- The rejection is **client-side**: the SDK client validates (`client/index.js:502`); the server
-  does not check, so nothing server-side ever errors (Kenya's sweep, section below).
+- The rejection is **client-side**: the SDK client validates the reply against the JSON Schema and
+  rejects it (`client/index.js:502`). **The server checks too, and its check passes**: SDK 1.30.0
+  `server/mcp.js:204` runs `safeParseAsync` on the structured content, and a plain `z.object`
+  strips unknown keys rather than failing. So nothing server-side ever errors. *Corrected
+  2026-09-16 by Wren on Henry's catch, verified against the installed SDK. The first version of
+  this handover said the server does not check, copied from the sweep section below, which says
+  the same and is superseded on that point.* It also makes `.strict()` on the server-side schema
+  a fix option: the server would then catch an undeclared key itself.
 - It is **one field**: the sweep found `readout.colorPainted` and nothing else on the paths it
   exercised; `lint` is clean (section below).
 - `mcp.spec:137` has been flaky on this bug **82 times** across CI attempts since 09-13
@@ -112,7 +118,7 @@ a retry keeps rescuing it.**
 
 ## SWEPT 2026-09-15 by Kenya, on assignment. **One instance on the paths exercised — and the card's mechanism is wrong in a way that makes this worse, not better.**
 
-**THE SERVER DOES NOT REJECT ITS OWN REPLY. THE CLIENT DOES.** This card says *"the shape is `additionalProperties: false`, so the server validates its own correct reply and rejects it."* Measured: a raw JSON-RPC client that does no validation **receives the reply with `colorPainted` in it**. The check lives at `node_modules/@modelcontextprotocol/sdk/dist/cjs/client/index.js:502` — `McpError(InvalidParams, "Structured content does not match the tool's output schema")` — and `server/mcp.js` has no such check at all.
+**THE SERVER DOES NOT REJECT ITS OWN REPLY. THE CLIENT DOES.** This card says *"the shape is `additionalProperties: false`, so the server validates its own correct reply and rejects it."* Measured: a raw JSON-RPC client that does no validation **receives the reply with `colorPainted` in it**. The check lives at `node_modules/@modelcontextprotocol/sdk/dist/cjs/client/index.js:502` — `McpError(InvalidParams, "Structured content does not match the tool's output schema")` — and `server/mcp.js` has no such check at all. *(Superseded on this point, 2026-09-16: SDK 1.30.0 `server/mcp.js:204` does run `safeParseAsync` on structured content; a plain `z.object` strips the unknown key, so the check passes rather than being absent. The conclusion beside it, that nothing server-side ever errors, stands. — Wren, on Henry's catch.)*
 
 **So the defect is invisible from the server's side and breaks every client that validates.** `mcp.spec:137` fails because the SDK client validates; an agent in the field gets `-32602` for the same reason. Nothing server-side will ever notice, which is why it survived a day of being counted.
 
