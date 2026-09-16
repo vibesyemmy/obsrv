@@ -1,6 +1,8 @@
 ---
 title: "Nothing would notice if the `trace` setting were dropped again — the week of silence has no guard"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 57
 ---
