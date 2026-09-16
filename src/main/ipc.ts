@@ -9,7 +9,8 @@ import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout, pointOffScreenNote } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
-import { findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
+import { MAX_VIEWPORT, findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
+import { onionSkinRefusal } from '../shared/onionSkin'
 import { visionMatrix } from '../shared/vision'
 import { readFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
@@ -1513,6 +1514,19 @@ export function registerIpc(ctx: AppContext): () => void {
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     launchSettled,
+    onionSkinRefusal: async () => {
+      // The viewport a preset or rotation on its way will leave decides it:
+      // waited for here without clearing the pending flag, which a capture
+      // later in the same call still needs for its own wait.
+      const s = tab()
+      const deadline = Date.now() + VIEWPORT_ARRIVAL_MS
+      while (s.viewportPending && !s.viewportArrived && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, SETTLE_POLL_MS))
+      }
+      const vp = s.target.getViewport()
+      // The same test `TabSession.setReference` refuses by.
+      return onionSkinRefusal(vp.width, vp.height, MAX_VIEWPORT)
+    },
     status: () => {
       let url = ''
       try {

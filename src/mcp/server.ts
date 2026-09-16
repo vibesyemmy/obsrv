@@ -593,7 +593,8 @@ const driveInputShape = {
     .describe(
       "The onion skin's opacity, 0 to 1 (0 = off): the same page rendered at HiDPI and blended over the target's raster " +
         "in the app, for seeing what the target screen's raster moved — a line wrapped differently, a hairline gone. " +
-        'Read back in status; 0 when the app could not render a reference for the viewport (4K and ultrawide at 1x). ' +
+        'Read back in status; 0 when the app could not render a reference for the viewport (4K and ultrawide at 1x), ' +
+        'and `warnings` then says why. ' +
         'Not remembered across launches. An app older than the field rejects the command.',
     ),
   profile: z.enum(PROFILE_IDS).optional().describe('Apply this panel profile in the app.'),
@@ -710,7 +711,12 @@ const driveOutputShape = {
   profileId: z.string(),
   textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
   throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
-  onionSkin: z.number().describe("The onion skin's opacity, 0 = off. Reported as 0 by an app older than the field."),
+  onionSkin: z
+    .number()
+    .describe(
+      "The onion skin's opacity, 0 = off. Also 0 when the app could not render a reference for this viewport, and then " +
+        '`warnings` says so; and 0 from an app older than the field.',
+    ),
   // `drive` spreads the app's status into its reply, so every key `status`
   // carries has to be declared here too: these three were not, and every
   // validating client rejected every drive reply (bug-drive-reply-fails-its-own-schema).
@@ -2235,8 +2241,12 @@ server.registerTool(
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
       }
+      // A skin the viewport cannot have is refused by the app with a sentence
+      // saying so; it joins the warnings below, in the order the calls ran.
+      const onionSkinRefused: string[] = []
       if (input.onionSkin !== undefined) {
-        await controlCall(live.info, 'setOnionSkin', { onionSkin: input.onionSkin }, LIVE_APPLY_TIMEOUT_MS)
+        const r = await controlCall(live.info, 'setOnionSkin', { onionSkin: input.onionSkin }, LIVE_APPLY_TIMEOUT_MS)
+        if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') onionSkinRefused.push(w)
       }
       if (input.throttle !== undefined) {
         await controlCall(live.info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
@@ -2269,6 +2279,7 @@ server.registerTool(
       let atEnd: boolean | undefined
       const warnings: string[] = []
       if (navigateCut) warnings.push(NAVIGATE_CUT_NOTE)
+      warnings.push(...onionSkinRefused)
       // A preset or a rotation recreates the target and reloads its page, and
       // the control confirms once a page is back or on its way. Read straight
       // after, the status once said about:blank with loading false for a

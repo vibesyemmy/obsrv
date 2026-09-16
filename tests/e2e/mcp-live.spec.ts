@@ -500,6 +500,23 @@ test('obsrv_drive sets a throttle on the live target; status and the footer repo
   expect(bad.isError).toBe(true)
 })
 
+test('obsrv_drive: an onion skin the screen cannot have reads back 0 and says why; one it can have reads back as set', async () => {
+  // bug-onion-skin-zero-means-three-things: 0 was also off, and an app older
+  // than the field, with nothing in the reply to tell the three apart.
+  const onionWarnings = (r: { structuredContent?: unknown }): string[] =>
+    ((r.structuredContent as { warnings?: string[] }).warnings ?? []).filter(w => w.includes('onion skin'))
+  const refused = await call('obsrv_drive', { preset: '4k-27', onionSkin: 0.5 })
+  expect(refused.isError).toBeFalsy()
+  expect(refused.structuredContent).toMatchObject({ presetId: '4k-27', onionSkin: 0 })
+  expect(onionWarnings(refused)).toEqual([expect.stringContaining('the onion skin was left off')])
+  const fits = await call('obsrv_drive', { preset: '1080p-24', onionSkin: 0.5 })
+  expect(fits.isError).toBeFalsy()
+  expect(fits.structuredContent).toMatchObject({ presetId: '1080p-24', onionSkin: 0.5 })
+  expect(onionWarnings(fits)).toEqual([])
+  const off = await call('obsrv_drive', { onionSkin: 0 })
+  expect(off.structuredContent).toMatchObject({ onionSkin: 0 })
+})
+
 test('obsrv_drive: tab "new" opens and fronts a tab with the url and preset; closeTab "current" closes it last', async () => {
   const opened = (await call('obsrv_drive', { tab: 'new', url: fixture('tall.html'), preset: 'laptop-768', capture: 'pane' })).structuredContent as {
     tabId: string
