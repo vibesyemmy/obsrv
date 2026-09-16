@@ -80,12 +80,19 @@ type ListHandler = (request: unknown, extra: unknown) => Promise<{ tools?: { nam
  *
  * Read once, lazily: the list handler exists only after the first tool is
  * registered, and every tool is registered before any call arrives.
+ *
+ * Null does not mean "carry on unchecked" — the caller fails every
+ * schema-declaring call — so the warning says that rather than saying the
+ * check is off, which is what it used to say and was no longer true.
  */
 async function publishedPaths(server: unknown, warn: (line: string) => void): Promise<Map<string, Set<string>> | null> {
   const low = (server as { server?: { _requestHandlers?: Map<string, ListHandler> } }).server
   const handler = low?._requestHandlers?.get('tools/list')
   if (handler === undefined) {
-    warn('obsrv: strict output check DISABLED — the server exposes no tools/list handler to read its published schemas from')
+    warn(
+      'obsrv: strict output check cannot read the published schemas (the server exposes no tools/list handler); ' +
+        'every tool that declares an output schema fails its calls under OBSRV_TEST / OBSRV_STRICT_OUTPUT until it can',
+    )
     return null
   }
   try {
@@ -99,7 +106,10 @@ async function publishedPaths(server: unknown, warn: (line: string) => void): Pr
     }
     return out
   } catch (e) {
-    warn(`obsrv: strict output check DISABLED — reading the published schemas failed: ${e instanceof Error ? e.message : String(e)}`)
+    warn(
+      `obsrv: strict output check cannot read the published schemas (${e instanceof Error ? e.message : String(e)}); ` +
+        'every tool that declares an output schema fails its calls under OBSRV_TEST / OBSRV_STRICT_OUTPUT until it can',
+    )
     return null
   }
 }
@@ -123,6 +133,14 @@ export function rejectUndeclaredKeysUnderTest(
   let paths: Promise<Map<string, Set<string>> | null> | null = null
   const wrapped: Register = (name, config, handler) => {
     const tool = String(name)
+    // Whether the REGISTRATION promised a shape. Kept from here because it is
+    // the only place the two cases can be told apart: a tool absent from the
+    // published list because it declares no output schema (nothing it sends is
+    // undeclared, so there is nothing to check) and a tool that declared one
+    // the list does not carry (the premise this check rests on is false for
+    // it, and it would otherwise be silently unchecked — which is this card's
+    // own subject, and the shape the first version of this file shipped).
+    const promisedSchema = (config as { outputSchema?: unknown }).outputSchema !== undefined
     const inner = handler as (...args: unknown[]) => Promise<CallToolResult>
     return register(name, config, async (...args: unknown[]) => {
       const result = await inner(...args)
@@ -134,8 +152,36 @@ export function rejectUndeclaredKeysUnderTest(
       // read as an empty reply, which would call every refusal a violation.
       if (out.isError === true || out.structuredContent === undefined) return out
       paths ??= publishedPaths(target, warn)
-      const declared = (await paths)?.get(tool)
-      if (declared === undefined) return out
+      const list = await paths
+      // The whole mechanism is gone, not one tool: the server exposes no
+      // readable `tools/list`. Every tool that promised a shape is unchecked,
+      // so every one of them fails rather than reporting as checked — under
+      // the fence only, so a suite goes loudly red with a message naming the
+      // cause instead of quietly testing nothing. `warn` has already said it
+      // once, for the reader who gets there by stderr.
+      if (list === null) {
+        if (!promisedSchema) return out
+        throw new Error(
+          `${tool} cannot be checked: the server's published tool list could not be read, so nothing knows what its ` +
+            `reply is allowed to contain. Under OBSRV_TEST=1 or OBSRV_STRICT_OUTPUT=1 that fails the call rather than ` +
+            `passing unchecked.`,
+        )
+      }
+      const declared = list.get(tool)
+      if (declared === undefined) {
+        if (!promisedSchema) return out
+        // Under the fence, a tool whose registration promised an output schema
+        // that `tools/list` does not publish is not a tool to wave through:
+        // the premise the check rests on is false for it, and a pass would say
+        // "checked" about a call nothing checked. Fails the same way an
+        // undeclared key does, because the consequence is the same — a reply
+        // nobody compared against what clients were told.
+        throw new Error(
+          `${tool} declared an output schema at registration that the server does not publish in tools/list, so its ` +
+            `reply cannot be checked against what clients are told. Under OBSRV_TEST=1 or OBSRV_STRICT_OUTPUT=1 that ` +
+            `fails the call rather than passing unchecked.`,
+        )
+      }
       const undeclared = undeclaredKeyPaths(emittedKeyPaths(out.structuredContent), declared)
       if (undeclared.length === 0) return out
       throw new Error(
