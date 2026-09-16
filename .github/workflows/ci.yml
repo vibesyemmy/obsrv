@@ -191,7 +191,13 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1 --grep control2
+        run: npx playwright test --retries=1 --grep control4
+
+      # THROWAWAY probe: the OLD gate, so one cancelled run says whether the
+      # new gate took anything away from hanging runs.
+      - name: OLD GATE probe
+        if: failure()
+        run: echo 'the old if:failure() gate would have uploaded here'
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
