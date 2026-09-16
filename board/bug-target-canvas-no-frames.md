@@ -55,3 +55,27 @@ So `ci.yml:91`, the step named **"Upload Playwright traces on failure"**, has up
 
 **What it does to the rest:** the console line naming a GPU process exit — the thing this card lists under *what is not known* — was never going to be in the artefact. That absence is the upload step, **not the app**, and no re-reading of past runs recovers it.
 
+
+## A local reproduction that does NOT match this card's signature — Rook, 2026-09-16
+
+Running `panes.spec:83` **alone** on current `main`, at `--repeat-each=3` plus a single run:
+**4 failures out of 4**, with this card's assertion and figure — `Expected: > 1000, Received: 0`.
+
+That would refute "only a casualty of an already-degraded run", which is the shape suggested by
+its never having been the first failure of a CI run. **Two things stop it counting, and both are
+mine to declare rather than for a reader to discover:**
+
+- **The machine was not clean.** 43 Obsrv-related processes were alive, including a live app left
+  from run 19, another session's app under `/tmp/obsrv-kenya`, and several MCP servers. A blank
+  target under GPU contention is a documented Obsrv behaviour (`docs/gpu-reset.md`), so a
+  contended machine is an expected cause of exactly this figure.
+- **The signature is absent.** CI's snapshot carried the app's own *"No frames from target
+  renderer"*. **The local `error-context.md` carries no such line.** Same assertion, same zero,
+  no shared evidence of the same mechanism.
+
+So this is **two failures that look alike at the assertion**, and the local one is evidence about
+a contended machine rather than about `main`.
+
+**What would settle it:** the same run with no other Obsrv process alive. Not done, because it
+needs killing another session's app and the app on Opeyemi's desk, neither of which is mine to
+close.
