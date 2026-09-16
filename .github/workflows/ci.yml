@@ -222,6 +222,17 @@ jobs:
         if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run typecheck
 
+      # Build BEFORE the unit tests, because one of them needs the built tree.
+      # `tests/unit/publicShape.test.ts` asks the MCP server for its published
+      # schemas over stdio, and `bin/obsrv-mcp.js` runs `out/mcp/server.js` —
+      # so with the old order it could never answer on CI, and would have spent
+      # its 30 s timeout finding that out (Kenya, reading #162). The test now
+      # also fails immediately with "run npm run build" rather than timing out,
+      # so the two guards are independent: this order, and its own check.
+      - name: Build
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
+        run: npm run build
+
       - name: Unit tests
         if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm test
@@ -229,10 +240,6 @@ jobs:
       - name: Shader parity (browser)
         if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run test:browser
-
-      - name: Build
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run build
 
       # --retries=1 absorbs the known-flaky mobile input-forwarding test on
       # loaded runners; a persistent failure still fails the job.

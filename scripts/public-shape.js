@@ -36,6 +36,7 @@
  * it up to that.
  */
 const { spawn } = require('node:child_process')
+const { existsSync } = require('node:fs')
 const { resolve } = require('node:path')
 
 const ROOT = resolve(__dirname, '..')
@@ -77,6 +78,14 @@ function schemaKeyPaths(schema, path = '', out = new Set()) {
 /** Ask the running server for its published tools, over stdio, and hang up. */
 function listTools() {
   return new Promise((resolvePromise, rejectPromise) => {
+    // Say what is wrong immediately, rather than spending the timeout on it.
+    // `bin/obsrv-mcp.js` runs the BUILT server, so without a build this can
+    // only ever fail — and it used to fail as "did not answer within 30 s",
+    // which names the symptom and hides the cause (Kenya, reading #162).
+    if (!existsSync(resolve(ROOT, 'out/mcp/server.js'))) {
+      rejectPromise(new Error('out/mcp/server.js is missing — run `npm run build` first; this reads the built server, not the sources'))
+      return
+    }
     const child = spawn(process.execPath, [MCP_BIN], { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'] })
     let buf = ''
     let settled = false
