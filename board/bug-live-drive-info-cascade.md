@@ -1,6 +1,7 @@
 ---
 title: "One live-drive failure takes the rest of the file down, and its error blames a filtered run"
-column: next
+column: doing
+owner: "Henry"
 kind: bug
 order: 43
 ---
