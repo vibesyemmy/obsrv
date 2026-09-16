@@ -2,7 +2,7 @@
 title: "The one `obsrv_drive` call documented as read-only starts the application"
 column: doing
 owner: "Henry"
-waiting: ""
+waiting: "Opeyemi: whether an empty drive call should launch the app at all"
 kind: bug
 order: 45
 ---
@@ -43,3 +43,33 @@ call an agent reaches for first, precisely because it reads as the safe one.
 The reply already carries `launched`, so an agent *can* know after the fact. What it cannot do
 is know beforehand from the tool description — which is the surface an agent reads when deciding
 whether a call is safe to make against a window somebody is working in.
+
+## ENGINEERING HALF RESOLVED 2026-09-16 by Henry — the description says what the call does
+
+**A correction to this card first.** It says `obsrv_drive` "does not say" it launches. **It did,
+since `c521551`, which is in 0.60.0**, but only as the first sentence of its *last* paragraph, 2,444
+characters into a 2,616-character description. The opening paragraph didn't say it. Earlier than that sentence, the clause
+describing the empty call, *"none = just read the current state"*, read as the one safe call. So
+the description contradicted itself, and the half an agent reads first was the wrong half.
+
+**Re-observed on `main` (`58f4437`)**, as far as the harness allows. It never launches a real app
+(`OBSRV_TEST=1`), so what can be seen is the path: `obsrv_drive {}` with no app answers the same
+`no-display … OBSRV_TEST` error as `obsrv_drive { preset }`. The empty call resolves an app the way
+every drive call does, rather than reading anything. Outside the harness that path launches.
+
+**The fix, wording only; the behaviour is unchanged:**
+- **The opening paragraph** now ends: *"If the app is not running, any call launches it first
+  (`launched: true` on that call), including a call with no inputs."* That's where `snap`,
+  `audit`, `lint` and `inspect` say it.
+- **The empty-call clause** now reads *"none = read the current state, which still launches the app
+  first if it is not running"*.
+- **The last paragraph's** launch sentence is removed, now that it's said twice where it's read. Its
+  `declined` sentence stays.
+
+**Tests, in `mcp.spec.ts`:** a new test on the description (the opening paragraph and the clause
+both say it, and "just read the current state" is gone), and the no-app test now also calls
+`drive {}`. **Fix:** 3/3 with `tools/list`. **Control, `main`'s `server.ts`:** the description test
+failed at the opening paragraph.
+
+**Still open, and why the card stays in Doing:** whether an empty call *should* launch the app is
+Opeyemi's decision. If it changes, this description changes with it.
