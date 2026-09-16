@@ -145,6 +145,67 @@ describe('captureQuiescent', () => {
     expect(got.unsettledReason).toBe('uncovered')
   })
 
+  /**
+   * CHARACTERIZATION, not a fix (`bug-product-matches-own-prose`).
+   *
+   * `src/cli/main.ts` decides whether to suppress a capture warning by
+   * matching the warning's own sentence — `/kept painting/.test(m)` — after a
+   * load the budget cut short, because the load warning already explained it.
+   * `compatibility.md` tells callers never to match on prose, and
+   * `read-the-output-not-the-code` commits this project to rewording warnings
+   * whenever they get clearer. Reword either sentence below and the routing
+   * changes silently: nothing throws.
+   *
+   * This pins the pairing the regex depends on — which reason carries which
+   * sentence — BEFORE anything is changed, so that "the fix is
+   * behaviour-identical" is a claim the suite checks rather than one a person
+   * checked once. Every reason `captureQuiescent` can emit a warning for is
+   * here, with today's verdict beside it.
+   *
+   * **What this does NOT pin, and it is the point of the card:** the routing
+   * decision itself. It is an inline arrow function inside `render()` in a
+   * 1600-line file, unexported and reachable only by driving a real Electron
+   * target — so there is no test anywhere that the suppression happens. The
+   * fix makes that testable; this test cannot.
+   */
+  it('records which unsettled reason carries which sentence, and how the prose match routes each', async () => {
+    const said = async (opts: Parameters<typeof captureQuiescent>[1], src: FakeSource, poke: boolean): Promise<string> => {
+      const warnings: string[] = []
+      const noisy = poke ? setInterval(() => src.invalidate(), 20) : null
+      try {
+        const got = await captureQuiescent(src, { ...opts, onWarn: m => warnings.push(m) })
+        return `${got.unsettledReason} ${warnings.join(' ')}`
+      } finally {
+        if (noisy) clearInterval(noisy)
+      }
+    }
+
+    const cases = [
+      ['animating', await said({ settleMs: 100, timeoutMs: 30_000 }, new FakeSource([fullFrame(1, 1, 9)]), true)],
+      ['timeout', await said({ settleMs: 100, timeoutMs: 400, animationExit: false }, new FakeSource([marked(8, 8, 9)]), true)],
+      ['blank', await said({ settleMs: 20, timeoutMs: 400, blankGraceMs: 30 }, new FakeSource([fullFrame(4, 4, 200)]), false)],
+      [
+        'uncovered',
+        await said({ settleMs: 20, timeoutMs: 150 }, new FakeSource([{ frame: { x: 0, y: 0, width: 1, height: 1, data: new Uint8Array(4).fill(3) }, frameWidth: 2, frameHeight: 1 }]), false),
+      ],
+    ] as const
+
+    // The predicate as `main.ts` spells it today, copied deliberately: this
+    // test cannot reach the original, and saying so is the finding.
+    const suppressedToday = (message: string): boolean => /kept painting/.test(message)
+
+    const table = cases.map(([want, got]) => {
+      const [reason, message] = got.split(' ')
+      expect(reason, `expected reason ${want}, got ${reason} — the fixture no longer produces this case`).toBe(want)
+      expect(message!.length, `${want} emitted no warning: nothing to route, and this row proves nothing`).toBeGreaterThan(0)
+      return `${reason}:${suppressedToday(message!) ? 'suppressed' : 'kept'}`
+    })
+
+    // Both verdicts appear, so the predicate is discriminating rather than
+    // saturated — a table of four "kept" would pass while testing nothing.
+    expect(table).toEqual(['animating:suppressed', 'timeout:suppressed', 'blank:kept', 'uncovered:kept'])
+  })
+
   it('an external failure aborts immediately instead of burning the timeout', async () => {
     const t0 = Date.now()
     let failed: Error | null = null
