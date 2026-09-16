@@ -169,7 +169,7 @@ Unchanged by the sweep: adding `colorPainted` to `readoutShape` is **itself brea
 
     colorPainted declared in readoutShape          src/mcp/server.ts
     register entry under 0.61.0 with restart note  docs/breaking-changes.md
-    npm run schema:sweep                           0 disagreements, 8 tools (was 1)
+    npm run schema:sweep                           0 disagreements: 7 swept, drive skipped by design
     playwright mcp.spec.ts --retries=0             29 passed, 50.8 s
 
 **One run, first attempt, retries off.** That is the measurement, and it is one run — it contradicts six passes reported earlier from a possibly stale build, which Rook is checking.
@@ -198,4 +198,8 @@ So:
 `:137` only proves the reply validates. **A field declared in the schema and never populated passes it.** So `mcp.spec.ts:314` — which already inspects `#grey` — now asserts the value: `expect(m.readout.colorPainted).toBe('#6b7280')`, the stated colour, because `#grey` is fully opaque. Rook's suggestion, written before it stopped; taken.
 
 **Full file, unfiltered, `--retries=0`: 29 passed, 50.4 s.**
+
+**A correction to this card's own number, from Rook's cold review.** It first read *"0 disagreements, 8 tools (was 1)"*. **`obsrv_drive` is not among the eight** — the sweep skips it by construction (`scripts/schema-emit-sweep.js`: it launches and drives the visible app). So the count included a tool it did not check, and **drive is exactly where Henry then found three undeclared keys.**
+
+The script's own last line kept the qualifier and the card's summary dropped it, which is where a reader looks. **Fixed at the source rather than in the prose:** the sweep now prints `7 swept, 1 skipped by design (obsrv_drive)`, so the next person cannot copy a number that covers a tool nobody swept.
 
