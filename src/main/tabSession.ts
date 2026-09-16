@@ -195,19 +195,22 @@ export class TabSession {
   /**
    * The reference takes the target's viewport, phone-ness and text scale.
    * Called after each change of those; a viewport the reference can no
-   * longer fit drops it, and the renderer's skin then draws nothing over
-   * the target until the viewport fits again and the skin is set anew.
+   * longer fit drops it and answers true, so the caller can turn the skin off
+   * where it is shown. Left on, the renderer's skin read 50% over nothing,
+   * even back on a screen that fits, until the value was changed
+   * (bug-onion-skin-dies-on-a-preset-round-trip).
    */
-  syncReference(): void {
+  syncReference(): boolean {
     const ref = this.reference
-    if (!ref) return
+    if (!ref) return false
     const vp = this.target.getViewport()
     if (!referenceFits(vp.width, vp.height, MAX_VIEWPORT)) {
       this.setReference(false)
-      return
+      return true
     }
     ref.setViewport(vp.width, vp.height, REFERENCE_DSF, this.target.isMobile())
     ref.setTextScale(this.target.getTextScale())
+    return false
   }
 
   /**

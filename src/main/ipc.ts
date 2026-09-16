@@ -460,12 +460,14 @@ export function registerIpc(ctx: AppContext): () => void {
       throw new Error('invalid mobile flag')
     }
     const v = tab().target.setViewport(width, height, dsf, rawMobile === true)
-    tab().syncReference()
+    // A viewport the onion skin's reference cannot fit drops it; the renderer
+    // turns the skin off on the tab that sent this, as it does for a refusal.
+    const onionSkinDropped = tab().syncReference()
     if (!firstViewportSeen) {
       firstViewportSeen = true
       firstViewportApplied()
     }
-    return { width: v.width, height: v.height }
+    return { width: v.width, height: v.height, ...(onionSkinDropped ? { onionSkinDropped: true as const } : {}) }
   })
   handle(IPC.setTextScale, (e, raw: unknown) => {
     assertRenderer(e)
