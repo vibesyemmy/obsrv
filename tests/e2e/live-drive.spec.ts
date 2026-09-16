@@ -833,7 +833,11 @@ test('a capture of a hidden window shows the page now, not the frame before it w
     // pixel assertion above calls it fine (`src/main/frameCheck.ts`). Asserted
     // here so the handshake failing is caught by the warning even on a desk
     // where the pixels happen to come out right.
-    const doubt = (body.warnings ?? []).filter(w => w.includes('older frame') || w.includes('not being delivered'))
+    //
+    // The matcher comes FROM the producer rather than repeating its words: a
+    // reword is a minor, and a spec matching a copy of the sentences would
+    // quietly match nothing, pass, and be vacuous again.
+    const doubt = (body.warnings ?? []).filter(isFrameIdentityWarning)
     expect(doubt, `the capture doubts its own frame: ${JSON.stringify(body.warnings)}`).toEqual([])
   } finally {
     // Rasterisation resumes on the window's own show event; hand the next test
