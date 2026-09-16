@@ -1,4 +1,4 @@
-import { maxCssViewport } from '../shared/calibration'
+import { maxCssViewport, resolveRotate } from '../shared/calibration'
 import { MAX_SELECTOR_LENGTH } from '../shared/inspect'
 import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
@@ -193,7 +193,15 @@ Shared flags:
 ${presets}
   --width <px> --height <px> [--dsf <factor>] [--diagonal <inches>]
                        Custom CSS viewport instead of --preset (dsf defaults to 1).
-  --orientation <o>    portrait | landscape (default ${DEFAULT_ORIENTATION}). This names the
+  --rotate             Turn the screen a quarter turn: width and height swap. Says the
+                       thing itself, and is the flag to use. 1080p-24 --rotate is
+                       1080x1920; iphone-61 --rotate is landscape. The diagonal, raster
+                       density and physical size never change — it is the same panel
+                       turned sideways.
+  --orientation <o>    DEPRECATED, use --rotate. Kept with its current meaning rather
+                       than redefined, because redefining it would silently change what
+                       every existing caller gets.
+                       portrait | landscape (default ${DEFAULT_ORIENTATION}). This names the
                        preset's *stored* orientation, not the shape you get:
                          portrait  = the preset exactly as the table above lists it
                          landscape = that rotated a quarter turn (width and height swap)
@@ -294,12 +302,12 @@ warning naming the cut load; inspect errors instead, naming the same.`
 }
 
 /** Flags that take no value. */
-const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk', 'groups-only'])
+const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk', 'groups-only', 'rotate'])
 /** Flags that consume the next token. */
 const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
 /** Flags every command takes. */
-const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
+const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'rotate', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
 /**
  * The rest, per command. A flag outside a command's set is refused, and the
  * message names the first command (in this order) that takes it — so
@@ -412,11 +420,30 @@ function resolveTextScale(flags: Map<string, string | true>): number {
   return scale
 }
 
-function resolveOrientation(flags: Map<string, string | true>): Orientation {
+/**
+ * `--rotate` and the deprecated `--orientation`, resolved into one answer.
+ *
+ * `--orientation` names the preset's STORED form, so `landscape` means "the
+ * rotated one" and gives a portrait screen on every monitor and laptop. That
+ * inversion is `bug-orientation-name`, and `--rotate` is the flag that says the
+ * thing itself. The word keeps its meaning rather than being redefined, because
+ * redefining it would turn a confusing name into a silent wrong answer for
+ * every caller relying on today's behaviour (Henry's call).
+ *
+ * Returns the literal word too, so a reply can point out where it inverted —
+ * only where it actually did.
+ */
+function resolveOrientation(flags: Map<string, string | true>): { orientation: Orientation; given: Orientation | undefined; rotate: boolean } {
   const raw = flags.get('orientation')
-  if (raw === undefined) return DEFAULT_ORIENTATION
-  if (!isOrientation(raw)) throw new ArgError(`--orientation: expected portrait or landscape, got "${String(raw)}"`)
-  return raw
+  let given: Orientation | undefined
+  if (raw !== undefined) {
+    if (!isOrientation(raw)) throw new ArgError(`--orientation: expected portrait or landscape, got "${String(raw)}"`)
+    given = raw
+  }
+  const wants = flags.get('rotate') === true ? true : undefined
+  const resolved = resolveRotate(given, wants)
+  if ('refuse' in resolved) throw new ArgError(`--rotate and --orientation disagree. ${resolved.refuse}`)
+  return { orientation: resolved.rotate ? 'landscape' : DEFAULT_ORIENTATION, given, rotate: resolved.rotate }
 }
 
 /**
@@ -444,7 +471,8 @@ function resolveSpecs(flags: Map<string, string | true>): { specs: RenderSpec[];
 }
 
 function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[]; matrix: boolean } {
-  const orientation = resolveOrientation(flags)
+  const rot = resolveOrientation(flags)
+  const orientation = rot.orientation
   const custom = ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
   if (custom && flags.has('preset')) throw new ArgError('--preset and --width/--height are mutually exclusive')
   if (custom && flags.has('matrix')) throw new ArgError('--matrix lists presets; it cannot be combined with custom --width/--height dims')
@@ -553,7 +581,8 @@ export function parseArgs(argv: string[]): CliCommand {
   if (command === 'report') {
     // Nothing named means the default matrix, not the default preset.
     const named = flags.has('preset') || flags.has('matrix') || ['width', 'height', 'dsf', 'diagonal'].some(f => flags.has(f))
-    const orientation = resolveOrientation(flags)
+    const rot = resolveOrientation(flags)
+  const orientation = rot.orientation
     const textScale = resolveTextScale(flags)
     const throttle = resolveThrottle(flags)
     const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation), textScale, throttle }))
