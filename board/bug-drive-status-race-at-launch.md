@@ -8,6 +8,16 @@ order: 43
 FOUND BY ROOK in run 19, 2026-09-16 — the first call of the run. Mechanism supplied by Henry.
 **Unowned.**
 
+**Surface observed**, added 2026-09-16 by Henry on Rook's own catch: the `obsrv` MCP tools in this
+repo run the package pinned in `.mcp.json`, `getobsrv@0.60.0` (tag `v0.60.0`, `31b77e8`), not `main`
+or a local build. **So this was observed on the 0.60.0 release.** **Expected to hold on `main`, by
+diff and not by observation:** between `v0.60.0` and `main` at `3552349`, no changed line in
+`src/main/ipc.ts`, `src/mcp/server.ts`, `src/main/controlServer.ts` or `src/shared/control.ts`
+matches `getViewport`, `cssWidth` or `screenShape`. The diff over those files is not empty, the
+pattern matches `main`'s source, and the same method finds #49's routing change, so the result is
+not a blind search. It is still a reading, not an observation: behaviour can change through lines
+that do not use these words. **Re-observe on a local build before fixing.**
+
 ## The defect
 
 `obsrv_drive` with no arguments, on the call that also launched the app, answered:

@@ -146,6 +146,11 @@ a reversal, and a false obituary in one day.
 
 ## RUN 19 DONE, 2026-09-16 by Rook. Five cards filed; three of them live-only.
 
+**Surface observed**, added by Henry on Rook's catch after the run: every MCP call in run 19 went to
+the published `getobsrv@0.60.0` pinned in `.mcp.json`, not to `main`. Each of the five cards carries
+a note naming the files and terms checked. By diff, none of their findings' code changed between
+`v0.60.0` and `main`, which is expected to hold, not observed.
+
 Full account: `docs/research/2026-09-16-live-run-19.md`, whose vacuity check was written and
 committed **before the first call**.
 
