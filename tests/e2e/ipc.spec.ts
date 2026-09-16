@@ -67,14 +67,14 @@ test('reports the host display in physical pixels', async () => {
 
 test('settings round-trip, and impossible values are refused', async () => {
   const saved = await page.evaluate(async () => {
-    await window.obsrv.setSettings({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
+    await window.obsrv.setSettings({ ...(await window.obsrv.getSettings()), hostDiagonalInches: 32, hostNits: 400, agentControl: false })
     return window.obsrv.getSettings()
   })
   expect(saved).toMatchObject({ hostDiagonalInches: 32, hostNits: 400, agentControl: false })
 
   const outcome = await page.evaluate(async () => {
     try {
-      await window.obsrv.setSettings({ hostDiagonalInches: 0, hostNits: 400, agentControl: false })
+      await window.obsrv.setSettings({ ...(await window.obsrv.getSettings()), hostDiagonalInches: 0, hostNits: 400, agentControl: false })
       return 'accepted'
     } catch {
       return 'rejected'

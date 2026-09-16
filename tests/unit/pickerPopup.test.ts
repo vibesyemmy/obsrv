@@ -42,7 +42,7 @@ describe('parsePickerOpen', () => {
     expect(parsePickerOpen({ ...good, max: undefined })).toBeNull()
   })
   it('copies only the known fields', () => {
-    const r = parsePickerOpen({ ...good, extra: true }) as Record<string, unknown>
+    const r = parsePickerOpen({ ...good, extra: true })
     expect(r).not.toHaveProperty('extra')
   })
 })

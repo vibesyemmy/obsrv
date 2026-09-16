@@ -137,7 +137,7 @@ test('the menu nudges the renderer rather than acting on the shell', async () =>
   const menu = await app.evaluate(({ Menu }) => {
     const m = Menu.getApplicationMenu()
     const items = m ? m.items : []
-    const flat: { label: string; role?: string; accelerator?: string }[] = []
+    const flat: { label: string; role?: string; accelerator?: string | null }[] = []
     const walk = (list: Electron.MenuItem[]): void => {
       for (const it of list) {
         flat.push({ label: it.label, role: it.role, accelerator: it.accelerator })

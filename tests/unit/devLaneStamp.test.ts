@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { laneStamp, stampField, withStamp } from '../../src/mcp/devLane'
 
 /**
@@ -25,7 +26,7 @@ describe('the dev lane stamp in structured results', () => {
     expect(withStamp({ structuredContent: { url: 'u' } }, 'warnings', s).structuredContent).toEqual({ url: 'u', warnings: [s] })
     const failed = { isError: true, structuredContent: { notes: [] } }
     expect(withStamp(failed, 'notes', s)).toBe(failed)
-    const plain = { content: [] }
+    const plain: CallToolResult = { content: [] }
     expect(withStamp(plain, 'notes', s)).toBe(plain)
   })
 

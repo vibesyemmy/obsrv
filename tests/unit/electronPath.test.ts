@@ -19,7 +19,7 @@ import { createRequire } from 'node:module'
 const { electronBinaryPath, electronStatus, ensureElectron, downloadLine } = createRequire(__filename)('../../bin/electronPath.js') as {
   electronBinaryPath: (pkgDir: string, override: string | undefined) => string | null
   electronStatus: (pkgDir: string | null, override?: string) => { present: true; path: string; pkgDir: string } | { present: false; pkgDir: string; version: string } | { present: false; error: string }
-  ensureElectron: (options: { pkgDir: string; onData?: (chunk: string) => void }) => Promise<{ path: string; downloadedMs: number } | { error: string }>
+  ensureElectron: (options: { pkgDir?: string | null; override?: string; onData?: (chunk: string) => void; pollMs?: number; timeoutMs?: number }) => Promise<{ path: string; downloadedMs: number } | { error: string }>
   downloadLine: (version: string) => string
 }
 

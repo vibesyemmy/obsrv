@@ -307,7 +307,7 @@ test('a capture after a preset change shows the new preset, cropped to the rende
 
   const phone = await call('obsrv_drive', { preset: 'iphone-61', capture: 'pane' })
   expect(phone.isError).toBeFalsy()
-  const m = phone.structuredContent as Record<string, number>
+  const m = phone.structuredContent as { width: number; height: number }
 
   expect(m.height).toBeGreaterThan(m.width)
   expect(m.width / m.height).toBeCloseTo(393 / 852, 1)
@@ -319,7 +319,7 @@ test('a desktop capture in fit mode hugs the render', async () => {
   // pane, so cropping to it must give the preset's aspect and nothing else.
   const fit = await call('obsrv_drive', { preset: '1080p-24', viewMode: 'fit', capture: 'pane' })
   expect(fit.isError).toBeFalsy()
-  const m = fit.structuredContent as Record<string, number>
+  const m = fit.structuredContent as { width: number; height: number }
   expect(m.width / m.height).toBeCloseTo(1920 / 1080, 1)
 
   // And back to 1:1, where the crop is the pane because the render overflows.

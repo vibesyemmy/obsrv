@@ -18,6 +18,8 @@ const grey: InspectReport = {
   color: [107, 114, 128, 1],
   background: [255, 255, 255, 1],
   backgroundNote: 'computed',
+  opacity: 1,
+  hidden: null,
 }
 
 const screenOf = (id: string, textScale = 1): InspectScreen => {

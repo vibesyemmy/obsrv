@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio, effectiveContrast, over, paintedColor } from '../../src/shared/contrast'
+import { profileToParams } from '../../src/shared/panelSim'
+import { DEFAULT_SETTINGS, findProfile } from '../../src/shared/presets'
 import type { PanelParams } from '../../src/shared/types'
 
 /**
@@ -17,7 +19,10 @@ import type { PanelParams } from '../../src/shared/types'
  *
  * Both halves now come from one place, so they cannot drift apart again.
  */
-const REFERENCE: PanelParams = { blackFloor: 0, gamutCoverage: 1, bits: 8, frc: false, nits: null }
+// From the profile, as the product builds it. This was once a literal in the
+// profile's own shape (`gamutCoverage`, `bits`), so every panel field
+// `onPanel` reads was undefined and that half came out NaN; no assertion read it.
+const REFERENCE: PanelParams = profileToParams(findProfile('reference'), DEFAULT_SETTINGS.hostNits)
 
 describe('paintedColor: what the screen actually shows', () => {
   it('composites a translucent colour onto what is under it', () => {
@@ -59,6 +64,8 @@ describe('effectiveContrast: the ratio now accounts for opacity too', () => {
   it('full opacity is unchanged, so every existing verdict stands', () => {
     const plain = effectiveContrast([255, 255, 255, 1], [12, 12, 12, 1], REFERENCE, undefined, 1)
     expect(plain.asIs).toBeCloseTo(19.56, 1)
+    // The reference panel shows the pair as stated, so both halves agree.
+    expect(plain.onPanel).toBeCloseTo(plain.asIs, 1)
     const gov = effectiveContrast([11, 12, 12, 1], [210, 226, 241, 1], REFERENCE, undefined, 1)
     expect(gov.asIs).toBeCloseTo(14.82, 1)
   })

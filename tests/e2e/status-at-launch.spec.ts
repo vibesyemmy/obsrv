@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp } from './launch'
-import { CONTROL_FILE_NAME, parseControlFile } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile } from '../../src/shared/control'
 import { findPreset } from '../../src/shared/presets'
 
 /**
@@ -64,12 +64,13 @@ async function launchAndRead(
     await expect.poll(() => existsSync(controlFile), { timeout: 15_000 }).toBe(true)
     const info = parseControlFile(readFileSync(controlFile, 'utf8'))
     expect(info, 'the control file did not parse').not.toBeNull()
+    if (!info || isDisabledStance(info)) throw new Error('the control file names no port: agent control is off')
     const states: string[] = []
     const wrong: string[] = []
     let replies = 0
     const until = Date.now() + 4_000
     while (Date.now() < until) {
-      const s = await status(info!.port, info!.token)
+      const s = await status(info.port, info.token)
       if (!s) {
         await new Promise(r => setTimeout(r, 10))
         continue

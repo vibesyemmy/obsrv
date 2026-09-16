@@ -120,7 +120,7 @@ describe('a page the server answered with an error status', () => {
       ['https://a.test/gone', 'https://a.test/missing'],
       ['a.test/gone', 'https://a.test/missing'],
       ['http://127.0.0.1:5173/private', 'http://127.0.0.1:5173/login'],
-    ]) {
+    ] as [string, string][]) {
       const said = httpStatusNote(404, 'Not Found', landed, asked)!
       const dropped = !said.includes('not of the page asked for')
       expect(dropped, `${asked} → ${landed}`).toBe(landedElsewhereNote(asked, landed) !== null)

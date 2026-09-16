@@ -230,6 +230,7 @@ test('a 0.5px hairline does not scale with the raster: one device row in both pa
     }
   }, { url: HAIRLINE, capture: `(${captureBoth.toString()})` })
 
+  if (!seen) throw new Error('no full 600x400 paint within 10s')
   test.skip(seen.sf < 2, 'needs a HiDPI host — the whole premise of the product')
 
   // Chromium snaps a 0.5px border to one device row at either scale, so each

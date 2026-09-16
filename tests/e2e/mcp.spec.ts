@@ -574,8 +574,8 @@ test('every unsettled reason the CLI can produce is admitted by the snap and rep
   const snap = tools.find(t => t.name === 'obsrv_snap')!.outputSchema as { properties: Record<string, { enum?: string[] }> }
   expect(snap.properties.unsettledReason?.enum).toEqual([...reasons, ...liveOnly])
   // The report is headless by design and has no second surface to admit for.
-  const report = tools.find(t => t.name === 'obsrv_report')!.outputSchema as { properties: { screens: { items: { properties: Record<string, { enum?: string[] }> } } } }
-  expect(report.properties.screens.items.properties.unsettledReason?.enum).toEqual(reasons)
+  const report = tools.find(t => t.name === 'obsrv_report')!.outputSchema as { properties: Record<string, { items?: { properties: Record<string, { enum?: string[] }> } }> }
+  expect(report.properties.screens?.items?.properties.unsettledReason?.enum).toEqual(reasons)
 })
 
 /**

@@ -8,7 +8,7 @@ import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp } from './launch'
 
 /**
@@ -125,7 +125,9 @@ test.describe('live: a refused throttle is not shown as in force, and the reply 
     const userData = await app.evaluate(({ app: a }) => a.getPath('userData'))
     const controlFile = join(userData, CONTROL_FILE_NAME)
     await expect.poll(() => existsSync(controlFile)).toBe(true)
-    info = parseControlFile(readFileSync(controlFile, 'utf8'))!
+    const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
+    if (!parsed || isDisabledStance(parsed)) throw new Error(`the control file at ${controlFile} names no port`)
+    info = parsed
     const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
     client = new Client({ name: 'throttle-refused-spec', version: '0.0.0' })
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [MCP_BIN], cwd: ROOT, env: { ...env, OBSRV_CONTROL_FILE: controlFile } }))
