@@ -403,6 +403,21 @@ add it to the tool's output shape in the same commit or the suite will tell you.
 `OBSRV_TEST_UNDECLARED_KEY=<tool>` injects one deliberately, which is how the
 suite proves the check is running rather than merely green.
 
+**A test that matches a product sentence must get the matcher from the code
+that produces it, never a copy of the words.** Rewording a warning is a minor
+(`docs/compatibility.md`), and a copied matcher fails by matching *nothing* — the
+filter comes back empty, the assertion passes, and the test is vacuous without
+saying so. Two shapes are in the tree, and which fits depends on the sentence:
+export a predicate built from the same constants the producer uses
+(`isFrameIdentityWarning` in `src/main/frameCheck.ts`), or derive the invariant
+part in the spec by calling the producer with sample inputs and keeping what
+they share (`pageMovedNote`'s opening in the live specs). Prefer the second when
+the sentence is mostly interpolated or when the producer would otherwise gain an
+export only tests use. There is deliberately no shared helper: the producers
+differ in shape, and a generic matcher would have to guess which half is fixed —
+a guess that would be invisible at the call site and would fail the same silent
+way the copied prose did.
+
 **A check's own coverage needs a reader who didn't write it.** That check shipped
 twice with a hole its author could not see: fenced on `OBSRV_TEST` alone it was
 switched off across the entire live surface, where two of the three keys it was
