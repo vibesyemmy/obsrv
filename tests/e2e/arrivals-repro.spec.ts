@@ -242,3 +242,92 @@ test('DISCRIMINATOR: native pane alone, but a SERVER redirect — the target nev
   }
   console.log(`[arrivals-repro] NATIVE-ONLY + SERVER redirect: ${fired}/${RUNS} notes\n${firstTrace}`)
 })
+
+test('PROBE: every field Electron 43 puts on a navigation event, on both arms', async () => {
+  const dump = async (label: string, drive: () => Promise<void>): Promise<void> => {
+    await app.evaluate(() => {
+      const g = globalThis as any
+      const mod = g.__obsrvNavDetails
+      if (mod) mod.length = 0
+    })
+    await drive()
+    await new Promise(r => setTimeout(r, 700))
+    const rows = await app.evaluate(() => {
+      const g = globalThis as any
+      return (g.__obsrvNavDetails ?? []) as Record<string, unknown>[]
+    })
+    const seen = rows.map(r => {
+      const { pane, event, at, url, ...rest } = r as Record<string, unknown>
+      void at
+      return `  ${String(pane).padEnd(6)} ${String(event).padEnd(24)} ${String(url).split('/').pop()}  ${JSON.stringify(rest)}`
+    })
+    console.log(`[nav-details] ${label}\n${seen.join('\n')}`)
+  }
+
+  await dump('ARM 1: navigate(redirect.html) — both panes', async () => {
+    await call('navigate', { url: pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href })
+    await new Promise(r => setTimeout(r, 300))
+    await call('navigate', { url: REDIRECT })
+  })
+
+  await dump('ARM 3: native pane alone loads redirect.html', async () => {
+    await call('navigate', { url: pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href })
+    await new Promise(r => setTimeout(r, 300))
+    await app.evaluate(async (_e, url: string) => {
+      await (globalThis as any).__obsrv.native.load(url)
+    }, REDIRECT)
+  })
+
+  await dump('ARM 4: native pane alone, SERVER 302', async () => {
+    await call('navigate', { url: `${origin}/landed` })
+    await new Promise(r => setTimeout(r, 300))
+    await app.evaluate(async (_e, url: string) => {
+      await (globalThis as any).__obsrv.native.load(url)
+    }, `${origin}/redirect`)
+  })
+})
+
+test('PROBE: does a 302 really fire no did-start-navigation on the native pane?', async () => {
+  // Listeners attached HERE, before the load, straight onto the webContents —
+  // so this does not depend on any instrumentation in src/, and a capture
+  // failure is ruled out by a positive control in the same run rather than
+  // assumed away.
+  const rows: { event: string; url: string; httpResponseCode?: number }[] = await app.evaluate(
+    async (_e, urls: { redirect: string; plain: string }) => {
+      const g = globalThis as any
+      const wc = g.__obsrv.native.webContents
+      const seen: { event: string; url: string; httpResponseCode?: number }[] = []
+      const onStart = (_ev: unknown, ...a: unknown[]) => {
+        const d = (typeof a[0] === 'object' ? a[0] : _ev) as { url?: string; isMainFrame?: boolean }
+        seen.push({ event: 'did-start-navigation', url: String(d?.url) })
+      }
+      const onRedirect = (_ev: unknown, ...a: unknown[]) => {
+        const d = (typeof a[0] === 'object' ? a[0] : _ev) as { url?: string }
+        seen.push({ event: 'did-redirect-navigation', url: String(d?.url) })
+      }
+      const onNavigate = (_ev: unknown, url: string, httpResponseCode?: number) =>
+        seen.push({ event: 'did-navigate', url, httpResponseCode })
+      wc.on('did-start-navigation', onStart)
+      wc.on('did-redirect-navigation', onRedirect)
+      wc.on('did-navigate', onNavigate)
+      try {
+        // The case in question.
+        await g.__obsrv.native.load(urls.redirect)
+        await new Promise((r: (v?: unknown) => void) => setTimeout(r, 600))
+        seen.push({ event: '--- positive control below ---', url: '' })
+        // The control: the same listeners, a load with no redirect. If rows
+        // appear here and not above, the capture works and the 302 path is
+        // genuinely different.
+        await g.__obsrv.native.load(urls.plain)
+        await new Promise((r: (v?: unknown) => void) => setTimeout(r, 600))
+      } finally {
+        wc.off('did-start-navigation', onStart)
+        wc.off('did-redirect-navigation', onRedirect)
+        wc.off('did-navigate', onNavigate)
+      }
+      return seen
+    },
+    { redirect: `${origin}/redirect`, plain: `${origin}/landed` },
+  )
+  console.log(`[302-probe]\n${rows.map(r => `    ${r.event.padEnd(28)} ${r.url.replace(/^https?:\/\/[^/]+/, '')}${r.httpResponseCode !== undefined ? ` code=${r.httpResponseCode}` : ''}`).join('\n')}`)
+})
