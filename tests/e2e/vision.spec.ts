@@ -71,7 +71,15 @@ test('it actually changes the render, and turning it off restores it', async () 
   await page.click('.vision-none')
   const normal = await middle()
   // The fixture is solid red, so this is a real red before anything touches it.
-  expect(normal[0]).toBeGreaterThan(normal[1]! + 40)
+  //
+  // All three channels in the message, because red and green alone cannot say
+  // WHICH failure this is. CI (run 34977896287) reported `expected > 295,
+  // received 255` — red and green both 255, blue discarded. 255,255,255 is a
+  // washed-out render; 255,255,0 is the deficiency shader still applied while
+  // the button already read Normal, which is the confirm-ahead-of-paint class
+  // from pass 4. The uploaded artefacts carry no screenshot, so the channel
+  // that separates them existed only inside this assertion and was thrown away.
+  expect(normal[0], `middle pixel rgb: ${JSON.stringify(normal)}`).toBeGreaterThan(normal[1]! + 40)
 
   await page.click('.vision-protan')
   await page.locator('.vision-severity').fill('100')

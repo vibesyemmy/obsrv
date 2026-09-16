@@ -290,3 +290,36 @@ Add to the practice: **when a test recurs in the tally, open its error once.**
 The cause of any of the four. Whether they share one. Whether `mcp.spec:137` failing first-time
 in 5 of 5 is a defect in the test or in the product — nobody has read it. And the rate for the
 other three remains three observations, which is not a rate.
+
+---
+
+## READ 2026-09-15 by Kenya, on Opeyemi's word. **The logs are open, and this card's tally is wrong in both directions.**
+
+**It was three unread logs, not four.** `devtools:92` was already read — `bug-devtools-toggle-reopens` carries its error from run `34956013490`.
+
+**`vision:47` is not "a magnitude, not a timeout", and the sentence calling it a possible rendering defect should be struck.** The assertion is `expect(normal[0]).toBeGreaterThan(normal[1]! + 40)`. **`295` is not a threshold anyone chose — it is green + 40.** Red and green both came back 255. The "14% shortfall" was an artefact of how the bound is written.
+
+**But 255/255 does not settle what happened, and the failure message throws away the channel that would.** `middle()` reads all three channels; the assertion compares two. `255,255,255` is a washed-out render; `255,255,0` is the deficiency shader still applied while the button already read `Normal` — the confirm-ahead-of-paint class from pass 4. The uploaded artefacts are `error-context.md` only, with no screenshot, so **from CI's own output the two are indistinguishable.** The assertion now carries all three channels so the next occurrence answers it in its own failure text. `vision:47` is **cause unknown**, and neither "rendering defect" nor "wash-out" belongs on it.
+
+**The retry-defeating tally over-counts cascades.** `controls.spec:85` (`locator.blur` timeout, run `34995218008`) fails to commit `32`; `:109` then reads `hostDiagonalInches` 27 and `:115` reads value "27". **One root, two dependents, three rows** — the `live-drive:963 → :1015` shape.
+
+**And the five failures are at least four mechanisms, not one condition:**
+
+    panes:83        lost WebGL context — the app's own "No frames from target renderer"
+                    is in error-context.md. SPLIT OUT as bug-target-canvas-no-frames.
+    vision:47       cause unknown; the deciding channel is discarded
+    controls:85     one root with two cascades
+    stall:42        the app CLOSED: "Target page, context or browser has been closed".
+                    No frames notice, no assertion, nothing about the page.
+    devtools:92     already carded
+
+**One correction Kenya made to its own reading, recorded because it is the useful half.** The first pass ruled out a cascade for `vision:47` on the grounds that `Normal` was pressed in the snapshot. The test clicks `.vision-none` on the line before it measures — **so the button state is what the test had just set, not evidence about the shader**, which is precisely the two things confirm-ahead-of-paint says can disagree.
+
+**What this does to the card's decision.** The retry question is not the live one. A retry count cannot be chosen sensibly against four mechanisms, one of which is the product failing (`panes:83`) and one of which is the app closing (`stall:42`). **Neither is a flake, and quarantining either would hide a product event.**
+
+**A blind spot in the counting method, from Henry:** per-test ✘ counting is blind to a run that fails outside any test — PR #18 went red on a worker teardown with zero test failures. Any tally here is a **floor**.
+
+**AND THE EVIDENCE EVERY INVESTIGATION HERE RELIED ON DOES NOT EXIST.** `playwright.config.ts` sets no `trace`, `screenshot` or `video` — Playwright defaults all three to off — so a failing run leaves `error-context.md` and nothing else. `ci.yml:91`, *"Upload Playwright traces on failure"*, has uploaded an empty directory on every red run this week and passed, because uploading nothing succeeds. Rook found it; verified in the tree.
+
+**So "the traces will decide it" was false for the whole of this card's life.** Every reading above — mine included — was of the one file that happens to exist. Where this card says a discriminator is unreadable, the cause is the upload step and not the app, and **no re-reading of past runs recovers it.**
+
