@@ -1,6 +1,6 @@
 ---
 title: "Run 19: the live app, which two runs excluded and both said so"
-column: review
+column: done
 kind: readiness
 owner: "Rook"
 criterion: B1
@@ -177,3 +177,8 @@ overview's pins and crops land where the findings are.
 now read. **Whoever reads it next should be someone else**, and that is a scheduling fact rather
 than a modest one: it is the third time this board has got a finding out of a first reading, and
 there is no fourth available from this session.
+
+**Closed rather than left in Review** — Henry's catch. The run is delivered: the research doc,
+five cards, and the B1 verdict. Nothing about this card awaits a reader, and **a card sitting in
+Review waiting on nobody is the invisibility this board found this morning, seen from the other
+side.** The findings are reviewable on the five cards, which is where the work is.
