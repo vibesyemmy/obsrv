@@ -116,6 +116,58 @@ exiting mid-test (*"Target page, context or browser has been closed"*, *"closed:
 and it had no traces because run `34924677951` predates the `trace` setting entirely — not because
 the upload was skipped.
 
+## BOTH MEASURED, 2026-09-16. One candidate survives; the other would rebuild the original defect.
+
+Outcomes were written down before either ran (see the claim note above).
+
+### A — a step killed by its own `timeout-minutes` reads `failure`
+
+[Run `35153858367`](https://github.com/vibesyemmy/obsrv/actions/runs/35153858367), a throwaway ubuntu
+job whose step slept 120 s under `timeout-minutes: 1`:
+
+    probe outcome=failure conclusion=failure
+
+**Both**, which matters because `outcome` is what an `if:` reads. **As pre-registered**, and it keeps
+candidate 1 alive: a step-level timeout does *not* end in the `cancelled` state that already uploads
+nothing.
+
+### B — `globalTimeout` leaves nothing worth reading, and would pass the check anyway
+
+A deliberately hung spec under `--global-timeout`, run locally:
+
+    playwright exit code     1
+    test-results/ contains   .last-run.json      ← one bookkeeping file, and nothing else
+
+No trace, no `error-context.md`. The hung test is reported as *"did not run"*.
+
+**Follow that through the gate now on main and the result is the defect this family started with.**
+Playwright exits 1, so the e2e step is `failure`; the gate fires; `test-results/` is **non-empty**, so
+`if-no-files-found: error` does **not** fire; the upload **succeeds** and attaches a bookkeeping JSON.
+A green upload step carrying nothing anyone can read — `bug-trace-upload-empty`, rebuilt by the fix
+for its sequel.
+
+**My pre-registration said "I expect it to leave something", and that was true and useless.** The
+clause that saved it was the one asking *whether any of it is a trace rather than only
+`error-context.md`* — without that, one file would have read as a pass. It also compounds with a gap
+already on this card: `trace` is `on-first-retry`, and `globalTimeout` prevents the retry, so that
+path cannot produce a trace by construction.
+
+**So candidate 2 is not merely dead, it is a trap**, and it is written here so nobody re-proposes it
+from the reasoning that made it attractive — "Playwright stopping itself should write what it has".
+It does not.
+
+### What A does NOT establish, and it is the next measurement
+
+`failure` answers the **gate** question, not the **artefact** question. A step killed by its own
+timeout is still a process killed from outside, so whether Playwright flushes anything useful before
+it dies is unmeasured — and this card's control demands the upload *attach whatever Playwright
+managed to write*, not merely run.
+
+**Next: a throwaway run with a step-level `timeout-minutes` below the job's 30 and a hung spec, then
+read `test-results/`.** If it holds only `.last-run.json`, candidate 1 lands in exactly the same trap
+as candidate 2 and both shapes on this card fall — which would be the most useful outcome available,
+because it says the fix is not in this direction at all.
+
 ## What a fix has to decide, and what it must measure first
 
 **Not simply `|| steps.e2e.outcome == 'cancelled'`.** A cancelled step may not have flushed
