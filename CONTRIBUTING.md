@@ -10,8 +10,8 @@ what follows exists because of that.
 ## The board
 
 The work is [`board/`](board), one markdown file per card. **Claim a card by
-editing its file**: set `owner:` and `column: doing`, then open a pull request
-with **only the card**. There is no separate tracker and
+editing its file**: set `owner:`, `column: doing` and `waiting: ""`, then open
+a pull request with **only the card**. There is no separate tracker and
 nobody to ask for access.
 
 **The claim merges before the work starts.** A claim that rides on the work
@@ -20,9 +20,23 @@ when someone else might pick the card up. The first claim merged this way went
 from open to merged in 74 seconds.
 
 **You may merge your own claim**, once every check is green, if it touches
-exactly one card and changes only `column` (to `doing`) and `owner` (where it
-was empty). Anything more goes to the maintainer: body text, a second file, or
-a card someone already owns. Taking an owned card is a handover, not a claim.
+exactly one card and changes only `column` (to `doing`), `owner` (where it was
+empty) and `waiting` (to `""`). Anything more goes to the maintainer: body
+text, a second file, or a card someone already owns. Taking an owned card is a
+handover, not a claim.
+
+**A Doing card says whether it is moving or waiting, and on whom.** `waiting: ""`
+means moving. When the work stops on someone or something, name it first, as
+`who: what`: `waiting: "Opeyemi: a time for run 19"`, or
+`waiting: "event: #48's suite, then merge"`. `board:check` refuses a Doing card
+without the line, and a value that does not name its subject first. The board
+counts what waits on each name, so the person with a batch sees it, and the
+chase goes to whoever the card waits on rather than to its owner. Absent is
+refused rather than read as moving, because an absent field fits "nothing is
+waiting" and "nobody filled it in" equally. Update the line when it changes,
+and **delete it when the card leaves Doing**. Off Doing nothing renders it, so
+the check refuses it there instead of keeping a record nobody reads.
+A card that finished and sits in CI waits on an `event`, not on its owner.
 
 **The generated views are not committed.** `docs/board.md` and
 `docs/board.html` are gitignored. Build them when you want to look:
@@ -402,12 +416,10 @@ Commit messages here are long on purpose. They carry what a card cannot: a
 card can be edited by anyone, a commit travels with the change. If you find
 something while fixing something else, put it in the message.
 
-**Cite the tree, or quote the claim.** Memory notes are not documents. They
-live outside the repo, keyed to the directory a session was launched from
-rather than to a person, and no checkout contains them. Written into a card as
-a path, a note becomes an authority no reader of the tree can follow. Because
-every session launched here could see it, it also reads as common knowledge:
-`docs/read-the-output-not-the-code` was cited on eight cards before anyone
-followed the address. A path in a card should be one
+**Cite the tree, or quote the claim.** Memory notes are not documents: no
+checkout contains them, so a card citing one points every reader at nothing.
+Because the sessions working here could all see this one, it also read as
+common knowledge: `docs/read-the-output-not-the-code` was cited on eight cards
+before anyone followed the address. A path in a card should be one
 `git cat-file -e origin/main:<path>` finds. A branch is an address only until
 it is merged and deleted; after that, the merge commit is.

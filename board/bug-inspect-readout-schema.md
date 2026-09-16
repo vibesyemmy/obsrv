@@ -3,6 +3,7 @@ title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hide
 column: doing
 kind: bug
 owner: "Rook"
+waiting: "Rook: back at 13:00 WAT; fix/inspect-colorpainted-schema is checked out in his worktree, unpushed"
 order: 35
 ---
 

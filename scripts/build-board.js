@@ -97,7 +97,7 @@ const auto = process.argv.includes('--auto')
 const COLUMNS = [
   { id: 'backlog', name: 'Backlog', blurb: 'Raised, not yet picked.' },
   { id: 'next', name: 'Next', blurb: 'Picked, not claimed — start here.' },
-  { id: 'doing', name: 'Doing', blurb: 'Claimed. Someone is on it.' },
+  { id: 'doing', name: 'Doing', blurb: 'Claimed: moving, or waiting on someone or something named.' },
   { id: 'review', name: 'Review', blurb: 'Finished, waiting on the maintainer to merge.' },
   { id: 'done', name: 'Done', blurb: 'Merged.' },
 ]
@@ -126,8 +126,32 @@ function parseCard(id, text) {
   }
   card.column = col
   card.order = Number(card.order ?? 0)
+  // A Doing card must say whether it is moving or waiting, and on whom
+  // (chore-waiting-field). `waiting: ""` is moving. Anything else is
+  // `who: what` — a room name, or `event` for a suite result or a recurrence —
+  // so the reader chases the named person rather than the owner, and the board
+  // can count what waits on each. Absent is refused rather than read as moving:
+  // an absent field fits "nothing is waiting" and "nobody filled it in" equally,
+  // and on 2026-09-16 Opeyemi read six Doing cards and could not tell working
+  // from waiting from finished-and-in-CI.
+  if (col === 'doing') {
+    if (card.waiting === undefined) {
+      throw new Error(`board/${id}.md: a Doing card needs a waiting: line — "" if it is moving, or "who: what" it waits on`)
+    }
+    if (card.waiting !== '' && !/^[^:]{1,40}: \S/.test(card.waiting)) {
+      throw new Error(`board/${id}.md: waiting: names who or what first, as "who: what" — got ${JSON.stringify(card.waiting)}`)
+    }
+  } else if (card.waiting !== undefined) {
+    // Off Doing, nothing renders it and nothing waits: a `waiting` line on a
+    // finished card is a record kept where nobody reads it. Refused, so the
+    // close that moves a card out of Doing is the edit that removes it.
+    throw new Error(`board/${id}.md: waiting: belongs on a Doing card, and this one is "${col}" — delete the line when a card leaves Doing`)
+  }
   return card
 }
+
+/** Who or what a Doing card waits on: the part of `waiting` before its first colon. */
+const waitingOn = c => (c.column === 'doing' && c.waiting ? c.waiting.slice(0, c.waiting.indexOf(':')).trim() : '')
 
 const cards = readdirSync(CARDS)
   .filter(n => n.endsWith('.md'))
@@ -138,16 +162,27 @@ const esc = s => String(s ?? '').replace(/\r/g, '')
 const open = cards.filter(c => c.column !== 'done')
 const byKind = k => open.filter(c => c.kind === k).length
 const unclaimed = open.filter(c => !c.owner).length
+const doing = cards.filter(c => c.column === 'doing')
+const moving = doing.filter(c => !c.waiting).length
+// Who the Doing column is waiting on, most-waited-on first: the batch a person
+// would want in front of them, and the chase the card exists to redirect.
+const waitingBy = Object.entries(
+  doing.filter(c => c.waiting).reduce((acc, c) => ((acc[waitingOn(c)] ??= []).push(c.id), acc), {}),
+).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+const doingSummary =
+  `${doing.length} in Doing: ${moving} moving` +
+  (waitingBy.length ? `, waiting on ${waitingBy.map(([who, ids]) => `${who} ${ids.length}`).join(', ')}` : '')
 
 const out = []
 out.push('# The Obsrv board')
 out.push('')
-out.push(`*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed.*`)
+out.push(`*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed. ${doingSummary}.*`)
 out.push('')
 out.push('**This file is generated. The board is [`board/`](../board), one file per')
-out.push('card — edit those.** `npm run board` regenerates this; CI runs')
-out.push('`npm run board:check` and fails if the two disagree, so this cannot go')
-out.push('quietly stale the way a snapshot of somewhere else can.')
+out.push('card — edit those.** `npm run board` regenerates this locally, and the')
+out.push('published board is rebuilt from `main` on every push. CI runs')
+out.push('`npm run board:check`, which refuses a card it cannot read — including a')
+out.push('Doing card that does not say whether it is moving or waiting.')
 out.push('')
 out.push('## If you want to pick something up')
 out.push('')
@@ -156,11 +191,12 @@ out.push('closes, an owner when it has one, and the file, commit or document tha
 out.push('defines *done* — enough to begin without having been in the conversation that')
 out.push('produced it.')
 out.push('')
-out.push('**Claim it by editing its file** — set `owner:` and `column: doing` in')
-out.push('`board/<id>.md`, run `npm run board`, and open a pull request with both')
-out.push('changes. That is the whole mechanism; there is no separate board to update')
-out.push('and no one you have to ask to update it for you. An unowned card in Next or')
-out.push('Backlog is free; a card with an owner is being worked on, and a card in')
+out.push('**Claim it by editing its file** — set `owner:`, `column: doing` and')
+out.push('`waiting: ""` in `board/<id>.md`, and open a pull request with only the card;')
+out.push('it merges before the work starts. When the work stops on someone or')
+out.push('something, say so: `waiting: "Opeyemi: a time for run 19"`, or')
+out.push('`waiting: "event: #48\'s suite"`. An unowned card in Next or Backlog is free;')
+out.push('a Doing card is moving unless it names what it waits on, and a card in')
 out.push('Review is finished and waiting on the maintainer rather than on help.')
 out.push('')
 out.push('**How to read a commit on a card.** Where a card names delivered work it')
@@ -195,6 +231,7 @@ for (const col of COLUMNS) {
     if (c.criterion) bits.push(`**${esc(c.criterion)}**`)
     if (c.kind && KIND[c.kind]) bits.push(KIND[c.kind])
     bits.push(c.owner ? `owner: ${esc(c.owner)}` : '*unclaimed*')
+    if (c.column === 'doing') bits.push(c.waiting ? `**waiting on ${esc(c.waiting)}**` : 'moving')
     out.push(`### ${esc(c.title)}`)
     out.push('')
     out.push(`[\`${esc(c.id)}\`](../board/${esc(c.id)}.md) · ${bits.join(' · ')}`)
@@ -237,12 +274,16 @@ function renderHtml(stampText) {
     ...col,
     cards: cards
       .filter(c => c.column === col.id)
-      .map(c => ({ id: c.id, title: c.title, owner: c.owner ?? '', criterion: c.criterion ?? '', kind: c.kind ?? '', evidence: c.evidence ?? '' })),
+      .map(c => ({
+        id: c.id, title: c.title, owner: c.owner ?? '', criterion: c.criterion ?? '', kind: c.kind ?? '', evidence: c.evidence ?? '',
+        // null off the Doing column: a `waiting` left behind on a finished card is history, not state.
+        waiting: c.column === 'doing' ? (c.waiting ?? '') : null,
+      })),
   })).filter(c => c.cards.length > 0)
   // `</script>` inside a card's prose would end the tag early; the escape is
   // invisible to JSON.parse and keeps the page from breaking on a card that
   // happens to quote some HTML.
-  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, stamp: stampText, auto })
+  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto })
     .replace(/</g, '\\u003c')
   const head = fragment
     ? ''
@@ -297,6 +338,9 @@ function renderHtml(stampText) {
   .tag.crit { border-color: currentColor; font-weight: 600; }
   .owner { color: var(--dim); }
   .owner.none { font-style: italic; opacity: .75; }
+  .wait { margin-top: 6px; font-size: 11.5px; line-height: 1.35; }
+  .wait.on { color: var(--doing); font-weight: 600; }
+  .wait.moving { color: var(--dim); }
   .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--dim); }
   dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); max-width: 760px; width: calc(100% - 32px); padding: 0; }
   dialog::backdrop { background: rgba(0,0,0,.45); }
@@ -322,7 +366,7 @@ ${bodyOpen}<div class="wrap">
 const DATA = JSON.parse(${JSON.stringify(json)});
 const COLOR = { next: 'var(--next)', doing: 'var(--doing)', review: 'var(--review)', backlog: 'var(--backlog)', done: 'var(--done)' };
 document.getElementById('sub').textContent =
-  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed';
+  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary;
 const st = document.getElementById('stamp');
 if (DATA.stamp) {
   const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
@@ -355,6 +399,12 @@ for (const col of DATA.columns) {
     const id = document.createElement('span'); id.className = 'id'; id.textContent = c.id;
     m.append(o, id);
     el.append(t, m);
+    if (c.waiting !== null) {
+      const w = document.createElement('div');
+      w.className = 'wait ' + (c.waiting ? 'on' : 'moving');
+      w.textContent = c.waiting ? 'Waiting on ' + c.waiting : 'Moving';
+      el.append(w);
+    }
     el.addEventListener('click', () => open_(c, col));
     d.append(el);
   }
@@ -365,7 +415,8 @@ function open_(c, col) {
   document.getElementById('dtitle').textContent = c.title;
   const meta = document.getElementById('dmeta');
   meta.textContent = '';
-  const bits = [c.id, col.name, c.criterion, c.kind, c.owner || 'unclaimed'].filter(Boolean);
+  const bits = [c.id, col.name, c.criterion, c.kind, c.owner || 'unclaimed',
+    c.waiting === null ? '' : c.waiting ? 'waiting on ' + c.waiting : 'moving'].filter(Boolean);
   for (const b of bits) { const s = document.createElement('span'); s.className = 'tag'; s.textContent = b; meta.append(s); }
   document.getElementById('dbody').textContent = c.evidence || 'No evidence recorded on this card.';
   dlg.showModal();
