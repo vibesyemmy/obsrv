@@ -83,6 +83,15 @@ edge answers `found: false` without the sentence. The sentence is keyed on the g
 true wherever it is said. Modelling that rounding under a text scale and a layout scale would trade
 that for a sentence that could be wrong.
 
+**A second limit, the same shape and wider: a classic scrollbar.** On a desktop preset, a page that
+overflows gets a scrollbar strip inside the viewport. With one styled in on `laptop-768`, `(1365, 100)`
+finds nothing and `(1350, 100)` finds the page. Without it, both find the page. A point on the strip
+answers `found: false` with no sentence, because it *is* on the screen. CI's macOS runners draw these
+without being asked (overlay scrollbars need a trackpad), which is how the first CI run of the live
+test found it: its last-pixel control sat on the strip. The control now asks a page that doesn't
+overflow. Whether a phone preset draws a strip on CI is unchecked. The CLI test's last-pixel control,
+on `pixel-8`, passed there, and that is all it shows.
+
 **Tests:** `cli-inspect.spec.ts`, *a point off the screen says so…*: off to the side, one row below
 the bottom edge, and the last pixel on the screen as the control (found, no sentence).
 `live-drive.spec.ts`, *an inspect point off the screen says so…*: below the fold on a tall page, the

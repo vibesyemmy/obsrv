@@ -895,6 +895,12 @@ test('an inspect point off the screen says so, naming the viewport status report
   expect(offScreen(below.body), JSON.stringify(below.body['notes'])).toEqual([
     expect.stringContaining(`the point (10, ${cssHeight + 200}) is outside this screen's CSS viewport, ${cssWidth}x${cssHeight}`),
   ])
+  // The last pixel on the screen is on it — asked of a page that does not
+  // overflow. On CI a desktop preset draws a classic scrollbar down the right
+  // of a tall page, and a point on a scrollbar finds no element (and gets no
+  // sentence, being inside the viewport): the first CI run of this test read
+  // found: false there. Measured locally by styling one in.
+  expect((await call('navigate', { url: BUTTON })).status).toBe(200)
   const edge = await call('inspect', { x: cssWidth - 1, y: cssHeight - 1 })
   expect(edge.status).toBe(200)
   expect(edge.body).toMatchObject({ ok: true, found: true })
