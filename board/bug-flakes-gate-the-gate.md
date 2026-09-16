@@ -1,7 +1,9 @@
 ---
 title: "The e2e suite is not reliable enough to gate merges — counted, not asserted"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
+waiting: ""
 order: 34
 ---
 
@@ -354,3 +356,64 @@ absent from it.
 
 **Not re-derived here.** The sweep is Henry's (#99); this entry folds it in as he asked, and the
 numbers are his. What is Kenya's is the correction to this card's own two rows.
+
+> **Read the section above first.** Kenya corrected this card's devtools rows and found a test
+> missing from the list entirely; the pass below is a different cut — the *order* failures came
+> in — and it corrects a third thing. They agree and neither supersedes the other.
+
+## READ AGAIN 2026-09-16 by Rook, by FIRST FAILURE — and two of these four were never first
+
+Henry's rule for this pass: **name the first failure in each run before reading anything after
+it.** Nine failed runs, `✘` lines in log order (which is the order Playwright completes them):
+
+    stall:42       FIRST in 34924677951
+    controls:85    FIRST in 34995218008, with :109 and :115 after it
+    vision:47      NEVER first — 34938178928 (mcp-live:743 first), 35099493469 (mcp.spec:137 first)
+    panes:83       NEVER first — 35099493469 (mcp.spec:137 first)
+
+**Two of these four have never been observed as the first failure of a run.** That is a real
+split and it is the question this card should have been asking: an independent defect and a
+casualty of an already-degraded run are different things, and the tally has been counting them
+as the same thing. **Nine runs is a small sample and this is a pattern, not a proof.**
+
+The errors, each confirmed from the log rather than from a summary:
+
+    stall:42     electronApplication.evaluate: Target page, context or browser has been closed
+                 beside the app's own line: [pid=37639][out] obsrv: closed: sessions down
+    controls:85  locator.blur timeout — and :109/:115 read the OLD value after it
+    vision:47    Expected > 295, Received 255, at expect(normal[0]).toBeGreaterThan(normal[1]! + 40)
+    panes:83     Expected > 1000, Received 0 — zero white pixels
+
+## The four decisions, because none of them stays "open"
+
+**1. `controls:85` — not three retry-defeating tests. One, with two dependents.** Ordering
+confirms what Kenya read from the values: `:85` fails first, `:109` and `:115` then read the
+stale value. **This card's count of retry-defeating failures is inflated by two.** The root — a
+`locator.blur` timeout on a resolved input — is unexplained and is `bug-controls-blur-timeout`.
+
+**2. `stall:42` — the app went away, and that is its own event.** It is first in its run, so
+nothing preceding it explains it, and the app's own `closed: sessions down` says the process shut
+down rather than the page misbehaving. Not a rendering fault and not a timing threshold. Filed as
+`bug-app-closes-under-stall-spec`.
+
+**3. `vision:47` — not a defect on the evidence available, and the instrument has been fixed.**
+Kenya established the assertion reads `green + 40` and both channels came back 255; the third
+channel, which would separate a wash-out from a shader still applied, was discarded by the
+failure message and has since been added. **Nothing further can be decided until it recurs with
+the new message.** It has also never been observed first. Left as a note here rather than a card,
+because a card whose next action is "wait for it to happen again" is a card nobody can pick up.
+
+**4. `panes:83` — two candidate causes, and my own control could not separate them.** It fails
+**4/4 on this machine on current main**, alone, at `--repeat-each=3` plus a single run — which
+would refute "only a casualty of a degraded run". **But the control was not clean and I am not
+going to present it as one:** 43 Obsrv-related processes were running at the time, including a
+live app from run 19, another session's app under `/tmp/obsrv-kenya`, and several MCP servers.
+**And the local failure does NOT carry the `No frames from target renderer` line Kenya found in
+CI's snapshot.** Same assertion, zero white pixels, no shared signature. So the honest reading is
+**two failures that look alike at the assertion**, and the local one is evidence about a
+contended machine rather than about `main`. Noted on `bug-target-canvas-no-frames`, which is
+Kenya's.
+
+**What would settle it, for whoever has a clean machine:** the same run with no other Obsrv
+process alive. I could not do that without killing another session's app and the app on
+Opeyemi's desk, which is not mine to do.
