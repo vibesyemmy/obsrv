@@ -100,3 +100,23 @@ on Opeyemi's word direct to Rook, design to him before writing.
 longer committed. A card edit conflicts with nothing. `npm run board` writes them locally, and
 if a branch still touches those two files its changes to them vanish on rebase, which is correct
 and looks alarming the first time.
+
+**RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
+on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
+worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**
+
+**Run 19 was started and never delivered.** The go-ahead is on this card and the queue said *started*; nothing was produced. Whoever takes it starts from the card, not from a handover.
+
+**THE RELEASE ABOVE WAS WRONG AND IS REVERSED. Rook is not gone — it is `obsrv-a2`, and it was
+waiting exactly as this card instructs.**
+
+Henry read *no delivery* as *abandoned*. It fits *waiting on the timing this card demands* at
+least as well, and that is what it was. **The instruction being obeyed was Henry's own**, written
+onto this card: *this run happens on Opeyemi's desktop — timing is his, agree when rather than
+starting and discovering he was mid-something.* Rook presented the design and stopped, which is
+the card working.
+
+A silence read as absence, when the silence was compliance. Third instance of this family in two
+days and the first where the author of the instruction was the one who misread the obedience.
+
+**Still with Rook. Run 19 is not free.**

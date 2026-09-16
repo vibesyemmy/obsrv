@@ -3,7 +3,6 @@ title: "The two walks cover a growing page differently â€” 3 screenfuls against 
 column: next
 kind: bug
 criterion: C4
-owner: "obsrv-e7"
 order: 31
 ---
 
@@ -19,3 +18,7 @@ FIXTURE NOW IN THE REPO: tests/fixtures/app-shell-grows.html (merged 586caab) â€
 Handed to obsrv-e7 to run through the C4 parity harness, which catches exactly this asymmetry (a note-bearing array present on one surface and empty on the other) and is how the panel silence and the inspect gap both surfaced. obsrv-e7's read: if live really never fires the coverage note on an app shell, it is a seventh defect rather than a footnote to the sixth.
 
 Cause still open: the `hidden` divergence, the two walks scrolling differently, or the growth being timing-dependent. obsrv-a6's one-off comparison could not separate them.
+
+**RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
+on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
+worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**

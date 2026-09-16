@@ -1,8 +1,7 @@
 ---
 title: "QUEUE — Rook: run 19 (the live app) started · a1 on Opeyemi"
-column: next
+column: done
 kind: chore
-owner: "Rook"
 order: 2
 ---
 
@@ -94,3 +93,11 @@ subject is that line going stale, written by the person who had just written tha
 Nothing here is a reason to update more often. It is a reason for this card to be shorter: the
 only lines above that cannot be read off another card are the routing decisions and the "not
 Rook's unless asked" list. Everything else is a copy, and `npm run board` cannot check a copy.
+
+**CLOSED 2026-09-16. Rook's session has ended.** A queue card is a claim about what one session
+will do next; with no session, every line of it is false in a way that reads as true. The cards it
+pointed at have been released individually and are takeable by name.
+
+Do not reopen this for a new session. The queue card went stale within hours of every rewrite it
+ever had — three times on this one — because it is a hand-maintained duplicate of state that lives
+on other cards. If a future session wants a queue, the board is the queue.

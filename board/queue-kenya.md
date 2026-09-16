@@ -1,8 +1,7 @@
 ---
 title: "QUEUE — Kenya: c5-elevated DONE · bug-retina DONE · c3 remains"
-column: next
+column: done
 kind: chore
-owner: "Kenya"
 order: 3
 ---
 
@@ -13,3 +12,11 @@ Updated 2026-09-14 evening. Two of three delivered, and the order changed — Op
 3. c3 — does skills/obsrv-screens/SKILL.md describe the tools that exist. NOT started; Kenya is putting it to Opeyemi before picking it up.
 
 Henry asked Kenya to SPLIT docs/c5-note-inventory into two branches so bug-retina can merge first — it makes every other local run cheaper to read, so it is worth more merged before people run suites than after. Sequencing only; both still wait on Opeyemi's word given to Kenya directly.
+
+**CLOSED 2026-09-16. Kenya's session has ended.** A queue card is a claim about what one session
+will do next; with no session, every line of it is false in a way that reads as true. The cards it
+pointed at have been released individually and are takeable by name.
+
+Do not reopen this for a new session. The queue card went stale within hours of every rewrite it
+ever had — three times on this one — because it is a hand-maintained duplicate of state that lives
+on other cards. If a future session wants a queue, the board is the queue.
