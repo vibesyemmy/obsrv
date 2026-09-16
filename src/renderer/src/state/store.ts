@@ -181,6 +181,8 @@ export interface AppState {
   setTextScale(scale: number): void
   setThrottle(id: string): void
   setOnionSkin(opacity: number): void
+  /** The onion skin of a tab named by main, not the one in front: a reply can outlive a tab switch. */
+  setTabOnionSkin(id: string, opacity: number): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setVision(type: VisionType, severity: number): void
@@ -365,6 +367,7 @@ export const useStore = create<AppState>()((set, get) => ({
     set(patchActiveWith(t => (t.textScale === textScale ? null : { textScale, agentHighlight: null }))),
   setThrottle: throttle => set(patchActiveWith(t => (t.throttle === throttle ? null : { throttle }))),
   setOnionSkin: onionSkin => set(patchActiveWith(t => (t.onionSkin === onionSkin ? null : { onionSkin }))),
+  setTabOnionSkin: (id, onionSkin) => set(patchTabWith(id, t => (t.onionSkin === onionSkin ? null : { onionSkin }))),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),

@@ -178,6 +178,30 @@ test('a viewport too wide for a 2× reference refuses the skin: the value reads 
   await call('setPreset', { id: '1080p-24' })
 })
 
+test('a skin that is on goes off when a resize leaves a screen too big for it, and stays off back on one that fits', async () => {
+  // bug-onion-skin-dies-on-a-preset-round-trip: main dropped the reference and
+  // nothing told the renderer, so the skin read 0.5 over nothing — on the big
+  // screen, and back on a screen that fits, until the value was changed.
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+  const on = await call('setOnionSkin', { onionSkin: 0.5 })
+  expect(on.body).toMatchObject({ ok: true, applied: true, onionSkin: 0.5 })
+  await expect.poll(reference).not.toBeNull()
+
+  await call('setPreset', { id: '4k-27' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(3840)
+  await expect.poll(async () => (await call('status')).body.onionSkin).toBe(0)
+  expect(await reference()).toBeNull()
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
+
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+  // Off, and saying so: the value and the reference agree on a screen that could have one.
+  expect((await call('status')).body).toMatchObject({ onionSkin: 0 })
+  expect(await reference()).toBeNull()
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
+})
+
 test('a bad value is refused with the reason', async () => {
   const r = await call('setOnionSkin', { onionSkin: 2 })
   expect(r.status).toBe(400)
