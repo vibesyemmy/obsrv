@@ -50,42 +50,146 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Is this change nothing but board cards and the views generated from them?
+  #
+  # Seconds on ubuntu, and it exists so the expensive job can answer cheaply
+  # without ever being ABSENT. `paths-ignore` would have been the obvious fix
+  # and is a trap: `typecheck · unit · shader parity · e2e` is a REQUIRED check,
+  # and a required check that never runs never arrives, so the pull request
+  # cannot merge at all. That is the same deadlock `bug-suite-absent-on-conflict`
+  # measured on a conflicting PR — an absence that reads as "not yet" forever.
+  #
+  # So the job below always runs and always reports. What this decides is which
+  # runner it takes and which steps it does.
+  scope:
+    name: What this change touches
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      board_only: ${{ steps.decide.outputs.board_only }}
+      files: ${{ steps.decide.outputs.files }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the comparison needs both sides
+
+      - id: decide
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          # A first push to a branch, or a force-push, can leave BASE empty or
+          # unreachable. Unknown means run everything: the cheap answer must
+          # never be the one that skips a suite.
+          if [ -z "${BASE:-}" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "base unknown — running the full suite"
+            echo "board_only=false" >> "$GITHUB_OUTPUT"
+            echo "files=(base unknown)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE" "${{ github.sha }}")
+          echo "changed files:"; echo "$files" | sed 's/^/  /'
+          # Board cards, and nothing else. `docs/board.md` and
+          # `docs/board.html` are generated and gitignored as of `437cdd6`, so
+          # they cannot appear in a diff at all — naming them here would
+          # describe a tree that no longer exists, and a force-added one is an
+          # anomaly that has earned the full suite rather than a pass. The list
+          # is deliberately short: a wrong entry here buys a green that tested
+          # nothing.
+          #
+          # `|| true` because `grep -v` exits 1 exactly when every file IS a
+          # board file — the case this is looking for. Under `set -e` that
+          # would abort the job and strand the required check.
+          outside=$(echo "$files" | grep -vE '^board/' || true)
+          if [ -z "$files" ]; then
+            echo "no files changed — running the full suite"
+            echo "board_only=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$outside" ]; then
+            echo "board-only change"
+            echo "board_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "touches more than the board:"; echo "$outside" | sed 's/^/  /'
+            echo "board_only=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$files" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
+
   test:
     name: typecheck · unit · shader parity · e2e
     # Not on a version tag: `tested-on-main` proves this tree already passed
     # here, on the `main` push the tag was cut from.
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: macos-14
+    #
+    # `always()` matters more than it looks: without it, a `scope` job that
+    # FAILED would skip this one, the required check would never arrive, and
+    # the pull request would be unmergeable with nothing to click. The cheap
+    # job must never be able to block the expensive one — it can only make it
+    # cheaper. A missing or empty output compares false against 'true'
+    # everywhere below, so anything unexpected lands on the full macOS run,
+    # which is the safe direction.
+    if: ${{ always() && !startsWith(github.ref, 'refs/tags/v') }}
+    needs: scope
+    # The whole point: a board-only change takes a cheap runner and no macOS
+    # queue. The job still runs, still carries this name, and still reports —
+    # it is the required check, and it must arrive.
+    runs-on: ${{ needs.scope.outputs.board_only == 'true' && 'ubuntu-latest' || 'macos-14' }}
     timeout-minutes: 30
     steps:
+      - name: Say what this run did not do
+        if: ${{ needs.scope.outputs.board_only == 'true' }}
+        run: |
+          echo "::notice::Board-only change: the suite was NOT run. This green means the change touches only board/ — not that any test passed. The board's own check runs separately, in board.yml."
+          {
+            echo "## The suite did not run"
+            echo
+            echo "This change touches only \`board/\`."
+            echo "**No typecheck, no unit tests, no shader parity and no e2e ran for this commit.**"
+            echo
+            echo "The check that *does* apply to a board change ran elsewhere, and this change did not"
+            echo "touch it: \`board.yml\` runs \`npm run board:check\` on every push, on \`ubuntu-latest\`."
+            echo "A green here means *nothing outside the board changed*, which is a different fact from *the tests passed*."
+            echo
+            echo "Files:"
+            echo '```'
+            echo "${{ needs.scope.outputs.files }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v7
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
 
       - uses: actions/setup-node@v7
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         with:
           node-version-file: .nvmrc   # same toolchain the repo develops on
           cache: npm
 
       - name: Install dependencies
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm ci
 
       - name: Install Chromium (Vitest browser mode)
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npx playwright install chromium
 
       - name: Typecheck
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run typecheck
 
       - name: Unit tests
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm test
 
       - name: Shader parity (browser)
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run test:browser
 
       - name: Build
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run build
 
       # --retries=1 absorbs the known-flaky mobile input-forwarding test on
       # loaded runners; a persistent failure still fails the job.
       - name: E2E (Playwright driving the Electron app)
+        if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npx playwright test --retries=1
 
       - name: Upload Playwright traces on failure
