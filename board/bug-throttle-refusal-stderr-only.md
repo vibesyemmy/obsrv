@@ -56,3 +56,16 @@ between:
 A run under a throttle that *works* proves nothing here. The vacuity check is: the assertion has
 to see a non-null `refused` reach the array. If the harness cannot produce one, the test has no
 subject and a green from it is the defect `CONTRIBUTING.md` names.
+
+## The live surface has the same shape, by reading — added 2026-09-16 by Henry
+
+Found while checking `drive`'s set-and-read-back fields for `bug-onion-skin-zero-means-three-things`.
+**Read in the code, not observed.** Main's `IPC.setThrottle` handler (`src/main/ipc.ts:486`) awaits
+the same `target.setThrottle()` and, on a refusal, only `log.warn`s it. The renderer's store keeps
+the id it asked for, `status` mirrors the store, and `obsrv_drive` answers `throttle: <id>`, the
+request again, with nothing in `warnings`. The control server's `setThrottle` confirms on that
+mirrored id, so its reply agrees with the store, not with Chromium.
+
+Not reproduced: a refusal needs a second debugger client on the target, and one wasn't tried. A fix
+here would likely want the refusal carried back the way `setOnionSkin`'s now is (#66): refused in
+main, with the sentence in the reply's `warnings`.
