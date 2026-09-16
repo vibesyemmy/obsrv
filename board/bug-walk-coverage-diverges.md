@@ -1,6 +1,8 @@
 ---
 title: "The two walks cover a growing page differently — 3 screenfuls against 8"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C4
 order: 31
