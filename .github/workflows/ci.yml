@@ -50,6 +50,24 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+
+  # THROWAWAY — measurement A for bug-no-traces-when-e2e-hangs, on
+  # verify/step-timeout. Never merged. Ubuntu and about a minute, rather than a
+  # macOS suite, because the only question is how GitHub RECORDS a step killed
+  # by its own timeout-minutes: failure, or cancelled? The card's step-level
+  # timeout candidate lives or dies on the answer.
+  step-timeout-probe:
+    name: Does a step killed by its own timeout read failure or cancelled
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: The step under test sleeps past its own one-minute limit
+        id: probe
+        timeout-minutes: 1
+        run: sleep 120
+      - name: What the probe step was recorded as
+        if: ${{ always() }}
+        run: echo "probe outcome=${{ steps.probe.outcome }} conclusion=${{ steps.probe.conclusion }}"
   # Is this change nothing but board cards and the views generated from them?
   #
   # Seconds on ubuntu, and it exists so the expensive job can answer cheaply
