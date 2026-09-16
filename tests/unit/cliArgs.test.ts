@@ -425,10 +425,14 @@ describe('--rotate, and the deprecated --orientation beside it', () => {
     expect(cmd.specs[0]?.cssHeight).toBe(1080)
   })
 
-  it('agrees with --orientation landscape, which means the same thing', () => {
+  it('produces the same SCREEN as --orientation landscape, differing only by the note', () => {
     const viaWord = snap('https://example.com', '--preset', '1080p-24', '--orientation', 'landscape')
     const viaFlag = snap('https://example.com', '--preset', '1080p-24', '--rotate')
-    expect(viaFlag.specs[0]!).toEqual(viaWord.specs[0]!)
+    // The note is the whole difference, and it should be: the word inverted
+    // here and is owed an explanation, while --rotate said it plainly.
+    const { orientationNote, ...word } = viaWord.specs[0]!
+    expect(viaFlag.specs[0]!).toEqual(word)
+    expect(orientationNote).toContain('produced a portrait screen')
   })
 
   it('accepts the pair when they agree', () => {
@@ -441,5 +445,31 @@ describe('--rotate, and the deprecated --orientation beside it', () => {
     // original defect cost a day.
     expect(() => snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'portrait')).toThrow(ArgError)
     expect(() => snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'portrait')).toThrow(/disagree/)
+  })
+})
+
+describe('the note that says where the word inverted', () => {
+  it('is carried on the spec when --orientation landscape gave a portrait screen', () => {
+    const cmd = snap('https://example.com', '--preset', '1080p-24', '--orientation', 'landscape')
+    expect(cmd.specs[0]?.orientationNote).toContain('produced a portrait screen')
+    expect(cmd.specs[0]?.orientationNote).toContain('rotate: true')
+  })
+
+  it('is absent when the word was true — a phone asked for landscape got landscape', () => {
+    const cmd = snap('https://example.com', '--preset', 'iphone-61', '--orientation', 'landscape')
+    expect(cmd.specs[0]?.orientationNote).toBeUndefined()
+  })
+
+  it('is absent when --rotate was used, because there is no word to contradict', () => {
+    const cmd = snap('https://example.com', '--preset', '1080p-24', '--rotate')
+    expect(cmd.specs[0]?.orientationNote).toBeUndefined()
+  })
+
+  it('is per spec under --matrix, not per run', () => {
+    // The word inverts on the monitor and not on the phone, in one run.
+    const cmd = snap('https://example.com', '--matrix', '1080p-24,iphone-61', '--orientation', 'landscape')
+    const byPreset = new Map(cmd.specs.map(s => [s.presetId, s.orientationNote]))
+    expect(byPreset.get('1080p-24')).toContain('produced a portrait screen')
+    expect(byPreset.get('iphone-61')).toBeUndefined()
   })
 })

@@ -1,4 +1,4 @@
-import { maxCssViewport, resolveRotate } from '../shared/calibration'
+import { maxCssViewport, orientationWordNote, resolveRotate } from '../shared/calibration'
 import { MAX_SELECTOR_LENGTH } from '../shared/inspect'
 import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
@@ -49,6 +49,13 @@ export interface RenderSpec {
    * included, so a baseline can be asked for by name.
    */
   throttle: string | null
+  /**
+   * Set only when the deprecated --orientation word contradicted the shape it
+   * produced: landscape on a landscape-stored preset gives portrait. Absent
+   * otherwise, including whenever --rotate was used, because then there is no
+   * word to contradict (bug-orientation-name).
+   */
+  orientationNote?: string
 }
 
 export interface AuditCommand {
@@ -452,9 +459,17 @@ function resolveOrientation(flags: Map<string, string | true>): { orientation: O
  * sideways rather than a different one. Applied here, before the diff bounds
  * are checked, so those check the viewport that will actually be rendered.
  */
-function orientSpec(spec: RenderSpec, orientation: Orientation): RenderSpec {
-  if (orientation !== 'landscape') return { ...spec, orientation }
-  return { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+function orientSpec(spec: RenderSpec, orientation: Orientation, given?: Orientation): RenderSpec {
+  const turned =
+    orientation !== 'landscape'
+      ? { ...spec, orientation }
+      : { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+  // Computed per spec rather than per run, because `--matrix` rotates several
+  // presets at once and the word inverts on some of them and not others: a
+  // single run can legitimately owe a note about `1080p-24` and none about
+  // `iphone-61`.
+  const note = orientationWordNote(given, turned.cssWidth, turned.cssHeight)
+  return note === null ? turned : { ...turned, orientationNote: note }
 }
 
 /**
@@ -501,18 +516,18 @@ function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[
       textScale: DEFAULT_TEXT_SCALE,
       throttle: null,
     }
-    return { specs: [orientSpec(spec, orientation)], matrix: false }
+    return { specs: [orientSpec(spec, orientation, rot.given)], matrix: false }
   }
 
   const matrixRaw = flags.get('matrix')
   if (typeof matrixRaw === 'string') {
     const ids = matrixRaw.split(',').map(s => s.trim()).filter(s => s.length > 0)
     if (ids.length === 0) throw new ArgError('--matrix: expected a comma-separated list of preset ids')
-    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation)), matrix: true }
+    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation, rot.given)), matrix: true }
   }
 
   const id = typeof flags.get('preset') === 'string' ? (flags.get('preset') as string) : DEFAULT_PRESET
-  return { specs: [orientSpec(presetSpec(id), orientation)], matrix: false }
+  return { specs: [orientSpec(presetSpec(id), orientation, rot.given)], matrix: false }
 }
 
 function resolveProfile(flags: Map<string, string | true>): string {
@@ -585,7 +600,7 @@ export function parseArgs(argv: string[]): CliCommand {
   const orientation = rot.orientation
     const textScale = resolveTextScale(flags)
     const throttle = resolveThrottle(flags)
-    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation), textScale, throttle }))
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation, rot.given), textScale, throttle }))
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
     return {
       command,

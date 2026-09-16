@@ -816,6 +816,13 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       cssWidth: r.cssWidth,
       cssHeight: r.cssHeight,
       deviceScaleFactor: spec.deviceScaleFactor,
+      // Whether the screen was turned a quarter turn from the preset's stored
+      // form. Unconditional, unlike the keyed fields below, because it is true
+      // of every render and a caller reading it must not have to know which
+      // flag produced it (`bug-orientation-name`). A breaking addition on the
+      // MCP surface, where the schemas are additionalProperties: false, and it
+      // is in docs/breaking-changes.md as one.
+      rotated: spec.orientation === 'landscape',
       // Only under --full-page: the flagless JSON is a contract. `tiled` says
       // the page was captured in bands, which is now the default, so it is
       // false only when --single-surface asked for one viewport.
@@ -832,7 +839,11 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // reason says whether waiting longer could have helped.
       settled: r.frame.settled,
       ...(r.frame.settled ? {} : { unsettledReason: r.frame.unsettledReason }),
-      warnings: r.warnings,
+      // Said only where the deprecated --orientation word inverted: a phone
+      // asked for landscape got landscape and is owed nothing. In the reply
+      // rather than on stderr alone, because the caller who passed the flag is
+      // usually an agent reading JSON (bug-orientation-name).
+      warnings: spec.orientationNote === undefined ? r.warnings : [...r.warnings, spec.orientationNote],
     })
   }
   await machine(cmd.matrix ? results : results[0])
