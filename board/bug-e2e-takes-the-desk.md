@@ -77,8 +77,10 @@ and every 50 ms during the CLI runs. `lsappinfo` does report each app's `Applica
 **Two answers.**
 1. **The icon's window shrinks from about 1.1 s to about 80 ms per harness launch** if the drop happens at
    module top, still without activating. Built: `index.ts` hides it at module top under
-   `showsInactive()`, and `cli/main.ts` does the same unconditionally. The existing calls stay, which is
-   also the configuration the probe measured.
+   `showsInactive()` (the measured app arm), and `cli/main.ts` sets the activation policy at module top
+   on macOS (the measured CLI arm; Wren's read caught a first version that shipped the unmeasured
+   `dock.hide()` there). The existing calls stay, as in the probe, and
+   `tests/unit/dockDroppedAtLaunch.test.ts` fails if either drop leaves module top.
 2. **On CI, the CLI's own launch does not take the front from an app holding it.** The holder's key state
    never changed during either CLI run. So the 5 s front Rook saw on Opeyemi's desk (22:41:44) came from
    something a runner doesn't have. The remaining candidates are the same as for the harness app's
