@@ -1,13 +1,12 @@
 ---
 title: "The app shuts down under `stall.spec:42` — `closed: sessions down`, not a slow page"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 49
 ---
 
-FOUND BY ROOK 2026-09-16, reading the CI logs by first failure. **Unowned.** Split out of
+FOUND BY ROOK 2026-09-16, reading the CI logs by first failure. Split out of
 `bug-flakes-gate-the-gate`, where it was one row in a tally of "flakes".
 
 ## What the log says
@@ -39,3 +38,42 @@ not.
 - **The vacuity check:** a run of `stall.spec` that passes proves nothing about this. The
   assertion has to see the app's shutdown line to be evidence, so any check here must show that
   it *can* observe the condition before its silence means anything.
+
+## RESOLVED 2026-09-16 by Henry — not the app exiting: a test that timed out, with two causes
+
+**The first line of the failure was one this card's quote left out:** *"Test timeout of 30000ms
+exceeded."* The evaluate error came after it. In all three runs that carry this failure
+(`34882194536`, `34924677951`, `34961903958`), the app log reads `starting`, then about 40 s later
+`quitting` and `closing: main window`, which is **Playwright's teardown after the timeout**, not
+the app shutting itself down. `closed: sessions down` is the last line of the main window's
+orderly `close` handler (`src/main/index.ts`). **Every run failed both tries.**
+
+**Cause A, reproduced, and fixed: a hidden dependency on the first test.** `:42` appended a hidden
+`file://` iframe to *whatever page the target showed*. It relied on `:21` having navigated the
+target to a `file://` fixture, and under any other page the iframe never loads, so its `onload` never
+fired and the evaluate waited out the timeout.
+
+| run, locally on `main` | `:42` |
+| --- | --- |
+| the whole file ×10 | timed out **2/10**, both in the replacement worker right after `:21` failed |
+| `:42` alone ×3 | **timed out 3/3** |
+
+**That is also why CI failed both tries: a retry runs `:42` alone.** It is the shape of `live-drive`'s
+`captureTarget` (#48).
+
+**Cause B, observed, not reproduced: on CI's first attempt `:42` hung with its page in place.** `:21`
+and `:35` had passed in the same app, so the target *was* on the `file://` fixture. Yet the
+evaluate never returned. Teardown then stopped before `closed: sessions down`: `app.close()` was
+killed after 10 s, so `tabs.destroy()` did not return. And run `34924677951` later logged the app
+exiting on its own with `SIGSEGV`. That reads as a target renderer that stopped answering. **Nothing
+here reproduced it.**
+
+**The fix (the test, not the product):** `:42` now navigates to its own fixture first, and waits for
+the target to be on it. **The wait is bounded twice, so the next occurrence says which it was:** the
+page answers `{ loaded: false, top, readyState }` after 8 s if the iframe never loads, and main answers
+`{ renderer: "did not answer within 12 s" }` if the renderer never replies (cause B). Either way the
+test fails with that object as its message, not a bare timeout.
+
+**Tests:** `:42` alone ×3, passed 3/3 (timed out 3/3 before). The whole file ×8, 32/32.
+**Also seen locally, not this card's:** `:21` failed 2 of the first 10 repetitions (`.stall` not visible
+within 10 s) and 0 of the next 8. It's recorded here and not chased.
