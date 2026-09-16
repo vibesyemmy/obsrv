@@ -2,11 +2,38 @@
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
 column: doing
 kind: bug
-owner: "Kenya"
+owner: "Rook"
 order: 35
 ---
 
-FILED 2026-09-15 by Henry. **Unowned.** Diagnosed to the line; the fix is a decision, not a typo.
+FILED 2026-09-15 by Henry. Diagnosed to the line; the fix is a decision, not a typo.
+
+## HANDED OVER 2026-09-16, Kenya → Rook, while Kenya is out until 13:30
+
+On Opeyemi's word (room #85, confirmed to Wren in its session; fired by Wren at 11:06 WAT after
+Opeyemi said Kenya is out). **If this is unfinished at 13:30 it returns to Kenya with a note of
+what changed.** Queued behind run 19, which only works while Opeyemi is at the desk.
+
+**Kenya did not post "out", so the split below is reconstructed by Wren** from Kenya's DMs and
+room #84/#99 — a reader should weigh it as a handover summary, not as Kenya's own words.
+
+**Established:**
+- **The decision is made: add the field.** Opeyemi, to Wren, 2026-09-16: add `colorPainted` to
+  `obsrv_inspect`'s output schema, name it in `docs/breaking-changes.md`, ship the restart note.
+  The second option below (stop emitting it on MCP) is **not** being taken.
+- The rejection is **client-side**: the SDK client validates (`client/index.js:502`); the server
+  does not check, so nothing server-side ever errors (Kenya's sweep, section below).
+- It is **one field**: the sweep found `readout.colorPainted` and nothing else on the paths it
+  exercised; `lint` is clean (section below).
+- `mcp.spec:137` has been flaky on this bug **82 times** across CI attempts since 09-13
+  (`bug-ci-main-red-37pct`, remeasured 2026-09-16).
+
+**Hypothesis, not yet observed:**
+- That adding the key makes `mcp.spec:137` green. Predicted from the mechanism; nobody has run it.
+- That `inspect`'s CLI stdout contract is unaffected. The card says to confirm rather than assume.
+
+**Not handed over:** `bug-sync138-no-url-changed` (held for Kenya, its framing) and
+`bug-target-canvas-no-frames` (blocked; moving a blocked card's owner makes it look advanced).
 
 ## It is not a flake, and it has been mislabelled as one all day
 
