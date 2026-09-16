@@ -597,6 +597,14 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     try {
       // Nothing to lift on a session that was never opened.
       if (off && !dbg.isAttached()) return null
+      // A product change made for a test, and said so: Chromium lets a second
+      // debugger client attach, so nothing outside the process can make this
+      // refuse, and a refusal nobody can force cannot be regression-tested.
+      // Under the harness only, a message here refuses every throttle that
+      // applies conditions, through this same catch
+      // (bug-throttle-refusal-stderr-only).
+      const forced = process.env.OBSRV_TEST === '1' ? process.env.OBSRV_TEST_THROTTLE_REFUSAL : undefined
+      if (!off && forced) throw new Error(forced)
       if (!dbg.isAttached()) dbg.attach('1.3')
       await dbg.sendCommand('Network.enable')
       const n = this.throttle.network
@@ -720,13 +728,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       this.dsf = dsf
       if (!this.disposed) this.recreate()
     } else if (!this.win.isDestroyed()) {
-      this.win.setContentSize(v.width, v.height)
-      // The emulated screen must track the viewport, and Chromium only reads
-      // it on (re-)application. Safe here only once the first navigation has
-      // committed; before that, the did-navigate re-apply picks up the new
-      // size on its own.
-      if (this.firstNavDone) this.applyEmulation()
-      this.win.webContents.invalidate()
+      const apply = (): void => {
+        if (this.win.isDestroyed()) return
+        this.win.setContentSize(v.width, v.height)
+        // The emulated screen must track the viewport, and Chromium only reads
+        // it on (re-)application. Safe here only once the first navigation has
+        // committed; before that, the did-navigate re-apply picks up the new
+        // size on its own.
+        if (this.firstNavDone) this.applyEmulation()
+        this.win.webContents.invalidate()
+      }
+      // A product change made for a test, and said so: a resize reaches the
+      // page some time after this returns, and on a loaded runner long enough
+      // for a measurement taken straight after to see the old size
+      // (bug-viewport-warning-race). Under the harness only, this delays a
+      // resize after the first navigation, so a test can make that window
+      // wide on purpose instead of hoping a runner is slow.
+      const delayMs = process.env.OBSRV_TEST === '1' ? Number(process.env.OBSRV_TEST_RESIZE_DELAY_MS ?? 0) : 0
+      if (this.firstNavDone && delayMs > 0) setTimeout(apply, delayMs)
+      else apply()
     }
     return v
   }

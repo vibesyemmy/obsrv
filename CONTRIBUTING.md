@@ -28,15 +28,23 @@ handover, not a claim.
 **A Doing card says whether it is moving or waiting, and on whom.** `waiting: ""`
 means moving. When the work stops on someone or something, name it first, as
 `who: what`: `waiting: "Opeyemi: a time for run 19"`, or
-`waiting: "event: #48's suite, then merge"`. `board:check` refuses a Doing card
+`waiting: "ci: #48's suite, then merge"`. Name who with one of the usual words:
+a room name, `Opeyemi`, `ci` for a suite or a merge that will come in minutes,
+or `event` for what nobody can force, such as a recurrence. A card in CI and a
+card waiting on a recurrence are different waits, and one word hid the first
+inside the second. `board:check` refuses a Doing card
 without the line, and a value that does not name its subject first. The board
 counts what waits on each name, so the person with a batch sees it, and the
 chase goes to whoever the card waits on rather than to its owner. Absent is
 refused rather than read as moving, because an absent field fits "nothing is
 waiting" and "nobody filled it in" equally. Update the line when it changes,
-and **delete it when the card leaves Doing**. Off Doing nothing renders it, so
-the check refuses it there instead of keeping a record nobody reads.
-A card that finished and sits in CI waits on an `event`, not on its owner.
+and **delete it when the card leaves Doing**, unless it goes to Review, where
+the line is optional and names the reviewer the card waits on. Off Doing and
+Review nothing renders it, so the check refuses it there instead of keeping a
+record nobody reads. A card that finished and sits in CI waits on `ci`, not on
+its owner. **The board shows when each wait was set**, from the commit that last
+changed the line, so "back at 13:00" read at 15:00 is visibly two hours old.
+Names are counted case-insensitively.
 
 **The generated views are not committed.** `docs/board.md` and
 `docs/board.html` are gitignored. Build them when you want to look:

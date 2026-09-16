@@ -174,9 +174,17 @@ export function App() {
   // first — 1920x1080, then the restored tab's 412x915 16 ms later — and main,
   // which lets control commands through once the first viewport is applied,
   // answered `pixel-8` beside 1920x1080 in between (bug-drive-status-race-at-launch).
+  //
+  // A viewport too big for the onion skin's reference drops it in main, and the
+  // skin is turned off here on the tab that sent the viewport, by the rule the
+  // skin's own effect below applies to a refusal: not a menu reading 50% over
+  // nothing (bug-onion-skin-dies-on-a-preset-round-trip).
   useEffect(() => {
     if (!tabsKnown) return
-    void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor, isMobileScreen)
+    const sentFor = useStore.getState().activeId
+    void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor, isMobileScreen).then(r => {
+      if (r.onionSkinDropped) useStore.getState().setTabOnionSkin(sentFor, 0)
+    })
   }, [tabsKnown, viewport.width, viewport.height, deviceScaleFactor, isMobileScreen])
 
   // The target keeps its own scale per tab, so a switch between two tabs at

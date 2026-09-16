@@ -96,13 +96,15 @@ export interface ObsrvApi {
    * `mobile` decides phone fidelity (mobile UA and viewport semantics). It is
    * passed rather than derived from `deviceScaleFactor`, because density and
    * being-a-phone are different facts: a Retina laptop is dense and a desktop.
+   * `onionSkinDropped` in the answer: this viewport is too big for the onion
+   * skin's 2x reference, which main has dropped, so the skin should read off.
    */
   setViewport(
     width: number,
     height: number,
     deviceScaleFactor?: number,
     mobile?: boolean,
-  ): Promise<{ width: number; height: number }>
+  ): Promise<{ width: number; height: number; onionSkinDropped?: true }>
   /**
    * Browser zoom as reflow, on the target alone: the page lays out in a CSS
    * viewport `1/scale` the size of the screen at `scale` times its density.

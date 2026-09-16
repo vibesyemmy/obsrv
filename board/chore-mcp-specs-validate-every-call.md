@@ -66,3 +66,31 @@ attempt failed, the fix has not reached the case it was written for.
 
 It does not make the sweep see `obsrv_drive` — `scripts/schema-emit-sweep.js:115` skips it by
 design, and that is its own gap with a known instance. Separate card.
+
+## CONFIRMED 2026-09-16 by a two-armed control, and it is worse than the card above says
+
+Henry's hypothesis, and it holds: when a test in this file fails, Playwright replaces the worker;
+the new worker's `beforeAll` builds a **fresh client that has listed nothing**; and every test
+after the failure runs unvalidated. Both arms, on `main`, same build, `--retries=0`, the only
+variable being whether the failing test ran first:
+
+    -g ":49 + :314"            → :314 FAILS   (-32602, validated correctly)
+    -g ":49 + :137 + :314"     → :137 fails, then :314 PASSES
+
+**So a single schema violation silently switches validation off for every test after it.**
+
+**What that means for everything this suite has ever reported:** CI has only ever been able to
+surface the **first** schema violation in the file. A second one was not flaky and not
+intermittent — it was **invisible**, and would have stayed invisible for as long as the first one
+existed. `colorPainted` was the first; `obsrv_drive`'s three undeclared keys (#68) and live
+`snap`'s `onionSkin` and `loading` (#75) sat behind it, in a file that runs them, reporting
+green.
+
+**It also explains this card's own three-versus-one**, which was left unexplained above: the
+`beforeAll` change caught `:153`, `:330` and `:447` where only `:137` had failed before, because
+every replacement worker now lists the tools too. Not a wider net — the same net, no longer
+switched off halfway through.
+
+**The suite's ability to detect schema violations was disabled by its detecting one.** That is
+the sharpest form of the defect this board keeps finding: an instrument that stops looking, and
+stops precisely when it has something to look at.

@@ -144,15 +144,62 @@ test('the reference follows a navigation of the target', async () => {
   await expect.poll(reference).toBeNull()
 })
 
-test('a viewport too wide for a 2× reference refuses the skin: the value reads back as 0', async () => {
+test('the reply is the skin in force: from off, on a screen that can have one, it answers the value set', async () => {
+  // The confirmation accepted "off" so that a refusal could confirm, and so it
+  // accepted the off from before the patch: on main this reply read 0 six times
+  // of six (bug-onion-skin-zero-means-three-things).
+  await expect.poll(async () => (await call('status')).body.onionSkin).toBe(0)
+  const on = await call('setOnionSkin', { onionSkin: 0.5 })
+  expect(on.status, JSON.stringify(on.body)).toBe(200)
+  expect(on.body).toMatchObject({ ok: true, applied: true, onionSkin: 0.5 })
+  expect(on.body.warnings).toBeUndefined()
+  await expect.poll(reference).not.toBeNull()
+  const off = await call('setOnionSkin', { onionSkin: 0 })
+  expect(off.body).toMatchObject({ ok: true, applied: true, onionSkin: 0 })
+  await expect.poll(reference).toBeNull()
+})
+
+test('a viewport too wide for a 2× reference refuses the skin: the value reads back as 0, and the reply says why', async () => {
   await call('setPreset', { id: '4k-27' })
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(3840)
+  const vp = await app.evaluate(() => (globalThis as any).__obsrv.target.getViewport() as { width: number; height: number })
   const r = await call('setOnionSkin', { onionSkin: 0.5 })
   expect(r.status, JSON.stringify(r.body)).toBe(200)
-  await expect.poll(async () => (await call('status')).body.onionSkin).toBe(0)
+  expect(r.body).toMatchObject({ ok: true, applied: false, onionSkin: 0 })
+  expect(r.body.warnings).toEqual([expect.stringContaining(`the onion skin was left off`)])
+  expect((r.body.warnings as string[])[0]).toContain(`at this ${vp.width}x${vp.height} viewport`)
+  // Refused before the renderer was asked, so the value never passes through
+  // 0.5 on its way to 0, where a status read in between would have caught it.
+  const seen = new Set<unknown>()
+  for (const end = Date.now() + 1_000; Date.now() < end; ) seen.add((await call('status')).body.onionSkin)
+  expect([...seen]).toEqual([0])
   expect(await reference()).toBeNull()
   await expect(page.locator('.onion-slider')).toHaveValue('0')
   await call('setPreset', { id: '1080p-24' })
+})
+
+test('a skin that is on goes off when a resize leaves a screen too big for it, and stays off back on one that fits', async () => {
+  // bug-onion-skin-dies-on-a-preset-round-trip: main dropped the reference and
+  // nothing told the renderer, so the skin read 0.5 over nothing — on the big
+  // screen, and back on a screen that fits, until the value was changed.
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+  const on = await call('setOnionSkin', { onionSkin: 0.5 })
+  expect(on.body).toMatchObject({ ok: true, applied: true, onionSkin: 0.5 })
+  await expect.poll(reference).not.toBeNull()
+
+  await call('setPreset', { id: '4k-27' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(3840)
+  await expect.poll(async () => (await call('status')).body.onionSkin).toBe(0)
+  expect(await reference()).toBeNull()
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
+
+  await call('setPreset', { id: '1080p-24' })
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport().width)).toBe(1920)
+  // Off, and saying so: the value and the reference agree on a screen that could have one.
+  expect((await call('status')).body).toMatchObject({ onionSkin: 0 })
+  expect(await reference()).toBeNull()
+  await expect(page.locator('.onion-slider')).toHaveValue('0')
 })
 
 test('a bad value is refused with the reason', async () => {

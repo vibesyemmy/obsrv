@@ -61,6 +61,7 @@
 // staleness is impossible when there is no stored copy to go stale.
 const { readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { join, dirname } = require('node:path')
+const { execFileSync } = require('node:child_process')
 
 const ROOT = join(dirname(__dirname))
 const CARDS = join(ROOT, 'board')
@@ -128,7 +129,8 @@ function parseCard(id, text) {
   card.order = Number(card.order ?? 0)
   // A Doing card must say whether it is moving or waiting, and on whom
   // (chore-waiting-field). `waiting: ""` is moving. Anything else is
-  // `who: what` — a room name, or `event` for a suite result or a recurrence —
+  // `who: what` — a room name, `Opeyemi`, `ci` for a suite or a merge that will
+  // come in minutes, or `event` for something nobody can force, a recurrence —
   // so the reader chases the named person rather than the owner, and the board
   // can count what waits on each. Absent is refused rather than read as moving:
   // an absent field fits "nothing is waiting" and "nobody filled it in" equally,
@@ -141,17 +143,66 @@ function parseCard(id, text) {
     if (card.waiting !== '' && !/^[^:]{1,40}: \S/.test(card.waiting)) {
       throw new Error(`board/${id}.md: waiting: names who or what first, as "who: what" — got ${JSON.stringify(card.waiting)}`)
     }
+  } else if (col === 'review') {
+    // Optional on Review (chore-waiting-field-refinements): a finished card
+    // waits on a reviewer, and which one is not implied, so a line naming them
+    // makes the review queue countable. Present, it names who, the same way.
+    if (card.waiting !== undefined && !/^[^:]{1,40}: \S/.test(card.waiting)) {
+      throw new Error(`board/${id}.md: waiting: on a Review card names who it waits on, as "who: what" — got ${JSON.stringify(card.waiting)}; delete the line to name nobody`)
+    }
   } else if (card.waiting !== undefined) {
-    // Off Doing, nothing renders it and nothing waits: a `waiting` line on a
-    // finished card is a record kept where nobody reads it. Refused, so the
-    // close that moves a card out of Doing is the edit that removes it.
-    throw new Error(`board/${id}.md: waiting: belongs on a Doing card, and this one is "${col}" — delete the line when a card leaves Doing`)
+    // Off Doing and Review, nothing renders it and nothing waits: a `waiting`
+    // line on a finished card is a record kept where nobody reads it. Refused,
+    // so the close that moves a card out is the edit that removes it.
+    throw new Error(`board/${id}.md: waiting: belongs on a Doing or Review card, and this one is "${col}" — delete the line when a card leaves them`)
   }
   return card
 }
 
-/** Who or what a Doing card waits on: the part of `waiting` before its first colon. */
-const waitingOn = c => (c.column === 'doing' && c.waiting ? c.waiting.slice(0, c.waiting.indexOf(':')).trim() : '')
+/** Who or what a card waits on, as written: the part of `waiting` before its first colon. */
+const waitingOn = c => (c.waiting ? c.waiting.slice(0, c.waiting.indexOf(':')).trim() : '')
+
+/**
+ * The cards in `list` that wait, grouped by who, most-waited-on first. Grouped
+ * case-insensitively, so `Opeyemi` and `opeyemi` are one row rather than two,
+ * and the row keeps the spelling the first card used.
+ */
+const waitsBy = list =>
+  Object.values(
+    list
+      .filter(c => c.waiting)
+      .reduce((acc, c) => ((acc[waitingOn(c).toLowerCase()] ??= { who: waitingOn(c), ids: [] }).ids.push(c.id), acc), {}),
+  ).sort((a, b) => b.ids.length - a.ids.length || a.who.localeCompare(b.who))
+
+/**
+ * When a card's `waiting` line last changed, from the commit that changed it,
+ * in ms, or null (chore-waiting-field-refinements). "Rook: back at 13:00" read
+ * as current at 15:00, and neither the check nor the reader had a "now" to
+ * hold it against. Null, said as nothing rather than as a guess, wherever
+ * history cannot answer: a shallow clone, where every card would date from
+ * HEAD; a card changed and not committed, where the date would be the old
+ * line's; no git at all.
+ */
+const git = args => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+const historyAnswers = (() => {
+  try {
+    return git(['rev-parse', '--is-shallow-repository']).trim() === 'false'
+  } catch {
+    return false
+  }
+})()
+function waitingSince(c) {
+  if (!c.waiting || !historyAnswers) return null
+  const file = `board/${c.id}.md`
+  try {
+    if (git(['status', '--porcelain', '--', file]).trim() !== '') return null
+    const at = git(['log', '-1', '--format=%ct', '-G', '^waiting:', '--', file]).trim()
+    return at ? Number(at) * 1000 : null
+  } catch {
+    return null
+  }
+}
+const utc = ms => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`
 
 const cards = readdirSync(CARDS)
   .filter(n => n.endsWith('.md'))
@@ -165,13 +216,16 @@ const unclaimed = open.filter(c => !c.owner).length
 const doing = cards.filter(c => c.column === 'doing')
 const moving = doing.filter(c => !c.waiting).length
 // Who the Doing column is waiting on, most-waited-on first: the batch a person
-// would want in front of them, and the chase the card exists to redirect.
-const waitingBy = Object.entries(
-  doing.filter(c => c.waiting).reduce((acc, c) => ((acc[waitingOn(c)] ??= []).push(c.id), acc), {}),
-).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+// would want in front of them, and the chase the card exists to redirect. And
+// the Review column's named reviewers, when any card names one.
+const waitingBy = waitsBy(doing)
+const review = cards.filter(c => c.column === 'review')
+const reviewBy = waitsBy(review)
+const named = rows => rows.map(({ who, ids }) => `${who} ${ids.length}`).join(', ')
 const doingSummary =
   `${doing.length} in Doing: ${moving} moving` +
-  (waitingBy.length ? `, waiting on ${waitingBy.map(([who, ids]) => `${who} ${ids.length}`).join(', ')}` : '')
+  (waitingBy.length ? `, waiting on ${named(waitingBy)}` : '') +
+  (reviewBy.length ? `; ${review.length} in Review, waiting on ${named(reviewBy)}` : '')
 
 const out = []
 out.push('# The Obsrv board')
@@ -195,7 +249,9 @@ out.push('**Claim it by editing its file** — set `owner:`, `column: doing` and
 out.push('`waiting: ""` in `board/<id>.md`, and open a pull request with only the card;')
 out.push('it merges before the work starts. When the work stops on someone or')
 out.push('something, say so: `waiting: "Opeyemi: a time for run 19"`, or')
-out.push('`waiting: "event: #48\'s suite"`. An unowned card in Next or Backlog is free;')
+out.push('`waiting: "ci: #48\'s suite"`. Name who first: a room name, `Opeyemi`, `ci`')
+out.push('for a suite or merge that will come in minutes, or `event` for what nobody')
+out.push('can force. A card in Review may name its reviewer the same way. An unowned card in Next or Backlog is free;')
 out.push('a Doing card is moving unless it names what it waits on, and a card in')
 out.push('Review is finished and waiting on the maintainer rather than on help.')
 out.push('')
@@ -231,7 +287,10 @@ for (const col of COLUMNS) {
     if (c.criterion) bits.push(`**${esc(c.criterion)}**`)
     if (c.kind && KIND[c.kind]) bits.push(KIND[c.kind])
     bits.push(c.owner ? `owner: ${esc(c.owner)}` : '*unclaimed*')
-    if (c.column === 'doing') bits.push(c.waiting ? `**waiting on ${esc(c.waiting)}**` : 'moving')
+    const since = waitingSince(c)
+    const waitingText = c.waiting ? `**waiting on ${esc(c.waiting)}**${since === null ? '' : ` (since ${utc(since)})`}` : ''
+    if (c.column === 'doing') bits.push(waitingText || 'moving')
+    else if (waitingText) bits.push(waitingText)
     out.push(`### ${esc(c.title)}`)
     out.push('')
     out.push(`[\`${esc(c.id)}\`](../board/${esc(c.id)}.md) · ${bits.join(' · ')}`)
@@ -276,8 +335,11 @@ function renderHtml(stampText) {
       .filter(c => c.column === col.id)
       .map(c => ({
         id: c.id, title: c.title, owner: c.owner ?? '', criterion: c.criterion ?? '', kind: c.kind ?? '', evidence: c.evidence ?? '',
-        // null off the Doing column: a `waiting` left behind on a finished card is history, not state.
-        waiting: c.column === 'doing' ? (c.waiting ?? '') : null,
+        // '' is moving, on Doing only; null is nothing to show — off Doing and
+        // Review, or a Review card that names nobody.
+        waiting: c.column === 'doing' ? (c.waiting ?? '') : c.column === 'review' && c.waiting ? c.waiting : null,
+        // The page says how long ago at the moment it is read, not when it was built.
+        waitingSince: waitingSince(c),
       })),
   })).filter(c => c.cards.length > 0)
   // `</script>` inside a card's prose would end the tag early; the escape is
@@ -374,6 +436,13 @@ if (DATA.stamp) {
     ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
     : 'Snapshot of ' + where + ' — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
 } else { st.remove(); }
+// How long ago a wait was set, at the moment the page is read: the page is
+// built once and read for hours, so a "3 h ago" baked in at build time would
+// be the stale value this exists to expose.
+const ago = ms => {
+  const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  return min < 60 ? min + ' min ago' : min < 2880 ? Math.round(min / 60) + ' h ago' : Math.round(min / 1440) + ' d ago';
+};
 const cols = document.getElementById('cols');
 for (const col of DATA.columns) {
   const d = document.createElement('div');
@@ -402,7 +471,7 @@ for (const col of DATA.columns) {
     if (c.waiting !== null) {
       const w = document.createElement('div');
       w.className = 'wait ' + (c.waiting ? 'on' : 'moving');
-      w.textContent = c.waiting ? 'Waiting on ' + c.waiting : 'Moving';
+      w.textContent = c.waiting ? 'Waiting on ' + c.waiting + (c.waitingSince ? ' · set ' + ago(c.waitingSince) : '') : 'Moving';
       el.append(w);
     }
     el.addEventListener('click', () => open_(c, col));
@@ -416,7 +485,7 @@ function open_(c, col) {
   const meta = document.getElementById('dmeta');
   meta.textContent = '';
   const bits = [c.id, col.name, c.criterion, c.kind, c.owner || 'unclaimed',
-    c.waiting === null ? '' : c.waiting ? 'waiting on ' + c.waiting : 'moving'].filter(Boolean);
+    c.waiting === null ? '' : c.waiting ? 'waiting on ' + c.waiting + (c.waitingSince ? ', set ' + ago(c.waitingSince) : '') : 'moving'].filter(Boolean);
   for (const b of bits) { const s = document.createElement('span'); s.className = 'tag'; s.textContent = b; meta.append(s); }
   document.getElementById('dbody').textContent = c.evidence || 'No evidence recorded on this card.';
   dlg.showModal();

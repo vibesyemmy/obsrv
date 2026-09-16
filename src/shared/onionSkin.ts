@@ -49,3 +49,19 @@ export function formatOnionSkin(v: number): string {
 export function referenceFits(cssWidth: number, cssHeight: number, maxDevicePx: number): boolean {
   return cssWidth * REFERENCE_DSF <= maxDevicePx && cssHeight * REFERENCE_DSF <= maxDevicePx
 }
+
+/**
+ * The sentence a refused skin carries, or null when the viewport can have
+ * one. The refusal already happened silently: `onionSkin` read back as 0,
+ * which is also what off and an app older than the field answer, so an agent
+ * that set 0.5 and read 0 could not tell "turned off" from "could not".
+ */
+export function onionSkinRefusal(cssWidth: number, cssHeight: number, maxDevicePx: number): string | null {
+  if (referenceFits(cssWidth, cssHeight, maxDevicePx)) return null
+  const side = Math.floor(maxDevicePx / REFERENCE_DSF)
+  return (
+    `the onion skin was left off: it blends a ${REFERENCE_DSF}x render of the page over the target, and at this ` +
+    `${cssWidth}x${cssHeight} viewport that render would be ${cssWidth * REFERENCE_DSF}x${cssHeight * REFERENCE_DSF} ` +
+    `device px, past the ${maxDevicePx} px limit; a screen up to ${side} CSS px on each side can have one`
+  )
+}

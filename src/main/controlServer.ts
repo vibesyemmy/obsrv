@@ -83,6 +83,19 @@ export interface ControlDeps {
    * already names its preset, and a reply would pair the two.
    */
   launchSettled(): Promise<void>
+  /**
+   * Why the onion skin cannot be drawn on the active tab's viewport as it is
+   * once any resize on its way has landed, or null when it can. Main is the
+   * one that refuses a reference, so main answers before the renderer is
+   * asked.
+   */
+  onionSkinRefusal(): Promise<string | null>
+  /**
+   * Applies the throttle to the active tab's target now, before the renderer
+   * is asked, and answers Chromium's refusal (the target keeps the throttle it
+   * had), or null when the conditions are in force.
+   */
+  throttleRefusal(id: string): Promise<string | null>
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
   status(): StatusReport
   /**
@@ -440,6 +453,12 @@ export class ControlServer {
         const err = throttleApplyError(payload.throttle)
         if (err) return reply(400, { error: err })
         const throttle = payload.throttle as string
+        // Tried here first, as the onion skin is refused here first. Asked
+        // first, the renderer showed the throttle, main's attempt was refused
+        // into the log, and the reply and every status after it named a
+        // throttle Chromium never applied (bug-throttle-refusal-stderr-only).
+        const refused = await this.deps.throttleRefusal(throttle)
+        if (refused !== null) return reply(200, { ok: true, applied: false, warnings: [refused], ...this.deps.status() })
         return this.applyAndConfirm({ throttle }, s => s.throttle === throttle)
       }
 
@@ -447,10 +466,19 @@ export class ControlServer {
         const err = onionSkinApplyError(payload.onionSkin)
         if (err) return reply(400, { error: err })
         const onionSkin = payload.onionSkin as number
-        // The renderer turns the skin off again when main cannot render a
-        // reference for the viewport, so the confirmation is the value or
-        // off — and off is what the agent reads back.
-        return this.applyAndConfirm({ onionSkin }, s => s.onionSkin === onionSkin || s.onionSkin === 0)
+        // Refused here, before the renderer is asked. Asked first, it showed
+        // the value, asked main, was refused and turned the skin off again —
+        // and the confirmation, which had to accept "off" for that, accepted
+        // the off from *before* the patch: the reply read 0 on a screen that
+        // could have the skin (6 of 6 from off), and a reply on one that could
+        // not said nothing about why. So a refusal is not sent, a skin still
+        // showing is turned off, and the reply says why.
+        const refused = onionSkin > 0 ? await this.deps.onionSkinRefusal() : null
+        if (refused !== null) {
+          const off = await this.applyAndConfirm({ onionSkin: 0 }, s => s.onionSkin === 0)
+          return reply(off.code, { ...off.body, applied: false, warnings: [refused] })
+        }
+        return this.applyAndConfirm({ onionSkin }, s => s.onionSkin === onionSkin)
       }
 
       case 'captureVisible': {

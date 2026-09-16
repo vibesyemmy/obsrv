@@ -103,6 +103,9 @@ const machine = (json: unknown): Promise<void> =>
   })
 
 const sleep = (ms: number): Promise<void> => new Promise(done => setTimeout(done, ms))
+/** How long a full-page capture waits for the page to take its taller surface before measuring it. */
+const GROWN_SURFACE_BUDGET_MS = 2_000
+const GROWN_SURFACE_POLL_MS = 25
 
 function encodePng(img: RGBAImage): Buffer {
   // Chromium's bitmap layout (BGRA on this stack — verified against a solid
@@ -604,6 +607,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
                 `(device pixels are capped at 4096 per axis)`,
             )
           }
+          const innerHeightNow = async (): Promise<number> => Number(await target.webContents.executeJavaScript('innerHeight'))
+          const innerBefore = await innerHeightNow()
           target.setViewport(applied.width, wanted, spec.deviceScaleFactor, spec.mobile)
           cssHeight = wanted
           // One surface means a viewport as tall as the page, and a page that
@@ -611,17 +616,36 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           // `100vh` hero is the screen's height on the screen and the whole
           // surface's height here. Measured rather than assumed — the page is
           // asked again, and only a page that actually moved is warned about.
-          const grownHeight = Math.ceil(
-            (await target.webContents.executeJavaScript(
-              'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
-            )) as number,
-          )
-          if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
+          //
+          // Asked again once the page has the taller surface, not straight
+          // after asking for it: the resize reaches the page later, and on a
+          // loaded runner a read taken at once saw the old size, found nothing
+          // moved, and the warning stayed silent about the layout it exists
+          // for (bug-viewport-warning-race). The page's own `innerHeight`
+          // changing is the fact waited on — not a sleep.
+          let surfaceTaken = wanted === applied.height
+          for (const deadline = Date.now() + GROWN_SURFACE_BUDGET_MS; !surfaceTaken && Date.now() < deadline; ) {
+            if ((await innerHeightNow()) !== innerBefore) surfaceTaken = true
+            else await sleep(GROWN_SURFACE_POLL_MS)
+          }
+          if (!surfaceTaken) {
             warn(
-              `this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
-                `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
-                `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
+              `the page had not taken the ${wanted} CSS px surface within ${GROWN_SURFACE_BUDGET_MS / 1000} s, so whether it ` +
+                `lays out against the viewport height was not measured`,
             )
+          } else {
+            const grownHeight = Math.ceil(
+              (await target.webContents.executeJavaScript(
+                'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0)',
+              )) as number,
+            )
+            if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
+              warn(
+                `this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
+                  `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
+                  `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
+              )
+            }
           }
         }
       }
@@ -938,10 +962,11 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle is said in `notes`, where the reply's reader looks,
+    // beside the `throttle` field that reports the flag it was given
+    // (bug-throttle-refusal-stderr-only); `notes` reach stderr below.
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     // The one page ask, within the same budget as the load (`shared/measureBudget`).
     const report =
@@ -952,6 +977,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       if (err) throw err
     }
     const notes = timedOut ? [measureTimeoutNote('inspect', cmd.timeoutMs)] : []
+    if (throttleRefused) notes.unshift(throttleRefused)
     // The element was read on the page that is there now, which is not always
     // the page that was asked for: it may have moved under the wait, and it
     // may be the server's error page.
@@ -1018,11 +1044,13 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle joins the command's notes, which reach both stderr and
+    // the reply's `warnings`; it used to reach stderr alone, where the reply's
+    // reader is told not to look (bug-throttle-refusal-stderr-only).
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const notes: string[] = []
+    if (throttleRefused) notes.push(throttleRefused)
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // Where the load landed comes before anything measured on the page: it is
@@ -1141,11 +1169,13 @@ async function runLint(cmd: LintCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle joins the command's notes, which reach both stderr and
+    // the reply's `warnings`; it used to reach stderr alone, where the reply's
+    // reader is told not to look (bug-throttle-refusal-stderr-only).
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const notes: string[] = []
+    if (throttleRefused) notes.push(throttleRefused)
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // As in the audit: which page the figures are of, first.
