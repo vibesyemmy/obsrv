@@ -1,7 +1,8 @@
 ---
 title: "The product routes a warning by matching its own prose"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
 order: 37
 ---
 
