@@ -1,7 +1,9 @@
 ---
 title: "The e2e suite is not reliable enough to gate merges — counted, not asserted"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
+waiting: ""
 order: 34
 ---
 
