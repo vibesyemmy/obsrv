@@ -77,3 +77,28 @@ test fails with that object as its message, not a bare timeout.
 **Tests:** `:42` alone ×3, passed 3/3 (timed out 3/3 before). The whole file ×8, 32/32.
 **Also seen locally, not this card's:** `:21` failed 2 of the first 10 repetitions (`.stall` not visible
 within 10 s) and 0 of the next 8. It's recorded here and not chased.
+
+## CORRECTION BY ITS FILER, 2026-09-16 — the premise above was wrong, and here is how
+
+Henry's RESOLVED section has the finding: the first line of every failure was `Test timeout of
+30000ms exceeded`, and `closed: sessions down` was teardown after it. **So this card's opening
+claim — "it is not a timeout" — is exactly backwards**, and the sentence criticising the earlier
+reasoning for guessing at a timeout was criticising the right answer.
+
+**The part only I can add is how I got there, because the mechanism is reusable.**
+
+**My filter could not match its own answer.** I read the log through a grep whose pattern
+contained `Timeout`. The log says `Test timeout`. Case-sensitive: the first line — the one that
+settles it — was invisible to the search that was looking for it, so the *second* line read as
+the first, and this card is titled after it.
+
+**And I broke the rule I was applying, by applying it at the wrong granularity.** The instruction
+for that pass was *name the first failure before reading anything after it*. I applied it to
+**which test failed first** across nine runs, carefully, and never to **which line of a failure
+came first** inside one. The pass that got the run-ordering right got the line-ordering wrong,
+with the same words in front of me.
+
+**What to take from it, since a wrong card is only worth its lesson:** *first* is a question that
+has to be asked at every level of nesting, not once at the top. And a case-sensitive filter over
+machine output is a silent one — the same false-zero family as `ugrep -I` on a control byte and
+a `grep -c` that exits 1, both of which also cost time today.
