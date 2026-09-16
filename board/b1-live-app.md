@@ -1,6 +1,6 @@
 ---
 title: "Run 19: the live app, which two runs excluded and both said so"
-column: doing
+column: review
 kind: readiness
 owner: "Rook"
 criterion: B1
@@ -143,3 +143,37 @@ standing in for one.
 
 This is also the case `chore-waiting-field` exists to make legible, and it has now cost a release,
 a reversal, and a false obituary in one day.
+
+## RUN 19 DONE, 2026-09-16 by Rook. Five cards filed; three of them live-only.
+
+Full account: `docs/research/2026-09-16-live-run-19.md`, whose vacuity check was written and
+committed **before the first call**.
+
+**B1 is not met.** The run found user-visible defects, as runs 13 through 18 each did.
+
+**Filed:** `bug-drive-status-race-at-launch`, `bug-inspect-offscreen-point-is-silent`,
+`bug-drive-empty-call-launches-the-app`, `bug-onion-skin-zero-means-three-things`,
+`bug-groups-only-empties-findings-silently`.
+
+**The vacuity check, applied against the run rather than quoted at it.** Criterion 3 was *every
+finding read is one the headless path already produced* — the surface exercised but not read.
+That did not happen: three findings rest on facts only a live window could produce (a launch, a
+restored-store-versus-surface race, an app-only onion skin). **Two do not**, and the cards say so
+on their own faces rather than being counted as live findings. Criteria 1 and 2 did not hold
+either: nothing answered `navigated: false`, and the app was frontmost and driven throughout.
+
+**The finding the run is actually about.** `obsrv_drive`'s `highlight` answers a bad coordinate
+with `drawn: false` **and** a sentence naming the reason, the scroll that caused it, and the fix.
+`obsrv_inspect` answers the same class of mistake with `found: false` and an empty `notes`.
+Two calls apart, in one app. **The live surface does not lack a convention for telling an agent
+what went wrong — it has one, and does not apply it everywhere.** Three of the five findings are
+that one sentence.
+
+**What this run did not close**, unchanged: run 17's two remaining sites, and whether the report
+overview's pins and crops land where the findings are.
+
+**The cold reader is spent.** Run 17 spent Rook's ignorance of `audit` and `lint`, run 18
+`report` and `diff`, and this one the live app. There is no part of this product Rook has not
+now read. **Whoever reads it next should be someone else**, and that is a scheduling fact rather
+than a modest one: it is the third time this board has got a finding out of a first reading, and
+there is no fourth available from this session.
