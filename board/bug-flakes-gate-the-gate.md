@@ -311,7 +311,9 @@ other three remains three observations, which is not a rate.
     controls:85     one root with two cascades
     stall:42        the app CLOSED: "Target page, context or browser has been closed".
                     No frames notice, no assertion, nothing about the page.
-    devtools:92     already carded
+    devtools:92     carded, but the card's central reading has since been withdrawn
+                    by its own author (Henry, below) — and its twin :116 is not
+                    carded and was never counted here at all
 
 **One correction Kenya made to its own reading, recorded because it is the useful half.** The first pass ruled out a cascade for `vision:47` on the grounds that `Normal` was pressed in the snapshot. The test clicks `.vision-none` on the line before it measures — **so the button state is what the test had just set, not evidence about the shader**, which is precisely the two things confirm-ahead-of-paint says can disagree.
 
@@ -323,3 +325,32 @@ other three remains three observations, which is not a rate.
 
 **So "the traces will decide it" was false for the whole of this card's life.** Every reading above — mine included — was of the one file that happens to exist. Where this card says a discriminator is unreadable, the cause is the upload step and not the app, and **no re-reading of past runs recovers it.**
 
+## TALLY CORRECTED 2026-09-16 by Kenya, from Henry's sweep. **Both of this card's devtools rows were wrong, and one test was missing from it entirely.**
+
+Henry swept every CI attempt since `devtools.spec` landed on 09-13 — **334 attempts, 185 ran the
+suite, 178 reached the file** — and the numbers change what this card says twice over.
+
+**`devtools.spec.ts:92` — 181 tries, 172 ✓, 9 ✘.** This card called it "already carded" and left
+it there. It *is* carded, but the card it points at, `bug-devtools-toggle-reopens`, said the close
+poll succeeded and the inspector re-opened. **Henry has withdrawn that: the close poll has never
+observed a close, in any run, pass or fail.** Every try took 505–624 ms with a 500 ms sleep inside
+it, so the 10 s poll at `:108` finished within ~124 ms every time and read `false` before the
+deferred toggles ran — `isDevToolsOpened()` answers for the request, not the window
+(`docs/e2e-flakes.md:461`). A real open→close never takes less than 337 ms (178 runs, median 540).
+**So the verdict is one sample at +500 ms, and a slow runner and a dropped close both read `true`.**
+"Already carded" is therefore not a reason to stop looking: what it was carded *as* is not what
+happens.
+
+**`devtools.spec.ts:116` — 181 tries, 9 ✘, never carded and never counted here.** The three-click
+test has the same shape and the same failure count as `:92`, and this card has no row for it. Of
+the 18 failures across the pair, **4 defeated the retry**, and **10 of the 14 runs carrying one
+were on `main`** — so the tests this card exists to count were failing on the protected branch in
+a column this card never had.
+
+**This is a second way the tally is a floor**, beside Henry's worker-teardown point above: that one
+misses runs that fail outside any test, this one missed a test that nobody had listed. Both are
+failures of the *list*, not of the counting — and a per-test tally cannot report a test that is
+absent from it.
+
+**Not re-derived here.** The sweep is Henry's (#99); this entry folds it in as he asked, and the
+numbers are his. What is Kenya's is the correction to this card's own two rows.
