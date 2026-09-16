@@ -340,12 +340,12 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // still a render, and the JSON says the throttle was asked for.
     if (spec.throttle !== null) {
       const refused = await target.setThrottle(findThrottle(spec.throttle))
-      if (refused) warn(`warning: ${refused}`)
+      if (refused) warn(refused)
     }
     const startedAt = Date.now()
     const load = await loadWithin(target, url, { ...options, throttle: spec.throttle }, watch, true)
     if (!load.loaded) {
-      warn(`warning: ${loadTimeoutMessage(options.timeoutMs, spec.throttle, url)}; capturing the page as it stands — settled false, settledMs null`)
+      warn(`${loadTimeoutMessage(options.timeoutMs, spec.throttle, url)}; capturing the page as it stands — settled false, settledMs null`)
     }
 
     let cssHeight = applied.height
@@ -481,7 +481,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         if (stuck.length > 0) {
           stuckChrome = stuck
           const what = stuck.map(b => `${b.element} (${b.position}, ${b.height} px)`).join(', ')
-          human(`hid chrome stuck inside the scroller for the bands after the first: ${what}`)
+          warn(`hid chrome stuck inside the scroller for the bands after the first: ${what}`)
         }
         // Put the page back where the walks expect it: their rects are
         // measured against a scroller at the top, and audit and lint run after
@@ -495,7 +495,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         bandsCaptured = bands.length
         if (bandsWanted > bandCount) {
           warn(
-            `warning: the page scrolls an inner container ${shell.scrollHeight} CSS px tall; captured the first ${bandCount} ` +
+            `the page scrolls an inner container ${shell.scrollHeight} CSS px tall; captured the first ${bandCount} ` +
               `bands of ${step} CSS px (${MAX_TILE_BANDS} at most) — what lies past them is not in the raster`,
           )
         } else {
@@ -508,7 +508,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         // preview in an iframe. The walk is right to find nothing, and the
         // capture is genuinely one screen; saying so is the honest part.
         warn(
-          `warning: this page hides the document's overflow and scrolls nothing the capture can reach — no ` +
+          `this page hides the document's overflow and scrolls nothing the capture can reach — no ` +
             `scrollable container in its light DOM. Content in an iframe, in a shadow root, or in a container ` +
             `that scrolls by transform (a virtualised list or editor) is past this one screen and not in the PNG`,
         )
@@ -516,7 +516,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         // Same page, but without --tiled there is nothing to scroll: say what
         // is missing rather than returning the first screen quietly.
         warn(
-          `warning: the document itself does not scroll — this page keeps its content in an inner scroller ` +
+          `the document itself does not scroll — this page keeps its content in an inner scroller ` +
             `${shell.scrollHeight} CSS px tall (an app shell). A full-page capture on one surface scrolls the window, ` +
             `which this page ignores, so the PNG is the first screen only; add --tiled to capture the scroller itself. ` +
             `The audit and lint walks see the whole page either way`,
@@ -578,7 +578,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           if (stuck.length > 0) {
             stuckChrome = stuck
             const what = stuck.map(b => `${b.element} (${b.position}, ${b.height} px)`).join(', ')
-            human(`hid chrome stuck to the viewport for the bands after the first: ${what}`)
+            warn(`hid chrome stuck to the viewport for the bands after the first: ${what}`)
           }
           const width = bands[0]!.width
           const height = Math.max(...bands.map(b => b.y + b.height))
@@ -586,7 +586,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           bandsCaptured = bands.length
           if (bandsWanted > bandCount) {
             warn(
-              `warning: full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${applied.height} CSS px ` +
+              `full page is ${surfaceHeight} CSS px tall; captured the first ${bandCount} bands of ${applied.height} CSS px ` +
                 `(${MAX_TILE_BANDS} at most) — what lies past them is not in the raster`,
             )
           } else {
@@ -596,7 +596,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           const wanted = Math.min(surfaceHeight, limit)
           if (surfaceHeight > limit) {
             warn(
-              `warning: full page is ${surfaceHeight} CSS px tall; clamped to ${wanted} ` +
+              `full page is ${surfaceHeight} CSS px tall; clamped to ${wanted} ` +
                 `(device pixels are capped at 4096 per axis)`,
             )
           }
@@ -614,7 +614,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           )
           if (grownHeight > scrollHeight + Math.max(8, scrollHeight * 0.02)) {
             warn(
-              `warning: this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
+              `this page lays out against the viewport height — on a surface ${wanted} CSS px tall it is ` +
                 `${grownHeight} CSS px, against ${scrollHeight} on the screen itself; the capture is that taller ` +
                 `layout, not what the screen shows. Add --tiled to capture the page a screenful at a time instead`,
             )
@@ -639,7 +639,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     let heightAtStart: number | undefined
     if ((options.audit || options.lint) && options.walk !== false) {
       const w = await walkHeadless(target)
-      for (const n of w.notes) warn(`warning: ${n}`)
+      for (const n of w.notes) warn(n)
       walked = w.walked
       documentLocked = w.documentLocked
       blocked = w.blocked
@@ -657,7 +657,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     if (auditReport != null) {
       const motion = await motionAfter(auditBoxes(auditReport), () => target.auditPage(), auditBoxes)
       const note = motion === null ? null : pageMovedNote('audit', motion, motion.afterMs)
-      if (note !== null) warn(`warning: ${note}`)
+      if (note !== null) warn(note)
     }
     if (lintReport != null) {
       const motion = await motionAfter(
@@ -667,7 +667,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         auditReport == null ? MOTION_PROBE_MS : 0,
       )
       const note = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
-      if (note !== null) warn(`warning: ${note}`)
+      if (note !== null) warn(note)
     }
     // The walk may have seen the end of a page it never crossed — a consent
     // layer that fixes the body, a page that grew after the walk: say so.
@@ -682,7 +682,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           ? undefined
           : Math.max(auditReport?.pageHeight ?? 0, lintReport?.pageHeight ?? 0) > heightAtStart,
     })
-    if (coverage !== null) warn(`warning: ${coverage}`)
+    if (coverage !== null) warn(coverage)
     return {
       frame,
       // Where the load actually ended, for snap's `url`: a capture is of

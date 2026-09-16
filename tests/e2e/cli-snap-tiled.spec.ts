@@ -183,7 +183,19 @@ test('chrome stuck to the viewport is hidden for the bands after the first, and 
   // The rail is stuck too and stays: it covers no page content, and hiding it
   // would leave a blank column down every band after the first.
   expect(found.join(' ')).not.toContain('rail')
-  expect(r.stderr).toContain('hid chrome stuck to the viewport')
+  expect(r.stderr).toContain('warning: hid chrome stuck to the viewport')
+  // The sentence saying the image was edited is a fact about the artefact,
+  // not a progress note, so it is a warning: it reaches `warnings[]` and from
+  // there the report's HTML and every MCP caller. It used to go to stderr
+  // only, while the truncation warnings beside it reached the list — run 18
+  // found a report whose central image had lost 160 CSS px per band and
+  // whose artefact said nothing (bug-report-edit-invisible). `stuckChrome`
+  // above carries the structured fact for snap; the report does not carry
+  // that field, so the sentence is the only route the fact has there.
+  const warnings = (JSON.parse(r.stdout) as { warnings: string[] }).warnings
+  expect(warnings.join(' ')).toMatch(/hid chrome stuck to the viewport for the bands after the first: .*header#fixed-bar/)
+  // And bare: the label belongs to the stderr line, not to the list.
+  expect(warnings.some(w => w.startsWith('warning: '))).toBe(false)
 })
 
 test('--keep-stuck-chrome leaves every band as the capture used to take it', async () => {
@@ -192,6 +204,7 @@ test('--keep-stuck-chrome leaves every band as the capture used to take it', asy
   expect(r.code, r.stderr).toBe(0)
   expect((JSON.parse(r.stdout) as { stuckChrome: unknown[] }).stuckChrome).toEqual([])
   expect(r.stderr).not.toContain('hid chrome stuck to the viewport')
+  expect((JSON.parse(r.stdout) as { warnings: string[] }).warnings.join(' ')).not.toContain('hid chrome')
 })
 
 test('the two captures are the same size and differ only where the chrome was', async () => {

@@ -82,15 +82,22 @@ export interface Band {
 }
 
 /**
- * What a diff says when the renders never went paint-quiet. The bands are
- * still reported — a measurement is a measurement — but the band *findings*
- * are claims about rasterisation, and two captures of different animation
- * frames cannot support one.
+ * What a diff says when the renders never went paint-quiet. The numbers are
+ * still reported — a measurement is a measurement — but every comparison
+ * between the two frames is a claim about rasterisation, and two captures of
+ * different animation frames cannot support one.
+ *
+ * The sentence names the figures it disowns. It used to say "the band deltas
+ * below", which reached only downward: `inkCoverage.delta` and `rows.ratio`,
+ * the two numbers a person actually quotes, printed above it from the same
+ * two frames and stood unqualified — and on a static page they print in
+ * exactly the same shape, so this sentence was the only thing telling the
+ * reader which case they were in, and it was keyed off its own position.
  */
 export const UNSETTLED_FINDING =
   'renders did not go paint-quiet (animation or video, or a load that never finished), so the two captures are ' +
-  'different frames — the band deltas below are frame-to-frame noise, not evidence about rasterisation. ' +
-  'Compare a static page, or pass a longer --timeout if the page merely settles late.'
+  'different frames: inkCoverage.delta, rows.ratio and every band delta here are frame-to-frame noise, not ' +
+  'evidence about rasterisation. Compare a static page, or pass a longer --timeout if the page merely settles late.'
 
 export interface DiffMetrics {
   /**

@@ -1,7 +1,8 @@
 ---
 title: "The report's central image is altered and only stderr says so"
-column: next
+column: review
 kind: bug
+owner: "Rook"
 order: 30
 ---
 
@@ -72,3 +73,36 @@ Whether the overview's pins and crops **land** where the findings are. Run 18 es
 that the page explains what it could not locate — not that what it did locate is in the right
 place. If a pin is placed against unedited coordinates while the image lost 160 px per band,
 that is a second defect hiding behind this one, and it is untested either way.
+
+
+## Resolved by Rook, 2026-09-16 — branch `fix/report-diff-trio`
+
+**The sentence now reaches the artefact.** Both stuck-chrome sentences — `main.ts:484` (chrome
+inside the scroller) and `:581` (chrome stuck to the viewport) — go through `warn()` rather
+than `human()`, so they join `warnings[]`, and from there the report's HTML and every MCP
+caller's `screens[].warnings`. Observed in output, not inferred from source: a `report` on the
+stuck-chrome fixture with one audit finding (so the full-page pass runs) answers
+`"full page: hid chrome stuck to the viewport for the bands after the first: header#fixed-bar
+(fixed, 56 px), div#sticky-bar (sticky, 40 px)"` in JSON, prints it under the screen's Warnings
+in the HTML, and says it once on stderr with the label. The first attempt at that check was
+vacuous — the plain fixture has no findings, so `report` never takes the full-page pass and
+`warnings` was `[]` for a reason that had nothing to do with the fix. Read the zero.
+
+**The audit the card asked for, every `human()` in `main.ts` against *would a caller reasoning
+about the output be wrong without it*:** two sentences moved (above). Everything else stays —
+the per-command summary lines restate fields; the *captured in N bands* pair at `:502`/`:593`
+is a progress note whose fact is the `bands` field; the echoes at `:960`–`:1230` mirror
+`notes`/`warnings`/`listed`/`coverage`/`unwalked` that reach the machine output at
+`:1000`, `:1122` and `:1256`–`:1262`, checked line by line rather than assumed.
+
+**One the audit found and this branch does not fix — it needs a decision.** `refused`, the
+message `setThrottle` returns when Chromium would not apply a throttle, reaches stderr only in
+`inspect` (`:939`), `audit` (`:1015`) and `lint` (`:1138`) — while their machine output
+still answers `throttle: <id>` from the request. A caller reading that field would believe the
+numbers were measured under conditions that were refused. `snap`'s twin at `:343` already
+goes through `warn()`. It is three lines to fix and it is not fixed here because the refusal
+cannot be forced from the CLI's own process, so there is no failing test to write first; that is
+a choice for Opeyemi rather than a thing to ship on a reading. Filed as its own card.
+
+**Still not known:** whether the pins and crops land where the findings are. Unchanged from
+above; this card was about the sentence.

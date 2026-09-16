@@ -284,7 +284,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         // (0,0,0,0) — which an agent could otherwise read as a black or blank
         // band of the page.
         options.onWarn?.(
-          `warning: ${((uncovered / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
+          `${((uncovered / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
             `never painted within ${timeoutMs} ms` +
             (box ? ` (uncovered region ${box.width}x${box.height} at ${box.x},${box.y})` : '') +
             `; those pixels are transparent, not page content. ` +

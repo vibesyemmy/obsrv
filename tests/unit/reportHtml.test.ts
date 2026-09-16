@@ -59,7 +59,8 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
     reference: { base64: 'AAAA', width: 1366, height: 768 },
   },
   diffSkipped: null,
-  warnings: ['warning: something <odd>'],
+  // Bare: the sink labels the stderr line, the list carries the fact.
+  warnings: ['something <odd>'],
   ...over,
 })
 
@@ -93,9 +94,30 @@ describe('reportHtml', () => {
     const html = reportHtml(data([screen()]))
     expect(html).not.toContain('<script>alert')
     expect(html).toContain('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &quot;quotes&quot;')
-    expect(html).toContain('warning: something &lt;odd&gt;')
+    expect(html).toContain('<li>something &lt;odd&gt;</li>')
     expect(html).toContain('https://example.test/a?b=1&amp;c=&lt;2&gt;')
     expect(html).toContain('<title>Obsrv report — https://example.test/a?b=1&amp;c=&lt;2&gt;</title>')
+  })
+  it('an unsettled diff does not paint its delta as a defect, and says so where the numbers are', () => {
+    // Run 18 (bug-diff-disowns-its-numbers): the delta cell wore `bad` while
+    // the note beneath the table called the same number noise. Colour says
+    // "look at this"; prose said "ignore it"; the reader took the colour. When
+    // the captures are of different frames, the figures are still printed —
+    // a measurement is a measurement — but they carry no verdict, and the
+    // sentence saying why sits in the table with them, not after the findings.
+    const s = screen()
+    const noisy = { ...s, diff: { ...s.diff!, metrics: { ...s.diff!.metrics, settled: false, findings: ['renders did not go paint-quiet'] } } }
+    const html = reportHtml(data([noisy]))
+    // The delta cell specifically: the audit table has its own `bad` cells
+    // and they are about millimetres, which settle has nothing to say about.
+    expect(html).not.toContain('class="n bad">-0.30%')
+    expect(html).toContain('>-0.30%<')
+    const table = html.indexOf('Ink coverage')
+    const note = html.indexOf('frame-to-frame noise')
+    expect(note).toBeGreaterThan(-1)
+    expect(note).toBeLessThan(table)
+    // And the settled case keeps its verdict: a negative delta on a quiet page is a finding.
+    expect(reportHtml(data([screen()]))).toContain('class="n bad">-0.30%')
   })
   it('states the screen, the profile and the thresholds, and shows the figures', () => {
     const html = reportHtml(data([screen()]))
