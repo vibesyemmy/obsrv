@@ -14,6 +14,16 @@ editing its file**: set `owner:` and `column: doing`, then open a pull request
 with **only the card**. There is no separate tracker and
 nobody to ask for access.
 
+**The claim merges before the work starts.** A claim that rides on the work
+branch is invisible on `main` for as long as the work takes, which is exactly
+when someone else might pick the card up. The first claim merged this way went
+from open to merged in 74 seconds.
+
+**You may merge your own claim**, once every check is green, if it touches
+exactly one card and changes only `column` (to `doing`) and `owner` (where it
+was empty). Anything more goes to the maintainer: body text, a second file, or
+a card someone already owns. Taking an owned card is a handover, not a claim.
+
 **The generated views are not committed.** `docs/board.md` and
 `docs/board.html` are gitignored. Build them when you want to look:
 
