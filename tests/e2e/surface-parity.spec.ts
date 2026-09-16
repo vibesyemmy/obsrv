@@ -10,6 +10,7 @@ import { join, resolve, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME } from '../../src/shared/control'
 import { noEvidenceMessage } from '../../src/shared/established'
+import { MOTION_PROBE_MS, pageMovedNote } from '../../src/shared/pageMotion'
 import { launchApp } from './launch'
 
 /**
@@ -260,13 +261,71 @@ type MotionVerdict = 'moving' | 'quiet' | 'unknown'
 /** The tools that run the probe at all. The others cannot answer the question. */
 const PROBES = new Set(['obsrv_audit', 'obsrv_lint'])
 
-/** The opening words of `pageMovedNote`, which is the only positive signal there is. */
-const MOVED_NOTE = /this page was still moving when it was measured/
+/**
+ * The note's opening sentence, **derived from the producer rather than copied
+ * from it** (Henry, reading #138).
+ *
+ * A literal `/this page was still moving when it was measured/` matches
+ * `pageMovedNote`'s prose, and prose gets reworded in a minor. After a reword
+ * the matcher finds nothing, `verdictOf` answers `quiet` everywhere, and **the
+ * probe half of this check goes blind without a sound** — a page nobody flagged
+ * that starts moving stays in the compared set, and the assertion cannot
+ * notice, while the flag half keeps working and the suite stays green. This
+ * card's own rule, once more: the matcher decides, and nothing was watching it.
+ *
+ * Measured, not argued. The note was reworded and the spec run both ways:
+ *
+ *     derived from the producer   seen moving by the probe: moves
+ *     pinned to the old literal   seen moving by the probe: (none)
+ *
+ * Calling the producer removes the copy. `pageMotion.ts` imports nothing, so it
+ * is safe to pull into a spec.
+ */
+const MOVED_NOTE_OPENING = ((): string => {
+  // Two notes with different numbers, and keep what they share. The opening is
+  // the part that does not depend on the figures, so the common prefix IS the
+  // opening — whatever punctuation the sentence happens to use.
+  //
+  // `split(':')` was the first version and assumed the colon survives a reword
+  // (Henry, on #144). If it did not, `[0]` would be the whole sentence with its
+  // counts baked in — a matcher that only ever matches a note reporting exactly
+  // one moved element, and long enough to walk straight past the guard below.
+  // A wrong matcher that looks right is the failure this whole card is about.
+  // The two samples vary the TOOL as well as the figures, and that is not
+  // decoration (Henry again, on #144). `verdictOf` reads both `obsrv_audit`'s
+  // notes and `obsrv_lint`'s. With today's prose the prefix stops at the first
+  // number, well before "The audit/lint is of one moment", so a matcher built
+  // from two `audit` samples happens to match lint too — by luck, not design.
+  // A reword that moved the tool name ahead of the first varying number would
+  // bake "audit" into the prefix, and **lint's half of the probe would go blind
+  // while audit's kept working**: a partial blindness, which is harder to spot
+  // than a total one. Varying the tool makes the prefix unable to contain
+  // either name.
+  const a = pageMovedNote('audit', { moved: 1, changed: 0, compared: 1, maxPx: 1 }, MOTION_PROBE_MS) ?? ''
+  const b = pageMovedNote('lint', { moved: 3, changed: 0, compared: 9, maxPx: 7 }, MOTION_PROBE_MS) ?? ''
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return a.slice(0, i)
+})()
+
+/**
+ * A matcher that matched everything would be as bad as one that matched
+ * nothing, and quieter: every page would read `moving`, every page would leave
+ * the comparison, and the assertion would go red for a reason nobody could
+ * place. An empty or absurdly short opening means the derivation broke, so say
+ * so at load rather than answering questions with it.
+ */
+if (MOVED_NOTE_OPENING.length < 20) {
+  throw new Error(
+    `surface-parity: could not derive the motion note's opening from pageMovedNote (got ${JSON.stringify(MOVED_NOTE_OPENING)}). ` +
+      `The probe half of the compared-set check depends on it; fix the derivation rather than falling back to a literal.`,
+  )
+}
 
 const verdictOf = (tool: string, reply: unknown, notes: string[]): MotionVerdict => {
   if (reply === undefined) return 'unknown'
   if (!PROBES.has(tool)) return 'unknown'
-  return notes.some((n) => MOVED_NOTE.test(n)) ? 'moving' : 'quiet'
+  return notes.some((n) => n.includes(MOVED_NOTE_OPENING)) ? 'moving' : 'quiet'
 }
 
 type Row = {
