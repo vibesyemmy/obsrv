@@ -42,8 +42,9 @@ const alive = (pid: number): boolean => {
     return false
   }
 }
+// `tree`: the checkout each call is meant to test, which the proxy requires and this spec's lane serves.
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
-  client.callTool({ name, arguments: args }, undefined, { timeout: 100_000 }) as Promise<CallToolResult>
+  client.callTool({ name, arguments: { tree: ROOT, ...args } }, undefined, { timeout: 100_000 }) as Promise<CallToolResult>
 const said = (r: CallToolResult): string => {
   const s = r.structuredContent as { notes?: string[]; warnings?: string[] }
   return [...(s.notes ?? []), ...(s.warnings ?? [])].join(' ')
