@@ -306,7 +306,7 @@ other three remains three observations, which is not a rate.
 **And the five failures are at least four mechanisms, not one condition:**
 
     panes:83        lost WebGL context — the app's own "No frames from target renderer"
-                    is in the trace. SPLIT OUT as bug-target-canvas-no-frames.
+                    is in error-context.md. SPLIT OUT as bug-target-canvas-no-frames.
     vision:47       cause unknown; the deciding channel is discarded
     controls:85     one root with two cascades
     stall:42        the app CLOSED: "Target page, context or browser has been closed".
@@ -318,4 +318,8 @@ other three remains three observations, which is not a rate.
 **What this does to the card's decision.** The retry question is not the live one. A retry count cannot be chosen sensibly against four mechanisms, one of which is the product failing (`panes:83`) and one of which is the app closing (`stall:42`). **Neither is a flake, and quarantining either would hide a product event.**
 
 **A blind spot in the counting method, from Henry:** per-test ✘ counting is blind to a run that fails outside any test — PR #18 went red on a worker teardown with zero test failures. Any tally here is a **floor**.
+
+**AND THE EVIDENCE EVERY INVESTIGATION HERE RELIED ON DOES NOT EXIST.** `playwright.config.ts` sets no `trace`, `screenshot` or `video` — Playwright defaults all three to off — so a failing run leaves `error-context.md` and nothing else. `ci.yml:91`, *"Upload Playwright traces on failure"*, has uploaded an empty directory on every red run this week and passed, because uploading nothing succeeds. Rook found it; verified in the tree.
+
+**So "the traces will decide it" was false for the whole of this card's life.** Every reading above — mine included — was of the one file that happens to exist. Where this card says a discriminator is unreadable, the cause is the upload step and not the app, and **no re-reading of past runs recovers it.**
 
