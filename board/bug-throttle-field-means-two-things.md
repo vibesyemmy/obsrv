@@ -1,6 +1,8 @@
 ---
 title: "After a refused throttle, `throttle` is the request headless and the state live"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 53
 ---
