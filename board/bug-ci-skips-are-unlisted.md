@@ -80,6 +80,17 @@ skips, ignoring stale rows, accepting an empty report and dropping describe titl
 report fields read (`suites`, `specs`, `tests[].status`, `annotations`, `stats`) are confirmed against
 Playwright's own `JSONReport` types.
 
+**Wren's cold read, all three taken:**
+- **The walk is cross-checked against the report's own count.** If the nesting changes, the walk finds
+  nothing while `stats.skipped` still counts skips, and the check would have printed "0 skipped, all
+  listed" over a run that skipped tests. Now it fails, naming both numbers.
+- **A test that failed and then skipped on its retry is flagged.** Playwright reports it as flaky,
+  not skipped, and the run stays green.
+- **A skip's reason is read from each result's annotations as well as the test's.** A runtime
+  `test.skip(condition, reason)` may land on the result only.
+
+Each has its own unit arm, and removing each check turns its arm red.
+
 **The CI control Wren asked for:** a draft PR carrying this check on #141's first head (`eb2b114`,
 whose CI skipped `focusWindow`'s test) must go red, naming that test.
 

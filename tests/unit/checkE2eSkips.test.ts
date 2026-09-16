@@ -60,6 +60,22 @@ describe('check-e2e-skips', () => {
     expect(() => check.main(join(tmpdir(), `obsrv-no-report-${process.pid}.json`), 'x.json')).toThrow('cannot read the e2e report')
   })
 
+  it("fails when walking the report finds fewer skips than the report's own count: a shape it cannot read", () => {
+    const r = { stats: { expected: 3, skipped: 1 }, suites: [{ title: 'x.spec.ts', file: 'x.spec.ts', entries: [spec(FOCUS, 'skipped', RUNNER)] }] }
+    expect(run(r, [])).toThrow('counts 1 skipped test(s) but walking its suites found 0')
+  })
+
+  it('names a test that failed and then skipped on its retry, which Playwright reports as flaky', () => {
+    const flaky = { ...spec(FOCUS, 'flaky'), tests: [{ status: 'flaky', annotations: [], results: [{ status: 'failed' }, { status: 'skipped', annotations: [{ type: 'skip', description: RUNNER }] }] }] }
+    const r = report([flaky], { expected: 1, flaky: 1 })
+    expect(run(r, [])).toThrow(`skipped on a retry and not listed: live-drive.spec.ts:349 › ${FOCUS} (its reason: "${RUNNER}")`)
+  })
+
+  it("reads a skip's reason from the result when the test itself carries none", () => {
+    const onResult = { ...spec(FOCUS, 'skipped'), tests: [{ status: 'skipped', annotations: [], results: [{ status: 'skipped', annotations: [{ type: 'skip', description: RUNNER }] }] }] }
+    expect(check.skippedTests(report([onResult], { skipped: 1 }))[0]?.why).toBe(RUNNER)
+  })
+
   it('keys a nested test by its describe titles, as the list reporter prints them', () => {
     const r = { stats: { skipped: 1 }, suites: [{ title: 'x.spec.ts', file: 'x.spec.ts', specs: [], suites: [{ title: 'outer', file: 'x.spec.ts', specs: [{ ...spec('inner', 'skipped', 'r'), file: 'x.spec.ts' }], suites: [] }] }] }
     expect(check.skippedTests(r).map(s => s.title)).toEqual(['outer › inner'])

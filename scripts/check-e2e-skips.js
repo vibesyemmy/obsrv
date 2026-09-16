@@ -16,22 +16,39 @@ const { readFileSync } = require('node:fs')
 const { basename } = require('node:path')
 
 /**
- * Every test the report marks skipped, as { file, title, line, why }. `title`
- * joins the describe titles and the test's own with " › ", which is what the
- * list reporter prints, so a row can be copied from a CI log. The file is the
- * spec's basename, because lines move and files rarely do.
+ * Every test the report marks skipped, and every test that skipped on a retry,
+ * as { file, title, line, why, retry }. `title` joins the describe titles and
+ * the test's own with " › ", which is what the list reporter prints, so a row
+ * can be copied from a CI log. The file is the spec's basename, because lines
+ * move and files rarely do.
+ *
+ * `retry` marks a test Playwright reports as flaky whose later attempt skipped.
+ * A first attempt that failed and a retry that skipped counts as flaky, not
+ * skipped, and the run stays green, so the skip is as silent as any other
+ * (Wren's read). A guard that evaluates differently in a fresh worker can do
+ * exactly that.
+ *
+ * The reason is read from the test's annotations and from each result's: a
+ * runtime `test.skip(condition, reason)` may land on the result only.
  */
 function skippedTests(report) {
   const out = []
+  const reasonOf = t =>
+    [...(t.annotations ?? []), ...(t.results ?? []).flatMap(r => r.annotations ?? [])]
+      .filter(a => a.type === 'skip' && a.description)
+      .map(a => a.description)
+      .filter((d, i, all) => all.indexOf(d) === i)
+      .join('; ')
   const walk = (suite, titles) => {
     const file = suite.file ? basename(suite.file) : undefined
     // A file's own suite is titled with the file name, which the key already carries.
     const own = suite.title && suite.title !== file ? [...titles, suite.title] : titles
     for (const spec of suite.specs ?? []) {
       for (const t of spec.tests ?? []) {
-        if (t.status !== 'skipped') continue
-        const why = (t.annotations ?? []).filter(a => a.type === 'skip').map(a => a.description ?? '').join('; ')
-        out.push({ file: basename(spec.file ?? suite.file ?? ''), title: [...own, spec.title].join(' › '), line: spec.line, why })
+        const skipped = t.status === 'skipped'
+        const retry = !skipped && (t.results ?? []).some(r => r.status === 'skipped')
+        if (!skipped && !retry) continue
+        out.push({ file: basename(spec.file ?? suite.file ?? ''), title: [...own, spec.title].join(' › '), line: spec.line, why: reasonOf(t), retry })
       }
     }
     for (const child of suite.suites ?? []) walk(child, own)
@@ -73,10 +90,23 @@ function main(reportPath, listPath) {
     if (!row.file || !row.title || !row.why) throw new Error(`${listPath}: every row needs file, title and why; got ${JSON.stringify(row)}`)
   }
   const skipped = skippedTests(report)
+  // The walk and the report's own count must agree. If the report's nesting
+  // ever changes, the walk finds nothing while stats still counts the skips,
+  // and this check would print "0 skipped, all listed" over a run that skipped
+  // tests: the silence it exists to stop (Wren's read).
+  const walkedSkips = skipped.filter(s => !s.retry).length
+  const statsSkips = report.stats?.skipped ?? 0
+  if (walkedSkips !== statsSkips) {
+    throw new Error(
+      `the e2e report counts ${statsSkips} skipped test(s) but walking its suites found ${walkedSkips}, ` +
+        'so the report shape is not the one this check reads, and no skip was checked',
+    )
+  }
   const { unlisted, stale } = compareSkips(skipped, listed)
   const lines = []
   for (const s of unlisted) {
-    lines.push(`skipped and not listed: ${s.file}:${s.line} › ${s.title}${s.why ? ` (its reason: "${s.why}")` : ''}`)
+    const what = s.retry ? 'skipped on a retry and not listed' : 'skipped and not listed'
+    lines.push(`${what}: ${s.file}:${s.line} › ${s.title}${s.why ? ` (its reason: "${s.why}")` : ''}`)
   }
   for (const l of stale) lines.push(`listed but not skipped: ${l.file} › ${l.title} (listed because: "${l.why}")`)
   if (lines.length > 0) {
