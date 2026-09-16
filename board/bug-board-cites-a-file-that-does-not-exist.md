@@ -12,21 +12,35 @@ FOUND BY ROOK 2026-09-16, checking every file path one card names against `origi
 ## The defect
 
 **`docs/read-the-output-not-the-code` does not exist.** Not in `docs/`, not anywhere in the tree,
-on `main` or on any pushed branch. Seven cards cite it as a repo document:
+on `main` or on any pushed branch. **Eight cards cite it**, seven as a repo path:
 
     b1.md
     b1-live-app.md
     b1-report-diff.md
     bug-diff-disowns-its-numbers.md
-    bug-log-attribution.md
     bug-product-matches-own-prose.md
     bug-report-doubled-warning-prefix.md
+    chore-waiting-field.md
 
-Most spell it as a path — *"`docs/read-the-output-not-the-code` says the warnings ARE the
-product"* — which reads as a file a person can open. One (`bug-log-attribution`) writes it as
-`[[read-the-output-not-the-code]]`, a memory-style wikilink, which is the likelier origin: **an
-agent's private memory note, promoted to a repo citation by being written down in a card, and
-then copied card to card by readers who reasonably assumed the earlier card had checked.**
+and one, `bug-log-attribution.md`, as `[[read-the-output-not-the-code]]` — a memory-style
+wikilink, and the likelier origin: **an agent's private memory note, promoted to a repo citation
+by being written into a card, then copied card to card by readers who reasonably assumed the
+earlier card had checked.** Henry has since confirmed that origin from the commit history: the
+oldest card carrying the path is `ebfb041`, his own routing commit, and the note is in his
+session's memory.
+
+> **Count corrected 2026-09-16, and the correction is the card's own subject.** The first version
+> said *seven*, listed `bug-log-attribution` among the path-citers where it does not belong, and
+> **omitted `chore-waiting-field` entirely** — which Henry found by sweeping with controls. The
+> eight-file list was on my screen when I wrote the seven-file one: I transcribed it and dropped
+> the last line.
+>
+> **What made it stick was a second check that agreed for a different reason.** I then counted
+> with a narrower pattern — the `docs/` path form only — which returned **7**, because it excluded
+> `bug-log-attribution`'s wikilink while including the `chore-waiting-field` I had just dropped.
+> Two different errors, one of transcription and one of scope, producing the same number. **A
+> confirming count is not a check when it counts a different set**, and the agreement is what
+> stopped me looking.
 
 ## Why it is worth a card rather than a find-and-replace
 
