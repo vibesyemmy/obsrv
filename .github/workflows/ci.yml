@@ -88,12 +88,21 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         run: npx playwright test --retries=1
 
+      # `if-no-files-found: error` is the point of this step, not the upload.
+      # The step is named for traces and uploaded none for a week: the config
+      # set no `trace`, so `test-results/` held `error-context.md` and nothing
+      # else, and uploading an empty directory SUCCEEDS. A green step whose
+      # name asserted a capability the config did not provide is why nobody
+      # looked. Now an empty directory is a red run on the day it happens
+      # rather than a week of silence — which is the only part of this that
+      # survives someone dropping the trace setting again.
       - name: Upload Playwright traces on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/
+          if-no-files-found: error
           retention-days: 7
 
   # Tags only: `main` between releases is legitimately ahead of the plugin
