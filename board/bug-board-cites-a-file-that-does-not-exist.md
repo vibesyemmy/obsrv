@@ -1,6 +1,7 @@
 ---
 title: "Seven cards cite `docs/read-the-output-not-the-code`, which is not in the repo"
-column: next
+column: doing
+owner: "Henry"
 kind: bug
 order: 42
 ---
