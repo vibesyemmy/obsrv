@@ -43,3 +43,13 @@ over coincidence. The window also starts at 16:05Z, so anything older is unswept
   Both point at the native pane on that runner at that time, not at one test's state.
 - Whether it is new. A wider sweep (older runs, via the per-attempt logs) is the first step, before
   any reading of `NativePane`.
+
+## Where to look first if it recurs, as a lead and not a finding
+
+Rook's read: a native surface reading invisible in a fresh app, plus a `url-changed` that never came,
+is close to the shape in the `gpu-reset-webgl-stall` memory: a wedged display session on the runner
+taking a surface with it. The mechanism there is a lost WebGL context, not a hidden view, so it is a
+place to look, not an explanation. **The tell for "runner, not test" here:** the retries failed in
+fresh workers, so no state was inherited, and a later attempt on the same head was green. That tell
+holds even though nothing else in the run failed.
+
