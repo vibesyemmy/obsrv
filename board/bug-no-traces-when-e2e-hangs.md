@@ -1,6 +1,8 @@
 ---
 title: "A run that outlasts the job's 30 minutes uploads no traces — and that is the run you cannot read"
-column: next
+column: doing
+owner: "Rook"
+waiting: ""
 kind: bug
 order: 55
 ---
@@ -8,6 +10,33 @@ order: 55
 FOUND BY WREN 2026-09-16, as a question on the cold read of `bug-trace-upload-errors-when-e2e-never-ran`;
 measured by Rook, and **narrowed by Wren on a second read that removed most of its original scope**.
 **Unowned.**
+
+## Claimed by Rook 2026-09-16, assigned by Wren. First step is a measurement, not a fix.
+
+Both candidate shapes rest on something unestablished, so those come first and cheap. **Pre-registered
+before either runs, so neither result can be re-read afterwards as the one I expected:**
+
+**A — does GitHub record a step killed by its own `timeout-minutes` as `failure` or `cancelled`?**
+A throwaway job whose step sleeps past a 1-minute `timeout-minutes`; read the *step's* conclusion.
+
+- I **expect `failure`**, on the reasoning that a step timeout is the step's own outcome while a job
+  timeout is the runner giving up on the job. That is a guess, and the card exists because nobody has
+  looked.
+- **If `failure`:** the step-level-timeout shape is viable and becomes the leading candidate.
+- **If `cancelled`:** that shape is **dead** — it would end in exactly the state that already uploads
+  nothing — and `globalTimeout` is the only candidate left. This is the outcome that would cost the
+  most to discover after building on it, which is why it is measured first.
+
+**B — what does Playwright's `globalTimeout` leave in `test-results/`?**
+One short spec under a tiny `globalTimeout`, then list the directory.
+
+- I **expect it to leave something** — Playwright stopping itself should write what it has, unlike
+  being killed from outside — but *what*, and whether any of it is a trace rather than only
+  `error-context.md`, is exactly the open question. The distinction matters: an artefact with no
+  trace in it is what started this whole family (`bug-trace-upload-empty`), and a directory that is
+  merely non-empty would satisfy `if-no-files-found: error` while carrying nothing worth reading.
+- **If it leaves nothing:** `globalTimeout` is dead too, and both shapes fall — which would be the
+  most useful possible result, because it says the fix is not in this direction at all.
 
 ## What happens
 

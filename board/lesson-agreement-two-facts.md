@@ -1,8 +1,7 @@
 ---
 title: "Whatever decides, something else must notice when the decision changes"
-column: review
+column: done
 owner: "Rook"
-waiting: "Wren: the cold read, then Henry merges"
 kind: chore
 criterion: B5
 order: 13
