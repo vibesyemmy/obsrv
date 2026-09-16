@@ -1986,6 +1986,11 @@ export function registerIpc(ctx: AppContext): () => void {
     reload: reloadBoth,
     focusWindow: () => {
       if (win.isDestroyed()) return
+      // Fronting the app is this command's whole job, so it first undoes what
+      // keeps a harness window from ever becoming key (showWindow): a window
+      // that cannot become key cannot be fronted. A user's window is already
+      // focusable, so outside the harness this changes nothing.
+      win.setFocusable(true)
       win.show()
       // The window's own `focus()` cannot activate an app that is not
       // frontmost; `app.focus` asks for that, stealing where the OS allows it

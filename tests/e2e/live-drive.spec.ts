@@ -357,6 +357,12 @@ test('focusWindow answers ok and fronts the window (takes the desk: CI, or local
   const r = await call('focusWindow')
   expect(r.status).toBe(200)
   expect(r.body).toEqual({ ok: true })
+  // The command makes the window focusable before fronting it. Under the
+  // harness a window starts unable to become key (showWindow). Without that
+  // step the poll below can never succeed, and the test skipped on every run
+  // while blaming the runner: skipped on #141's first CI run, passed on main
+  // before it (Rook's read). Asserted, so that case fails instead of skipping.
+  expect(await app.evaluate(() => (globalThis as any).__obsrv.win.isFocusable())).toBe(true)
   // Some runners' window managers refuse to grant focus; the command itself
   // succeeded above, so the visible effect is checked only where it can be.
   let focused = false

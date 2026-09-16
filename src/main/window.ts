@@ -20,14 +20,19 @@ function devLaneTitle(): string | null {
  */
 export function showWindow(win: BrowserWindow): void {
   if (showsInactive()) {
+    // Never key. `showInactive()` still orders the window above the apps
+    // someone is working in, and the OS can hand it key focus, which activates
+    // the app. That happened 8 times in a recorded full run while the user
+    // worked (2026-09-16, 20:31 WAT): each time `browser-window-focus` fired at
+    // the same instant as `did-become-active`, and no call from the app came
+    // before. Set before the show, so the window is never key for a moment.
+    // Nothing under the harness needs a key window: the suite has run with
+    // none since #105, and the specs that need one launch with
+    // OBSRV_TEST_TAKES_THE_DESK, which takes the other branch.
+    win.setFocusable(false)
     win.showInactive()
-    // Click-through, too: `showInactive()` still orders the window above the
-    // apps someone is working in. A recorded full run still had 5 activations
-    // with no call from the app before them, and a click meant for the app
-    // underneath landing on this window is the likely cause, not an
-    // established one. The suite sends its input through the driver, not the
-    // OS, and passed click-through (545 in a recorded full run, in which
-    // nobody clicked).
+    // Click-through, too, so a click meant for the app underneath passes
+    // through (#107). Test input arrives through the driver, not the OS.
     win.setIgnoreMouseEvents(true)
   } else win.show()
 }
