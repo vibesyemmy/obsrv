@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync,
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { laneStamp } from '../../src/mcp/devLane'
 
 /**
  * The obsrv-dev proxy (scripts/dev-mcp.js): the one MCP server a session
@@ -41,7 +42,7 @@ server.registerTool('slow', { description: 'answers after 700 ms' }, async () =>
 server.registerTool('die', { description: 'exits mid-call' }, async () => process.exit(3))
 server.registerTool('noted', { description: 'stamps its structured result, as the lane server does' }, async () => ({
   ...text('noted ' + MARK),
-  structuredContent: { notes: ['a note', 'obsrv-dev lane: ' + MARK + ' · server built now · here'] },
+  structuredContent: { notes: ['a note', ${JSON.stringify(laneStamp(mark, 0, root))}] },
 }))
 process.stdin.on('data', chunk => require('node:fs').appendFileSync(require('node:path').join(__dirname, '..', '..', 'received.jsonl'), chunk))
 server.connect(new StdioServerTransport())
@@ -163,7 +164,9 @@ describe('the obsrv-dev proxy', () => {
     expect(stamp(checked)).not.toContain('not compared')
     expect(notes(checked)[1]).not.toContain('not compared')
     expect(stamp(unchecked)).toContain('tree "any": not compared with your checkout')
-    expect(notes(unchecked)).toEqual(['a note', expect.stringMatching(/^obsrv-dev lane: A1 .* · tree "any": not compared with your checkout$/)])
+    // The real server's stamp, not a copy of its wording: the proxy finds the line to mark by its prefix,
+    // so rewording laneStamp must turn this red rather than leave "any" answers unmarked (Wren's read).
+    expect(notes(unchecked)).toEqual(['a note', `${laneStamp('A1', 0, a)} · tree "any": not compared with your checkout`])
   })
 
   it("a worktree inside the lane's checkout is another checkout, not the lane's", async () => {
