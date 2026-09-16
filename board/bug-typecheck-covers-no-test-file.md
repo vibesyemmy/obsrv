@@ -1,6 +1,8 @@
 ---
 title: "`npm run typecheck` covers no test file, so \"typecheck clean\" has never said anything about a test change"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 59
 ---
