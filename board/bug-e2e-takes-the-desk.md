@@ -58,6 +58,34 @@ longer look" equally well.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
 
+## PROGRESS 2026-09-16 by Henry — never key since #141, and the activations left follow the user's own app switches
+
+**In-use run #1** (`75c200a`, 20:31 WAT, after #105 and #107): 551 passed, 8 activations. In each one the
+OS handed the harness window key focus (`browser-window-focus` at the same instant as
+`did-become-active`), and no app call came before any of them. **#141** now makes the harness window
+non-focusable before it's shown.
+
+**In-use run #2** (`c3ac1a1`, 22:40 WAT): 551 passed, 2 skipped, 797 s. **2 activations and 0 key
+handoffs.** Both fell inside `live-drive`'s preset-cycling capture pair (`:1025` and `:1144` on that
+tree), 2.3 s and 8.4 s after Opeyemi switched to Dia or Finder, with nothing from the app before either.
+In the same run, Rook's CLI Electron from another worktree was front for 5 s. That is the second launch
+path (the CLI's own Electron), not this app.
+
+**The pair run alone ×3 with a wider recorder** (23:26 WAT, Opeyemi's yes via Wren). The recorder added
+window and webContents creation, bounds, dock, menu and `showInactive`. Result: 6 passed and **1
+activation**, 2.1 s after a switch to Dia, lasting 7.7 s. In the 3 s before it, the app made no
+`show`, `showInactive`, `focus`, `moveTop`, `restore`, `app.focus` or dock call, created no window, and
+fired no `browser-window-focus`. Reps 2 and 3, where he switched only between Claude windows, had none.
+**So the pair no longer fronts the app on its own.** The "fronts alone" entry below predates #141.
+
+**The shape that's left:** about 2 s after the user switches to Dia or Finder, with no app call and no key
+window. The harness app is in both the Dock and Cmd+Tab, so those are the candidates. **Not
+established.** The next lever is `app.dock?.hide()` under `showsInactive()`, which removes both routes.
+It's held until Rook's CLI launch-path measurement says whether `dock.hide()` activates the app by
+itself (the CLI calls it at startup). If it does, the lever would add an activation to every launch.
+
+**Done-means 1 isn't met.**
+
 ## PROGRESS 2026-09-16 by Henry — click-through, measured as far as it can be without the user clicking
 
 **#105 merged** (`e37caa7`): the app no longer activates itself under the harness. **Next:** the harness
