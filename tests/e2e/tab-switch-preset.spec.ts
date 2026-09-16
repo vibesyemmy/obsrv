@@ -2,7 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { existsSync, readFileSync } from 'node:fs'
 import { request } from 'node:http'
 import { join } from 'node:path'
-import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -78,6 +78,7 @@ test.beforeAll(async () => {
   await expect.poll(() => existsSync(controlFile)).toBe(true)
   const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
   if (!parsed) throw new Error(`the control file at ${controlFile} did not parse`)
+  if (isDisabledStance(parsed)) throw new Error(`the control file at ${controlFile} names no port: agent control is off`)
   info = parsed
 })
 

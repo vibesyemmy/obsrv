@@ -544,7 +544,7 @@ describe('tabs', () => {
   })
 
   describe('applyAgentPatchToTab', () => {
-    const SCREEN = { presetId: '1080p-24', profileId: 'reference' }
+    const SCREEN = { presetId: '1080p-24', profileId: 'reference', orientation: DEFAULT_ORIENTATION, textScale: DEFAULT_TEXT_SCALE }
 
     it("writes an agent's patch to the tab main named, and leaves the tab still in front here untouched", () => {
       // bug-preset-after-tab-switch-lands-on-the-other-tab: main has switched to
