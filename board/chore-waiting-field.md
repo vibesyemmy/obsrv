@@ -68,6 +68,32 @@ and then to a release that had to be reversed.
   is where a number like that has to justify itself, and inventing one to make today's board look
   tidy is exactly what that file exists to prevent.
 
+## Rook's view on two of the three, offered as a view rather than a decision
+
+**Required, not optional** — with an explicit empty value meaning *moving*.
+
+> Optional reproduces the exact silence the card exists to remove: an absent field fits *nobody
+> is waiting on anything* and *nobody filled it in* equally.
+
+That is the card's own argument turned on the card's own design, which is the test it should
+have to pass. `build-board.js` can enforce presence cheaply — the same shape as `board:check`
+refusing a view that does not match its cards, and cheaper, because it is one key on one column.
+
+**No N in the first version.**
+
+> The honest first version is *no N* — render the field, require it, and let the first time
+> somebody chases the wrong person supply the number.
+
+This is the stronger of the two and it is worth reading twice. The obvious move is to pick a
+threshold so the check is complete on day one. **Refusing to pick one is the finding**: a number
+invented to make the check look finished is exactly what `thresholds.md` exists to prevent, and
+the evidence for a real one arrives the first time the ambiguity costs somebody something. Ship
+the field without the alarm; let the alarm's threshold be measured rather than declared.
+
+The third question — whether `build-board.js` renders it — nobody has a view on yet, and it is
+the one that decides whether any of this is worth doing. An unrendered field is a record kept
+where nobody reads it.
+
 ## Not done deliberately
 
 No field added and no generator change. The design is one message old and has been read by one
