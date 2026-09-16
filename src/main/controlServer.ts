@@ -90,6 +90,12 @@ export interface ControlDeps {
    * asked.
    */
   onionSkinRefusal(): Promise<string | null>
+  /**
+   * Applies the throttle to the active tab's target now, before the renderer
+   * is asked, and answers Chromium's refusal (the target keeps the throttle it
+   * had), or null when the conditions are in force.
+   */
+  throttleRefusal(id: string): Promise<string | null>
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
   status(): StatusReport
   /**
@@ -447,6 +453,12 @@ export class ControlServer {
         const err = throttleApplyError(payload.throttle)
         if (err) return reply(400, { error: err })
         const throttle = payload.throttle as string
+        // Tried here first, as the onion skin is refused here first. Asked
+        // first, the renderer showed the throttle, main's attempt was refused
+        // into the log, and the reply and every status after it named a
+        // throttle Chromium never applied (bug-throttle-refusal-stderr-only).
+        const refused = await this.deps.throttleRefusal(throttle)
+        if (refused !== null) return reply(200, { ok: true, applied: false, warnings: [refused], ...this.deps.status() })
         return this.applyAndConfirm({ throttle }, s => s.throttle === throttle)
       }
 

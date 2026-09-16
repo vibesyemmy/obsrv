@@ -1514,6 +1514,15 @@ export function registerIpc(ctx: AppContext): () => void {
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     launchSettled,
+    throttleRefusal: async id => {
+      const t = tab().target
+      const before = t.getThrottle()
+      const refused = await t.setThrottle(findThrottle(id))
+      // Refused: the target keeps the throttle it had, so what it records is
+      // what is in force, and the renderer is not asked to show the other.
+      if (refused !== null) await t.setThrottle(before)
+      return refused
+    },
     onionSkinRefusal: async () => {
       // The viewport a preset or rotation on its way will leave decides it:
       // waited for here without clearing the pending flag, which a capture

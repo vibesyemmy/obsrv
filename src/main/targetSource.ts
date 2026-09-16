@@ -597,6 +597,14 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     try {
       // Nothing to lift on a session that was never opened.
       if (off && !dbg.isAttached()) return null
+      // A product change made for a test, and said so: Chromium lets a second
+      // debugger client attach, so nothing outside the process can make this
+      // refuse, and a refusal nobody can force cannot be regression-tested.
+      // Under the harness only, a message here refuses every throttle that
+      // applies conditions, through this same catch
+      // (bug-throttle-refusal-stderr-only).
+      const forced = process.env.OBSRV_TEST === '1' ? process.env.OBSRV_TEST_THROTTLE_REFUSAL : undefined
+      if (!off && forced) throw new Error(forced)
       if (!dbg.isAttached()) dbg.attach('1.3')
       await dbg.sendCommand('Network.enable')
       const n = this.throttle.network
