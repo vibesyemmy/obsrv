@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InspectReport } from '../../src/shared/inspect'
-import { inspectReadout, isLargeText, type InspectPanel, type InspectScreen } from '../../src/shared/inspectReadout'
+import { inspectReadout, isLargeText, pointOffScreenNote, type InspectPanel, type InspectScreen } from '../../src/shared/inspectReadout'
+import { parseClick } from '../../src/shared/control'
 import { profileToParams } from '../../src/shared/panelSim'
 import { DEFAULT_SETTINGS, findPreset, findProfile } from '../../src/shared/presets'
 import { visionMatrix } from '../../src/shared/vision'
@@ -120,5 +121,42 @@ describe('inspectReadout on a page drawn scaled to fit (no viewport meta)', () =
     const older = inspectReadout(grey, screenOf('android-65'), panelOf('reference'))
     expect(older.layoutScale).toBe(1)
     expect(older.font.mm).toBeCloseTo(2.45, 1)
+  })
+})
+
+describe('pointOffScreenNote', () => {
+  const phone = { width: 412, height: 915 }
+
+  it('says nothing for a point on the screen, up to the last fraction of the last pixel', () => {
+    for (const at of [{ x: 0, y: 0 }, { x: 206, y: 457 }, { x: 411, y: 914 }, { x: 411.99, y: 914.99 }]) {
+      expect(pointOffScreenNote(at, phone), JSON.stringify(at)).toBeNull()
+    }
+  })
+
+  it('names the point, the viewport, and what found: false then means, past either edge', () => {
+    const note = pointOffScreenNote({ x: 1000, y: 500 }, phone)
+    expect(note).toContain('the point (1000, 500) is outside')
+    expect(note).toContain('412x915')
+    expect(note).toContain('found: false is about the point, not the page')
+    expect(note).toContain('--selector (selector)')
+    expect(pointOffScreenNote({ x: 412, y: 0 }, phone)).toContain('(412, 0)')
+    expect(pointOffScreenNote({ x: 0, y: 915 }, phone)).toContain('(0, 915)')
+    expect(pointOffScreenNote({ x: 411.5, y: 915.25 }, phone)).toContain('(411.5, 915.25)')
+  })
+
+  it('draws the edge where a click does, so the two tools agree on which points exist', () => {
+    const edges = [-1, -0.01, 0, 0.5, 411, 411.5, 411.99, 412, 412.01, 914, 914.99, 915, 1000]
+    let outside = 0
+    for (const x of edges) {
+      for (const y of edges) {
+        const click = parseClick({ x, y }, phone)
+        const refused = typeof click === 'string' && click.includes('outside')
+        expect(pointOffScreenNote({ x, y }, phone) !== null, `(${x}, ${y})`).toBe(refused)
+        if (refused) outside++
+      }
+    }
+    // Both answers occur, so the agreement is not two functions that always say the same thing.
+    expect(outside).toBeGreaterThan(0)
+    expect(outside).toBeLessThan(edges.length * edges.length)
   })
 })

@@ -11,7 +11,7 @@ import { MOTION_PROBE_MS, auditBoxes, lintBoxes, motionAfter, pageMovedNote } fr
 import type { StuckBar } from '../shared/stuckChrome'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
-import { inspectReadout } from '../shared/inspectReadout'
+import { inspectReadout, pointOffScreenNote } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import type { LoadError, Walked } from '../shared/types'
 import type { AuditRect, AuditReport } from '../shared/audit'
@@ -961,6 +961,10 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     const inspectStatus = target.httpStatus()
     const inspectStatusNote = httpStatusNote(inspectStatus.code, inspectStatus.text, inspectStatus.url, cmd.url)
     if (inspectStatusNote !== null) notes.push(inspectStatusNote)
+    // A point the screen does not have: said, because `found: false` alone
+    // reads as nothing drawn there, not as no such point.
+    const offScreen = cmd.at === null ? null : pointOffScreenNote(cmd.at, applied)
+    if (offScreen !== null) notes.push(offScreen)
     for (const n of notes) human(`warning: ${n}`)
     const where = cmd.selector !== null ? `selector ${JSON.stringify(cmd.selector)}` : `(${cmd.at!.x}, ${cmd.at!.y})`
     const readout =

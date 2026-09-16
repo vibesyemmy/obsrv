@@ -182,3 +182,29 @@ export function inspectReadout(
     notes: [scaleNote, paintedNote].filter((n): n is string => n !== null),
   }
 }
+
+/**
+ * The sentence an inspect at a point carries when the point is not on the
+ * screen. Without it, `found: false` for (1000, 500) on a 412-wide phone reads
+ * as nothing drawn there, and an agent concludes the page is empty there, when
+ * the point is not on this screen at all. (A blank stretch of page answers what
+ * lies under it, `body` or `html`, not `found: false`.) Null when the point is
+ * on the screen.
+ *
+ * The coordinate space is the click's (`parseClick` in `shared/control`):
+ * `[0, width) × [0, height)` in CSS px of the viewport as set, which is what
+ * `inspectAt` takes on both surfaces. It is the geometry, not the hit test:
+ * Chromium reads the point at the nearest whole page pixel, so a point in the
+ * last half pixel before the edge (411.5 on a 412-wide screen, measured) finds
+ * nothing and gets no sentence. The sentence stays true where it is said,
+ * rather than modelling that rounding under a text or layout scale.
+ */
+export function pointOffScreenNote(at: { x: number; y: number }, viewport: { width: number; height: number }): string | null {
+  const { x, y } = at
+  if (x >= 0 && y >= 0 && x < viewport.width && y < viewport.height) return null
+  return (
+    `the point (${x}, ${y}) is outside this screen's CSS viewport, ${viewport.width}x${viewport.height}, and a point is read ` +
+    `inside the viewport, so nothing can be found there — found: false is about the point, not the page; ` +
+    `to read an element that is not on screen, use --selector (selector)`
+  )
+}

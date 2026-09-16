@@ -7,7 +7,7 @@ import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
 import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
-import { inspectReadout } from '../shared/inspectReadout'
+import { inspectReadout, pointOffScreenNote } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import { findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
 import { visionMatrix } from '../shared/vision'
@@ -1700,6 +1700,10 @@ export function registerIpc(ctx: AppContext): () => void {
       }
       const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
       if (statusNote !== null) pre.push(statusNote)
+      // A point the screen does not have, in the same words as the headless
+      // inspect: the viewport the point was read inside is this tab's, now.
+      const offScreen = 'selector' in req ? null : pointOffScreenNote(req, vp)
+      if (offScreen !== null) pre.push(offScreen)
       // Which page it was, even when there was nothing at the point asked
       // about: "nothing at (400, 300)" on a login page the caller never asked
       // for is the case where the sentence matters most.
