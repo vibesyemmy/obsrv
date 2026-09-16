@@ -1,7 +1,9 @@
 ---
 title: "`inspect` by selector: a hidden element reads as drawn, and a selector that is not CSS reads as no match"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
+waiting: ""
 order: 48
 ---
 
