@@ -65,6 +65,12 @@ test.beforeAll(async () => {
   await client.connect(
     new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'scripts', 'dev-mcp.js')], cwd: ROOT, env: { ...env, OBSRV_DEV_HOME: home } }),
   )
+  // The SDK validates a reply against the tool's output schema only if it has
+  // cached that schema, and it caches on `listTools()`. A client that connects
+  // and calls straight away is checking nothing — see
+  // chore-mcp-specs-validate-every-call, where that silence hid three separate
+  // schema defects in a file that exercised them.
+  await client.listTools()
 })
 
 test.afterAll(async () => {
