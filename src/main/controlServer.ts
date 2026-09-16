@@ -76,6 +76,13 @@ const APPLY_POLL_MS = 25
 type StatusReport = Omit<ControlStatus, 'tabs'>
 
 export interface ControlDeps {
+  /**
+   * Resolves once main has applied the renderer's first viewport since the app
+   * started, or after a bounded wait. Every command awaits it: before that
+   * moment a restored tab's surface still has the default size while the mirror
+   * already names its preset, and a reply would pair the two.
+   */
+  launchSettled(): Promise<void>
   /** Snapshot for `status`: app version, the target's URL, the UI mirror. */
   status(): StatusReport
   /**
@@ -325,6 +332,9 @@ export class ControlServer {
       return reply(400, { error: `unknown command — allowed: ${CONTROL_COMMANDS.join(', ')}` })
     }
     this.deps.activity()
+    // After the token and the command are known to be good, so a refused or
+    // malformed request is answered at once rather than held for the launch.
+    await this.deps.launchSettled()
     const payload = typeof body.payload === 'object' && body.payload !== null ? (body.payload as Record<string, unknown>) : {}
 
     switch (command) {

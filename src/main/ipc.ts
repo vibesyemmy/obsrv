@@ -406,8 +406,43 @@ export function registerIpc(ctx: AppContext): () => void {
     if (!point) return null
     return tab().target.inspectAt(point.x, point.y)
   })
-  handle(IPC.setViewport, (e, width: number, height: number, rawDsf: unknown, rawMobile: unknown) => {
+  // --- the first viewport ----------------------------------------------------
+  // A restored tab's surface is born at the default size and becomes its
+  // preset's size only when the renderer's first `setViewport` lands. Until
+  // then `status` pairs the restored `presetId` from the mirror with the default
+  // surface: run 19 read `pixel-8` beside 1920x1080 on the call that launched
+  // the app (bug-drive-status-race-at-launch). So control commands wait for that
+  // first viewport — once per app lifetime, and bounded, so a renderer that
+  // never reports cannot hang an agent; on expiry the reply is what it was
+  // before this wait existed.
+  //
+  // "First" is only the restored tab's viewport because the renderer holds its
+  // viewport until main's tab list has arrived (App.tsx). Before that it sent
+  // its own default 1920x1080 first, this wait released on it, and a spec that
+  // held the viewport back caught the 28 ms in between. Measured, not reasoned.
+  const FIRST_VIEWPORT_BUDGET_MS = 5_000
+  let firstViewportSeen = false
+  let firstViewportApplied: () => void = () => {}
+  const firstViewport = new Promise<void>(resolve => {
+    firstViewportApplied = resolve
+  })
+  const launchSettled = async (): Promise<void> => {
+    if (firstViewportSeen) return
+    let timer: NodeJS.Timeout | undefined
+    await Promise.race([firstViewport, new Promise<void>(resolve => (timer = setTimeout(resolve, FIRST_VIEWPORT_BUDGET_MS)))])
+    clearTimeout(timer)
+  }
+  handle(IPC.setViewport, async (e, width: number, height: number, rawDsf: unknown, rawMobile: unknown) => {
     assertRenderer(e)
+    // Test-only: hold the first viewport back, so the launch window above is
+    // wide on purpose instead of by the luck of a slow machine. On a fast desk
+    // the renderer's first viewport lands before the first control reply, and a
+    // spec that only hoped for a slow launch passed 6 of 6 against the bug.
+    // Never read outside OBSRV_TEST.
+    if (!firstViewportSeen && process.env.OBSRV_TEST === '1') {
+      const holdMs = Number(process.env.OBSRV_TEST_FIRST_VIEWPORT_DELAY_MS ?? 0)
+      if (holdMs > 0) await new Promise(resolve => setTimeout(resolve, holdMs))
+    }
     // The resize the pending flag was waiting for has arrived; from here
     // `awaitViewportStable` can watch the viewport itself rather than guess.
     tab().viewportArrived = true
@@ -425,6 +460,10 @@ export function registerIpc(ctx: AppContext): () => void {
     }
     const v = tab().target.setViewport(width, height, dsf, rawMobile === true)
     tab().syncReference()
+    if (!firstViewportSeen) {
+      firstViewportSeen = true
+      firstViewportApplied()
+    }
     return { width: v.width, height: v.height }
   })
   handle(IPC.setTextScale, (e, raw: unknown) => {
@@ -1473,6 +1512,7 @@ export function registerIpc(ctx: AppContext): () => void {
   }
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
+    launchSettled,
     status: () => {
       let url = ''
       try {
