@@ -1,8 +1,7 @@
 ---
 title: "control.json survives a crash and then survives the uninstall"
-column: review
+column: done
 owner: "Rook"
-waiting: "Henry: agree it is already fixed, then done"
 kind: bug
 order: 33
 ---
@@ -104,3 +103,18 @@ fix. An unnecessary check that duplicates an existing judgement is a cost, not a
 **Proposed: close this as already fixed**, with the uninstall case tracked where it belongs. Left to
 Henry rather than done unilaterally, because the card records a measurement of mine and someone else
 should agree the thing I measured is no longer there.
+
+## Agreed already fixed, 2026-09-17, by Henry — read against `main` (`5a1b6aa`), not taken on description
+
+- **Both boot writes replace the file unconditionally.** `ControlServer.start()` does
+  `rmSync(this.file, { force: true })` before its `writeFileSync`, and its own comment names the case:
+  *"a stale file (a crashed run) is removed first"*. `writeDisabled()` does the same. Boot calls exactly
+  one of them either way: `if (settings.agentControl) applyAgentControl(true) else control.writeDisabled()`.
+- **Nothing contends for the delete.** The single-instance lock is keyed on the userData path, and the
+  loser exits before `registerIpc` writes anything.
+- **The residue is as Rook states it:** a crash leaves the file only until that profile's next launch,
+  or for good if the app is uninstalled before then. The uninstall case belongs to
+  `bug-history-survives-uninstall`, not here.
+- **One limit, not a reason to reopen:** no e2e plants a stale file and checks it is replaced. The
+  guarantee comes from construction (an unconditional replace on every boot write). If that write ever
+  becomes conditional, this card's question comes back.
