@@ -1,8 +1,8 @@
 ---
 title: "`orientation: landscape` produces a portrait screen on every desktop preset"
-column: doing
+column: review
 owner: "Rook"
-waiting: ""
+waiting: "Kenya: the cold read of #178, then Henry merges"
 kind: bug
 criterion: C2
 order: 27
