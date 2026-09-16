@@ -241,8 +241,8 @@ field meant one thing on one surface and another on the other
 Now the CLI does what the app does: a refused throttle puts back the conditions
 the target had, and `throttle` names them. That's `"none"` on a fresh render. A
 report states the throttle every screen had in force. In the one case where
-screens disagree, it states the throttle asked for, and each refused screen's
-warnings say so. Presence doesn't change: the key still appears exactly when
+screens disagree, it states the throttle asked for, each refused screen's
+warnings say so, and the HTML says how many screens it held on. Presence doesn't change: the key still appears exactly when
 `--throttle` was given.
 
 **What breaks:** code that read `throttle` as "the flag I passed" sees `"none"`

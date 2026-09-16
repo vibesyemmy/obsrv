@@ -56,8 +56,14 @@ is two meanings with a note saying so.
 - The CLI does what the app's `throttleRefusal` does. A refused throttle puts back the conditions
   the target had, and `throttle` names them: `"none"` on a fresh render.
 - That covers `snap`, `inspect`, `audit` and `lint`. `report` states the throttle every screen had
-  in force; if screens disagree (a non-uniform refusal), it keeps the one asked for, and each
-  refused screen's warnings say it didn't hold there.
+  in force. If screens disagree (a non-uniform refusal), it keeps the one asked for; each refused
+  screen's warnings say it didn't hold there, the HTML banner says "on N of M screens", and the
+  field's schema description names the case. That is close to unreachable, since each screen
+  renders on a fresh target and the forced refusal is uniform, so sentences carry it rather than a
+  live test (Wren's read).
+- A refusal whose put-back is refused too says `throttle` names the conditions put back, not ones
+  known to be in force. That's false only when the put-back fails at an earlier CDP step than the
+  apply did (Wren), and no test can force it.
 - The load-timeout and cut-load sentences name the throttle in force too. Presence is unchanged:
   the key still appears exactly when `--throttle` was given.
 - Breaking-changes register entry under 0.61.0. No schema shape changes, so no restart note.
@@ -67,7 +73,9 @@ refusal ("the footer still states what was asked for", `ipc.ts`). That is UI, an
 card's contract.
 
 **Controls:** `throttle-refused.spec` now asserts `throttle: "none"` on a refusal and `"slow-4g"`
-on the same call without one, for `snap` (newly covered), `inspect`, `audit` and `lint`. The rule a
+on the same call without one, for `snap` (newly covered), `inspect`, `audit`, `lint` and `report`.
+`report` runs through its own wiring, so deleting the per-screen collection turns it red; that gap
+was Wren's find. The "on N of M screens" banner has a unit test. The rule a
 report uses (`reportThrottle`) has a unit test covering all agree, all refused, one refused (in
 either order) and no screens. Two sabotages, one run each, turned it red: always the throttle asked
 for, and always the first screen's throttle. The second was green until the refused screen was

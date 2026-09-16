@@ -121,8 +121,12 @@ export interface ReportScreen {
 }
 
 export interface ReportData {
-  /** The network and CPU conditions every screen was rendered under, when `--throttle` was given. */
-  throttle?: { id: string; label: string; summary: string }
+  /**
+   * The network and CPU conditions every screen was rendered under, when
+   * `--throttle` was given. `heldOn` when a refusal left some screens under
+   * others: the throttle asked for, and on how many screens it held.
+   */
+  throttle?: { id: string; label: string; summary: string; heldOn?: { screens: number; of: number } }
   url: string
   generatedAt: string
   version: string
@@ -345,7 +349,7 @@ export function reportHtml(data: ReportData): string {
     `<title>Obsrv report — ${url}</title>\n<style>${CSS}</style>\n</head>\n<body>\n<main>\n` +
     `<h1>Obsrv report</h1>\n<p class="facts"><a href="${url}">${url}</a><br>` +
     `Panel profile <b>${escapeHtml(data.profile.label)}</b> · thresholds ${data.thresholds.tapMm} mm targets, ${data.thresholds.textMm} mm text · ` +
-    `${data.throttle ? `throttle <b>${escapeHtml(data.throttle.label)}</b> (${escapeHtml(data.throttle.summary)}) · ` : ''}` +
+    `${data.throttle ? `throttle <b>${escapeHtml(data.throttle.label)}</b> (${escapeHtml(data.throttle.summary)})${data.throttle.heldOn ? ` on ${data.throttle.heldOn.screens} of ${data.throttle.heldOn.of} screens — refused on the others, which say so` : ''} · ` : ''}` +
     `${escapeHtml(data.generatedAt)} · obsrv ${escapeHtml(data.version)}</p>\n` +
     `<p>The same page on the screens people own. Each render is at the screen's true density; the audit measures ` +
     `tap targets and text in millimetres on that screen; 1x screens are compared with the 2x display the page was ` +

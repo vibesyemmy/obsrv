@@ -268,6 +268,16 @@ function landedUrl(target: TargetSource): string {
 }
 
 /**
+ * On how many of the report's screens the throttle it states was in force,
+ * when that is not all of them: a refusal that was not uniform
+ * (`reportThrottle`). Nothing when every screen had it.
+ */
+function heldOn(stated: string, inForce: readonly string[]): { heldOn?: { screens: number; of: number } } {
+  const screens = inForce.filter(id => id === stated).length
+  return screens === inForce.length ? {} : { heldOn: { screens, of: inForce.length } }
+}
+
+/**
  * Applies the throttle a command was given, and answers the one in force after.
  * A refusal puts back the conditions the target had, as the app does
  * (`throttleRefusal`, src/main/ipc.ts). So the page loads under what the
@@ -283,7 +293,7 @@ async function throttleForCommand(target: TargetSource, asked: string | null): P
   const putBack = await target.setThrottle(had)
   return {
     throttle: had.id,
-    refused: putBack === null ? refused : `${refused}; and ${putBack}, so the conditions in force are not known`,
+    refused: putBack === null ? refused : `${refused}; and ${putBack}, so \`throttle\` names the conditions put back, not ones known to be in force`,
   }
 }
 
@@ -1558,7 +1568,7 @@ async function runReport(cmd: ReportCommand): Promise<void> {
     profile: { id: profile.id, label: profile.label },
     thresholds,
     screens,
-    ...(throttle ? { throttle: { id: throttle.id, label: throttle.label, summary: throttle.summary } } : {}),
+    ...(throttle ? { throttle: { id: throttle.id, label: throttle.label, summary: throttle.summary, ...heldOn(throttle.id, inForce) } } : {}),
   })
   writeFileSync(out, html)
   human(`report ${cmd.url} → ${out} (${screens.length} screen(s), ${Math.round(html.length / 1024)} KiB)`)

@@ -87,6 +87,24 @@ test.describe('headless: snap, inspect, audit and lint say a refused throttle in
       expect(a.throttle).toBe('slow-4g')
     })
   }
+
+  test('report', async () => {
+    // Through report's own wiring: without each screen's throttle collected,
+    // the top level would state the throttle asked for (Wren's read of #121).
+    const args = ['report', FIXTURE, '--preset', 'laptop-768', '--throttle', 'slow-4g', '--out', join(outDir, 'report.html')]
+    const refused = await runCli(args, { OBSRV_TEST_THROTTLE_REFUSAL: FORCED })
+    expect(refused.code, refused.stderr).toBe(0)
+    const r = JSON.parse(refused.stdout)
+    expect(refusedIn(r.screens[0].warnings), JSON.stringify(r.screens[0].warnings)).toEqual([SENTENCE])
+    expect(r.throttle).toBe('none')
+    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b>')
+
+    const applied = await runCli(args, {})
+    expect(applied.code, applied.stderr).toBe(0)
+    const a = JSON.parse(applied.stdout)
+    expect(refusedIn(a.screens[0].warnings)).toEqual([])
+    expect(a.throttle).toBe('slow-4g')
+  })
 })
 
 test.describe('live: a refused throttle is not shown as in force, and the reply says why', () => {

@@ -320,7 +320,7 @@ const EXPLAINED: { tool: string; path: string; why: string }[] = [
   // (bug-throttle-field-means-two-things).
   { tool: 'obsrv_inspect', path: 'throttle', why: 'headless reports it only when the flag was given; both report the conditions in force' },
   { tool: 'obsrv_snap', path: 'textScale', why: 'as textScale' },
-  { tool: 'obsrv_snap', path: 'throttle', why: 'as throttle' },
+  { tool: 'obsrv_snap', path: 'throttle', why: "as obsrv_inspect's throttle" },
   // A live capture is of a window, and reports the window it captured.
   ...['orientation', 'screenShape', 'viewMode', 'panes', 'loading', 'onionSkin', 'navigated', 'width', 'height'].map(path => ({
     tool: 'obsrv_snap',
