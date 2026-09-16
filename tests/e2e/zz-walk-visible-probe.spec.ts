@@ -72,9 +72,14 @@ test.afterAll(async () => {
  * this and still render like a hidden one.
  */
 test('ARM C: does the flag change anything this runner can see?', async () => {
-  const state = await app.evaluate(({ BrowserWindow }) => {
-    const w = BrowserWindow.getAllWindows()[0]
-    return w === undefined ? null : { visible: w.isVisible(), focusable: w.isFocusable(), focused: w.isFocused() }
+  // The MAIN window by name, not getAllWindows()[0] — the app also creates an
+  // overlay window, so the index is a guess. The first run of this probe took
+  // that guess and reported visible:false with the flag ON and off alike,
+  // which made arm B unmeasurable for a reason that was mine rather than the
+  // runner's.
+  const state = await app.evaluate(() => {
+    const w = (globalThis as { __obsrv?: { win?: Electron.BrowserWindow } }).__obsrv?.win
+    return w === undefined ? null : { visible: w.isVisible(), focusable: w.isFocusable(), focused: w.isFocused(), count: require('electron').BrowserWindow.getAllWindows().length }
   })
   console.log(`  ARM C  flag=${TAKES_DESK ? 'ON' : 'off'}  window=${JSON.stringify(state)}`)
   expect(state, 'no window to judge; every arm below is void').not.toBeNull()
