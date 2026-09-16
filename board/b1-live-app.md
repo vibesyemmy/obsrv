@@ -100,3 +100,19 @@ on Opeyemi's word direct to Rook, design to him before writing.
 longer committed. A card edit conflicts with nothing. `npm run board` writes them locally, and
 if a branch still touches those two files its changes to them vanish on rebase, which is correct
 and looks alarming the first time.
+
+**ROOK'S SESSION ENDED 2026-09-16 WHILE THIS WAS WAITING, and that is a different sentence from
+"abandoned" — the distinction cost a release and a reversal earlier the same day.**
+
+What is true, precisely: Rook was waiting on Opeyemi for the timing of a run that drives the
+window on his desktop, exactly as this card instructs. Its session then ended. Nothing was
+delivered because nothing was supposed to start yet.
+
+**The card stays with Rook and the work is not free.** If it is reassigned, the successor starts
+from this card and from `docs/research/` — not from a handover, which no longer exists. Rook's
+own rule was *hand over rather than have it rebuilt*; it cannot hand over now, so this note is
+the handover.
+
+This is the second time in one day that a session ended while holding a card parked on a person.
+It is the case `chore-waiting-field` exists to make legible, and it is now the evidence for that
+card rather than a hypothetical.
