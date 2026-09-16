@@ -1,8 +1,7 @@
 ---
 title: "After a refused throttle, `throttle` is the request headless and the state live"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 53
 ---
@@ -84,3 +83,10 @@ for, and always the first screen's throttle. The second was green until the refu
 tested first. The e2e assertion is red on main by construction, since main's own spec asserted
 `"slow-4g"` there and passed.
 
+## DONE 2026-09-16 by Henry: merged as #121 (`b21d1da`)
+
+After a refusal, `throttle` names the conditions in force on both surfaces. `throttle-refused.spec`
+asserts `"none"` on a refusal and the asked-for id without one, for `snap`, `inspect`, `audit`, `lint`
+and `report`, and it passed on CI. Wren read every head. `report` is exercised through its own wiring,
+and its banner says when a throttle held on only some screens or was refused on all of them. The
+side-panel footer's "shows what was asked for" is named above as out of scope.
