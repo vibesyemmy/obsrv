@@ -12,6 +12,13 @@ import { createMainWindow, showWindow, showsInactive } from './window'
 // First, so everything below has somewhere to write.
 const logFile = initLog()
 
+// Out of the Dock and Cmd+Tab at once under the harness (bug-e2e-takes-the-desk).
+// `showWindow` hides the icon too, but only at `ready-to-show`, and until then
+// every launch sat in both for about 1.1 s. From here it is gone about 80 ms
+// after the process appears, and the app still does not activate: measured on
+// a CI runner with another app holding the front (run 35160584859).
+if (showsInactive()) app.dock?.hide()
+
 // Both panes are Chrome, and say so. Electron's default user agent is
 // Chrome's with an `Electron/x.y.z` token added, and that token is what
 // Google and Microsoft refuse sign-in to ("this browser or app may not be
