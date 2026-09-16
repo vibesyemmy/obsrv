@@ -3,7 +3,7 @@ title: "The target emits no url-changed at all — a second shape, and the test 
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "Kenya: the native side of step 2 — did its load commit, or commit after the traces were read?"
+waiting: "event: a recurrence carrying the native-side outcome, which CI supplies unasked"
 order: 40
 ---
 
@@ -134,3 +134,39 @@ and when the native committed, beside the existing traces. The next natural recu
 (a) from (b). CI supplies recurrences unasked (15 in `bug-ci-main-red-37pct`'s tally). A budget buys
 nothing until an occurrence can tell the two apart.
 
+## NATIVE-SIDE EVIDENCE BUILT 2026-09-16 by Kenya, per Henry's decision. **The outcome was not untraced — it was destroyed.**
+
+`NativePane.load` awaited `loadURL` inside a `try` and **swallowed the rejection**
+(`nativePane.ts:70`), with a comment saying callers should not be forced into try/catch. That is a
+fair API decision and it also threw away the one fact this card needs: an aborted step-2 load and a
+completed one were the same event from outside that method. **No amount of repetition could have
+separated (a) from (b), because the product deleted the difference before any test could see it.**
+That is why no run budget was the right call for a second reason beyond Henry's.
+
+**What it records now**, bounded at 64 like the traces it is read beside:
+
+- `loadTrace()` — every `load()` with `outcome: 'ok' | 'aborted' | 'failed'`, the error for a real
+  failure, and `tookMs`. `aborted` is net::ERR_ABORTED named as what it is: a navigation replaced by
+  a later one, not a failure.
+- `commitTrace()` — this pane's own main-frame commits, on the same clock as the mirror trace, so a
+  commit the bus never acted on is visible as such.
+
+`sync.spec.ts:138` reads both beside the existing two, and **asserts the instrument emitted** rather
+than trusting it: a run where the native pane recorded no load at all fails saying so. It also
+prints one line on every run, green ones included, so ordinary CI builds the picture at no cost.
+
+**The healthy baseline, measured locally:**
+
+    [sync138] step-2 native load: ok in 7ms; native commits after it: 2; target url-changed: 2
+
+**What the next recurrence will say**, which is the whole point of building this:
+
+| the line reads | the answer |
+| --- | --- |
+| `aborted` | **(a)**: the step-2 load never committed — the second HAIRLINE replaced it, as the card's inference guessed |
+| `ok`, native commits ≥ 1, target url-changed 0 | **(b)** or a bus failure: the native committed and the target never heard, which is the bus's own question |
+| `ok`, native commits 0 | the load resolved without committing — neither fact, and a new one |
+
+Verified: `sync` 10/10, plus `sync-mirror-mark`, `native-pane`, `history`, `tabs`, `image-tabs`,
+`url-loading-strip` — 61 tests, all green. The card stays in Doing: **the cause is still not found,
+and this makes the next occurrence answer for itself.**

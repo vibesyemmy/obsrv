@@ -170,14 +170,37 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   //   'already-there'             the panes were judged in step
   //   commits empty               nothing committed in the target at all
   //   commits with said: false    a commit happened and was silenced, and why
+  //   native loads: aborted        the step-2 load was replaced before it committed
+  //   native loads: ok             it completed, so a missing target commit is timing
+  //   native commits after the ok  the commit the bus should have seen, with its clock
+  //
+  // The last three are the fact this test could not previously reach.
+  // `NativePane.load` swallows Chromium's rejection so callers need no
+  // try/catch, which also threw away the difference between "aborted" and
+  // "completed" — the two opposite facts the one recurrence in 160 fits
+  // equally well (bug-sync138-no-url-changed, decided 2026-09-16: no run
+  // budget, because more repetitions of what the target reports cannot
+  // separate them and this can).
   const why = await app.evaluate(() => {
     const g = globalThis as any
     return {
       mirror: g.__obsrv.sync.mirrorTrace().slice(-8),
       commits: g.__obsrv.target.commitTrace().slice(-8),
+      nativeLoads: g.__obsrv.native.loadTrace().slice(-4),
+      nativeCommits: g.__obsrv.native.commitTrace().slice(-8),
     }
   })
   const account = JSON.stringify(why)
+  // The instrument has to be shown to emit, on the runs that PASS, or the day
+  // it stops recording is the day this card's evidence silently becomes an
+  // empty object again — which is how `ci.yml` uploaded nothing for a week and
+  // passed. A green run therefore asserts the trace is there and prints the
+  // step-2 outcome, so every ordinary CI run adds one data point without
+  // anybody spending a budget on it.
+  const step2 = why.nativeLoads.at(-1)
+  expect(step2, `the native pane recorded no load at all. ${account}`).toBeTruthy()
+  console.log(`[sync138] step-2 native load: ${step2.outcome} in ${step2.tookMs}ms; native commits after it: ` +
+    `${why.nativeCommits.filter((c: { at: number }) => c.at >= step2.at).length}; target url-changed: ${seen.length}`)
   expect(seen.length, `the target emitted no url-changed. ${account}`).toBeGreaterThanOrEqual(1)
   expect(seen.at(-1), account).toBe(HAIRLINE)
 })
