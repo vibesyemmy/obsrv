@@ -1,6 +1,8 @@
 ---
 title: "`obsrv_inspect` answers an off-screen point exactly as it answers an empty one"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 44
 ---
