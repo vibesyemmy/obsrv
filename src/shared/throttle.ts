@@ -61,6 +61,19 @@ export function isThrottleId(v: unknown): v is string {
   return typeof v === 'string' && THROTTLE_PROFILES.some(p => p.id === v)
 }
 
+/**
+ * The throttle a report states for all of its screens: the one every screen had
+ * in force. A screen whose throttle was refused kept the conditions it had, so
+ * the screens disagree only when a refusal was not uniform. Then no single id is
+ * true of every screen, and the report keeps the one asked for, with each
+ * refused screen's warnings saying it did not hold there
+ * (bug-throttle-field-means-two-things).
+ */
+export function reportThrottle(asked: string, inForce: readonly string[]): string {
+  const [first, ...rest] = inForce
+  return first !== undefined && rest.every(id => id === first) ? first : asked
+}
+
 /** Throws on an unknown id, naming the valid ones — the CLI and the tools both validate first. */
 export function findThrottle(id: string): ThrottleProfile {
   const p = THROTTLE_PROFILES.find(t => t.id === id)

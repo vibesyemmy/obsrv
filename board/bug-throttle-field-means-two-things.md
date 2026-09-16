@@ -38,3 +38,39 @@ disagreed about the facts. Now they can.
 
 **Rook's framing, which is the test for any answer:** either meaning is defensible, but not one
 meaning on one surface and the other on the other.
+
+## DECIDED 2026-09-16 by Henry: option 1. `throttle` is the conditions in force, on every surface
+
+**The codebase already contradicted itself**, which settles the choice more than taste does. The
+headless render's comment said its JSON "says the throttle was asked for". Every tool schema
+describes the same field as the state: "the conditions applied" (snap), "the conditions the page
+loaded under" (audit), "only when a throttle was in force" (lint), "the conditions every screen
+rendered under" (report). The app already answered with the state.
+
+**Of the three options, only option 1 gives `throttle` one meaning.** Option 2 (headless adds
+`applied: false`) keeps the request in headless `throttle` and the state in live `throttle`: two
+meanings, plus a new field that is breaking on MCP. Option 3 (leave it and rely on the sentence)
+is two meanings with a note saying so.
+
+**How (this PR):**
+- The CLI does what the app's `throttleRefusal` does. A refused throttle puts back the conditions
+  the target had, and `throttle` names them: `"none"` on a fresh render.
+- That covers `snap`, `inspect`, `audit` and `lint`. `report` states the throttle every screen had
+  in force; if screens disagree (a non-uniform refusal), it keeps the one asked for, and each
+  refused screen's warnings say it didn't hold there.
+- The load-timeout and cut-load sentences name the throttle in force too. Presence is unchanged:
+  the key still appears exactly when `--throttle` was given.
+- Breaking-changes register entry under 0.61.0. No schema shape changes, so no restart note.
+
+**Out of scope, named:** the side panel's footer still shows the throttle asked for after a panel
+refusal ("the footer still states what was asked for", `ipc.ts`). That is UI, and it is not this
+card's contract.
+
+**Controls:** `throttle-refused.spec` now asserts `throttle: "none"` on a refusal and `"slow-4g"`
+on the same call without one, for `snap` (newly covered), `inspect`, `audit` and `lint`. The rule a
+report uses (`reportThrottle`) has a unit test covering all agree, all refused, one refused (in
+either order) and no screens. Two sabotages, one run each, turned it red: always the throttle asked
+for, and always the first screen's throttle. The second was green until the refused screen was
+tested first. The e2e assertion is red on main by construction, since main's own spec asserted
+`"slow-4g"` there and passed.
+

@@ -315,9 +315,12 @@ const EXPLAINED: { tool: string; path: string; why: string }[] = [
   // headless reply omits what nobody asked for. The app has no flags: it has
   // a state, and reports it. Same fact, two honest reporting rules.
   { tool: 'obsrv_inspect', path: 'textScale', why: 'headless reports the flag it was given; live reports the state in force' },
-  { tool: 'obsrv_inspect', path: 'throttle', why: 'as textScale' },
+  // The throttle differs in when it appears, not in what it means: both report
+  // the conditions in force, which after a refusal are the ones kept
+  // (bug-throttle-field-means-two-things).
+  { tool: 'obsrv_inspect', path: 'throttle', why: 'headless reports it only when the flag was given; both report the conditions in force' },
   { tool: 'obsrv_snap', path: 'textScale', why: 'as textScale' },
-  { tool: 'obsrv_snap', path: 'throttle', why: 'as textScale' },
+  { tool: 'obsrv_snap', path: 'throttle', why: 'as throttle' },
   // A live capture is of a window, and reports the window it captured.
   ...['orientation', 'screenShape', 'viewMode', 'panes', 'loading', 'onionSkin', 'navigated', 'width', 'height'].map(path => ({
     tool: 'obsrv_snap',

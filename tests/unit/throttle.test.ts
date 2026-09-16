@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THROTTLE, NO_THROTTLE, THROTTLE_IDS, THROTTLE_PROFILES, findThrottle, isThrottleId } from '../../src/shared/throttle'
+import { DEFAULT_THROTTLE, NO_THROTTLE, THROTTLE_IDS, THROTTLE_PROFILES, findThrottle, isThrottleId, reportThrottle } from '../../src/shared/throttle'
 
 describe('throttle profiles', () => {
   it("are Chrome DevTools' presets at their nominal figures", () => {
@@ -23,6 +23,15 @@ describe('throttle profiles', () => {
     for (const id of THROTTLE_IDS) expect(isThrottleId(id)).toBe(true)
     for (const bad of ['edge', '', 3, null, undefined, 'CPU-4X']) expect(isThrottleId(bad)).toBe(false)
     expect(() => findThrottle('edge')).toThrow(/unknown throttle: edge \(valid: none, fast-4g/)
+  })
+  it("a report states the throttle every screen had in force, and the one asked for when the screens disagree", () => {
+    expect(reportThrottle('slow-4g', ['slow-4g', 'slow-4g'])).toBe('slow-4g')
+    // Refused on every screen: each kept the conditions it had, so the report says so.
+    expect(reportThrottle('slow-4g', ['none', 'none', 'none'])).toBe('none')
+    // Refused on one screen only: no single id is true of every screen; that screen's warnings say it.
+    expect(reportThrottle('slow-4g', ['slow-4g', 'none'])).toBe('slow-4g')
+    expect(reportThrottle('slow-4g', ['none', 'slow-4g'])).toBe('slow-4g')
+    expect(reportThrottle('3g', [])).toBe('3g')
   })
   it('every profile has a one-line summary for menus and tool descriptions', () => {
     for (const p of THROTTLE_PROFILES) expect(p.summary.length).toBeGreaterThan(5)

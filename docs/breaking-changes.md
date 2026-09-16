@@ -227,6 +227,37 @@ the old `drive` schema and rejects the three new keys.
 **What to do:** restart the session after upgrading, as the note at the top of
 this release says.
 
+### After a refused throttle, headless `throttle` says `"none"`, not the throttle asked for
+
+`snap`, `inspect`, `audit`, `lint` and `report` given `--throttle` answered with
+that throttle's id even when Chromium refused it, so `throttle: "slow-4g"` sat
+beside a warning saying slow-4g was not applied, over a page that loaded
+unthrottled. The app already answered with the conditions in force (`"none"`,
+with `applied: false`), and every tool schema already described the field that
+way: "the conditions applied", "the conditions the page loaded under". The
+field meant one thing on one surface and another on the other
+(`bug-throttle-field-means-two-things`).
+
+Now the CLI does what the app does: a refused throttle puts back the conditions
+the target had, and `throttle` names them. That's `"none"` on a fresh render. A
+report states the throttle every screen had in force. In the one case where
+screens disagree, it states the throttle asked for, and each refused screen's
+warnings say so. Presence doesn't change: the key still appears exactly when
+`--throttle` was given.
+
+**What breaks:** code that read `throttle` as "the flag I passed" sees `"none"`
+after a refusal. Nothing changes when the throttle applies, and a refusal never
+happened silently: the warning or note was already there.
+
+**What to do:** read `throttle` as the conditions the page loaded under. To tell
+a refusal apart, compare it with what you asked for, or look for the "not
+applied" sentence in `warnings` (`notes` for `inspect`).
+
+**Why it ships:** a field whose value disagrees with the warning beside it, with
+its own schema, and with the same field on the other surface is wrong whichever
+of the three you believe. `settledMs` beside it was always measured under the
+conditions in force, so it now reads true too.
+
 ### Also in 0.61.0, not breaking
 
 `blocked` and `panel` now survive the trip from the page to the live walk, so
