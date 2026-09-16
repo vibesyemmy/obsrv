@@ -1,6 +1,8 @@
 ---
 title: "The dev lane says which tree it serves, and never says it is not yours"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 6
 ---
