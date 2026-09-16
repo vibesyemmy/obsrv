@@ -879,6 +879,34 @@ test('click reaches the live page and can act on it; out-of-viewport is refused'
     .toBe('clicked')
 })
 
+test('an inspect point off the screen says so, naming the viewport status reports; the last pixel on it does not', async () => {
+  // bug-inspect-offscreen-point-is-silent, live: the point is read inside the
+  // tab's viewport as it is now, so the sentence names that viewport.
+  expect((await call('navigate', { url: TALL })).status).toBe(200)
+  const st = await call('status')
+  expect(st.status).toBe(200)
+  const { cssWidth, cssHeight } = st.body as { cssWidth: number; cssHeight: number }
+  const offScreen = (body: Record<string, unknown>): string[] =>
+    ((body['notes'] ?? []) as string[]).filter(n => n.includes('is outside this screen'))
+  // Below the fold: the page has content there, and the viewport does not.
+  const below = await call('inspect', { x: 10, y: cssHeight + 200 })
+  expect(below.status).toBe(200)
+  expect(below.body).toMatchObject({ ok: true, found: false, readout: null })
+  expect(offScreen(below.body), JSON.stringify(below.body['notes'])).toEqual([
+    expect.stringContaining(`the point (10, ${cssHeight + 200}) is outside this screen's CSS viewport, ${cssWidth}x${cssHeight}`),
+  ])
+  // The last pixel on the screen is on it — asked of a page that does not
+  // overflow. On CI a desktop preset draws a classic scrollbar down the right
+  // of a tall page, and a point on a scrollbar finds no element (and gets no
+  // sentence, being inside the viewport): the first CI run of this test read
+  // found: false there. Measured locally by styling one in.
+  expect((await call('navigate', { url: BUTTON })).status).toBe(200)
+  const edge = await call('inspect', { x: cssWidth - 1, y: cssHeight - 1 })
+  expect(edge.status).toBe(200)
+  expect(edge.body).toMatchObject({ ok: true, found: true })
+  expect(offScreen(edge.body), JSON.stringify(edge.body['notes'])).toEqual([])
+})
+
 test('captureTarget returns a PNG of just the target pane', async () => {
   // Its own page and view, not the ones earlier tests left. Run after a
   // replaced worker, or alone, the target was the app's blank start page (the

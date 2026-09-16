@@ -82,6 +82,32 @@ test('text over an image has no contrast figure; nothing matched is found: false
   expect(none.stderr).toContain('nothing at selector "#no-such-thing"')
 })
 
+test('a point off the screen says so, naming the viewport it is off; a point on the screen does not', async () => {
+  // bug-inspect-offscreen-point-is-silent: found: false for a point the screen
+  // does not have read as nothing drawn there, with nothing saying otherwise.
+  const offScreen = (notes: string[]): string[] => notes.filter(n => n.includes('is outside this screen'))
+  const far = await runCli(['inspect', fixture('contrast.html'), '--preset', 'pixel-8', '--at', '1000,500'])
+  expect(far.code, far.stderr).toBe(0)
+  const f = JSON.parse(far.stdout)
+  expect(f).toMatchObject({ found: false, readout: null })
+  const { cssWidth, cssHeight } = f as { cssWidth: number; cssHeight: number }
+  expect(cssWidth).toBeLessThan(1000)
+  expect(offScreen(f.notes), JSON.stringify(f.notes)).toEqual([
+    expect.stringContaining(`the point (1000, 500) is outside this screen's CSS viewport, ${cssWidth}x${cssHeight}`),
+  ])
+  expect(far.stderr).toContain('warning: the point (1000, 500) is outside')
+
+  // One row past the bottom edge is off; the last pixel on the screen is on it.
+  const below = await runCli(['inspect', fixture('contrast.html'), '--preset', 'pixel-8', '--at', `10,${cssHeight}`])
+  expect(below.code, below.stderr).toBe(0)
+  expect(offScreen(JSON.parse(below.stdout).notes)).toHaveLength(1)
+  const edge = await runCli(['inspect', fixture('contrast.html'), '--preset', 'pixel-8', '--at', `${cssWidth - 1},${cssHeight - 1}`])
+  expect(edge.code, edge.stderr).toBe(0)
+  const e = JSON.parse(edge.stdout)
+  expect(e.found).toBe(true)
+  expect(offScreen(e.notes), JSON.stringify(e.notes)).toEqual([])
+})
+
 test('exactly one of --at / --selector, and --at is x,y', async () => {
   const neither = await runCli(['inspect', fixture('contrast.html')])
   expect(neither.code).toBe(2)
