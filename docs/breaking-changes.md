@@ -172,6 +172,11 @@ might have been; live `inspect` gains the landing and status sentences that
 `audit` and `lint` already had; and both surfaces answer `deviceScaleFactor`. Those are additions to fields already
 declared, and the restart note above covers them too.
 
+Right after a launch, the first control command now waits until the restored
+tab's screen size is applied, at most 5 s, instead of answering at once. The
+reply before that could name the restored preset beside the default 1920x1080
+surface (`bug-drive-status-race-at-launch`). Timing only: no field changes.
+
 ---
 
 ## 0.56.0 – 0.58.0, and 0.60.0 — checked, and nothing found to name

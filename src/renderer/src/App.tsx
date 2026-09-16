@@ -167,9 +167,17 @@ export function App() {
   // two screens of the same size and density but different kind — a custom
   // 1512x982 and the MacBook Pro preset, say — changes nothing else here, and
   // without it main would keep the previous browser identity.
+  //
+  // Held until the tab list has arrived, for the reason the `reportUiState`
+  // effect below is: before then the store describes a tab of its own minting,
+  // and its default size is a screen nobody chose. Sent anyway, it reached main
+  // first — 1920x1080, then the restored tab's 412x915 16 ms later — and main,
+  // which lets control commands through once the first viewport is applied,
+  // answered `pixel-8` beside 1920x1080 in between (bug-drive-status-race-at-launch).
   useEffect(() => {
+    if (!tabsKnown) return
     void window.obsrv.setViewport(viewport.width, viewport.height, deviceScaleFactor, isMobileScreen)
-  }, [viewport.width, viewport.height, deviceScaleFactor, isMobileScreen])
+  }, [tabsKnown, viewport.width, viewport.height, deviceScaleFactor, isMobileScreen])
 
   // The target keeps its own scale per tab, so a switch between two tabs at
   // the same scale sends nothing and one between different scales sends the
