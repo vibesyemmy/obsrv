@@ -196,11 +196,22 @@ jobs:
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
       # set no `trace`, so `test-results/` held `error-context.md` and nothing
-      # else, and uploading an empty directory SUCCEEDS. A green step whose
-      # name asserted a capability the config did not provide is why nobody
-      # looked. Now an empty directory is a red run on the day it happens
-      # rather than a week of silence — which is the only part of this that
-      # survives someone dropping the trace setting again.
+      # else. A green step whose name asserted a capability the config did not
+      # provide is why nobody looked.
+      #
+      # What that setting does and does NOT catch, measured rather than
+      # assumed (Wren, reading this change cold). Every failed run in that week
+      # uploaded a NON-empty `playwright-traces`: 13,184 B on run 34977896287,
+      # 30,001 B on 34995218008, 59,880 B on 35074542775 — error-context.md
+      # files, no traces. The directory was never empty, so `error` would have
+      # stayed silent through the entire week, and it would stay silent again
+      # if `trace` were dropped tomorrow. **It does not guard the trace
+      # setting.** Nothing does today; that wants its own card, not a wider
+      # `if:` here.
+      #
+      # What it does catch is an e2e failure that wrote NOTHING AT ALL — a real
+      # state, and control 3 below (run 35114327271: e2e red, this step red,
+      # `artifacts: none`). That is the reason it stays.
       #
       # Gated on the e2e step having actually FAILED, not on the job failing.
       # `if: failure()` fires for any failure, including a typecheck or unit
@@ -214,21 +225,33 @@ jobs:
       # way back to being ignored — which is where this one started
       # (bug-trace-upload-errors-when-e2e-never-ran).
       #
-      # `if-no-files-found: error` STAYS. Quieting the noise by making the step
-      # unable to fail again would restore the defect the gate exists to keep
-      # fixed. The gate narrows WHEN the step runs; it does not soften what the
-      # step says when it does.
+      # `if-no-files-found: error` STAYS, for the reason above: it is the only
+      # thing that speaks when a failing e2e run wrote nothing. The gate
+      # narrows WHEN the step runs; it does not soften what the step says when
+      # it does.
       #
-      # ON A HANG THIS UPLOADS NOTHING, and neither did the old gate. The e2e
-      # step has no `timeout-minutes` of its own and the job has 30, so a hang
-      # can only end as a job-level timeout — which GitHub records as
-      # `cancelled`, not `failure`. `always()` lets this step evaluate, the
-      # outcome test is false, and it is skipped. Observed on run 35115147209,
-      # which carried a probe step holding the old `if: failure()` beside this
-      # one: e2e `cancelled`, and BOTH steps skipped. So the gate takes nothing
-      # away from hanging runs; they never had traces to take. Getting traces
-      # out of a hang is a real want — it is when you need one most — but it is
-      # a different change: `bug-no-traces-when-e2e-hangs`.
+      # ON A HANG THIS USUALLY STILL UPLOADS, and the exception is narrow.
+      # Every spec has a finite timeout — the config's 30 s, with describe-level
+      # overrides up to 900 s, and none set to zero — so a test that never
+      # finishes ends as a TEST failure: e2e goes `failure` and this step runs.
+      # Runs 34995218008 and 35086053288 are that shape ("Test timeout of
+      # 30000ms exceeded", e2e red, this step green).
+      #
+      # What ends `cancelled` is a run that outlasts the JOB's 30 minutes (the
+      # e2e step has no `timeout-minutes` of its own). e2e takes ≈17 of those on
+      # a green main, so ≈12 are spare: one hung attempt in
+      # surface-parity.spec.ts (serial, `timeout: 900_000`) spends them by
+      # itself, and so does a hang that catches many tests at once. Then
+      # `steps.e2e.outcome` is `cancelled`, not `failure`, and this step is
+      # skipped. Observed on run 35115147209 — a deliberate hang that really did
+      # exhaust the 30 minutes ("The job has exceeded the maximum execution time
+      # of 30m0s") — which carried a probe step holding the old `if: failure()`
+      # beside this one: e2e `cancelled`, BOTH skipped. NOTE the limit of that
+      # observation: both being skipped also fits "nothing runs after a job
+      # timeout at all", so it shows the outcome, not the mechanism. Either way
+      # the old gate uploaded nothing there either, so this takes nothing away.
+      # Getting traces out of a timed-out run is a different change:
+      # `bug-no-traces-when-e2e-hangs`.
       - name: Upload Playwright traces on failure
         if: ${{ always() && steps.e2e.outcome == 'failure' }}
         uses: actions/upload-artifact@v7

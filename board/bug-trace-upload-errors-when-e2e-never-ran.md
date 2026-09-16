@@ -67,12 +67,22 @@ deleting `if-no-files-found: error` — the outcome this card was written to for
 
 ## The fourth control, which was Wren's question and not mine
 
-Traces matter most when e2e **hangs** — and a hang does not end in a failure, so
+Traces matter most when e2e **hangs** — and a hang need not end in a failure, so
 `steps.e2e.outcome == 'failure'` could be false exactly when you most want them. Checked rather
 than assumed: **the e2e step has no `timeout-minutes` of its own**, and the `test` job has
-`timeout-minutes: 30`. So a hang here can only end as a job-level timeout, which GitHub records as
-`cancelled`. [Run `35115147209`](https://github.com/vibesyemmy/obsrv/actions/runs/35115147209) is a
-deliberately hanging test, cancelled once e2e was genuinely running:
+`timeout-minutes: 30`.
+
+**My first answer here was too wide, and Wren's second read narrowed it.** I wrote that a hang *can
+only* end as a job-level timeout. It usually doesn't: every spec has a finite timeout (30 s by
+config, describe-level overrides to 900 s, none zero), so a hanging test ends as a **test** failure
+and the upload runs — runs `34995218008` and `35086053288` are that shape. What ends `cancelled` is
+a run that exhausts the job's 30 minutes.
+
+[Run `35115147209`](https://github.com/vibesyemmy/obsrv/actions/runs/35115147209) is a deliberately
+hung test (`test.setTimeout(0)`, which no real spec does). **It was not stopped by hand**: a cancel
+was requested and did not take, and the job ran 15:24:59 → 15:55:20 and died on its own limit —
+*"The job has exceeded the maximum execution time of 30m0s"*. So the control observed a real
+job-level timeout rather than a stand-in for one.
 
     cancelled   E2E (Playwright driving the Electron app)
     skipped     OLD GATE probe                        ← a throwaway step holding the OLD `if: failure()`
@@ -83,5 +93,24 @@ cancelled job too, so nothing is lost"* — is correct, and it is also reasoning
 looks like a check, which is the exact mistake this card exists to correct. **Both gates skipped,
 so "not a regression" is observed rather than argued.**
 
-It also names a real gap, which is not this card's to close: **a hung run produces no traces under
-either gate.** Filed as `bug-no-traces-when-e2e-hangs`.
+**What that run does not show is the mechanism.** Both steps skipped fits "the gate evaluated and
+the outcome test was false" and equally fits "nothing runs after a job-level timeout at all". The
+conclusion is the same either way — nothing uploads — but anyone later trying `outcome ==
+'cancelled'` needs to know which, and this run does not say.
+
+It also names a real gap, not this card's to close: **a run that outlasts the job's 30 minutes
+produces no traces under either gate.** Filed as `bug-no-traces-when-e2e-hangs`.
+
+## What the fix's own justification got wrong
+
+Worth keeping, because it was wrong in the direction that flatters the change. I wrote — and #29's
+paragraph in `ci.yml` said before me — that `if-no-files-found: error` is what stops the week of
+silence recurring if the `trace` setting is dropped again. **It isn't.** Every failed run in that
+week uploaded a *non-empty* `playwright-traces`: 13,184 B (`34977896287`), 30,001 B
+(`34995218008`), 59,880 B (`35074542775`) — error-context.md files, no traces. `error` never fires
+on a non-empty directory, so it was silent through the whole week and would be silent again.
+
+`error` still earns its place: it is the only thing that speaks when a failing e2e run writes
+**nothing at all**, which is control 3. But the reason had to be corrected in both paragraphs, and
+**a dropped `trace` setting has no guard today** — which is a card of its own, deliberately not
+grown into this change.

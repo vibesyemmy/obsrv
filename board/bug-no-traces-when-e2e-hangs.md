@@ -1,61 +1,84 @@
 ---
-title: "A hung e2e run uploads no traces — the one case where you most want them"
+title: "A run that outlasts the job's 30 minutes uploads no traces — and that is the run you cannot read"
 column: next
 kind: bug
 order: 55
 ---
 
-FOUND BY WREN 2026-09-16, as a question on the cold read of `bug-trace-upload-errors-when-e2e-never-ran`,
-and measured by Rook while verifying that card's fix. **Unowned.**
+FOUND BY WREN 2026-09-16, as a question on the cold read of `bug-trace-upload-errors-when-e2e-never-ran`;
+measured by Rook, and **narrowed by Wren on a second read that removed most of its original scope**.
+**Unowned.**
 
 ## What happens
 
-The trace upload step fires on the e2e step having **failed**. A hang is not a failure.
+The trace upload fires on the e2e step having **failed**. A run killed by the job's
+`timeout-minutes: 30` is `cancelled`, so it uploads nothing.
 
-`.github/workflows/ci.yml`'s e2e step has no `timeout-minutes` of its own, and the `test` job has
-`timeout-minutes: 30`. So an e2e run that hangs — a target that never settles, an Electron window
-that never closes, a `waitFor` with nothing coming — can only end as a **job-level timeout**, which
-GitHub records as `cancelled`, not `failure`. A person cancelling the run by hand produces the same
-outcome.
+**A hanging test is usually not this case, and the first version of this card wrongly said it was.**
+Every spec has a finite timeout — `playwright.config.ts` sets `timeout: 30_000`, describe-level
+overrides go up to `900_000`, and none is zero — so a test that never finishes ends as a **test
+failure**: e2e goes `failure` and the upload runs normally. Runs `34995218008` and `35086053288` are
+that shape: *"Test timeout of 30000ms exceeded"*, e2e red, upload green.
+
+**The case that survives is a run that exhausts the job's 30 minutes.** e2e takes ≈17 of them on a
+green main, leaving ≈12 spare, and two things spend that:
+
+- **one hung attempt in `surface-parity.spec.ts`**, which is `mode: 'serial'` with `timeout: 900_000`
+  — 15 minutes, by itself more than the slack
+- **a hang that catches many tests at once**, each burning its own 30 s
 
 Measured on [run `35115147209`](https://github.com/vibesyemmy/obsrv/actions/runs/35115147209), a
-deliberately hanging test cancelled once e2e was genuinely running:
+deliberately hung test (`test.setTimeout(0)`, which no real spec does) that ran the job out:
+annotation *"The job has exceeded the maximum execution time of 30m0s"*.
 
     cancelled   E2E (Playwright driving the Electron app)
     skipped     OLD GATE probe                        ← a throwaway step holding the older `if: failure()`
     skipped     Upload Playwright traces on failure
 
-**This is not a regression, and that was checked rather than assumed.** The run carried a probe step
-holding the previous `if: failure()` gate beside the current one, because `failure()` is also false
-on a cancelled job. Both skipped. No version of this step has ever uploaded traces for a hung run.
+**Not a regression, and that was checked rather than assumed.** The run carried a probe step holding
+the previous `if: failure()` gate beside the current one, because `failure()` is false on a cancelled
+job too. Both skipped. No version of this step has ever uploaded traces for a timed-out run.
 
-## Why it is worth a card anyway
+**A second gap, same effect:** `trace` is `on-first-retry`, so a hang on attempt 1 has no trace to
+upload under **any** gate.
 
-A hang is the failure a trace helps with most. A test that fails with an assertion already tells you
-what it wanted and what it got, in the log. A test that hangs tells you nothing: the log stops
-mid-run, and the artefact that would say what the app was showing at that moment is precisely the
-one not collected. The suite has had hangs before — `bug-app-closes-under-stall-spec` is one — and
-each was diagnosed without traces because there were none to have.
+## Why it is worth a card
 
-## What a fix has to decide
+A timed-out run is the one you cannot read. A test that fails an assertion says what it wanted and
+what it got, in the log. A run killed at 30 minutes stops mid-sentence, and the artefact that would
+show what the app was doing is exactly the one not collected.
 
-Not simply `|| steps.e2e.outcome == 'cancelled'`. That would also fire when a person cancels a run
-deliberately, and — more importantly — **a cancelled step may not have flushed its traces to disk**,
-so the upload could then meet an empty or half-written `test-results/` and go red on a run nobody
-was failing. `if-no-files-found: error` is doing real work on that step
-(`bug-trace-upload-errors-when-e2e-never-ran`), and this must not be the change that makes it cry
-wolf again.
+**It is not, however, the cause of the traceless diagnoses on this board.**
+`bug-app-closes-under-stall-spec` looks like a candidate and is not one: its log shows the app
+exiting mid-test (*"Target page, context or browser has been closed"*, *"closed: sessions down"*),
+and it had no traces because run `34924677951` predates the `trace` setting entirely — not because
+the upload was skipped.
 
-The likelier shape is a **step-level `timeout-minutes` on the e2e step**, set below the job's 30, so
-a hang ends as a step *failure* with Playwright given the chance to write what it has. Whether
-GitHub records a step killed by its own `timeout-minutes` as `failure` or `cancelled` is **not
-established here** — the workflow has no step-level timeout today, so there was nothing to observe.
-**Measure that before building on it**: it is the whole hinge of this approach, and it is one
-throwaway run to settle.
+## What a fix has to decide, and what it must measure first
+
+**Not simply `|| steps.e2e.outcome == 'cancelled'`.** A cancelled step may not have flushed
+`test-results/`, so the upload would then meet an empty or half-written directory and go red on a run
+nobody was failing — putting back the cry-wolf defect that
+`bug-trace-upload-errors-when-e2e-never-ran` just removed.
+
+Two shapes are worth weighing, and **each rests on something not established here**:
+
+1. **A step-level `timeout-minutes` on the e2e step**, below the job's 30, so the run ends as a step
+   *failure* with Playwright given a chance to write what it has. **Unmeasured:** whether GitHub
+   records a step killed by its own `timeout-minutes` as `failure` or `cancelled`. The workflow has
+   no step-level timeout today, so there was nothing to observe. One throwaway run settles it, and
+   the whole approach hinges on the answer.
+2. **Playwright's `globalTimeout`,** set under the job's spare time, so Playwright stops itself and
+   writes its own output rather than being killed from outside. **Unmeasured:** what it leaves in
+   `test-results/` when it fires.
+
+One more thing to know before building on either: **run `35115147209` shows the outcome, not the
+mechanism.** Both steps skipped is equally consistent with "the gate evaluated and the outcome test
+was false" and with "nothing runs after a job-level timeout at all". Anyone trying `cancelled` in the
+`if:` needs to know which, because the second would mean the step never gets the chance.
 
 ## The control
 
-A run whose e2e step hangs and is killed by a short step-level timeout must show the upload step
-running, and must attach whatever Playwright managed to write. And the existing controls must still
-hold: a run that dies before e2e uploads nothing, and a run whose e2e fails with an empty
-`test-results/` still goes red.
+A run whose e2e is killed by whichever mechanism is chosen must show the upload step **running**, and
+must attach whatever Playwright managed to write. And the existing controls must still hold: a run
+that dies before e2e uploads nothing, and a run whose e2e fails having written nothing still goes red.
