@@ -26,6 +26,7 @@ const APP_SHELL = pathToFileURL(resolve(__dirname, '../fixtures/app-shell.html')
 const AUDIT = pathToFileURL(resolve(__dirname, '../fixtures/audit.html')).href
 const LINT = pathToFileURL(resolve(__dirname, '../fixtures/lint.html')).href
 const SOLID_RED = pathToFileURL(resolve(__dirname, '../fixtures/solid-red.html')).href
+const SOLID_BLUE = pathToFileURL(resolve(__dirname, '../fixtures/solid-blue.html')).href
 const APP_SHELL_FINDINGS = pathToFileURL(resolve(__dirname, '../fixtures/app-shell-findings.html')).href
 const PAINTS_LATE = pathToFileURL(resolve(__dirname, '../fixtures/paints-late.html')).href
 
@@ -809,15 +810,31 @@ test('a capture of a hidden window shows the page now, not the frame before it w
 
   await app.evaluate(() => (globalThis as any).__obsrv.win.hide())
   try {
-    await call('navigate', { url: FIXTURE })
-    await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(FIXTURE)
+    // BLUE, not the white fixture this used to navigate to. White is what a
+    // blank capture, an undrawn canvas and the window's own background all
+    // look like, so "not red any more" passed whether or not anything had been
+    // drawn — and with the `drawNow` send sabotaged the test still passed
+    // (bug-hidden-window-capture-test-cannot-see-drawnow). Three states, three
+    // colours: red is the stale frame, white is nothing drawn, blue is the
+    // page that is actually there.
+    await call('navigate', { url: SOLID_BLUE })
+    await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(SOLID_BLUE)
     const r = await call('captureTarget')
     expect(r.status).toBe(200)
-    const png = decodePng(Buffer.from((r.body as { data: string }).data, 'base64'))
+    const body = r.body as { data: string; warnings?: string[] }
+    const png = decodePng(Buffer.from(body.data, 'base64'))
     const [red, green, blue] = pixelAt(png, Math.round(png.width / 2), Math.round(png.height / 2))
-    // The fixture is a white page; the frame before the hide was solid red.
-    expect(green, `still the frame from before the hide: rgb(${red},${green},${blue})`).toBeGreaterThan(150)
-    expect(blue).toBeGreaterThan(150)
+    const shownAs = `rgb(${red},${green},${blue})`
+    expect(blue, `not the page that is there now: ${shownAs}`).toBeGreaterThan(150)
+    expect(red, `still the frame from before the hide, or nothing drawn at all: ${shownAs}`).toBeLessThan(100)
+    // The reply already knew, and this test used to ignore it. Without the
+    // draw acknowledgement `frameIdentityWarning` says the renderer did not
+    // say which frame it drew, so the capture carries its own doubt while the
+    // pixel assertion above calls it fine (`src/main/frameCheck.ts`). Asserted
+    // here so the handshake failing is caught by the warning even on a desk
+    // where the pixels happen to come out right.
+    const doubt = (body.warnings ?? []).filter(w => w.includes('older frame') || w.includes('not being delivered'))
+    expect(doubt, `the capture doubts its own frame: ${JSON.stringify(body.warnings)}`).toEqual([])
   } finally {
     // Rasterisation resumes on the window's own show event; hand the next test
     // a target that is painting rather than one still paused.

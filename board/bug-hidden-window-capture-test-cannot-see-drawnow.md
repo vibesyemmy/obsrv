@@ -40,3 +40,55 @@ it stopped working.** Candidates for why the test passes anyway, none checked:
 **A planted stale frame that the test catches**, meaning a setup under which removing `drawNow`
 turns this test red, before anything about the handshake is changed or trusted. If no setup
 on a real desk makes it red, that is a finding about the handshake too: it may no longer be needed.
+
+## RESOLVED 2026-09-16 by Kenya — the assertion could not fail, and the reply already knew
+
+**The third candidate, and it needed none of the other two to be true.** The test navigated to
+`hairline.html`, a `#fff` page, and asserted `green > 150 && blue > 150` — which says only *"not red
+any more"*. **A blank capture is white. An undrawn canvas is white. The window's own background is
+white.** So the assertion passed whether or not anything had been drawn, and Henry's two candidates
+were never needed to explain the green.
+
+**And the capture already said so.** With the handshake gone, `flushRendererDraw` answers `null`,
+and `frameCheck.ts:25` puts this in the reply's `warnings`:
+
+    the renderer did not say which frame it drew, so the capture may show an older frame than
+    the target painted
+
+The product was reporting its own doubt while the test called the capture fine. A third instrument,
+already shipped, already correct, never read.
+
+## What the test does now
+
+- **Navigates to `solid-blue.html`**, so three states separate: red = the stale frame,
+  **white = nothing drawn**, blue = the page that is really there. `blue > 150 && red < 100`.
+- **Asserts the capture carries no frame-identity doubt.** This is the stricter arm: it fails when
+  the handshake is gone *whatever the pixels do*.
+
+The fixture carries a small corner mark, which is not decoration: a page that is one colour end to
+end is judged blank by the live capture, which then waits out its settle budget and warns. The mark
+makes it an ordinary page and keeps the centre pure blue. Run time went 7.4 s → 4.8 s.
+
+## Measured, both arms, with the sabotage verified in the build (`obsrv:draw-now` sends: 1 → 0)
+
+| build | result |
+| --- | --- |
+| handshake intact | **passes**, 4.8 s |
+| handshake removed | **fails both attempts**, on the warnings assertion |
+| whole `live-drive.spec` with it intact | 45 passed, 1 skipped (`focusWindow`, desk-gated — not this test) |
+
+## The part that is NOT resolved, and it is the card's own "what a fix has to show first"
+
+**The pixels were still correct with the handshake removed.** The sabotaged run failed on the
+warning, and the colour assertions passed — so on this desk `win.hide()` does not reproduce the
+stale frame, and **no colour-based assertion, tri-state or not, can catch this regression here.**
+
+So the card's demand — *a planted stale frame that the test catches* — **is not met.** What is met is
+the title: the test no longer passes with the handshake removed. The regression is caught by the
+absent acknowledgement, which is a property of the code path rather than of the desk, and that is
+why it is deterministic where pixels are not.
+
+**Reproducing an actually stale capture needs real occlusion** — another window covering the app,
+not `win.hide()` — which is a desk-taking run and needs Opeyemi's separate word. Until someone does
+that, the card's other possible finding stands open: **the handshake may no longer be needed at
+all**, and nothing here proves it is. Worth its own card if anyone wants it pursued.
