@@ -29,7 +29,7 @@ import {
 } from './args'
 import { auditFindings, auditListTruncationNote } from './audit'
 import { lintFindings, listTruncationNote, slimGroups, unwalkedImageNote, type LintGroup } from './lint'
-import { bgraToRgba, captureQuiescent, type CapturedFrame, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
+import { bgraToRgba, captureQuiescent, type CapturedFrame, explainedByCutLoad, stitchBands, type CaptureBand, type UnsettledReason } from './capture'
 import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
@@ -355,12 +355,16 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // Under a throttle the quiet moment is the measurement (`settledMs`), and
     // a page loading over 3G paints steadily too: no early exit there. After
     // a load the budget cut short, the capture gets a short budget of its own
-    // and takes the frame as it stands; its "kept painting (animation?)" line
-    // would explain what the load warning above already has.
+    // and takes the frame as it stands; a warning that only says it was still
+    // painting would explain what the load warning above already has.
+    //
+    // Routed on the reason, not on the sentence. `explainedByCutLoad` says
+    // which reasons a cut-short load accounts for; the wording of the warning
+    // is prose and is free to change without moving anything.
     const quiescent = (): Promise<CapturedFrame> =>
       captureQuiescent(target, {
         timeoutMs: load.loaded ? options.timeoutMs : CUT_LOAD_CAPTURE_MS,
-        onWarn: load.loaded ? warn : m => (/kept painting/.test(m) ? undefined : warn(m)),
+        onWarn: load.loaded ? warn : (m, reason) => (explainedByCutLoad(reason) ? undefined : warn(m)),
         failure: failed,
         animationExit: spec.throttle === null,
       })

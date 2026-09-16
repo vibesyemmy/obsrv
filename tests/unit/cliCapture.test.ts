@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { EventEmitter } from 'node:events'
 import type { FrameMessage } from '../../src/shared/api'
-import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, bgraToRgba, captureQuiescent, stitchBands } from '../../src/cli/capture'
+import type { UnsettledReason } from '../../src/cli/capture'
+import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, bgraToRgba, captureQuiescent, explainedByCutLoad, stitchBands } from '../../src/cli/capture'
 
 /** Emits scripted frames when poked; `invalidate()` replays the script once. */
 class FakeSource extends EventEmitter {
@@ -169,12 +170,21 @@ describe('captureQuiescent', () => {
    * fix makes that testable; this test cannot.
    */
   it('records which unsettled reason carries which sentence, and how the prose match routes each', async () => {
-    const said = async (opts: Parameters<typeof captureQuiescent>[1], src: FakeSource, poke: boolean): Promise<string> => {
+    // Returns the pair rather than a joined string. The first version joined
+    // on a NUL separator, which wrote two literal control bytes into this file
+    // — invisible in a diff, and enough for `ugrep -I` to classify the whole
+    // file as binary and skip it, so every `grep` for anything in this file
+    // returned nothing. Found by chasing that false negative.
+    const said = async (
+      opts: Parameters<typeof captureQuiescent>[1],
+      src: FakeSource,
+      poke: boolean,
+    ): Promise<{ reason: string | undefined; message: string }> => {
       const warnings: string[] = []
       const noisy = poke ? setInterval(() => src.invalidate(), 20) : null
       try {
         const got = await captureQuiescent(src, { ...opts, onWarn: m => warnings.push(m) })
-        return `${got.unsettledReason} ${warnings.join(' ')}`
+        return { reason: got.unsettledReason, message: warnings.join(' ') }
       } finally {
         if (noisy) clearInterval(noisy)
       }
@@ -190,20 +200,99 @@ describe('captureQuiescent', () => {
       ],
     ] as const
 
-    // The predicate as `main.ts` spells it today, copied deliberately: this
-    // test cannot reach the original, and saying so is the finding.
-    const suppressedToday = (message: string): boolean => /kept painting/.test(message)
+    // What `/kept painting/` did to each of these messages, measured against
+    // the real sentences on 2026-09-16 before the routing changed. Written as
+    // data rather than as a live copy of the old regex: a copied predicate in
+    // a test is the same defect as the one in the product, and it would make
+    // this test fail whenever a sentence is reworded — which is exactly the
+    // coupling being removed.
+    const verdictOfTheOldProseMatch: Record<string, boolean> = {
+      animating: true, // "page kept painting steadily for N ms…"
+      timeout: true, //   "page kept painting for N ms (animation?)…"
+      blank: false, //    "the frame is one colour end to end…"
+      uncovered: false, // "N% of the frame never painted within N ms"
+    }
 
     const table = cases.map(([want, got]) => {
-      const [reason, message] = got.split(' ')
+      const { reason, message } = got
       expect(reason, `expected reason ${want}, got ${reason} — the fixture no longer produces this case`).toBe(want)
-      expect(message!.length, `${want} emitted no warning: nothing to route, and this row proves nothing`).toBeGreaterThan(0)
-      return `${reason}:${suppressedToday(message!) ? 'suppressed' : 'kept'}`
+      expect(message.length, `${want} emitted no warning: nothing to route, and this row proves nothing`).toBeGreaterThan(0)
+      // The equivalence that makes "behaviour-identical" a fact rather than a
+      // claim: routing on the reason gives, for every reason the capture can
+      // warn for, the verdict the prose match gave.
+      expect(explainedByCutLoad(reason as UnsettledReason), `${reason}: the fix disagrees with the behaviour it replaced`).toBe(
+        verdictOfTheOldProseMatch[want],
+      )
+      return `${reason}:${explainedByCutLoad(reason as UnsettledReason) ? 'suppressed' : 'kept'}`
     })
 
-    // Both verdicts appear, so the predicate is discriminating rather than
+    // Both verdicts appear, so the routing is discriminating rather than
     // saturated — a table of four "kept" would pass while testing nothing.
     expect(table).toEqual(['animating:suppressed', 'timeout:suppressed', 'blank:kept', 'uncovered:kept'])
+  })
+
+  /**
+   * The fix for `bug-product-matches-own-prose`: the reason travels with the
+   * warning, so the caller routes on the fact rather than on the sentence.
+   *
+   * `unsettledReason` is already set on the line immediately above every
+   * `onWarn` call in this file — the structured fact existed where the warning
+   * was raised and was simply not passed. Nothing reaches `warnings[]`: this
+   * is a second argument on the callback, consumed at the routing site and
+   * discarded, so no output schema gains a field.
+   */
+  it('hands the caller the reason alongside the message, for every reason it warns for', async () => {
+    const seen = async (opts: Parameters<typeof captureQuiescent>[1], src: FakeSource, poke: boolean): Promise<string[]> => {
+      const got: string[] = []
+      const noisy = poke ? setInterval(() => src.invalidate(), 20) : null
+      try {
+        await captureQuiescent(src, { ...opts, onWarn: (_m, reason) => got.push(String(reason)) })
+        return got
+      } finally {
+        if (noisy) clearInterval(noisy)
+      }
+    }
+    expect(await seen({ settleMs: 100, timeoutMs: 30_000 }, new FakeSource([fullFrame(1, 1, 9)]), true)).toEqual(['animating'])
+    expect(await seen({ settleMs: 100, timeoutMs: 400, animationExit: false }, new FakeSource([marked(8, 8, 9)]), true)).toEqual(['timeout'])
+    expect(await seen({ settleMs: 20, timeoutMs: 400, blankGraceMs: 30 }, new FakeSource([fullFrame(4, 4, 200)]), false)).toEqual(['blank'])
+    const partial: FrameMessage = { frame: { x: 0, y: 0, width: 1, height: 1, data: new Uint8Array(4).fill(3) }, frameWidth: 2, frameHeight: 1 }
+    expect(await seen({ settleMs: 20, timeoutMs: 150 }, new FakeSource([partial]), false)).toEqual(['uncovered'])
+  })
+})
+
+/**
+ * The routing decision `bug-product-matches-own-prose` is about, extracted so
+ * that it can be tested at all. Until this existed it was an inline arrow
+ * inside `render()` in a 1600-line file, unexported and reachable only by
+ * driving a real Electron target — which is why a defect in it survived.
+ */
+describe('explainedByCutLoad: which capture warnings a cut-short load has already accounted for', () => {
+  it('suppresses exactly the two the load warning already explains', () => {
+    expect(explainedByCutLoad('animating')).toBe(true)
+    expect(explainedByCutLoad('timeout')).toBe(true)
+  })
+
+  it('keeps the two that say something the load warning does not', () => {
+    // A blank frame and an uncovered one are facts about the raster, not about
+    // the budget running out. Suppressing them would lose the only sentence
+    // saying the image is not what it appears to be.
+    expect(explainedByCutLoad('blank')).toBe(false)
+    expect(explainedByCutLoad('uncovered')).toBe(false)
+    expect(explainedByCutLoad('loading')).toBe(false)
+  })
+
+  it('does not depend on the wording, which is the whole defect', () => {
+    // The regression the old code could not survive: `capture.ts`'s sentences
+    // are prose this project commits to improving, and rewording one used to
+    // change where the warning went, with `tsc` clean and nothing thrown.
+    // Measured: renaming "page kept painting steadily" to "page painted
+    // continuously" flipped `animating` from suppressed to kept.
+    //
+    // There is no string here to reword. A reason that stopped being routed
+    // correctly would have to be renamed in the union, which is a type error
+    // at every call site.
+    const reasons: UnsettledReason[] = ['animating', 'timeout', 'blank', 'uncovered', 'loading']
+    expect(reasons.filter(explainedByCutLoad)).toEqual(['animating', 'timeout'])
   })
 
   it('an external failure aborts immediately instead of burning the timeout', async () => {
