@@ -1,6 +1,8 @@
 ---
 title: "The onion skin dies silently on a trip through a big screen, and still reads back as on"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 49
 ---
