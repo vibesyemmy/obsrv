@@ -131,7 +131,7 @@ jobs:
     # queue. The job still runs, still carries this name, and still reports —
     # it is the required check, and it must arrive.
     runs-on: ${{ needs.scope.outputs.board_only == 'true' && 'ubuntu-latest' || 'macos-14' }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Say what this run did not do
         if: ${{ needs.scope.outputs.board_only == 'true' }}
@@ -191,7 +191,9 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
+        run: |
+          bash scripts/blur-loop.sh 75 no-flag
+          OBSRV_TEST_TAKES_THE_DESK=1 bash scripts/blur-loop.sh 75 takes-desk
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
