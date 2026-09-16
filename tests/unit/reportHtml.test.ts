@@ -265,6 +265,21 @@ describe('reportHtml', () => {
     expect(html).toContain('throttle <b>Budget phone</b> (3G and CPU 6×)')
     expect(html).toContain('settled in <b>0.8 s</b>')
     expect(html).toContain('never settled')
+    // Every screen had it: the plain statement, with no count.
+    expect(html).not.toContain(' of 2 screens')
+  })
+  it('says on how many screens the throttle held when a refusal was not uniform, rather than stating it for all', () => {
+    const d = data([screen(), screen({ presetId: 'android-65' })])
+    const html = reportHtml({ ...d, throttle: { id: 'slow-4g', label: 'Slow 4G', summary: 'x', heldOn: { screens: 1, of: 2 } } })
+    expect(html).toContain('throttle <b>Slow 4G</b> (x) on 1 of 2 screens — refused on the others, which say so')
+  })
+  it('says a throttle was refused on every screen, so the banner does not read like --throttle none', () => {
+    const d = data([screen(), screen({ presetId: 'android-65' })])
+    const none = { id: 'none', label: 'No throttle', summary: 'the host as it is' }
+    expect(reportHtml({ ...d, throttle: none })).not.toContain('refused')
+    expect(reportHtml({ ...d, throttle: { ...none, refused: 'Slow 4G' } })).toContain(
+      'throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen, which say so',
+    )
   })
   it('says when the page did not answer the audit', () => {
     const html = reportHtml(data([screen({ audit: null })]))

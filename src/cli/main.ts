@@ -1,5 +1,5 @@
 import { app, nativeImage } from 'electron'
-import { findThrottle } from '../shared/throttle'
+import { findThrottle, reportThrottle } from '../shared/throttle'
 import { formatTextScale } from '../shared/textScale'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -156,6 +156,12 @@ interface RenderResult {
    * How the page *feels* on the screen, under `--throttle` or without.
    */
   settledMs: number | null
+  /**
+   * The throttle in force for the load when one was asked for: that one, or
+   * after a refusal the conditions the target kept (`throttleForCommand`).
+   * Null when none was asked for.
+   */
+  throttle: string | null
   /** The walk before the audit and lint, when they were asked for and `walk` was not false (see cli/walk.ts). */
   walked?: Walked
 }
@@ -261,6 +267,36 @@ function landedUrl(target: TargetSource): string {
   return target.httpStatus().url || target.webContents.getURL()
 }
 
+/**
+ * On how many of the report's screens the throttle it states was in force,
+ * when that is not all of them: a refusal that was not uniform
+ * (`reportThrottle`). Nothing when every screen had it.
+ */
+function heldOn(stated: string, inForce: readonly string[]): { heldOn?: { screens: number; of: number } } {
+  const screens = inForce.filter(id => id === stated).length
+  return screens === inForce.length ? {} : { heldOn: { screens, of: inForce.length } }
+}
+
+/**
+ * Applies the throttle a command was given, and answers the one in force after.
+ * A refusal puts back the conditions the target had, as the app does
+ * (`throttleRefusal`, src/main/ipc.ts). So the page loads under what the
+ * reply's `throttle` names, and the refusal sentence is what says which
+ * throttle was asked for (bug-throttle-field-means-two-things). Both are null
+ * when no throttle was given.
+ */
+async function throttleForCommand(target: TargetSource, asked: string | null): Promise<{ throttle: string | null; refused: string | null }> {
+  if (asked === null) return { throttle: null, refused: null }
+  const had = target.getThrottle()
+  const refused = await target.setThrottle(findThrottle(asked))
+  if (refused === null) return { throttle: asked, refused: null }
+  const putBack = await target.setThrottle(had)
+  return {
+    throttle: had.id,
+    refused: putBack === null ? refused : `${refused}; and ${putBack}, so \`throttle\` names the conditions put back, not ones known to be in force`,
+  }
+}
+
 async function loadWithin(
   target: TargetSource,
   url: string,
@@ -339,16 +375,15 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
     // its scale from the first paint rather than reflowing after.
     target.setTextScale(spec.textScale)
     // Before the load, so the page fetches and runs under the conditions from
-    // its first byte; a refusal is a warning, not a failure — the render is
-    // still a render, and the JSON says the throttle was asked for.
-    if (spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(spec.throttle))
-      if (refused) warn(refused)
-    }
+    // its first byte. A refusal is a warning, not a failure: the render is
+    // still a render, under the conditions the target kept, and the JSON's
+    // `throttle` names those rather than the ones asked for.
+    const { throttle, refused } = await throttleForCommand(target, spec.throttle)
+    if (refused) warn(refused)
     const startedAt = Date.now()
-    const load = await loadWithin(target, url, { ...options, throttle: spec.throttle }, watch, true)
+    const load = await loadWithin(target, url, { ...options, throttle }, watch, true)
     if (!load.loaded) {
-      warn(`${loadTimeoutMessage(options.timeoutMs, spec.throttle, url)}; capturing the page as it stands — settled false, settledMs null`)
+      warn(`${loadTimeoutMessage(options.timeoutMs, throttle, url)}; capturing the page as it stands — settled false, settledMs null`)
     }
 
     let cssHeight = applied.height
@@ -721,6 +756,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       cssHeight,
       warnings,
       settledMs,
+      throttle,
       ...(auditReport !== undefined ? { auditReport } : {}),
       ...(lintReport !== undefined ? { lintReport } : {}),
       ...(walked !== undefined ? { walked } : {}),
@@ -761,7 +797,7 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       `snap ${cmd.url} → ${out} (${r.frame.width}×${r.frame.height} device px, ` +
         `${r.cssWidth}×${r.cssHeight} CSS ${shape}, preset ${spec.presetId}, profile ${profile.id}` +
         `${spec.textScale !== 1 ? `, text ${formatTextScale(spec.textScale)}` : ''}` +
-        `${spec.throttle !== null ? `, throttle ${spec.throttle}, ${r.settledMs === null ? 'not settled' : `settled in ${r.settledMs} ms`}` : ''})`,
+        `${r.throttle !== null ? `, throttle ${r.throttle}, ${r.settledMs === null ? 'not settled' : `settled in ${r.settledMs} ms`}` : ''})`,
     )
     results.push({
       out,
@@ -782,7 +818,7 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       ...(spec.textScale !== 1 ? { textScale: spec.textScale } : {}),
       // Same rule for the throttle, keyed on the flag rather than the value:
       // `--throttle none` is a baseline someone asked for by name.
-      ...(spec.throttle !== null ? { throttle: spec.throttle, settledMs: r.settledMs } : {}),
+      ...(r.throttle !== null ? { throttle: r.throttle, settledMs: r.settledMs } : {}),
       profile: profile.id,
       // False means a best-effort capture of a page that never went
       // paint-quiet (animation); machine consumers can gate on it, and the
@@ -962,12 +998,12 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    // A refused throttle is said in `notes`, where the reply's reader looks,
-    // beside the `throttle` field that reports the flag it was given
-    // (bug-throttle-refusal-stderr-only); `notes` reach stderr below.
-    let throttleRefused: string | null = null
-    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
+    // A refused throttle is said in `notes`, where the reply's reader looks
+    // (bug-throttle-refusal-stderr-only), beside a `throttle` field naming the
+    // conditions kept (bug-throttle-field-means-two-things); `notes` reach
+    // stderr below.
+    const { throttle, refused: throttleRefused } = await throttleForCommand(target, cmd.spec.throttle)
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle }, watch)
     // The one page ask, within the same budget as the load (`shared/measureBudget`).
     const answer =
       cmd.selector !== null ? await target.inspectSelector(cmd.selector, cmd.timeoutMs) : await target.inspectAt(cmd.at!.x, cmd.at!.y, cmd.timeoutMs)
@@ -1033,7 +1069,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       deviceScaleFactor: cmd.spec.deviceScaleFactor,
       profile: profile.id,
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
-      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
+      ...(throttle !== null ? { throttle } : {}),
       found: readout !== null,
       readout,
       // Both: the call's own notes (a measurement that ran out of budget) and
@@ -1058,12 +1094,11 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     // A refused throttle joins the command's notes, which reach both stderr and
     // the reply's `warnings`; it used to reach stderr alone, where the reply's
     // reader is told not to look (bug-throttle-refusal-stderr-only).
-    let throttleRefused: string | null = null
-    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
+    const { throttle, refused: throttleRefused } = await throttleForCommand(target, cmd.spec.throttle)
     const notes: string[] = []
     if (throttleRefused) notes.push(throttleRefused)
-    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
-    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle }, watch, true)
+    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, throttle, cmd.url))
     // Where the load landed comes before anything measured on the page: it is
     // the sentence that says which page the rest is about.
     const landed = landedElsewhereNote(cmd.url, load.landedAt, target.httpStatus().code)
@@ -1159,7 +1194,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       deviceScaleFactor: cmd.spec.deviceScaleFactor,
       // Present only when a scale other than 1 was applied, as in `snap`.
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
-      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
+      ...(throttle !== null ? { throttle } : {}),
       pageHeight: report.pageHeight,
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
@@ -1183,12 +1218,11 @@ async function runLint(cmd: LintCommand): Promise<void> {
     // A refused throttle joins the command's notes, which reach both stderr and
     // the reply's `warnings`; it used to reach stderr alone, where the reply's
     // reader is told not to look (bug-throttle-refusal-stderr-only).
-    let throttleRefused: string | null = null
-    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
+    const { throttle, refused: throttleRefused } = await throttleForCommand(target, cmd.spec.throttle)
     const notes: string[] = []
     if (throttleRefused) notes.push(throttleRefused)
-    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
-    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
+    const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle }, watch, true)
+    if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, throttle, cmd.url))
     // As in the audit: which page the figures are of, first.
     const lintLanded = landedElsewhereNote(cmd.url, load.landedAt, target.httpStatus().code)
     if (lintLanded !== null) notes.push(lintLanded)
@@ -1295,7 +1329,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       cssHeight: applied.height,
       deviceScaleFactor: cmd.spec.deviceScaleFactor,
       ...(cmd.spec.textScale !== 1 ? { textScale: cmd.spec.textScale } : {}),
-      ...(cmd.spec.throttle !== null ? { throttle: cmd.spec.throttle } : {}),
+      ...(throttle !== null ? { throttle } : {}),
       pageHeight: report.pageHeight,
       ...(walk.walked !== undefined ? { walked: walk.walked } : {}),
       ...result,
@@ -1343,10 +1377,13 @@ async function runReport(cmd: ReportCommand): Promise<void> {
   const profile = findProfile(cmd.profileId)
   const thresholds = { tapMm: cmd.tapMm, textMm: cmd.textMm }
   const screens: ReportScreen[] = []
+  // The throttle each screen rendered under, for the one the report states.
+  const inForce: string[] = []
   const referenceMax = maxCssViewport(2)
 
   for (const spec of cmd.specs) {
     const r = await render(cmd.url, spec, { fullPage: false, waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, audit: true, lint: true, walk: cmd.walk })
+    if (r.throttle !== null) inForce.push(r.throttle)
     const raw = bgraToRgba(r.frame.bgra, r.frame.width, r.frame.height)
     const profiled = profile.id !== 'reference'
     const img = profiled ? applyPanelProfile(raw, profile) : raw
@@ -1521,7 +1558,8 @@ async function runReport(cmd: ReportCommand): Promise<void> {
   const version = cliVersion()
   const out = resolve(cmd.out)
   mkdirSync(dirname(out), { recursive: true })
-  const throttleId = cmd.specs[0]?.throttle ?? null
+  const asked = cmd.specs[0]?.throttle ?? null
+  const throttleId = asked === null ? null : reportThrottle(asked, inForce)
   const throttle = throttleId === null ? null : findThrottle(throttleId)
   const html = reportHtml({
     url: cmd.url,
@@ -1530,7 +1568,19 @@ async function runReport(cmd: ReportCommand): Promise<void> {
     profile: { id: profile.id, label: profile.label },
     thresholds,
     screens,
-    ...(throttle ? { throttle: { id: throttle.id, label: throttle.label, summary: throttle.summary } } : {}),
+    ...(throttle && asked !== null
+      ? {
+          throttle: {
+            id: throttle.id,
+            label: throttle.label,
+            summary: throttle.summary,
+            ...heldOn(throttle.id, inForce),
+            // Refused on every screen: the banner states the conditions kept, and
+            // without this it would read the same as `--throttle none` (Wren's read).
+            ...(throttle.id !== asked ? { refused: findThrottle(asked).label } : {}),
+          },
+        }
+      : {}),
   })
   writeFileSync(out, html)
   human(`report ${cmd.url} → ${out} (${screens.length} screen(s), ${Math.round(html.length / 1024)} KiB)`)

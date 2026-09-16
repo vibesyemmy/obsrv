@@ -2050,7 +2050,13 @@ const reportOutputShape = {
   generatedAt: z.string(),
   profile: z.string(),
   thresholds: z.object({ tapMm: z.number(), textMm: z.number() }),
-  throttle: z.string().optional().describe('Only when `throttle` was given: the conditions every screen rendered under.'),
+  throttle: z
+    .string()
+    .optional()
+    .describe(
+      'Only when `throttle` was given: the conditions every screen rendered under. When a refusal left screens under ' +
+        "different conditions, the throttle asked for, and each refused screen's warnings say it did not hold there.",
+    ),
   screens: z.array(
     z.object({
       preset: z.string(),

@@ -3,8 +3,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { request } from 'node:http'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, parseControlFile, type ControlInfo } from '../../src/shared/control'
@@ -47,31 +48,71 @@ function runCli(args: string[], env: Record<string, string>): Promise<CliResult>
 
 const refusedIn = (lines: unknown): string[] => (Array.isArray(lines) ? lines.filter((l): l is string => typeof l === 'string' && l.includes('not applied')) : [])
 
-test.describe('headless: inspect, audit and lint say a refused throttle in the reply', () => {
+test.describe('headless: snap, inspect, audit and lint say a refused throttle in the reply, and report the conditions kept', () => {
+  let outDir: string
+  test.beforeAll(() => {
+    outDir = mkdtempSync(join(tmpdir(), 'obsrv-throttle-refused-'))
+  })
+  test.afterAll(() => {
+    rmSync(outDir, { recursive: true, force: true })
+  })
+
   // Each command's own array for sentences about the answer: inspect's
-  // `notes`; audit's and lint's `warnings`, which is where their notes go.
+  // `notes`; the others' `warnings`, which is where audit's and lint's notes go.
   for (const [command, key, extra] of [
+    ['snap', 'warnings', ['--out', 'OUT']],
     ['inspect', 'notes', ['--selector', '#big']],
     ['audit', 'warnings', []],
     ['lint', 'warnings', []],
   ] as const) {
     test(`${command}`, async () => {
-      const args = [command, FIXTURE, '--preset', 'laptop-768', '--throttle', 'slow-4g', ...extra]
+      const args = [command, FIXTURE, '--preset', 'laptop-768', '--throttle', 'slow-4g', ...extra.map(a => (a === 'OUT' ? join(outDir, `${command}.png`) : a))]
       const refused = await runCli(args, { OBSRV_TEST_THROTTLE_REFUSAL: FORCED })
       expect(refused.code, refused.stderr).toBe(0)
       const r = JSON.parse(refused.stdout)
       expect(refusedIn(r[key]), `${key}: ${JSON.stringify(r[key])}`).toEqual([SENTENCE])
-      // The field still reports the flag it was given; the note is what says it did not take.
-      expect(r.throttle).toBe('slow-4g')
+      // One meaning on both surfaces (bug-throttle-field-means-two-things): the
+      // conditions the page loaded under, which after a refusal are the ones the
+      // fresh target had. The sentence is what names the throttle asked for.
+      expect(r.throttle).toBe('none')
       // Said once on stderr too, not twice.
       expect(refused.stderr.split(SENTENCE).length - 1, refused.stderr).toBe(1)
 
-      // The control: the same call with nothing refused has no such note.
+      // The control: the same call with nothing refused has no such sentence,
+      // and its field names the throttle it was given.
       const applied = await runCli(args, {})
       expect(applied.code, applied.stderr).toBe(0)
-      expect(refusedIn(JSON.parse(applied.stdout)[key])).toEqual([])
+      const a = JSON.parse(applied.stdout)
+      expect(refusedIn(a[key])).toEqual([])
+      expect(a.throttle).toBe('slow-4g')
     })
   }
+
+  test('report', async () => {
+    // Through report's own wiring: without each screen's throttle collected,
+    // the top level would state the throttle asked for (Wren's read of #121).
+    const args = ['report', FIXTURE, '--preset', 'laptop-768', '--throttle', 'slow-4g', '--out', join(outDir, 'report.html')]
+    const refused = await runCli(args, { OBSRV_TEST_THROTTLE_REFUSAL: FORCED })
+    expect(refused.code, refused.stderr).toBe(0)
+    const r = JSON.parse(refused.stdout)
+    // Every render a screen makes says it: the screen's own first, then the
+    // others with their prefix ("full page: ", "reference: ").
+    const said = refusedIn(r.screens[0].warnings)
+    expect(said[0], JSON.stringify(r.screens[0].warnings)).toBe(SENTENCE)
+    for (const line of said) expect(line.endsWith(SENTENCE), line).toBe(true)
+    // And each render's own line carries its prefix, or two renders' refusals
+    // would read as one sentence said twice (Wren's read).
+    for (const line of said.slice(1)) expect(line).toMatch(/^(full page|reference): /)
+    expect(r.throttle).toBe('none')
+    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen')
+
+    const applied = await runCli(args, {})
+    expect(applied.code, applied.stderr).toBe(0)
+    const a = JSON.parse(applied.stdout)
+    expect(refusedIn(a.screens[0].warnings)).toEqual([])
+    expect(a.throttle).toBe('slow-4g')
+    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).not.toContain('was refused on every screen')
+  })
 })
 
 test.describe('live: a refused throttle is not shown as in force, and the reply says why', () => {

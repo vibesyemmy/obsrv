@@ -67,7 +67,9 @@ Through Chromium's debugger on the target, exactly as DevTools does it:
 the page fetches and runs under the conditions from its first byte. A
 window a density change swaps in gets them again. If Chromium refuses —
 another debugger already on the target, say — the render still happens
-and a warning says the throttle was not applied.
+under the conditions the target had, a warning says the throttle was not
+applied, and the reply's `throttle` names the conditions kept (`none` on a
+fresh headless render), on the CLI and in the app alike.
 
 ## Live, in the app
 
