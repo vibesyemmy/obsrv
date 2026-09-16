@@ -1304,6 +1304,18 @@ export function registerIpc(ctx: AppContext): () => void {
   // and is dropped rather than guessed at.
   const publishTabs = (): void => {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
+    // Test-only: hold the strip back, so the gap between main switching tabs
+    // and the renderer learning of it can be forced rather than hoped for
+    // (bug-preset-after-tab-switch-lands-on-the-other-tab). Read on every
+    // publish, so a spec can open and close the gap. Never read outside
+    // OBSRV_TEST.
+    const holdMs = process.env.OBSRV_TEST === '1' ? Number(process.env.OBSRV_TEST_TABS_CHANGED_DELAY_MS ?? 0) : 0
+    if (holdMs > 0) {
+      setTimeout(() => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(IPC.tabsChanged, tabs.snapshot())
+      }, holdMs)
+      return
+    }
     win.webContents.send(IPC.tabsChanged, tabs.snapshot())
   }
   tabs.onTabsChanged = (): void => {
@@ -1616,10 +1628,13 @@ export function registerIpc(ctx: AppContext): () => void {
           }
           pendingApplies.shift()
         }
-        pendingApplies.push(patch)
+        pendingApplies.push({ ...patch, tabId: tabs.activeId })
         return
       }
-      win.webContents.send(IPC.agentApply, patch)
+      // Named by the tab it was applied for, which is main's front tab now. The
+      // renderer may not have heard of a switch that just happened: an agent's
+      // activateTab answers at once, and the strip learns of it afterwards.
+      win.webContents.send(IPC.agentApply, { ...patch, tabId: tabs.activeId })
     },
     // Both captures hold the target painting for their duration: a hidden
     // window pauses it (see `TabManager.setShellVisible`), and `settleTarget`

@@ -253,7 +253,40 @@ export interface AgentApplyPatch {
   panTo?: { x: number; y: number }
   /** Draw a temporary neutral overlay over this target-pixel rect. */
   highlight?: AgentHighlight
+  /**
+   * The tab main applied this for: its front tab when the command arrived. The
+   * renderer writes the patch to that tab even while its own strip has not yet
+   * heard of the switch, or the patch lands on the tab just left
+   * (bug-preset-after-tab-switch-lands-on-the-other-tab). Set by main, never by
+   * a caller; absent means the tab in front.
+   */
+  tabId?: string
 }
+
+/**
+ * Where each field of an agent's patch lives: on a tab, on the window, or
+ * only routing the patch. The renderer writes a patch through two paths, one
+ * for the tab in front and one for a tab named by main that is not in front
+ * yet, and both must handle every field. `satisfies` makes a field added to
+ * `AgentApplyPatch` fail typecheck until it is placed here, and a unit test
+ * checks that the background path writes every `tab` field (Wren's read of #160).
+ */
+export const AGENT_PATCH_FIELDS = {
+  presetId: 'tab',
+  profileId: 'tab',
+  viewMode: 'tab',
+  panes: 'window',
+  orientation: 'tab',
+  textScale: 'tab',
+  throttle: 'tab',
+  onionSkin: 'tab',
+  pixelExact: 'tab',
+  visionType: 'tab',
+  visionSeverity: 'tab',
+  panTo: 'tab',
+  highlight: 'tab',
+  tabId: 'routing',
+} as const satisfies Record<keyof AgentApplyPatch, 'tab' | 'window' | 'routing'>
 
 export const CONTROL_COMMANDS = [
   'status',

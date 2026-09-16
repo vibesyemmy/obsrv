@@ -20,7 +20,7 @@ import {
   findProfile,
 } from '../../../shared/presets'
 import { canAddTab, closeTab as closeInList, type TabSnapshot } from '../../../shared/tabList'
-import type { AgentHighlight } from '../../../shared/control'
+import type { AgentApplyPatch, AgentHighlight } from '../../../shared/control'
 import type { HistoryEntry } from '../../../shared/history'
 import type { InspectReport } from '../../../shared/inspect'
 import type { HostInfo, LoadError, Orientation, PanelParams, PanelProfile, Settings, UpdateState } from '../../../shared/types'
@@ -183,6 +183,12 @@ export interface AppState {
   setOnionSkin(opacity: number): void
   /** The onion skin of a tab named by main, not the one in front: a reply can outlive a tab switch. */
   setTabOnionSkin(id: string, opacity: number): void
+  /**
+   * An agent's patch, written to the tab main applied it for when that is not
+   * the tab in front here yet: the same writes the setters below make for the
+   * tab in front. `panes` is not per tab and stays with its own setter.
+   */
+  applyAgentPatchToTab(id: string, patch: AgentApplyPatch): void
   setCustom(c: Partial<TargetScreen>): void
   setPixelExact(v: boolean): void
   setVision(type: VisionType, severity: number): void
@@ -368,6 +374,26 @@ export const useStore = create<AppState>()((set, get) => ({
   setThrottle: throttle => set(patchActiveWith(t => (t.throttle === throttle ? null : { throttle }))),
   setOnionSkin: onionSkin => set(patchActiveWith(t => (t.onionSkin === onionSkin ? null : { onionSkin }))),
   setTabOnionSkin: (id, onionSkin) => set(patchTabWith(id, t => (t.onionSkin === onionSkin ? null : { onionSkin }))),
+  applyAgentPatchToTab: (id, p) =>
+    set(
+      patchTabWith(id, t => {
+        const out: Partial<TabState> = {}
+        // In the order the tab-in-front handler applies them, so a highlight in
+        // the same patch as a preset survives the preset clearing the old one.
+        if (p.presetId !== undefined) Object.assign(out, { presetId: p.presetId, agentHighlight: null })
+        if (p.profileId !== undefined) Object.assign(out, { profileId: p.profileId, profileOverride: null })
+        if (p.orientation !== undefined && p.orientation !== t.orientation) Object.assign(out, { orientation: p.orientation, agentHighlight: null })
+        if (p.textScale !== undefined && p.textScale !== t.textScale) Object.assign(out, { textScale: p.textScale, agentHighlight: null })
+        if (p.throttle !== undefined && p.throttle !== t.throttle) out.throttle = p.throttle
+        if (p.onionSkin !== undefined && p.onionSkin !== t.onionSkin) out.onionSkin = p.onionSkin
+        if (p.viewMode !== undefined) out.viewMode = p.viewMode
+        if (p.pixelExact !== undefined) out.pixelExact = p.pixelExact
+        if (p.visionType !== undefined) Object.assign(out, { visionType: p.visionType, visionSeverity: p.visionSeverity ?? t.visionSeverity })
+        if (p.panTo !== undefined) out.agentPan = { ...p.panTo, seq: (t.agentPan?.seq ?? 0) + 1 }
+        if (p.highlight !== undefined) out.agentHighlight = { ...p.highlight, seq: (t.agentHighlight?.seq ?? 0) + 1 }
+        return Object.keys(out).length === 0 ? null : out
+      }),
+    ),
   setCustom: c =>
     set(patchActiveWith(t => ({ custom: { ...t.custom, ...c }, presetId: CUSTOM_PRESET_ID, agentHighlight: null }))),
   setPixelExact: pixelExact => set(patchActive({ pixelExact })),
