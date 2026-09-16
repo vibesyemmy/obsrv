@@ -1,9 +1,8 @@
 ---
 title: "The MCP specs only validate replies after `tools/list` runs — so a retry turns validation off"
-column: doing
+column: done
 kind: chore
 owner: "Rook"
-waiting: "Rook: four specs still to list before their first call"
 order: 48
 ---
 
@@ -121,3 +120,29 @@ itself while measuring nothing. Its own MCP replies are going unvalidated at the
 **Not closing this by fixing them here**, because the fix is four one-line additions across four
 specs and each one can turn a green spec red the moment validation starts — which is the point of
 it, and wants its own run rather than riding on a tidy-up.
+
+## Closed 2026-09-16: every spec now lists before its first call
+
+`#128` added `listTools()` to `dev-lane`, `mcp-electron` and `surface-parity`. **`throttle-refused`
+needed no change** — it already listed before its calls, which is why the row above said "check only
+the ordering" rather than counting it as broken.
+
+Verified on `main` rather than assumed, and the verification needed a second look:
+
+| spec | `listTools` | first `callTool` |
+| --- | --- | --- |
+| `mcp` | 43 | 63 |
+| `mcp-live` | 63 | 74 |
+| `dev-lane` | 69 | **47** |
+| `mcp-electron` | 63 | 78 |
+| `surface-parity` | 97 | 112 |
+| `throttle-refused` | 133 | 163 |
+
+**`dev-lane` reads wrong and is right.** Its line 47 is the *definition* of the `call` helper, not an
+invocation; the helper runs inside tests, which run after the `beforeAll` that lists at 69. A
+line-number comparison would have filed a false alarm here — the sort of check that looks like a
+measurement and is really a proxy for one.
+
+**And the change was shown to switch validation on, not merely to be present:** an undeclared key was
+injected into `obsrv_audit`'s `structuredContent` and `mcp-electron` run both ways on the same build
+— with `listTools()` it failed, without it passed.
