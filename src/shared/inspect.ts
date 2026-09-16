@@ -50,6 +50,12 @@ export interface InspectReport {
    */
   opacity: number
   /**
+   * Which rule takes the element off the screen, or null when it is drawn.
+   * `opacity: 0` is deliberately not here: it is already said through the
+   * painted colour, which reports what the screen shows.
+   */
+  hidden: 'visibility' | 'display' | null
+  /**
    * The layout viewport's width, in the page's own CSS px. A page with no
    * viewport meta tag under a phone preset lays out 980 wide and is drawn
    * scaled to fit, so the box and the font above are larger than they are
@@ -78,7 +84,7 @@ export const MAX_SELECTOR_LENGTH = 512
  * side checks field by field; the page is not trusted, its DOM merely
  * measured.
  */
-export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?: number): InspectReport | null {
+export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?: number): InspectReport | { invalidSelector: true } | null {
   let el: Element | null = null
   if (mode === 'point') {
     const hit = document.elementFromPoint(Number(a), Number(b))
@@ -87,7 +93,13 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     try {
       el = document.querySelector(String(a))
     } catch {
-      el = null
+      // A selector that is not CSS and a selector that matches nothing used to
+      // return the same `null`, so `p[` and `#no-such-thing` answered
+      // identically down to the human line — an agent that typos a selector
+      // concluded the element was not on the page. The marker is returned
+      // rather than thrown so it survives the page boundary, and the parser
+      // keeps it.
+      return { invalidSelector: true }
     }
   }
   if (!(el instanceof Element)) return null
@@ -123,6 +135,22 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   for (let node: Element | null = el; node !== null; node = node.parentElement) {
     const o = Number.parseFloat(getComputedStyle(node).opacity)
     if (Number.isFinite(o)) opacity *= Math.min(1, Math.max(0, o))
+  }
+
+  // Whether the thing measured is on the screen at all, and if not, which rule
+  // takes it off. `audit` already answers this — `shown` in shared/audit.ts —
+  // and skips what is not rendered, so on one page `audit` reported the
+  // smallest text as 10 px while `inspect` measured a 4 px paragraph and said
+  // nothing about it being invisible. Both were right about their own
+  // question; only one said what it did. `visibility` and `display` are the
+  // inherited ones, so an ancestor hides a child that declares neither, which
+  // is why this walks rather than reading the element alone. `opacity: 0` is
+  // already reported through the painted colour and is left to it.
+  let hidden: 'visibility' | 'display' | null = null
+  for (let node: Element | null = el; node !== null && hidden === null; node = node.parentElement) {
+    const cs = getComputedStyle(node)
+    if (cs.display === 'none') hidden = 'display'
+    else if (cs.visibility === 'hidden' || cs.visibility === 'collapse') hidden = 'visibility'
   }
 
   const r = el.getBoundingClientRect()
@@ -195,13 +223,16 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     background,
     backgroundNote: note,
     opacity,
+    hidden,
     viewportWidth: innerWidth,
   }
 }
 
 /** The point form, for the browser tests and anything else in-page. */
 export function inspectAtPoint(x: number, y: number): InspectReport | null {
-  return inspectTarget('point', x, y)
+  const r = inspectTarget('point', x, y)
+  // A point cannot produce the invalid-selector marker; narrowed for callers.
+  return r !== null && 'invalidSelector' in r ? null : r
 }
 
 /** `inspectTarget` as source, for `executeJavaScriptInIsolatedWorld`. */

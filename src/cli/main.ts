@@ -11,7 +11,7 @@ import { MOTION_PROBE_MS, auditBoxes, lintBoxes, motionAfter, pageMovedNote } fr
 import type { StuckBar } from '../shared/stuckChrome'
 import { boxDownsample, cropImage, rgbaToBgra, type RGBAImage } from '../shared/downsample'
 import { DEFAULT_SETTINGS, SCREEN_PRESETS, findProfile } from '../shared/presets'
-import { inspectReadout, pointOffScreenNote } from '../shared/inspectReadout'
+import { inspectReadout, invalidSelectorNote, pointOffScreenNote } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import type { LoadError, Walked } from '../shared/types'
 import type { AuditRect, AuditReport } from '../shared/audit'
@@ -969,15 +969,26 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     // The one page ask, within the same budget as the load (`shared/measureBudget`).
-    const report =
+    const answer =
       cmd.selector !== null ? await target.inspectSelector(cmd.selector, cmd.timeoutMs) : await target.inspectAt(cmd.at!.x, cmd.at!.y, cmd.timeoutMs)
-    const timedOut = report === null && target.askOutcome() === 'timeout'
-    if (report === null && !timedOut) {
+    // A rejected selector is not a miss and not a failure: the page was never
+    // asked. It joins `report === null` for everything below — there is no
+    // element, so there is no readout — and is told apart in the note and the
+    // human line, which is the whole distinction the caller was missing.
+    const invalidSelector = answer === 'invalid-selector'
+    const report = answer === 'invalid-selector' ? null : answer
+    const timedOut = report === null && !invalidSelector && target.askOutcome() === 'timeout'
+    if (report === null && !timedOut && !invalidSelector) {
       const err = watch.failed()
       if (err) throw err
     }
     const notes = timedOut ? [measureTimeoutNote('inspect', cmd.timeoutMs)] : []
+    // Both, and in this order. The throttle refusal is unshifted because it is
+    // about the conditions the whole measurement ran under, so it belongs
+    // before anything about what was measured; the invalid-selector note is
+    // about this call's argument and reads after it.
     if (throttleRefused) notes.unshift(throttleRefused)
+    if (invalidSelector) notes.push(invalidSelectorNote(cmd.selector!))
     // The element was read on the page that is there now, which is not always
     // the page that was asked for: it may have moved under the wait, and it
     // may be the server's error page.
@@ -1009,7 +1020,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
           )
     human(
       readout === null
-        ? `inspect ${cmd.url} @ ${cmd.spec.presetId}: nothing at ${where}`
+        ? `inspect ${cmd.url} @ ${cmd.spec.presetId}: ${invalidSelector ? `${where} is not a valid CSS selector` : `nothing at ${where}`}`
         : `inspect ${cmd.url} @ ${cmd.spec.presetId}: ${readout.element} · ${readout.font.px}px` +
             `${readout.font.mm !== null ? ` = ${readout.font.mm} mm` : ''} · ${readout.color} on ${readout.background ?? 'an image'}` +
             `${readout.contrast ? ` · ${readout.contrast.asIs}:1 here · ${readout.contrast.onPanel}:1 on ${profile.label}` : ''}`,

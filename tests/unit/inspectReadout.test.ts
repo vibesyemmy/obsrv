@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { InspectReport } from '../../src/shared/inspect'
-import { inspectReadout, isLargeText, pointOffScreenNote, type InspectPanel, type InspectScreen } from '../../src/shared/inspectReadout'
+import { inspectReadout, invalidSelectorNote, isLargeText, pointOffScreenNote, type InspectPanel, type InspectScreen } from '../../src/shared/inspectReadout'
 import { parseClick } from '../../src/shared/control'
 import { profileToParams } from '../../src/shared/panelSim'
 import { DEFAULT_SETTINGS, findPreset, findProfile } from '../../src/shared/presets'
@@ -158,5 +158,53 @@ describe('pointOffScreenNote', () => {
     // Both answers occur, so the agreement is not two functions that always say the same thing.
     expect(outside).toBeGreaterThan(0)
     expect(outside).toBeLessThan(edges.length * edges.length)
+  })
+})
+
+describe('an element that is not drawn', () => {
+  const noteOf = (report: InspectReport): string | undefined =>
+    inspectReadout(report, screenOf('laptop-768'), panelOf('reference')).notes.find(n => n.includes('not drawn'))
+
+  it('says nothing for the ordinary case, where the element is on the screen', () => {
+    expect(noteOf({ ...grey, hidden: null })).toBeUndefined()
+  })
+
+  it('names the rule, and says the figures below it are not about anything a reader sees', () => {
+    const none = noteOf({ ...grey, hidden: 'display' })!
+    expect(none).toContain('display: none')
+    expect(none).toContain('on it or on an ancestor')
+    expect(none).toContain('the contrast verdict is not a verdict about anything a reader sees')
+    expect(noteOf({ ...grey, hidden: 'visibility' })!).toContain('visibility: hidden')
+  })
+
+  it('comes first, before the notes about the figures themselves', () => {
+    // A reader who stops at the first note has to learn this one, not the
+    // layout scale: nothing below it describes anything on the screen.
+    const r = inspectReadout({ ...grey, hidden: 'display', color: [0, 0, 0, 0.5] }, screenOf('laptop-768'), panelOf('reference'))
+    expect(r.notes.length).toBeGreaterThan(1)
+    expect(r.notes[0]).toContain('not drawn')
+  })
+
+  it('keeps the measurements: the selector matched, and what the element would be is a fair question', () => {
+    const r = inspectReadout({ ...grey, hidden: 'display' }, screenOf('laptop-768'), panelOf('reference'))
+    expect(r.font.px).toBe(13)
+    expect(r.contrast).not.toBeNull()
+  })
+})
+
+describe('invalidSelectorNote', () => {
+  it('quotes the selector and says what found: false does and does not mean', () => {
+    const note = invalidSelectorNote('p[')
+    expect(note).toContain('"p[" is not a valid CSS selector')
+    expect(note).toContain('nothing was looked for')
+    expect(note).toContain('found: false is about the selector, not the page')
+  })
+
+  it('names the causes an agent actually hits, and does not warn off valid CSS', () => {
+    // Measured against the engine in tests/browser/inspect.test.ts: `:has()`
+    // and `:is()` are accepted, `:contains()` is not.
+    const note = invalidSelectorNote('p:contains("x")')
+    expect(note).toContain(':contains()')
+    expect(note).toContain(':has() and :is() are valid CSS and are accepted')
   })
 })

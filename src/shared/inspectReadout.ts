@@ -135,6 +135,23 @@ export function inspectReadout(
           report.opacity < 1 ? `an opacity of ${round(report.opacity, 2)}` : 'the colour\u2019s own alpha'
         } composites it onto the background, and the contrast figures are of what is shown`
 
+  // Nothing here is on the screen, and every figure below describes it anyway.
+  // `audit` skips an element this rule rejects, so on one page `audit` called
+  // the smallest text 10 px while `inspect` measured a hidden 4 px paragraph
+  // and passed its contrast at 18.88:1. The measurements are kept — the
+  // selector matched, and what the element WOULD be is a fair question — and
+  // the note says they are of something nobody can see.
+  // Keyed on the two values that mean something rather than on `!== null`: a
+  // report built before this field carries `undefined`, and a "not drawn" note
+  // on every such report would be the same kind of confident wrong answer the
+  // note exists to prevent.
+  const hiddenNote =
+    report.hidden !== 'display' && report.hidden !== 'visibility'
+      ? null
+      : `this element is not drawn: ${
+          report.hidden === 'display' ? 'display: none' : 'visibility: hidden'
+        } on it or on an ancestor. The measurements below are of a box the screen never shows, and the contrast verdict is not a verdict about anything a reader sees.`
+
   let contrast: InspectContrast | null = null
   if (report.background !== null) {
     const large = isLargeText(report.fontSizePx, report.fontWeight)
@@ -179,8 +196,28 @@ export function inspectReadout(
     contrast,
     ppi: ppi === null ? null : Math.round(ppi),
     layoutScale: round(scale, 4),
-    notes: [scaleNote, paintedNote].filter((n): n is string => n !== null),
+    notes: [hiddenNote, scaleNote, paintedNote].filter((n): n is string => n !== null),
   }
+}
+
+/**
+ * The sentence an inspect by selector carries when the string is not a CSS
+ * selector at all. `p[` and `#no-such-thing` used to produce the same answer —
+ * `found: false`, no note — so a typo read as "that element is not on the
+ * page", and the agent went looking for why the page had changed. Nothing was
+ * looked for: the browser rejected the string before any matching happened.
+ *
+ * The distinction is made in the page ask (`inspectTarget` returns a marker)
+ * and travels as a note, not as a thrown error, because the surrounding notes
+ * — which page answered, what its status was — are worth as much on a typo as
+ * on a hit, and an error would throw them away.
+ */
+export function invalidSelectorNote(selector: string): string {
+  return (
+    `${JSON.stringify(selector)} is not a valid CSS selector, so nothing was looked for — found: false is about ` +
+    `the selector, not the page: the element may well be there. Unbalanced brackets or quotes, an XPath, and jQuery ` +
+    `extensions such as :contains() are the usual causes; :has() and :is() are valid CSS and are accepted`
+  )
 }
 
 /**

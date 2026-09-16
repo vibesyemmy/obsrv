@@ -163,8 +163,13 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
   // than clamped — the rule the rest of this parser follows.
   const opacity = raw.opacity === undefined ? 1 : raw.opacity
   if (!isFiniteNumber(opacity) || opacity < 0 || opacity > 1) return null
+  // A page reporting anything but the two rules, or nothing at all, reads as
+  // drawn: the same posture as `opacity` above, and an older report carries no
+  // such field.
+  const hidden = raw.hidden === 'visibility' || raw.hidden === 'display' ? raw.hidden : null
   return {
     opacity,
+    hidden,
     tag,
     id,
     classes,

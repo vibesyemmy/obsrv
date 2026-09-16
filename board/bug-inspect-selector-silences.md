@@ -1,9 +1,8 @@
 ---
 title: "`inspect` by selector: a hidden element reads as drawn, and a selector that is not CSS reads as no match"
-column: doing
+column: done
 kind: bug
-owner: "Rook"
-waiting: "ci: #85's suite, then Rook's cold read and the merge"
+owner: "Kenya"
 order: 48
 ---
 
@@ -17,7 +16,7 @@ commits, local and remote identical, nothing unpushed); its checks were passing 
 Rook takes it to merge: read it cold (he did not write it), answer CI, merge via Henry.
 
 FOUND BY HENRY 2026-09-16, following the last line of `bug-inspect-offscreen-point-is-silent`
-(*"Worth checking while there: … a selector that matches a hidden element"*). **Unowned.**
+(*"Worth checking while there: … a selector that matches a hidden element"*).
 
 **Surface observed:** a local build of `main` at `f362898`, through the CLI's JSON, which the MCP's
 headless `obsrv_inspect` relays. The live path runs the same `inspectSelector`, so it is expected
@@ -83,3 +82,45 @@ page ask has to tell *invalid* from *no match*. Either it returns a marker the p
 second ask checks the selector when the first returns `null`. This is the fix's decision.
 
 **One owner for both halves**, since both change the same page ask, `inspectTarget`: the hidden half needs the element's computed `visibility` and `display` reported, and the invalid half needs its `null` split in two.
+
+## RESOLVED 2026-09-16 by Kenya — a note for the hidden half, a marker for the invalid one
+
+**Hidden.** `inspectTarget` now walks the ancestor chain for `display: none` and
+`visibility: hidden|collapse` into a new `hidden` field, and the readout puts one sentence **first**
+in `notes`: the element is not drawn, which rule does it, and that the contrast verdict below is not
+a verdict about anything a reader sees. The measurements stay — the selector matched, and what the
+element *would* be is a fair question. `notes` is already declared, so nothing in the schema moved.
+
+**Invalid.** The page ask returns `{ invalidSelector: true }` where it used to return the same
+`null` a miss returns; `TargetSource.inspectSelector` turns that into `'invalid-selector'`, which
+the type system then forced both callers to handle. Both surfaces answer `found: false` with
+`invalidSelectorNote` in `notes`, and the CLI's human line says *is not a valid CSS selector* rather
+than *nothing at*. A marker rather than a throw, because a throw would discard the surrounding notes
+— which page answered, what its status was — and those are worth as much on a typo as on a hit.
+
+**The card proposed sharing `audit`'s `shown`, and this does not.** Read against the fix's needs,
+`shown` answers a different question, and Henry should weigh this at merge:
+
+- it is one boolean, and the readout has to name **which** rule, or it cannot say `display: none`
+  rather than `visibility: hidden`;
+- it includes `opacity !== '0'`, already reported through the painted colour, so sharing it would
+  say that twice and the card itself calls the opacity case already-said;
+- it rejects the 1×1 clipped box of the "visually hidden" pattern. That element **is** drawn, just
+  clipped, and `inspect` calling it "not drawn" would be a new wrong answer;
+- it reads the element's own computed style, because `audit` walks the tree and reaches each
+  element itself. `inspect` is handed one element by a selector, and the hiding rule is usually on
+  an ancestor, so it has to walk up.
+
+The two tools still cannot disagree about the cases this card is about: on `display` and
+`visibility` they use the same rule, and the walk is the strictly wider one.
+
+**Measured, not assumed.** The note tells agents that `:has()` and `:is()` are accepted and
+`:contains()` is not; `tests/browser/inspect.test.ts` puts all three to this engine, so the sentence
+is checked against the browser rather than believed.
+
+**Seen while verifying, and already known:** on the pre-rebase base `mcp.spec:137` failed with
+`data/readout must NOT have additional properties` — the readout emitted `colorPainted`, which that
+`readoutShape` did not declare. That is #65, since merged, and Rook's #157 explains why it ever
+looked intermittent: a failing test replaces the Playwright worker, the replacement client has
+listed nothing, and validation is off for everything after it. Recorded only as a confirmation from
+a second direction: on current main the whole file is 39 passed with no retry.

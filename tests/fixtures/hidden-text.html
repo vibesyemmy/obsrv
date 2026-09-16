@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>hidden-text-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font-family: Arial, sans-serif; }
+      /* The one thing on this page a reader can see. */
+      #shown { position: absolute; left: 10px; top: 10px; margin: 0; font-size: 16px; color: #111111; }
+      /* Not drawn, and the rule is on the ancestor rather than the paragraph:
+         reading the element alone reports `display: block` and says nothing.
+         Its text is tiny and near-invisible on purpose — `audit` skips it,
+         `inspect` measures it, and before the note the two disagreed in
+         silence about the same page. */
+      #drawer { display: none; }
+      #drawer p { margin: 0; font-size: 4px; color: #f4f4f4; }
+      /* Hidden the other way: the box keeps its space, nothing is painted in it. */
+      #veiled { visibility: hidden; position: absolute; left: 10px; top: 60px; }
+      #veiled p { margin: 0; font-size: 13px; color: #6b7280; }
+    </style>
+  </head>
+  <body>
+    <p id="shown">This paragraph is on the screen</p>
+    <div id="drawer"><p id="drawer-text">Four pixel text nobody can see</p></div>
+    <div id="veiled"><p id="veiled-text">Space is reserved, nothing is painted</p></div>
+  </body>
+</html>

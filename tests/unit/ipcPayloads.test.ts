@@ -488,8 +488,12 @@ describe('parseInspectReport', () => {
   it('copies a good report field by field', () => {
     const r = parseInspectReport(good)!
     // `opacity` is supplied by the parser when the page omits it: a page that
-    // says nothing about opacity is fully opaque.
-    expect(r).toEqual({ ...good, opacity: 1 })
+    // says nothing about opacity is fully opaque. `hidden` is the same shape —
+    // a page that says nothing about `display` or `visibility` is drawn — and
+    // it is spelled `null` rather than left absent so that "not hidden" and
+    // "this report predates the field" stay distinguishable downstream, which
+    // is what `inspectReadout` keys its note on.
+    expect(r).toEqual({ ...good, opacity: 1, hidden: null })
     expect(r).not.toBe(good)
     expect(r.color).not.toBe(good.color)
   })

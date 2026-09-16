@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { INSPECT_SCRIPT, inspectAtPoint, type inspectTarget } from '../../src/shared/inspect'
+import { INSPECT_SCRIPT, inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
+import type { InspectReport } from '../../src/shared/inspect'
 
 /**
  * `inspectAtPoint` runs inside the target page, so it is tested against a
@@ -27,6 +28,10 @@ beforeEach(() => {
       /* lemonde.fr's consent wall: a dark scrim from another branch of the tree, the text a sibling above it. */
       #scrim { position: absolute; left: 10px; top: 280px; width: 300px; height: 40px; background: rgb(41, 42, 43); z-index: 1; }
       #scrim-text { position: absolute; left: 20px; top: 290px; font-size: 14px; color: rgb(239, 240, 243); z-index: 2; }
+      /* not drawn at all: the rule is on the ancestor, which is the case a
+         one-element check misses */
+      #gone { display: none; }
+      #veiled { visibility: hidden; }
       /* a photo as an <img>, not a background, with a caption over it */
       #pic { position: absolute; left: 10px; top: 340px; width: 300px; height: 40px; }
       #pic-text { position: absolute; left: 20px; top: 350px; font-size: 12px; color: rgb(255, 255, 255); z-index: 2; }
@@ -36,6 +41,8 @@ beforeEach(() => {
     <div id="veil"><span id="veil-text">White on a half-black veil</span></div>
     <div id="photo"><span id="photo-text">Red on a gradient</span></div>
     <div id="scrim"></div><span id="scrim-text">Reject all cookies</span>
+    <div id="gone"><p id="gone-text">Never drawn: display none on its parent</p></div>
+    <div id="veiled"><p id="veiled-text">Never drawn: visibility hidden on its parent</p></div>
     <img id="pic" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt=""><span id="pic-text">Caption over a photo</span>
   `
   host.id = 'host'
@@ -109,8 +116,45 @@ describe('inspectAtPoint', () => {
     const { x, y } = centre('card-text')
     expect(fromSource('point', x, y)).toEqual(inspectAtPoint(x, y))
     expect(fromSource('selector', '#card-text')).toEqual(inspectAtPoint(x, y))
-    // Nothing matched, or not a selector at all: null, never a throw.
+    // Nothing matched: null. Not a selector at all: the marker, never a throw
+    // — it has to survive `executeJavaScriptInIsolatedWorld`, which a throw
+    // does not.
     expect(fromSource('selector', '#no-such-element')).toBeNull()
-    expect(fromSource('selector', '[[[')).toBeNull()
+    expect(fromSource('selector', '[[[')).toEqual({ invalidSelector: true })
+  })
+})
+
+describe('a selector the browser will not accept', () => {
+  it('is told apart from one that matches nothing', () => {
+    // The two answered identically before this, down to the human line, so a
+    // typo read as "that element is not on the page".
+    expect(inspectTarget('selector', '#no-such-thing')).toBeNull()
+    expect(inspectTarget('selector', 'p[')).toEqual({ invalidSelector: true })
+  })
+  it('rejects only what this engine rejects: the note names these cases, so they are measured', () => {
+    // `:has()` and `:is()` are CSS this Chromium accepts; `:contains()` is
+    // jQuery's and never was. The note in inspectReadout.ts tells agents
+    // exactly this, and a note that is wrong about the engine is worse than
+    // no note, so it is checked against the engine rather than believed.
+    expect(inspectTarget('selector', '#card:has(> p)')).not.toBeNull()
+    expect(inspectTarget('selector', ':is(#grey)')).not.toBeNull()
+    expect(inspectTarget('selector', 'p:contains("Grey")')).toEqual({ invalidSelector: true })
+  })
+})
+
+describe('an element that is not drawn', () => {
+  const report = (sel: string): InspectReport => inspectTarget('selector', sel) as InspectReport
+  it("names display: none on an ancestor, not on the element", () => {
+    const r = report('#gone-text')
+    expect(r.id).toBe('gone-text')
+    expect(r.hidden).toBe('display')
+  })
+  it('names visibility: hidden on an ancestor', () => {
+    expect(report('#veiled-text').hidden).toBe('visibility')
+  })
+  it('is null for an element the screen shows, which is the ordinary case', () => {
+    expect(report('#grey').hidden).toBeNull()
+    const { x, y } = centre('card-text')
+    expect(inspectAtPoint(x, y)!.hidden).toBeNull()
   })
 })
