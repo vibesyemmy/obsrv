@@ -683,7 +683,7 @@ describe('parseLogMessage', () => {
     expect(parseLogMessage('  webgl context lost ')).toBe('webgl context lost')
   })
   it('drops control characters rather than the message, so a newline cannot forge a second entry', () => {
-    expect(parseLogMessage('one\nforged  two ')).toBe('one forged  two')
+    expect(parseLogMessage('one\nforged  two\x00')).toBe('one forged  two')
   })
   it.each([
     ['a non-string', 42],
