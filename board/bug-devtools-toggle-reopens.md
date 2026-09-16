@@ -1,6 +1,7 @@
 ---
 title: "The inspector closes, then re-opens 500 ms later — and it defeats the retry"
-column: next
+column: doing
+owner: "Henry"
 kind: bug
 order: 33
 ---
