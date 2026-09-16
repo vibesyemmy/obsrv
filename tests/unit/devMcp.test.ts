@@ -39,6 +39,10 @@ server.registerTool('slow', { description: 'answers after 700 ms' }, async () =>
   return text('slow ' + MARK)
 })
 server.registerTool('die', { description: 'exits mid-call' }, async () => process.exit(3))
+server.registerTool('noted', { description: 'stamps its structured result, as the lane server does' }, async () => ({
+  ...text('noted ' + MARK),
+  structuredContent: { notes: ['a note', 'obsrv-dev lane: ' + MARK + ' · server built now · here'] },
+}))
 process.stdin.on('data', chunk => require('node:fs').appendFileSync(require('node:path').join(__dirname, '..', '..', 'received.jsonl'), chunk))
 server.connect(new StdioServerTransport())
 `,
@@ -125,7 +129,7 @@ describe('the obsrv-dev proxy', () => {
 
   it('every tool gains a required `tree`, because nothing in the proxy can tell which checkout the caller works in', async () => {
     const { tools } = await client.listTools()
-    expect(tools.map(t => t.name)).toEqual(['build', 'slow', 'die'])
+    expect(tools.map(t => t.name)).toEqual(['build', 'slow', 'die', 'noted'])
     for (const t of tools) {
       expect(t.inputSchema.properties?.['tree']).toMatchObject({ type: 'string' })
       expect(t.inputSchema.required).toContain('tree')
@@ -148,7 +152,18 @@ describe('the obsrv-dev proxy', () => {
     expect(text(r)).toContain(`serves`)
     expect(text(r)).toContain(a)
     expect(text(r)).toContain('npm run lane')
+    expect(text(r)).toContain(`calls meant for ${realpathSync(a)} are then refused instead`)
     expect(callsTo(a).length).toBe(before)
+  })
+
+  it('an "any" answer says it was not compared, in the text stamp and the structured one; a compared answer does not', async () => {
+    const checked = await client.callTool({ name: 'noted', arguments: { tree: a } })
+    const unchecked = await client.callTool({ name: 'noted', arguments: ANY })
+    const notes = (r: unknown): string[] => (r as { structuredContent: { notes: string[] } }).structuredContent.notes
+    expect(stamp(checked)).not.toContain('not compared')
+    expect(notes(checked)[1]).not.toContain('not compared')
+    expect(stamp(unchecked)).toContain('tree "any": not compared with your checkout')
+    expect(notes(unchecked)).toEqual(['a note', expect.stringMatching(/^obsrv-dev lane: A1 .* · tree "any": not compared with your checkout$/)])
   })
 
   it("a worktree inside the lane's checkout is another checkout, not the lane's", async () => {
@@ -166,11 +181,14 @@ describe('the obsrv-dev proxy', () => {
     const none = await client.callTool({ name: 'build' })
     expect(isError(none)).toBe(true)
     expect(text(none)).toContain('names no `tree`')
-    expect(text(none)).toContain('"any"')
+    // What to pass, and not "any": a caller that never thought about trees should not be handed the one value that skips the check (Wren's read).
+    expect(text(none)).toContain('git rev-parse --show-toplevel')
+    expect(text(none)).not.toContain('"any"')
     for (const tree of ['obsrv', join(tmpdir(), `obsrv-proxy-nowhere-${process.pid}`)]) {
       const r = await client.callTool({ name: 'build', arguments: { tree } })
       expect(isError(r)).toBe(true)
       expect(text(r)).toContain('not an absolute path in a git checkout')
+      expect(text(r)).not.toContain('"any"')
     }
     expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('A1 dev=1')
   })

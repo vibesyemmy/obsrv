@@ -322,7 +322,8 @@ npm run lane -- --status     # where the lane points, and how fresh its builds a
   that. So every `obsrv-dev` tool takes a required `tree`, the top of the
   caller's working tree. A call naming a checkout other than the lane's is not
   run, and says which checkout the lane serves and how to point it there.
-  `tree: "any"` runs on whatever the lane serves.
+  `tree: "any"` runs on whatever the lane serves, and that answer's stamp says
+  it was not compared with your checkout.
 - **In dev mode the server drives the lane's app**: it discovers the lane
   profile's `control.json`, launches the checkout's `out/main/index.js`
   rather than `/Applications/Obsrv.app`, and relaunches a dev app that started

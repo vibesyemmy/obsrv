@@ -60,9 +60,21 @@ top of the caller's working tree, and the proxy compares git tops:
 - `tree: "any"` runs on whatever the lane serves: the card's "serving another tree is sometimes
   correct", said on purpose rather than by default.
 
-**Controls, one run each:** five sabotages each turned exactly the intended unit test red: no schema
+**Wren's cold read found the escape hatch reopening the hazard, and it is closed in the same PR.**
+An `"any"` answer carried the same stamp as a compared one, so a reader could not tell them apart:
+the state before this change. Now both stamps on an `"any"` answer, the proxy's text line and the
+lane server's line in `notes` or `warnings` (the one Claude Code shows), end
+`tree "any": not compared with your checkout`. The refusals for no `tree` and for a path in no
+checkout no longer offer `"any"`; they say what to pass. A caller who never thought about trees
+should not be handed the one value that skips the check. The mismatch refusal still offers it,
+where running on the lane's build is a real decision. It also says that pointing the lane away
+turns calls meant for the lane's checkout into refusals, since another session may be the one
+using it.
+
+**Controls, one run each:** eight sabotages each turned exactly the intended unit test red: no schema
 rewrite, `tree` forwarded to the build, path containment instead of git tops, a missing `tree`
-allowed, another checkout allowed.
+allowed, another checkout allowed, no mark on the text stamp, no mark on the structured stamp, and
+`"any"` offered again in the no-`tree` refusal.
 
 **Limits:**
 - **It trusts what the caller names.** A session that names the lane's checkout while meaning its

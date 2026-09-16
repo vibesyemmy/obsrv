@@ -50,7 +50,7 @@ let initRequest = null
 let initialized = false
 /** Whether the client has had an answer to `initialize`, from a child or from here. */
 let answeredInit = false
-/** The running child: { proc, root, key, tree, label, built, inflight: Map<id, method>, replayIds: Set<id>, waiters, lastErr, exited }. */
+/** The running child: { proc, root, key, tree, label, built, inflight: Map<id, method>, unchecked: Set<id>, replayIds: Set<id>, waiters, lastErr, exited }. */
 let child = null
 let replaySeq = 0
 const replays = new Map()
@@ -73,6 +73,8 @@ const TREE_PROPERTY = {
     '`git rev-parse --show-toplevel` prints it there. obsrv-dev runs one checkout for the whole machine, and a ' +
     `call naming another is not run rather than answered by the lane's build. "${ANY_TREE}" runs on whatever the lane serves.`,
 }
+/** What an "any" answer's stamps add: the lane's build answered with no comparison against the caller's checkout. */
+const UNCHECKED = `tree "${ANY_TREE}": not compared with your checkout`
 
 /** A tool as a client sees it through the proxy: its own arguments, and `tree`, required. */
 function withTree(tool) {
@@ -106,20 +108,20 @@ function treeRefusal(tree, c) {
   if (typeof tree !== 'string' || tree.trim() === '')
     return (
       `not run: this call names no \`${TREE}\`, the checkout it is meant to test. The dev lane serves ${c.label} at ` +
-      `${c.root}, one checkout for the whole machine, and obsrv-dev cannot tell which tree you work in: pass the top ` +
-      `of your working tree as \`${TREE}\`, or "${ANY_TREE}" to run on that checkout as it is`
+      `${c.root}, one checkout for the whole machine, and obsrv-dev cannot tell which tree you work in: pass as ` +
+      `\`${TREE}\` the top of your working tree, which \`git rev-parse --show-toplevel\` prints where you work`
     )
   const named = isAbsolute(tree) ? toplevel(tree) : null
   if (named === null)
     return (
       `not run: \`${TREE}\` is ${JSON.stringify(tree)}, which is not an absolute path in a git checkout on this machine. ` +
-      `Pass the top of your working tree, or "${ANY_TREE}"; ${serves}`
+      `Pass the top of your working tree, which \`git rev-parse --show-toplevel\` prints where you work; ${serves}`
     )
   if (named === c.tree) return null
   return (
     `not run: this call is meant to test ${named}, but ${serves}, and that build would have answered it. ` +
-    `\`npm run lane\` in ${named} points the lane there, for every session on this machine; ` +
-    `${TREE}: "${ANY_TREE}" runs this call on ${c.root} as it is`
+    `\`npm run lane\` in ${named} points the lane there for every session on this machine, and calls meant for ` +
+    `${c.root} are then refused instead; ${TREE}: "${ANY_TREE}" runs this call on ${c.root} as it is`
   )
 }
 
@@ -182,6 +184,7 @@ function startChild(root, key) {
     root,
     key,
     tree: toplevel(root) || root,
+    unchecked: new Set(),
     label: lane.laneLabel(root),
     built: new Date(lane.serverStamp(root)).toLocaleTimeString(),
     inflight: new Map(),
@@ -241,23 +244,40 @@ function fromChild(c, line) {
     if (method === 'tools/list' && msg.result && Array.isArray(msg.result.tools)) {
       msg.result.tools = msg.result.tools.map(withTree)
     }
-    if (method === 'tools/call' && msg.result && Array.isArray(msg.result.content)) {
-      msg.result.content = [...msg.result.content, { type: 'text', text: stampFor(c) }]
+    if (method === 'tools/call' && msg.result) {
+      const unchecked = c.unchecked.delete(msg.id)
+      if (Array.isArray(msg.result.content)) msg.result.content = [...msg.result.content, { type: 'text', text: stampFor(c, unchecked) }]
+      if (unchecked) markUnchecked(msg.result.structuredContent)
     }
     if (c.inflight.size === 0) for (const done of c.waiters.splice(0)) done()
   }
   write(msg)
 }
 
-/** The line a tool result ends with: which build answered, and whether the lane moved since the last one. */
-function stampFor(c) {
-  const line = `obsrv-dev lane: ${c.label} · server built ${c.built} · ${c.root}`
+/** The line a tool result ends with: which build answered, whether it was compared with the caller's checkout, and whether the lane moved since the last one. */
+function stampFor(c, unchecked) {
+  const line = `obsrv-dev lane: ${c.label} · server built ${c.built} · ${c.root}${unchecked ? ` · ${UNCHECKED}` : ''}`
   const moved = lastAnswered !== null && lastAnswered.root !== c.root ? lastAnswered : null
   lastAnswered = { root: c.root, label: c.label }
   return moved === null
     ? line
     : `${line} — the lane moved since this session's last call, from ${moved.root} (${moved.label}): ` +
         '`npm run lane` in any checkout moves it for every session'
+}
+
+/**
+ * Marks the stamp the lane's server wrote into a structured result as not
+ * compared. That stamp, not the text block, is the one a client that shows
+ * structured content (Claude Code) puts in front of the model.
+ */
+function markUnchecked(structured) {
+  if (!structured || typeof structured !== 'object') return
+  for (const field of ['notes', 'warnings']) {
+    const lines = structured[field]
+    if (!Array.isArray(lines)) continue
+    const i = lines.findIndex(l => typeof l === 'string' && l.startsWith('obsrv-dev lane: '))
+    if (i >= 0) lines[i] = `${lines[i]} · ${UNCHECKED}`
+  }
 }
 
 function onChildExit(c, code, signal, error) {
@@ -361,6 +381,7 @@ async function handle(msg) {
       if (isRequest) answerError(msg.id, msg.method, refused)
       return
     }
+    if (args[TREE] === ANY_TREE && isRequest) r.child.unchecked.add(msg.id)
     // The lane's server never declared `tree`, so it never sees it.
     const own = { ...args }
     delete own[TREE]
