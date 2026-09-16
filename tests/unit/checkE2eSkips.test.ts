@@ -71,6 +71,13 @@ describe('check-e2e-skips', () => {
     expect(run(r, [])).toThrow(`skipped on a retry and not listed: live-drive.spec.ts:349 › ${FOCUS} (its reason: "${RUNNER}")`)
   })
 
+  it('does not name a test that skipped behind a failing serial sibling and passed on its retry: it ran', () => {
+    const ran = { ...spec(FOCUS, 'expected'), tests: [{ status: 'expected', annotations: [], results: [{ status: 'skipped' }, { status: 'passed' }] }] }
+    const r = report([ran], { expected: 1 })
+    expect(check.skippedTests(r)).toEqual([])
+    expect(run(r, [])()).toBe('1 tests; 0 skipped, all listed')
+  })
+
   it("reads a skip's reason from the result when the test itself carries none", () => {
     const onResult = { ...spec(FOCUS, 'skipped'), tests: [{ status: 'skipped', annotations: [], results: [{ status: 'skipped', annotations: [{ type: 'skip', description: RUNNER }] }] }] }
     expect(check.skippedTests(report([onResult], { skipped: 1 }))[0]?.why).toBe(RUNNER)

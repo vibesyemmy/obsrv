@@ -28,6 +28,11 @@ const { basename } = require('node:path')
  * (Wren's read). A guard that evaluates differently in a fresh worker can do
  * exactly that.
  *
+ * Only the LAST attempt decides. A serial file skips the tests after one that
+ * fails, and their retries then run and pass: that test ran. Run 35155348601
+ * named `surface-parity.spec.ts:578` for a skipped first try and a passing
+ * retry, while the rule read "any attempt skipped".
+ *
  * The reason is read from the test's annotations and from each result's: a
  * runtime `test.skip(condition, reason)` may land on the result only.
  */
@@ -46,7 +51,7 @@ function skippedTests(report) {
     for (const spec of suite.specs ?? []) {
       for (const t of spec.tests ?? []) {
         const skipped = t.status === 'skipped'
-        const retry = !skipped && (t.results ?? []).some(r => r.status === 'skipped')
+        const retry = !skipped && (t.results ?? []).at(-1)?.status === 'skipped'
         if (!skipped && !retry) continue
         out.push({ file: basename(spec.file ?? suite.file ?? ''), title: [...own, spec.title].join(' › '), line: spec.line, why: reasonOf(t), retry })
       }
