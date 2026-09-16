@@ -58,6 +58,22 @@ set already used `preset` / `profile`, so `snap` was the outlier, and with
 surfaces. If you support both old and new, `reply.preset ?? reply.presetId`
 covers the transition.
 
+### Live `obsrv_snap` declares `onionSkin` and `loading`, which it has sent since 0.26.0 and 0.28.0
+
+A live snap has answered with the app's onion-skin opacity since 0.26.0, and
+with whether the tab was still loading since 0.28.0. `snapOutputShape`, which
+is `additionalProperties: false`, never listed either, so **a client that
+validates the published schema has rejected every live snap since then**
+(`-32602`, additional properties; `bug-live-snap-reply-fails-its-own-schema`).
+They are declared now, and the values are what they always were.
+
+**What breaks:** nothing that worked. A validating client couldn't read a live
+snap before, and one that doesn't validate sees the same keys as before. A
+session that listed the tools before upgrading still holds the old schema and
+still rejects them.
+
+**What to do:** restart the session after upgrading.
+
 ### The live walk's sentences move from `notes` to `warnings`
 
 Sentences about the **page** — the walk covered a panel rather than the page,

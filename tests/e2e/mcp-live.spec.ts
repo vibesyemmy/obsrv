@@ -116,6 +116,26 @@ test('an obsrv_drive reply passes its own output schema, checked the way a valid
   }
 })
 
+test('a live obsrv_snap reply passes its own output schema, checked the way a validating client checks it', async () => {
+  // bug-live-snap-reply-fails-its-own-schema: a live snap has sent `onionSkin`
+  // since 0.26.0 and `loading` since 0.28.0, and the schema declared neither,
+  // so a client that validates rejected every live snap. Found by preflighting
+  // listTools() in this file's beforeAll. A client of its own, as the drive test above.
+  const validating = new Client({ name: 'obsrv-mcp-live-spec-validating-snap', version: '0.0.0' })
+  await validating.connect(serverTransport())
+  try {
+    await validating.listTools()
+    const validator = (validating as unknown as { getToolOutputValidator(name: string): unknown }).getToolOutputValidator('obsrv_snap')
+    expect(validator).toBeDefined()
+    const r = (await validating.callTool({ name: 'obsrv_snap', arguments: { url: FIXTURE } }, undefined, { timeout: CALL_TIMEOUT_MS })) as CallToolResult
+    expect(r.isError).toBeFalsy()
+    expect(r.structuredContent).toMatchObject({ mode: 'live' })
+    expect(Object.keys(r.structuredContent ?? {})).toEqual(expect.arrayContaining(['onionSkin', 'loading']))
+  } finally {
+    await validating.close()
+  }
+})
+
 test('obsrv_drive sets the text scale; the page reflows and the status confirms it', async () => {
   const innerWidth = (): Promise<number> =>
     app.evaluate(() => (globalThis as any).__obsrv.target.webContents.executeJavaScript('innerWidth'))
