@@ -100,6 +100,9 @@ test.describe('headless: snap, inspect, audit and lint say a refused throttle in
     const said = refusedIn(r.screens[0].warnings)
     expect(said[0], JSON.stringify(r.screens[0].warnings)).toBe(SENTENCE)
     for (const line of said) expect(line.endsWith(SENTENCE), line).toBe(true)
+    // And each render's own line carries its prefix, or two renders' refusals
+    // would read as one sentence said twice (Wren's read).
+    for (const line of said.slice(1)) expect(line).toMatch(/^(full page|reference): /)
     expect(r.throttle).toBe('none')
     expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen')
 
