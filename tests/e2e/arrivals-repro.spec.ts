@@ -174,7 +174,7 @@ test('REPRO: the same question for a SERVER redirect (302), which is the path He
     if (i === 0) {
       const full = await app.evaluate(() => {
         const g = globalThis as any
-        return g.__obsrv.target.commitTrace().slice(-4) as { url: string; mirroring?: boolean; said: boolean }[]
+        return g.__obsrv.target.commitTrace().slice(-4) as { at: number; url: string; mirroring?: boolean; said: boolean }[]
       })
       firstTrace = full.map(c => `    ${c.url.replace(/^https?:\/\/[^/]+/, '')} mirroring=${String(c.mirroring)} said=${c.said}`).join('\n')
     }
@@ -207,10 +207,38 @@ test('REPRO: the case the card actually claims — the NATIVE pane alone redirec
     if (i === 0) {
       const full = await app.evaluate(() => {
         const g = globalThis as any
-        return g.__obsrv.target.commitTrace().slice(-4) as { url: string; mirroring?: boolean; said: boolean }[]
+        return g.__obsrv.target.commitTrace().slice(-4) as { at: number; url: string; mirroring?: boolean; said: boolean }[]
       })
-      firstTrace = full.map(c => `    ${c.url.split('/').pop()} mirroring=${String(c.mirroring)} said=${c.said}`).join('\n')
+      firstTrace = full.map(c => `    commit ${String(c.at)} ${c.url.split('/').pop()} mirroring=${String(c.mirroring)}`).join('\n')
     }
   }
   console.log(`[arrivals-repro] NATIVE-ONLY redirect: ${fired}/${RUNS} notes\n${firstTrace}${exampleNote ? `\n    note: ${exampleNote}` : ''}`)
+})
+
+test('DISCRIMINATOR: native pane alone, but a SERVER redirect — the target never runs a redirecting page', async () => {
+  // If the duplicate commit is the TARGET running redirect.html's own
+  // `location.replace`, then a 302 must produce no duplicate and no note: the
+  // native commits /landed directly, the bus mirrors /landed, and the target
+  // never loads a page that redirects itself.
+  let fired = 0
+  let firstTrace = ''
+  for (let i = 0; i < RUNS; i++) {
+    await call('navigate', { url: `${origin}/landed` })
+    await new Promise(r => setTimeout(r, 300))
+    await app.evaluate(async (_e, url: string) => {
+      await (globalThis as any).__obsrv.native.load(url)
+    }, `${origin}/redirect`)
+    await new Promise(r => setTimeout(r, 600))
+    const r = await call('inspect', { selector: 'body' })
+    const notes = ((r.body as { notes?: string[] }).notes ?? []).filter(n => n.includes('navigated after'))
+    if (notes.length > 0) fired++
+    if (i === 0) {
+      const full = await app.evaluate(() => {
+        const g = globalThis as any
+        return g.__obsrv.target.commitTrace().slice(-4) as { at: number; url: string; mirroring?: boolean }[]
+      })
+      firstTrace = full.map(c => `    commit ${c.url.replace(/^https?:\/\/[^/]+/, '')} mirroring=${String(c.mirroring)}`).join('\n')
+    }
+  }
+  console.log(`[arrivals-repro] NATIVE-ONLY + SERVER redirect: ${fired}/${RUNS} notes\n${firstTrace}`)
 })
