@@ -1,6 +1,6 @@
 ---
 title: "The report says \"full page: warning: full page is…\""
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 32
