@@ -39,7 +39,7 @@ ask the session. That is precisely the routing this board exists to remove.
 Rook's argument, which is the one that decides it: **a second column says "waiting" and still
 leaves the reader asking *on what, from whom* — and that is the question that determines whether
 the work is in hand or free.** A column is a state that has to be interpreted; a sentence names
-its own subject. That is the same rule `docs/read-the-output-not-the-code` applies to every
+its own subject. That is the same rule `CONTRIBUTING.md`'s *Writing it down* applies to every
 warning Obsrv emits, turned on the board that tracks them.
 
 It costs nothing to read `doing` with an empty `waiting` as *moving*.

@@ -384,6 +384,18 @@ walked"* — because the second inferred what the first had measured.
 facts, the silence is a defect rather than a quiet success. A tool that says
 nothing when all is well and nothing when it cannot see is not reassuring.
 
+**Have someone who did not write it read it cold.** Whoever wrote a sentence
+reads what they meant. Print every shape the output can take, read the joins
+between them, and have a peer read them before calling a sentence done.
+
 Commit messages here are long on purpose. They carry what a card cannot: a
 card can be edited by anyone, a commit travels with the change. If you find
 something while fixing something else, put it in the message.
+
+**Cite the tree, or quote the claim.** Each session keeps private notes nobody
+else can open. Written into a card as a path, one becomes an authority no
+reader can check, and copying spreads it: a memory note was cited as
+`docs/read-the-output-not-the-code` on eight cards before anyone followed the
+address. A path in a card should be one `git cat-file -e origin/main:<path>`
+finds. A branch is an address only until it is merged and deleted; after that,
+the merge commit is.

@@ -34,3 +34,5 @@ obsrv-91 added `resizing` yesterday, told its user plainly it had never seen it 
 TWO METHOD FINDINGS Kenya asked be kept out of the commit message:
 1. A phrase sieve over the suite UNDERCOUNTS. Matching note text mechanically said `55 of 58 never asserted`; spot-checking six found four that ARE asserted, through regexes and partial phrases the matcher cannot see (cli-snap-tiled.spec.ts:102, cli-walk.spec.ts:137, others). The sieve is in the file as a pointer to where to look, explicitly not as a result. A number that reads as measurement and is not is the same defect as the note that had never fired. Anyone automating C5: this is the trap.
 2. live-drive.spec sets `info` (control port and token) in the FIRST test of the file, so any -g filtered single-test run dies on `Cannot read properties of undefined (reading 'token')`. It reads like a bug in whatever test you just wrote. Cost a run.
+
+**ADDRESS MOVED 2026-09-16** (Henry, from the board-wide path sweep on `bug-board-cites-a-file-that-does-not-exist`): the branch named above was merged as `3f92680` and then deleted, so it no longer resolves. The merge commit is the address now.

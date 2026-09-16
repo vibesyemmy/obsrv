@@ -58,7 +58,7 @@ So the dev app and the installed app both write `~/Library/Logs/Obsrv/obsrv.log`
 
 Not a defect on its own — nothing is lost or corrupted. The cost is that **a line in that log does not say which of the two wrote it**, and this project has had two Obsrvs running side by side all day. Anyone debugging from the log while a dev build exists is reading an interleaving they cannot separate, and the log is what `docs/limitations.md` and the issue template both point people at.
 
-The obvious fix is to move `logs` for the dev lane too. The less obvious and possibly better one is to stamp the line: a log that names its own writer stays readable even when someone runs a third instance the flag does not know about. That is the [[read-the-output-not-the-code]] principle — a sentence should name its own subject rather than depend on the reader knowing the context it was produced in.
+The obvious fix is to move `logs` for the dev lane too. The less obvious and possibly better one is to stamp the line: a log that names its own writer stays readable even when someone runs a third instance the flag does not know about. That is the `CONTRIBUTING.md` *Writing it down* principle — a sentence should name its own subject rather than depend on the reader knowing the context it was produced in.
 
 Related: the same measurement produced `chore-electron-sandbox-note`, and the general fact is that Electron on macOS ignores `HOME` entirely.
 
