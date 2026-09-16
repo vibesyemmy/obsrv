@@ -1,8 +1,7 @@
 ---
 title: "The dev lane says which tree it serves, and never says it is not yours"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 6
 ---
@@ -85,3 +84,14 @@ allowed, another checkout allowed, no mark on the text stamp, no mark on the str
   result with text, the path the no-lane sentence already takes.
 - **A stale build is a different hazard:** the right checkout with `npm run build` not run is not
   this card's.
+
+## DONE 2026-09-16 by Henry: merged as #109 (`ab39983`)
+
+Every `obsrv-dev` call names the checkout it means to test. The proxy compares git tops and refuses a
+mismatch, and an `"any"` answer is marked as not compared in both stamps. CI ran the real proxy and app
+in `dev-lane.spec` with `tree: ROOT`, and both tests passed.
+
+**Still not seen:** a Claude Code session calling through the new proxy. A session gets it only after
+`npm run lane` copies the proxy and that session's MCP connection restarts. The first session to do
+that should read one refusal and one `"any"` stamp as Claude Code shows them. That is a check, not an
+open defect.
