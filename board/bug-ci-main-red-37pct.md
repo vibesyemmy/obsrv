@@ -6,8 +6,9 @@ criterion: B5
 order: 37
 ---
 
-**REMEASURED 2026-09-16 by Henry, for the gate question at the bottom. The 37% describes 09-15,
-not now.**
+**REMEASURED 2026-09-16 by Henry, for the gate question at the bottom, and read cold by Wren
+before merge.** The rate since #10 is consistent with most of the 37% having been episodes since
+fixed, but 21 runs cannot rule out a rate near it.
 
 Every failed test in every `ci.yml` attempt from 09-13 00:21Z to 09-16 09:46Z: 216 attempts, 189
 of which ran the suite, read from the logs. A test counts as **failed** only if its retry failed
@@ -15,27 +16,34 @@ too. A first attempt is **red** if Playwright counted a failure or an error sat 
 That is not `gh`'s run `conclusion`, which belongs to a run's *latest* attempt and reads "success"
 on a first attempt that failed.
 
-| main, push, first attempts | ran | red |
-| --- | --- | --- |
-| 09-13 → 09-16 09:46Z | 137 | 37 (27%) |
-| since #10 merged, 09-15 10:43Z | 21 | **3 (14%)** |
+| main, push, first attempts | ran | red | 95% interval (Wilson) |
+| --- | --- | --- | --- |
+| 09-13 → 09-16 09:46Z | 137 | 37 (27%) | 20–35% |
+| since #10 merged, 09-15 10:43Z | 21 | **3 (14%)** | **5–35%** |
 
-All branches since #10: 9 red of 56 (16%).
+All branches since #10: 9 red of 56 (16%, interval 9–28%). Of main's 31 pushes since #10, 21 ran
+the suite; **the other 10 were board-only**, each carrying the skip's notice.
 
-- **Most of the 27% is two episodes since fixed:** `log.spec`'s writer tag (12 red main runs,
-  fixed by #10) and `live-drive` (10 runs, plus this morning's, below).
-- **Main's three since #10:** `stall.spec` ×1 (09-15 11:11Z), `controls.spec` ×3 in one run
-  (09-15 16:28Z), and **`live-drive.spec` ×11 in one run at 09-16 08:34Z (`1c054a7`), not yet
-  read.** Eleven tests in one file in one run reads like a cascade, but that is a guess until
-  someone opens the log.
+- **Most of the 09-13 window's 27% is two episodes:** `log.spec`'s writer tag (12 red main runs,
+  fixed by #10) and `live-drive`'s resizing pair `:963`/`:1015` (10 runs; its card is done).
+  Neither is among the three since #10.
+- **Main's three since #10:** `stall.spec` ×1 (09-15 11:11Z); `controls.spec` ×3 in one run
+  (09-15 16:28Z), one root with two cascades as `bug-target-canvas-no-frames` records; and
+  `live-drive.spec` ×11 in one run at 09-16 08:34Z (`1c054a7`), **read: one failure and ten
+  cascades.** `:776` failed on a black centre pixel in the capture taken *before* the window was
+  hidden. Its retry and every later test in the file then failed in 2–5 ms with *"info (the
+  control port and token) was never established"*: `info` is set inside the file's first test,
+  and Playwright replaces the worker after a failure, so nothing after it can recover. That is
+  `bug-live-drive-info-cascade`.
 - **Flaky (failed the first try, passed the retry): 273 across all attempts, and one test is 30%
   of them.** `mcp.spec:137` ×82 (`bug-inspect-readout-schema`), sync reversals ×38, `panes`
   failed-load / `sync-mirror-mark` / sync redirect ×15 each, `cli-snap-tiled` viewport ×14
   (`bug-viewport-warning-race`), `throttle-live` ×11.
 - **devtools `:92`/`:116` made only one main first attempt red on their own**, so their fix (#38)
   barely moves the rate. It removes a test that could not tell a slow runner from a dropped close.
-- **Holes:** runs cancelled by the concurrency group are missing data, not passes (see below).
-  Twenty-one main runs is a small sample, and the rate since #10 has a wide interval.
+- **Holes:** three main runs cancelled by the concurrency group (09-15 04:36–04:44Z) are missing
+  data in the 09-13 window, not passes; none fall since #10. And failures are counted per test,
+  so a cascade inflates the test tallies above without adding a red run.
 
 ---
 
