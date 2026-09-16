@@ -159,12 +159,12 @@ function parseCard(id, text) {
   // A card that isn't Done must not say it is. #139 merged the drawNow card's
   // resolved section while the card stayed in Next, because the edit meant to
   // move it matched nothing, and every check passed (Kenya, fixed in #145). A
-  // closing heading (DONE, RESOLVED, MERGED, FIXED or CLOSED, in capitals) on a
+  // closing heading at any level (DONE, RESOLVED, MERGED, FIXED or CLOSED, in capitals) on a
   // card in any other column is the board contradicting itself. Only this
   // direction is checked: Done cards record their close in many shapes, and
   // the reverse rule would have refused 52 of the cards on main on 2026-09-16.
   if (col !== 'done') {
-    const closing = /^##\s+(DONE|RESOLVED|MERGED|FIXED|CLOSED)(?=[\s:]|$).*$/m.exec(card.evidence)
+    const closing = /^#{1,6}\s+(DONE|RESOLVED|MERGED|FIXED|CLOSED)(?=[\s:]|$).*$/m.exec(card.evidence)
     if (closing) {
       throw new Error(`board/${id}.md: the section "${closing[0].slice(0, 70)}" says this card is closed, and its column is "${col}" — move it to done, or retitle the section`)
     }
