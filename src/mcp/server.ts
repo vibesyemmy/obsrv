@@ -434,6 +434,11 @@ const snapOutputShape = {
   panes: z.string().optional().describe("Live only: 'both' (native pane beside the target) or 'target' (the target render has the whole window)."),
   tabId: z.string().optional().describe('Live only: which of the app\'s tabs was captured (the active one). Empty from an app older than tabs.'),
   tabIndex: z.number().optional().describe("Live only: that tab's 0-based position in the strip."),
+  // Sent by every live snap since 0.26.0 (onionSkin) and 0.28.0 (loading), and
+  // never declared: a client validating this schema rejected every live snap
+  // (bug-live-snap-reply-fails-its-own-schema).
+  onionSkin: z.number().optional().describe("Live only: the onion skin's opacity in the app when the capture was taken, 0 = off."),
+  loading: z.boolean().optional().describe('Live only: whether the tab was still loading a document when the capture was taken.'),
   width: z
     .number()
     .optional()

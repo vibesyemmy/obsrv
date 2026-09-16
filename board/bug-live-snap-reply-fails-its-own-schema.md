@@ -1,8 +1,7 @@
 ---
 title: "Every live `obsrv_snap` reply fails its own output schema, and has since 0.26.0"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 51
 ---
@@ -29,3 +28,21 @@ Claude Code's own client validates. Rook's run 19 used live snap on 0.60.0.
 
 The same as `bug-drive-reply-fails-its-own-schema`: `mcp-live.spec.ts` never listed the tools, so no
 live reply there was validated.
+
+## RESOLVED 2026-09-16 by Henry — both keys declared, as a repair of a shipped break
+
+**The fix:** `onionSkin` (an optional number) and `loading` (an optional boolean), declared in
+`snapOutputShape` as live-only, next to `viewMode`, `panes`, `tabId` and `tabIndex`. Optional,
+because a headless snap sends neither. The register entry under 0.61.0 frames it the way
+`colorPainted`'s is framed: nothing that worked breaks, a validating client couldn't read a live snap
+before, and a session holding the old schema still needs the restart.
+
+**Test:** `mcp-live.spec.ts`, *a live obsrv_snap reply passes its own output schema…*, with its own
+`Client`, like #68's `drive` test. It lists the tools, asserts that the SDK holds a validator for
+`obsrv_snap`, takes a live snap, and asserts that `onionSkin` and `loading` are in the reply that was
+checked. **Fix:** 3/3, with #68's `drive` test and the first live snap test. **Control, `main`'s
+`mcp/server.ts`:** failed with `-32602 … additional properties` ×2.
+
+**What this unblocks:** Rook's step 2, `listTools()` in the MCP specs' `beforeAll`. The preflight that
+found this showed every other `mcp-live.spec.ts` test passing with validation on, over main + #65 +
+#68.
