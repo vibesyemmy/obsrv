@@ -95,7 +95,11 @@ test.describe('headless: snap, inspect, audit and lint say a refused throttle in
     const refused = await runCli(args, { OBSRV_TEST_THROTTLE_REFUSAL: FORCED })
     expect(refused.code, refused.stderr).toBe(0)
     const r = JSON.parse(refused.stdout)
-    expect(refusedIn(r.screens[0].warnings), JSON.stringify(r.screens[0].warnings)).toEqual([SENTENCE])
+    // Every render a screen makes says it: the screen's own first, then the
+    // others with their prefix ("full page: ", "reference: ").
+    const said = refusedIn(r.screens[0].warnings)
+    expect(said[0], JSON.stringify(r.screens[0].warnings)).toBe(SENTENCE)
+    for (const line of said) expect(line.endsWith(SENTENCE), line).toBe(true)
     expect(r.throttle).toBe('none')
     expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen')
 
