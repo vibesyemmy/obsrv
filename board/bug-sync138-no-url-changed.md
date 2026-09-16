@@ -1,8 +1,7 @@
 ---
 title: "The target emits no url-changed at all — a second shape, and the test named for it"
-column: doing
+column: next
 kind: bug
-owner: "Kenya"
 order: 40
 ---
 
@@ -85,3 +84,6 @@ Which is the account the empty array could not give: the bus decided, issued the
 
 **NOT DONE, and it is the card's own question:** whether the assertion checks what the title claims. `seen.length >= 1` is still the only witness that the target moved at all — the poll that follows passes trivially, because the target is already on HAIRLINE from the previous step, so "followed and came back" and "never moved" are the same observation to it. Anything that makes this test green should be checked against that before it is believed.
 
+**RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
+on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
+worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**

@@ -1,8 +1,7 @@
 ---
 title: "Run 19: the live app, which two runs excluded and both said so"
-column: doing
+column: next
 kind: readiness
-owner: "Rook"
 criterion: B1
 order: 18
 ---
@@ -100,3 +99,9 @@ on Opeyemi's word direct to Rook, design to him before writing.
 longer committed. A card edit conflicts with nothing. `npm run board` writes them locally, and
 if a branch still touches those two files its changes to them vanish on rebase, which is correct
 and looks alarming the first time.
+
+**RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
+on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
+worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**
+
+**Run 19 was started and never delivered.** The go-ahead is on this card and the queue said *started*; nothing was produced. Whoever takes it starts from the card, not from a handover.
