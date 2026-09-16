@@ -37,12 +37,17 @@ export interface TargetSourceEventMap {
   'load-error': [LoadError]
   loading: [boolean]
   /**
-   * A main-frame, cross-document navigation started: a paint is now owed.
-   * Distinct from `loading`, which also fires for subframe loads — an iframe
-   * on a healthy static page changes no pixel and owes no frame, so a stall
-   * watchdog keyed to `loading` would cry wolf on it.
+   * A main-frame, cross-document navigation started, to this URL: a paint is
+   * now owed. Distinct from `loading`, which also fires for subframe loads — an
+   * iframe on a healthy static page changes no pixel and owes no frame, so a
+   * stall watchdog keyed to `loading` would cry wolf on it.
    */
-  navigating: []
+  navigating: [string]
+  /**
+   * The server redirected the main-frame navigation in flight to this URL; its
+   * commit, if it comes, is of this URL rather than the one the load asked for.
+   */
+  redirected: [string]
 }
 
 /**
@@ -437,7 +442,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       if (!this.internal) this.emit('loading', false)
     })
     wc.on('did-start-navigation', details => {
-      if (!this.internal && details.isMainFrame && !details.isSameDocument) this.emit('navigating')
+      if (!this.internal && details.isMainFrame && !details.isSameDocument) this.emit('navigating', details.url)
+    })
+    wc.on('did-redirect-navigation', details => {
+      if (!this.internal && details.isMainFrame) this.emit('redirected', details.url)
     })
     // A dead renderer paints nothing; surface it through the same channel a
     // failed navigation uses so the UI has something to show. A clean exit is
