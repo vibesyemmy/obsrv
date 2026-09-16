@@ -116,9 +116,11 @@ exiting mid-test (*"Target page, context or browser has been closed"*, *"closed:
 and it had no traces because run `34924677951` predates the `trace` setting entirely — not because
 the upload was skipped.
 
-## BOTH MEASURED, 2026-09-16. One candidate survives; the other would rebuild the original defect.
+## ALL THREE MEASURED, 2026-09-16 — and BOTH candidate shapes fall.
 
-Outcomes were written down before either ran (see the claim note above).
+Outcomes were written down before each ran (see the claim note above). **Read C before acting on A:**
+A on its own reads as "candidate 1 survives", and that was true for about twenty minutes, until C
+asked the question A does not answer.
 
 ### A — a step killed by its own `timeout-minutes` reads `failure`
 
