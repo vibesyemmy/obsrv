@@ -1,6 +1,8 @@
 ---
 title: "A preset sent straight after a tab switch may resize the new tab with the old tab's settings: read from the call chain, not reproduced"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 58
 ---
