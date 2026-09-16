@@ -1,6 +1,6 @@
 ---
 title: "There is no supported way to remove Obsrv's data"
-column: next
+column: backlog
 kind: chore
 order: 32
 ---
@@ -17,3 +17,23 @@ Two shapes, and the lighter one may be enough:
 **Prefer the list first.** It is the part that makes the privacy statement true, it can ship immediately, and it is the specification the command would have to implement anyway. A command written before the list exists is a command whose completeness nobody can check.
 
 Whoever takes the command: `a4`'s write-up (`docs/research/2026-09-14-a4-install-remains.md`) is the inventory, measured on a real packaged build rather than reasoned from the code.
+
+## CHECKED 2026-09-16 by Henry — the list shipped, and it covers what was measured; the command is a product question
+
+**The lighter shape is already in the README**, from `bug-history-survives-uninstall`: *"Removing
+Obsrv does not remove any of that"* and three commands, for `~/Library/Application Support/Obsrv`,
+`~/Library/Logs/Obsrv` and `~/Library/Caches/electron`.
+
+**Checked against `a4`'s measured inventory** (`docs/research/2026-09-14-a4-install-remains.md`),
+not reasoned from the code. After one use and the app deleted, what remains is `userData`
+(history, tabs, settings, Chromium's per-site state and caches, and a crashed run's
+`control.json`) and the log. `npm rm` also leaves the Electron zip in `~/Library/Caches/electron`.
+**All three are on the list.** The rest of that inventory is npm's own (`~/.npm/_cacache`, an
+empty prefix) or the developer-only dev lane (`~/.obsrv-dev`), and neither is Obsrv's to remove for
+a user.
+
+**What remains is the command, and whether to build one is scope, not a defect:** the card's own
+words are *"the lighter one may be enough"*. **To Backlog, for Opeyemi:** is the documented list
+enough, or is `obsrv uninstall` wanted? If it is, the list above is its specification, and the
+card's cautions (don't delete a profile in use, say what it will remove first) are its
+requirements.
