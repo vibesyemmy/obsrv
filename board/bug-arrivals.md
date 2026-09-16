@@ -41,12 +41,48 @@ produces no note at all, so the note is about redirects rather than about every 
 is never reported as the page moving. It works. **What defeats it is that there are two commits of
 the same arrival, and only one of them is the mirror's.**
 
-**This matches @Henry's `probe/live-walk-scroll-timeout` measurement from the other side** (run
+**@Henry's `probe/live-walk-scroll-timeout` measures a neighbouring path from the other side** (run
 `35158932493`, 4 of 12 apps): the native pane commits the redirect's destination first, the bus finds
 no issued entry for it and mirrors it in, and the target then runs a **second** navigation to the
 same address — `did-navigate` twice on the target, about 30 ms apart, with one first load ending
 `did-fail-load -3`. His trace is of the double load; this one is of what the double load does to the
 arrivals counter.
+
+## CORRECTION 2026-09-16, same evening, by Kenya — my first headline was an overclaim
+
+**The 20/20 above is not the defect, and calling those notes "spurious" was wrong.** Two further
+arms, run on the same `main`:
+
+    client-side redirect, `navigate` (BOTH panes driven)   20/20 notes
+    server redirect (302), `navigate`                       0/20 notes
+    client-side redirect, NATIVE PANE ALONE                19/20 notes
+
+**Why the first is defensible.** `navigate` drives both panes, so the target's second commit is its
+own redirect landing. `navigate` resolves when `redirect.html` has loaded, the arrivals count is
+recorded at that moment, and the client-side `location.replace` commits *after* it. **The page really
+did navigate after it loaded**, and a note saying so is true. The 302 arm fires nothing because both
+its commits land before the count is taken — which is the same rule, working.
+
+**The defect is the third arm, and it is the one `7d811f8` actually described.** Only the native pane
+is driven, so every commit the *target* makes is the bus's doing. The target's trace:
+
+    hairline.html    mirroring=false    the earlier navigate
+    redirect.html    mirroring=true     the bus mirroring native's redirect — correctly marked
+    hairline.html    mirroring=false    the bus mirroring native's landing — UNMARKED, and counted
+
+And the note it produces names its own absurdity:
+
+> the page navigated after it loaded **(to the same address)**: a bot challenge, an interstitial, a
+> redirect, or a dev server reloading under an edit; the figures are of the page it arrived at
+
+**The target was already on that page and nobody asked it to move.** It is Obsrv's own plumbing,
+reported to the caller as the page moving under them — which is exactly what `watchArrivals`'s
+`mirrored` check exists to prevent, and it is defeated because the mirror's own commit arrives
+unmarked when the target is already showing that URL.
+
+**A lead, not a conclusion:** the flag is set while `loadMirrored()` is in flight, and a load of the
+address the pane already shows is the case most likely to commit outside that window. Not measured
+yet, and it is the next thing to measure rather than the next thing to fix.
 
 **So the card's own framing needs one correction.** It says the second commit's attribution is a race
 and *"can still be counted"*. On this desk it is not a race and there is no *can*: the duplicate
