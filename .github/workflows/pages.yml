@@ -51,6 +51,12 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The board dates each wait from the commit that last changed its
+          # `waiting` line. At the default depth of 1, every card would date
+          # from HEAD, and the generator shows no date at all on a shallow
+          # clone rather than that wrong one.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
