@@ -1,6 +1,8 @@
 ---
 title: "The one `obsrv_drive` call documented as read-only starts the application"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 45
 ---
