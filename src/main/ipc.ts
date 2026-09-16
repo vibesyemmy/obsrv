@@ -1304,6 +1304,18 @@ export function registerIpc(ctx: AppContext): () => void {
   // and is dropped rather than guessed at.
   const publishTabs = (): void => {
     if (win.isDestroyed() || win.webContents.isDestroyed()) return
+    // Test-only: hold the strip back, so the gap between main switching tabs
+    // and the renderer learning of it can be forced rather than hoped for
+    // (bug-preset-after-tab-switch-lands-on-the-other-tab). Read on every
+    // publish, so a spec can open and close the gap. Never read outside
+    // OBSRV_TEST.
+    const holdMs = process.env.OBSRV_TEST === '1' ? Number(process.env.OBSRV_TEST_TABS_CHANGED_DELAY_MS ?? 0) : 0
+    if (holdMs > 0) {
+      setTimeout(() => {
+        if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(IPC.tabsChanged, tabs.snapshot())
+      }, holdMs)
+      return
+    }
     win.webContents.send(IPC.tabsChanged, tabs.snapshot())
   }
   tabs.onTabsChanged = (): void => {
