@@ -1,9 +1,8 @@
 ---
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: ""
 order: 35
 ---
 

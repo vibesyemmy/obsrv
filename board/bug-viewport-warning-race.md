@@ -7,7 +7,7 @@ kind: bug
 order: 42
 ---
 
-FILED 2026-09-16 by Wren, from Henry's reading of PR #30's red. **Unowned.** Found while
+FILED 2026-09-16 by Wren, from Henry's reading of PR #30's red. Found while
 checking whether #30 was at fault; it was not — #30 adds a script and a `package.json` entry.
 
 ## The defect

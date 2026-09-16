@@ -2,10 +2,19 @@
 title: "`inspect` by selector: a hidden element reads as drawn, and a selector that is not CSS reads as no match"
 column: doing
 kind: bug
-owner: "Kenya"
-waiting: ""
+owner: "Rook"
+waiting: "ci: #85's suite, then Rook's cold read and the merge"
 order: 48
 ---
+
+## HANDED OVER 2026-09-16 14:40 WAT, Kenya → Rook, while Kenya is out until 18:30
+
+On Opeyemi's word to Wren. **Kenya did not post "out"; this is reconstructed by Wren** from the
+board, the open PRs and Kenya's worktree, checked rather than inferred:
+**established** — the fix is written and **pushed as #85** (`fix/inspect-selector-silences`, 2
+commits, local and remote identical, nothing unpushed); its checks were passing at handover.
+**Not established** — whether #85's full suite is green, and whether it has had a cold read.
+Rook takes it to merge: read it cold (he did not write it), answer CI, merge via Henry.
 
 FOUND BY HENRY 2026-09-16, following the last line of `bug-inspect-offscreen-point-is-silent`
 (*"Worth checking while there: … a selector that matches a hidden element"*). **Unowned.**
