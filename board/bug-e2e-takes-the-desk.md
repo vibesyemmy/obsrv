@@ -58,6 +58,19 @@ longer look" equally well.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
 
+## PROGRESS 2026-09-16 by Henry — click-through, measured as far as it can be without the user clicking
+
+**#105 merged** (`e37caa7`): the app no longer activates itself under the harness. **Next:** the harness
+window is also click-through (`setIgnoreMouseEvents(true)`), because the five residual activations had
+no call from the app before them and fit a click meant for the app beneath landing on a window that
+`showInactive()` still puts on top.
+
+**Recorded full run with it: 545 passed, 1 skipped, zero activations, zero change of front app.**
+**The limit:** the user stayed in one app (Dia) for the whole run, so nothing was clicked. The run
+shows the change is harmless to the suite, not that click-driven activation is gone. A synthetic OS
+click would need an Accessibility permission prompt on the user's machine, which is not worth it.
+**Done-means 1 closes on a run while someone actively uses the desk.**
+
 ## PROGRESS 2026-09-16 by Henry — the app no longer activates itself; five activations remain with no app-side cause
 
 **Found by recording, not reading.** One full suite ran with a temporary recorder in every launched
