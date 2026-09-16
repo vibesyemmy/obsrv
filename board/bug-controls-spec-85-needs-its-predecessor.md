@@ -1,11 +1,32 @@
 ---
 title: "`controls.spec:85` silently requires the test before it, so every retry of it fails for the wrong reason"
-column: doing
+column: review
 kind: bug
 owner: "Rook"
-waiting: ""
+waiting: "a cold read, then Henry merges"
 order: 56
 ---
+
+## Fixed; both arms of the control ran
+
+Each of the three links now establishes its own precondition rather than inheriting it.
+**Measured, on `main` at `b0d2952`:**
+
+| | |
+| --- | --- |
+| each of the 5 tests run **alone** | passes |
+| the whole file **in order** | 10 passed |
+
+And the arm that matters, because passing alone is cheap to buy by asserting nothing — **the commit
+path was deliberately broken and the test had to notice:**
+
+| mutation | test goes red at | what it says |
+| --- | --- | --- |
+| `onCommit` never called | line 96, the new precondition | expected 54, received 27 |
+| **blur only** stops committing | line 109, the post-blur assertion | expected 32, received 54 |
+
+The second is the one worth having: the test is named for blur, and with only the blur path broken
+it still fails **at the assertion about blur**. So the precondition did not swallow the subject.
 
 ## Claimed by Rook 2026-09-16, assigned by Henry, as a precondition for `bug-controls-blur-timeout`
 
