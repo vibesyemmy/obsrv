@@ -1,6 +1,8 @@
 ---
 title: "No test can see the overlay's keyboard focus hand-off: a keystroke reaching an open menu is untested on every surface"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 56
 ---
