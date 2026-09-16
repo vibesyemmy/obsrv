@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -13,7 +14,8 @@ import { join, resolve } from 'node:path'
  * starts it again when the lane's build changes or the lane moves, replaying
  * the handshake, so a call after `npm run build` runs the new code on the
  * same connection — no session restart. Driven here with a real MCP client
- * against fake checkouts whose server answers which build it is.
+ * against fake checkouts whose server answers which build it is, and records
+ * every message it was sent.
  */
 const ROOT = resolve(__dirname, '../..')
 const PROXY = join(ROOT, 'scripts', 'dev-mcp.js')
@@ -37,6 +39,7 @@ server.registerTool('slow', { description: 'answers after 700 ms' }, async () =>
   return text('slow ' + MARK)
 })
 server.registerTool('die', { description: 'exits mid-call' }, async () => process.exit(3))
+process.stdin.on('data', chunk => require('node:fs').appendFileSync(require('node:path').join(__dirname, '..', '..', 'received.jsonl'), chunk))
 server.connect(new StdioServerTransport())
 `,
   )
@@ -46,12 +49,32 @@ server.connect(new StdioServerTransport())
 }
 function checkout(mark: string): string {
   const root = mkdtempSync(join(tmpdir(), 'obsrv-proxy-co-'))
+  git(root, 'init', '-q')
   mkdirSync(join(root, 'bin'))
   mkdirSync(join(root, 'out', 'mcp'), { recursive: true })
   writeFileSync(join(root, 'bin', 'obsrv-mcp.js'), "require('../out/mcp/server.js')\n")
   build(root, mark)
   return root
 }
+function git(root: string, ...args: string[]): void {
+  execFileSync('git', ['-C', root, '-c', 'user.name=proxy-test', '-c', 'user.email=proxy-test@example.com', ...args], { stdio: 'ignore' })
+}
+/** The tool calls the fake build at `root` was sent, as they reached it. */
+const callsTo = (root: string): { params?: { arguments?: Record<string, unknown> } }[] => {
+  let raw = ''
+  try {
+    raw = readFileSync(join(root, 'received.jsonl'), 'utf8')
+  } catch {
+    return []
+  }
+  return raw
+    .split('\n')
+    .filter(l => l.trim() !== '')
+    .map(l => JSON.parse(l) as { method?: string; params?: { arguments?: Record<string, unknown> } })
+    .filter(m => m.method === 'tools/call')
+}
+/** A call that runs on whatever the lane serves: what every test not about `tree` means. */
+const ANY = { tree: 'any' }
 const text = (r: unknown): string => (r as { content: { text: string }[] }).content[0]!.text
 /** The last content block: the lane's stamp, naming the build that answered. */
 const stamp = (r: unknown): string => {
@@ -87,7 +110,7 @@ describe('the obsrv-dev proxy', () => {
   })
 
   it("answers from the lane's build, with that server in dev mode, and names the lane in the handshake", async () => {
-    expect(text(await client.callTool({ name: 'build' }))).toBe('A1 dev=1')
+    expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('A1 dev=1')
     expect(client.getServerVersion()?.version).toContain('dev lane')
   })
 
@@ -95,53 +118,105 @@ describe('the obsrv-dev proxy', () => {
     // The pointer is shared by every session on the machine: `npm run lane`
     // in one moves another's obsrv-dev. The stamp is how a reader knows
     // which build answered without asking (obsrv-8d's point).
-    const r = await client.callTool({ name: 'build' })
+    const r = await client.callTool({ name: 'build', arguments: ANY })
     expect(stamp(r)).toMatch(/^obsrv-dev lane: .* · server built \d/)
     expect(stamp(r)).toContain(a)
+  })
+
+  it('every tool gains a required `tree`, because nothing in the proxy can tell which checkout the caller works in', async () => {
+    const { tools } = await client.listTools()
+    expect(tools.map(t => t.name)).toEqual(['build', 'slow', 'die'])
+    for (const t of tools) {
+      expect(t.inputSchema.properties?.['tree']).toMatchObject({ type: 'string' })
+      expect(t.inputSchema.required).toContain('tree')
+    }
+  })
+
+  it("a call naming the lane's checkout, or a directory in it, runs there, and the build is never sent `tree`", async () => {
+    expect(text(await client.callTool({ name: 'build', arguments: { tree: a } }))).toBe('A1 dev=1')
+    expect(text(await client.callTool({ name: 'build', arguments: { tree: join(a, 'out', 'mcp') } }))).toBe('A1 dev=1')
+    const calls = callsTo(a)
+    expect(calls.length).toBeGreaterThan(1)
+    for (const call of calls) expect(call.params?.arguments ?? {}).not.toHaveProperty('tree')
+  })
+
+  it('a call naming another checkout is not run: it names both, says how to point the lane, and never reaches the build', async () => {
+    const before = callsTo(a).length
+    const r = await client.callTool({ name: 'build', arguments: { tree: b } })
+    expect(isError(r)).toBe(true)
+    expect(text(r)).toContain(`meant to test ${realpathSync(b)}`)
+    expect(text(r)).toContain(`serves`)
+    expect(text(r)).toContain(a)
+    expect(text(r)).toContain('npm run lane')
+    expect(callsTo(a).length).toBe(before)
+  })
+
+  it("a worktree inside the lane's checkout is another checkout, not the lane's", async () => {
+    // The finding's shape: a session's worktree under .claude/worktrees sits
+    // inside the checkout the lane serves, so containment would call it the lane's.
+    git(a, 'commit', '-q', '--allow-empty', '-m', 'a')
+    const worktree = join(a, 'nested', 'wt')
+    git(a, 'worktree', 'add', '-q', '--detach', worktree)
+    const r = await client.callTool({ name: 'build', arguments: { tree: worktree } })
+    expect(isError(r)).toBe(true)
+    expect(text(r)).toContain(`meant to test ${realpathSync(worktree)}`)
+  })
+
+  it('a call naming no checkout, or a path in none, is not run and says what to pass; "any" runs on the lane as it is', async () => {
+    const none = await client.callTool({ name: 'build' })
+    expect(isError(none)).toBe(true)
+    expect(text(none)).toContain('names no `tree`')
+    expect(text(none)).toContain('"any"')
+    for (const tree of ['obsrv', join(tmpdir(), `obsrv-proxy-nowhere-${process.pid}`)]) {
+      const r = await client.callTool({ name: 'build', arguments: { tree } })
+      expect(isError(r)).toBe(true)
+      expect(text(r)).toContain('not an absolute path in a git checkout')
+    }
+    expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('A1 dev=1')
   })
 
   it('a new build answers the next call on the same connection, and the client is told the tools may have changed', async () => {
     const before = listChanged
     build(a, 'A2')
-    expect(text(await client.callTool({ name: 'build' }))).toBe('A2 dev=1')
+    expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('A2 dev=1')
     await expect.poll(() => listChanged).toBeGreaterThan(before)
   })
 
   it('moving the lane to another checkout moves the next call with it, and that result says the lane moved', async () => {
     lane.pointLaneAt(b, env())
-    const r = await client.callTool({ name: 'build' })
+    const r = await client.callTool({ name: 'build', arguments: ANY })
     expect(text(r)).toBe('B1 dev=1')
     expect(stamp(r)).toMatch(/the lane moved since this session's last call/)
     expect(stamp(r)).toContain(b)
-    const again = await client.callTool({ name: 'build' })
+    const again = await client.callTool({ name: 'build', arguments: ANY })
     expect(stamp(again)).not.toMatch(/moved/)
   })
 
   it('a call in flight finishes on the build it started on; the next waits for it, then runs on the new one', async () => {
-    const slow = client.callTool({ name: 'slow' })
+    const slow = client.callTool({ name: 'slow', arguments: ANY })
     await new Promise(r => setTimeout(r, 150))
     build(b, 'B2')
-    const next = client.callTool({ name: 'build' })
+    const next = client.callTool({ name: 'build', arguments: ANY })
     expect(text(await slow)).toBe('slow B1')
     expect(text(await next)).toBe('B2 dev=1')
   })
 
   it('a server that dies mid-call fails that call with a sentence, and the next call starts it again', async () => {
-    const died = await client.callTool({ name: 'die' })
+    const died = await client.callTool({ name: 'die', arguments: ANY })
     expect(isError(died)).toBe(true)
     expect(text(died)).toMatch(/^the dev lane's server exited .* before answering/)
-    expect(text(await client.callTool({ name: 'build' }))).toBe('B2 dev=1')
+    expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('B2 dev=1')
   })
 
   it('a lane pointed at a checkout that is gone says where it pointed, and recovers when pointed again', async () => {
     const gone = checkout('G')
     lane.pointLaneAt(gone, env())
     rmSync(gone, { recursive: true, force: true })
-    const r = await client.callTool({ name: 'build' })
+    const r = await client.callTool({ name: 'build', arguments: ANY })
     expect(isError(r)).toBe(true)
     expect(text(r)).toContain('no dev lane')
     expect(text(r)).toContain(gone)
     lane.pointLaneAt(a, env())
-    expect(text(await client.callTool({ name: 'build' }))).toBe('A2 dev=1')
+    expect(text(await client.callTool({ name: 'build', arguments: ANY }))).toBe('A2 dev=1')
   })
 })

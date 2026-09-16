@@ -316,6 +316,13 @@ npm run lane -- --status     # where the lane points, and how fresh its builds a
   time and checkout; `obsrv_presets`, which has neither, reads the preset table
   alone. The proxy also appends that line as a text block, and after a move says
   the lane moved, for clients that show text blocks.
+- **Every call names the checkout it means to test.** The stamp still leaves the
+  comparison to whoever reads it, and the proxy cannot make it: it starts in the
+  project the session opened, whichever worktree the session works in after
+  that. So every `obsrv-dev` tool takes a required `tree`, the top of the
+  caller's working tree. A call naming a checkout other than the lane's is not
+  run, and says which checkout the lane serves and how to point it there.
+  `tree: "any"` runs on whatever the lane serves.
 - **In dev mode the server drives the lane's app**: it discovers the lane
   profile's `control.json`, launches the checkout's `out/main/index.js`
   rather than `/Applications/Obsrv.app`, and relaunches a dev app that started
@@ -327,6 +334,9 @@ rebuild needs a restart:
 ```bash
 claude mcp add --scope local --transport stdio obsrv-dev -- node ~/.obsrv-dev/bin/dev-mcp.js
 ```
+
+A change to the proxy itself is the exception: it reaches a session once
+`npm run lane` has copied it and that session's MCP connection has restarted.
 
 The loop is then: work on a branch in a worktree, `npm run lane` there, test
 through the `obsrv-dev` tools, adjust, `npm run build`, test again. `obsrv`

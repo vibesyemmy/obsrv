@@ -23,12 +23,19 @@
 // after a move says the lane moved, from where. The handshake's version
 // names the lane too.
 //
+// A stamp still leaves the comparison to whoever reads it, and twice nobody
+// made it: a session testing its branch from a worktree was answered by the
+// lane's checkout instead (bug-lane-serves-another-tree). Nothing here can
+// make it either, because nothing here knows the caller's tree. So every tool
+// gains a required `tree`, the checkout the call is meant to test, and a call
+// naming another checkout is not run. "any" runs on whatever the lane serves.
+//
 // Messages are newline-delimited JSON-RPC, the MCP stdio framing.
 'use strict'
 
-const { spawn } = require('node:child_process')
-const { existsSync } = require('node:fs')
-const { join } = require('node:path')
+const { spawn, spawnSync } = require('node:child_process')
+const { existsSync, realpathSync } = require('node:fs')
+const { isAbsolute, join } = require('node:path')
 const lane = require('./devLane.js')
 
 const REPLAY_ID = 'obsrv-dev-lane-replay'
@@ -43,12 +50,78 @@ let initRequest = null
 let initialized = false
 /** Whether the client has had an answer to `initialize`, from a child or from here. */
 let answeredInit = false
-/** The running child: { proc, root, key, label, built, inflight: Map<id, method>, replayIds: Set<id>, waiters, lastErr, exited }. */
+/** The running child: { proc, root, key, tree, label, built, inflight: Map<id, method>, replayIds: Set<id>, waiters, lastErr, exited }. */
 let child = null
 let replaySeq = 0
 const replays = new Map()
 /** The lane that answered this session's last tool call: { root, label }, or null before the first. */
 let lastAnswered = null
+
+/**
+ * The argument the proxy adds to every tool. Nothing in this process can tell
+ * which tree the session calling works in: its working directory and
+ * CLAUDE_PROJECT_DIR are the project the session opened, whichever worktree it
+ * works in afterwards (four sessions read on 2026-09-16, including one working
+ * in a worktree inside that project).
+ */
+const TREE = 'tree'
+const ANY_TREE = 'any'
+const TREE_PROPERTY = {
+  type: 'string',
+  description:
+    'The checkout this call is meant to test: the top of the working tree you are working in, as ' +
+    '`git rev-parse --show-toplevel` prints it there. obsrv-dev runs one checkout for the whole machine, and a ' +
+    `call naming another is not run rather than answered by the lane's build. "${ANY_TREE}" runs on whatever the lane serves.`,
+}
+
+/** A tool as a client sees it through the proxy: its own arguments, and `tree`, required. */
+function withTree(tool) {
+  const schema = tool.inputSchema || { type: 'object' }
+  const required = Array.isArray(schema.required) ? schema.required.filter(k => k !== TREE) : []
+  return {
+    ...tool,
+    inputSchema: { ...schema, properties: { ...(schema.properties || {}), [TREE]: TREE_PROPERTY }, required: [...required, TREE] },
+  }
+}
+
+/** The top of the git working tree `path` is in, through symlinks; null when it is in none. */
+function toplevel(path) {
+  const r = spawnSync('git', ['-C', path, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' })
+  if (r.status !== 0) return null
+  try {
+    return realpathSync(r.stdout.trim())
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Why a call may not run on child `c`'s lane, or null when it may. Checkouts
+ * compare by their tops, not by one path containing the other: a worktree can
+ * sit inside the checkout it came from, and is not that checkout.
+ */
+function treeRefusal(tree, c) {
+  const serves = `the dev lane serves ${c.label} at ${c.root}`
+  if (tree === ANY_TREE) return null
+  if (typeof tree !== 'string' || tree.trim() === '')
+    return (
+      `not run: this call names no \`${TREE}\`, the checkout it is meant to test. The dev lane serves ${c.label} at ` +
+      `${c.root}, one checkout for the whole machine, and obsrv-dev cannot tell which tree you work in: pass the top ` +
+      `of your working tree as \`${TREE}\`, or "${ANY_TREE}" to run on that checkout as it is`
+    )
+  const named = isAbsolute(tree) ? toplevel(tree) : null
+  if (named === null)
+    return (
+      `not run: \`${TREE}\` is ${JSON.stringify(tree)}, which is not an absolute path in a git checkout on this machine. ` +
+      `Pass the top of your working tree, or "${ANY_TREE}"; ${serves}`
+    )
+  if (named === c.tree) return null
+  return (
+    `not run: this call is meant to test ${named}, but ${serves}, and that build would have answered it. ` +
+    `\`npm run lane\` in ${named} points the lane there, for every session on this machine; ` +
+    `${TREE}: "${ANY_TREE}" runs this call on ${c.root} as it is`
+  )
+}
 
 /** The lane as it stands: its checkout and a key that changes with every server build; root null when there is none. */
 function currentLane() {
@@ -108,6 +181,7 @@ function startChild(root, key) {
     proc,
     root,
     key,
+    tree: toplevel(root) || root,
     label: lane.laneLabel(root),
     built: new Date(lane.serverStamp(root)).toLocaleTimeString(),
     inflight: new Map(),
@@ -163,6 +237,9 @@ function fromChild(c, line) {
       const info = msg.result.serverInfo || {}
       msg.result.serverInfo = { ...info, version: `${info.version || '?'} (dev lane: ${c.label})` }
       answeredInit = true
+    }
+    if (method === 'tools/list' && msg.result && Array.isArray(msg.result.tools)) {
+      msg.result.tools = msg.result.tools.map(withTree)
     }
     if (method === 'tools/call' && msg.result && Array.isArray(msg.result.content)) {
       msg.result.content = [...msg.result.content, { type: 'text', text: stampFor(c) }]
@@ -276,8 +353,21 @@ async function handle(msg) {
     if (isRequest) answerError(msg.id, msg.method, r.error)
     return
   }
+  let forward = msg
+  if (msg.method === 'tools/call') {
+    const args = (msg.params && msg.params.arguments) || {}
+    const refused = treeRefusal(args[TREE], r.child)
+    if (refused !== null) {
+      if (isRequest) answerError(msg.id, msg.method, refused)
+      return
+    }
+    // The lane's server never declared `tree`, so it never sees it.
+    const own = { ...args }
+    delete own[TREE]
+    forward = { ...msg, params: { ...msg.params, arguments: own } }
+  }
   if (isRequest) r.child.inflight.set(msg.id, msg.method)
-  send(r.child, msg)
+  send(r.child, forward)
 }
 
 // One message at a time, in order: a restart waits for what is in flight,
