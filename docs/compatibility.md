@@ -20,6 +20,21 @@ This inverts the rule most projects run on, where additive is safe. It is why
 three separate designs were decided this week the way they were, and it was
 nowhere written down until now.
 
+**And since 2026-09-16 something fails when it is not followed** (`board/c2.md`).
+`docs/public-shape.json` records every key path every tool's published output
+schema declares; `tests/unit/publicShape.test.ts` goes red when the published
+shape moves away from it, naming each path that appeared or vanished; and a CI
+job goes red when that snapshot moves without `breaking-changes.md` being
+touched in the same change. Refresh the snapshot with
+`node scripts/public-shape.js > docs/public-shape.json`.
+
+**What that check does not cover, so its green is not over-read:** a field whose
+*meaning* changes while its shape stays — the case this page cares about most,
+and the one `url` was in 0.59.0 — is invisible to a shape diff by construction.
+So is the CLI's JSON output, which is a second surface with no snapshot yet.
+**Those still depend on the person making the change noticing**, which is what
+this page is for.
+
 **Checked on the wire, 2026-09-15, because everything below rests on it.** The
 schemas are `zod` shapes that the MCP SDK converts, so `additionalProperties`
 appears nowhere in `src/` and cannot be grepped — this page asserted the
