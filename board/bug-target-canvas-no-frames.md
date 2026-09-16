@@ -3,6 +3,7 @@ title: "The target canvas goes blank in CI and the app says why — No frames fr
 column: doing
 kind: bug
 owner: "Kenya"
+waiting: "event: a panes:83 failure recurring under #29's screenshot config, which cannot be forced; Kenya is out until 13:30"
 order: 35
 ---
 

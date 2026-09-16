@@ -1,12 +1,47 @@
 ---
 title: "`doing` cannot tell working from waiting, and the board has no word for it"
-column: doing
+column: done
 owner: "Henry"
 kind: chore
 order: 36
 ---
 
 FILED 2026-09-16 by Henry. **The design is Rook's**, from having sat inside the ambiguity twice.
+
+## RESOLVED 2026-09-16 by Henry, on Rook's design, with the case made by Opeyemi
+
+**Why now:** Opeyemi read the published board's Doing column (six cards) and asked Wren whether
+they were all done, because Henry and Rook looked idle. None were. Two had finished work in CI, two
+waited on him, and two on Kenya, who was out. All six read *"Claimed. Someone is on it."*
+
+**The three decisions the card left to its taker:**
+- **Rendered, in both views.** Each Doing card shows *"waiting on …"* or *"moving"*. The heading
+  counts the column: *"7 in Doing: 1 moving, waiting on event 3, Opeyemi 2, Kenya 1"*.
+- **Required on Doing, as Rook argued.** `board:check` refuses a Doing card without `waiting:`,
+  and `""` means moving. **And refused everywhere else**, which is Rook's own argument applied
+  to the field. Off Doing nothing renders it, and *"an unrendered field is a record kept where
+  nobody reads it"*. Rebasing this change produced exactly that **three times**: #48, #51 and
+  #52 each closed a card this change had given a `waiting` line, and each rebase merged cleanly
+  into a `done` card still saying what it waited on. The check refused all three: exit 1,
+  *"waiting: belongs on a Doing card, and this one is "done""*.
+- **No N.** There is no stalled-card threshold, as Rook argued; nothing here has evidence for one.
+
+**One addition, from Wren's question.** Three of today's values wait on a person and two on an
+event, and free text cannot answer "everything waiting on Opeyemi". Rather than a second,
+structured field that can disagree with the sentence, the one field is shaped `who: what`, and the
+check enforces the shape. The board counts by the part before the colon. The sentence still names
+its subject; the subject is now also a key.
+
+**Watched refusing,** on `main`'s cards as they stood: every Doing card lacked the field, and the
+check exited 1 naming `b1-live-app`. With Wren's roster value *"Kenya, out until 13:30"* left in
+unshaped, it exited 1 again: *"waiting: names who or what first"*. Fixed, exit 0. The HTML page's
+own script was run against a stub DOM: seven Doing cards with a waiting line, none outside Doing.
+
+**The values** came from Wren's roster at 11:29, reshaped, and were corrected at each rebase as
+cards closed or changed hands. When this merges, three cards are in Doing: one waits on Kenya's
+return, one on Rook's with the branch named, and one on an event, a recurrence nobody can force.
+The board's own heading says the same: *"3 in Doing: 0 moving, waiting on event 1, Kenya 1, Rook
+1"*. Owners correct their own lines.
 Rook offered to file it and declined to, because it does not take work without asking Opeyemi
 first and has three questions queued already. Filing a card is not taking the work; taking it is
 still open to anyone.
