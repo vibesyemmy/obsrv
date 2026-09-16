@@ -31,7 +31,14 @@ export interface TargetSourceEventMap {
    * by mirroring the other pane into this one — the pane moved, but not
    * because the page or the user moved it.
    */
-  'url-changed': [string, boolean, boolean]
+  /**
+   * `[url, inPage, mirrored, byDocument]`. `byDocument` is true when the page
+   * itself began the navigation — a reload or a redirect — rather than main
+   * loading the pane. A consumer counting arrivals needs it: the bus's own
+   * mirrored load and a page's reload of the same address are indistinguishable
+   * without it (`bug-arrivals`).
+   */
+  'url-changed': [string, boolean, boolean, boolean]
   /** The page's cursor as CSS, for the canvas (see shared/cursor.ts). */
   cursor: [string]
   'load-error': [LoadError]
@@ -73,6 +80,8 @@ export interface AppliedViewport {
 
 /** net::ERR_ABORTED — ordinary navigation cancellation, not a failure. */
 const ERR_ABORTED = -3
+/** Navigation starts kept to answer "did the document start this one". */
+const NAV_START_TRACE_MAX = 32
 /** Commits kept for reading a silence afterwards; the same bound `SyncBus`'s mirror trace uses. */
 const COMMIT_TRACE_MAX = 64
 
@@ -264,6 +273,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * withheld, and only for the mirror's own load.
    */
   private mirroring = false
+  private readonly starts: { at: number; url: string; byDocument: boolean }[] = []
   /**
    * Every main-frame commit this pane saw, and whether it said anything about
    * it.
@@ -413,7 +423,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // one — `sync.spec`'s redirect test saw one commit locally and none on
       // CI, from the same code (2026-09-14). The fact a consumer needs is
       // *which kind* of commit this was, so say it and let each decide.
-      this.emit('url-changed', url, false, this.mirroring)
+      this.emit('url-changed', url, false, this.mirroring, this.startedByDocument(url))
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame && this.internal) this.record({ at: Date.now(), url, kind: 'in-page', said: false, why: 'internal' })
@@ -425,7 +435,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
         // the bus mirroring it (`onTargetNav` drops what is marked). Three
         // quick navigations back and forth stopped mirroring when this was
         // wired to the flag — the loop test caught it.
-        this.emit('url-changed', url, true, false)
+        // In-page: the document did this by definition — a fragment or a
+        // history entry it survived — so `byDocument` is true and the counter
+        // ignores it anyway on `inPage`.
+        this.emit('url-changed', url, true, false, true)
       }
     })
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
@@ -442,6 +455,14 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       if (!this.internal) this.emit('loading', false)
     })
     wc.on('did-start-navigation', details => {
+      if (details.isMainFrame && !details.isSameDocument) {
+        this.starts.push({
+          at: Date.now(),
+          url: details.url,
+          byDocument: (details as { initiator?: unknown }).initiator !== undefined,
+        })
+        if (this.starts.length > NAV_START_TRACE_MAX) this.starts.splice(0, this.starts.length - NAV_START_TRACE_MAX)
+      }
       if (!this.internal && details.isMainFrame && !details.isSameDocument) this.emit('navigating', details.url)
     })
     wc.on('did-redirect-navigation', details => {
@@ -676,6 +697,18 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * `load`, for the sync bus mirroring the other pane's commit into this one.
    * See `mirroring`.
    */
+  /**
+   * Whether the DOCUMENT started the navigation this commit answers.
+   *
+   * Electron 43 puts `initiator` on a navigation a page began itself, and it is
+   * the only field that says so — there is no `isRendererInitiated` (measured
+   * across both arms of `bug-arrivals`). A page reloading itself, or
+   * redirecting, is news; a load main asked for is not.
+   */
+  private startedByDocument(url: string): boolean {
+    return [...this.starts].reverse().find(s => s.url === url)?.byDocument === true
+  }
+
   async loadMirrored(input: string): Promise<string> {
     this.mirroring = true
     try {

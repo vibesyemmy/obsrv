@@ -227,8 +227,22 @@ export function registerIpc(ctx: AppContext): () => void {
     // `mirrored` is the sync bus loading the other pane's address into this
     // one: the pane moved, the page did not, and counting it would report
     // "the page navigated after it loaded" about Obsrv's own plumbing.
-    s.target.on('url-changed', (url: string, inPage: boolean, mirrored: boolean) => {
+    s.target.on('url-changed', (url: string, inPage: boolean, mirrored: boolean, byDocument: boolean) => {
       if (inPage || mirrored) return
+      // A commit to the address this pane is ALREADY recorded at, which the
+      // document did not start, is not the page moving: it is the bus's own
+      // mirrored load landing after `loadMirrored`'s flag came down (measured
+      // at 4 ms late). Counted, it produced "the page navigated after it loaded
+      // (to the same address)" about a pane nobody asked to move
+      // (`bug-arrivals`, 17-20 runs in 20).
+      //
+      // Both halves are needed. Without the address test, a real redirect to a
+      // DIFFERENT page is silenced whenever the bus's mirrored load wins the
+      // race to commit (measured: true notes 20 in 20 down to 5). Without
+      // `byDocument`, a page that reloads itself to the same address stops
+      // being reported, which the product does on purpose
+      // (`mcp-live.spec:722` and `:813`).
+      if (url === arrivals(s).url && !byDocument) return
       arrivalsOf.set(s, { count: arrivals(s).count + 1, url })
     })
   }
