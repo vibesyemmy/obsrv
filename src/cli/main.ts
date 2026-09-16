@@ -938,10 +938,11 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle is said in `notes`, where the reply's reader looks,
+    // beside the `throttle` field that reports the flag it was given
+    // (bug-throttle-refusal-stderr-only); `notes` reach stderr below.
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch)
     // The one page ask, within the same budget as the load (`shared/measureBudget`).
     const report =
@@ -952,6 +953,7 @@ async function runInspect(cmd: InspectCommand): Promise<void> {
       if (err) throw err
     }
     const notes = timedOut ? [measureTimeoutNote('inspect', cmd.timeoutMs)] : []
+    if (throttleRefused) notes.unshift(throttleRefused)
     // The element was read on the page that is there now, which is not always
     // the page that was asked for: it may have moved under the wait, and it
     // may be the server's error page.
@@ -1018,11 +1020,13 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle joins the command's notes, which reach both stderr and
+    // the reply's `warnings`; it used to reach stderr alone, where the reply's
+    // reader is told not to look (bug-throttle-refusal-stderr-only).
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const notes: string[] = []
+    if (throttleRefused) notes.push(throttleRefused)
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // Where the load landed comes before anything measured on the page: it is
@@ -1141,11 +1145,13 @@ async function runLint(cmd: LintCommand): Promise<void> {
     const watch = watchFailures(target)
     const applied = target.setViewport(cmd.spec.cssWidth, cmd.spec.cssHeight, cmd.spec.deviceScaleFactor, cmd.spec.mobile)
     target.setTextScale(cmd.spec.textScale)
-    if (cmd.spec.throttle !== null) {
-      const refused = await target.setThrottle(findThrottle(cmd.spec.throttle))
-      if (refused) human(`warning: ${refused}`)
-    }
+    // A refused throttle joins the command's notes, which reach both stderr and
+    // the reply's `warnings`; it used to reach stderr alone, where the reply's
+    // reader is told not to look (bug-throttle-refusal-stderr-only).
+    let throttleRefused: string | null = null
+    if (cmd.spec.throttle !== null) throttleRefused = await target.setThrottle(findThrottle(cmd.spec.throttle))
     const notes: string[] = []
+    if (throttleRefused) notes.push(throttleRefused)
     const load = await loadWithin(target, cmd.url, { waitMs: cmd.waitMs, timeoutMs: cmd.timeoutMs, throttle: cmd.spec.throttle }, watch, true)
     if (!load.loaded) notes.push(cutLoadMeasureNote(cmd.timeoutMs, cmd.spec.throttle, cmd.url))
     // As in the audit: which page the figures are of, first.

@@ -976,7 +976,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
       await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
     }
     if (input.throttle !== undefined) {
-      await controlCall(info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
+      // A throttle Chromium refused is said where headless snap says it.
+      const r = await controlCall(info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
+      if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') warnings.push(w)
     }
     if (input.profile !== undefined) await controlCall(info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
   } catch (e) {
@@ -2255,15 +2257,18 @@ server.registerTool(
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
       }
-      // A skin the viewport cannot have is refused by the app with a sentence
-      // saying so; it joins the warnings below, in the order the calls ran.
-      const onionSkinRefused: string[] = []
+      // A skin the viewport cannot have, or a throttle Chromium refused, is
+      // refused by the app with a sentence saying so; they join the warnings
+      // below, in the order the calls ran.
+      const applyRefused: string[] = []
       if (input.onionSkin !== undefined) {
         const r = await controlCall(live.info, 'setOnionSkin', { onionSkin: input.onionSkin }, LIVE_APPLY_TIMEOUT_MS)
-        if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') onionSkinRefused.push(w)
+        if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') applyRefused.push(w)
       }
+      // A throttle Chromium refused is said the same way, in call order.
       if (input.throttle !== undefined) {
-        await controlCall(live.info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
+        const r = await controlCall(live.info, 'setThrottle', { throttle: input.throttle }, LIVE_APPLY_TIMEOUT_MS)
+        if (Array.isArray(r['warnings'])) for (const w of r['warnings'] as unknown[]) if (typeof w === 'string') applyRefused.push(w)
       }
       if (input.profile !== undefined) await controlCall(live.info, 'setProfile', { id: input.profile }, LIVE_APPLY_TIMEOUT_MS)
       if (input.viewMode !== undefined) {
@@ -2293,7 +2298,7 @@ server.registerTool(
       let atEnd: boolean | undefined
       const warnings: string[] = []
       if (navigateCut) warnings.push(NAVIGATE_CUT_NOTE)
-      warnings.push(...onionSkinRefused)
+      warnings.push(...applyRefused)
       // A preset or a rotation recreates the target and reloads its page, and
       // the control confirms once a page is back or on its way. Read straight
       // after, the status once said about:blank with loading false for a

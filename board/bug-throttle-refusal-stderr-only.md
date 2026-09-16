@@ -1,14 +1,13 @@
 ---
 title: "`inspect`, `audit` and `lint` answer `throttle: <id>` after the throttle was refused"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 41
 ---
 
 FOUND BY ROOK on 2026-09-16, auditing every `human()` call in `src/cli/main.ts` for
-`bug-report-edit-invisible`. **Unowned.** Three lines to fix; not fixed on that branch because
+`bug-report-edit-invisible`. Three lines to fix; not fixed on that branch because
 there is no failing test to write first, and that is the decision this card asks for.
 
 **When Chromium refuses a throttle, three commands say so where callers are told not to look,
@@ -71,3 +70,41 @@ mirrored id, so its reply agrees with the store, not with Chromium.
 Not reproduced: a refusal needs a second debugger client on the target, and one wasn't tried. A fix
 here would likely want the refusal carried back the way `setOnionSkin`'s now is (#66): refused in
 main, with the sentence in the reply's `warnings`.
+
+## RESOLVED 2026-09-16 by Henry — the refusal reaches the reply, on both surfaces, under a test that forces it
+
+**The decision this card asked for, taken as an engineering call: the test hook.**
+`OBSRV_TEST_THROTTLE_REFUSAL`, read only under `OBSRV_TEST=1`, is thrown inside `applyThrottle`'s own
+`try`, so the sentence under test is the product's own (`throttle <id> not applied: <message>`). It's
+a product change made for a test, and the comment beside it says so. The precedent is #59's
+`OBSRV_TEST_FIRST_VIEWPORT_DELAY_MS`. It refuses only a throttle that applies conditions, so lifting
+one (`none`) still works under it and the test can turn it off.
+
+**Headless.** `inspect`, `audit` and `lint` now put the refusal among their notes, which already
+reach both stderr and the reply: inspect's `notes`, and audit's and lint's `warnings`, where their
+notes have always gone. It's said once, not twice. `throttle` keeps its documented meaning, the flag
+it was given (the parity spec's allowlist says so), and the note beside it says it didn't take.
+
+**Live.** The control server's `setThrottle` now applies the throttle in main **before the renderer
+is asked**, the way #66 refuses an onion skin. A refusal isn't sent to the renderer, the target puts
+back the throttle it had, and the reply is `applied: false` with the sentence in `warnings`.
+`obsrv_drive` and a live `obsrv_snap` carry it into their own `warnings`. Before this, the renderer
+showed the throttle, main's attempt was refused into the log, and every reply and status after it
+named a throttle that wasn't applied. **Not changed:** a throttle picked by hand in the side panel
+still logs a refusal and shows the throttle asked for, which the code's own comment calls
+deliberate. The card is about what a caller reads.
+
+**Tests:** `tests/e2e/throttle-refused.spec.ts`. Headless: `inspect`, `audit` and `lint`, each with
+the refusal forced (the sentence in its array exactly once, and once on stderr) and without it (no
+such sentence). Live: a harness app launched with the flag. The control reply is `applied: false`
+with the sentence and the target still at `none`, and lifting isn't refused. `obsrv_drive` and a
+live `obsrv_snap`, through a client that has listed the tools, carry the sentence in `warnings`.
+**Every assertion needs the forced message to arrive**, which is the card's vacuity rule. **Fix:** 5/5,
+plus `mcp-live`'s existing throttle test. **Control (the wiring removed, the hook kept):** all 5 failed,
+at inspect `notes: []`, audit and lint `warnings: []`, the live reply's `applied`/`throttle`, and
+`drive`'s `throttle`.
+
+**A wrong turn worth keeping:** the first headless test read `notes` for all three commands, and audit
+and lint failed *on the fix*, because their notes are emitted as `warnings`. That same first cut also
+printed the sentence twice on stderr, which the once-on-stderr assertion would have caught. Their
+first control failed at the same wrong key, so it proved nothing and was re-run.
