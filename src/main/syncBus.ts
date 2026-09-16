@@ -121,6 +121,29 @@ export function attachSyncBus(
    * rewrites after it leave the arm — they are what it is for.
    */
   const armedAt: Record<Pane, number> = { native: 0, target: 0 }
+  /**
+   * When the navigation each pane has in flight was issued, or null when the
+   * bus did not issue it (the page's own, or a person's).
+   *
+   * A server can answer an issued load with a redirect, and the pane then
+   * commits a URL nobody issued. That commit is still the issued load arriving.
+   * Read as news, it was mirrored into the other pane while that pane was
+   * loading the same URL through the same redirect: the target started a
+   * second load of the page, and a live scroll sent between the two commits was
+   * never answered. That happened in 4 of 12 apps on `surface-parity`'s
+   * `redirect` page (probe run 35158932493). When the lost scroll was the walk's
+   * `next`, the live audit reported `atEnd: false` on a page with nothing to
+   * scroll. So a redirect of an issued navigation is issued too, with the
+   * original's time, and its commit retires both.
+   */
+  const inFlight: Record<Pane, number | null> = { native: null, target: null }
+  const started = (pane: Pane, url: string): void => {
+    inFlight[pane] = issued[pane].get(url) ?? null
+  }
+  const redirected = (pane: Pane, url: string): void => {
+    const sent = inFlight[pane]
+    if (sent !== null) issued[pane].set(url, sent)
+  }
   let lastReported = ''
   let lastMirror: { from: Pane; at: number } | null = null
   /** Consecutive direction reversals within `LOOP_WINDOW_MS` of each other. */
@@ -255,9 +278,22 @@ export function attachSyncBus(
     mirror('target', url, inPage)
   }
 
+  const onNativeStart = (details: { url: string; isMainFrame: boolean; isSameDocument: boolean }): void => {
+    if (details.isMainFrame && !details.isSameDocument) started('native', details.url)
+  }
+  const onNativeRedirect = (details: { url: string; isMainFrame: boolean }): void => {
+    if (details.isMainFrame) redirected('native', details.url)
+  }
+  const onTargetStart = (url: string): void => started('target', url)
+  const onTargetRedirect = (url: string): void => redirected('target', url)
+
   native.webContents.on('did-navigate', onNativeNav)
   native.webContents.on('did-navigate-in-page', onNativeNavInPage)
+  native.webContents.on('did-start-navigation', onNativeStart)
+  native.webContents.on('did-redirect-navigation', onNativeRedirect)
   target.on('url-changed', onTargetNav)
+  target.on('navigating', onTargetStart)
+  target.on('redirected', onTargetRedirect)
 
   return {
     expect(url: string): void {
@@ -298,9 +334,13 @@ export function attachSyncBus(
     },
     detach(): void {
       target.off('url-changed', onTargetNav)
+      target.off('navigating', onTargetStart)
+      target.off('redirected', onTargetRedirect)
       if (!native.webContents.isDestroyed()) {
         native.webContents.off('did-navigate', onNativeNav)
         native.webContents.off('did-navigate-in-page', onNativeNavInPage)
+        native.webContents.off('did-start-navigation', onNativeStart)
+        native.webContents.off('did-redirect-navigation', onNativeRedirect)
       }
     },
   }

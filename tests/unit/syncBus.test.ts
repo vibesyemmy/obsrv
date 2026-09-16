@@ -35,6 +35,14 @@ class FakeNative extends EventEmitter {
     this.loaded.push(url)
     return url
   }
+  /** A main-frame, cross-document navigation starting in the native pane. */
+  start(url: string): void {
+    this.webContents.emit('did-start-navigation', { url, isMainFrame: true, isSameDocument: false })
+  }
+  /** The server redirecting that navigation. */
+  redirect(url: string): void {
+    this.webContents.emit('did-redirect-navigation', { url, isMainFrame: true, isSameDocument: false })
+  }
   /** A commit in the native pane, as Electron reports one. */
   commit(url: string, inPage = false): void {
     this.webContents.url = url
@@ -53,6 +61,14 @@ class FakeTarget extends EventEmitter {
   async load(url: string): Promise<string> {
     this.loaded.push(url)
     return url
+  }
+  /** A main-frame, cross-document navigation starting, as `TargetSource` reports one. */
+  start(url: string): void {
+    this.emit('navigating', url)
+  }
+  /** The server redirecting that navigation. */
+  redirect(url: string): void {
+    this.emit('redirected', url)
   }
   /**
    * A commit in the target pane. `mirrored` is the flag `TargetSource` sets
@@ -145,5 +161,68 @@ describe('SyncBus: a mirrored load that never commits back', () => {
     native.commit(B)
     expect(target.mirrored).toEqual([])
     expect(sync.mirrorTrace().filter(d => d.branch === 'echo')).toHaveLength(2)
+  })
+})
+
+describe('SyncBus: a server redirect of a navigation the bus issued', () => {
+  // surface-parity's `redirect` page: a 302 from /redirect to /landed. Both
+  // panes are told to load /redirect, both follow the redirect, and each
+  // commits /landed. Read as news, the first commit was mirrored into the
+  // other pane while that pane was loading the same page: the target loaded it
+  // twice, and a live scroll sent between the two commits was never answered
+  // (probe run 35158932493, 4 of 12 apps).
+  const ASKED = 'https://a.test/redirect'
+  const LANDED = 'https://a.test/landed'
+
+  it('is that navigation arriving in each pane when the native pane commits first', () => {
+    const { native, target, sync, reported } = bus()
+    sync.expect(ASKED)
+    native.start(ASKED)
+    target.start(ASKED)
+    native.redirect(LANDED)
+    target.redirect(LANDED)
+    native.commit(LANDED)
+    expect(target.mirrored).toEqual([])
+    target.commit(LANDED)
+    expect(native.loaded).toEqual([])
+    expect(reported).toEqual([LANDED])
+  })
+
+  it('and when the target commits first', () => {
+    const { native, target, sync, reported } = bus()
+    sync.expect(ASKED)
+    target.start(ASKED)
+    native.start(ASKED)
+    target.redirect(LANDED)
+    native.redirect(LANDED)
+    target.commit(LANDED)
+    expect(native.loaded).toEqual([])
+    native.commit(LANDED)
+    expect(target.mirrored).toEqual([])
+    expect(reported).toEqual([LANDED])
+  })
+
+  it("is still mirrored when the navigation was the page's own", () => {
+    const { native, target } = bus()
+    native.start('https://a.test/link')
+    native.redirect(LANDED)
+    native.commit(LANDED)
+    expect(target.mirrored).toEqual([LANDED])
+  })
+
+  it("leaves no record behind that swallows the pane's next genuine navigation to the same URL", () => {
+    const { native, target } = bus()
+    // A mirrored load into the target that the server redirects.
+    native.commit(ASKED)
+    expect(target.mirrored).toEqual([ASKED])
+    target.start(ASKED)
+    target.redirect(LANDED)
+    target.commit(LANDED, { mirrored: true })
+    // Later the target goes to LANDED on its own: news, mirrored into the native pane.
+    native.commit('https://a.test/elsewhere')
+    target.commit('https://a.test/elsewhere', { mirrored: true })
+    target.start(LANDED)
+    target.commit(LANDED)
+    expect(native.loaded).toContain(LANDED)
   })
 })
