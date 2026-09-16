@@ -22,10 +22,12 @@ export function showWindow(win: BrowserWindow): void {
   if (showsInactive()) {
     win.showInactive()
     // Click-through, too: `showInactive()` still orders the window above the
-    // apps someone is working in, and a click meant for the app underneath
-    // landed on it and activated it (5 activations with no call from the app
-    // in a recorded full run). Test input arrives through the driver, not
-    // the OS, so nothing in the suite needs the window to take a real click.
+    // apps someone is working in. A recorded full run still had 5 activations
+    // with no call from the app before them, and a click meant for the app
+    // underneath landing on this window is the likely cause, not an
+    // established one. The suite sends its input through the driver, not the
+    // OS, and passed click-through (545 in a recorded full run, in which
+    // nobody clicked).
     win.setIgnoreMouseEvents(true)
   } else win.show()
 }

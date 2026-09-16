@@ -122,8 +122,12 @@ export class Overlay {
    * `webContents.focus()` focuses its window too, which activates the app:
    * under the harness every spec that opened a menu took the desk from whoever
    * was using the machine (bug-e2e-takes-the-desk, 6 of 7 activations in a
-   * recorded full run). There the key events come from the test driver, not
-   * from the keyboard, so nothing needs the window to be key.
+   * recorded full run). So under the harness neither the chrome nor the overlay
+   * gets it, and with the app never active none of its windows is key. What is
+   * measured is that the suite passes that way (545 in a recorded full run); the
+   * menu and picker specs send their keys through the test driver. Whether focus
+   * and blur in a page always behave the same when its window is not key is not
+   * measured: bug-controls-blur-timeout has it as a suspect.
    */
   private focusView(wc: WebContents): void {
     if (showsInactive()) return
