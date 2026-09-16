@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDeclinedStance, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, closeSettings, openSettings, rendererWindow } from './launch'
 import { decodePng, pixelAt } from './helpers/decodePng'
+import { isFrameIdentityWarning } from '../../src/main/frameCheck'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
 import { established } from '../../src/shared/established'
 
