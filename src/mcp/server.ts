@@ -1106,6 +1106,19 @@ const server = new McpServer({ name: 'obsrv-mcp-server', version: VERSION })
  * handlers are wrapped at registration rather than each result builder
  * touched, so no tool can forget.
  */
+/**
+ * Under test, every tool checks its own reply against its own output schema
+ * and fails the call on a key the schema does not declare (`strictOutput.ts`).
+ *
+ * **Installed before `stampLaneResults`, and the order is load-bearing.**
+ * Registration wrappers nest in reverse: the one installed first has its
+ * handler wrapper applied last, so it sees the reply as later wrappers leave
+ * it. Installed after the stamp, this checked a reply that was not the reply
+ * sent — and the stamped field is exactly the kind of addition it exists to
+ * catch.
+ */
+rejectUndeclaredKeysUnderTest(server)
+
 function stampLaneResults(target: McpServer, stamp: string): void {
   type Register = (name: unknown, config: unknown, handler: unknown) => unknown
   const register = target.registerTool.bind(target) as unknown as Register
@@ -1118,15 +1131,6 @@ function stampLaneResults(target: McpServer, stamp: string): void {
   ;(target as unknown as { registerTool: Register }).registerTool = wrapped
 }
 if (devMode()) stampLaneResults(server, laneStamp(devLane().laneLabel(REPO_ROOT), devLane().serverStamp(REPO_ROOT), REPO_ROOT))
-
-/**
- * Under `OBSRV_TEST=1`, every tool registered after this checks its own reply
- * against its own output schema and fails the call on a key the schema does
- * not declare (`strictOutput.ts`). Wrapped here, before the first
- * `registerTool` below, so no tool can forget — and outside the `devMode()`
- * fence above, because the suite runs on the ordinary build.
- */
-rejectUndeclaredKeysUnderTest(server)
 
 server.registerTool(
   'obsrv_snap',

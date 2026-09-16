@@ -56,7 +56,7 @@ export function schemaKeyPaths(schema: unknown, path = '', out = new Set<string>
   // construction. Marked open rather than walked: flagging a record's own keys
   // would be a false red on a reply every client accepts, and a check that
   // cries wolf in a suite with flakes is a check that gets switched off.
-  if (s.additionalProperties !== undefined && s.additionalProperties !== false) out.add(`${path}.*`)
+  if (s.additionalProperties !== undefined && s.additionalProperties !== false) out.add(path === '' ? '*' : `${path}.*`)
   if (s.properties !== null && typeof s.properties === 'object') {
     for (const [k, sub] of Object.entries(s.properties as Record<string, unknown>)) {
       const p = path ? `${path}.${k}` : k
@@ -78,6 +78,13 @@ export function schemaKeyPaths(schema: unknown, path = '', out = new Set<string>
  * so is everything below it.
  */
 export function undeclaredKeyPaths(emitted: Set<string>, declared: Set<string>): string[] {
-  const open = [...declared].filter(p => p.endsWith('.*')).map(p => p.slice(0, -2))
-  return [...emitted].filter(p => !declared.has(p) && !open.some(o => p === o || p.startsWith(`${o}.`) || p.startsWith(`${o}[`)))
+  // `*` is the root itself being open, which opens everything below it; any
+  // other marker opens one subtree. Spelled apart because `''.*` would have
+  // matched nothing and made a root-level open object a FALSE RED — unreachable
+  // on today's shapes, which are all `additionalProperties: false`, and wrong
+  // the day one is not.
+  const open = [...declared].filter(p => p === '*' || p.endsWith('.*')).map(p => (p === '*' ? '' : p.slice(0, -2)))
+  return [...emitted].filter(
+    p => !declared.has(p) && !open.some(o => o === '' || p === o || p.startsWith(`${o}.`) || p.startsWith(`${o}[`)),
+  )
 }

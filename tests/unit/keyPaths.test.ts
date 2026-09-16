@@ -72,6 +72,15 @@ describe('what it deliberately does not flag', () => {
     expect(undeclaredKeyPaths(emitted, schemaKeyPaths({ type: 'object', properties: open }))).toEqual([])
   })
 
+  it('opens everything when the ROOT admits unnamed keys', () => {
+    // Unreachable on today's shapes — every tool's root is
+    // `additionalProperties: false` — and a false red the day one is not,
+    // which is the kind of latent wrong answer that surfaces as "the check is
+    // broken" long after anyone remembers why.
+    const emitted = emittedKeyPaths({ anything: { deeper: 1 } })
+    expect(undeclaredKeyPaths(emitted, schemaKeyPaths({ type: 'object', additionalProperties: true }))).toEqual([])
+  })
+
   it('still flags a sibling of an open object, so openness does not leak outwards', () => {
     const s = { type: 'object', properties: { meta: { type: 'object', additionalProperties: true }, named: { type: 'string' } } }
     const emitted = emittedKeyPaths({ meta: { free: 1 }, named: 'x', extra: 2 })

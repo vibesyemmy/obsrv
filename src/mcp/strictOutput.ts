@@ -1,10 +1,9 @@
-import { z } from 'zod'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { emittedKeyPaths, schemaKeyPaths, undeclaredKeyPaths } from '../shared/keyPaths'
 
 /**
- * Under `OBSRV_TEST=1`, every tool checks its own reply against its own output
- * schema and fails the call when it carries a key the schema does not declare.
+ * Under test, every tool checks its own reply against its own output schema
+ * and fails the call when it carries a key the schema does not declare.
  *
  * **Why the server does not catch this on its own**, measured rather than
  * assumed: the SDK parses the reply against the zod output shape and throws
@@ -55,7 +54,7 @@ const underTest = (): boolean => process.env.OBSRV_TEST === '1' || process.env.O
  *
  * A product change made for a test, on the precedent of
  * `OBSRV_TEST_FIRST_VIEWPORT_DELAY_MS` (#59) and `OBSRV_TEST_THROTTLE_REFUSAL`
- * (#81), and fenced twice: `OBSRV_TEST=1` *and* this variable. Without it the
+ * (#81), and fenced twice: the fence above *and* this variable. Without it the
  * check is green on a clean tree and nobody ever learns whether it is running
  * — which is precisely what `ci.yml`'s trace upload did for a week while it
  * uploaded an empty directory and passed.
@@ -66,43 +65,64 @@ const underTest = (): boolean => process.env.OBSRV_TEST === '1' || process.env.O
 const poisonFor = (tool: string): boolean => underTest() && process.env.OBSRV_TEST_UNDECLARED_KEY === tool
 
 type Register = (name: unknown, config: unknown, handler: unknown) => unknown
+type ListHandler = (request: unknown, extra: unknown) => Promise<{ tools?: { name?: unknown; outputSchema?: unknown }[] }>
 
 /**
- * The declared key paths of one tool's output schema, or null when the schema
- * cannot be converted. Null disables the check **for that tool**, and the
- * caller says so on stderr rather than passing quietly: a check that silently
- * covers seven tools while reporting eight is the overclaim this repo has
- * already made once (`schema-emit-sweep`'s summary, room #148).
+ * The declared paths of every tool, read from **the server's own `tools/list`
+ * reply** — the exact object a client caches and validates against.
+ *
+ * Deriving them from the zod shapes instead would mean a second conversion
+ * with its own options, and this check's error message appeals to what a
+ * validating client does with the reply. If the two conversions ever disagreed,
+ * this would fail a reply that every client accepts, or pass one they reject —
+ * and the sentence naming `-32602` would be the confident wrong answer. There
+ * is one definition of "declared" here, and it belongs to the client.
+ *
+ * Read once, lazily: the list handler exists only after the first tool is
+ * registered, and every tool is registered before any call arrives.
  */
-function declaredPathsOf(outputSchema: unknown): Set<string> | null {
-  if (outputSchema === null || typeof outputSchema !== 'object') return null
+async function publishedPaths(server: unknown, warn: (line: string) => void): Promise<Map<string, Set<string>> | null> {
+  const low = (server as { server?: { _requestHandlers?: Map<string, ListHandler> } }).server
+  const handler = low?._requestHandlers?.get('tools/list')
+  if (handler === undefined) {
+    warn('obsrv: strict output check DISABLED — the server exposes no tools/list handler to read its published schemas from')
+    return null
+  }
   try {
-    const json = z.toJSONSchema(z.object(outputSchema as z.ZodRawShape), { io: 'output', unrepresentable: 'any' })
-    return schemaKeyPaths(json)
-  } catch {
+    const listed = await handler({ method: 'tools/list', params: {} }, { signal: new AbortController().signal })
+    const out = new Map<string, Set<string>>()
+    for (const tool of listed.tools ?? []) {
+      // A tool that publishes no output schema promises no shape, so nothing
+      // it emits is undeclared. Absent from the map, not empty in it — an
+      // empty set would call every key it sends a violation.
+      if (typeof tool.name === 'string' && tool.outputSchema !== undefined) out.set(tool.name, schemaKeyPaths(tool.outputSchema))
+    }
+    return out
+  } catch (e) {
+    warn(`obsrv: strict output check DISABLED — reading the published schemas failed: ${e instanceof Error ? e.message : String(e)}`)
     return null
   }
 }
 
 /**
  * Wraps `registerTool` so no tool can forget the check — the same hook
- * `stampLaneResults` uses, and for the same reason. Call before any tool is
- * registered.
+ * `stampLaneResults` uses, and for the same reason.
+ *
+ * **Install this BEFORE any other registration wrapper.** Wrappers nest in
+ * reverse: the one installed first has its handler wrapper applied last, so it
+ * sees the reply as the later wrappers leave it. Installed after
+ * `stampLaneResults`, this checked the reply *before* the dev-lane stamp was
+ * added, which is not the reply that is sent — and the stamped field is
+ * exactly the kind of addition this is meant to catch.
  */
-export function rejectUndeclaredKeysUnderTest(target: { registerTool: unknown }, warn: (line: string) => void = line => process.stderr.write(`${line}\n`)): void {
+export function rejectUndeclaredKeysUnderTest(
+  target: { registerTool: unknown },
+  warn: (line: string) => void = line => process.stderr.write(`${line}\n`),
+): void {
   const register = (target.registerTool as Register).bind(target) as Register
+  let paths: Promise<Map<string, Set<string>> | null> | null = null
   const wrapped: Register = (name, config, handler) => {
     const tool = String(name)
-    const schema = (config as { outputSchema?: unknown }).outputSchema
-    // A tool with no output schema declares nothing, so there is nothing to
-    // disagree with. Not a gap: the key it emits is not undeclared, because
-    // the tool never promised a shape.
-    if (schema === undefined) return register(name, config, handler)
-    const declared = declaredPathsOf(schema)
-    if (declared === null) {
-      warn(`obsrv: strict output check DISABLED for ${tool} — its output schema could not be converted`)
-      return register(name, config, handler)
-    }
     const inner = handler as (...args: unknown[]) => Promise<CallToolResult>
     return register(name, config, async (...args: unknown[]) => {
       const result = await inner(...args)
@@ -113,6 +133,9 @@ export function rejectUndeclaredKeysUnderTest(target: { registerTool: unknown },
       // the SDK either, so there is nothing to compare; skipped rather than
       // read as an empty reply, which would call every refusal a violation.
       if (out.isError === true || out.structuredContent === undefined) return out
+      paths ??= publishedPaths(target, warn)
+      const declared = (await paths)?.get(tool)
+      if (declared === undefined) return out
       const undeclared = undeclaredKeyPaths(emittedKeyPaths(out.structuredContent), declared)
       if (undeclared.length === 0) return out
       throw new Error(

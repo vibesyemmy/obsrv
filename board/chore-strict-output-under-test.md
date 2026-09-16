@@ -57,7 +57,8 @@ against every instance in its own card is the failure this card exists to preven
 ## The control the card demanded, run first
 
 **Historical, on `6755535` (`f32dbbb`'s parent — before #65, #68 and #75).** The check was copied onto
-that tree and the real server driven over stdio:
+that tree and the real server driven over stdio — and re-run after the derivation changed to the
+published schema, rather than inherited from the first version:
 
     obsrv_inspect emitted 1 key its own output schema does not declare: readout.colorPainted.
 
@@ -101,3 +102,24 @@ lived. The claim on this card — that a server-side check reaches every `drive`
 - `mcp.spec` 33/33 with three new arms; `mcp-live.spec` 41/41 with the check running on every live
   reply and one new arm; `surface-parity` + `mcp-electron` 13/13; `schema:sweep` clean on the shared
   walkers
+
+## Three corrections from Rook's and Henry's read, before merge
+
+**1. "Declared" now means what the client means.** The first version derived paths with
+`z.toJSONSchema(…, { unrepresentable: 'any' })` while the SDK publishes with
+`toJsonSchemaCompat(…, { strictUnions: true, pipeStrategy: 'output' })` — two conversions, and this
+check's error message appeals to what a validating client does with the reply. If they ever
+disagreed, it would fail a reply every client accepts, or pass one they reject, while naming
+`-32602`. It now reads the declared paths from the server's **own `tools/list` reply**, the exact
+object a client caches, so there is one definition and it is the client's. No live instance of a
+disagreement was found, and none is claimed.
+
+**2. It was checking a reply that was not the one sent.** Installed after `stampLaneResults`, the
+check ran *inside* it: registration wrappers nest in reverse, so the first installed sees the reply
+last. Under the dev lane the stamped field was added after the check looked — and a field added to
+a reply is precisely what this exists to catch. Installed first now, with the reason on the line.
+
+**3. A root-level open object opened nothing.** `additionalProperties: true` at the root produced
+the marker `.*`, which matched no path, so every key would have been a false red. Unreachable on
+today's shapes — every tool's root is `additionalProperties: false` — and wrong the day one is not.
+Fixed and tested.
