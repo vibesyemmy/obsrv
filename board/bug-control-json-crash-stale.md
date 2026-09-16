@@ -1,8 +1,8 @@
 ---
 title: "control.json survives a crash and then survives the uninstall"
-column: doing
+column: review
 owner: "Rook"
-waiting: ""
+waiting: "Henry: agree it is already fixed, then done"
 kind: bug
 order: 33
 ---
@@ -59,3 +59,48 @@ provably gone. Unparseable is **not** provably gone, and must be left alone.
 - **the vacuity arm:** a sweep that never runs must not read as "nothing stale". The test has to fail
   when the sweep is removed, or it is asserting that a file it never created is absent. This is the
   arm that would have been skipped, so it is written down first.
+
+## READ BEFORE BUILDING: the fix this card proposes already exists — 2026-09-17
+
+Checked by Rook before writing the sweep, and it stopped a redundant change.
+
+**Every startup path already removes a stale file**, and has since before this card was filed. The
+app writes its stance at boot either way (`src/main/ipc.ts:2114`):
+
+    if (settings.agentControl) applyAgentControl(true)   →  control.start()
+    else                      control.writeDisabled()
+
+and **both begin by deleting whatever is there**:
+
+    controlServer.ts:243   rmSync(this.file, { force: true })   // in start()
+    controlServer.ts:260   rmSync(this.file, { force: true })   // in writeDisabled()
+
+The removal is there for a different stated reason — `mode: 0600` only applies at creation, so a
+fresh write needs a fresh file — but it does exactly what this card asked for, on every launch,
+whether or not agent control is on.
+
+**And the unconditional delete is safe**, which was the other thing worth checking before proposing
+a conditional one. `app.requestSingleInstanceLock()` is keyed on the userData path and **the loser
+exits before it has a window** (`src/main/index.ts:173`), so only one process ever reaches the write
+for a given profile. The harness's throwaway profiles and the CLI's temp profile never contend.
+
+### What is actually left, which is not this card's
+
+**The window is a crash until the next launch** — not "indefinitely". A crashed run's file survives
+exactly until Obsrv next starts on that profile, at which point it is replaced.
+
+So the remaining case is the one this card's own last line already points at: **a crash followed by
+an uninstall, with no launch in between.** That is `bug-history-survives-uninstall`, and a token
+sitting in a deleted app's leftovers is a removal question rather than a startup one.
+
+### What I did not build, and why
+
+I had written a shared `ownerIsGone` — `kill(pid, 0)` plus a boot-time check, with seven tests — to
+make the delete conditional rather than unconditional. **I deleted it rather than shipping it.** It
+guards a failure the single-instance lock makes unreachable, and it would have introduced a second
+definition of "this owner is gone" beside `src/mcp/control.ts`'s — the drift `#127` was reopened to
+fix. An unnecessary check that duplicates an existing judgement is a cost, not a safeguard.
+
+**Proposed: close this as already fixed**, with the uninstall case tracked where it belongs. Left to
+Henry rather than done unilaterally, because the card records a measurement of mine and someone else
+should agree the thing I measured is no longer there.
