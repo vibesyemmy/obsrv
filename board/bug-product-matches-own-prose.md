@@ -22,9 +22,18 @@ prose."* The product does the thing its own policy forbids, to itself.
 
 ## Why it is worse than an ugly line
 
-**The sentences are the product and they get rewritten.** `docs/read-the-output-not-the-code` is
-the standing argument that Obsrv's warnings improve by being reworded. So this repo has a
-documented commitment to changing exactly the string this regex depends on.
+**The sentences are the product and they get rewritten.** `CONTRIBUTING.md`'s *Writing it down*
+opens *"Obsrv's output is sentences, and the sentences are the product"*, and `compatibility.md`
+promises callers the wording of any warning may change in a minor. So this repo has a documented
+commitment to changing exactly the string this regex depends on.
+
+> **Citation corrected 2026-09-16.** This card, and six others on the board, cited
+> `docs/read-the-output-not-the-code` for that principle. **No such file exists, on `main` or
+> anywhere in the tree** — it is a path seven cards have been pointing at for days. The principle
+> is real and lives in `CONTRIBUTING.md` under *Writing it down*; only the citation was a ghost.
+> Found by checking every file path this card names against `origin/main` — a check run because
+> Henry caught this same card asserting that a test file *carries* something the tree does not
+> contain. The other six are not this card's to edit and are filed separately.
 
 **And the failure is silent.** Reword "kept painting" and the test stops matching. Nothing throws;
 the warning routes down the other branch; a person reading the output sees a sentence in the wrong
@@ -109,18 +118,28 @@ so `[^/\n]` excludes `/`, `\` and **the letter `n`**. "kept painting" contains a
 asking what the zero was a zero *out of* is what exposed it. **An instrument that has not been
 shown to find something cannot report a zero.**
 
-## What is pinned before any fix
+## Measured, and where the instrument is
 
-`tests/unit/cliCapture.test.ts` carries a characterization test recording which reason carries
-which sentence and how the prose match routes each — `animating` and `timeout` suppressed,
-`blank` and `uncovered` kept — with both verdicts present so the predicate is discriminating
-rather than saturated.
+**Nothing in the tree this card lands in carries the test below.** It is on Rook's
+`fix/prose-match-routing`, unpushed at the time of writing, and lands with the work pull request.
+Named rather than implied, because a card that says a file *carries* something the tree does not
+contain is this card's own defect in a different costume — Henry caught it on the first draft of
+this section.
+
+The measurement itself stands wherever the instrument ends up, and is the reason this card is a
+bug rather than a tidy-up:
+
+A characterization test drives `captureQuiescent` through every reason it can warn for and
+records which sentence each carries and how the prose match routes it — `animating` and `timeout`
+suppressed, `blank` and `uncovered` kept. Both verdicts appear, so the predicate is discriminating
+rather than saturated; four `kept` rows would pass while testing nothing.
 
 **Its control is the demonstration this card previously only argued.** Rewording `capture.ts`'s
 animating sentence to *"page painted continuously for"* — the kind of edit
 `read-the-output-not-the-code` commits this project to making — turned the test red
 (`animating:suppressed → animating:kept`) **with `tsc` clean on that tree.** A rewording is not a
-type error, nothing throws, and the warning silently takes the other branch.
+type error, nothing throws, and the warning silently takes the other branch. The edit was then
+reversed rather than the file reverted, and `src/` was confirmed unchanged.
 
 **What is still not pinned, and it is why the defect survived:** the routing decision itself has
 no test anywhere. It is an inline arrow inside `render()` in a 1600-line file, unexported, and
