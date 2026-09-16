@@ -1,13 +1,12 @@
 ---
 title: "`groupsOnly` empties `findings` and `truncated` says nothing was cut"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 47
 ---
 
-FOUND BY ROOK in run 19, 2026-09-16, with a control. **Unowned.** The smallest of run 19's five
+FOUND BY ROOK in run 19, 2026-09-16, with a control. The smallest of run 19's five
 and the card says so: a careful reader has `summary`. Not live-specific — headless does the same.
 
 **Surface observed**, added 2026-09-16 by Henry on Rook's own catch: the `obsrv` MCP tools in this
@@ -19,6 +18,42 @@ diff and not by observation:** between `v0.60.0` and `main` at `3552349`, no cha
 source, and the same method finds #49's routing change, so the result is not a blind search. It is
 still a reading, not an observation: behaviour can change through lines that do not use these words.
 **Re-observe on a local build before fixing.**
+
+## RESOLVED 2026-09-16 by Henry — one note, on both tools, both surfaces
+
+**Re-observed on main first**, through the CLI's JSON that the MCP relays, each against its own
+control without the flag:
+
+| command | flag | `findings` | `truncated.findings` | `groups` | `summary` |
+| --- | --- | --- | --- | --- | --- |
+| `audit` | none | 1 | 0 | 1 | targets under: 1 |
+| `audit` | `--groups-only` | **0** | **0** | 1 | targets under: 1 |
+| `lint` | none | 6 | 0 | 6 | six rules counted |
+| `lint` | `--groups-only` | **0** | **0** | 6 | six rules counted |
+
+**The class is two, not one:** `lint` has the same silence as `audit`. The card was filed on audit.
+
+**Zeroing `truncated.findings` was deliberate**, and its comment says why (`noListCut`: no list was
+printed, so nothing was cut from one). The CLI's stderr always said *"the list left out"*. What was
+missing was a sentence in the reply an agent reads, and that reply already declares `notes`, which
+is where the register puts sentences about the call rather than the page. So nothing was changed
+about the counter.
+
+**The fix:** `GROUPS_ONLY_NOTE` in `src/mcp/server.ts`, pushed into `notes` at all four sites
+(`audit` and `lint`, live and headless) whenever `groupsOnly` is set. *"`groupsOnly` left the
+per-finding list out: `findings` is empty and `truncated.findings` is 0 because no list was printed,
+not because nothing was found. Every finding is counted in `summary` and grouped in `groups`."* It is
+an entry in an already-declared array, so no schema changes.
+
+**Test:** `mcp.spec.ts`, *groupsOnly says the list was left out by request…*, on both tools. With
+the flag: an empty list, a fixture that has groups, and the note exactly once. Without it: findings
+listed, no note. **Passed with the fix (and its audit/lint neighbours, 5/5). Failed on `main`'s
+server** at the note assertion, where audit's `notes` held only the headless-reason sentence.
+**Stated plainly:** that control stopped at `audit`, the first tool in the loop, so `lint`'s absence
+was shown by reading, not by watching it fail.
+
+**Not observed live:** the live sites share the constant and the push, but no live `groupsOnly` call
+was made for this change.
 
 ## The defect
 
