@@ -58,3 +58,40 @@ fire on the condition it guards is the same defect as the step it is guarding â€
 whole history is a check that everybody believed in and nobody had watched fail.
 
 Then restore it and watch the check go green, so the guard is not merely always-red.
+
+## PROGRESS 2026-09-16 by Henry: the config check, and what the setting depends on
+
+**Shape chosen: option 1, carrying the weight alone.** Option 2 (an artefact check in the upload
+step) was not built, for two measured reasons:
+- It runs only on red runs.
+- It would cry wolf on red runs where no test failed. A global-setup error fails e2e with no test
+  ever retried, so no trace can exist, and the check would add a second red saying traces are
+  missing from a run that could never have had one. That is the same shape as the upload step's own
+  `failure()` misfire, which #106 removed.
+
+**`tests/unit/e2e-evidence-settings.test.ts`**, run on every CI build in the unit step, reads
+`playwright.config.ts` itself and `ci.yml`'s `playwright test` lines. It asserts:
+- every project's effective `trace` records a failed test (`on`, `retain-on-failure`,
+  `retain-on-first-failure`, `on-first-retry` or `on-all-retries`);
+- every project's effective `screenshot` writes one on failure. The config's own comment measured
+  that the Electron trace carries no picture, so dropping `screenshot` loses the other half of the
+  evidence;
+- **wherever the trace is taken only on a retry, a retry happens**, both in the config and in every
+  CI invocation (a `--retries` flag overrides the config). This is the "a value that never produces a
+  file" case the card named. `on-first-retry` with `retries: 0` writes nothing and would pass a check
+  of the setting alone;
+- no CI invocation passes a `--trace` that records nothing.
+
+**Controls, one run each, all red on exactly the intended test, then green once restored:**
+1. `trace` deleted (the card's own control);
+2. `trace: 'off'`;
+3. `screenshot` deleted;
+4. config `retries: 0`;
+5. CI `--retries=0`;
+6. CI `--trace off`;
+7. a project overriding `trace: 'off'`.
+
+**Limit, stated:** this guards the settings and their dependency, not the artefact. A Playwright
+change that stopped writing `trace.zip` for Electron under a valid setting would pass it. That's
+possible, not observed, and it's what option 2 would catch at the cost above.
+
