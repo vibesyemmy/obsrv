@@ -124,6 +124,42 @@ is worth nothing until you show it can produce one.
 So **repetition alone is not a viable strategy**: at this rate a local loop would need to be very
 long to expect a single hit, and a green run of any length says almost nothing.
 
+## The focus experiment, and why its answer is worth nothing — 2026-09-16
+
+[Run `35142312962`](https://github.com/vibesyemmy/obsrv/actions/runs/35142312962), on CI, two arms of
+75 chain runs (`:53 :71 :85` in one worker, file order), one as the harness runs today and one with
+`OBSRV_TEST_TAKES_THE_DESK=1` restoring the pre-`#105` focus:
+
+    no-flag      75 requested, 75 actually ran 3 tests, 0 gate failures — blur=0
+    takes-desk   75 requested, 75 actually ran 3 tests, 0 gate failures — blur=0
+
+The gate held: every one of the 150 iterations really ran its three tests, so this is not a sweep
+that measured nothing.
+
+**And it still says nothing about focus, because I sized it wrong.** The failure has been seen once
+in the workflow's ~591 runs. At that rate:
+
+| runs | expected sightings | P(see zero) |
+| --- | --- | --- |
+| 75 (one arm) | 0.13 | **88%** |
+| 150 (both) | 0.25 | 78% |
+| 1,000 | 1.69 | 18% |
+| 1,773 | 3.00 | 5% |
+
+**Zero was the overwhelmingly likely outcome whether or not focus is the cause.** The run cost a
+60-minute CI job and could not have discriminated between the hypothesis and its negation — which is
+the same defect as a green that fits two facts, arrived at by arithmetic I did not do until
+afterwards. *Do the power calculation before spending the runs, not after.*
+
+**So the focus hypothesis is neither supported nor refuted, and must not be written up as refuted.**
+
+**What this rules out is the method, not the suspect.** Chasing a ~1-in-600 event by repetition needs
+~1,800 runs per arm to expect three sightings — hours of macOS CI per arm, for a flake that costs the
+board one red run. The next attempt should be a *deterministic trigger* — something that makes
+`blurNode`'s evaluate hang on demand — rather than more samples. The narrowing in the section above
+(an evaluate that never returned, with the retry loop ruled out by the single resolution in the call
+log) is where that hunt starts.
+
 ## What a fix has to do first
 
 **Reproduce it alone.** If `:85` only fails in a full run, that is a finding in itself and points
