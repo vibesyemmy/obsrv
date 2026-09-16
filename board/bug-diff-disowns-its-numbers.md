@@ -1,7 +1,8 @@
 ---
 title: "`diff` calls its band deltas noise and leaves its headline numbers standing"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
 order: 31
 ---
 

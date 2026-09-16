@@ -1,7 +1,8 @@
 ---
 title: "The report says \"full page: warning: full page is…\""
-column: next
+column: doing
 kind: bug
+owner: "Rook"
 order: 32
 ---
 

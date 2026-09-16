@@ -1,7 +1,8 @@
 ---
 title: "The report's central image is altered and only stderr says so"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
 order: 30
 ---
 
