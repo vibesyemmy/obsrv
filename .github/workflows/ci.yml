@@ -210,8 +210,10 @@ jobs:
       # error-context.md and no traces. The directory was never empty, so
       # `error` was silent through the entire week and would be silent again if
       # `trace` were dropped tomorrow.
-      # **It does not guard the trace setting.** Nothing does today; that wants
-      # its own card, not a wider `if:` here.
+      # **It does not guard the trace setting.** The unit test
+      # tests/unit/e2e-evidence-settings.test.ts does: trace and screenshot on
+      # failure, and a retry wherever the trace is taken only on one
+      # (bug-trace-setting-has-no-guard).
       #
       # What it does catch is an e2e failure that wrote NOTHING AT ALL — a real
       # state, and one this change was verified against (run 35114327271: e2e
