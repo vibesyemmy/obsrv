@@ -170,7 +170,9 @@ test('obsrv_snap mode:"headless" ignores the running app', async () => {
 test('one obsrv_drive call combines preset + scroll + highlight and returns the final status', async () => {
   const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
   const r = await call('obsrv_drive', {
-    focus: true,
+    // `focus` fronts the app, so it rides along on CI and locally only when
+    // asked for (bug-e2e-takes-the-desk); nothing below asserts it.
+    ...(process.env['CI'] || process.env['OBSRV_E2E_FRONT'] ? { focus: true } : {}),
     url: TALL,
     preset: 'laptop-768',
     scroll: { x: 0, y: 800 },

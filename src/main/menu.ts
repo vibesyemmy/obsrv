@@ -1,6 +1,7 @@
 import { Menu, shell, type MenuItemConstructorOptions, type WebContents } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
+import { showsInactive } from './window'
 
 /**
  * Standard macOS menus plus File → Open Image…, which only nudges the
@@ -102,7 +103,10 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
       }
       wc.once('devtools-opened', settle)
       wc.once('devtools-closed', settle)
-      wc.openDevTools({ mode: 'detach' })
+      // Detached DevTools come to the front by default, and under the harness
+      // that took the desk from whoever was using the machine
+      // (bug-e2e-takes-the-desk).
+      wc.openDevTools({ mode: 'detach', activate: !showsInactive() })
     }, 0)
   }
   /** Add *and* activate: "new tab" means the tab you asked for is in front. */

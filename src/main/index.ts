@@ -7,7 +7,7 @@ import { installMenu } from './menu'
 import { Overlay } from './overlay'
 import { TabManager } from './tabs'
 import { exposeForTests } from './testHooks'
-import { createMainWindow } from './window'
+import { createMainWindow, showWindow, showsInactive } from './window'
 
 // First, so everything below has somewhere to write.
 const logFile = initLog()
@@ -184,8 +184,11 @@ if (!app.requestSingleInstanceLock()) {
     const win = mainWin
     if (!win || win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
+    showWindow(win)
+    // Under the harness the window is told, not fronted: the single-instance
+    // spec asserts the telling, and focusing here took the desk from whoever
+    // was using the machine (bug-e2e-takes-the-desk).
+    if (!showsInactive()) win.focus()
   })
   void app.whenReady().then(boot)
 }

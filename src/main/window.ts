@@ -10,6 +10,28 @@ function devLaneTitle(): string | null {
   return lane ? `Obsrv — dev lane (${process.env.OBSRV_DEV_LANE_LABEL ?? lane})` : null
 }
 
+/**
+ * Shows the window. Under the e2e harness it shows it without activating the
+ * app: `show()` on macOS makes the app the front one, and a suite that
+ * launches the app hundreds of times a day on the machine someone is working
+ * at took their desk on every launch (bug-e2e-takes-the-desk).
+ * `showInactive()` still orders the window on screen, so the window server,
+ * and the hide/show events Electron derives from occlusion, see it as before.
+ */
+export function showWindow(win: BrowserWindow): void {
+  if (showsInactive()) win.showInactive()
+  else win.show()
+}
+
+/**
+ * Whether the app must not activate itself: under the e2e harness, and for a
+ * real launch a test makes without the harness (the dev lane's spec), which
+ * says so with `OBSRV_SHOW_INACTIVE=1`.
+ */
+export function showsInactive(): boolean {
+  return process.env.OBSRV_TEST === '1' || process.env.OBSRV_SHOW_INACTIVE === '1'
+}
+
 export function createMainWindow(): BrowserWindow {
   const devTitle = devLaneTitle()
   const win = new BrowserWindow({
@@ -27,7 +49,7 @@ export function createMainWindow(): BrowserWindow {
     },
   })
 
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => showWindow(win))
   // The page's own <title> would replace it on load.
   if (devTitle !== null) win.on('page-title-updated', e => e.preventDefault())
 

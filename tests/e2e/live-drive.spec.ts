@@ -346,7 +346,12 @@ function paneScrollY(pane: 'native' | 'target'): Promise<number> {
   }, pane)
 }
 
-test('focusWindow answers ok and fronts the window', async () => {
+test('focusWindow answers ok and fronts the window (takes the desk: CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
+  // Fronting the app is this command's whole job, so the test does it for
+  // real — and on a machine someone is using, that takes their desk. It runs
+  // on CI, where nobody is at the desk, and locally only when asked for
+  // (bug-e2e-takes-the-desk).
+  test.skip(!process.env['CI'] && !process.env['OBSRV_E2E_FRONT'], 'fronts the app: runs on CI, or locally with OBSRV_E2E_FRONT=1')
   const r = await call('focusWindow')
   expect(r.status).toBe(200)
   expect(r.body).toEqual({ ok: true })
@@ -816,7 +821,7 @@ test('a capture of a hidden window shows the page now, not the frame before it w
   } finally {
     // Rasterisation resumes on the window's own show event; hand the next test
     // a target that is painting rather than one still paused.
-    await app.evaluate(() => (globalThis as any).__obsrv.win.show())
+    await app.evaluate(() => (globalThis as any).__obsrv.win.showInactive())
     await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.session.painting)).toBe(true)
   }
 })

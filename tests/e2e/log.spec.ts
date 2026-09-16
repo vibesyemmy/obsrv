@@ -56,7 +56,7 @@ test('the window going hidden and coming back is on record, once per transition'
   await expect.poll(hidden).toBe(before.hidden + 1)
   // A second hide event for a window that is already hidden is not news.
   await app.evaluate(() => (globalThis as any).__obsrv.win.hide())
-  await app.evaluate(() => (globalThis as any).__obsrv.win.show())
+  await app.evaluate(() => (globalThis as any).__obsrv.win.showInactive())
   await expect.poll(shown).toBe(before.shown + 1)
   expect(hidden()).toBe(before.hidden + 1)
 })
