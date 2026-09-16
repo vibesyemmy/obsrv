@@ -22,3 +22,35 @@ Cause still open: the `hidden` divergence, the two walks scrolling differently, 
 **RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
 on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
 worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**
+
+## RE-OBSERVED ON `main` 2026-09-16 by Henry — the divergence does not reproduce under the harness
+
+Main's CLI and MCP server (`58f4437`), against a harness app from the same tree. Live is
+`obsrv_audit mode: live`, with the app set to the preset first through `obsrv_drive`, **because live
+ignores `preset`.** A first pass that passed it anyway measured the app's own 1920x1080 screen and
+looked like a divergence.
+
+| preset | surface | runs | screenfuls | `atEnd` | `pageHeight` | coverage note |
+| --- | --- | --- | --- | --- | --- | --- |
+| `laptop-768` | headless | 3 | 3 | true | 4712 | fires: *3 screenfuls (3072 CSS px) … (7 screenfuls)* |
+| `laptop-768` | live | 3 | 3 | true | 4712 | fires, word for word the same |
+| `1080p-24` | headless | 2 | 2 | true | 4712 | fires: *2 screenfuls (3240 CSS px) … (5 screenfuls)* |
+| `1080p-24` | live | 3 | 2 | true | 4712 | fires, word for word the same |
+
+**The two surfaces agree on every run, and the note fires on both,** which is what the fixture's own
+comment says it was built for: *"the walk does reach a real end and reports atEnd, while the page it
+measures afterwards is taller"*. The 2026-09-14 reading (live 8 screenfuls, 6832, silent) was taken
+in a visible app, on the day `219223e` changed how the coverage note measures growth on this same
+fixture. Whether it was taken before or after that merge isn't recorded.
+
+**What that leaves, by reading the code:** both walks take `atEnd` from the same step that
+scrolled, before their dwell. The fixture grows from a `scroll` handler, which runs at the next
+frame. So a walk whose `scroll` reply lands after that frame would see the growth and keep going. A
+visible window renders every frame, and a hidden harness window may not. **That's the one
+hypothesis still standing, and it's unobserved:** whether a visible app's reply lands after the
+handler. Testing it needs a visible app (the dev lane), which this pass didn't use, because
+`bug-lane-serves-another-tree` makes a shared lane unsafe to rebuild.
+
+**Not a fix to make on this evidence.** Taking `atEnd` after a frame would make both walks follow
+this fixture to its full height and silence the note the fixture exists to raise. Whether that's
+right is a design question, and nothing observed today asks it.
