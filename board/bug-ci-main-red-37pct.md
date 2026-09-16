@@ -117,10 +117,49 @@ Henry got this wrong twice before it was right. First by sampling only the first
 **At least three distinct tests, sampled rather than assumed:**
 
     a1c9050   tests/e2e/live-drive.spec.ts:963    the resizing verdict
-    b89ec67   tests/e2e/cli-walk.spec.ts:173
+    b89ec67   tests/e2e/cli-walk.spec.ts:173      examined 2026-09-16, see below
     6a8cd02   tests/e2e/devtools.spec.ts:92
 
-Only the first is the one already carded. The other two are unexamined.
+Only the first is the one already carded. `devtools:92` is unexamined.
+
+## `cli-walk:173` examined — and it breaks the both-tries rule a second way
+
+EXAMINED BY ROOK 2026-09-16, after Henry described a fresh sighting as *"cli-walk.spec:173 on both
+tries, a known flake"*. Those two halves cannot both be true under this board's own rule:
+`bug-flakes-gate-the-gate` counts a test as failed only when its `(retry #1)` line is ✘ too,
+**precisely so that ✘ on both means deterministic rather than flaky.**
+
+Measured on `main`, gated on a `Running N tests` line so a selector that matched nothing could not
+come back as a clean pass:
+
+    :173 alone, three times   1 passed, 1 passed, 1 passed
+    the whole file            14 passed
+
+So **not deterministic, and no hidden predecessor** — the two readings that would have made it a real
+defect or a tally error. Henry supplied the third fact: attempt 2 of the same CI run went green on
+the same head.
+
+**And its one tally sighting is inside `b89ec67`** — which this card already classifies as *"one
+environmental failure taking the run with it"*, seven unrelated specs failing at once. Both of its
+appearances are therefore consistent with load, and neither with the test.
+
+### What that says about the rule, which matters beyond this row
+
+**The both-tries rule assumes the retry is an independent trial. It is not.** A retry runs seconds
+later, on the same machine, under the same load, in a worker the same run replaced. Any cause that
+outlives one retry — a saturated runner, a slow disk, another process — fails both attempts
+identically and is then recorded as *deterministic*.
+
+So the rule has **two** failure modes, and both were found on 2026-09-16:
+
+- **a hidden predecessor** makes an intermittent test fail its retry every time, because the retry
+  runs it alone (`bug-controls-spec-85-needs-its-predecessor`);
+- **a condition that outlives the retry** makes an environmental failure look like a property of the
+  test, which is this row.
+
+Both directions turn "✘ on both tries" into something it does not mean. The rule is still the best
+cheap signal there is — but a both-tries failure wants its **run** looked at before its test, and a
+run with unrelated specs failing alongside it is the tell.
 
 **HOW THIS WENT UNNOTICED FOR OVER THREE HOURS, which is the part that matters more than the rate.** Every merge this evening was verified the same way: run the suite locally, read the green, push, report it as verified. Nobody read CI after the push. Several of the failing commits — a1c9050, 81f139f, 284dac2 — touch nothing but board cards and generated docs, so the failures cannot be caused by what was merged, and were visible the whole time to anyone who looked.
 
