@@ -256,6 +256,17 @@ jobs:
       # the old gate uploaded nothing there either, so this takes nothing away.
       # Getting traces out of a timed-out run is a different change:
       # `bug-no-traces-when-e2e-hangs`.
+      # A green e2e run can still have skipped a test, and a skip is silent: #141
+      # made focusWindow's test skip on every CI run, blaming the runner, with the
+      # suite green, and only a person reading the log caught it
+      # (bug-ci-skips-are-unlisted). Every test a CI run skips must be listed, with
+      # its reason, in tests/e2e/expected-skips.json. An unlisted skip fails, and so
+      # does a listed test that ran. Only after a passing e2e: a failure in a serial
+      # group skips the rest of it, which is the failure's news, not a skip's.
+      - name: Every skipped e2e test is listed
+        if: ${{ steps.e2e.outcome == 'success' }}
+        run: node scripts/check-e2e-skips.js playwright-report/results.json tests/e2e/expected-skips.json
+
       - name: Upload Playwright traces on failure
         if: ${{ always() && steps.e2e.outcome == 'failure' }}
         uses: actions/upload-artifact@v7
