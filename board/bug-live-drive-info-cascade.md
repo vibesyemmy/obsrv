@@ -60,5 +60,14 @@ fix, eleven tests are red. After a `beforeAll` fix, one is.
 
 ## What `:776` itself was
 
-Not read beyond its assertion: a black centre in a capture of a *visible* window, once, on main.
-It may belong with `bug-target-canvas-no-frames` (the target canvas blank in CI). Not established.
+A black centre in a capture of a *visible* window, once, on main. It may belong with
+`bug-target-canvas-no-frames` (the target canvas blank in CI): a **candidate, unverified.**
+
+**The obvious discriminator has nothing to look at in this run.** Wren proposed checking `:776`'s
+`error-context.md` for Obsrv's own *"No frames from target renderer"* notice, which is that card's
+signature. It has zero matches, **and that is not a negative.** The file (artifact
+`playwright-traces`, run `35074542775`, expires 2026-09-23) has four sections: *Instructions*,
+*Test info*, *Error details*, *Test source*. **There is no page snapshot at all**, so there was
+never a notice in it to find. Five other error-contexts in the same artifact do carry snapshots;
+why `:776`'s does not is unknown. The run predates #29, so there is no screenshot either. Settling
+it needs a recurrence under #29's screenshot-on-failure.
