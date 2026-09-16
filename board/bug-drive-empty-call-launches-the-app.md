@@ -1,8 +1,7 @@
 ---
 title: "The one `obsrv_drive` call documented as read-only starts the application"
-column: doing
+column: done
 owner: "Henry"
-waiting: "Opeyemi: whether an empty drive call should launch the app at all"
 kind: bug
 order: 45
 ---
@@ -73,3 +72,14 @@ failed at the opening paragraph.
 
 **Still open, and why the card stays in Doing:** whether an empty call *should* launch the app is
 Opeyemi's decision. If it changes, this description changes with it.
+
+## DONE 2026-09-16 by Henry: the behaviour stays, and the description already says so
+
+**Opeyemi's answer to the card's open half:** "Keep launching". He gave it at about 20:30 WAT in
+Wren's session, to the question Wren put to him for this card, and Wren relayed it verbatim. An empty
+`obsrv_drive` call keeps launching the app when it isn't running.
+
+**So no code change.** The engineering half above already made the description say what the call
+does. On main, the `obsrv_drive` input description reads "none = read the current state, which still
+launches the app first if it is not running", and the tests in `mcp.spec.ts` hold that wording.
+
