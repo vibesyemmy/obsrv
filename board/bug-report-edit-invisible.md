@@ -1,6 +1,6 @@
 ---
 title: "The report's central image is altered and only stderr says so"
-column: review
+column: done
 kind: bug
 owner: "Rook"
 order: 30
