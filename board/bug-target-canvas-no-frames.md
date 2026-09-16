@@ -6,6 +6,8 @@ owner: "Kenya"
 order: 35
 ---
 
+**WAITING, not idle: this card is blocked on a `panes:83` failure recurring under the new trace config (#29), which cannot be forced.** The evidence it needs — the console line naming a GPU process exit, and a screenshot of the blank pane — was never captured on the runs already read, and no re-reading recovers it. Stated here because the board has no `waiting:` field yet (`chore-waiting-field`), and `doing` plus silence is what misled someone this morning.
+
 SPLIT OUT of `bug-flakes-gate-the-gate` 2026-09-15 by Kenya, on Opeyemi's word. **This is the one failure in that card's set with a proven mechanism, and it is the product's own subject matter rather than the harness's.**
 
 ## What the failure context says, rather than what the summary line says
