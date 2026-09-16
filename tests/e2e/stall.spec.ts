@@ -42,18 +42,34 @@ test('a page that simply finishes painting is not called a stall', async () => {
 test('a subframe load on a healthy page is not a stall', async () => {
   // `did-start-loading` fires for an iframe too, and a hidden one changes no
   // pixel, so no frame follows. Only a main-frame navigation owes a frame.
-  await app.evaluate(async (_electron, src: string) => {
+  //
+  // Its own page first. This test used to borrow the one the first test
+  // navigated to, and a `file://` iframe never loads under a page that is not
+  // `file://`: run alone — a retry, or a worker replaced after a failure — it
+  // waited out its 30 s timeout, and the teardown that followed read like the
+  // app shutting itself down (bug-app-closes-under-stall-spec).
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL() as string)).toBe(FIXTURE)
+  // Bounded twice, so a failure says which wait it was: the iframe that never
+  // loaded (answered by the page), or a target renderer that never answered at
+  // all (answered by main) — CI's first attempts hung the second way.
+  const subframe = await app.evaluate(async (_electron, src: string) => {
     const ctx = (globalThis as any).__obsrv
-    await ctx.target.webContents.executeJavaScript(
+    const inPage = ctx.target.webContents.executeJavaScript(
       `new Promise(r => {
         const f = document.createElement('iframe')
         f.hidden = true
         f.src = ${JSON.stringify(src)}
-        f.onload = () => r(true)
+        f.onload = () => r({ loaded: true })
+        setTimeout(() => r({ loaded: false, top: location.href, readyState: document.readyState }), 8000)
         document.body.append(f)
       })`,
     )
+    const unanswered = new Promise(r => setTimeout(() => r({ loaded: false, renderer: 'did not answer within 12 s' }), 12000))
+    return Promise.race([inPage, unanswered])
   }, TALL)
+  expect(subframe, JSON.stringify(subframe)).toEqual({ loaded: true })
   await new Promise(r => setTimeout(r, 3000))
   await expect(page.locator('.stall')).toBeHidden()
 })
