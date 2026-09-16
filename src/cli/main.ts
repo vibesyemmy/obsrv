@@ -1568,7 +1568,19 @@ async function runReport(cmd: ReportCommand): Promise<void> {
     profile: { id: profile.id, label: profile.label },
     thresholds,
     screens,
-    ...(throttle ? { throttle: { id: throttle.id, label: throttle.label, summary: throttle.summary, ...heldOn(throttle.id, inForce) } } : {}),
+    ...(throttle && asked !== null
+      ? {
+          throttle: {
+            id: throttle.id,
+            label: throttle.label,
+            summary: throttle.summary,
+            ...heldOn(throttle.id, inForce),
+            // Refused on every screen: the banner states the conditions kept, and
+            // without this it would read the same as `--throttle none` (Wren's read).
+            ...(throttle.id !== asked ? { refused: findThrottle(asked).label } : {}),
+          },
+        }
+      : {}),
   })
   writeFileSync(out, html)
   human(`report ${cmd.url} → ${out} (${screens.length} screen(s), ${Math.round(html.length / 1024)} KiB)`)

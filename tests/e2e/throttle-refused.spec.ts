@@ -97,13 +97,14 @@ test.describe('headless: snap, inspect, audit and lint say a refused throttle in
     const r = JSON.parse(refused.stdout)
     expect(refusedIn(r.screens[0].warnings), JSON.stringify(r.screens[0].warnings)).toEqual([SENTENCE])
     expect(r.throttle).toBe('none')
-    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b>')
+    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).toContain('throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen')
 
     const applied = await runCli(args, {})
     expect(applied.code, applied.stderr).toBe(0)
     const a = JSON.parse(applied.stdout)
     expect(refusedIn(a.screens[0].warnings)).toEqual([])
     expect(a.throttle).toBe('slow-4g')
+    expect(readFileSync(join(outDir, 'report.html'), 'utf8')).not.toContain('was refused on every screen')
   })
 })
 

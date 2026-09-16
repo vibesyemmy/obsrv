@@ -273,6 +273,14 @@ describe('reportHtml', () => {
     const html = reportHtml({ ...d, throttle: { id: 'slow-4g', label: 'Slow 4G', summary: 'x', heldOn: { screens: 1, of: 2 } } })
     expect(html).toContain('throttle <b>Slow 4G</b> (x) on 1 of 2 screens — refused on the others, which say so')
   })
+  it('says a throttle was refused on every screen, so the banner does not read like --throttle none', () => {
+    const d = data([screen(), screen({ presetId: 'android-65' })])
+    const none = { id: 'none', label: 'No throttle', summary: 'the host as it is' }
+    expect(reportHtml({ ...d, throttle: none })).not.toContain('refused')
+    expect(reportHtml({ ...d, throttle: { ...none, refused: 'Slow 4G' } })).toContain(
+      'throttle <b>No throttle</b> (the host as it is) — Slow 4G was refused on every screen, which say so',
+    )
+  })
   it('says when the page did not answer the audit', () => {
     const html = reportHtml(data([screen({ audit: null })]))
     expect(html).toContain('did not answer the audit')

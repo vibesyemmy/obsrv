@@ -58,7 +58,9 @@ is two meanings with a note saying so.
 - That covers `snap`, `inspect`, `audit` and `lint`. `report` states the throttle every screen had
   in force. If screens disagree (a non-uniform refusal), it keeps the one asked for; each refused
   screen's warnings say it didn't hold there, the HTML banner says "on N of M screens", and the
-  field's schema description names the case. That is close to unreachable, since each screen
+  field's schema description names the case. Refused on every screen, the banner states the
+  conditions kept and says the throttle asked for was refused, so it can't read like
+  `--throttle none` (Wren). That is close to unreachable, since each screen
   renders on a fresh target and the forced refusal is uniform, so sentences carry it rather than a
   live test (Wren's read).
 - A refusal whose put-back is refused too says `throttle` names the conditions put back, not ones
