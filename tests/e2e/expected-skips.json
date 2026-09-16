@@ -1,0 +1,4 @@
+{
+  "why": "Every e2e test a CI run may skip, with the reason it is expected to. scripts/check-e2e-skips.js fails a green CI run whose skips differ from this list, in either direction (bug-ci-skips-are-unlisted). Main skipped nothing on CI across eight runs on 2026-09-16, so it starts empty.",
+  "skips": []
+}

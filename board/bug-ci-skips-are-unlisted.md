@@ -59,3 +59,40 @@ on it.** This is the `EXPLAINED` table in `surface-parity.spec.ts`, applied to s
   list would mostly be noise. The proposal is CI only.
 - **Whether a retried test that skips on its retry counts as a skip.** Measure how the reporter
   records that before deciding.
+
+## PROGRESS 2026-09-16 by Henry: the check, and its controls
+
+**Measured first, as the card asked:** eight main CI suite runs on 2026-09-16 (`35144253768` through
+`35152238927`), and **none reports a skipped test**. Some had flaky tests and one had failures. So
+the list starts empty.
+
+**The check:**
+- On CI, Playwright also writes a JSON report, to `playwright-report/`. It can't go in
+  `test-results/`: the trace upload's `if-no-files-found: error` exists for a failing run that wrote
+  nothing there, and a report file would silence it.
+- After a *passing* e2e step, `scripts/check-e2e-skips.js` compares the report's skipped tests with
+  `tests/e2e/expected-skips.json`, keyed by file and full title (lines move).
+- It fails on an unlisted skip, naming the file, line, title and the test's own skip reason. It also
+  fails on a listed row whose test ran, and on a report that is missing or accounts for no tests.
+- It runs only after a passing e2e step, because a failure in a serial group skips the rest of that
+  group, and that is the failure's news.
+
+**Controls (unit), one run each:** four sabotages, each red on exactly its test. Ignoring unlisted
+skips, ignoring stale rows, accepting an empty report and dropping describe titles from the key. The
+report fields read (`suites`, `specs`, `tests[].status`, `annotations`, `stats`) are confirmed against
+Playwright's own `JSONReport` types.
+
+**Wren's cold read, all three taken:**
+- **The walk is cross-checked against the report's own count.** If the nesting changes, the walk finds
+  nothing while `stats.skipped` still counts skips, and the check would have printed "0 skipped, all
+  listed" over a run that skipped tests. Now it fails, naming both numbers.
+- **A test that failed and then skipped on its retry is flagged.** Playwright reports it as flaky,
+  not skipped, and the run stays green.
+- **A skip's reason is read from each result's annotations as well as the test's.** A runtime
+  `test.skip(condition, reason)` may land on the result only.
+
+Each has its own unit arm, and removing each check turns its arm red.
+
+**The CI control Wren asked for:** a draft PR carrying this check on #141's first head (`eb2b114`,
+whose CI skipped `focusWindow`'s test) must go red, naming that test.
+
