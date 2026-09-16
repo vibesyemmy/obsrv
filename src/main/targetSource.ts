@@ -910,11 +910,18 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * surface CSS px, font size the page's own. Null when nothing matches,
    * the selector is invalid, or the page did not answer.
    */
-  async inspectSelector(selector: string, budgetMs?: number): Promise<InspectReport | null> {
+  /**
+   * `'invalid-selector'` rather than `null` when the string is not CSS. The two
+   * used to be the same answer, so a typo read as "that element is not on the
+   * page" — the distinction is made in the page ask and kept here, and the
+   * callers have to say which they got.
+   */
+  async inspectSelector(selector: string, budgetMs?: number): Promise<InspectReport | 'invalid-selector' | null> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     try {
       const k = this.textScale
       const raw = await this.ask(`${INSPECT_SCRIPT}('selector', ${JSON.stringify(selector)})`, budgetMs)
+      if (raw !== null && typeof raw === 'object' && (raw as { invalidSelector?: unknown }).invalidSelector === true) return 'invalid-selector'
       const report = parseInspectReport(raw)
       if (report === null || k === 1) return report
       const r = report.rect

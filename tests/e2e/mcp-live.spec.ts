@@ -401,6 +401,13 @@ test('obsrv_inspect (auto) inspects the running app: the page it is navigated to
   expect((at.structuredContent as { readout: { id: string } }).readout.id).toBe('grey')
   const off = await call('obsrv_inspect', { selector: '#nope' })
   expect(off.structuredContent).toMatchObject({ mode: 'live', found: false })
+  expect((off.structuredContent as { notes: string[] }).notes.filter(n => n.includes('valid CSS selector'))).toEqual([])
+  // The live surface tells a rejected selector from a miss in the same words
+  // as the headless one; before this both were a bare found: false.
+  const bad = await call('obsrv_inspect', { selector: 'p[' })
+  const badOut = bad.structuredContent as { mode: string; found: boolean; notes: string[] }
+  expect(badOut).toMatchObject({ mode: 'live', found: false })
+  expect(badOut.notes, JSON.stringify(badOut.notes)).toEqual([expect.stringContaining('is not a valid CSS selector')])
 })
 
 test('obsrv_audit (auto) audits the running app on the screen in force, and names the tab', async () => {

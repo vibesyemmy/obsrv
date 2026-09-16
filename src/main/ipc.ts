@@ -7,7 +7,7 @@ import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
 import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, captureQuiescent } from '../cli/capture'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
-import { inspectReadout, pointOffScreenNote } from '../shared/inspectReadout'
+import { inspectReadout, invalidSelectorNote, pointOffScreenNote } from '../shared/inspectReadout'
 import { profileToParams } from '../shared/panelSim'
 import { MAX_VIEWPORT, findPreset as findScreenPreset, findProfile as findPanelProfile } from '../shared/presets'
 import { onionSkinRefusal } from '../shared/onionSkin'
@@ -1746,7 +1746,12 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     inspect: async req => {
       const t = tab().target
-      const report = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
+      const answer = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
+      // The same three answers the headless surface has: an element, nothing
+      // there, and a string the browser would not accept as a selector. The
+      // third is not a miss — it says so in a note, and the notes below still
+      // say which page was asked, which is worth as much on a typo as on a hit.
+      const report = answer === 'invalid-selector' ? null : answer
       const vp = t.getViewport()
       // Which page this element was read on, before anything about the
       // element. The same three sentences the headless inspect says
@@ -1769,6 +1774,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // inspect: the viewport the point was read inside is this tab's, now.
       const offScreen = 'selector' in req ? null : pointOffScreenNote(req, vp)
       if (offScreen !== null) pre.push(offScreen)
+      if (answer === 'invalid-selector' && 'selector' in req) pre.push(invalidSelectorNote(req.selector))
       // Which page it was, even when there was nothing at the point asked
       // about: "nothing at (400, 300)" on a login page the caller never asked
       // for is the case where the sentence matters most.

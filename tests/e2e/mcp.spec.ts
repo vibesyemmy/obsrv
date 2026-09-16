@@ -364,6 +364,18 @@ test('obsrv_inspect (headless, no app): the grey caption by selector, in millime
   const none = await call('obsrv_inspect', { url: fixture('contrast.html'), selector: '#nope' })
   expect(none.isError).toBeFalsy()
   expect(none.structuredContent).toMatchObject({ found: false, readout: null })
+  expect((none.structuredContent as { notes: string[] }).notes.filter(n => n.includes('valid CSS selector'))).toEqual([])
+
+  // A string the browser will not accept is not a miss, and an agent that
+  // typos one needs to be told which of the two it got (bug-inspect-selector-silences).
+  const bad = await call('obsrv_inspect', { url: fixture('contrast.html'), selector: 'p[' })
+  expect(bad.isError).toBeFalsy()
+  const badOut = bad.structuredContent as { found: boolean; readout: null; notes: string[] }
+  expect(badOut).toMatchObject({ found: false, readout: null })
+  // Filtered: this surface also carries the note about having rendered headlessly.
+  expect(badOut.notes.filter(n => n.includes('valid CSS selector')), JSON.stringify(badOut.notes)).toEqual([
+    expect.stringContaining('is not a valid CSS selector, so nothing was looked for'),
+  ])
 
   const neither = await call('obsrv_inspect', { url: fixture('contrast.html') })
   expect(neither.isError).toBe(true)

@@ -82,6 +82,50 @@ test('text over an image has no contrast figure; nothing matched is found: false
   expect(none.stderr).toContain('nothing at selector "#no-such-thing"')
 })
 
+test('a selector the browser rejects is told apart from one that matches nothing', async () => {
+  // bug-inspect-selector-silences: `p[` and `#no-such-thing` produced the same
+  // answer — found: false, no note — so a typo read as "that element is not on
+  // the page" and the reader went looking for what had changed.
+  const bad = await runCli(['inspect', fixture('contrast.html'), '--preset', 'laptop-768', '--selector', 'p['])
+  expect(bad.code, bad.stderr).toBe(0)
+  const b = JSON.parse(bad.stdout)
+  expect(b).toMatchObject({ found: false, readout: null })
+  expect(b.notes, JSON.stringify(b.notes)).toEqual([expect.stringContaining('is not a valid CSS selector, so nothing was looked for')])
+  expect(bad.stderr).toContain('is not a valid CSS selector')
+  // The distinction the fix exists for: the miss says neither of those things.
+  const none = await runCli(['inspect', fixture('contrast.html'), '--preset', 'laptop-768', '--selector', '#no-such-thing'])
+  expect(none.code, none.stderr).toBe(0)
+  expect(JSON.parse(none.stdout).notes.filter((n: string) => n.includes('valid CSS selector'))).toEqual([])
+  expect(none.stderr).toContain('nothing at selector "#no-such-thing"')
+})
+
+test('an element the screen never shows is measured, and the readout says it is not drawn', async () => {
+  // The other half of the same card: the figures were produced for a hidden
+  // element exactly as for a visible one, so a contrast pass was reported for
+  // text nobody can see. The measurements stay — what the element WOULD be is
+  // a fair question — and the note says what they are of.
+  const notDrawn = (notes: string[]): string[] => notes.filter(n => n.includes('this element is not drawn'))
+  const gone = await runCli(['inspect', fixture('hidden-text.html'), '--preset', 'laptop-768', '--selector', '#drawer-text'])
+  expect(gone.code, gone.stderr).toBe(0)
+  const g = JSON.parse(gone.stdout)
+  expect(g.found).toBe(true)
+  expect(g.readout.font.px).toBe(4)
+  expect(notDrawn(g.notes), JSON.stringify(g.notes)).toEqual([expect.stringContaining('display: none')])
+  // The readout carries its own copy, for a caller that reads only that.
+  expect(notDrawn(g.readout.notes)).toHaveLength(1)
+
+  const veiled = await runCli(['inspect', fixture('hidden-text.html'), '--preset', 'laptop-768', '--selector', '#veiled-text'])
+  expect(veiled.code, veiled.stderr).toBe(0)
+  expect(notDrawn(JSON.parse(veiled.stdout).notes)).toEqual([expect.stringContaining('visibility: hidden')])
+
+  // An element that is drawn carries no such note: the note has to mean something.
+  const shown = await runCli(['inspect', fixture('hidden-text.html'), '--preset', 'laptop-768', '--selector', '#shown'])
+  expect(shown.code, shown.stderr).toBe(0)
+  const sh = JSON.parse(shown.stdout)
+  expect(sh.found).toBe(true)
+  expect(notDrawn(sh.notes)).toEqual([])
+})
+
 test('a point off the screen says so, naming the viewport it is off; a point on the screen does not', async () => {
   // bug-inspect-offscreen-point-is-silent: found: false for a point the screen
   // does not have read as nothing drawn there, with nothing saying otherwise.
