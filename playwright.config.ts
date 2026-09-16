@@ -53,5 +53,10 @@ export default defineConfig({
   // question about what was on screen. Electron's own stdout already reaches
   // the report as `[pid=…][err]` Browser logs when the app dies.
   use: { trace: 'on-first-retry', screenshot: 'only-on-failure' },
-  reporter: [['list']],
+  // On CI, a JSON report as well, which scripts/check-e2e-skips.js reads to fail
+  // a green run that skipped a test nobody listed (bug-ci-skips-are-unlisted).
+  // It goes to playwright-report/, not test-results/, because the trace upload's
+  // `if-no-files-found: error` exists for a failing run that wrote nothing into
+  // test-results/, and a report file there would silence it.
+  reporter: process.env['CI'] ? [['list'], ['json', { outputFile: 'playwright-report/results.json' }]] : [['list']],
 })
