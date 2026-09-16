@@ -1,8 +1,6 @@
 ---
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
-column: doing
-owner: "Henry"
-waiting: ""
+column: backlog
 kind: bug
 order: 0
 ---
@@ -57,3 +55,68 @@ longer look" equally well.
    frame, and a planted stale frame must still go red.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
+
+## PAUSED 2026-09-16 on Opeyemi's word (via Wren): keep the e2e behaviour as it is for now
+
+**Why:** the risk this card names. A fix that stops the fronting might quietly weaken the capture and
+visibility tests, and one of the controls below came back ambiguous before anyone knew which way it
+cut. **Nothing was merged.** Main's window behaviour is unchanged, so local Electron e2e runs still
+front the app. The work is on the branch **`fix/e2e-does-not-take-the-desk`** (`58e5139`), with no PR.
+
+### What was built (on the branch)
+
+- **`showWindow()`** in `src/main/window.ts`: under `OBSRV_TEST`, `showInactive()` instead of
+  `show()`, at launch and in `second-instance` (which also skips `focus()` under test).
+- **The four test-side `win.show()` calls** use `showInactive()`: `helpers/deskState.ts`,
+  `visibility.spec.ts`, `live-drive.spec.ts`, `log.spec.ts`.
+- **`focusWindow`'s test** keeps the command's real, fronting behaviour. It runs on CI, and locally only
+  with `OBSRV_E2E_FRONT=1`, and its name says so.
+- **A CONTRIBUTING rule, plus `tests/unit/e2e-leaves-the-desk.test.ts`,** which fails if an e2e file calls
+  `win.show()`, `win.focus()` or `app.focus(`. On main's four files it failed, listing exactly those
+  four lines.
+
+### The instrument, which is the part worth reusing
+
+`lsappinfo front`, polled every 100 ms and logging name, pid and command whenever the frontmost app
+changes. **It's built into macOS and triggers no permission prompt.** With pid logging it tells the test app
+(`…/Obsrv/node_modules/electron/…/Electron`) from other Electron apps and from the user's own switching.
+
+### Observed
+
+| run | test app took the front |
+| --- | --- |
+| `main`, `stall.spec` (one launch) | **yes**, at 2 s, for about 5 s. The instrument can see fronting. |
+| fix, `stall.spec` | no |
+| fix, `visibility` + `log` + `single-instance` + `consent` (17 tests) | no |
+| fix, `live-drive`: hidden-window capture + `focusWindow` (skipped by design) | no |
+| **fix, full suite** (543 passed, 1 skipped, 790 s) | **yes, 6 times** |
+
+**The six in the full run, pinned to tests by timestamp and then re-run alone:**
+- **`devtools.spec`** fronts alone too. `menu.ts` opens DevTools detached, and `openDevTools` activates
+  unless given `activate: false`. **Not yet changed.**
+- **`live-drive.spec:1019`** (*"a pane still being resized…"*) fronts alone too. It only cycles
+  `setPreset` through the control server. **Unexplained.** The offscreen target window is created with
+  `show: false`.
+- **`dev-lane.spec`** launches the real app without `OBSRV_TEST` on purpose (*"the point is a real
+  launch"*), so the fix can't reach it. Found by reading, not re-run.
+- **`native-pane`, `onion-skin` and `surface-parity`'s dialog case** did **not** front when run alone, 0 of 3.
+  Their full-run events are unexplained. The user switching apps, or clicking the test window (which
+  `showInactive()` still orders on top without focusing it), fits, but wasn't established. One more
+  honest limit: two of the six happened while four test files were briefly swapped in the worktree for
+  a guard control, a mistake, and aren't counted as evidence either way.
+
+### The open question, stated as open
+
+**Done-means 2** asks that a planted stale frame still go red. With the `drawNow` handshake sabotaged,
+the hidden-window capture test **passed on the fix and also on `main`'s window code** (0 `obsrv:draw-now`
+sends in the built output, so the sabotage was real). **So the test couldn't see that regression
+before this change, and the fix didn't change what it sees.** That's filed on its own as
+`bug-hidden-window-capture-test-cannot-see-drawnow`. Whether a fix here weakens *other* capture or
+visibility tests is **not established**, and that question is why this is paused.
+
+### If this is picked up again
+
+1. Run the instrument over a full suite on `main` first, for the baseline count.
+2. Give `devtools` and `live-drive:1019` their own fixes, and explain the rest.
+3. Settle `bug-hidden-window-capture-test-cannot-see-drawnow` first, so the capture control has a test that
+   can fail.
