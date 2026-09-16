@@ -47,6 +47,17 @@ test.beforeAll(async () => {
     })
   client = new Client({ name: 'obsrv-mcp-live-spec', version: '0.0.0' })
   await client.connect(serverTransport())
+  // Cache the output schemas so every call in this file is validated — see the
+  // same line in mcp.spec.ts. It matters more here: the live replies are the
+  // ones that carry app state, and `obsrv_drive` spreads the whole status
+  // object into its reply, so an undeclared field on the app side reaches a
+  // caller through this surface first.
+  //
+  // Note for anyone adding a test that builds its own client from
+  // `serverTransport()`: that client has listed nothing, so its replies are
+  // NOT validated. Call `listTools()` on it too, or the test is exercising the
+  // surface without checking it.
+  await client.listTools()
 })
 
 test.afterAll(async () => {
