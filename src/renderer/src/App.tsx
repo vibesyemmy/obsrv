@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { FrameMessage } from '../../shared/api'
+import type { AgentApplyPatch } from '../../shared/control'
 import { isBlankUrl } from '../../shared/url'
 import { ConsentBar } from './components/ConsentBar'
 import { DropZone } from './components/DropZone'
@@ -297,8 +298,23 @@ export function App() {
   // panTo and highlight park in the store for TargetCanvas, which owns the
   // pane measurement and scale the two need.
   useEffect(() => {
-    return window.obsrv.onAgentApply(patch => {
+    // Main applied each patch to its front tab and names it. Two ways this strip
+    // can be behind main when the patch arrives, both measured with tabsChanged
+    // held back (bug-preset-after-tab-switch-lands-on-the-other-tab):
+    //   - the named tab is open here but not yet in front (an agent's activateTab
+    //     then setPreset). Written to that tab, or the preset lands on the tab just
+    //     left and main resizes the new front tab with that tab's settings;
+    //   - the named tab is not open here yet (openTab with a preset, one command).
+    //     Held until tabsChanged brings it, or the patch has nowhere to land.
+    const held: AgentApplyPatch[] = []
+    const HELD_MAX = 16
+    const apply = (patch: AgentApplyPatch): void => {
       const s = useStore.getState()
+      if (patch.tabId !== undefined && patch.tabId !== s.activeId) {
+        s.applyAgentPatchToTab(patch.tabId, patch)
+        if (patch.panes !== undefined) s.setPanes(patch.panes)
+        return
+      }
       if (patch.presetId !== undefined) s.setPreset(patch.presetId)
       if (patch.profileId !== undefined) s.setProfile(patch.profileId)
       if (patch.orientation !== undefined) s.setOrientation(patch.orientation)
@@ -315,7 +331,32 @@ export function App() {
       }
       if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
       if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)
+    }
+    // In arrival order, once the tab each names is open here.
+    const offTabs = useStore.subscribe((state, prev) => {
+      if (held.length === 0 || state.tabs === prev.tabs) return
+      for (let i = 0; i < held.length; ) {
+        const patch = held[i]!
+        if (patch.tabId !== undefined && state.tabs[patch.tabId]) {
+          held.splice(i, 1)
+          apply(patch)
+        } else i++
+      }
     })
+    const offApply = window.obsrv.onAgentApply(patch => {
+      if (patch.tabId !== undefined && !useStore.getState().tabs[patch.tabId]) {
+        // Bounded: a tab opened and closed before this strip heard of it never
+        // arrives, and its patch should not be kept forever.
+        if (held.length >= HELD_MAX) held.shift()
+        held.push(patch)
+        return
+      }
+      apply(patch)
+    })
+    return () => {
+      offApply()
+      offTabs()
+    }
   }, [])
 
   // The surround control only repaints the field the panes sit in.

@@ -253,6 +253,14 @@ export interface AgentApplyPatch {
   panTo?: { x: number; y: number }
   /** Draw a temporary neutral overlay over this target-pixel rect. */
   highlight?: AgentHighlight
+  /**
+   * The tab main applied this for: its front tab when the command arrived. The
+   * renderer writes the patch to that tab even while its own strip has not yet
+   * heard of the switch, or the patch lands on the tab just left
+   * (bug-preset-after-tab-switch-lands-on-the-other-tab). Set by main, never by
+   * a caller; absent means the tab in front.
+   */
+  tabId?: string
 }
 
 export const CONTROL_COMMANDS = [

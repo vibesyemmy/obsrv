@@ -1628,10 +1628,13 @@ export function registerIpc(ctx: AppContext): () => void {
           }
           pendingApplies.shift()
         }
-        pendingApplies.push(patch)
+        pendingApplies.push({ ...patch, tabId: tabs.activeId })
         return
       }
-      win.webContents.send(IPC.agentApply, patch)
+      // Named by the tab it was applied for, which is main's front tab now. The
+      // renderer may not have heard of a switch that just happened: an agent's
+      // activateTab answers at once, and the strip learns of it afterwards.
+      win.webContents.send(IPC.agentApply, { ...patch, tabId: tabs.activeId })
     },
     // Both captures hold the target painting for their duration: a hidden
     // window pauses it (see `TabManager.setShellVisible`), and `settleTarget`

@@ -542,6 +542,41 @@ describe('tabs', () => {
     expect(tabTitle(tab().url, tab().title)).toBe('Example — Home')
   })
 
+  describe('applyAgentPatchToTab', () => {
+    const SCREEN = { presetId: '1080p-24', profileId: 'reference' }
+
+    it("writes an agent's patch to the tab main named, and leaves the tab still in front here untouched", () => {
+      // bug-preset-after-tab-switch-lands-on-the-other-tab: main has switched to
+      // `named` and applied the patch there; this strip has not heard yet.
+      const front = useStore.getState().activeId
+      const named = useStore.getState().addTab()!
+      useStore.getState().syncTabs({ tabs: [{ id: front, url: '', title: '', ...SCREEN }, { id: named, url: '', title: '', ...SCREEN }], activeId: front })
+
+      useStore.getState().applyAgentPatchToTab(named, {
+        presetId: 'iphone-61',
+        profileId: 'budget-tn',
+        highlight: { x: 1, y: 2, width: 3, height: 4, durationMs: 500 },
+      })
+
+      const s = useStore.getState()
+      expect(s.activeId).toBe(front)
+      expect(s.tabs[front]!.presetId).toBe('1080p-24')
+      expect(s.tabs[named]!.presetId).toBe('iphone-61')
+      expect(s.tabs[named]!.profileId).toBe('budget-tn')
+      // The preset clears an old highlight, and the highlight in the same patch survives it.
+      expect(s.tabs[named]!.agentHighlight).toMatchObject({ x: 1, width: 3, seq: 1 })
+    })
+
+    it('writes nothing for a tab that is not open, and nothing for a patch that changes nothing', () => {
+      const before = useStore.getState()
+      useStore.getState().applyAgentPatchToTab('tab-nowhere', { presetId: 'iphone-61' })
+      expect(useStore.getState().tabs).toBe(before.tabs)
+      const front = before.activeId
+      useStore.getState().applyAgentPatchToTab(front, {})
+      expect(useStore.getState().tabs).toBe(before.tabs)
+    })
+  })
+
   describe('syncTabs', () => {
     /** What a session main just built reports: the same defaults `blankTab` has. */
     const SCREEN = { presetId: '1080p-24', profileId: 'reference', orientation: DEFAULT_ORIENTATION, textScale: DEFAULT_TEXT_SCALE }
