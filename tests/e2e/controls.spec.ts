@@ -85,6 +85,15 @@ test('a bigger host diagonal means a smaller magnification', async () => {
 test('a field commits on blur or Enter, never on a keystroke', async () => {
   await openSettings(page, 'display')
   const field = page.locator('.host-diagonal')
+  // This test's own starting point, not the previous test's parting one. The
+  // assertion below — that typing has NOT committed — reads the stored value,
+  // so it needs a known one to compare against, and a retry runs this test
+  // alone in a fresh worker where the store holds the default 27 rather than
+  // the 54 the test above leaves. Inheriting it made every retry of this test
+  // fail at that line in ~400ms, for a reason unrelated to whatever failed
+  // first (bug-controls-spec-85-needs-its-predecessor).
+  await enter('.host-diagonal', '54')
+  await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 54 })
   // Typing "32" passes through "3", which would be a 3-inch display.
   const before = await backingWidth(page)
   await field.fill('')
@@ -108,6 +117,9 @@ test('a field commits on blur or Enter, never on a keystroke', async () => {
 
 test('settings persist through main', async () => {
   await openSettings(page, 'display')
+  // Same reason as above: the diagonal this asserts is the one the test before
+  // leaves, and alone this test would read the default.
+  await enter('.host-diagonal', '32')
   await enter('.host-nits', '420')
   await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32, hostNits: 420, agentControl: false })
 })
@@ -115,6 +127,12 @@ test('settings persist through main', async () => {
 test('an invalid setting is refused without taking the app down', async () => {
   await openSettings(page, 'display')
   const field = page.locator('.host-diagonal')
+  // The "last good value" this test is about is 32/420, and both come from the
+  // two tests above. Set them here so the test states what it needs instead of
+  // inheriting it — see bug-controls-spec-85-needs-its-predecessor.
+  await enter('.host-diagonal', '32')
+  await enter('.host-nits', '420')
+  await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32, hostNits: 420 })
   // A zero diagonal would make `ppi` throw and main refuse it: leaving the
   // field keeps the last good value, shows why, and snaps the field back.
   await field.fill('0')
