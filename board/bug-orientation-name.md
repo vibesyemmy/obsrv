@@ -2,7 +2,7 @@
 title: "`orientation: landscape` produces a portrait screen on every desktop preset"
 column: doing
 owner: "Rook"
-waiting: "Henry: which of the four semantics, before any code"
+waiting: ""
 kind: bug
 criterion: C2
 order: 27
@@ -51,3 +51,38 @@ That is the blind spot #162 names by construction, meeting its first real instan
 name for a silent wrong answer, and this project has spent the week removing exactly that trade. But
 which break a pre-1.0 project wants to hand its callers is a judgement about users, not about code,
 and it is Henry's.
+
+## DECIDED 2026-09-16 by Henry: option 3, plus a note exactly where the word inverts
+
+**Option 3: add `rotate`, deprecate `orientation`, remove it later.** Rook's read is right. Option 1 trades a
+confusing name for a silent wrong answer, and option 4 has already failed in three places. Option 2
+fixes the name at the cost of every surface at once: persisted `tabs.json`, IPC payloads, the toolbar,
+`AgentUiState`, the report and the skill docs, all in one break. Option 3 gives callers a correct word
+now and one loud break later, and the internals can keep `Orientation` until that break.
+
+**The spec:**
+1. **Input: `rotate: boolean`** on every surface that takes `orientation` today (CLI `--rotate`, the MCP
+   tools, `obsrv_drive`, control). `rotate: true` means what `orientation: 'landscape'` means today: a
+   quarter turn from the preset as listed.
+2. **`orientation` keeps its current meaning for this release line.** Its descriptions and `--help` say
+   it is deprecated and name `rotate`.
+3. **Both given and disagreeing → refused**, naming both values. An ambiguous request gets no answer
+   rather than a guess.
+4. **The note, only where the word inverts:** when a call uses `orientation` and the resulting
+   `screenShape` is the other word (`landscape` on a landscape-stored preset gives a portrait screen,
+   and the reverse), the reply says so in one sentence. It names the shape, and says `rotate` means
+   the same thing plainly. Where the word matches the shape (a phone stored portrait, rotated to
+   landscape), there's no note, because the word was true. This is the part that reaches agents:
+   obsrv-e7 read the replies, not the docs.
+5. **Output: add `rotated: boolean`** beside `orientation` and `screenShape` wherever `orientation` is
+   reported today. The `orientation` output stays until the removal.
+6. **C2:** `rotate` and `rotated` move the published shape, so #162's check flags them, and they get
+   register entries as additions. The deprecation doesn't move the shape, so its register entry is
+   manual, as this card says.
+7. **Removing `orientation` is a breaking release, and when to ship it is Opeyemi's call**, like every
+   publish. This card delivers 1–6. The removal goes on its own card once this lands.
+
+**Controls I'd expect on the PR:** a unit test per surface that `rotate: true` and
+`orientation: 'landscape'` produce the same screen. The note fires for `1080p-24` + `landscape`, and
+doesn't for a phone + `landscape`. The disagreeing pair is refused. And for each assertion, a sabotaged
+version that goes red.
