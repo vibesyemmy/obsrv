@@ -1,8 +1,7 @@
 ---
 title: "A run that outlasts the job's 30 minutes uploads no traces — and that is the run you cannot read"
-column: doing
+column: done
 owner: "Rook"
-waiting: "Henry: whether trace: on is worth its cost, for an event seen once"
 kind: bug
 order: 55
 ---
@@ -115,6 +114,26 @@ show what the app was doing is exactly the one not collected.
 exiting mid-test (*"Target page, context or browser has been closed"*, *"closed: sessions down"*),
 and it had no traces because run `34924677951` predates the `trace` setting entirely — not because
 the upload was skipped.
+
+## PARKED AS WON'T-FIX, 2026-09-16 — Henry's decision, with a trigger to reopen
+
+Taken **without** measuring what `trace: 'on'` costs, and the reasoning is worth keeping because it
+is the opposite of the usual one: **no figure would change the answer.** The event has never happened
+on its own — the only job in this workflow's history to reach the 30-minute limit is control 4, which
+I induced. A cost measurement would have told us the price of insuring against something that has not
+occurred.
+
+**Every cheaper shape is closed by the measurements below**, so parking this is not deferring a
+decision, it is recording that the options ran out:
+
+- a **killed run flushes nothing** — zero files, under both SIGTERM and SIGKILL;
+- **`trace: 'on-first-retry'`** never starts a trace on a run that is killed before any retry;
+- **`globalTimeout`** leaves one bookkeeping file, which is worse than nothing: non-empty, so
+  `if-no-files-found: error` stays silent and the upload goes **green** carrying nothing readable.
+
+**Reopen on: the first job-level CI timeout nobody induced.** At that point the question changes from
+"is this worth insuring against" to "does it recur", and `trace: 'on'` gets measured then — starting
+with whether a trace zip killed mid-write is readable at all, which is still unmeasured.
 
 ## ALL THREE MEASURED, 2026-09-16 — and BOTH candidate shapes fall.
 
