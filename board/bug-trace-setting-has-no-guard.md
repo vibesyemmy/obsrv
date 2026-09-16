@@ -1,8 +1,7 @@
 ---
 title: "Nothing would notice if the `trace` setting were dropped again — the week of silence has no guard"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 57
 ---
@@ -94,4 +93,19 @@ step) was not built, for two measured reasons:
 **Limit, stated:** this guards the settings and their dependency, not the artefact. A Playwright
 change that stopped writing `trace.zip` for Electron under a valid setting would pass it. That's
 possible, not observed, and it's what option 2 would catch at the cost above.
+
+## DONE 2026-09-16 by Henry: merged as #137 (`7ccb510`), with Kenya's hole closed in the follow-up
+
+**Kenya's cold read re-ran four of the seven sabotages herself** and got exactly one red each. She
+then found and measured one gap: a flag on a shell-continuation line was invisible to the line-based
+scan. A `run: |` block with `npx playwright test --retries=1 \` and `--trace off` on the next line
+passed all four tests.
+
+**Closed:** the scan now joins backslash continuations first. Controls, one run each: `--trace off`
+on a continuation line is red on exactly its test, `--retries=0` on one is red on exactly its test,
+and a clean two-line invocation is green. A YAML folded scalar (`run: >`) is not joined, and the test
+says so; `ci.yml` uses none.
+
+**`video` is deliberately not required**, and the test now says why: #29 chose the trace and a
+screenshot as the evidence and left video off.
 
