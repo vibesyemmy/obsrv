@@ -36,9 +36,15 @@ export function showWindow(win: BrowserWindow): void {
  * Whether the app must not activate itself: under the e2e harness, and for a
  * real launch a test makes without the harness (the dev lane's spec), which
  * says so with `OBSRV_SHOW_INACTIVE=1`.
+ *
+ * A harness app launched with `OBSRV_TEST_TAKES_THE_DESK=1` activates as a
+ * user's would. It is for what only a focused window can show, such as the
+ * overlay's keyboard focus hand-off (bug-overlay-focus-handoff-untested), and
+ * a spec that asks for it runs on CI, or locally only with OBSRV_E2E_FRONT=1.
  */
 export function showsInactive(): boolean {
-  return process.env.OBSRV_TEST === '1' || process.env.OBSRV_SHOW_INACTIVE === '1'
+  if (process.env.OBSRV_TEST === '1') return process.env.OBSRV_TEST_TAKES_THE_DESK !== '1'
+  return process.env.OBSRV_SHOW_INACTIVE === '1'
 }
 
 export function createMainWindow(): BrowserWindow {
