@@ -52,6 +52,14 @@ export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'blank' | 
  * adding a reason to the union does not compile until someone has decided
  * which side of this it falls on. The old regex silently treated every new
  * reason as "keep"; a comparison chain would do the same quietly.
+ *
+ * The default does not throw, which is Henry's correction to the first version
+ * of this. The exhaustiveness is entirely the `never` assignment's doing, at
+ * compile time; a throw adds nothing to it and makes a *warning router* able
+ * to take down a capture. And the safe answer for an unclassifiable warning is
+ * not to crash — it is to let the sentence through. This whole card is about a
+ * warning going missing quietly, so a router that cannot place one should err
+ * towards saying it.
  */
 export function explainedByCutLoad(reason: UnsettledReason | undefined): boolean {
   switch (reason) {
@@ -64,8 +72,11 @@ export function explainedByCutLoad(reason: UnsettledReason | undefined): boolean
     case undefined:
       return false
     default: {
+      // Unreachable while the union is routed above — the assignment is the
+      // compile-time check. At runtime, keep the warning.
       const unrouted: never = reason
-      throw new Error(`unrouted unsettled reason: ${String(unrouted)}`)
+      void unrouted
+      return false
     }
   }
 }
