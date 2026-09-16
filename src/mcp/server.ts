@@ -711,6 +711,13 @@ const driveOutputShape = {
   textScale: z.number().describe('Browser zoom as reflow on the target, 1 = none. Reported as 1 by an app older than text scale.'),
   throttle: z.string().describe("The target's network and CPU conditions, a preset id; 'none' as the host. Reported as 'none' by an app older than the field."),
   onionSkin: z.number().describe("The onion skin's opacity, 0 = off. Reported as 0 by an app older than the field."),
+  // `drive` spreads the app's status into its reply, so every key `status`
+  // carries has to be declared here too: these three were not, and every
+  // validating client rejected every drive reply (bug-drive-reply-fails-its-own-schema).
+  visionType: z
+    .string()
+    .describe("The colour-vision deficiency simulated on the target render, as `vision` sets it; 'none' when off. Reported as 'none' by an app older than the field."),
+  visionSeverity: z.number().describe('How complete that deficiency is, 0..1, as `visionSeverity` sets it. Reported as 1 by an app older than the field.'),
   loading: z.boolean().describe('Whether the target is loading a document. Reported as false by an app older than the field.'),
   error: z
     .object({ code: z.number(), description: z.string(), url: z.string() })
@@ -734,6 +741,7 @@ const driveOutputShape = {
     .number()
     .describe('The CSS viewport the target is rendering at, already rotated. 0 from an app that predates the field.'),
   cssHeight: z.number().describe('The CSS viewport height, already rotated. 0 from an app that predates the field.'),
+  deviceScaleFactor: z.number().optional().describe('Device pixels per CSS pixel of the screen in force. Absent from an app older than the field.'),
   viewMode: z.string(),
   panes: z.string(),
   mode: z.string().describe("The app's pane mode: 'url' (live page) or 'image' (a dropped design export)."),
