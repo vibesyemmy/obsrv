@@ -41,9 +41,24 @@ const { resolve } = require('node:path')
 const ROOT = resolve(__dirname, '..')
 const MCP_BIN = resolve(ROOT, 'bin/obsrv-mcp.js')
 
-/** Every key path a JSON Schema declares — the same walk `src/shared/keyPaths.ts` performs. */
+/**
+ * Every key path a JSON Schema declares — the walk `src/shared/keyPaths.ts`
+ * performs — **plus each enum's values**.
+ *
+ * The enums are not decoration. `docs/compatibility.md` lists *"a new value in
+ * an enum a caller may have cached"* among the things that break, alongside a
+ * field appearing or vanishing. A first version of this script walked only key
+ * paths, and there are **17 enums** across the published output schemas — so
+ * adding a value to `unsettledReason` or `why` would have been breaking and
+ * invisible to the check written to catch breaking changes. Found by reading
+ * `bug-orientation-name`, which is about a different enum entirely.
+ *
+ * Values are sorted, so reordering a `z.enum` is not reported as a change: the
+ * set is what a caller can receive, and its order is not part of the contract.
+ */
 function schemaKeyPaths(schema, path = '', out = new Set()) {
   if (schema === null || typeof schema !== 'object') return out
+  if (Array.isArray(schema.enum)) out.add(`${path || '(root)'} = [${[...schema.enum].map(String).sort().join('|')}]`)
   for (const branch of ['anyOf', 'oneOf', 'allOf']) {
     if (Array.isArray(schema[branch])) for (const sub of schema[branch]) schemaKeyPaths(sub, path, out)
   }
