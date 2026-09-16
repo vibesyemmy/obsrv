@@ -311,8 +311,10 @@ export function App() {
     const apply = (patch: AgentApplyPatch): void => {
       const s = useStore.getState()
       if (patch.tabId !== undefined && patch.tabId !== s.activeId) {
-        s.applyAgentPatchToTab(patch.tabId, patch)
+        // Panes first: it does not change `tabs`, so it cannot re-enter the
+        // flush below the way the tab write does.
         if (patch.panes !== undefined) s.setPanes(patch.panes)
+        s.applyAgentPatchToTab(patch.tabId, patch)
         return
       }
       if (patch.presetId !== undefined) s.setPreset(patch.presetId)
@@ -332,16 +334,19 @@ export function App() {
       if (patch.panTo !== undefined) s.requestAgentPan(patch.panTo)
       if (patch.highlight !== undefined) s.showAgentHighlight(patch.highlight)
     }
-    // In arrival order, once the tab each names is open here.
+    // In arrival order, once the tab each names is open here. The ready ones are
+    // taken out first and applied after the loop: applying writes `tabs`, which
+    // re-enters this listener, and a later patch applied inside an earlier one
+    // could then be overwritten by the rest of the earlier one (Wren's read).
     const offTabs = useStore.subscribe((state, prev) => {
       if (held.length === 0 || state.tabs === prev.tabs) return
+      const ready: AgentApplyPatch[] = []
       for (let i = 0; i < held.length; ) {
         const patch = held[i]!
-        if (patch.tabId !== undefined && state.tabs[patch.tabId]) {
-          held.splice(i, 1)
-          apply(patch)
-        } else i++
+        if (patch.tabId !== undefined && state.tabs[patch.tabId]) ready.push(...held.splice(i, 1))
+        else i++
       }
+      for (const patch of ready) apply(patch)
     })
     const offApply = window.obsrv.onAgentApply(patch => {
       if (patch.tabId !== undefined && !useStore.getState().tabs[patch.tabId]) {

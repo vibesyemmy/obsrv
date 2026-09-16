@@ -263,6 +263,31 @@ export interface AgentApplyPatch {
   tabId?: string
 }
 
+/**
+ * Where each field of an agent's patch lives: on a tab, on the window, or
+ * only routing the patch. The renderer writes a patch through two paths, one
+ * for the tab in front and one for a tab named by main that is not in front
+ * yet, and both must handle every field. `satisfies` makes a field added to
+ * `AgentApplyPatch` fail typecheck until it is placed here, and a unit test
+ * checks that the background path writes every `tab` field (Wren's read of #160).
+ */
+export const AGENT_PATCH_FIELDS = {
+  presetId: 'tab',
+  profileId: 'tab',
+  viewMode: 'tab',
+  panes: 'window',
+  orientation: 'tab',
+  textScale: 'tab',
+  throttle: 'tab',
+  onionSkin: 'tab',
+  pixelExact: 'tab',
+  visionType: 'tab',
+  visionSeverity: 'tab',
+  panTo: 'tab',
+  highlight: 'tab',
+  tabId: 'routing',
+} as const satisfies Record<keyof AgentApplyPatch, 'tab' | 'window' | 'routing'>
+
 export const CONTROL_COMMANDS = [
   'status',
   'navigate',
