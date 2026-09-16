@@ -21,8 +21,14 @@ room #84/#99 — a reader should weigh it as a handover summary, not as Kenya's 
 - **The decision is made: add the field.** Opeyemi, to Wren, 2026-09-16: add `colorPainted` to
   `obsrv_inspect`'s output schema, name it in `docs/breaking-changes.md`, ship the restart note.
   The second option below (stop emitting it on MCP) is **not** being taken.
-- The rejection is **client-side**: the SDK client validates (`client/index.js:502`); the server
-  does not check, so nothing server-side ever errors (Kenya's sweep, section below).
+- The rejection is **client-side**: the SDK client validates the reply against the JSON Schema and
+  rejects it (`client/index.js:502`). **The server checks too, and its check passes**: SDK 1.30.0
+  `server/mcp.js:204` runs `safeParseAsync` on the structured content, and a plain `z.object`
+  strips unknown keys rather than failing. So nothing server-side ever errors. *Corrected
+  2026-09-16 by Wren on Henry's catch, verified against the installed SDK. The first version of
+  this handover said the server does not check, copied from the sweep section below, which says
+  the same and is superseded on that point.* It also makes `.strict()` on the server-side schema
+  a fix option: the server would then catch an undeclared key itself.
 - It is **one field**: the sweep found `readout.colorPainted` and nothing else on the paths it
   exercised; `lint` is clean (section below).
 - `mcp.spec:137` has been flaky on this bug **82 times** across CI attempts since 09-13
