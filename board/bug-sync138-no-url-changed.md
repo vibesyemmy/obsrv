@@ -3,7 +3,7 @@ title: "The target emits no url-changed at all — a second shape, and the test 
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "decision: whether to spend the run budget — and first, whether a recurrence would even be legible"
+waiting: "Henry: whether to spend the run budget — and first, whether a recurrence would even be legible"
 order: 40
 ---
 
