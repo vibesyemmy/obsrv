@@ -77,12 +77,16 @@ test('ARM C: does the flag change anything this runner can see?', async () => {
   // that guess and reported visible:false with the flag ON and off alike,
   // which made arm B unmeasurable for a reason that was mine rather than the
   // runner's.
-  const state = await app.evaluate(() => {
+  // BrowserWindow arrives as the destructured argument; `require` is not
+  // defined in this scope, which is how the second dispatch died.
+  const state = await app.evaluate(({ BrowserWindow }) => {
     const w = (globalThis as { __obsrv?: { win?: Electron.BrowserWindow } }).__obsrv?.win
-    return w === undefined ? null : { visible: w.isVisible(), focusable: w.isFocusable(), focused: w.isFocused(), count: require('electron').BrowserWindow.getAllWindows().length }
+    return w === undefined
+      ? { found: false, count: BrowserWindow.getAllWindows().length }
+      : { found: true, visible: w.isVisible(), focusable: w.isFocusable(), focused: w.isFocused(), count: BrowserWindow.getAllWindows().length }
   })
   console.log(`  ARM C  flag=${TAKES_DESK ? 'ON' : 'off'}  window=${JSON.stringify(state)}`)
-  expect(state, 'no window to judge; every arm below is void').not.toBeNull()
+  expect(state.found, 'no main window to judge; arm B would be void').toBe(true)
   // Recorded, not asserted: the comparison is between the two runs, and a
   // single run cannot make it. The dispatch runs both and the two lines are
   // read together.
