@@ -58,6 +58,30 @@ longer look" equally well.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
 
+## PROGRESS 2026-09-16 by Henry — `dock.hide()` measured on CI, and the harness app now leaves the Dock and Cmd+Tab
+
+**The measurement came first, on a CI runner, so no one's desk was involved** (`probe/dock-hide-activation`, run
+`35159351340`). Two earlier attempts were VOID. `lsappinfo front` returns nothing on a runner, and the
+second attempt relied on activation events that can fire before a listener is attached. The instrument
+that worked was a second harness app launched with `OBSRV_TEST_TAKES_THE_DESK`, whose window's key state
+(`BrowserWindow.getFocusedWindow()`) shows whether it still holds the front.
+
+| arm | holder still front? | become/resign-active | control `app.focus({ steal })` |
+| --- | --- | --- | --- |
+| baseline harness launch | yes | none | took the front |
+| `dock.hide()` before `showInactive`, at launch | yes | none | took the front |
+| `dock.hide()` on a running app | yes | none | took the front |
+
+**So `dock.hide()` doesn't activate the app, and the probe could have seen it if it did.** The first
+attempt also confirmed the policy change: after the hide, `lsappinfo` reports the app as `UIElement`.
+
+**Built:** under `showsInactive()`, `showWindow` now calls `app.dock?.hide()` before anything else.
+`tests/unit/showWindow.test.ts` pins the order, and it went red on both harness branches with the call
+removed. **One limit:** the icon is visible from launch until `ready-to-show`, about a second. The probe
+measured this placement, not an earlier one.
+
+**Done-means 1 is still open.** That needs an in-use run on this change, and that run needs Opeyemi's yes.
+
 ## PROGRESS 2026-09-16 by Henry — never key since #141, and the activations left follow the user's own app switches
 
 **In-use run #1** (`75c200a`, 20:31 WAT, after #105 and #107): 551 passed, 8 activations. In each one the

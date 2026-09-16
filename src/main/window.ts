@@ -20,6 +20,15 @@ function devLaneTitle(): string | null {
  */
 export function showWindow(win: BrowserWindow): void {
   if (showsInactive()) {
+    // Out of the Dock and the app switcher. With the window never key and
+    // click-through, activations were still recorded while the user worked:
+    // 3 across a full run and a repro (2026-09-16), each about 2 s after they
+    // switched apps, with no call from the app and no key window. That leaves
+    // the Dock icon and Cmd+Tab, and an app without a Dock icon is in neither.
+    // Hiding it does not activate the app: measured on a CI runner with a
+    // second app holding the front, at launch and on a running app, and
+    // `app.focus({ steal })` as the control that did take it (run 35159351340).
+    app.dock?.hide()
     // Never key. `showInactive()` still orders the window above the apps
     // someone is working in, and the OS can hand it key focus, which activates
     // the app. That happened 8 times in a recorded full run while the user

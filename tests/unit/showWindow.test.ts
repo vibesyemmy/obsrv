@@ -1,18 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 
-vi.mock('electron', () => ({ app: { isPackaged: true }, BrowserWindow: class {} }))
+// One log for the app and the window, so the order between them is checked too.
+const calls = vi.hoisted((): string[] => [])
+vi.mock('electron', () => ({ app: { isPackaged: true, dock: { hide: () => calls.push('dock.hide') } }, BrowserWindow: class {} }))
 
 const { showWindow } = await import('../../src/main/window')
 
 /**
- * How the main window is shown (bug-e2e-takes-the-desk). Under the harness it
- * must not become key, must not activate the app, and must let clicks pass
- * through. A user's launch, and a harness app launched to take the desk, show
- * it normally.
+ * How the main window is shown (bug-e2e-takes-the-desk). Under the harness the
+ * app leaves the Dock and the app switcher, and the window must not become key,
+ * must not activate the app, and must let clicks pass through. A user's launch,
+ * and a harness app launched to take the desk, show it normally.
  */
 function fakeWindow() {
-  const calls: string[] = []
+  calls.length = 0
   const win = {
     show: () => calls.push('show'),
     showInactive: () => calls.push('showInactive'),
@@ -39,18 +41,18 @@ describe('showWindow', () => {
     }
   })
 
-  it('under the harness: never key, then shown without activating, then click-through, in that order', () => {
+  it('under the harness: out of the Dock, never key, then shown without activating, then click-through, in that order', () => {
     process.env['OBSRV_TEST'] = '1'
     const { win, calls } = fakeWindow()
     showWindow(win)
-    expect(calls).toEqual(['setFocusable(false)', 'showInactive', 'setIgnoreMouseEvents(true)'])
+    expect(calls).toEqual(['dock.hide', 'setFocusable(false)', 'showInactive', 'setIgnoreMouseEvents(true)'])
   })
 
   it('for a real launch that asks not to activate (OBSRV_SHOW_INACTIVE), the same', () => {
     process.env['OBSRV_SHOW_INACTIVE'] = '1'
     const { win, calls } = fakeWindow()
     showWindow(win)
-    expect(calls).toEqual(['setFocusable(false)', 'showInactive', 'setIgnoreMouseEvents(true)'])
+    expect(calls).toEqual(['dock.hide', 'setFocusable(false)', 'showInactive', 'setIgnoreMouseEvents(true)'])
   })
 
   it("for a user's launch, and for a harness app launched to take the desk: shown as usual, and nothing else", () => {
