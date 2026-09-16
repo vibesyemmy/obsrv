@@ -2,7 +2,6 @@
 title: "Make the server reject its own undeclared key — under OBSRV_TEST only"
 column: next
 kind: chore
-waiting: ""
 order: 36
 ---
 
