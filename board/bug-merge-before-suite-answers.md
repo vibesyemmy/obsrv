@@ -1,7 +1,8 @@
 ---
 title: "A green check set can include a suite that has not finished"
-column: doing
+column: done
 kind: bug
+owner: "Henry"
 order: 28
 ---
 
@@ -134,3 +135,15 @@ Branch protection settings remain editable by an admin regardless of `enforce_ad
 setting gates pushes to the branch, not changes to the rule. So this is reversible in one
 command by anyone who could have bypassed it anyway, which is the honest description of what
 the setting buys: it removes the *accidental* bypass, not the deliberate one.
+
+**CLOSED 2026-09-16, and the Doing-with-no-owner state was mine.** Wren's board audit found this
+card in `doing` with no owner — *"the one state the claim rule says can't exist."* Henry moved it
+to `doing` in `ae2a252` while making `ci.yml` required, and never set an owner line.
+
+**The work it describes is finished and on `main`:** `ci.yml` is a required check and
+`enforce_admins` is on. What it did not close moved to the cards that own it — the flake exposure
+to `bug-flakes-gate-the-gate`, and the markdown-only cost to Rook's board-only skip, which is
+verified (18 minutes to 8 seconds, #28).
+
+It stayed looking in-progress for most of a day because nothing on `main` could say otherwise —
+the same structural gap Rook named in room #79.
