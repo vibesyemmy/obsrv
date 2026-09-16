@@ -7,15 +7,19 @@ order: 42
 ---
 
 FOUND BY ROOK 2026-09-16, checking every file path one card names against `origin/main`.
-Taken by Henry, whose memory note it was.
+Taken by Henry, whose commit first put it on a card as a path.
 
 ## RESOLVED 2026-09-16 by Henry — one ghost document, and where it came from
 
-**Origin, established rather than inferred.** `read-the-output-not-the-code` is a note in the
-session memory Henry works from, not a file in any ref. It reached the board twice: as a wikilink
-on 2026-09-14 (`a1c9050`, in `bug-log-attribution`), then as the path
-`docs/read-the-output-not-the-code` on 09-15 (`ebfb041`, Henry's "B1 goes to Rook"). **The path
-form is the one that was copied**, onto six more cards. The three claims cards cite it for (the
+**Origin, established rather than inferred.** `read-the-output-not-the-code` is an auto-memory
+note, not a file in any ref. **Auto-memory is keyed to the launch directory, not to a session**
+(Wren's point, checked by Rook): the project's memory directory holds 43 notes that every session
+launched from the checkout reads, and this one's `originSessionId` is `ddaaa8e3`, neither Henry's
+session nor Rook's. It reached the board twice: as a wikilink on 2026-09-14 (`a1c9050`, in
+`bug-log-attribution`), then as the path `docs/read-the-output-not-the-code` on 09-15 (`ebfb041`,
+"B1 goes to Rook", made by Henry's session). **The path form is the one that was copied**, onto
+six more cards. That the note was visible to every session is why nobody followed it: it read as
+common knowledge, and it was common only among us. The three claims cards cite it for (the
 warnings are the product, a sentence names its own subject, a peer reads it cold) are that note's
 three lines. The third was never in the tree, which is why `CONTRIBUTING.md` lacked it.
 

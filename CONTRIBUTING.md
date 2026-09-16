@@ -392,10 +392,12 @@ Commit messages here are long on purpose. They carry what a card cannot: a
 card can be edited by anyone, a commit travels with the change. If you find
 something while fixing something else, put it in the message.
 
-**Cite the tree, or quote the claim.** Each session keeps private notes nobody
-else can open. Written into a card as a path, one becomes an authority no
-reader can check, and copying spreads it: a memory note was cited as
-`docs/read-the-output-not-the-code` on eight cards before anyone followed the
-address. A path in a card should be one `git cat-file -e origin/main:<path>`
-finds. A branch is an address only until it is merged and deleted; after that,
-the merge commit is.
+**Cite the tree, or quote the claim.** Memory notes are not documents. They
+live outside the repo, keyed to the directory a session was launched from
+rather than to a person, and no checkout contains them. Written into a card as
+a path, a note becomes an authority no reader of the tree can follow. Because
+every session launched here could see it, it also reads as common knowledge:
+`docs/read-the-output-not-the-code` was cited on eight cards before anyone
+followed the address. A path in a card should be one
+`git cat-file -e origin/main:<path>` finds. A branch is an address only until
+it is merged and deleted; after that, the merge commit is.
