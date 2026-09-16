@@ -1,6 +1,8 @@
 ---
 title: "`onionSkin: 0` means off, unsupported, or too-old, and says which for none"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 46
 ---
