@@ -54,6 +54,9 @@ setTimeout(() => {
       env: { ...env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json'), OBSRV_ELECTRON_PKG_DIR: stubDir },
     }),
   )
+  // Cache the output schemas, or nothing this file asserts about a reply's
+  // shape is actually checked — see chore-mcp-specs-validate-every-call.
+  await client.listTools()
   // The server is up before the download is done: the connection must not wait on it.
   expect(Date.now() - started).toBeLessThan(1_400)
 })

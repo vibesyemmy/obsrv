@@ -87,6 +87,11 @@ test.beforeAll(async () => {
       env: { ...env, OBSRV_CONTROL_FILE: join(userData, CONTROL_FILE_NAME) },
     }),
   )
+  // Cache the output schemas before the first call. Without this the SDK
+  // validates nothing, and this spec's whole subject is two surfaces agreeing:
+  // an unvalidated reply can agree with another unvalidated reply about a field
+  // neither of them declares. See chore-mcp-specs-validate-every-call.
+  await client.listTools()
 
   /**
    * Both surfaces must measure the same screen or nothing below is a
