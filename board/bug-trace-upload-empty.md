@@ -1,6 +1,6 @@
 ---
 title: "\"Upload Playwright traces on failure\" has been uploading nothing, and passing"
-column: next
+column: done
 kind: bug
 owner: "Kenya"
 order: 38
@@ -119,3 +119,45 @@ page snapshot while its neighbours did.
 And the cost, in Kenya's framing: **trace zips are megabytes rather than kilobytes and the retry
 attempt runs slightly slower — against an afternoon three sessions spent reasoning from an artefact
 that was never going to contain the answer.**
+
+## PROVEN END TO END 2026-09-16 by Rook — and it caused one thing, filed separately
+
+Henry's standing caveat on the merge was *"not proven end-to-end: the next real CI red is what
+proves the step carries something"*. **It is proven now, by artefact size on real CI reds**, the
+config having landed at `cd52660`, 09-16 09:26:
+
+    BEFORE   09-15 runs        13–30 KB      error-context.md and nothing else
+    AFTER    35086053288       4,616,039 B   traces and screenshots
+             35095532091         154,425 B
+             35099493469         231,814 B
+
+**Two orders of magnitude, on failures nobody arranged.** That is the card's claim discharged:
+the step now uploads what its name says.
+
+### The note this card was waiting for
+
+**An absent `trace.zip` does not mean the config failed.** `trace: 'on-first-retry'` produces a
+zip only when a retry ran, so a red run at `--retries=0` carries screenshots and
+`error-context.md` and **no trace**, correctly. *Nothing was retried* and *the config is broken*
+look identical in the artefact list, and the first is the common case in local runs. Measured
+today: a `--retries=0` failure wrote 4 screenshots and an `error-context.md`, zero trace zips;
+the same failure at `--retries=1` wrote a zip.
+
+### What it caused, and it is not a reason to reopen this card
+
+`if-no-files-found: error` was the right call — it is what turns a silent step into one that can
+go red. **It also makes that step fail whenever the run failed BEFORE Playwright ran.** Observed
+on run `35102701577`:
+
+    failure   Unit tests                            ← the real cause
+    skipped   E2E (Playwright driving the Electron app)
+    failure   Upload Playwright traces on failure   ← test-results/ never existed
+
+The real failure is still reported and still first, so nothing is masked. But **a second red step
+that means nothing now appears on every typecheck, unit or build failure**, and it is named after
+an artefact the run never had a chance to produce. Filed as
+`bug-trace-upload-errors-when-e2e-never-ran`.
+
+**This card closes.** Its fix landed, and the proof it asked for exists. The consequence is a new
+defect in a step that previously could not fail at all, which is the shape of progress rather than
+a regression: it can now be wrong out loud instead of silently.
