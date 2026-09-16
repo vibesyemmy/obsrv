@@ -1381,6 +1381,29 @@ function noListCut(truncated: unknown): Record<string, unknown> {
   return { ...t, findings: 0 }
 }
 
+/**
+ * Said whenever `groupsOnly` leaves the list out, on `audit` and `lint`, live
+ * and headless. `findings: []` and `truncated.findings: 0` are right under the
+ * flag (no list was printed, so nothing was cut from one), and they read
+ * exactly like a page with nothing wrong: run 19 read them that way, with only
+ * `summary` and `groups` disagreeing in the same object
+ * (bug-groups-only-empties-findings-silently). The CLI's stderr always said
+ * "the list left out"; the reply an agent reads said nothing. A note, not a
+ * warning, because it is about the call rather than the page.
+ */
+function groupsOnlyNote(tool: 'audit' | 'lint'): string {
+  const where =
+    tool === 'audit'
+      ? // An audit's `summary.*.count` is everything measured; `under` is the findings. Named, so
+        // `targets.count: 120` is not read as 120 findings (Wren's cold read of the first wording).
+        'The findings are counted by `summary.targets.under` and `summary.text.under`, and grouped in `groups`.'
+      : 'Every finding is counted in `summary` and grouped in `groups`.'
+  return (
+    '`groupsOnly` left the per-finding list out on request: `findings` is empty and `truncated.findings` is 0 ' +
+    `because the list was left out, not because nothing was found. ${where}`
+  )
+}
+
 async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   try {
@@ -1453,6 +1476,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     const auditTruncated = (measured['truncated'] as { findings?: unknown } | undefined)?.findings
     const auditListed = input.groupsOnly ? null : auditListTruncationNote(typeof auditTruncated === 'number' ? auditTruncated : 0)
     const auditAdded = [...(auditListed === null ? [] : [auditListed]), ...(auditCoverage === null ? [] : [auditCoverage])]
+    if (input.groupsOnly) notes.push(groupsOnlyNote('audit'))
     const structured = {
       mode: 'live',
       url: answeredUrl(input.url, status.url),
@@ -1539,7 +1563,7 @@ server.registerTool(
     if (run.killed || run.code !== 0) return cliFailure('audit', run, killAfterMs)
     const result = extractTrailingJson(run.stdout)
     if (!result) return toolError(`obsrv audit exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...waits(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...(input.groupsOnly ? [groupsOnlyNote('audit')] : []), ...waits(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )
@@ -1758,6 +1782,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
       },
     )
     const added = [...(listed === null ? [] : [listed]), ...(unwalked === null ? [] : [unwalked]), ...(lintCoverage === null ? [] : [lintCoverage])]
+    if (input.groupsOnly) notes.push(groupsOnlyNote('lint'))
     const structured = {
       mode: 'live',
       url: answeredUrl(input.url, status.url),
@@ -1844,7 +1869,7 @@ server.registerTool(
     if (!result) return toolError(`obsrv lint exited 0 but printed unparseable JSON: ${stderrTail(run.stdout)}`)
     // `groupsOnly` went to the CLI as --groups-only, which leaves the list out
     // at the source, and with it the sentence about the list's cap.
-    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...waits(run)] }
+    const structured = { mode: 'headless', why, ...result, notes: [...notes, ...(input.groupsOnly ? [groupsOnlyNote('lint')] : []), ...waits(run)] }
     return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured }
   },
 )

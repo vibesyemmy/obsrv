@@ -363,6 +363,34 @@ test('obsrv_lint: groups carry a slim exemplar, and groupsOnly leaves the list o
   expect(m.skipped).toEqual({ textOnImages: 1, invisibleText: 0, spacers: 0 })
 })
 
+test('groupsOnly says the list was left out by request, on audit and lint, and nothing says it without the flag', async () => {
+  // `findings: []` beside `truncated.findings: 0` is right under the flag and
+  // reads exactly like a clean page. Run 19 read it that way, with only
+  // `summary` and `groups` disagreeing (bug-groups-only-empties-findings-silently).
+  for (const [tool, page] of [['obsrv_audit', 'audit.html'], ['obsrv_lint', 'lint.html']] as const) {
+    const grouped = (await call(tool, { url: fixture(page), preset: 'laptop-768', groupsOnly: true })).structuredContent as {
+      findings: unknown[]
+      groups: unknown[]
+      notes: string[]
+    }
+    expect(grouped.findings).toEqual([])
+    // A fixture with nothing to group would make the note's absence and presence equally meaningless.
+    expect(grouped.groups.length, `${tool}: the fixture has nothing to group`).toBeGreaterThan(0)
+    expect(grouped.notes.filter(n => n.includes('groupsOnly')), `${tool} notes: ${JSON.stringify(grouped.notes)}`).toHaveLength(1)
+    // Each tool names where its findings went in its own terms: an audit's `summary.*.count` is
+    // everything measured, so its note has to point at `under`, not at `summary` as a whole.
+    const note = grouped.notes.find(n => n.includes('groupsOnly'))!
+    expect(note).toContain(tool === 'obsrv_audit' ? '`summary.targets.under`' : 'counted in `summary`')
+
+    const listed = (await call(tool, { url: fixture(page), preset: 'laptop-768' })).structuredContent as {
+      findings: unknown[]
+      notes: string[]
+    }
+    expect(listed.findings.length, `${tool}: the control lists nothing, so it controls nothing`).toBeGreaterThan(0)
+    expect(listed.notes.some(n => n.includes('groupsOnly')), `${tool} without the flag, notes: ${JSON.stringify(listed.notes)}`).toBe(false)
+  }
+})
+
 test("a measurement of a cut load answers with the page as it stands and the CLI's sentence, not Chromium's log", async () => {
   // theverge.com never finished loading and the error was a kilobyte of
   // task_policy_set lines with the one useful sentence last.
