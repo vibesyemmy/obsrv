@@ -200,13 +200,16 @@ jobs:
       # provide is why nobody looked.
       #
       # What that setting does and does NOT catch, measured rather than
-      # assumed (Wren, reading this change cold, across ALL of them rather than
-      # a sample): every one of the 57 runs whose e2e failed between this step's
-      # creation in 1b0be8f and #29's merge uploaded a NON-EMPTY
-      # `playwright-traces` — none missing, none zero bytes, 13,184 B on run
-      # 34977896287 through 59,880 B on 35074542775, all error-context.md and no
-      # traces. The directory was never empty, so `error` was silent through the
-      # entire week and would be silent again if `trace` were dropped tomorrow.
+      # assumed (Wren, who then re-checked the scope of his own numbers and
+      # corrected them twice — the figure below is the third and complete one):
+      # every e2e failure between this step's creation in 1b0be8f and #29's
+      # merge — 71 ATTEMPTS, being 58 runs plus the 13 first attempts that were
+      # re-run to green and so do not show up under a latest-attempt query —
+      # uploaded a NON-EMPTY `playwright-traces`. None missing, none zero bytes,
+      # 1,235 B on run 34249494196 through 178,059 B on 34107042439, all
+      # error-context.md and no traces. The directory was never empty, so
+      # `error` was silent through the entire week and would be silent again if
+      # `trace` were dropped tomorrow.
       # **It does not guard the trace setting.** Nothing does today; that wants
       # its own card, not a wider `if:` here.
       #

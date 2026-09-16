@@ -108,12 +108,20 @@ produces no traces under either gate.** Filed as `bug-no-traces-when-e2e-hangs`.
 
 Worth keeping, because it was wrong in the direction that flatters the change. I wrote — and #29's
 paragraph in `ci.yml` said before me — that `if-no-files-found: error` is what stops the week of
-silence recurring if the `trace` setting is dropped again. **It isn't.** I sampled four runs;
-**Wren then checked all of them**: every one of the **57** runs whose e2e failed between this
-step's creation (`1b0be8f`, 2026-08-25) and #29's merge uploaded a *non-empty*
-`playwright-traces` — none missing, none zero bytes, from 13,184 B (`34977896287`) to 59,880 B
-(`35074542775`), all error-context.md and no traces. `error` never fires on a non-empty directory,
-so it was silent through the whole week and would be silent again.
+silence recurring if the `trace` setting is dropped again. **It isn't.** I sampled four runs; Wren
+then checked all of them — and then **re-checked the scope of his own numbers and corrected them
+twice**, which is the only reason the figure here is right:
+
+- his first sweep filtered the window by comparing ISO strings with **mixed UTC offsets**, silently
+  dropping the first hour after `1b0be8f`, which contained a failed run — 57 became **58**;
+- `--status failure` reads only each run's **latest attempt**, the trap this repo already had
+  written down. **13 more runs failed e2e on attempt 1 and were re-run to green**, so they never
+  appeared in the sweep at all.
+
+**The complete statement:** every e2e failure between `1b0be8f` (2026-08-25) and #29's merge — **71
+attempts**, 58 runs plus those 13 first attempts — uploaded a *non-empty* `playwright-traces`. None
+missing, none zero bytes, from 1,235 B (`34249494196`) to 178,059 B (`34107042439`). `error` never
+fires on a non-empty directory, so it was silent through the whole week and would be silent again.
 
 Wren also established the other half: **from `1b0be8f` until this change the step had exactly one
 `if:`, `if: failure()`** — which is what control 4's probe carried. So "no version of this step has

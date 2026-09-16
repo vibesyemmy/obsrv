@@ -44,9 +44,23 @@ upload under **any** gate.
 
 ## How often this has actually happened: once, and that once was the control
 
-Measured by Wren over the **last 100 cancelled CI runs**: the only one that reached the 30-minute
-limit is control 4 itself. Every other cancellation happened after 1–11 minutes — superseded pushes
-and hand-cancels, which are not this defect.
+Measured by Wren across the workflow's **entire history**, not a window — he asked for the last 100
+cancelled runs and then found the workflow has only ever had about 30, so the true claim is stronger
+than the one he first wrote:
+
+- across the **latest attempt of every run** (591), the only run of 29 minutes or more that did not
+  succeed is control 4; the rest at 29–37 minutes all concluded `success`, so none of them can be
+  holding a timed-out job;
+- across the **earlier attempts of all 17 re-run runs**, the longest was 25 minutes and none was
+  cancelled.
+
+**So control 4 is the only job in this workflow's history ever to hit the 30-minute limit.**
+
+Two things this does *not* say. **Why the other cancellations happened is not established** — they
+ended within 11 minutes, and nobody has looked at their causes, so do not write "superseded pushes
+and hand-cancels" as if it were measured. And **the count of cancelled runs is a moving target**: it
+read 29 for Wren and 31 an hour later for me, because superseded PR pushes cancel runs continuously.
+Cite the invariant above, never the population size.
 
 **So the case this card describes has not occurred on its own in that window.** That is the honest
 frame for ordering it: the gap is real, the mechanism is measured, and the event is rare. It is not
