@@ -3,7 +3,7 @@ title: "The target emits no url-changed at all — a second shape, and the test 
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "Henry: whether to spend the run budget — and first, whether a recurrence would even be legible"
+waiting: "Kenya: the native side of step 2 — did its load commit, or commit after the traces were read?"
 order: 40
 ---
 
@@ -89,3 +89,48 @@ Which is the account the empty array could not give: the bus decided, issued the
 **RELEASED 2026-09-16. The session that owned this is gone.** Rook, Kenya and obsrv-e7 all ended
 on 2026-09-15; the room's last message is 14 hours old. An owner line naming an absent session is
 worse than no owner: it tells the next reader the work is in hand. **This card is takeable.**
+
+## DECIDED 2026-09-16 by Henry: no run budget. A recurrence is already legible, and the first one narrows the question
+
+**Legible? Yes, and it has been since 2026-09-15.** The instrument this card describes as "NOT merged,
+NOT pushed" merged as #4 (`bd1c96c`). `sync.spec.ts:138` carries both traces in its assertion message
+on main, so every CI recurrence explains itself at no cost.
+
+**And one has happened.** Run [`35121768980`](https://github.com/vibesyemmy/obsrv/actions/runs/35121768980)
+(PR #115's control tree, which touched only the overlay's focus), 2026-09-16 16:42Z, failed then
+passed on retry. Its assertion message, decoded (fixture paths shortened):
+
+    mirror (last 8)
+      16:42:04.489  native tall.html       echo
+      16:42:04.608  native hairline.html   echo
+      16:42:04.614  target hairline.html   echo
+      16:42:05.649  native redirect.html   echo
+      16:42:05.653  target redirect.html   echo
+      16:42:05.671  target hairline.html   issued     other was redirect.html
+      16:42:05.676  native hairline.html   echo
+      16:42:05.689  native hairline.html   already-there
+    commits (last 8, target)
+      about:blank, tall, hairline (mirroring), tall, hairline,
+      redirect.html 16:42:05.653 said, hairline.html 16:42:05.671 said
+
+**Read, with the reading marked:**
+- **Measured:** the 16:42:05 entries match **step 1** entry for entry: both panes told to expect
+  REDIRECT, both commit it, the target's replacement is issued to the native, and the native commits
+  HAIRLINE twice. **Nothing follows 16:42:05.689.** Step 2's `native.load(REDIRECT)` left no mirror
+  entry and no target commit by the time the test read the traces, and every target commit said
+  something.
+- **So in the card's own legend this is "the bus never saw the native commit", not a silenced
+  commit.** Two facts still fit it, and they are opposite:
+  - (a) the step-2 load never committed. It was aborted or was a no-op.
+  - (b) it committed after the traces were read. The poll after step 2 passes the moment both panes
+    read HAIRLINE, which they already did (the card's "NOT DONE" point).
+- **Inference, not established:** the native's second HAIRLINE commit (16:42:05.689) came 13 ms after
+  its first. Had step 1's poll passed on the first and step 2's load started before the second, the
+  second navigation could have aborted the REDIRECT load. Nothing here shows the load's outcome.
+
+**Why no run budget:** the next useful fact is on the native side, not in more repetitions of what the
+target already reports. Record in step 2 whether `native.load(REDIRECT)` resolved, rejected or aborted,
+and when the native committed, beside the existing traces. The next natural recurrence then separates
+(a) from (b). CI supplies recurrences unasked (15 in `bug-ci-main-red-37pct`'s tally). A budget buys
+nothing until an occurrence can tell the two apart.
+
