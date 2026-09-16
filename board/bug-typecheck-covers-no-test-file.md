@@ -1,8 +1,7 @@
 ---
 title: "`npm run typecheck` covers no test file, so \"typecheck clean\" has never said anything about a test change"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 59
 ---
@@ -46,3 +45,36 @@ again, in the verification line itself.
 - **Add test tsconfigs to `npm run typecheck`,** so CI's typecheck step covers them.
 - **The control:** reintroduce #143's missing import on a branch and watch `npm run typecheck` go red
   on it, before any e2e step runs.
+
+## Closed 2026-09-16: `tsconfig.tests.json` is part of `npm run typecheck`
+
+**One program, not one per side.** A unit test imports both sides in the same file.
+`store.test.ts` imports the renderer store along with shared presets, so splitting by directory
+wouldn't separate the settings. The tests config extends `tsconfig.node.json` (same strictness,
+node types) and adds the renderer's `DOM.Iterable` and JSX. It includes `tests/**`,
+`playwright.config.ts` and `vitest.config.ts`, and all 161 tracked test files are in the program.
+The whole `npm run typecheck` takes about 4 s.
+
+**The sort, re-measured on `e1c952d`.** On that tree the probe above found 54 errors, not 61, because
+main had moved. 4 of the 54 came from the probe's configuration, and adding `DOM.Iterable` and JSX
+removes them: TS2488 ×3 in `inspect`, `orientation` and `toolbar` specs, and TS6142 in
+`panelControls.test`. The other 50 were in the tests:
+
+- **Two real defects.**
+  - `contrastPainted.test`'s "reference panel" was a literal in the profile's shape
+    (`gamutCoverage`, `bits`) typed as `PanelParams`. So `onPanel` read undefined fields and came
+    out NaN, and no assertion read it.
+  - `rendering.spec`'s hairline test lacked its sibling's null guard. A capture with no full paint
+    failed as a TypeError on `seen.sf`, not with the message.
+- **Stale fixtures (types that grew).** Every reader of a missing field was checked. Each one
+  defaults the field, so no test was passing by mistake. The restore test now also asserts the orientation
+  and text scale a seeded tab takes.
+- **Narrowing and casts.** Four specs read the control file as always holding a port, but it can be a
+  stance, so they now narrow. The rest are casts that stopped overlapping their types.
+
+**Controls, run on the committed branch, with files restored from copies.**
+1. Removing #143's import (`isFrameIdentityWarning` in `live-drive.spec.ts`) makes `npm run typecheck`
+   exit 2 with `TS2304: Cannot find name 'isFrameIdentityWarning'`. CI runs typecheck before unit,
+   build and e2e.
+2. Putting back the old `REFERENCE` literal fails `expected NaN to be close to 19.56…`.
+3. Dropping `orientation`/`textScale` from `syncTabs`' seed fails the restore test.
