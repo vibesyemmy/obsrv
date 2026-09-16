@@ -1,12 +1,14 @@
 ---
 title: "`tsc -p tsconfig.json` checks nothing and exits 0, so the obvious typecheck command always passes"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
+waiting: ""
 order: 61
 ---
 
 FOUND BY ROOK 2026-09-17, after a missing import passed my "typecheck" and then failed 46 unit
-tests at runtime. **Unowned.**
+tests at runtime. **CLAIMED BY KENYA 2026-09-17** on Wren's routing — the same ground as `bug-typecheck-covers-no-test-file`, whose TS2304 control this card reuses.
 
 ## What happens
 
