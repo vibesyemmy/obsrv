@@ -58,7 +58,7 @@ person is looking at**, and it is a different product with different failure mod
 
 ## What this card is actually for, which is not "does it work"
 
-**The product is what an agent is told.** `docs/read-the-output-not-the-code` is the standing
+**The product is what an agent is told.** `CONTRIBUTING.md`'s *Writing it down* is the standing
 argument: the warnings ARE the product, and the way to check a sentence is to have a peer read
 it cold. Headless answers have been read that way twice. **Live answers never have.**
 

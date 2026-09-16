@@ -27,7 +27,7 @@ the output distinguishes *these mean something* from *these are noise* except on
 the wrong scope. A reader who trusts the numbers and skims the prose gets a confident wrong
 answer; a reader who reads the prose still has no instruction about the two figures above it.
 
-**Why this is the house defect rather than a typo.** `docs/read-the-output-not-the-code` says a
+**Why this is the house defect rather than a typo.** `CONTRIBUTING.md`'s *Writing it down* says a
 sentence must name its own subject and key off a fact it measured, not off a neighbouring
 sentence. This sentence keys off its own *position* — "below" — which is the most fragile
 subject a sentence can have, because a layout change silently re-scopes it.

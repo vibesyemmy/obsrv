@@ -1,13 +1,75 @@
 ---
-title: "Seven cards cite `docs/read-the-output-not-the-code`, which is not in the repo"
-column: doing
+title: "Eight cards cited `docs/read-the-output-not-the-code`, which was never in the repo"
+column: done
 owner: "Henry"
 kind: bug
 order: 42
 ---
 
 FOUND BY ROOK 2026-09-16, checking every file path one card names against `origin/main`.
-**Unowned.** Not filed by anyone earlier because nobody had followed the citation.
+Taken by Henry, whose commit first put it on a card as a path.
+
+## RESOLVED 2026-09-16 by Henry — one ghost document, and where it came from
+
+**Origin, established rather than inferred.** `read-the-output-not-the-code` is an auto-memory
+note, not a file in any ref. **Auto-memory is keyed to the launch directory, not to a session**
+(Wren's point, checked by Rook): the project's memory directory holds 43 notes that every session
+launched from the checkout reads, and this one's `originSessionId` is `ddaaa8e3`, neither Henry's
+session nor Rook's. It reached the board twice: as a wikilink on 2026-09-14 (`a1c9050`, in
+`bug-log-attribution`), then as the path `docs/read-the-output-not-the-code` on 09-15 (`ebfb041`,
+"B1 goes to Rook", made by Henry's session). **The path form is the one that was copied**, onto
+six more cards. That the note was visible to every session is why nobody followed it: it read as
+common knowledge, and it was common only among us. The three claims cards cite it for (the
+warnings are the product, a sentence names its own subject, a peer reads it cold) are that note's
+three lines. The third was never in the tree, which is why `CONTRIBUTING.md` lacked it.
+
+**The sweep, which is the deliverable:** every backticked span and `[[wikilink]]` in all 76 cards
+on `main`, 147 distinct path-like candidates, classified against the tree and its history.
+**Three controls, all passed:** `tests/e2e/cli-snap-tiled.spec.ts` and `src/cli/main.ts` must come
+back present; `docs/read-the-output-not-the-code` must come back a ghost. A first run failed its
+present-control because the path chosen was only ever cited outside backticks, so that run was
+void. That is recorded here so the next sweep picks a control it has seen extracted.
+
+| class | count |
+| --- | --- |
+| present in the tree (by path, basename or suffix) | 85 |
+| branch names, git and action refs, patterns, outside the tree | 49 |
+| runtime or CI files not meant to be in the tree (`control.json`, `error-context.md`, …) | 6 |
+| not paths (`/`, `completed/success`) | 2 |
+| existed once: `docs/board.md` / `.html` (generated, uncommitted since #13), `docs/signing.md` (on `chore/signing`) | 3 |
+| **ghost: never in any ref** | **2** — one document, with and without `.md` |
+
+**The heuristic called seven things ghosts; reading moved five.** Four were branch names with a
+`docs/` prefix (*"Branch `docs/c3-skill-audit`"*), and `server/mcp.js` is the SDK's file under
+`node_modules`. They are counted in the second row. The one real ghost appears in path form on 8
+cards and as a wikilink on 2. Two of those cards are the ones *about* it: this card, and Rook's
+correction note on `bug-product-matches-own-prose`.
+
+**One finding of a different kind:** `c3` and `c5-elevated` give *"THE BRANCH IS THE ADDRESS"*, and
+both branches were merged and deleted. Their merges are now named on those cards.
+
+**Fixed:** the ghost citation in `b1`, `b1-live-app`, `b1-report-diff`, `bug-diff-disowns-its-numbers`,
+`bug-report-doubled-warning-prefix` and `chore-waiting-field` (path form), and `bug-log-attribution`
+(wikilink), all now pointing at `CONTRIBUTING.md`'s *Writing it down*. That section gains the rule
+that was only in the note — *have someone who did not write it read it cold* — and *cite the tree,
+or quote the claim*. `bug-dev-app-exited`'s `[[bug-log-attribution]]` became a plain card name.
+
+**Outside the cards, found by Rook's review.** This sweep read `board/` only. Rook's, run over more
+of the tree, found `CONTRIBUTING.md` linking [`docs/dev-lane`](docs) — the same shape, never a
+file in any ref (the branch was `feat/dev-lane`). The lane is documented in `README.md`'s *The dev
+lane*, and the link now says so. So "the only ghost" above holds for the cards, not for the repo.
+Rook also named `docs/b4-noise-ratio` and `docs/c3-skill-audit`. Those are the branch names already
+counted above: a path check finds no commits for a branch, which is how they look like ghosts.
+
+**Left alone, deliberately:** `bug-product-matches-own-prose` already carries Rook's correction
+note from #37, and is in Doing on an unpushed branch. Its two remaining bare mentions are his to
+reword with that work, not a conflict to hand him.
+
+**Not done: the check in `board:check`.** Two of the classes above were settled by reading, not by
+rule: `docs/` branch names, and SDK paths. A gate built on today's heuristic would go red on a
+branch name. It wants those classes pinned first, and is worth its own card if anyone wants it.
+
+---
 
 ## The defect
 

@@ -42,7 +42,7 @@ is a promise somebody made to check later.
 qualification than run 17's and should be spent before it expires. Run 17 made Rook a reader of
 `audit` and `lint` output. It left `report` and `diff` untouched, so the cold-reading argument
 from `b1` — *the warnings ARE the product, and the way to check a sentence is to have a peer
-read it cold* (`docs/read-the-output-not-the-code`) — still applies here and will not apply
+read it cold* (`CONTRIBUTING.md`'s *Writing it down*) — still applies here and will not apply
 again after this run.
 
 ## What this card does NOT close, so nobody reads it as B1 met

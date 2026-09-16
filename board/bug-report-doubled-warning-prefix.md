@@ -19,7 +19,7 @@ So it says the subject twice and carries a bare `warning:` in the middle of a se
 than at the start of one.
 
 **Why it is worth a card rather than a quiet fix.** The sentences are the product — the whole
-argument of `docs/read-the-output-not-the-code` — and this is the one place in run 18 where a
+argument of `CONTRIBUTING.md`'s *Writing it down* — and this is the one place in run 18 where a
 sentence reads as though nobody had looked at it in the surface a user actually reads. The
 cause is almost certainly that the string was written for stderr, where the `warning:` prefix
 earns its place, and is then reused in HTML where the section heading already supplies the

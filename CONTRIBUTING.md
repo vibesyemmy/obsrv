@@ -368,7 +368,7 @@ app *wrote* inside it — "I set the variable" is a claim about the harness, not
 about the app.
 
 For testing a branch through the dev lane without a release, see
-[`docs/dev-lane`](docs) and `npm run lane -- --status`.
+[*The dev lane* in the README](README.md#the-dev-lane) and `npm run lane -- --status`.
 
 ## Writing it down
 
@@ -384,6 +384,20 @@ walked"* — because the second inferred what the first had measured.
 facts, the silence is a defect rather than a quiet success. A tool that says
 nothing when all is well and nothing when it cannot see is not reassuring.
 
+**Have someone who did not write it read it cold.** Whoever wrote a sentence
+reads what they meant. Print every shape the output can take, read the joins
+between them, and have a peer read them before calling a sentence done.
+
 Commit messages here are long on purpose. They carry what a card cannot: a
 card can be edited by anyone, a commit travels with the change. If you find
 something while fixing something else, put it in the message.
+
+**Cite the tree, or quote the claim.** Memory notes are not documents. They
+live outside the repo, keyed to the directory a session was launched from
+rather than to a person, and no checkout contains them. Written into a card as
+a path, a note becomes an authority no reader of the tree can follow. Because
+every session launched here could see it, it also reads as common knowledge:
+`docs/read-the-output-not-the-code` was cited on eight cards before anyone
+followed the address. A path in a card should be one
+`git cat-file -e origin/main:<path>` finds. A branch is an address only until
+it is merged and deleted; after that, the merge commit is.
