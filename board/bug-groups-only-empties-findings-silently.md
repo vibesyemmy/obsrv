@@ -39,11 +39,14 @@ missing was a sentence in the reply an agent reads, and that reply already decla
 is where the register puts sentences about the call rather than the page. So nothing was changed
 about the counter.
 
-**The fix:** `GROUPS_ONLY_NOTE` in `src/mcp/server.ts`, pushed into `notes` at all four sites
-(`audit` and `lint`, live and headless) whenever `groupsOnly` is set. *"`groupsOnly` left the
-per-finding list out: `findings` is empty and `truncated.findings` is 0 because no list was printed,
-not because nothing was found. Every finding is counted in `summary` and grouped in `groups`."* It is
-an entry in an already-declared array, so no schema changes.
+**The fix:** `groupsOnlyNote(tool)` in `src/mcp/server.ts`, pushed into `notes` at all four sites
+(`audit` and `lint`, live and headless) whenever `groupsOnly` is set: *"`groupsOnly` left the
+per-finding list out on request: `findings` is empty and `truncated.findings` is 0 because the list
+was left out, not because nothing was found."* Then, per tool: `lint` adds *"Every finding is counted
+in `summary` and grouped in `groups`"*. `audit` names `summary.targets.under` and `summary.text.under`,
+because an audit's `summary.*.count` is everything measured, not the findings. **Wren's cold read
+caught both:** the first wording said *"no list was printed"* to a reader holding JSON, and pointed
+an audit reader at `count`. It is an entry in an already-declared array, so no schema changes.
 
 **Test:** `mcp.spec.ts`, *groupsOnly says the list was left out by request…*, on both tools. With
 the flag: an empty list, a fixture that has groups, and the note exactly once. Without it: findings

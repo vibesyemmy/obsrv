@@ -377,6 +377,10 @@ test('groupsOnly says the list was left out by request, on audit and lint, and n
     // A fixture with nothing to group would make the note's absence and presence equally meaningless.
     expect(grouped.groups.length, `${tool}: the fixture has nothing to group`).toBeGreaterThan(0)
     expect(grouped.notes.filter(n => n.includes('groupsOnly')), `${tool} notes: ${JSON.stringify(grouped.notes)}`).toHaveLength(1)
+    // Each tool names where its findings went in its own terms: an audit's `summary.*.count` is
+    // everything measured, so its note has to point at `under`, not at `summary` as a whole.
+    const note = grouped.notes.find(n => n.includes('groupsOnly'))!
+    expect(note).toContain(tool === 'obsrv_audit' ? '`summary.targets.under`' : 'counted in `summary`')
 
     const listed = (await call(tool, { url: fixture(page), preset: 'laptop-768' })).structuredContent as {
       findings: unknown[]
