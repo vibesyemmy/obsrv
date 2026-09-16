@@ -110,7 +110,10 @@ test('the keyboard drives it, and the trigger takes its focus back', async () =>
 
   await menuKey(app, 'Enter')
   await expect(page.locator('.preset-select')).toHaveAttribute('data-value', /^iphone/)
-  // Focus returns to the chrome, or the next Tab would start from the body.
+  // The trigger is the chrome document's active element again, or the next Tab
+  // would start from the body. Whether the chrome also holds keyboard focus is
+  // not this check's: under the harness nothing is focused (Overlay.focusView),
+  // and overlay-focus.spec checks the hand-off in an app that takes the desk.
   await expect(page.locator('.preset-select')).toBeFocused()
 })
 

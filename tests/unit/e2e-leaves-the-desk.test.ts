@@ -6,13 +6,14 @@ import { join, relative, resolve } from 'node:path'
  * No e2e test fronts the app under test by hand (bug-e2e-takes-the-desk). On
  * macOS `win.show()`, `win.focus()` and `app.focus()` activate the app and take
  * the desk from whoever is using the machine; the harness shows its window with
- * `showInactive()` instead. The one test whose job is to front the app goes
- * through the `focusWindow` control command and is gated by name
+ * `showInactive()` instead. A test whose job needs a front app (the
+ * `focusWindow` command, the overlay's focus hand-off with
+ * `OBSRV_TEST_TAKES_THE_DESK`) is gated by name on the same line
  * (`OBSRV_E2E_FRONT`), so it never matches here.
  */
 
 const ROOT = resolve(__dirname, '../..')
-const FRONTS = /\bwin\.(show|focus)\(\)|\bapp\.focus\(|\bfocus:\s*true\b/
+const FRONTS = /\bwin\.(show|focus)\(\)|\bapp\.focus\(|\bfocus:\s*true\b|\bOBSRV_TEST_TAKES_THE_DESK\b/
 
 function tsFiles(dir: string): string[] {
   return readdirSync(dir).flatMap(name => {
