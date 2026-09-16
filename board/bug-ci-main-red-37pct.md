@@ -6,6 +6,39 @@ criterion: B5
 order: 37
 ---
 
+**REMEASURED 2026-09-16 by Henry, for the gate question at the bottom. The 37% describes 09-15,
+not now.**
+
+Every failed test in every `ci.yml` attempt from 09-13 00:21Z to 09-16 09:46Z: 216 attempts, 189
+of which ran the suite, read from the logs. A test counts as **failed** only if its retry failed
+too. A first attempt is **red** if Playwright counted a failure or an error sat outside any test.
+That is not `gh`'s run `conclusion`, which belongs to a run's *latest* attempt and reads "success"
+on a first attempt that failed.
+
+| main, push, first attempts | ran | red |
+| --- | --- | --- |
+| 09-13 → 09-16 09:46Z | 137 | 37 (27%) |
+| since #10 merged, 09-15 10:43Z | 21 | **3 (14%)** |
+
+All branches since #10: 9 red of 56 (16%).
+
+- **Most of the 27% is two episodes since fixed:** `log.spec`'s writer tag (12 red main runs,
+  fixed by #10) and `live-drive` (10 runs, plus this morning's, below).
+- **Main's three since #10:** `stall.spec` ×1 (09-15 11:11Z), `controls.spec` ×3 in one run
+  (09-15 16:28Z), and **`live-drive.spec` ×11 in one run at 09-16 08:34Z (`1c054a7`), not yet
+  read.** Eleven tests in one file in one run reads like a cascade, but that is a guess until
+  someone opens the log.
+- **Flaky (failed the first try, passed the retry): 273 across all attempts, and one test is 30%
+  of them.** `mcp.spec:137` ×82 (`bug-inspect-readout-schema`), sync reversals ×38, `panes`
+  failed-load / `sync-mirror-mark` / sync redirect ×15 each, `cli-snap-tiled` viewport ×14
+  (`bug-viewport-warning-race`), `throttle-live` ×11.
+- **devtools `:92`/`:116` made only one main first attempt red on their own**, so their fix (#38)
+  barely moves the rate. It removes a test that could not tell a slow runner from a dropped close.
+- **Holes:** runs cancelled by the concurrency group are missing data, not passes (see below).
+  Twenty-one main runs is a small sample, and the rate since #10 has a wide interval.
+
+---
+
 **THE CLASSIFIED LIST BELOW IS ALREADY PARTLY WRONG, measured 2026-09-15.** Three of its rows no longer point at a test — `live-drive.spec.ts:963`, `live-drive.spec.ts:1015` and `sync.spec.ts:165` — because the fixes moved them (to :969, and sync to :185). Hours, not months.
 
 The rows that go stale first are the ones whose tests were FIXED, which are exactly the rows someone would cite to excuse a red as pre-existing. Raised by obsrv-91 as a future risk on `bug-suite-absent-on-conflict`; it was already true when raised.
