@@ -3,7 +3,7 @@ title: "A mirrored redirect's second commit can still be counted as an arrival"
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "Henry: the syncBus redirect-mirror fix, which this re-measures on top of"
+waiting: "decision: how to tell the bus's own mirrored chain from a page reloading itself"
 criterion: B2
 order: 23
 ---
@@ -96,3 +96,45 @@ guessed at here.
 because a 20-iteration loop is the wrong shape for the suite.
 
 Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
+
+## MECHANISM MEASURED 2026-09-17 by Kenya, and TWO CANDIDATE FIXES REFUTED by their own controls
+
+**The mechanism, from the flag's own edges against the commit times** (temporary instrumentation on
+clean `main`; timings relative to the first commit):
+
+    +551  window open   redirect.html
+    +559  commit        redirect.html   mirroring=true     inside the window
+    +563  window open   hairline.html
+    +565  window close  redirect.html
+    +565  window close  hairline.html
+    +569  commit        hairline.html   mirroring=FALSE    4 ms after it closed
+
+**`mirroring` is keyed to `loadMirrored()`'s promise, and the commit can be delivered after the
+promise resolves.** `targetSource.ts:405` already says this in its own comment — `7d811f8` fixed the
+*withholding* and left the *attribution* on the same unreliable window. That is why the note fires
+17–20 times in 20 rather than always.
+
+**Candidate 1 — attribute by URL** (remember each mirrored load, claim the matching commit however
+late it lands). It works on the spurious arm and **breaks the truthful one**:
+
+    arm                                      main      candidate 1
+    native pane alone (SPURIOUS)            17-20/20   0/20
+    client redirect, both panes (TRUE)      20/20      7/20
+
+The bus's mirrored load and the page's own redirect go to **the same URL at the same moment**, so a
+URL claim cannot tell them apart and eats real movements. Refuted.
+
+**Candidate 2 — the counter ignores a commit to the address it already recorded.** Every arm came out
+right: 20/20 true notes kept, 0/20 spurious, controls 0/20. **And it breaks two existing tests that
+deliberately assert the opposite** — `mcp-live.spec:722` and `:813`, *"a page that reloads to the
+same address … says it moved"*, both red. A same-address reload is a real event the product reports
+on purpose. Refuted.
+
+**So the fix needs what neither candidate has: knowledge of which chain of commits the bus started.**
+That is bus-side state, and it is next to @Henry's issued-marker work in `syncBus.ts` (#171), so it
+should be agreed with him rather than written twice.
+
+**A caution for whoever takes it, learned the hard way here:** the spurious note and the truthful one
+are produced by the same code path on the same URLs, milliseconds apart. Any candidate must be run
+against **all four arms** of `probe/arrivals-repro` — a fix that silences the spurious note is worth
+nothing if it also silences the true one, and that is not visible from either arm alone.
