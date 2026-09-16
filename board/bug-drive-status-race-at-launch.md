@@ -1,6 +1,8 @@
 ---
 title: "At launch, `obsrv_drive`'s status contradicts its own field description"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 43
 ---
