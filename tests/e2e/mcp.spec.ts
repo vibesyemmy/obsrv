@@ -284,6 +284,29 @@ test('live drive without a running app: snap mode:"live" and obsrv_drive both na
   const driveText = (drive.content[0] as { text: string }).text
   expect(driveText).toMatch(/no-display/)
   expect(driveText).toMatch(/OBSRV_TEST/)
+
+  // A call with no inputs takes the same path: there is no current state to
+  // read without an app, and it resolves one the way every drive call does,
+  // by launching it when it may (bug-drive-empty-call-launches-the-app).
+  const empty = await call('obsrv_drive', {})
+  expect(empty.isError).toBe(true)
+  expect((empty.content[0] as { text: string }).text).toMatch(/OBSRV_TEST/)
+})
+
+test('obsrv_drive says it launches the app where an agent decides whether a call is safe', async () => {
+  // "none = just read the current state" read as the one safe call, and the
+  // sentence saying the app is launched was the last paragraph of a long
+  // description (bug-drive-empty-call-launches-the-app).
+  const { tools } = await client.listTools()
+  const description = tools.find(t => t.name === 'obsrv_drive')!.description!
+  // In the opening paragraph, where the other tools that launch say it.
+  expect(description.split('\n\n')[0]).toContain('any call launches it first')
+  expect(description.split('\n\n')[0]).toContain('including a call with no inputs')
+  // And inside the clause that describes the empty call.
+  const at = description.indexOf('none = ')
+  expect(at).toBeGreaterThan(-1)
+  expect(description.slice(at, description.indexOf(')', at))).toContain('launches the app')
+  expect(description).not.toContain('just read the current state')
 })
 
 test('obsrv_report: one screen, rendered, audited and diffed, as a file plus a summary', async () => {

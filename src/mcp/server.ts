@@ -2135,8 +2135,10 @@ server.registerTool(
       `toggle — each exactly as clicking the toolbar would ` +
       `— and steer the session like a guided demo: focus the window, step history (back/forward/reload), scroll ` +
       `both panes, pan the target pane to a pixel, click the live page, and highlight a rect with a temporary ` +
-      `neutral marker, all while the user watches.\n\n` +
-      `Only the supplied inputs run (none = just read the current state), in this fixed order: tab → focus → url → ` +
+      `neutral marker, all while the user watches. If the app is not running, any call launches it first ` +
+      `(\`launched: true\` on that call), including a call with no inputs.\n\n` +
+      `Only the supplied inputs run (none = read the current state, which still launches the app first if it is not ` +
+      `running), in this fixed order: tab → focus → url → ` +
       `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture → closeTab. ` +
       `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
@@ -2156,7 +2158,7 @@ server.registerTool(
       `Tabs: the app holds several sessions as tabs, each with its own URL, screen and page state. Commands act on the ` +
       `tab in front; \`tab\` brings one there first ("new" opens it), \`closeTab\` closes one last, and the result's \`tabs\` ` +
       `lists them all. One tab per screen, left open for the user to flip through, is the natural shape of a review.\n\n` +
-      `The app is launched if it is not running. If the user has turned agent control off (the AGENT chip, or Settings), ` +
+      `If the user has turned agent control off (the AGENT chip, or Settings), ` +
       `this errors with why: "declined" — ask them, do not retry.`,
     inputSchema: driveInputShape,
     outputSchema: driveOutputShape,
