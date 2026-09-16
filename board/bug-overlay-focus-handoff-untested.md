@@ -1,8 +1,7 @@
 ---
 title: "No test can see the overlay's keyboard focus hand-off: a keystroke reaching an open menu is untested on every surface"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 56
 ---
@@ -88,3 +87,36 @@ the runner doesn't grant focus, it skips and says so rather than passing blind.
 
 `select.spec.ts:114`'s comment now says what it checks: the trigger as the chrome document's active
 element, not keyboard focus.
+
+## DONE 2026-09-16 by Henry: merged as #114 (`bd6aa3e`); the e2e check goes red on CI without the hand-off
+
+**The card's open question, measured on CI: `webContents.isFocused()` does report the hand-off.** On
+#114's own run ([`35121758862`](https://github.com/vibesyemmy/obsrv/actions/runs/35121758862)),
+`overlay-focus.spec.ts:39` **passed on its first attempt, not skipped**: with the window focused, the
+chrome held focus before the menu, the overlay while it was open, and the chrome again after Escape.
+
+**The control, the same spec with `wc.focus()` removed** (draft #115, closed unmerged,
+[`35121768980`](https://github.com/vibesyemmy/obsrv/actions/runs/35121768980)): **failed both
+tries at `:56`**, received `{ chrome: true, overlay: false, window: true }`. The runner granted the
+window focus and focus never left the chrome, so the red is the missing hand-off, not a refused
+focus.
+
+**What closes it:** the card's "what a fix has to show" is met on both shapes. The unit test is red
+with the call deleted or misdirected (six sabotages, one run each, in the progress section). The CI
+e2e test is red without the call and green with it. `select.spec.ts:114` now says it checks the
+chrome document's active element, not keyboard focus.
+
+**Limits:**
+- **The e2e check reads what Electron reports, not where a real keystroke lands.** No test sends an
+  OS-level key, which would need an Accessibility grant. The "established" point above still holds
+  for keystrokes.
+- **Pickers are covered by the unit test only.** The e2e spec opens a menu.
+- **Why `:114` stays green without the hand-back is still inference.** The chrome document's active
+  element staying on the trigger fits the measurements, but it was not read directly.
+- **The spec takes the desk:** `OBSRV_TEST_TAKES_THE_DESK=1` launches a harness app with `show()` and
+  focus. It runs on CI, or locally only with `OBSRV_E2E_FRONT=1`, and the desk guard refuses it on
+  any ungated line. The same switch is `bug-controls-blur-timeout`'s pre-#105 focus control.
+- **Watch item, not a finding:** each of the two runs above had one sync-family flake (#114's run
+  `sync-mirror-mark:41`, #115's `sync.spec:138`). Both predate this change: 15 each in
+  `bug-ci-main-red-37pct`'s tally. The desk-taking spec now runs before them in file order, so a
+  change in their rate after `bd6aa3e` would be worth reading.
