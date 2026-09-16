@@ -37,10 +37,35 @@ step and called a trace because the step was named one.
 
     use: { trace: 'on-first-retry' }
 
-Under `retries: 1` that captures **exactly the retry attempt** — which is precisely the
-retry-defeating population every flake card here is about — with console, snapshots and
-screenshots. Not everything, which is expensive and mostly green runs; not nothing, which is
-today.
+Under `retries: 1` that captures **exactly the retry attempt** — precisely the retry-defeating
+population every flake card here is about.
+
+**CORRECTION, MEASURED BY KENYA 2026-09-16: a trace does not contain what this card originally
+said it did, and the fix as briefed would have answered neither of this week's questions.**
+
+Henry and Rook both described `trace: 'on-first-retry'` as giving *console, DOM snapshots and
+per-action screenshots*. Kenya set it, **failed a test on purpose, and opened the zip**:
+
+    context-options 1 · before 9 · after 9 · error 1
+
+The action log and the error. **No console entries. No DOM snapshots. No screenshots — zero image
+resources.** Setting `screenshots: true, snapshots: true, sources: true` explicitly produced an
+identical zip. **For an `electron.launch()` app, Playwright traces API actions and nothing else.**
+
+So the briefed fix would have made the step's name true while the artefact still settled nothing:
+no picture for `vision:47`'s white-or-yellow pixel, no console line for `panes:83`'s GPU exit.
+**The same defect one layer in — a capability asserted rather than checked — and it would have
+shipped if verification had been reading the diff.**
+
+**What actually produces the evidence, and it is a different setting:** `screenshot:
+'only-on-failure'`. A failure writes a real PNG **per page** — five for this app, shell and both
+panes, 798×828 — and a picture of the target pane is exactly what decides white versus yellow.
+Electron's own stdout already reaches the report as `[pid=…][err]` Browser logs when the app dies;
+that is how `stall:42`'s *Target page, context or browser has been closed* carried its launch log.
+
+**Keep both settings.** The trace gives the action sequence; the screenshot gives the picture.
+Neither substitutes for the other, and the next person to set `trace` alone will believe they are
+done.
 
 **It is Rook's proposal and the targeting is the good part.** The population the config captures
 and the population the cards are about are the same set, by construction rather than by luck.
