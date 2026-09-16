@@ -1,6 +1,8 @@
 ---
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 0
 ---
@@ -55,6 +57,14 @@ longer look" equally well.
    frame, and a planted stale frame must still go red.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
+
+## RESUMED the same day, on Opeyemi's word (via Wren): carry the fix through
+
+The pause below lasted under an hour. **Its gate question is answered:** the `drawNow` sabotage had
+already run on `main`'s window code before the pause arrived, and the test passed there too. So the fix
+did not weaken the hidden-window capture test; that test could not see the regression on this desk
+at all (`bug-hidden-window-capture-test-cannot-see-drawnow`). Work continues from the branch and
+the evidence below. The section keeps its original words as the record.
 
 ## PAUSED 2026-09-16 on Opeyemi's word (via Wren): keep the e2e behaviour as it is for now
 
