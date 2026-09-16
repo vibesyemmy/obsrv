@@ -29,7 +29,9 @@ export async function hideEventsFire(app: ElectronApplication): Promise<boolean>
     })
     win.hide()
     const ok = await fired
-    win.show()
+    // Shown without activating the app, so a probe does not take the desk
+    // from whoever is using the machine (bug-e2e-takes-the-desk).
+    win.showInactive()
     // Let the show land, so the tests start from a visible, painting window.
     await new Promise(r => setTimeout(r, 300))
     return ok

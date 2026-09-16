@@ -58,6 +58,42 @@ longer look" equally well.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
 
+## PROGRESS 2026-09-16 by Henry — the app no longer activates itself; five activations remain with no app-side cause
+
+**Found by recording, not reading.** One full suite ran with a temporary recorder in every launched
+app, wrapping `show`/`focus`/`moveTop`/`restore`, `app.focus` and `webContents.focus`, and logging
+`did-become-active`, beside the `lsappinfo front` watcher. 545 passed, 1 skipped. **7 activations, two
+causes:**
+- **6: `Overlay.show` → `webContents.focus()`.** On macOS that focuses the owning window, which
+  activates the app. That happened in every spec that opened the target's `<select>` menu or a picker.
+- **1: `focusWindow`,** from `mcp-live`'s combined `drive` call (`focus: true`).
+
+**Fixed on the branch:** under the harness (`OBSRV_TEST`, or `OBSRV_SHOW_INACTIVE=1` for the dev lane's
+real launch), `showWindow()` uses `showInactive()`; `second-instance` skips `focus()`; the overlay
+skips `webContents.focus()`; detached DevTools open with `activate: false`. `focusWindow`'s test, and
+the `focus: true` ingredient of the combined `drive` test, run on CI and locally only with
+`OBSRV_E2E_FRONT=1`. `tests/unit/e2e-leaves-the-desk.test.ts` refuses an ungated `win.show()`,
+`win.focus()`, `app.focus(` or `focus: true` in an e2e file.
+
+**The same recorded full run on the fix: 545 passed, 1 skipped, and 0 activations from any call the app
+makes.** **5 activations remain with nothing recorded before them**, in unrelated specs (`mcp-live`,
+`onion-skin`, `surface-parity`, `sync`, `tabs`), while the user was switching between WhatsApp,
+Figma, Trae and Dia. The likely mechanism is **the test window being on top**: `showInactive()`
+orders it in front without focusing it, so a click meant for the app beneath lands on it, or macOS
+activates the topmost window's app when the front app loses focus. **Not established.** The next
+step is to make the harness window click-through (`setIgnoreMouseEvents`; test input comes through
+CDP, not the OS) and measure again.
+
+**Done-means 2, by controls that can go red on the fix:**
+
+| control | result |
+| --- | --- |
+| `main`'s `show` handler removed → `log.spec`'s transition test | **failed** (Expected 2, Received 1); on the fix it **passed, not skipped** |
+| hidden window, frame delivery off, navigate red → white, capture | **the planted stale frame was seen** (`[255,0,0]`); delivery back on → `[255,255,255]` |
+
+So under `showInactive()` the visibility test still receives the window's `show` event, and a capture
+of a hidden window still shows staleness when there is some.
+
 ## RESUMED the same day, on Opeyemi's word (via Wren): carry the fix through
 
 The pause below lasted under an hour. **Its gate question is answered:** the `drawNow` sabotage had

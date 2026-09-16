@@ -45,7 +45,9 @@ const painting = (): Promise<boolean> => app.evaluate(() => (globalThis as any).
 const setShown = (shown: boolean): Promise<void> =>
   app.evaluate((_e, shown: boolean) => {
     const win = (globalThis as any).__obsrv.win
-    if (shown) win.show()
+    // `showInactive`: shown the way the app shows it under the harness,
+    // without taking the desk (bug-e2e-takes-the-desk).
+    if (shown) win.showInactive()
     else win.hide()
   }, shown)
 

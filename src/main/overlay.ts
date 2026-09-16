@@ -1,8 +1,9 @@
-import { app, WebContentsView, type BrowserWindow } from 'electron'
+import { app, WebContentsView, type BrowserWindow, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { IPC } from '../shared/ipc'
 import type { MenuRequest } from '../shared/api'
 import type { PickerRequest } from '../shared/pickerPopup'
+import { showsInactive } from './window'
 
 /**
  * A transparent view spanning the window, for the one kind of UI the renderer
@@ -74,7 +75,7 @@ export class Overlay {
     this.layout()
     this.view.setVisible(true)
     this.open = true
-    this.view.webContents.focus()
+    this.focusView(this.view.webContents)
     this.view.webContents.send(IPC.menuShow, request)
   }
 
@@ -88,7 +89,7 @@ export class Overlay {
     this.layout()
     this.view.setVisible(true)
     this.open = true
-    this.view.webContents.focus()
+    this.focusView(this.view.webContents)
     this.view.webContents.send(IPC.pickerShow, request)
   }
 
@@ -113,7 +114,20 @@ export class Overlay {
     if (!this.view.webContents.isDestroyed()) this.view.webContents.send(IPC.pickerShow, null)
     // Focus goes back to the chrome, or the next keystroke would land nowhere
     // and the trigger could not take its focus ring back.
-    this.win.webContents.focus()
+    this.focusView(this.win.webContents)
+  }
+
+  /**
+   * Keyboard focus for a menu, a picker or the chrome behind them. On macOS
+   * `webContents.focus()` focuses its window too, which activates the app:
+   * under the harness every spec that opened a menu took the desk from whoever
+   * was using the machine (bug-e2e-takes-the-desk, 6 of 7 activations in a
+   * recorded full run). There the key events come from the test driver, not
+   * from the keyboard, so nothing needs the window to be key.
+   */
+  private focusView(wc: WebContents): void {
+    if (showsInactive()) return
+    wc.focus()
   }
 
   get isOpen(): boolean {

@@ -377,6 +377,14 @@ Only one suite may run at a time per worktree; a second is refused, and the
 refusal says whether it found a live suite or a lock left by one that died.
 `OBSRV_SUITE_NO_LOCK=1` exists for the nested case only.
 
+**The suite leaves your desk alone.** Under the harness the app shows its window
+without activating it, so a run started while you work in another app leaves
+that app in front (`bug-e2e-takes-the-desk`). The one test whose job is to front
+the app, `focusWindow`, runs on CI and locally only with `OBSRV_E2E_FRONT=1`. A
+new test must not call `win.show()`, `win.focus()` or `app.focus()` on the app
+under test; use `win.showInactive()`, or gate it the same way and say so in its
+name.
+
 `-g` filtering is not safe everywhere. Some spec files establish shared state
 in their first test, and a filtered run skips it — you will get a message
 saying so rather than a crash, but the run is not the same conditions as a

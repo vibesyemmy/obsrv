@@ -53,8 +53,13 @@ test.beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), 'obsrv-dev-lane-e2e-'))
   lane.pointLaneAt(ROOT, { OBSRV_DEV_HOME: home })
   entryMtime = statSync(ENTRY).mtime
-  // Not OBSRV_TEST: the point is a real launch, on a throwaway profile.
-  const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== 'OBSRV_TEST'))
+  // Not OBSRV_TEST: the point is a real launch, on a throwaway profile. But
+  // OBSRV_SHOW_INACTIVE: a real launch still must not take the desk from
+  // whoever is using the machine (bug-e2e-takes-the-desk).
+  const env = {
+    ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== 'OBSRV_TEST')),
+    OBSRV_SHOW_INACTIVE: '1',
+  }
   client = new Client({ name: 'obsrv-dev-lane-spec', version: '0.0.0' })
   await client.connect(
     new StdioClientTransport({ command: process.execPath, args: [join(ROOT, 'scripts', 'dev-mcp.js')], cwd: ROOT, env: { ...env, OBSRV_DEV_HOME: home } }),
