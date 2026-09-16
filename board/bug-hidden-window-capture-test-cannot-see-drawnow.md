@@ -1,12 +1,14 @@
 ---
 title: "The hidden-window capture test passes with the `drawNow` handshake removed, so it cannot catch the regression it was written for"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
+waiting: ""
 order: 54
 ---
 
 FOUND BY HENRY 2026-09-16, while running the control Wren's `bug-e2e-takes-the-desk` asks for (*"a
-planted stale frame must still go red"*). **Unowned.** Not caused by that fix: it holds on `main`.
+planted stale frame must still go red"*). **CLAIMED BY KENYA 2026-09-16** on Wren's routing: it is the same shape as `chore-strict-output-under-test` — a green that holds with the guarded thing removed. Not caused by that fix: it holds on `main`.
 
 ## Observed, on this desk, one run each
 
