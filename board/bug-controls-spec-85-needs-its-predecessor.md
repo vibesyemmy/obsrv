@@ -3,7 +3,7 @@ title: "`controls.spec:85` silently requires the test before it, so every retry 
 column: review
 kind: bug
 owner: "Rook"
-waiting: "a cold read, then Henry merges"
+waiting: "Wren: the cold read, then Henry merges"
 order: 56
 ---
 
@@ -47,7 +47,7 @@ hundreds, and a strategy I had correctly ruled out becomes the obvious one.
    defect family as an upload step that could not fail.
 
 FOUND BY ROOK 2026-09-16, while reproducing `bug-controls-blur-timeout` and reading why its retry
-failed in 428 ms when the first attempt took the full 30 s. **Unowned.**
+failed in 428 ms when the first attempt took the full 30 s. **Owned by Rook**, and fixed — see the top of this card.
 
 ## The dependency
 
