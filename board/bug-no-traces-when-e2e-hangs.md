@@ -2,7 +2,7 @@
 title: "A run that outlasts the job's 30 minutes uploads no traces — and that is the run you cannot read"
 column: doing
 owner: "Rook"
-waiting: ""
+waiting: "Henry: whether trace: on is worth its cost, for an event seen once"
 kind: bug
 order: 55
 ---
@@ -167,6 +167,38 @@ managed to write*, not merely run.
 read `test-results/`.** If it holds only `.last-run.json`, candidate 1 lands in exactly the same trap
 as candidate 2 and both shapes on this card fall — which would be the most useful outcome available,
 because it says the fix is not in this direction at all.
+
+### C — measured, and that is exactly what happened: BOTH SHAPES FALL
+
+A killed Playwright run flushes **nothing**. A hung spec, killed mid-run by signal, both ways,
+because GitHub does not document which one a step timeout sends:
+
+    SIGTERM   playwright exit 143   files in test-results: 0
+    SIGKILL   playwright exit 137   files in test-results: 0
+
+**Zero files — not even the `.last-run.json` that `globalTimeout` leaves.** So candidate 1 ends a
+hung run with `e2e: failure`, the gate firing, an **empty** directory, and therefore the upload going
+**red on `if-no-files-found: error`** — loud, correct, and carrying no traces. It converts a silent
+absence of evidence into a noisy one. That is worth something, but it is not what this card asked
+for.
+
+**Three independent reasons the timeout direction cannot deliver a trace**, and any one of them is
+sufficient:
+
+1. **`trace: 'on-first-retry'`** (`playwright.config.ts:55`). A killed run never retries, so no trace
+   is ever started — already noted on this card, now decisive rather than a footnote.
+2. **`screenshot: 'only-on-failure'`**. A hung test is killed, not failed, so no screenshot either.
+3. **A killed process flushes nothing**, measured above, under both signals.
+
+**So the fix is not about when the run is killed. It is about what is being recorded while it runs.**
+Anyone returning to this card should start at `trace: 'on'` — continuous recording — and the first
+question there is whether a trace zip killed mid-write is readable at all, which is **unmeasured**
+and is the next thing to establish. `trace: 'on'` also costs time and disk on every run, for an event
+this card has measured at once in the workflow's history, so the trade wants stating before it is
+made.
+
+**This is the outcome the pre-registration named as most useful**, and it is: it says the direction
+is wrong, before anyone spent a day building in it.
 
 ## What a fix has to decide, and what it must measure first
 
