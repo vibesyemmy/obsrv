@@ -75,34 +75,13 @@ function client() {
 }
 
 /** Every key path a JSON value carries, so nesting is compared and not just the top level. */
-const keysOf = (v, path = '', out = new Set()) => {
-  if (v === null || typeof v !== 'object') return out
-  if (Array.isArray(v)) {
-    v.forEach(x => keysOf(x, `${path}[]`, out))
-    return out
-  }
-  for (const [k, x] of Object.entries(v)) {
-    const p = path ? `${path}.${k}` : k
-    out.add(p)
-    keysOf(x, p, out)
-  }
-  return out
-}
-
-/** Every key path a JSON Schema declares, following properties and items. */
-const schemaKeys = (s, path = '', out = new Set()) => {
-  if (!s || typeof s !== 'object') return out
-  for (const branch of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(s[branch])) s[branch].forEach(x => schemaKeys(x, path, out))
-  if (s.items) schemaKeys(s.items, `${path}[]`, out)
-  if (s.properties) {
-    for (const [k, sub] of Object.entries(s.properties)) {
-      const p = path ? `${path}.${k}` : k
-      out.add(p)
-      schemaKeys(sub, p, out)
-    }
-  }
-  return out
-}
+// The two walkers and the diff are `src/shared/keyPaths.ts`, which the SERVER
+// also runs on every reply under OBSRV_TEST (`src/mcp/strictOutput.ts`). One
+// definition on purpose: two copies of "what counts as declared" would be free
+// to drift, and the day they disagreed the disagreement would look like a
+// finding. Required from `out/` because this script already needs the build —
+// it drives `out/mcp/server.js`.
+const { emittedKeyPaths, schemaKeyPaths, undeclaredKeyPaths } = require(join(root, 'out', 'shared', 'keyPaths.js'))
 
 /** Minimal arguments per tool: enough to get a reply, nothing that changes the shape. */
 const callFor = url => ({
@@ -141,9 +120,9 @@ async function main() {
       rows.push({ tool: tool.name, status: 'no structuredContent', detail: '' })
       continue
     }
-    const emitted = keysOf(structured)
-    const allowed = schemaKeys(tool.outputSchema ?? {})
-    const undeclared = [...emitted].filter(k => !allowed.has(k))
+    const emitted = emittedKeyPaths(structured)
+    const allowed = schemaKeyPaths(tool.outputSchema ?? {})
+    const undeclared = undeclaredKeyPaths(emitted, allowed)
     rows.push({
       tool: tool.name,
       status: undeclared.length ? 'EMITS UNDECLARED KEYS' : 'ok',

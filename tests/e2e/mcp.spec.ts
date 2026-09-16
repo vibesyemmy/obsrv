@@ -577,3 +577,71 @@ test('every unsettled reason the CLI can produce is admitted by the snap and rep
   const report = tools.find(t => t.name === 'obsrv_report')!.outputSchema as { properties: { screens: { items: { properties: Record<string, { enum?: string[] }> } } } }
   expect(report.properties.screens.items.properties.unsettledReason?.enum).toEqual(reasons)
 })
+
+/**
+ * `chore-strict-output-under-test`: the server checks its own reply against
+ * its own output schema under `OBSRV_TEST=1`, and fails the call on a key the
+ * schema does not declare.
+ *
+ * Each arm spawns its own server, because the fence is an environment
+ * variable and the shared client above is already inside it. The poison is an
+ * `OBSRV_TEST`-only hook (`strictOutput.ts`), and it exists so this check can
+ * never be vacuous: without it the suite is green on a clean tree and nobody
+ * learns whether the check runs at all — which is exactly what `ci.yml`'s
+ * trace upload did for a week while it uploaded an empty directory and passed.
+ */
+test.describe('the server rejects its own undeclared key', () => {
+  const callWith = async (env: Record<string, string>): Promise<CallToolResult> => {
+    const base = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
+    const c = new Client({ name: 'obsrv-strict-spec', version: '0.0.0' })
+    await c.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [MCP_BIN],
+        cwd: ROOT,
+        env: { ...base, OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json'), ...env },
+      }),
+    )
+    try {
+      // No listTools(): this is the SERVER's check, and the point of it is
+      // that it holds when the client's own validation is off — which is the
+      // state a Playwright retry leaves every client in.
+      return (await c.callTool({ name: 'obsrv_presets', arguments: {} })) as CallToolResult
+    } finally {
+      await c.close()
+    }
+  }
+  const textOf = (r: CallToolResult): string => (r.content as { text?: string }[]).map(c => c.text ?? '').join('\n')
+
+  test('a poisoned reply fails the call, naming the tool and the key', async () => {
+    const poisoned = await callWith({ OBSRV_TEST: '1', OBSRV_TEST_UNDECLARED_KEY: 'obsrv_presets' })
+    expect(poisoned.isError).toBe(true)
+    const text = textOf(poisoned)
+    expect(text).toContain('obsrv_presets emitted 1 key its own output schema does not declare')
+    expect(text).toContain('obsrvTestUndeclaredKey')
+    // It says what a client would do with the reply, so the reader knows this
+    // is a real rejection and not a lint the server invented.
+    expect(text).toContain('additionalProperties: false')
+  })
+
+  test('the same call is clean when nothing poisons it', async () => {
+    const clean = await callWith({ OBSRV_TEST: '1' })
+    expect(clean.isError, textOf(clean)).toBeFalsy()
+    expect(textOf(clean)).not.toContain('does not declare')
+  })
+
+  test('with OBSRV_TEST unset, neither the hook nor the check runs', async () => {
+    // The fence, held by a test rather than by the sentence that states it.
+    // Both are fenced on the same variable, so this arm shows the poison stays
+    // out of a user's reply AND that the check is not running there.
+    //
+    // What it does NOT show is a genuine undeclared key travelling to a user,
+    // because producing one needs a tree that has one. That was measured
+    // instead on `6755535`, where `obsrv_inspect` really did emit
+    // `readout.colorPainted` undeclared: with the check on it is rejected by
+    // name, and that is the arm this pair cannot supply.
+    const production = await callWith({ OBSRV_TEST: '', OBSRV_TEST_UNDECLARED_KEY: 'obsrv_presets' })
+    expect(production.isError, textOf(production)).toBeFalsy()
+    expect(production.structuredContent).not.toHaveProperty('obsrvTestUndeclaredKey')
+  })
+})
