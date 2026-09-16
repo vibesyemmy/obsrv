@@ -189,6 +189,7 @@ jobs:
       # --retries=1 absorbs the known-flaky mobile input-forwarding test on
       # loaded runners; a persistent failure still fails the job.
       - name: E2E (Playwright driving the Electron app)
+        id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npx playwright test --retries=1
 
@@ -200,8 +201,25 @@ jobs:
       # looked. Now an empty directory is a red run on the day it happens
       # rather than a week of silence — which is the only part of this that
       # survives someone dropping the trace setting again.
+      #
+      # Gated on the e2e step having actually FAILED, not on the job failing.
+      # `if: failure()` fires for any failure, including a typecheck or unit
+      # failure that happens before Playwright has run and created
+      # `test-results/` — and then `if-no-files-found: error` correctly errors
+      # on a directory that never had a chance to exist. Observed on run
+      # 35102701577: unit tests red, e2e skipped, this step red too. Nothing
+      # was masked, but a second red step named after an artefact the run could
+      # not have produced appeared on every typecheck, unit or build failure,
+      # and a check that cries wolf on runs it has no opinion about is on its
+      # way back to being ignored — which is where this one started
+      # (bug-trace-upload-errors-when-e2e-never-ran).
+      #
+      # `if-no-files-found: error` STAYS. Quieting the noise by making the step
+      # unable to fail again would restore the defect the gate exists to keep
+      # fixed. The gate narrows WHEN the step runs; it does not soften what the
+      # step says when it does.
       - name: Upload Playwright traces on failure
-        if: failure()
+        if: ${{ always() && steps.e2e.outcome == 'failure' }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
