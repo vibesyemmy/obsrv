@@ -1,6 +1,8 @@
 ---
 title: "Two source files contain literal control bytes, so every `grep` of them returns nothing"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 51
 ---
