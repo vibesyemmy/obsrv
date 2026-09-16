@@ -170,3 +170,24 @@ prints one line on every run, green ones included, so ordinary CI builds the pic
 Verified: `sync` 10/10, plus `sync-mirror-mark`, `native-pane`, `history`, `tabs`, `image-tabs`,
 `url-loading-strip` — 61 tests, all green. The card stays in Doing: **the cause is still not found,
 and this makes the next occurrence answer for itself.**
+
+### Correction from Henry's cold read: the record is chosen by what was asked, never by position
+
+The first version read `nativeLoads.at(-1)` as step 2's load. **The bus mirrors into the native pane
+through the same `load()`** (`syncBus.ts:226`, `else void other.load(url)`), so every mirror leaves a
+record too, and a mirror starting after step 2 is the last one.
+
+**That breaks in exactly the case this instrument exists for.** Under hypothesis (a) — step 2's
+REDIRECT aborted by a later navigation — the aborted record is second from last and the mirror's
+`ok` is last, so the line would have printed `ok` and the reader would have concluded **(b)**: the
+opposite fact, stated confidently, by the instrument built to tell them apart.
+
+The record is now picked by url and by a clock taken inside main immediately before the load
+(`tests/e2e/helpers/nativeLoads.ts`), the line also prints how many other native loads followed —
+a mirror into the pane during step 2 is itself the hypothesis's mechanism, so it is counted rather
+than skipped — and four unit tests hold the selection, including the mirror-after-abort case, which
+cannot be staged reliably from outside because it is a race.
+
+The comment describing `ok` was also corrected: `ok` with native commits and no target `url-changed`
+is **(b) or the bus itself**, and this trace cannot separate those two. The first wording said
+"timing", which would have closed the question a step early.
