@@ -50,6 +50,54 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+
+  # C2: a public-shape change must be NAMED in the register, in the same change.
+  #
+  # The unit test beside this (tests/unit/publicShape.test.ts) fails when the
+  # published MCP shape moves away from docs/public-shape.json. It cannot see
+  # the other half of the rule — that the move was written down — because that
+  # is a fact about the CHANGE, not about the tree. This job is that half.
+  #
+  # Seconds on ubuntu, reading the same `git diff --name-only` the scope job
+  # below already uses.
+  #
+  # WHAT THIS DOES NOT CHECK, stated because a green here is easy to over-read:
+  # it does not read the register ENTRY, only that the file was touched. Someone
+  # can satisfy it with a typo. It is a prompt to write the entry at the moment
+  # the shape moves, not a proof that a good one exists — the entry itself is
+  # what a reviewer reads. And it says nothing about a field whose MEANING
+  # changed while its shape stayed, which is invisible to a shape diff by
+  # construction (bug-orientation-name).
+  register-names-the-shape-change:
+    name: A public-shape change is named in the register
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # An unknown base means this could not compare. Say so rather than
+          # pass quietly: a check that cannot see the diff must not leave a
+          # green that reads as "the shape did not move".
+          if [ -z "${BASE:-}" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "::notice::base unknown — this check could not compare, and is NOT reporting that the shape is unchanged"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE" "$HEAD_SHA")
+          shape=$(echo "$files" | grep -cx 'docs/public-shape.json' || true)
+          register=$(echo "$files" | grep -cx 'docs/breaking-changes.md' || true)
+          echo "public-shape.json changed: $shape    breaking-changes.md changed: $register"
+          if [ "$shape" -gt 0 ] && [ "$register" -eq 0 ]; then
+            echo "::error::docs/public-shape.json moved but docs/breaking-changes.md was not touched. On the MCP surface every shape change is breaking in BOTH directions (docs/compatibility.md): the schemas are additionalProperties: false, so a client holding the old shape rejects a reply carrying a field it does not know. Name the change in the register, in this change."
+            exit 1
+          fi
+          echo "ok"
   # Is this change nothing but board cards and the views generated from them?
   #
   # Seconds on ubuntu, and it exists so the expensive job can answer cheaply
