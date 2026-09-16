@@ -1,6 +1,8 @@
 ---
 title: "The two walks cover a growing page differently — 3 screenfuls against 8"
-column: backlog
+column: doing
+owner: "Rook"
+waiting: ""
 kind: bug
 criterion: C4
 order: 31
@@ -87,3 +89,52 @@ her arrivals arms against the branch and confirmed nothing else moved. Client-si
 doesn't reproduce under the harness (the table above), and the one open hypothesis still needs a visible
 app. **Back to Backlog, unowned, blocked as before** (the unblockers are listed above). A parity flake on
 `walked` from now on is new evidence, because the redirect cause is gone.
+
+## Claimed by Rook 2026-09-17, assigned by Wren — with an unblocker the card does not list
+
+The card says the one open hypothesis needs a visible app, and that the unblockers are
+`bug-lane-serves-another-tree` or a session on Opeyemi's desk. **There is a third, and it arrived
+after this card was last edited: `OBSRV_TEST_TAKES_THE_DESK=1` on CI.**
+
+`#114` added that flag: a harness app launched with it uses `show()` and takes focus as a user's app
+would, instead of `showInactive()`. It takes a desk **by design**, which is why it needs Opeyemi's
+word on his machine — and why **a CI runner is the right place for it**, where there is no desk to
+take and no word needed. Henry has already used a CI probe this way twice (`dock.hide()` activation,
+and the live walk's lost scroll), so the shape is established rather than invented here.
+
+So this is runnable now, without waiting on the lane and without asking for the desk.
+
+### The hypothesis, restated so the arms can be pre-registered against it
+
+Both walks take `atEnd` from the step that scrolled, before their dwell. The fixture grows from a
+`scroll` handler, which runs at the next frame. **A visible window renders every frame; a hidden one
+may not.** So a walk whose scroll reply lands *after* that frame sees the growth and keeps going —
+8 screenfuls — and one whose reply lands before it stops at 3.
+
+### Pre-registered, before anything runs
+
+**Arm A — hidden (today's harness), `laptop-768`, `app-shell-grows.html`, live and headless.**
+I expect Henry's table to reproduce: 3 screenfuls, `atEnd: true`, `pageHeight` 4712, the note firing
+on both. **If it does not, #171's fix or something since has moved this**, and that is the finding —
+the card says a parity flake on `walked` from now on is new evidence.
+
+**Arm B — the same, with `OBSRV_TEST_TAKES_THE_DESK=1`.**
+- **If live goes to 8 screenfuls and falls silent**, the hypothesis holds: the divergence is frame
+  timing, the 2026-09-14 reading was a visible app, and the card has its cause.
+- **If it stays at 3**, the hypothesis is dead and the 2026-09-14 reading needs another explanation —
+  `219223e` landed the same day and changed how the note measures growth on this very fixture, which
+  is the next thing to look at.
+
+**Arm C, and without it the other two are worth nothing.** A CI runner's "visible" is not obviously
+a desk's visible: a window that is shown but never composited may render no more frames than a hidden
+one. **So the probe must first show it can tell the two apart at all** — count frames, or observe any
+behaviour that differs between the flag being on and off. If nothing differs, arm B's result is
+*unmeasured*, not negative, and must be reported that way rather than as "the hypothesis is dead".
+
+This is the arm I would skip if I were in a hurry, so it is written down first.
+
+### Desk
+
+Nothing here runs on Opeyemi's machine. Arms A–C are a throwaway CI branch. The local half is
+headless and `launchApp` only; **no `cli-*` specs**, which front the app through the second launch
+path (`bug-e2e-takes-the-desk`).
