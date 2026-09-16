@@ -2,11 +2,18 @@
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
 column: doing
 kind: bug
-owner: "Rook"
+owner: "Henry"
 order: 35
 ---
 
 FILED 2026-09-15 by Henry. Diagnosed to the line; the fix is a decision, not a typo.
+
+## HANDED OVER AGAIN 2026-09-16, Rook → Henry, while Rook is out until 13:00
+
+Rook ran out of tokens minutes after the decision reached him (room #132). Opeyemi asked, through
+Wren, that tasks go to Henry for the hour. **Unstarted when it moved**, so nothing is lost. The
+decision stands as #132 gave it: add `colorPainted` to `obsrv_inspect`'s output schema, name it in
+`docs/breaking-changes.md`, restart note. If it is still in flight at 13:00 it stays with Henry.
 
 ## HANDED OVER 2026-09-16, Kenya → Rook, while Kenya is out until 13:30
 
