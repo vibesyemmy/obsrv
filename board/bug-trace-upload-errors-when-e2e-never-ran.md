@@ -1,7 +1,9 @@
 ---
 title: "The trace upload step fails on every run that dies before Playwright starts"
-column: next
+column: doing
 kind: bug
+owner: "Rook"
+waiting: ""
 order: 52
 ---
 
