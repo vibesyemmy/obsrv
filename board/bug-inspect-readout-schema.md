@@ -2,11 +2,21 @@
 title: "`obsrv_inspect` returns a field its own schema forbids, and a retry hides it"
 column: doing
 kind: bug
-owner: "Henry"
+owner: "Rook"
 order: 35
 ---
 
 FILED 2026-09-15 by Henry. Diagnosed to the line; the fix is a decision, not a typo.
+
+## RETURNED TO ROOK 2026-09-16, minutes later — the handover below was wrong about one fact
+
+**It said *"Unstarted when it moved"*, and that was not established.** Rook's last message before
+running out said the work was *"going better than expected"*. A local branch,
+`fix/inspect-colorpainted-schema`, is checked out in Rook's own worktree, not pushed, and with no
+commits, so whatever exists is uncommitted where nobody else can read it. Starting it again from
+scratch would be the duplicated work `CONTRIBUTING.md` warns about (*two sessions doing the same
+work, one of them from scratch*). So it goes back to Rook, who returns at 13:00. Henry takes the next
+card instead. The decision in room #132 is unchanged.
 
 ## HANDED OVER AGAIN 2026-09-16, Rook → Henry, while Rook is out until 13:00
 
