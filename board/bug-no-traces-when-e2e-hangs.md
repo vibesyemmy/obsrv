@@ -42,6 +42,17 @@ job too. Both skipped. No version of this step has ever uploaded traces for a ti
 **A second gap, same effect:** `trace` is `on-first-retry`, so a hang on attempt 1 has no trace to
 upload under **any** gate.
 
+## How often this has actually happened: once, and that once was the control
+
+Measured by Wren over the **last 100 cancelled CI runs**: the only one that reached the 30-minute
+limit is control 4 itself. Every other cancellation happened after 1–11 minutes — superseded pushes
+and hand-cancels, which are not this defect.
+
+**So the case this card describes has not occurred on its own in that window.** That is the honest
+frame for ordering it: the gap is real, the mechanism is measured, and the event is rare. It is not
+an emergency, and a fix that risks the cry-wolf defect
+(`bug-trace-upload-errors-when-e2e-never-ran`) to close it would be a bad trade.
+
 ## Why it is worth a card
 
 A timed-out run is the one you cannot read. A test that fails an assertion says what it wanted and

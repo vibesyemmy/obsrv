@@ -200,18 +200,19 @@ jobs:
       # provide is why nobody looked.
       #
       # What that setting does and does NOT catch, measured rather than
-      # assumed (Wren, reading this change cold). Every failed run in that week
-      # uploaded a NON-empty `playwright-traces`: 13,184 B on run 34977896287,
-      # 30,001 B on 34995218008, 59,880 B on 35074542775 — error-context.md
-      # files, no traces. The directory was never empty, so `error` would have
-      # stayed silent through the entire week, and it would stay silent again
-      # if `trace` were dropped tomorrow. **It does not guard the trace
-      # setting.** Nothing does today; that wants its own card, not a wider
-      # `if:` here.
+      # assumed (Wren, reading this change cold, across ALL of them rather than
+      # a sample): every one of the 57 runs whose e2e failed between this step's
+      # creation in 1b0be8f and #29's merge uploaded a NON-EMPTY
+      # `playwright-traces` — none missing, none zero bytes, 13,184 B on run
+      # 34977896287 through 59,880 B on 35074542775, all error-context.md and no
+      # traces. The directory was never empty, so `error` was silent through the
+      # entire week and would be silent again if `trace` were dropped tomorrow.
+      # **It does not guard the trace setting.** Nothing does today; that wants
+      # its own card, not a wider `if:` here.
       #
       # What it does catch is an e2e failure that wrote NOTHING AT ALL — a real
-      # state, and control 3 below (run 35114327271: e2e red, this step red,
-      # `artifacts: none`). That is the reason it stays.
+      # state, and one this change was verified against (run 35114327271: e2e
+      # red, this step red, `artifacts: none`). That is the reason it stays.
       #
       # Gated on the e2e step having actually FAILED, not on the job failing.
       # `if: failure()` fires for any failure, including a typecheck or unit

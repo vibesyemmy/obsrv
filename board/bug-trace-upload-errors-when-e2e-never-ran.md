@@ -79,10 +79,13 @@ and the upload runs — runs `34995218008` and `35086053288` are that shape. Wha
 a run that exhausts the job's 30 minutes.
 
 [Run `35115147209`](https://github.com/vibesyemmy/obsrv/actions/runs/35115147209) is a deliberately
-hung test (`test.setTimeout(0)`, which no real spec does). **It was not stopped by hand**: a cancel
-was requested and did not take, and the job ran 15:24:59 → 15:55:20 and died on its own limit —
-*"The job has exceeded the maximum execution time of 30m0s"*. So the control observed a real
-job-level timeout rather than a stand-in for one.
+hung test (`test.setTimeout(0)`, which no real spec does). **It was not stopped by hand.** My
+terminal recorded `gh run cancel` reporting `✓ Request to cancel workflow 35115147209 submitted`
+about 90 s after the e2e step began — that is where the request is attested, not in the run's own
+record — and the job then ran 15:24:59 → 15:55:20 and ended on its own limit, *"The job has
+exceeded the maximum execution time of 30m0s"*. So the control observed a real job-level timeout
+rather than a stand-in for one. **Nothing here says why the cancel did not stop it**, and one run
+could not establish that; do not read this as "GitHub cancels cannot stop a hung e2e run".
 
     cancelled   E2E (Playwright driving the Electron app)
     skipped     OLD GATE probe                        ← a throwaway step holding the OLD `if: failure()`
@@ -105,10 +108,16 @@ produces no traces under either gate.** Filed as `bug-no-traces-when-e2e-hangs`.
 
 Worth keeping, because it was wrong in the direction that flatters the change. I wrote — and #29's
 paragraph in `ci.yml` said before me — that `if-no-files-found: error` is what stops the week of
-silence recurring if the `trace` setting is dropped again. **It isn't.** Every failed run in that
-week uploaded a *non-empty* `playwright-traces`: 13,184 B (`34977896287`), 30,001 B
-(`34995218008`), 59,880 B (`35074542775`) — error-context.md files, no traces. `error` never fires
-on a non-empty directory, so it was silent through the whole week and would be silent again.
+silence recurring if the `trace` setting is dropped again. **It isn't.** I sampled four runs;
+**Wren then checked all of them**: every one of the **57** runs whose e2e failed between this
+step's creation (`1b0be8f`, 2026-08-25) and #29's merge uploaded a *non-empty*
+`playwright-traces` — none missing, none zero bytes, from 13,184 B (`34977896287`) to 59,880 B
+(`35074542775`), all error-context.md and no traces. `error` never fires on a non-empty directory,
+so it was silent through the whole week and would be silent again.
+
+Wren also established the other half: **from `1b0be8f` until this change the step had exactly one
+`if:`, `if: failure()`** — which is what control 4's probe carried. So "no version of this step has
+ever uploaded traces for a timed-out run" is a statement about every version there has been.
 
 `error` still earns its place: it is the only thing that speaks when a failing e2e run writes
 **nothing at all**, which is control 3. But the reason had to be corrected in both paragraphs, and
