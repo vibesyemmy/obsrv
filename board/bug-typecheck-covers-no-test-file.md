@@ -78,3 +78,9 @@ removes them: TS2488 ×3 in `inspect`, `orientation` and `toolbar` specs, and TS
    build and e2e.
 2. Putting back the old `REFERENCE` literal fails `expected NaN to be close to 19.56…`.
 3. Dropping `orientation`/`textScale` from `syncTabs`' seed fails the restore test.
+
+**One limit, left open (Wren's cold read of #163):** the JS helpers under `scripts/` are still not
+typechecked. A test types a script only through a cast where it uses it (`checkE2eSkips.test.ts` casts
+`check-e2e-skips.js`, and `electronPath.test.ts` casts `bin/electronPath.js`). So if a script's shape
+drifts away from its cast, the test still typechecks. The fix would be `checkJs` over `scripts/` and
+`bin/`, a separate change. `electronPath.test.ts`'s cast had already fallen behind the function's JSDoc.
