@@ -28,6 +28,44 @@ path was deliberately broken and the test had to notice:**
 The second is the one worth having: the test is named for blur, and with only the blur path broken
 it still fails **at the assertion about blur**. So the precondition did not swallow the subject.
 
+### One risk the cold read raised, and exactly what is known about it
+
+Wren, reading #123: **when `:85` runs alone the precondition really does move the diagonal from 27 to
+54**, and the canvas resize that follows is dispatched from the `scale` effect — so `before` could in
+principle be read mid-resize, which would make `expect(await backingWidth(page)).toBe(before)` flaky.
+He judged it unlikely, on the grounds that React flushes that passive effect inside the discrete
+keydown's own commit, and said plainly that he had not measured it.
+
+**Measured since: 100 runs of `:85` alone, 161 s, zero failures** — with failures bucketed into
+blur / `before` / other *before* the loop ran, so a red could not have been filed as the wrong bug.
+
+**State it no more strongly than this:** the precondition changes state when the test runs alone; a
+mid-resize read was suspected, judged unlikely by reading, and not seen in 100 runs. **No defect has
+been demonstrated**, and it should not be written up as one — a rare interleaving under load would
+look exactly like this result.
+
+**The poll was deliberately not added.** Waiting for `backingWidth` to settle before reading `before`
+would close the risk, and it would also cost time on every run and make the test quietly tolerant of
+a real resize bug. **If that assertion ever goes red, this is the first thing to suspect.**
+
+### What the loops cost, which is the point of this card
+
+| arm | what it runs | 100 runs | per run | failures |
+| --- | --- | --- | --- | --- |
+| alone | `:85` only | 161 s | 1.6 s | 0 |
+| chain (Wren's) | `:53 :71 :85` in one worker, file order | 221 s | 2.2 s | 0 |
+
+Against the full suite's **13.2 minutes**, that is the difference between ~4 attempts an hour and
+roughly 1,600. **The chain arm is the one to reach for**: it costs 37% more than the isolated test
+and gives the blur the file's own history — drawer open, profile and bits changed through the
+overlay select menu, the diagonal committed twice — which is what `:85` alone throws away.
+
+**The instrument was checked before its result was believed.** `npx playwright test
+controls.spec.ts:53 controls.spec.ts:71 controls.spec.ts:85` reports `Running 3 tests using 1
+worker` and lists all three in file order. A line-number selector that matched nothing would have
+run zero tests and reported success, and 100 × 0 tests would have looked exactly like 100 clean
+runs.
+
 ## Claimed by Rook 2026-09-16, assigned by Henry, as a precondition for `bug-controls-blur-timeout`
 
 Not because I filed it. **Fixing this is what makes the blur bug reproducible at all.** The only
