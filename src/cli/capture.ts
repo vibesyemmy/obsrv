@@ -29,6 +29,47 @@ export interface FrameEmitter {
  */
 export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'blank' | 'loading'
 
+/**
+ * After a load the budget cut short, which capture warnings say nothing the
+ * load warning has not already said.
+ *
+ * `animating` and `timeout` both mean *the page was still painting when we
+ * stopped waiting* — which is what a cut-short load is. Saying it twice adds
+ * a sentence and no fact. `blank` and `uncovered` are claims about the raster
+ * itself: the frame is one colour, or pixels never arrived. A cut-short load
+ * does not account for either, and dropping them would lose the only sentence
+ * saying the image is not what it appears to be.
+ *
+ * This lived in `main.ts` as `/kept painting/.test(message)` — the product
+ * matching its own prose, which `compatibility.md` forbids callers from doing
+ * and `CONTRIBUTING.md` commits us to breaking by rewording warnings whenever
+ * they get clearer. Measured: renaming "page kept painting steadily" to "page
+ * painted continuously" moved `animating` from suppressed to kept, with `tsc`
+ * clean and nothing thrown. Keyed on the reason there is no wording to break,
+ * and a renamed reason is a type error at every call site.
+ *
+ * A `switch` with a `never` default rather than a boolean expression, so that
+ * adding a reason to the union does not compile until someone has decided
+ * which side of this it falls on. The old regex silently treated every new
+ * reason as "keep"; a comparison chain would do the same quietly.
+ */
+export function explainedByCutLoad(reason: UnsettledReason | undefined): boolean {
+  switch (reason) {
+    case 'animating':
+    case 'timeout':
+      return true
+    case 'blank':
+    case 'uncovered':
+    case 'loading':
+    case undefined:
+      return false
+    default: {
+      const unrouted: never = reason
+      throw new Error(`unrouted unsettled reason: ${String(unrouted)}`)
+    }
+  }
+}
+
 export interface CapturedFrame {
   /** Device pixels (CSS viewport × deviceScaleFactor). */
   width: number
@@ -49,7 +90,14 @@ export interface CaptureOptions {
   settleMs?: number
   /** Overall budget; an animating page is captured as-is at this bound. */
   timeoutMs?: number
-  onWarn?: (message: string) => void
+  /**
+   * Called with the sentence and the reason it was raised for. The reason is
+   * what a caller should route on: the sentence is prose and gets reworded
+   * (see `explainedByCutLoad`). Not part of any output: the CLI consumes the
+   * reason at the routing site and puts only the message in `warnings[]`, so
+   * no MCP schema gains a field.
+   */
+  onWarn?: (message: string, reason: UnsettledReason) => void
   /**
    * Checked every poll: a returned error aborts the capture immediately —
    * how a renderer crash mid-capture fails fast instead of burning the
@@ -240,7 +288,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         if (Date.now() - blankSince >= blankGraceMs) {
           settled = false
           unsettledReason = 'blank'
-          options.onWarn?.(blankWarning(buffer, blankGraceMs))
+          options.onWarn?.(blankWarning(buffer, blankGraceMs), 'blank')
           break
         }
       }
@@ -256,6 +304,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         unsettledReason = 'animating'
         options.onWarn?.(
           `page kept painting steadily for ${ANIMATING_AFTER_MS} ms after its first full frame (animation or video); capturing the current frame`,
+          'animating',
         )
         break
       }
@@ -266,10 +315,10 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
           // colour, blank is the more useful word for what came back.
           if (isFlatFrame(buffer, width, height)) {
             unsettledReason = 'blank'
-            options.onWarn?.(blankWarning(buffer, timeoutMs))
+            options.onWarn?.(blankWarning(buffer, timeoutMs), 'blank')
           } else {
             unsettledReason = 'timeout'
-            options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`)
+            options.onWarn?.(`page kept painting for ${timeoutMs} ms (animation?); capturing the current frame`, 'timeout')
           }
           break
         }
@@ -289,6 +338,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
             (box ? ` (uncovered region ${box.width}x${box.height} at ${box.x},${box.y})` : '') +
             `; those pixels are transparent, not page content. ` +
             `Returning the frame as captured (settled: false)`,
+          'uncovered',
         )
         break
       }
