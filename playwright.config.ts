@@ -27,5 +27,31 @@ export default defineConfig({
    * weather. That is the signal to reopen it.
    */
   retries: 1,
+  // Trace the RETRY attempt, which under `retries: 1` is exactly the
+  // population every flake card here is about: a failure that survived one
+  // re-run, plus the first-attempt failures that a retry rescues and the
+  // summary line calls flaky.
+  //
+  // Until now this file set no `trace`, `screenshot` or `video` at all, so
+  // Playwright's defaults applied and all three were off. A failing run left
+  // `error-context.md` and nothing else, while `ci.yml`'s step named "Upload
+  // Playwright traces on failure" uploaded an empty directory and passed —
+  // uploading nothing succeeds. Three sessions spent a day reasoning from an
+  // artefact that was never going to hold the answer: the blue channel on
+  // vision:47, the focus state on controls:85, the console line that would
+  // name a GPU process exit on panes:83. Found by Rook, 2026-09-15.
+  //
+  // `screenshot` is here because the trace ALONE does not carry one. Measured
+  // rather than assumed: with `trace: 'on-first-retry'` the Electron trace
+  // holds `context-options`, the action log and the error, and NOTHING else —
+  // no console entries, no DOM snapshots, no per-action screenshots, with
+  // `screenshots: true, snapshots: true` explicitly set and ignored. So the
+  // trace would not have answered either question this week: no picture for
+  // vision:47's white-or-yellow pixel, no console for panes:83's GPU exit.
+  // `screenshot: 'only-on-failure'` writes a real PNG per page at failure —
+  // five of them for this app, shell and both panes — which is what answers a
+  // question about what was on screen. Electron's own stdout already reaches
+  // the report as `[pid=…][err]` Browser logs when the app dies.
+  use: { trace: 'on-first-retry', screenshot: 'only-on-failure' },
   reporter: [['list']],
 })
