@@ -1,6 +1,8 @@
 ---
 title: "The app shuts down under `stall.spec:42` — `closed: sessions down`, not a slow page"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 49
 ---
