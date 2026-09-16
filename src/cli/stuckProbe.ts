@@ -73,7 +73,7 @@ export async function callChrome(exec: ProbeDeps['exec'], method: 'mark' | 'sett
  */
 export async function findStuckChrome(deps: ProbeDeps, bandPage: number, warn: (message: string) => void): Promise<StuckBar[]> {
   const fail = (why: string): StuckBar[] => {
-    warn(`warning: could not measure chrome stuck to the viewport, so the bands keep it: ${why}`)
+    warn(`could not measure chrome stuck to the viewport, so the bands keep it: ${why}`)
     return []
   }
   try {
@@ -95,7 +95,7 @@ export async function findStuckChrome(deps: ProbeDeps, bandPage: number, warn: (
       if ('error' in settled) return fail(`settle threw: ${settled.error}`)
       if ('missing' in settled) {
         if (attempt === 1) return fail('the page replaced its document twice during the probe')
-        warn('warning: the page replaced its document during the probe; measured again')
+        warn('the page replaced its document during the probe; measured again')
         await deps.exec(STUCK_CHROME_SCRIPT)
         continue
       }

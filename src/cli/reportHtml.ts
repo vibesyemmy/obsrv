@@ -285,17 +285,28 @@ function diffSection(s: ReportScreen): string {
   const ratio = m.rows.ratio === null ? 'n/a' : num(m.rows.ratio, 2)
   const target = s.diff.target ?? s.png
   const unprofiled = s.diff.target !== null ? ', without the panel profile — the comparison is about rasterisation' : ''
+  // A negative delta is a verdict — ink lost at 1x — only when both captures
+  // are of the same frame. Unsettled, the cell wore `bad` while the note
+  // beneath the table called the same number noise; colour says "look at
+  // this" and the reader took the colour (run 18). So the verdict follows
+  // `settled`, and the sentence saying why sits with the numbers it is
+  // about, before them, rather than after the findings list where a reader
+  // who stopped at the table never reached it.
+  const verdict = m.settled && m.inkCoverage.delta < 0 ? ' bad' : ''
+  const unsettled = m.settled
+    ? ''
+    : `<p class="note">Unsettled: the page kept painting, so the two captures are different frames — the ink coverage delta, the rows ratio and every band delta here are frame-to-frame noise, not rendering evidence.</p>`
   return (
     `<h3>1x vs 2x — this screen against the one it was designed on</h3>` +
     `<div class="pair">` +
     `<figure><img src="${src(target)}" alt="This screen"><figcaption>This screen, 1x, ${target.width}×${target.height} device px${unprofiled}</figcaption></figure>` +
     `<figure><img src="${src(s.diff.reference)}" alt="2x reference"><figcaption>2x reference, box-downsampled to the same grid</figcaption></figure>` +
     `</div>` +
+    unsettled +
     `<table style="margin-top:12px"><tr><th></th><th class="n">This screen</th><th class="n">Reference</th><th class="n">Delta</th></tr>` +
-    `<tr><td>Ink coverage</td><td class="n">${pct(m.inkCoverage.target)}</td><td class="n">${pct(m.inkCoverage.reference)}</td><td class="n${m.inkCoverage.delta < 0 ? ' bad' : ''}">${pct(m.inkCoverage.delta)}</td></tr>` +
+    `<tr><td>Ink coverage</td><td class="n">${pct(m.inkCoverage.target)}</td><td class="n">${pct(m.inkCoverage.reference)}</td><td class="n${verdict}">${pct(m.inkCoverage.delta)}</td></tr>` +
     `<tr><td>Ink rows (ratio ≈0.5 is normal scaling)</td><td class="n">${m.rows.target}</td><td class="n">${m.rows.reference}</td><td class="n">${ratio}</td></tr></table>` +
-    (m.findings.length > 0 ? `<ul class="plain">${m.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : `<p class="muted">No band findings.</p>`) +
-    (m.settled ? '' : `<p class="note">Unsettled: the page kept painting, so the deltas are frame-to-frame noise, not rendering evidence.</p>`)
+    (m.findings.length > 0 ? `<ul class="plain">${m.findings.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>` : `<p class="muted">No band findings.</p>`)
   )
 }
 

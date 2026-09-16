@@ -126,6 +126,44 @@ in a test is the evidence that it is treated as a contract, and a register that
 only covered the MCP surfaces would have said 0.61.0 left the CLI alone. It
 did not.
 
+### `warnings[]` entries from `snap`, `diff` and `report` no longer begin with `warning: ` — breaking but sanctioned
+
+Every warning `snap` put in its list, and every warning `report` and `diff`
+carried forward from a render, began with the literal `warning: ` — the label
+a stderr line earns and a list entry does not. The list now holds the fact
+bare — `full page is 10374 CSS px tall; clamped to 4096` — and only the
+stderr line carries `warning: `. `audit`, `lint` and `inspect` already did
+this; they are unchanged.
+
+**Not every entry began that way, and that is the sharper fact.** The
+messages a capture raises while a page is still painting — *page kept
+painting steadily…*, the blank-page warning — never carried the label, so one
+`snap` could hold both forms in the same array. The list never had one shape.
+This is the first release in which it does.
+
+**Breaking, and sanctioned.** [`compatibility.md`](compatibility.md) says
+what may change in a minor: *change the wording of any warning or note. The
+sentences are the product and they get better; they are not a parsing target.
+Match on structured fields, never on prose.* A caller grepping `warning: ` out
+of `warnings[]` was told not to. If your code did, it was already wrong on the
+entries that never had the label; now it is wrong on all of them, which is at
+least consistent. Read the array; every entry is a warning.
+
+**Two sentences that were not in the list are now in it.** When a full-page
+capture hides chrome stuck to the viewport for the bands after the first — the
+sticky header shown once rather than repeated — the sentence saying so, and
+naming the elements and their heights, went to stderr only. It now joins
+`warnings[]`, so a `report`'s HTML and every MCP reply can say that the image
+its findings are pinned to was edited (`bug-report-edit-invisible`). That is
+an addition to the *contents* of a declared array, which is not a schema
+change.
+
+**Also corrected, wording only:** the sentence `diff` gives when the renders
+never went paint-quiet used to say *the band deltas below are noise*, reaching
+only downward while `inkCoverage.delta` and `rows.ratio` stood above it
+unqualified. It now names those two fields. And the report's HTML no longer
+paints an unsettled ink delta red (`bug-diff-disowns-its-numbers`).
+
 ### Also in 0.61.0, not breaking
 
 `blocked` and `panel` now survive the trip from the page to the live walk, so

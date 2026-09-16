@@ -112,4 +112,20 @@ describe('diffMetrics on renders that never went paint-quiet', () => {
     // No band claim survives: "strokes thickening" would be a false assertion.
     expect(noisy.findings.some(f => f.startsWith('band '))).toBe(false)
   })
+
+  it('the statement names the numbers it disowns, not a position on the page', () => {
+    // Run 18 (bug-diff-disowns-its-numbers): the sentence said "the band
+    // deltas below are frame-to-frame noise" and reached only downward, while
+    // `inkCoverage.delta` and `rows.ratio` — the two figures a person quotes,
+    // from the same two mismatched frames — printed above it, unqualified. On
+    // a static page those two print in exactly the same shape, so nothing
+    // but this sentence tells the reader which case they are in, and it was
+    // keyed off its own layout. A sentence names its own subject.
+    const noisy = diffMetrics(target, reference, 4, false)
+    const s = noisy.findings[0]!
+    expect(s).toMatch(/inkCoverage\.delta/)
+    expect(s).toMatch(/rows\.ratio/)
+    expect(s).toMatch(/band/)
+    expect(s).not.toMatch(/\bbelow\b/)
+  })
 })
