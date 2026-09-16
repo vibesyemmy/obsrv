@@ -1,8 +1,6 @@
 ---
 title: "The two walks cover a growing page differently — 3 screenfuls against 8"
-column: doing
-owner: "Henry"
-waiting: ""
+column: backlog
 kind: bug
 criterion: C4
 order: 31
@@ -63,3 +61,29 @@ hypothesis needs a visible app, and nothing can safely provide one yet. **Unbloc
 another session), or a visible-app session on Opeyemi's desk. **The next step when unblocked:**
 walk `tests/fixtures/app-shell-grows.html` live in a visible window at `laptop-768`, and compare
 with the table above.
+
+## PROGRESS 2026-09-17 by Henry — the divergence CI caught was a sync-bus double load, and #171 removed it; the growing-page one is still unreproduced
+
+**What came in (run `35155348601`, first try):** `surface-parity:543` failed on `obsrv_audit walked.atEnd`,
+on the `redirect` page (an HTTP 302 to `/landed`). Headless reported `true` and live `false`, and the two
+agreed on the retry. The parity collector's own stdout already held the tell: live's walk took `ms: 1038`,
+while `lint`'s walk on the same page took 15 ms. The scroll reply timeout is 1000 ms.
+
+**Measured, not read** (`probe/live-walk-scroll-timeout`, run `35158932493`: parity moves→redirect ×12, every
+main-frame navigation and scroll round-trip traced). The same sequence appeared in 4 of 12 apps:
+1. `navigate('/redirect')` expected `/redirect` on both panes, and the native pane committed `/landed` first.
+2. That commit was not an echo, and the target had not committed yet, so the bus mirrored `/landed` into
+   the target. The target then started a second load and committed `/landed` twice.
+3. The walk's first scroll, sent between the two commits, was never answered. When the lost scroll was
+   `next` rather than `top`, the walk stopped with "did not confirm a scroll" and `atEnd: false`.
+
+**Fixed in #171:** a server redirect of a navigation the bus issued is now issued too, so its commit is an
+echo. The same probe on the fix (run `35160092144`): 4/144 scroll timeouts → 0/144, second target loads
+7/48 → 0/48, aborted loads 6 → 0, and live `redirect/audit` `atEnd: true` 12/12. Kenya's cold read ran
+her arrivals arms against the branch and confirmed nothing else moved. Client-side redirects are
+`bug-arrivals`.
+
+**The card's own divergence is untouched:** 3 screenfuls headless vs 8 live on `app-shell-grows.html`. It
+doesn't reproduce under the harness (the table above), and the one open hypothesis still needs a visible
+app. **Back to Backlog, unowned, blocked as before** (the unblockers are listed above). A parity flake on
+`walked` from now on is new evidence, because the redirect cause is gone.
