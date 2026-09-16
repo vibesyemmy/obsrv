@@ -58,6 +58,35 @@ longer look" equally well.
 3. If some test genuinely needs the foreground, it says so in its name and is excluded from the
    default run.
 
+## PROGRESS 2026-09-17 by Henry — the icon is dropped at launch, and on CI the CLI's launch does not take the front
+
+**Measured on a CI runner** (`probe/dock-earliest`, run `35160584859`), with the same holder instrument. A
+second harness app held the front, and its window's key state was read before and after every launch,
+and every 50 ms during the CLI runs. `lsappinfo` does report each app's `ApplicationType` on a runner.
+`Foreground` means a Dock icon and a place in Cmd+Tab, `UIElement` means neither, and polling it every
+40 ms from before the launch gives how long the icon was up.
+
+| launch | icon up (Foreground → UIElement) | holder kept the front | control `app.focus({ steal })` |
+| --- | --- | --- | --- |
+| app, hide in `showWindow` (#169) | +153 → +1243 ms, **~1.1 s** | yes | took it |
+| app, `dock.hide()` at module top | +101 → +179 ms, **~80 ms** | yes | took it |
+| app, `setActivationPolicy('accessory')` at module top | +141 → +265 ms, ~120 ms | yes | took it |
+| CLI `snap`, hide in `whenReady` (today) | +225 → +333 ms, **~110 ms** | yes, at every 50 ms poll | — |
+| CLI `snap`, policy at module top | +113 → +144 ms, **~30 ms** | yes, at every 50 ms poll | — |
+
+**Two answers.**
+1. **The icon's window shrinks from about 1.1 s to about 80 ms per harness launch** if the drop happens at
+   module top, still without activating. Built: `index.ts` hides it at module top under
+   `showsInactive()` (the measured app arm), and `cli/main.ts` sets the activation policy at module top
+   on macOS (the measured CLI arm; Wren's read caught a first version that shipped the unmeasured
+   `dock.hide()` there). The existing calls stay, as in the probe, and
+   `tests/unit/dockDroppedAtLaunch.test.ts` fails if either drop leaves module top.
+2. **On CI, the CLI's own launch does not take the front from an app holding it.** The holder's key state
+   never changed during either CLI run. So the 5 s front Rook saw on Opeyemi's desk (22:41:44) came from
+   something a runner doesn't have. The remaining candidates are the same as for the harness app's
+   last activations: a user switch landing in the icon's window, or a desk-only cause. **Not
+   established.** An in-use run that includes the CLI specs is what can tell.
+
 ## PROGRESS 2026-09-16 by Henry — `dock.hide()` measured on CI, and the harness app now leaves the Dock and Cmd+Tab
 
 **The measurement came first, on a CI runner, so no one's desk was involved** (`probe/dock-hide-activation`, run

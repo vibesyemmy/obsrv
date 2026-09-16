@@ -42,6 +42,13 @@ import { walkCoverageNote, type WalkBlocked } from '../shared/walkCoverage'
 import { layoutScale } from '../shared/layoutScale'
 import { findingPlace, type FindingPlace, reportHtml, type ReportImage, type ReportProblems, type ReportScreen } from './reportHtml'
 
+// The CLI never has a Dock icon. Setting the activation policy here, rather
+// than hiding the icon in `whenReady` (below), takes it out of the Dock and
+// Cmd+Tab sooner on every launch: about 110 ms of icon became about 30 ms on a
+// CI runner, and neither launch took the front from the app holding it (run
+// 35160584859, which measured exactly this call). macOS only, like the policy.
+if (process.platform === 'darwin') app.setActivationPolicy('accessory')
+
 /** The worst findings featured on the report's full-page overview, per source (audit, lint): pins + crops. */
 const REPORT_CROP_LIMIT = 6
 /** The overview is downsampled to about this device-pixel width to keep the file small. */
