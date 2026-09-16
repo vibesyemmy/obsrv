@@ -2,12 +2,21 @@
  * A value one test establishes and another reads, with the failure named.
  *
  * A spec file whose later tests read module-level state that its FIRST test
- * fills works when run whole and dies when run filtered: the filler is skipped
- * and the reader crashes inside the app's own code. Kenya hit it on
+ * fills dies two ways. Run filtered, the filler is skipped and the reader
+ * crashes inside the app's own code. Kenya hit it on
  * `tests/e2e/live-drive.spec.ts`, where `info` carries the control port and
- * token — a `-g` run of any later test dies on `Cannot read properties of
+ * token — a `-g` run of any later test died on `Cannot read properties of
  * undefined (reading 'token')`, which reads like a bug in whatever test you
  * just wrote, in whichever part of the app the value reached first.
+ *
+ * Run whole, it dies the second way the moment any test in the file fails:
+ * Playwright replaces the worker after a failure and does not re-run the
+ * filler, so every later test fails in milliseconds on the same missing value.
+ * Main's run 35074542775 read as eleven failures and was one. This message
+ * first named only the filtered run, so in CI it told the reader that ten red
+ * tests downstream of a real failure were "the run, not the code".
+ * (`live-drive.spec.ts` now reads `info` in `beforeAll`, which every worker
+ * runs; the guard stays for the next file that fills state in a test.)
  *
  * That is the same family as a suite green that measured nothing
  * (`scripts/suiteLock.js`, `tests/e2e/surface-parity.spec.ts`): the symptom
@@ -60,8 +69,10 @@ export function noEvidenceMessage(counted: string, remedy: string): string {
 export function established<T>(value: T | undefined | null, what: string, filler: string): T {
   if (value === undefined || value === null) {
     throw new EstablishedError(
-      `${what} was never established: ${filler} did not run in this suite. ` +
-        'A filtered run (-g / -t) skips it, so this is the run, not the code — run the file whole to exercise this test.',
+      `${what} was never established: ${filler} did not run in this worker. Two runs do that. ` +
+        'A filtered run (-g / -t) skips it: run the file whole to exercise this test. ' +
+        'Or an earlier test in this file failed, and Playwright replaced the worker without running it again: ' +
+        'read the first failure in this file, because this one is its echo.',
     )
   }
   return value

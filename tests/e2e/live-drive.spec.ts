@@ -47,11 +47,12 @@ function call(
   headers?: Record<string, string>,
 ): Promise<Reply> {
   return new Promise((done, fail) => {
-    // `info` is filled by this file's first test, so a filtered run reaches
-    // here with nothing and used to die inside `request` on
-    // `Cannot read properties of undefined (reading 'token')` — a crash that
-    // names the app rather than the run. See src/shared/established.ts.
-    const control = established(info, 'info (the control port and token)', "this file's first test")
+    // `info` is read in `beforeAll`, which every worker runs, so neither a
+    // filtered run nor a worker replaced after a failure reaches here without
+    // it. The guard stays for the day it moves back into a test, when it used
+    // to die inside `request` on `Cannot read properties of undefined (reading
+    // 'token')`. See src/shared/established.ts.
+    const control = established(info, 'info (the control port and token)', "this file's beforeAll")
     const body: Record<string, unknown> = { command }
     if (token !== null) body.token = token ?? control.token
     if (payload) body.payload = payload
@@ -88,6 +89,14 @@ test.beforeAll(async () => {
   page = await rendererWindow(app)
   const userData = await app.evaluate(({ app: a }) => a.getPath('userData'))
   controlFile = join(userData, CONTROL_FILE_NAME)
+  // Read here, not in the first test. Playwright replaces the worker after any
+  // failure and re-runs this hook but not that test, so `info` filled there
+  // was undefined for everything after a failure: main's run 35074542775 read
+  // as eleven failures and was one (bug-live-drive-info-cascade).
+  await expect.poll(() => existsSync(controlFile)).toBe(true)
+  const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
+  if (!parsed) throw new Error(`the control file at ${controlFile} did not parse`)
+  info = parsed
 })
 test.afterAll(async () => {
   await app.close()
@@ -102,12 +111,11 @@ test('writes a 0600 discovery file with a port and a 64-hex token', async () => 
   expect(statSync(controlFile).mode & 0o777).toBe(0o600)
   const parsed = parseControlFile(readFileSync(controlFile, 'utf8'))
   expect(parsed).not.toBeNull()
-  info = parsed!
   // The file names its owner: this very process, and when it came up.
-  expect(info.pid).toBe(await app.evaluate(() => process.pid))
-  expect(typeof info.startedAt).toBe('string')
-  expect(Number.isNaN(Date.parse(info.startedAt!))).toBe(false)
-  expect(Date.parse(info.startedAt!)).toBeLessThanOrEqual(Date.now())
+  expect(parsed!.pid).toBe(await app.evaluate(() => process.pid))
+  expect(typeof parsed!.startedAt).toBe('string')
+  expect(Number.isNaN(Date.parse(parsed!.startedAt!))).toBe(false)
+  expect(Date.parse(parsed!.startedAt!)).toBeLessThanOrEqual(Date.now())
 })
 
 test('status answers with the app state, and the toolbar shows the AGENT badge', async () => {
@@ -872,6 +880,15 @@ test('click reaches the live page and can act on it; out-of-viewport is refused'
 })
 
 test('captureTarget returns a PNG of just the target pane', async () => {
+  // Its own page and view, not the ones earlier tests left. Run after a
+  // replaced worker, or alone, the target was the app's blank start page (the
+  // capture warned it was one colour end to end), and the view was the app's
+  // opening `fit` — where the crop hugs the letterboxed render rather than the
+  // pane (design spec §14.2), so the pane-bounds check below missed by 404
+  // device px every time. It only holds at 1:1, which the setPixelExact test
+  // used to set for it, many tests earlier.
+  expect((await call('setViewMode', { mode: '1:1' })).status).toBe(200)
+  expect((await call('navigate', { url: BUTTON })).status).toBe(200)
   const whole = await call('captureVisible')
   expect(whole.status).toBe(200)
   const wholePng = Buffer.from((whole.body as { data: string }).data, 'base64')

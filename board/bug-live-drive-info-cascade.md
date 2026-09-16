@@ -1,13 +1,45 @@
 ---
 title: "One live-drive failure takes the rest of the file down, and its error blames a filtered run"
-column: doing
+column: done
 owner: "Henry"
 kind: bug
 order: 43
 ---
 
 FILED 2026-09-16 by Henry, from reading main's red run `35074542775` (09-16 08:34Z, `1c054a7`)
-for `bug-ci-main-red-37pct`. **Unowned.**
+for `bug-ci-main-red-37pct`.
+
+## RESOLVED 2026-09-16 by Henry — and the control found a second dependency the cascade hid
+
+**The fix.** `live-drive.spec.ts` reads `info` in `beforeAll`, which every worker runs; the first
+test now only asserts the file's properties. `established()` names both runs that leave a value
+unset: a filtered one, and a whole run where an earlier test failed and the worker was replaced.
+It no longer says *"the run, not the code"*. A unit test pins that. It fails against the old
+message and passes against the new.
+
+**The control, the card's own:** force a test to fail, run the whole file with retries on.
+
+| spec | forced failure | red |
+| --- | --- | --- |
+| main's | `:776` | **11**: the forced test and ten *"never established"*, CI's exact shape |
+| `info` in `beforeAll` only | `:776` | **2**: the forced test **and `captureTarget`** |
+| the fix | `:776` | **1** |
+| the fix | the second test in the file | **1**, all 44 others passing in replaced workers |
+| the fix | none | 45 of 45 |
+
+**`captureTarget` was the second layer.** The cascade had always killed it before it ran in a fresh
+worker. Alone on a fresh app it failed every time, two ways. **It had no page of its own**, so it
+captured the blank start page. **And it only held in the `1:1` view**, which the setPixelExact test
+sets many tests earlier and nothing resets. In the app's opening `fit` view, `captureTarget` crops
+to the letterboxed render rather than the pane, as the design spec says it should (§14.2), so the
+test's pane-bounds check missed by 404 device px, deterministically. `setViewMode 1:1` first →
+passes 2/2; `setPanes both` first → still 404. **Not a product bug:** the product matched its spec
+and the test asserted a state it never set. It now sets its own page and view.
+
+**Not swept.** Two failure positions are not every position. A dependency between two tests that
+both sit on the same side of both positions would not show. This card predicted *one* red after a
+`beforeAll` fix, and the first run of its control found two. This run says one at two positions,
+and that is all it says.
 
 ## What happened
 

@@ -37,6 +37,24 @@ describe('established', () => {
     }
   })
 
+  it('names both runs that leave it unset, not only a filtered one', () => {
+    // A whole run gets here too: after any failure Playwright replaces the
+    // worker and does not re-run the filler, so every later test in the file
+    // fails on this. Naming only the filter told CI's reader that ten red
+    // tests were "the run, not the code" when they were one real failure.
+    try {
+      established(undefined, 'info', "the file's first test")
+    } catch (e) {
+      const text = (e as Error).message
+      expect(text).toMatch(/filtered/i)
+      expect(text).toMatch(/earlier test in this file failed/i)
+      expect(text).toMatch(/first failure/i)
+      expect(text).not.toMatch(/the run, not the code/i)
+      return
+    }
+    throw new Error('established(undefined) did not throw')
+  })
+
   it('treats null the same as undefined: neither is an established value', () => {
     expect(() => established(null, 'controlFile', 'beforeAll')).toThrow(EstablishedError)
   })
