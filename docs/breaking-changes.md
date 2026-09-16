@@ -91,6 +91,24 @@ gone. Nothing is lost; it moved.
 **What to do:** read `warnings` for anything about the page. If you scan both
 and concatenate, no change is needed.
 
+### Nothing broke here — `docs/public-shape.json` appears, recording the shape as it already is
+
+**Not a breaking change, and it is in the register on purpose.** This release
+adds a snapshot of the published MCP output shape — every tool's key paths and
+every enum's values — plus a unit test that fails when the two diverge and a CI
+job that fails when the snapshot moves without this file being touched
+(`board/c2.md`, criterion C2).
+
+The snapshot was taken from the shape this release already has, so it records
+**no** change of its own. It is written down because the check's first act was to
+refuse the change that introduced it — the file moved and this register did not —
+and the honest answer to that was an entry saying so, rather than an exemption
+for newly added files. An exemption would also have excused someone deleting the
+snapshot and adding it back, which is the case the check exists for.
+
+**What it means for you: nothing.** No field, value or meaning changed. The next
+entry after this one is the first the check will have been standing for.
+
 ### `unsettledReason` can now be `"resizing"`
 
 The live surface can be mid-resize when the capture budget runs out — the pane
