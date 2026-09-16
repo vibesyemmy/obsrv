@@ -50,6 +50,13 @@ both branches were merged and deleted. Their merges are now named on those cards
 that was only in the note — *have someone who did not write it read it cold* — and *cite the tree,
 or quote the claim*. `bug-dev-app-exited`'s `[[bug-log-attribution]]` became a plain card name.
 
+**Outside the cards, found by Rook's review.** This sweep read `board/` only. Rook's, run over more
+of the tree, found `CONTRIBUTING.md` linking [`docs/dev-lane`](docs) — the same shape, never a
+file in any ref (the branch was `feat/dev-lane`). The lane is documented in `README.md`'s *The dev
+lane*, and the link now says so. So "the only ghost" above holds for the cards, not for the repo.
+Rook also named `docs/b4-noise-ratio` and `docs/c3-skill-audit`. Those are the branch names already
+counted above: a path check finds no commits for a branch, which is how they look like ghosts.
+
 **Left alone, deliberately:** `bug-product-matches-own-prose` already carries Rook's correction
 note from #37, and is in Doing on an unpushed branch. Its two remaining bare mentions are his to
 reword with that work, not a conflict to hand him.

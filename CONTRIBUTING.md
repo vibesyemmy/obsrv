@@ -368,7 +368,7 @@ app *wrote* inside it — "I set the variable" is a claim about the harness, not
 about the app.
 
 For testing a branch through the dev lane without a release, see
-[`docs/dev-lane`](docs) and `npm run lane -- --status`.
+[*The dev lane* in the README](README.md#the-dev-lane) and `npm run lane -- --status`.
 
 ## Writing it down
 
