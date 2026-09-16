@@ -51,6 +51,37 @@ concurrency:
 
 jobs:
 
+  # THROWAWAY — bug-walk-coverage-diverges, on probe/walk-visible. Never merged.
+  #
+  # The card's open hypothesis needs a VISIBLE app, and says nothing can safely
+  # provide one. OBSRV_TEST_TAKES_THE_DESK=1 (#114) can, and a CI runner is the
+  # place for it: it takes a desk by design, and there is no desk here.
+  #
+  # Two runs of one probe spec, differing only in that flag. Read arm C's line
+  # from both before reading anything else: if the flag changes nothing this
+  # runner can see, arm B is UNMEASURED, not negative.
+  walk-visible-probe:
+    name: Does a visible app walk a growing page further
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: ARM A — hidden, as the harness runs today
+        run: npx playwright test zz-walk-visible-probe.spec.ts --retries=0 --reporter=line
+
+      - name: ARM B — the same, with the app taking the desk
+        if: ${{ always() }}
+        env:
+          OBSRV_TEST_TAKES_THE_DESK: '1'
+        run: npx playwright test zz-walk-visible-probe.spec.ts --retries=0 --reporter=line
+
   # C2: a public-shape change must be NAMED in the register, in the same change.
   #
   # The unit test beside this (tests/unit/publicShape.test.ts) fails when the
