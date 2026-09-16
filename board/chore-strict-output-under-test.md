@@ -123,3 +123,29 @@ a reply is precisely what this exists to catch. Installed first now, with the re
 the marker `.*`, which matched no path, so every key would have been a false red. Unreachable on
 today's shapes — every tool's root is `additionalProperties: false` — and wrong the day one is not.
 Fixed and tested.
+
+## FOLLOW-UP 2026-09-16 — a tool the published list does not carry was silently unchecked
+
+Rook found it in the merged head, and it is this card's own subject committed inside the fix for it.
+The rebase that moved "declared" onto the published `tools/list` reply also removed the per-tool
+`DISABLED` warning, and `declared === undefined` then covered two different things: a tool that
+declares no output schema (correct to pass — nothing it sends is undeclared) and **a tool whose
+registration promised a schema the list does not publish**, where the check is off for that tool and
+says nothing.
+
+**Every e2e arm still passed**, because they poison one named tool, so a different tool dropping out
+of the map is invisible to all of them. That is the coverage shape this card exists to attack.
+
+**Henry's call, taken: throw rather than warn.** Under the fence, a promised schema the server does
+not publish means the premise the check rests on is false for that tool, so its call fails naming it
+— the same consequence as an undeclared key, because it is the same outcome: a reply nobody compared
+against what clients were told. Told apart at registration, where `config` still says whether a
+schema was promised.
+
+**A second, distinct failure gets its own sentence:** the published list unreadable at all (the SDK
+moving `_requestHandlers`). Then every schema-declaring tool fails, so the suite goes loudly red
+naming the cause rather than testing nothing quietly.
+
+**Controlled by unit tests against a stand-in server** (`tests/unit/strictOutput.test.ts`, 8 arms),
+because the case that matters cannot be reached by the e2e arms at all — which is exactly how it
+shipped.
