@@ -14,7 +14,11 @@
  * filler, so every later test fails in milliseconds on the same missing value.
  * Main's run 35074542775 read as eleven failures and was one. This message
  * first named only the filtered run, so in CI it told the reader that ten red
- * tests downstream of a real failure were "the run, not the code".
+ * tests downstream of a real failure were "the run, not the code". Its next
+ * version named two causes as if that were all of them, and a reader who had
+ * re-run one test by `file:line` would not have recognised "-g / -t" as their
+ * case. So it keys on the one fact the reader can see — whether an earlier test
+ * in this file failed in this run — and names the rest as an open set.
  * (`live-drive.spec.ts` now reads `info` in `beforeAll`, which every worker
  * runs; the guard stays for the next file that fills state in a test.)
  *
@@ -69,10 +73,11 @@ export function noEvidenceMessage(counted: string, remedy: string): string {
 export function established<T>(value: T | undefined | null, what: string, filler: string): T {
   if (value === undefined || value === null) {
     throw new EstablishedError(
-      `${what} was never established: ${filler} did not run in this worker. Two runs do that. ` +
-        'A filtered run (-g / -t) skips it: run the file whole to exercise this test. ' +
-        'Or an earlier test in this file failed, and Playwright replaced the worker without running it again: ' +
-        'read the first failure in this file, because this one is its echo.',
+      `${what} was never established: ${filler} did not run in this worker. ` +
+        `If an earlier test in this file failed in this run, this is its echo — Playwright replaced the worker ` +
+        `without re-running ${filler} — so read that first failure. ` +
+        `If none did, this test ran without ${filler}: selected on its own (-g, -t, file:line, --last-failed, ` +
+        `test.only), the filler skipped, or the file's tests split across workers — so run the file whole, in order.`,
     )
   }
   return value

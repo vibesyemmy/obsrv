@@ -12,10 +12,14 @@ for `bug-ci-main-red-37pct`.
 ## RESOLVED 2026-09-16 by Henry — and the control found a second dependency the cascade hid
 
 **The fix.** `live-drive.spec.ts` reads `info` in `beforeAll`, which every worker runs; the first
-test now only asserts the file's properties. `established()` names both runs that leave a value
-unset: a filtered one, and a whole run where an earlier test failed and the worker was replaced.
-It no longer says *"the run, not the code"*. A unit test pins that. It fails against the old
-message and passes against the new.
+test now only asserts the file's properties. `established()` keys on the one fact the reader can
+see: **did an earlier test in this file fail in this run?** If so, this is that failure's echo, so
+read it. If not, the test ran without its filler: selected on its own (`-g`, `-t`, `file:line`,
+`--last-failed`, `test.only`), the filler skipped, or the file split across workers. It no longer
+says *"the run, not the code"*, and it no longer closes the list. Its first revision said *"two
+runs do that"*, and Wren's cold read showed a `file:line` rerun would have been sent looking for a
+failure that did not exist. A unit test pins both, including `file:line`. It fails against the
+original message and the first revision, and passes against this one.
 
 **The control, the card's own:** force a test to fail, run the whole file with retries on.
 
