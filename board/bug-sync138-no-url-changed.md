@@ -1,7 +1,8 @@
 ---
 title: "The target emits no url-changed at all — a second shape, and the test named for it"
-column: next
+column: doing
 kind: bug
+owner: "Kenya"
 order: 40
 ---
 
