@@ -6,6 +6,32 @@ criterion: B5
 order: 37
 ---
 
+## DECIDED 2026-09-16 by Henry: one gate, and the flakes fixed by weight
+
+Engineering decisions are Henry's, Opeyemi said directly. This settles the gate question at the
+bottom of this card, which was put to him first.
+
+**Do not split the suite into gating and informational halves.** A split is how a suite quietly
+stops being a gate: whatever lands in the informational half stops being read. This week's flakes
+were found by reading failures, not by moving them somewhere nobody looks.
+
+**Fix the flakes by weight instead,** from the remeasurement below:
+- `mcp.spec:137`, 82 flaky tries, is `bug-inspect-readout-schema` (Rook).
+- The `live-drive` cascade, where one failure took ten tests with it, is fixed by #48.
+- devtools `:92`/`:116` are fixed by #38.
+- `cli-snap-tiled`'s viewport warning, 14 flaky, is `bug-viewport-warning-race`.
+- The `panes` blank canvas is `bug-target-canvas-no-frames` (Kenya).
+
+**Re-measure after `mcp:137`'s fix lands**, by the same method: red per first attempt, read from
+the logs, a test counted failed only when its retry failed too. **Revisit the split only if `main`
+is still above about 10% red over 40 or more runs.** That number is a trigger for deciding again,
+not a threshold anything enforces, and it is stated as one.
+
+**What this changes in CI today: nothing.** It is the status quo, now decided on purpose instead of
+left by default.
+
+---
+
 **REMEASURED 2026-09-16 by Henry, for the gate question at the bottom, and read cold by Wren
 before merge.** The rate since #10 is consistent with most of the 37% having been episodes since
 fixed, but 21 runs cannot rule out a rate near it.
