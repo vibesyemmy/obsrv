@@ -87,14 +87,15 @@ new tests failed, at the reply value, `applied`, and the warning.
 
 **One limit of that `drive` test, found while writing it:** `mcp-live.spec.ts` never calls
 `listTools`, so the client validates no reply in that file. Probed with validation on, *every*
-`drive` reply on `main` is rejected, for three undeclared keys that have nothing to do with the onion
-skin. That's reported in the room, and it's being fixed on its own.
+`drive` reply on `main` was rejected, for three undeclared keys that have nothing to do with the onion
+skin. That was fixed on its own in #68.
 
 **The other set-and-read-back fields, as this card asked**, by reading: `textScale` confirms on the
 exact value and has no refusal path. `vision` replies `ok` and `drive` doesn't read it back.
 `throttle` confirms on the exact value, but a refusal from Chromium is only logged (`applyThrottle`
 returns it and the IPC handler `log.warn`s it), so `status` would name a throttle that isn't in
-effect. Reaching that needs a second debugger client, which wasn't tried.
+effect. Reaching that needs a second debugger client, which wasn't tried. It's now a note on the card
+that already covered the CLI side, `bug-throttle-refusal-stderr-only` (#71).
 
 **Not fixed here, filed:** `bug-onion-skin-dies-on-a-preset-round-trip`. A skin that's on survives a
 trip through a screen too big for it as `0.5` with no reference, even back on a screen that fits.
