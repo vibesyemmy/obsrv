@@ -127,7 +127,8 @@ export class Overlay {
    */
   private focusView(wc: WebContents): void {
     if (showsInactive()) return
-    wc.focus()
+    // CONTROL (do not merge): the hand-off removed, so overlay-focus.spec must go red.
+    void wc
   }
 
   get isOpen(): boolean {
