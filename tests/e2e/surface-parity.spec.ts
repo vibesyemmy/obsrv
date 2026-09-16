@@ -281,7 +281,22 @@ const PROBES = new Set(['obsrv_audit', 'obsrv_lint'])
  * Calling the producer removes the copy. `pageMotion.ts` imports nothing, so it
  * is safe to pull into a spec.
  */
-const MOVED_NOTE_OPENING = pageMovedNote('audit', { moved: 1, changed: 0, compared: 1, maxPx: 1 }, MOTION_PROBE_MS)?.split(':')[0] ?? ''
+const MOVED_NOTE_OPENING = ((): string => {
+  // Two notes with different numbers, and keep what they share. The opening is
+  // the part that does not depend on the figures, so the common prefix IS the
+  // opening — whatever punctuation the sentence happens to use.
+  //
+  // `split(':')` was the first version and assumed the colon survives a reword
+  // (Henry, on #144). If it did not, `[0]` would be the whole sentence with its
+  // counts baked in — a matcher that only ever matches a note reporting exactly
+  // one moved element, and long enough to walk straight past the guard below.
+  // A wrong matcher that looks right is the failure this whole card is about.
+  const a = pageMovedNote('audit', { moved: 1, changed: 0, compared: 1, maxPx: 1 }, MOTION_PROBE_MS) ?? ''
+  const b = pageMovedNote('audit', { moved: 3, changed: 0, compared: 9, maxPx: 7 }, MOTION_PROBE_MS) ?? ''
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  return a.slice(0, i)
+})()
 
 /**
  * A matcher that matched everything would be as bad as one that matched
