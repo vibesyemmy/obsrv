@@ -1,6 +1,8 @@
 ---
 title: "The viewport-units warning races the reflow, and on a slow runner says nothing about the layout it exists to catch"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 42
 ---
