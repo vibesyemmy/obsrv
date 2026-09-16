@@ -19,6 +19,6 @@ import { test, expect } from '@playwright/test'
  * This one shows it goes green on a populated one, which proves the gate did
  * not simply break the step.
  */
-test('control 2: fails inside the e2e step so test-results is written', () => {
+test('control2 fails inside the e2e step so test-results is written', () => {
   expect('a deliberate failure').toBe('with artefacts on disk')
 })
