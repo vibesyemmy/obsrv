@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
+import { loadIssuedAt, loadsAfter } from './helpers/nativeLoads'
 
 const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
 const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
@@ -144,12 +145,20 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   // Now the native pane alone goes back to REDIRECT. The target must follow
   // it — through REDIRECT, or straight to its replacement if the mirrored
   // HAIRLINE overtakes — rather than sit on the URL it already shows.
-  await app.evaluate(async (_electron, url: string) => {
+  // The clock is taken INSIDE main, immediately before the load, because the
+  // record is chosen by what was asked for and when — never by position. The
+  // bus mirrors into this same pane through the same method
+  // (`syncBus.ts:226`), so a mirror that starts after this one is the last
+  // record, and in the hypothesis this trace exists to test — step 2 aborted
+  // by a later navigation — the aborted record is second from last.
+  const startedAt: number = await app.evaluate(async (_electron, url: string) => {
     const g = globalThis as any
     g.__seen = [] as string[]
     g.__onUrl = (u: string) => g.__seen.push(u)
     g.__obsrv.target.on('url-changed', g.__onUrl)
+    const at = Date.now()
     await g.__obsrv.native.load(url)
+    return at
   }, REDIRECT)
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
 
@@ -170,14 +179,45 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   //   'already-there'             the panes were judged in step
   //   commits empty               nothing committed in the target at all
   //   commits with said: false    a commit happened and was silenced, and why
+  //   native loads: aborted        the step-2 load was replaced before it committed
+  //   native loads: ok             it completed — so a missing target url-changed is
+  //                                either timing (the commit landed after this read)
+  //                                OR the bus itself, and this cannot tell them apart
+  //   native commits after the ok  the commit the bus should have seen, with its clock
+  //
+  // The last three are the fact this test could not previously reach.
+  // `NativePane.load` swallows Chromium's rejection so callers need no
+  // try/catch, which also threw away the difference between "aborted" and
+  // "completed" — the two opposite facts the one recurrence in 160 fits
+  // equally well (bug-sync138-no-url-changed, decided 2026-09-16: no run
+  // budget, because more repetitions of what the target reports cannot
+  // separate them and this can).
   const why = await app.evaluate(() => {
     const g = globalThis as any
     return {
       mirror: g.__obsrv.sync.mirrorTrace().slice(-8),
       commits: g.__obsrv.target.commitTrace().slice(-8),
+      nativeLoads: g.__obsrv.native.loadTrace().slice(-8),
+      nativeCommits: g.__obsrv.native.commitTrace().slice(-8),
     }
   })
   const account = JSON.stringify(why)
+  // The instrument has to be shown to emit, on the runs that PASS, or the day
+  // it stops recording is the day this card's evidence silently becomes an
+  // empty object again — which is how `ci.yml` uploaded nothing for a week and
+  // passed. A green run therefore asserts the trace is there and prints the
+  // step-2 outcome, so every ordinary CI run adds one data point without
+  // anybody spending a budget on it.
+  const step2 = loadIssuedAt(why.nativeLoads, REDIRECT, startedAt)
+  expect(step2, `the native pane recorded no load of the step-2 url. ${account}`).toBeTruthy()
+  console.log(
+    `[sync138] step-2 native load: ${step2!.outcome} in ${step2!.tookMs}ms; ` +
+      `native commits after it: ${why.nativeCommits.filter((c: { at: number }) => c.at >= step2!.at).length}; ` +
+      // A mirror INTO the native pane during step 2 is the mechanism the
+      // hypothesis names, so it is counted rather than merely skipped over.
+      `other native loads after it: ${loadsAfter(why.nativeLoads, step2!)}; ` +
+      `target url-changed: ${seen.length}`,
+  )
   expect(seen.length, `the target emitted no url-changed. ${account}`).toBeGreaterThanOrEqual(1)
   expect(seen.at(-1), account).toBe(HAIRLINE)
 })
