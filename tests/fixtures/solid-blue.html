@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>solid-blue-fixture</title>
+    <style>
+      /* Blue under the middle of the viewport, paired with solid-red.html for
+         captures that must tell three states apart: the stale frame (red), the
+         page that is really there (blue), and NOTHING DRAWN AT ALL — which is
+         white, and which a white fixture cannot be told apart from.
+
+         The corner mark is not decoration. A page that is one colour end to
+         end is judged blank by the live capture, which then waits out its full
+         settle budget and warns; the mark makes the page ordinary while
+         leaving the centre pure blue for the pixel read. */
+      html, body { margin: 0; height: 100%; background: #0000ff; }
+      .mark { position: absolute; left: 8px; top: 8px; width: 24px; height: 24px; background: #ffffff; }
+    </style>
+  </head>
+  <body><div class="mark"></div></body>
+</html>
