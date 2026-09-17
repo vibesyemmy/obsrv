@@ -1,6 +1,7 @@
 ---
 title: "On a machine with no app running, the first MCP call waits 12 s and gives two contradicting reasons"
-column: next
+column: done
+owner: "Henry"
 kind: bug
 criterion: A3
 order: 62
@@ -49,3 +50,27 @@ it.** The fresh profile has agent control off, and main writes a disabled stance
 This is the first thing an agent does with Obsrv on a new machine, and the reply's explanation is wrong
 twice, in different ways. The promise "the next call will find it" is the kind of sentence an agent
 acts on.
+
+## Closed 2026-09-17 by #201 (f51162f): the cause was the app's name, measured and fixed
+
+**The cause, measured** (run `35168639669`, from a checkout and from an installed tarball): with no
+`Obsrv.app` installed, the MCP server launches the package's Electron as `electron out/main/index.js`.
+Electron names an app launched that way **"Electron"**. It wrote
+`~/Library/Application Support/Electron/control.json` and logged to `Logs/Electron`, while
+`discover()` reads `.../Obsrv/control.json`. So the app was up and never found:
+- call 1 timed out and said "the next call will find it";
+- call 2's launch lost the single-instance lock to the first app and blamed "an older Obsrv version".
+
+**The fix:** `APP_NAME` in `shared/control.ts`, used by `defaultControlFilePath` and by a module-top
+`app.setName(APP_NAME)` in `index.ts` before `initLog` and the lock. `tests/unit/appName.test.ts`
+guards it, and removing the line fails the test.
+
+**Verified cold** (run `35168918213`, the packed fix on fresh runners):
+- the launch writes `Application Support/Obsrv` and no `Electron` directory exists;
+- **call 1 goes `mode: live`, `launched: true` in 14.5 s** (including Electron's download), with no notes;
+- the next two calls are live, in 0.3 s and 1.1 s.
+
+**Consequences named in Wren's read:**
+- the package launch now shares the installed app's profile and lock (commented on #201);
+- data from earlier versions stays under `Electron`. README #202 covers it, Rook's uninstall plan names
+  it, and the 0.61.0 notes carry a line.
