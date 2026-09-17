@@ -153,7 +153,8 @@ export function inspectReadout(
         // screen. `visibility: hidden` is read on the element itself — its
         // computed value already carries any inheritance, and a descendant
         // that declares `visible` under a hidden parent IS painted, so naming
-        // an ancestor here would be wrong (fixed in 0.61.0; see shared/inspect.ts).
+        // an ancestor here would be wrong (see shared/inspect.ts; this lands after
+        // 0.61.0, which was cut without it).
         `this element is not drawn: ${
           report.hidden === 'display'
             ? 'display: none on it or on an ancestor'

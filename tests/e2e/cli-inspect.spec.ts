@@ -128,8 +128,9 @@ test('an element the screen never shows is measured, and the readout says it is 
   // `visibility` is inherited AND overridable, so a descendant that opts back
   // in is painted even under a `visibility: hidden` parent — and a reader can
   // see it. Walking ancestors for `visibility` found the parent and called
-  // this not drawn, which is the opposite of true. Found by Henry in the
-  // 0.61.0 release sweep; `audit`'s own `shown` rule reads the element alone
+  // this not drawn, which is the opposite of true. Found by the 0.61.0 release
+  // sweep — a classifier's read of #85, confirmed by Wren and Henry reading the
+  // code, and not measured until this arm. `audit`'s own `shown` rule reads the element alone
   // (shared/audit.ts:122), which is what this now agrees with.
   const revealed = await runCli(['inspect', fixture('hidden-text.html'), '--preset', 'laptop-768', '--selector', '#revealed'])
   expect(revealed.code, revealed.stderr).toBe(0)

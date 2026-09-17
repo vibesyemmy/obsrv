@@ -146,7 +146,9 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   // through the painted colour and is left to it.
   //
   // **The two rules are not the same shape, and treating them as one was a
-  // bug** (found by Henry in the 0.61.0 sweep). `visibility` is inherited *and
+  // bug** (found by the 0.61.0 release sweep — a classifier's read of #85,
+  // confirmed by Wren and Henry reading the code; `bug-inspect-visible-child-not-drawn`).
+  // `visibility` is inherited *and
   // overridable*: a descendant may declare `visibility: visible` under a
   // hidden ancestor and IS painted. Its own computed value already carries the
   // inheritance, so reading the element alone is both necessary and
