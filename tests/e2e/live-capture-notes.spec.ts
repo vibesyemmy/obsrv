@@ -144,7 +144,7 @@ test('a window capture of a page still painting when the budget runs out says so
   }
 })
 
-test('a raster capture while the pane is resized throughout says what it caught (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
+test('a raster capture while the pane is resized throughout says the page was still painting when the budget ran out (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
   // `ipc.ts:1793`, the raster path's wording for a capture the budget cut
   // short. A page cannot reach it alone. The raster loop leaves early for
   // steady painting, and it goes quiet otherwise. The only thing that restarts
@@ -152,9 +152,15 @@ test('a raster capture while the pane is resized throughout says what it caught 
   // for the whole 8 s budget. That is a preset cycle, the same state
   // `live-drive.spec.ts` holds for the window capture.
   //
-  // MEASUREMENT FIRST: it records the verdict and the warnings, and asserts
-  // only that the state held. Which label comes back is decided below once CI
-  // has said what it is.
+  // MEASURED FIRST, on CI (run 35215978933, six repeats): `timeout` five
+  // times and `uncovered` once, and all six carried this sentence. So this
+  // asserts the state, then the sentence on the label it belongs to, and
+  // records the label, as `live-drive.spec.ts` does for its own race.
+  //
+  // `uncovered` is recorded and NOT asserted. Part of that frame was never
+  // painted, so the PNG has transparent pixels, and "still painting" does not
+  // say so. That is `bug-live-raster-uncovered-said-as-painting`, and this
+  // test must not pin the wording that card replaces.
   test.skip(
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
@@ -162,6 +168,7 @@ test('a raster capture while the pane is resized throughout says what it caught 
   const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
+  const before = (await call('status')).presetId as string
 
   let cycling = true
   let applied = 0
@@ -171,17 +178,30 @@ test('a raster capture while the pane is resized throughout says what it caught 
       if (r.ok === true) applied++
     }
   })()
+  // Let the cycle get going, so the capture starts mid-resize rather than
+  // racing the first apply.
   await new Promise(r => setTimeout(r, 400))
   const started = Date.now()
   const shot = await call('captureRaster')
   const finished = Date.now()
   cycling = false
   await spin
-  await call('setPreset', { id: 'laptop-768' })
+  await call('setPreset', { id: before })
 
   const margin = `settled=${String(shot.settled)} label=${String(shot.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(shot.width)}x${String(shot.height)} warnings=${JSON.stringify(warningsOf(shot))}`
+  test.info().annotations.push({ type: 'raster verdict', description: margin })
   console.log(`raster under a preset cycle: ${margin}`)
+  // The state first: a stalled cycle would leave nothing below measuring what
+  // its name says.
   expect(applied, margin).toBeGreaterThan(20)
+  expect(shot.settled, margin).toBe(false)
+  if (shot.unsettledReason === 'timeout') {
+    expect(warningsOf(shot), margin).toContain('the page was still painting when the capture budget ran out; the PNG may show a transitional frame')
+  } else if (shot.unsettledReason !== 'uncovered') {
+    // Any other name on a pane that never stopped changing size is the
+    // finding, not a tolerance to widen.
+    throw new Error(`a raster of a pane still changing size came back as ${String(shot.unsettledReason)}: ${margin}`)
+  }
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
