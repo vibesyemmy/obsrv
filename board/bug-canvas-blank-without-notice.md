@@ -95,5 +95,9 @@ occlusion** — another window covering the app on the runner — rather than `h
 produces a near-zero, no count from this probe is evidence, and I would rather say the probe is not
 ready than publish a number from it.
 
-**Not done, and not to be read as done:** no CI run has been made. The throwaway branch was not
-pushed.
+**Not done, and not to be read as done:** no CI run has been made.
+
+**The probe lives on `probe/raf-ticks`, not here.** It was committed on this card's branch at first,
+which would have added a probe spec — one whose control had already failed — to main's suite on
+merge. That is the same stray-probe shape as #177, caught by @Wren reading the branch rather than
+the message about it. This card is board-only.
