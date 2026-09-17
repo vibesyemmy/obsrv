@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { closeSettings, launchApp, openSettings, rendererWindow } from './launch'
+import { armRendererPing } from './helpers/rendererPing'
 import { drawerSettled } from './helpers/select'
 import { choose } from './helpers/select'
 
@@ -105,7 +106,24 @@ test('a field commits on blur or Enter, never on a keystroke', async () => {
   expect(await backingWidth(page)).toBe(before)
   expect(await storedSettings()).toMatchObject({ hostDiagonalInches: 54 })
 
-  await field.blur()
+  // `bug-controls-blur-timeout`: this exact call timed out once in ~591 CI
+  // runs, on an input Playwright had already resolved, and left a call log and
+  // nothing else. The ping is armed only around it, and prints only when an
+  // answer is late — so a normal run says nothing and the next occurrence
+  // carries timestamps for when the renderer stopped answering. See the helper
+  // for why the two obvious instruments (timing from inside the handler, and
+  // Electron's `unresponsive`) are both silent on this failure.
+  const ping = armRendererPing(app, 'controls:blur')
+  try {
+    await field.blur()
+  } finally {
+    ping.stop()
+    // Two counts, said separately: a renderer that stopped answering is the
+    // failure this card is about; one that answered with an error is a
+    // different event wearing the same silence.
+    if (ping.misses() > 0) console.log(`[renderer-ping controls:blur] ${ping.misses()} late or unanswered ping(s) around this blur`)
+    if (ping.rejections() > 0) console.log(`[renderer-ping controls:blur] ${ping.rejections()} ping(s) rejected around this blur`)
+  }
   await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32 })
 
   // Escape discards an edit.
