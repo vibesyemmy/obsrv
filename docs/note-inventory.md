@@ -93,78 +93,87 @@ agent-control replies. The whole e2e suite ran on CI (run `35166342003`, 558 pas
 sentence was then attributed to **the longest string literal in `src/` (at `87c835a`) that it contains**,
 so the location below is where the sentence is written, not where it is pushed.
 
-**What it can and cannot tell you.** A row here means a run of the real app, against a page the suite
-serves, produced that sentence. That's what this file calls observed. It says nothing about notes the
-suite never provokes, and **the absence of a row is not evidence a note is unreachable.** Line numbers
-are `87c835a`'s. One suite run, so a count is how often it fired in that run, not a rate. `<n>` and
-`<path>` stand for numbers and paths.
+**What it can and cannot tell you.** A row means a run of Obsrv (the app, or a headless CLI render
+for `cli`-only rows), against a page the suite serves, produced that sentence. That's what this file
+calls observed. **The net caught only `notes`/`warnings` arrays in replies.** A sentence that reaches
+only the CLI's stderr, only the app's UI, or only the log file is outside it even when it fires, and
+**whether such producers exist hasn't been checked**. The absence of a row is not evidence a note is
+unreachable. Line numbers are `87c835a`'s. One suite run, so a count is how often a sentence fired in
+that run, not a rate. `<n>` and `<path>` stand for numbers and paths.
 
-**57 producers fired**, across 110 distinct sentences and 301 replies that carried at least one:
+**Placement was checked, not assumed** (Wren's read). A row is placed at the longest literal the
+sentence contains. When that literal occurs more than once in `src/`, or another literal of the same
+length also matches, the row is marked **ambiguous** and names the other locations: 3 rows.
+**Reach** marks the rows no user sees: one fires only because the suite sets `OBSRV_TEST`, one only in
+the dev lane.
 
-| written at | fired | surfaces | the sentence, shaped |
-| --- | --- | --- | --- |
-| `src/cli/audit.ts:159` | 1 | cli | no screen diagonal, so no millimetres: pass --diagonal <inches> with custom dimensions, or use a pre… |
-| `src/cli/audit.ts:35` | 1 | cli | <n> more findings past the <n> listed; the summary and the groups count them all |
-| `src/cli/capture.ts:317` | 6 | cli, mcp | page kept painting steadily for <n> ms after its first full frame (animation or video); capturing th… |
-| `src/cli/capture.ts:332` | 1 | cli | page kept painting for <n> ms (animation?); capturing the current frame |
-| `src/cli/lint.ts:514` | 25 | cli, control, mcp | <n> text element sits on an image or gradient and got no contrast verdict: the pixels under it are n… |
-| `src/cli/lint.ts:521` | 1 | cli | <n> images are a file of a pixel or two on a side stretched into a gap — a spacer, not a picture — a… |
-| `src/cli/main.ts:257` | 5 | cli, mcp | load did not finish within <n> ms under --throttle <n>g: <path> — measured the page as it stood; a p… |
-| `src/cli/main.ts:393` | 1 | cli | load did not finish within <n> ms under --throttle <n>g (a slow load is what a throttle is for): <pa… |
-| `src/cli/main.ts:533` | 2 | cli | hid chrome stuck inside the scroller for the bands after the first: div#toolbar (sticky, <n> px) |
-| `src/cli/main.ts:562` | 1 | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable co… |
-| `src/cli/main.ts:570` | 1 | cli | the document itself does not scroll — this page keeps its content in an inner scroller <n> CSS px ta… |
-| `src/cli/main.ts:630` | 2 | cli | hid chrome stuck to the viewport for the bands after the first: header#fixed-bar (fixed, <n> px), di… |
-| `src/cli/main.ts:649` | 2 | cli | full page is <n> CSS px tall; clamped to <n> (device pixels are capped at <n> per axis) |
-| `src/cli/main.ts:676` | 1 | cli | the page had not taken the <n> CSS px surface within <n> s, so whether it lays out against the viewp… |
-| `src/cli/main.ts:688` | 2 | cli | this page lays out against the viewport height — on a surface <n> CSS px tall it is <n> CSS px, agai… |
-| `src/cli/main.ts:881` | 1 | cli | the panel profile (budget-tn) is not applied to a diff: the comparison is about rasterisation and is… |
-| `src/main/controlServer.ts:592` | 1 | control | the page rect is off screen at the current scroll (<n>, <n>); scroll it into view first |
-| `src/main/frameCheck.ts:23` | 4 | control, mcp | the pane may show an older frame: the renderer drew frame <n>, the latest sent to it is <n> |
-| `src/main/ipc.ts:1145` | 15 | control, mcp | the frame is one colour end to end and stayed that way for the capture's <n> ms: the page painted it… |
-| `src/main/ipc.ts:1699` | 1 | control | the target was still resizing when the capture budget ran out; the PNG may show a transitional frame |
-| `src/main/ipc.ts:1701` | 1 | control | the page keeps painting steadily (animation or video); this is one frame of it, taken after two seco… |
-| `src/mcp/lib.ts:416` | 3 | mcp | this call waited <n> s for a render slot: the server runs at most <n> headless renders at once (OBSR… |
-| `src/mcp/lib.ts:430` | 1 | mcp | this call waited <n> s for Electron <n>.<n> to download: the first headless call after an install do… |
-| `src/mcp/lib.ts:576` | 1 | mcp | the dev app was relaunched to run the lane's current build: it had started before that build was mad… |
-| `src/mcp/lib.ts:617` | 21 | mcp | the Obsrv app is not running and cannot be launched here (OBSRV_TEST=<n> is set (the e<n>e harness m… |
-| `src/mcp/lib.ts:680` | 1 | mcp | fullPage is headless-only; rendered headlessly instead of driving the app. |
-| `src/mcp/server.ts:1054` | 1 | mcp | the app did not confirm the navigation before capture; the PNG may show the previous page. |
-| `src/mcp/server.ts:1251` | 1 | mcp | the PNG is <n> MiB, over the <n> MiB inline cap, so it is not inlined; read the file at <path> or re… |
-| `src/mcp/server.ts:1486` | 19 | mcp | `groupsOnly` left the per-finding list out on request: `findings` is empty and `truncated.findings`… |
-| `src/mcp/server.ts:1528` | 2 | mcp | `preset` is headless-only and was ignored in live mode; the app's own screen was used. |
-| `src/mcp/server.ts:2400` | 1 | mcp | the tab was still loading after the preset change when the settle budget ran out; the status, and an… |
-| `src/mcp/walk.ts:113` | 4 | cli, mcp | the walk was cut short before it began (the page did not answer a scroll within <n> s (its main thre… |
-| `src/preload/sync.ts:176` | 1 | control | scrollSelector "aside" matched an element that could not reach (<n>, <n>); it stopped at (<n>, <n>) |
-| `src/preload/sync.ts:182` | 3 | control, mcp | scrollSelector "#absent" matched no element; nothing was scrolled |
-| `src/shared/droppedEntries.ts:54` | 3 | cli, control, mcp | <n> of <n> text element the page sent was dropped: a value in it was outside what the measurement ac… |
-| `src/shared/emptyDocument.ts:112` | 1 | cli | nothing to measure in the light DOM: the page had no visible text and no targets, and none arrived i… |
-| `src/shared/emptyDocument.ts:128` | 9 | cli, control, mcp | nothing to measure: the page the server sent had no visible text and no targets, and none arrived in… |
-| `src/shared/emptyDocument.ts:133` | 31 | cli, control, mcp | nothing to measure: the page had no visible text and no targets, and none arrived in the <n> s it wa… |
-| `src/shared/inspectReadout.ts:151` | 4 | cli | this element is not drawn: display: none on it or on an ancestor. The measurements below are of a bo… |
-| `src/shared/inspectReadout.ts:218` | 5 | cli, control, mcp | "p[" is not a valid CSS selector, so nothing was looked for — found: false is about the selector, no… |
-| `src/shared/inspectReadout.ts:244` | 3 | cli, control | the point (<n>, <n>) is outside this screen's CSS viewport, <n>x<n>, and a point is read inside the… |
-| `src/shared/layoutScale.ts:45` | 29 | cli, control, mcp | the page lays out <n> CSS px wide where the screen gives it <n> and is drawn at <n>× to fit — what a… |
-| `src/shared/measureBudget.ts:122` | 10 | cli, control, mcp | the page navigated after it loaded (to the same address): a bot challenge, an interstitial, a redire… |
-| `src/shared/measureBudget.ts:144` | 16 | cli, control, mcp | the server answered <n> Not Found for <path> the figures are of the error page it sent, not of the p… |
-| `src/shared/measureBudget.ts:145` | 1 | cli | the server answered <n> Not Found for <path> the figures are of the error page it sent — check the r… |
-| `src/shared/measureBudget.ts:186` | 26 | cli, control, mcp | the load of <path> ended at <path> a login wall, a route that has moved, or a redirect the server ch… |
-| `src/shared/measureBudget.ts:187` | 1 | cli | the load of <path> ended at <path> a route that has moved, or a redirect the server chose — the figu… |
-| `src/shared/measureBudget.ts:76` | 7 | cli, mcp | the page did not answer the audit within <n> s of loading: its main thread was busy or blocked — a b… |
-| `src/shared/onionSkin.ts:63` | 3 | control, mcp | the onion skin was left off: it blends a <n>x render of the page over the target, and at this <n>x<n… |
-| `src/shared/pageMotion.ts:165` | 12 | cli, control, mcp | this page was still moving when it was measured: <n> of the <n> elements re-measured had moved, by u… |
-| `src/shared/paint.ts:156` | 26 | cli, mcp | the frame is one colour end to end (#<n>ff) and stayed that way for <n> ms: the page painted its bac… |
-| `src/shared/shadowShare.ts:122` | 9 | cli, control, mcp | <n> shadow roots hold <n> of this page's <n> interactive elements, which the measurement does not en… |
-| `src/shared/walkCoverage.ts:105` | 7 | cli, mcp | the page measures <n> CSS px (<n> screenfuls); the walk reached the first <n> px of it |
-| `src/shared/walkCoverage.ts:151` | 13 | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM, so the wal… |
-| `src/shared/walkCoverage.ts:253` | 18 | cli, mcp | the walk scrolled a dialog, not the page itself: this page hides the document's overflow while a dia… |
-| `src/shared/walkCoverage.ts:92` | 4 | cli, mcp | the walk saw the end after <n> screenful (<n> CSS px), but the page measures <n> CSS px (<n> screenf… |
-| `src/shared/walkCoverage.ts:94` | 1 | cli | the walk saw the end after <n> screenfuls (<n> CSS px), but the page measures <n> CSS px (<n> screen… |
+**57 producers fired** across 110 distinct sentences and 301 replies that carried at least one. **55 of them a user can see**; 3 of those 55 are placed ambiguously:
 
-**Four sentences had no literal of 16 characters or more to attribute them to:** the dev-lane stamp
-(`obsrv-dev lane: <branch> @ <sha> · server built …`) and three `throttle slow-4g not applied: refused
-by the harness` variants (`full page:`, `reference:`, and bare). Their producers are assembled from short
-parts. They fired, but they aren't placed in the table.
+| written at | fired | surfaces | reach / placement | the sentence, shaped |
+| --- | --- | --- | --- | --- |
+| `src/cli/audit.ts:159` | 1 | cli | user | no screen diagonal, so no millimetres: pass --diagonal <inches> with custom dimensions, or use a pre… |
+| `src/cli/audit.ts:35` | 1 | cli | user | <n> more findings past the <n> listed; the summary and the groups count them all |
+| `src/cli/capture.ts:317` | 6 | cli, mcp | user | page kept painting steadily for <n> ms after its first full frame (animation or video); capturing th… |
+| `src/cli/capture.ts:332` | 1 | cli | user | page kept painting for <n> ms (animation?); capturing the current frame |
+| `src/cli/lint.ts:514` | 25 | cli, control, mcp | user | <n> text element sits on an image or gradient and got no contrast verdict: the pixels under it are n… |
+| `src/cli/lint.ts:521` | 1 | cli | user | <n> images are a file of a pixel or two on a side stretched into a gap — a spacer, not a picture — a… |
+| `src/cli/main.ts:257` | 5 | cli, mcp | user | load did not finish within <n> ms under --throttle <n>g: <path> — measured the page as it stood; a p… |
+| `src/cli/main.ts:393` | 1 | cli | user | load did not finish within <n> ms under --throttle <n>g (a slow load is what a throttle is for): <pa… |
+| `src/cli/main.ts:533` | 2 | cli | user | hid chrome stuck inside the scroller for the bands after the first: div#toolbar (sticky, <n> px) |
+| `src/cli/main.ts:562` | 1 | cli | user | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable co… |
+| `src/cli/main.ts:570` | 1 | cli | user | the document itself does not scroll — this page keeps its content in an inner scroller <n> CSS px ta… |
+| `src/cli/main.ts:630` | 2 | cli | user | hid chrome stuck to the viewport for the bands after the first: header#fixed-bar (fixed, <n> px), di… |
+| `src/cli/main.ts:649` | 2 | cli | user | full page is <n> CSS px tall; clamped to <n> (device pixels are capped at <n> per axis) |
+| `src/cli/main.ts:676` | 1 | cli | user | the page had not taken the <n> CSS px surface within <n> s, so whether it lays out against the viewp… |
+| `src/cli/main.ts:688` | 2 | cli | user | this page lays out against the viewport height — on a surface <n> CSS px tall it is <n> CSS px, agai… |
+| `src/cli/main.ts:881` | 1 | cli | user | the panel profile (budget-tn) is not applied to a diff: the comparison is about rasterisation and is… |
+| `src/main/controlServer.ts:592` | 1 | control | user | the page rect is off screen at the current scroll (<n>, <n>); scroll it into view first |
+| `src/main/frameCheck.ts:23` | 4 | control, mcp | user | the pane may show an older frame: the renderer drew frame <n>, the latest sent to it is <n> |
+| `src/main/ipc.ts:1145` | 15 | control, mcp | user | the frame is one colour end to end and stayed that way for the capture's <n> ms: the page painted it… |
+| `src/main/ipc.ts:1699` | 1 | control | user | the target was still resizing when the capture budget ran out; the PNG may show a transitional frame |
+| `src/main/ipc.ts:1701` | 1 | control | user | the page keeps painting steadily (animation or video); this is one frame of it, taken after two seco… |
+| `src/mcp/lib.ts:416` | 3 | mcp | user | this call waited <n> s for a render slot: the server runs at most <n> headless renders at once (OBSR… |
+| `src/mcp/lib.ts:430` | 1 | mcp | user | this call waited <n> s for Electron <n>.<n> to download: the first headless call after an install do… |
+| `src/mcp/lib.ts:576` | 1 | mcp | dev-only: the dev lane | the dev app was relaunched to run the lane's current build: it had started before that build was mad… |
+| `src/mcp/lib.ts:617` | 21 | mcp | harness-only: fires because the suite sets `OBSRV_TEST` | the Obsrv app is not running and cannot be launched here (OBSRV_TEST=<n> is set (the e<n>e harness m… |
+| `src/mcp/lib.ts:680` | 1 | mcp | user | fullPage is headless-only; rendered headlessly instead of driving the app. |
+| `src/mcp/server.ts:1054` | 1 | mcp | user | the app did not confirm the navigation before capture; the PNG may show the previous page. |
+| `src/mcp/server.ts:1251` | 1 | mcp | user | the PNG is <n> MiB, over the <n> MiB inline cap, so it is not inlined; read the file at <path> or re… |
+| `src/mcp/server.ts:1486` | 19 | mcp | user | `groupsOnly` left the per-finding list out on request: `findings` is empty and `truncated.findings`… |
+| `src/mcp/server.ts:1528` | 2 | mcp | **ambiguous**, same literal at `src/mcp/server.ts:1832`, `src/mcp/server.ts:2516` | `preset` is headless-only and was ignored in live mode; the app's own screen was used. |
+| `src/mcp/server.ts:2400` | 1 | mcp | user | the tab was still loading after the preset change when the settle budget ran out; the status, and an… |
+| `src/mcp/walk.ts:113` | 4 | cli, mcp | **ambiguous**, same literal at `src/cli/walk.ts:105` | the walk was cut short before it began (the page did not answer a scroll within <n> s (its main thre… |
+| `src/preload/sync.ts:176` | 1 | control | user | scrollSelector "aside" matched an element that could not reach (<n>, <n>); it stopped at (<n>, <n>) |
+| `src/preload/sync.ts:182` | 3 | control, mcp | user | scrollSelector "#absent" matched no element; nothing was scrolled |
+| `src/shared/droppedEntries.ts:54` | 3 | cli, control, mcp | user | <n> of <n> text element the page sent was dropped: a value in it was outside what the measurement ac… |
+| `src/shared/emptyDocument.ts:112` | 1 | cli | user | nothing to measure in the light DOM: the page had no visible text and no targets, and none arrived i… |
+| `src/shared/emptyDocument.ts:128` | 9 | cli, control, mcp | user | nothing to measure: the page the server sent had no visible text and no targets, and none arrived in… |
+| `src/shared/emptyDocument.ts:133` | 31 | cli, control, mcp | user | nothing to measure: the page had no visible text and no targets, and none arrived in the <n> s it wa… |
+| `src/shared/inspectReadout.ts:151` | 4 | cli | user | this element is not drawn: display: none on it or on an ancestor. The measurements below are of a bo… |
+| `src/shared/inspectReadout.ts:218` | 5 | cli, control, mcp | user | "p[" is not a valid CSS selector, so nothing was looked for — found: false is about the selector, no… |
+| `src/shared/inspectReadout.ts:244` | 3 | cli, control | user | the point (<n>, <n>) is outside this screen's CSS viewport, <n>x<n>, and a point is read inside the… |
+| `src/shared/layoutScale.ts:45` | 29 | cli, control, mcp | user | the page lays out <n> CSS px wide where the screen gives it <n> and is drawn at <n>× to fit — what a… |
+| `src/shared/measureBudget.ts:122` | 10 | cli, control, mcp | user | the page navigated after it loaded (to the same address): a bot challenge, an interstitial, a redire… |
+| `src/shared/measureBudget.ts:144` | 16 | cli, control, mcp | user | the server answered <n> Not Found for <path> the figures are of the error page it sent, not of the p… |
+| `src/shared/measureBudget.ts:145` | 1 | cli | user | the server answered <n> Not Found for <path> the figures are of the error page it sent — check the r… |
+| `src/shared/measureBudget.ts:186` | 26 | cli, control, mcp | **ambiguous**, same literal at `src/shared/measureBudget.ts:187` | the load of <path> ended at <path> a login wall, a route that has moved, or a redirect the server ch… |
+| `src/shared/measureBudget.ts:187` | 1 | cli | user | the load of <path> ended at <path> a route that has moved, or a redirect the server chose — the figu… |
+| `src/shared/measureBudget.ts:76` | 7 | cli, mcp | user | the page did not answer the audit within <n> s of loading: its main thread was busy or blocked — a b… |
+| `src/shared/onionSkin.ts:63` | 3 | control, mcp | user | the onion skin was left off: it blends a <n>x render of the page over the target, and at this <n>x<n… |
+| `src/shared/pageMotion.ts:165` | 12 | cli, control, mcp | user | this page was still moving when it was measured: <n> of the <n> elements re-measured had moved, by u… |
+| `src/shared/paint.ts:156` | 26 | cli, mcp | user | the frame is one colour end to end (#<n>ff) and stayed that way for <n> ms: the page painted its bac… |
+| `src/shared/shadowShare.ts:122` | 9 | cli, control, mcp | user | <n> shadow roots hold <n> of this page's <n> interactive elements, which the measurement does not en… |
+| `src/shared/walkCoverage.ts:105` | 7 | cli, mcp | user | the page measures <n> CSS px (<n> screenfuls); the walk reached the first <n> px of it |
+| `src/shared/walkCoverage.ts:151` | 13 | cli, mcp | user | this page hides the document's overflow and has no scrollable container in its light DOM, so the wal… |
+| `src/shared/walkCoverage.ts:253` | 18 | cli, mcp | user | the walk scrolled a dialog, not the page itself: this page hides the document's overflow while a dia… |
+| `src/shared/walkCoverage.ts:92` | 4 | cli, mcp | user | the walk saw the end after <n> screenful (<n> CSS px), but the page measures <n> CSS px (<n> screenf… |
+| `src/shared/walkCoverage.ts:94` | 1 | cli | user | the walk saw the end after <n> screenfuls (<n> CSS px), but the page measures <n> CSS px (<n> screen… |
+
+**Four sentences had no literal of 16 characters or more to attribute them to**, and none counts
+towards C5. One is the dev-lane stamp (`obsrv-dev lane: <branch> @ <sha> · server built …`, dev-only).
+The other three are `throttle slow-4g not applied: refused by the harness` variants (`full page:`,
+`reference:`, and bare), which are harness-only: the suite forces the refusal. They fired, but they
+aren't placed in the table.
 
 **Against the hand-checked live table above**, these now have an observation: the resizing verdict
 (then `ipc.ts:1605`, now `:1699`), the steady-painting verdict (`:1701`), and `scrollSelector` matching no
