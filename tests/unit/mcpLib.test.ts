@@ -30,6 +30,8 @@ import {
   electronNote,
   chromiumChatter,
 } from '../../src/mcp/lib'
+import { parseArgs } from '../../src/cli/args'
+import type { SnapCommand } from '../../src/cli/args'
 
 const URL = 'https://x.test'
 const OUT = '/tmp/mcp/snap.png'
@@ -587,5 +589,41 @@ describe('the address a measurement answers under', () => {
     expect(answeredUrl(undefined, 'https://a.test/showing')).toBe('https://a.test/showing')
     expect(answeredUrl('', 'https://a.test/showing')).toBe('https://a.test/showing')
     expect(answeredUrl('   ', 'https://a.test/showing')).toBe('https://a.test/showing')
+  })
+})
+
+/**
+ * `bug-orientation-name`, the MCP half. `tests/unit/cliArgs.test.ts` proves the
+ * two flags mean one screen *at the CLI*; these prove the MCP builders hand the
+ * CLI that same screen, which is the join the two suites would otherwise leave
+ * unwatched — a builder that dropped `rotate` would pass both of them.
+ *
+ * Checked through the real parser rather than by comparing argv strings: the
+ * question is what screen a caller gets, and only the parser answers that.
+ */
+describe('rotate reaches the headless surface as the screen the deprecated word produced', () => {
+  it('every builder that takes orientation also emits --rotate', () => {
+    expect(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)).toContain('--rotate')
+    expect(buildAuditArgs({ url: URL, preset: '1080p-24', rotate: true })).toContain('--rotate')
+    expect(buildLintArgs({ url: URL, preset: '1080p-24', rotate: true })).toContain('--rotate')
+    expect(buildReportArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)).toContain('--rotate')
+    expect(buildInspectArgs({ url: URL, selector: '#a', preset: '1080p-24', rotate: true })).toContain('--rotate')
+  })
+
+  it('omits it when the caller did not ask, so the CLI default stands', () => {
+    expect(buildSnapArgs({ url: URL, preset: '1080p-24' }, OUT)).not.toContain('--rotate')
+    expect(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: false }, OUT)).not.toContain('--rotate')
+  })
+
+  it('lands on one screen either way — 1080p-24 turned a quarter turn is 1080x1920', () => {
+    const viaFlag = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)) as SnapCommand
+    const viaWord = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', orientation: 'landscape' }, OUT)) as SnapCommand
+    expect(viaFlag.specs[0]?.cssWidth).toBe(1080)
+    expect(viaFlag.specs[0]?.cssHeight).toBe(1920)
+    expect([viaWord.specs[0]?.cssWidth, viaWord.specs[0]?.cssHeight]).toEqual([1080, 1920])
+  })
+
+  it('refuses a disagreeing pair at the CLI it built the args for, not only in the handler', () => {
+    expect(() => parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', orientation: 'portrait', rotate: true }, OUT))).toThrow(/disagree/)
   })
 })

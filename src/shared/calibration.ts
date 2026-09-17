@@ -125,6 +125,24 @@ export function resolveRotate(
 }
 
 /**
+ * The same equivalence as `resolveRotate`, read in each direction, for the two
+ * places that hold a settled value rather than a caller's request.
+ *
+ * The control server speaks in the word — `setOrientation { orientation }`, and
+ * `status` answers with it — while every MCP reply now also carries `rotated`,
+ * which says the thing itself. These two translations are the join between
+ * those, and they live here so no handler writes its own ternary: a word that
+ * means two things is exactly what `bug-orientation-name` was.
+ */
+export function rotatedFromOrientation(orientation: Orientation): boolean {
+  return orientation === 'landscape'
+}
+
+export function orientationFromRotate(rotate: boolean): Orientation {
+  return rotate ? 'landscape' : 'portrait'
+}
+
+/**
  * A sentence for the reply **only when the word contradicts the screen it
  * produced**, and nothing otherwise.
  *

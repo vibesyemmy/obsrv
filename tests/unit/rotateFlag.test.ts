@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { orientationWordNote, resolveRotate } from '../../src/shared/calibration'
+import { orientationFromRotate, orientationWordNote, resolveRotate, rotatedFromOrientation } from '../../src/shared/calibration'
 
 /**
  * `bug-orientation-name`. `orientation` names the preset's STORED form, so
@@ -69,5 +69,39 @@ describe('orientationWordNote', () => {
     expect(note).not.toBeNull()
     expect(note).toContain('produced a landscape screen')
     expect(note).toContain('rotate: false')
+  })
+})
+
+/**
+ * The same equivalence read the other way. The control server speaks in the
+ * word (`setOrientation { orientation }`) and every MCP reply now also carries
+ * the plain flag, so both translations live here rather than as ternaries
+ * scattered through the handlers — which is how `orientation` came to mean two
+ * things in the first place.
+ */
+describe('the word and the flag are one fact', () => {
+  it('reads the rotation flag out of the word the app stores', () => {
+    expect(rotatedFromOrientation('landscape')).toBe(true)
+    expect(rotatedFromOrientation('portrait')).toBe(false)
+  })
+
+  it('writes the word the control server takes', () => {
+    expect(orientationFromRotate(true)).toBe('landscape')
+    expect(orientationFromRotate(false)).toBe('portrait')
+  })
+
+  it('round-trips both ways, so a reply cannot contradict the call that set it', () => {
+    for (const word of ['portrait', 'landscape'] as const) {
+      expect(orientationFromRotate(rotatedFromOrientation(word))).toBe(word)
+    }
+    for (const flag of [true, false]) {
+      expect(rotatedFromOrientation(orientationFromRotate(flag))).toBe(flag)
+    }
+  })
+
+  it('agrees with resolveRotate, the other reader of the same word', () => {
+    for (const word of ['portrait', 'landscape'] as const) {
+      expect(resolveRotate(word, undefined)).toEqual({ rotate: rotatedFromOrientation(word) })
+    }
   })
 })

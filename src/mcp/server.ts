@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { resolveRotate } from '../shared/calibration'
+import { orientationFromRotate, resolveRotate, rotatedFromOrientation } from '../shared/calibration'
 import { THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -1005,7 +1005,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     if (input.orientation !== undefined || input.rotate !== undefined) {
       const wanted = resolveRotate(input.orientation, input.rotate)
       if ('refuse' in wanted) return toolError(wanted.refuse)
-      await controlCall(info, 'setOrientation', { orientation: wanted.rotate ? 'landscape' : 'portrait' }, LIVE_APPLY_TIMEOUT_MS)
+      await controlCall(info, 'setOrientation', { orientation: orientationFromRotate(wanted.rotate) }, LIVE_APPLY_TIMEOUT_MS)
     }
     if (input.textScale !== undefined) {
       await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
@@ -1099,6 +1099,11 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     profile: status.profileId,
     ...(status.deviceScaleFactor === undefined ? {} : { deviceScaleFactor: status.deviceScaleFactor }),
     orientation: status.orientation,
+    // Derived here, from the app's own flag, rather than carried up from the
+    // CLI: the headless reply derives the same fact from the resolved request,
+    // so both surfaces answer `rotated` and neither reads it off the other
+    // (`bug-orientation-name`, and the C4 parity gap it opened).
+    rotated: rotatedFromOrientation(status.orientation),
     screenShape: status.screenShape,
     textScale: status.textScale,
     throttle: status.throttle,
@@ -1218,6 +1223,14 @@ server.registerTool(
     const liveNotes = resolved.notes
     const why = resolved.why
 
+    // Resolved here, ahead of the render, for two reasons: a disagreeing pair
+    // earns the shared sentence rather than an exit code wrapped in
+    // `cliFailure`, and the answer is what this reply reports as `rotated` —
+    // derived from the request the render was built from, not read back out of
+    // the CLI's JSON, which does not carry it.
+    const wanted = resolveRotate(input.orientation, input.rotate)
+    if ('refuse' in wanted) return toolError(wanted.refuse)
+
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
     let args: string[]
@@ -1240,6 +1253,7 @@ server.registerTool(
       ...meta,
       mode: 'headless',
       why,
+      rotated: wanted.rotate,
       inlined: image.inlined,
       warnings: [...cliWarnings, ...liveNotes, ...(image.note === null ? [] : [image.note]), ...waits(run)],
       pngPath,
@@ -2248,6 +2262,7 @@ server.registerTool(
     url?: string
     preset?: string
     orientation?: 'portrait' | 'landscape'
+    rotate?: boolean
     textScale?: number
     onionSkin?: number
     throttle?: string
@@ -2309,8 +2324,14 @@ server.registerTool(
       // After the preset, before everything else: rotation is applied on top of
       // whichever screen is in force, so a call carrying both has to land in
       // that order or the rotation would be spent on the outgoing preset.
-      if (input.orientation !== undefined) {
-        await controlCall(live.info, 'setOrientation', { orientation: input.orientation }, LIVE_APPLY_TIMEOUT_MS)
+      // `rotate` and the deprecated `orientation` reach this one control call
+      // through the function the CLI and live snap also resolve with, so the
+      // surfaces cannot drift on what a disagreeing pair means. Until this
+      // line, drive's schema accepted `rotate` and the handler dropped it.
+      if (input.orientation !== undefined || input.rotate !== undefined) {
+        const wanted = resolveRotate(input.orientation, input.rotate)
+        if ('refuse' in wanted) return toolError(wanted.refuse)
+        await controlCall(live.info, 'setOrientation', { orientation: orientationFromRotate(wanted.rotate) }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
@@ -2450,6 +2471,9 @@ server.registerTool(
       if (!status) return toolError('the control server returned a malformed status')
       const structured = {
         ...status,
+        // The app's rotation flag said plainly, beside the word it comes from
+        // — the same derivation obsrv_snap does on both of its surfaces.
+        rotated: rotatedFromOrientation(status.orientation),
         ...(resolved.launched ? { launched: true } : {}),
         ...(input.scroll !== undefined ? { scrolled: scrolled ?? null } : {}),
         ...(scroller !== undefined ? { scroller } : {}),
