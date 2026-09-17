@@ -103,3 +103,25 @@ animation frames. That hypothesis is set aside, and the silent blank canvas need
 - Nothing here yet explains the one sighting. The target frames that did arrive in main
   (`bus.lastSeq()`), and whether the renderer got them, are the next thing to record on a recurrence.
 
+## A SECOND SIGHTING, read 2026-09-17 by Kenya — run `35123165259` at `108e139`
+
+Read while settling the `bug-ci-main-red-37pct` row, and it is the same shape as the first:
+
+    ✓  375  panes.spec.ts:77  the toolbar navigates both panes (258ms)
+    ✘  376  panes.spec.ts:83  the target canvas shows the page, not a blank (9.8s)
+         Expected: > 1000   Received: 0
+
+- **The predecessor passed**, 258 ms earlier, so both panes were on the fixture. Genuine, not the
+  retry confound #230 removed.
+- **Zero white pixels** — nothing drawn at all. The first sighting reported the poll timing out;
+  this one reports the count, and the count is 0.
+- **`No frames from target renderer`: 0 occurrences**, again. The app said nothing, again.
+
+**So this card has two sightings on two different heads**, eight days of runs apart in the tally's
+ordering, both with a passing predecessor and both silent. It is not a one-off.
+
+**What it still does not have is a mechanism.** The rAF hypothesis lost its support on CI (#247):
+**occlusion does not throttle animation frames on a runner** — 30/27/28 ticks with a fronted holder
+app covering the window — so the vacuity arm failed there too, and nothing connects a blank canvas to
+missing animation frames. The next recording is Henry's: `bus.lastSeq()` against what the renderer
+received, which separates "main never sent a frame" from "the renderer never drew one".
