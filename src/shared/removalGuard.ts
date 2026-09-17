@@ -86,11 +86,19 @@ function within(child: string, parent: string): boolean {
 /**
  * Judges one path a caller is about to remove.
  *
- * **What it cannot see, and a caller must not assume it can:** symlinks. These
- * are string comparisons on resolved paths, so a sandbox containing a symlink
- * to somewhere under the real home satisfies every rule here. A caller that
- * removes directories should refuse to follow symlinks itself (`lstat` before
- * descending) rather than expect this to have caught it.
+ * **Symlinks: handled where they exist, and NOT where they dangle.** A live
+ * link is followed by `realpath`, so a sandbox root pointing into the real home
+ * is refused. A **dangling** one is not: `realpath` throws on it, `canonical`
+ * falls back to re-joining the unresolved segments literally, and
+ * `<sandbox>/link/x` is allowed even when `link` points at a path under the
+ * real home that does not exist yet. Should that target appear before the
+ * removal runs, a deleter that follows links walks straight into the home.
+ *
+ * **So the caller's duty stands, and it is not weakened by the above:** anything
+ * that removes directories must `lstat` and refuse to descend into symlinks
+ * itself. This function narrows the hole; it does not close it. (Noted by Wren
+ * on #197, after the live-symlink case was fixed — the danger of fixing half of
+ * something is a comment that reads as though you fixed all of it.)
  */
 export function checkRemoval(target: string, options: GuardOptions = {}): GuardVerdict {
   const rp = options.realpath ?? realpathSync.native

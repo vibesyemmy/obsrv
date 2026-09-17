@@ -186,6 +186,25 @@ describe('checkRemoval: canonical paths, not string prefixes', () => {
     expect(v.allow, 'an absent path under the real home was allowed').toBe(false)
   })
 
+  it('does NOT catch a dangling symlink, and this test exists so that is known rather than discovered', () => {
+    // Wren's note on #197, after the live-symlink case was fixed. `realpath`
+    // throws on a link whose target does not exist, `canonical` falls back to
+    // re-joining literally, and the verdict allows a path under a link that
+    // points into the real home. If that target appears before the removal
+    // runs, a deleter following links walks into the home.
+    //
+    // Asserted as-is rather than fixed: closing it needs `lstat` on every
+    // segment, which is the caller's duty anyway for the directory walk. The
+    // danger of fixing half a problem is believing you fixed all of it, so the
+    // remaining half is written down and tested.
+    const dangling = (p: string): string => {
+      if (p === '/tmp/box/link' || p.startsWith('/tmp/box/link/')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      return p
+    }
+    const v = checkRemoval('/tmp/box/link/Obsrv', { realHome: HOME_REAL, sandboxRoot: '/tmp/box', realpath: dangling })
+    expect(v.allow, 'if this now refuses, the guard got stronger and this test should say so').toBe(true)
+  })
+
   it('uses the real filesystem by default', () => {
     // The arms above inject, so one arm must show the default is wired up.
     // `/tmp` resolving to `/private/tmp` is the cheapest true statement about
