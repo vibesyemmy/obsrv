@@ -218,6 +218,18 @@ above.
 **A limit either way:** two displays with the same physical resolution but different sizes cannot be told
 apart.
 
+**Electron's display `id` was considered and left out** (Wren raised it). It tells same-resolution displays
+apart **within** a session, but it is not promised stable across restarts, which is the mirror image of
+the resolution key. Neither way of combining them earns its place:
+- **"A match on either counts"** does not close the gap. A second same-resolution display still matches
+  on resolution, so it is still read as the display the size was set for.
+- **"The id first, then resolution"** closes it within a session. But after a restart a recorded id can
+  belong to a different screen, and then the *right* screen reads as wrong, which is the nag this card
+  prevents, arriving by reboot.
+
+So the key stays physical resolution, with the limit stated. If same-resolution pairs turn out to matter,
+the answer is something stable per monitor (EDID or a serial), not the session id.
+
 ### Placement: a footer chip, not the empty state
 
 The chip sits beside `fit ×… · not pixel-exact` in `PaneFooter`. The external-monitor case happens with a
