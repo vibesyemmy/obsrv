@@ -621,6 +621,36 @@ html, body, #root { margin: 0; height: 100%; background: var(--chrome-0); color:
 }
 .pane-footer .role { color: var(--text-0); letter-spacing: 0.08em; }
 
+/* The calibration hint (`DiagonalHint`): its own row above the footer, because
+   `.pane-footer` never wraps and would clip a sentence to nothing on a narrow
+   pane. Same chrome as the footer, so it reads as the pane talking about
+   itself rather than as an alert bar. */
+.pane-hint {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font: 400 11px/1.4 var(--mono);
+  color: var(--text-0);
+  background: var(--chrome-2);
+  border-top: 1px solid var(--line);
+}
+.pane-hint-text { flex: 1 1 260px; min-width: 0; }
+.pane-hint-action {
+  flex: 0 0 auto;
+  font: inherit;
+  color: var(--text-0);
+  background: var(--chrome-3);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.pane-hint-action:hover { border-color: var(--text-1); }
+.pane-hint-error { flex: 1 1 100%; color: var(--error); }
+
 /* The rotate control. Same 30px border-box and the same `--chrome-3` pressed
    fill as `.segmented`, so the screen row keeps one hit-target rhythm and one
    way of marking a choice. Two outlines of the screen you get, rather than the

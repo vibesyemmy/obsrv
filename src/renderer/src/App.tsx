@@ -9,6 +9,7 @@ import { Fatal } from './components/Fatal'
 import { ImagePane } from './components/ImagePane'
 import { NativeSlot } from './components/NativeSlot'
 import { MIN_PANE_PX, PaneDivider } from './components/PaneDivider'
+import { DiagonalHint } from './components/DiagonalHint'
 import { TargetFooter } from './components/PaneFooter'
 import { PanelControls, type PanelSection } from './components/PanelControls'
 import { SettingsModal } from './components/SettingsModal'
@@ -514,6 +515,7 @@ export function App() {
                   would cost a context restore on every first navigation. */}
               <TargetCanvas onFatal={setFatal} imageFrame={imageFrame} />
             </div>
+            <DiagonalHint onOpenSettings={() => setDrawer('settings')} />
             <TargetFooter onOpenPanel={openPanel} />
           </div>
           {/* Spans both panes rather than sitting in the target half. That is

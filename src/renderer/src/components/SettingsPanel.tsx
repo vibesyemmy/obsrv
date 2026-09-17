@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { applyOrientation, ppi } from '../../../shared/calibration'
+import { recordDiagonalFor } from '../../../shared/diagonalHint'
 import { MAX_TABS_MAX, MAX_TABS_MIN } from '../../../shared/presets'
 import { formatAge } from '../../../shared/update'
 import type { Settings } from '../../../shared/types'
@@ -247,7 +248,9 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
         value={settings.hostDiagonalInches}
         min={5}
         step={0.1}
-        onCommit={v => commit({ ...useStore.getState().settings, hostDiagonalInches: v })}
+        // Recording the display is what ends the calibration hint: the number
+        // alone cannot say whether anyone chose it (`shared/diagonalHint.ts`).
+        onCommit={v => commit(recordDiagonalFor({ ...useStore.getState().settings, hostDiagonalInches: v }, useStore.getState().host))}
         onInvalid={setHostError}
       />
 
