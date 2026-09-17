@@ -95,7 +95,52 @@ test('the target canvas shows the page, not a blank', async () => {
 
   // A canvas nothing has drawn into is black (alpha: false); the fixture is a
   // white page, so white pixels prove a frame was uploaded and drawn.
-  await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
+  //
+  // WHEN IT FAILS, IT SAYS WHOSE SIDE IT IS. This has been seen blank twice on
+  // CI — runs 35123165259 and 35176357601, both with `:77` passing a second
+  // before, and the app's own `No frames from target renderer` notice ABSENT
+  // both times (`bug-canvas-blank-without-notice`). Neither log can say
+  // whether main never sent a frame or the renderer never drew one, and
+  // without that the next recurrence is worth no more than the last two.
+  //
+  // `frameSent()` is what the bus has sent and whether delivery is subscribed;
+  // `painting` is what the session believes. Read ON FAILURE, so a healthy run
+  // pays nothing for it — and read then rather than before, because the state
+  // wanted is the state at the moment it gave up.
+  try {
+    await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
+  } catch (failure) {
+    // Its OWN try/catch: this runs inside the failure path, and a crashed or
+    // closed app is one of the states this test can fail in. An exception here
+    // would replace the failure and lose both the account and the original
+    // message (Wren's read of #267).
+    let state = ''
+    try {
+      const sent = await app.evaluate(() => {
+        const g = globalThis as unknown as { __obsrv: { tabs: { frameSent(): { lastSeq: number; ready: boolean } }; session: { painting: boolean } } }
+        return { ...g.__obsrv.tabs.frameSent(), painting: g.__obsrv.session.painting }
+      })
+      state =
+        `main sent frame ${sent.lastSeq} (delivery subscribed: ${sent.ready}, session painting: ${sent.painting}). ` +
+        `lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas means it did ` +
+        // One bus, re-pointed across tabs by `setSource` with a single counter
+        // (`frameBus.ts:77`), so this count is NOT scoped to this tab: a
+        // non-zero value can predate a tab switch with nothing sent since.
+        `and nothing drew it — but the count is the bus's, not this tab's, so a non-zero value may predate a switch.`
+    } catch (e) {
+      state = `main's state could not be read: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`
+    }
+    let px = { white: -1, total: -1, distinct: -1 }
+    try {
+      px = await canvasPixels()
+    } catch {
+      // Left as -1, which reads as "not measured" rather than as zero pixels.
+    }
+    throw new Error(
+      `the canvas stayed blank: ${px.white} white of ${px.total} pixels, ${px.distinct} distinct. ${state} ` +
+        `Original: ${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)}`,
+    )
+  }
   // Hairlines, grey text and a black-to-white ramp: not a flat fill.
   const px = await canvasPixels()
   expect(px.distinct).toBeGreaterThan(16)

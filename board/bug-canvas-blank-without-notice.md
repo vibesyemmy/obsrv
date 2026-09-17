@@ -125,3 +125,48 @@ ordering, both with a passing predecessor and both silent. It is not a one-off.
 app covering the window — so the vacuity arm failed there too, and nothing connects a blank canvas to
 missing animation frames. The next recording is Henry's: `bus.lastSeq()` against what the renderer
 received, which separates "main never sent a frame" from "the renderer never drew one".
+
+## THE NEXT RECURRENCE WILL CARRY ITS OWN ANSWER, 2026-09-17 by Kenya
+
+Two sightings have now been read and neither log could say **whose side it was**: main never sending
+a frame, and the renderer never drawing one, look identical from outside. So `panes:83` now reads, on
+failure only:
+
+    the canvas stayed blank: 0 white of 360000 pixels, 1 distinct.
+    main sent frame N (delivery subscribed: true/false, session painting: true/false).
+    lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas
+    means it did and nothing drew it.
+
+**Read at the moment it gives up**, not before — the first draft captured it ahead of the poll, which
+would have recorded the state before the failure rather than at it.
+
+**Controlled:** with the pixel read forced to 0, the account prints live values —
+`main sent frame 4 (delivery subscribed: true, session painting: true)` — so it is not a sentence
+that only exists in the source.
+
+**Why this is new evidence rather than a restatement.** Neither sighting carried
+`No frames from target renderer` — the app's own notice, absent both times — and that notice is the
+only thing the product says when frames stop. **So nothing in either log could name which side was
+quiet**, and every reading of them, including both of mine, had to stop at "the canvas was blank".
+This account is the first thing that can answer it, which is the whole reason it goes in before the
+next recurrence rather than after.
+
+### How to read it when it fires — the key, on the card rather than only in a PR
+
+    lastSeq 0, or ready false     main never sent a frame. The question is main's, and this is
+                                  `bug-target-canvas-no-frames`' territory if its notice also appears.
+    lastSeq high, ready true      main sent frames and nothing drew them. The question is the
+                                  renderer's, and this card's.
+    "main's state could not be read"   the app was gone or the hook renamed; the original failure
+                                  message still follows, and that is what to read instead.
+
+**One caveat the sentence carries:** the count is the **bus's**, not this tab's. One bus is re-pointed
+across tabs with a single counter (`frameBus.ts:77`), so a non-zero `lastSeq` can predate a tab
+switch with nothing sent since. Do not read a high number as "frames arrived for this page".
+
+**Desk safety: unchanged.** The account adds no window call — no `show`, `focus` or `moveTop` — and
+reads only `tabs.frameSent()` and `session.painting`. `panes.spec` stays in the desk-safe local set.
+
+**This is the sync138 move.** That card sat on `waiting: event` for days and was answered from a
+single caught failure, because the trace was already in place when it happened. Nothing here waits on
+Henry's `bus.lastSeq()` recording being run by hand on a recurrence; the recurrence brings it.
