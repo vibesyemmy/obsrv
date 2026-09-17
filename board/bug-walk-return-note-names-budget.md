@@ -102,3 +102,42 @@ and blur both stories.
   never answers (cut short), and a budget exit with a reply latency above 0;
 - `cli-walk-limits.spec.ts` asserts the return-to-top sentence on `blocks-on-scroll.html` headless (the
   arm #308 deliberately left out).
+
+## MEASURED 2026-09-17 by Henry, on `#308`'s own prints — the prediction is half right
+
+`#308` added the unconditional `console.log('budget-ended walk said: …')` this card asked for, on both
+surfaces, and it has now run **twice** on the same branch. The two runs disagree, which is the answer.
+
+| run | headless budget-ended walk said |
+| --- | --- |
+| `35234853920` | the budget sentence, and nothing else |
+| `35239464603` | the budget sentence, **then** *"the walk could not return to the top afterwards (the page did not answer a scroll within 15 s (its main thread was busy or blocked)); measured where it stopped."* |
+
+The live surface printed the same two sentences both times — the budget sentence and the `groupsOnly`
+note — and the return-to-top sentence is in neither. So, on real Electron:
+
+- **path 2 is real: 1 of 2 headless budget-ended walks carried the sentence, 0 of 2 live.**
+- **"essentially every budget-exit headless walk" is too strong.** It is the race this card already
+  described, and the page wins it about half the time at a 15 s budget on the CI runner. Two runs is
+  not a rate; it is enough to rule out both "never" and "always".
+
+**Two lines above are now stale and are corrected here rather than edited away:** *"No CI log can
+answer it"* and *"prints the list only on failure"* were true of the runs that existed when they were
+written. `#308` changed that on purpose, and the answer cost no run of its own.
+
+### What the measurement changes about the fix
+
+**On this path the sentence is wrong twice over, and only one half was on the card.** The card's fix —
+report the time actually waited — answers the number. But on a budget exit the page's main thread is
+**free**: run `35239464603`'s walk answered all **97** steps and was then told it *"did not answer a
+scroll within 15 s (its main thread was busy or blocked)"*. **The blame is false too**, and no
+correction of the duration removes it. The cut-short path is different, and there the blame is fair
+(Wren): the thread really is blocked, and only the number lies.
+
+So the spent-budget wording Wren asked for is not just a way to avoid printing *"within 0 s"*. It has
+to stop accusing the page at all — the walk ran out of its own budget before it asked, and that is a
+fact about the walk. Something of the shape *"the walk's own budget was gone before it could return to
+the top, so the page was not asked; measured where it stopped."*
+
+**Acceptance item 1 is met** (the measurement) and is kept for its second half: the fix's control run
+still prints today's wording beside the fixed one. The last three items stand.
