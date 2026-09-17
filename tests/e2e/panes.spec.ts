@@ -95,7 +95,33 @@ test('the target canvas shows the page, not a blank', async () => {
 
   // A canvas nothing has drawn into is black (alpha: false); the fixture is a
   // white page, so white pixels prove a frame was uploaded and drawn.
-  await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
+  //
+  // WHEN IT FAILS, IT SAYS WHOSE SIDE IT IS. This has been seen blank twice on
+  // CI — runs 35123165259 and 35176357601, both with `:77` passing a second
+  // before, and the app's own `No frames from target renderer` notice ABSENT
+  // both times (`bug-canvas-blank-without-notice`). Neither log can say
+  // whether main never sent a frame or the renderer never drew one, and
+  // without that the next recurrence is worth no more than the last two.
+  //
+  // `frameSent()` is what the bus has sent and whether delivery is subscribed;
+  // `painting` is what the session believes. Read ON FAILURE, so a healthy run
+  // pays nothing for it — and read then rather than before, because the state
+  // wanted is the state at the moment it gave up.
+  try {
+    await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
+  } catch (failure) {
+    const sent = await app.evaluate(() => {
+      const g = globalThis as unknown as { __obsrv: { tabs: { frameSent(): { lastSeq: number; ready: boolean } }; session: { painting: boolean } } }
+      return { ...g.__obsrv.tabs.frameSent(), painting: g.__obsrv.session.painting }
+    })
+    const px = await canvasPixels()
+    throw new Error(
+      `the canvas stayed blank: ${px.white} white of ${px.total} pixels, ${px.distinct} distinct. ` +
+        `main sent frame ${sent.lastSeq} (delivery subscribed: ${sent.ready}, session painting: ${sent.painting}). ` +
+        `lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas means it did ` +
+        `and nothing drew it. Original: ${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)}`,
+    )
+  }
   // Hairlines, grey text and a black-to-white ramp: not a flat fill.
   const px = await canvasPixels()
   expect(px.distinct).toBeGreaterThan(16)

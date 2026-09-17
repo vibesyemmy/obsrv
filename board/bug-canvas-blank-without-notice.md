@@ -125,3 +125,25 @@ ordering, both with a passing predecessor and both silent. It is not a one-off.
 app covering the window — so the vacuity arm failed there too, and nothing connects a blank canvas to
 missing animation frames. The next recording is Henry's: `bus.lastSeq()` against what the renderer
 received, which separates "main never sent a frame" from "the renderer never drew one".
+
+## THE NEXT RECURRENCE WILL CARRY ITS OWN ANSWER, 2026-09-17 by Kenya
+
+Two sightings have now been read and neither log could say **whose side it was**: main never sending
+a frame, and the renderer never drawing one, look identical from outside. So `panes:83` now reads, on
+failure only:
+
+    the canvas stayed blank: 0 white of 360000 pixels, 1 distinct.
+    main sent frame N (delivery subscribed: true/false, session painting: true/false).
+    lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas
+    means it did and nothing drew it.
+
+**Read at the moment it gives up**, not before — the first draft captured it ahead of the poll, which
+would have recorded the state before the failure rather than at it.
+
+**Controlled:** with the pixel read forced to 0, the account prints live values —
+`main sent frame 4 (delivery subscribed: true, session painting: true)` — so it is not a sentence
+that only exists in the source.
+
+**This is the sync138 move.** That card sat on `waiting: event` for days and was answered from a
+single caught failure, because the trace was already in place when it happened. Nothing here waits on
+Henry's `bus.lastSeq()` recording being run by hand on a recurrence; the recurrence brings it.
