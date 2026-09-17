@@ -2017,10 +2017,11 @@ const readoutShape = z
     color: z.string().describe('Text colour, #rrggbb.'),
     colorPainted: z
       .string()
+      .optional()
       .describe(
         'The colour the screen actually shows: the stated colour after its own alpha and the element\'s effective opacity, composited onto the ' +
           'background. Equal to `color` when the text is fully opaque, which is most of the time; different is the case worth seeing, and it is ' +
-          'the colour the contrast figures describe.',
+          'the colour the contrast figures describe. Absent from an app older than the field.',
       ),
     background: z.string().nullable().describe('The colour the text sits on, composited; null when an image or gradient is under it.'),
     backgroundNote: z.enum(['computed', 'image']),
