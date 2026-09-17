@@ -232,13 +232,22 @@ found that `log.warn` and a stderr `warn` were being counted as replies (ten sen
 
 **The split:**
 
-| | producers | after the tests below |
-| --- | --- | --- |
-| fired, and placed at exactly one producer | 55 | **73** |
-| fired, but the same text is written at several places | 7 (3 groups) | **4** (2 groups) |
-| not seen to fire | 54 | **39** |
-| written or reworded after the run | 4 | 4 |
-| too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 |
+| | producers | after #256 and #258 | after #270, #273, #274, #282, #283, #292 and #293 |
+| --- | --- | --- | --- |
+| fired, and placed at exactly one producer | 55 | 73 | **89** (2 of them since deleted with `#293`) |
+| fired, but the same text is written at several places | 7 (3 groups) | 4 (2 groups) | **4** (2 groups) |
+| not seen to fire | 54 | 39 | **14** |
+| a named reason, not an observation | 0 | 0 | **9** |
+| written or reworded after the run | 4 | 4 | **7** |
+| too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 | 1 |
+
+**The third column counts 124 where the first two count 121, and that is a different population
+rather than an error.** 121 is what the pass found at `b43a272`. `#293` **wrote three producers**
+that did not exist then (they are the last three rows of the written-or-reworded table), so 124 have
+now been counted. **Two of the 89 have since been deleted** with `#293` — the share note and the
+empty-page note's web-components branch — and they stay counted as fired, because they did fire and
+the runs that carried them are named. So: **124 counted, 122 in the tree today.** Whoever adds the
+next producer adds to both.
 
 The right column is this file's state after `#256` and `#258`, below. The left is what the run of
 2026-09-17 saw, and it does not change: a test written afterwards says the sentence can be produced,
@@ -256,8 +265,9 @@ The run's log tags each MCP entry with the tool that answered, and only `mcp:obs
 `mcp:obsrv_lint` carried it — so `liveInspect`'s copy had never run. `#258` pins it
 (`mcp-live.spec:417`), and each of the three is now attributed to a tool.
 
-**Not seen to fire (39).** "Pushed in" is the directory of the sink, not every surface that relays it.
-Fifteen rows have left this table for the one below.
+**Not seen to fire (14).** "Pushed in" is the directory of the sink, not every surface that relays it.
+Forty rows have left this table: thirty-one to the fired list below, nine to the named reasons after
+it.
 
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
@@ -266,46 +276,24 @@ Fifteen rows have left this table for the one below.
 | `src/cli/main.ts:529` | cli | the page scrolls an inner container <…> CSS px tall; captured the first <…> <…>bands of <…> CSS px (… |
 | `src/cli/main.ts:620` | cli | full page is <…> CSS px tall; captured the first <…> bands of <…> CSS px <…>(<…> at most) — what lie… |
 | `src/cli/main.ts:1479` | cli | the <…> finding<…> worth featuring all <…>, so this screen has no <…>"where the problems are" sectio… |
-| `src/cli/stuckProbe.ts:76` | cli | could not measure chrome stuck to the viewport, so the bands keep it: <…> |
-| `src/cli/stuckProbe.ts:98` | cli | the page replaced its document during the probe; measured again |
 | `src/cli/walk.ts:98` | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. |
 | `src/cli/walk.ts:125` | cli | the walk stopped after <…> screenful<…> at its <…> s budget without reaching the end of the page; th… |
-| `src/cli/walk.ts:165` | cli | the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other… |
 | `src/cli/walk.ts:179` | cli | the walk was cut short after <…> screenful<…> (<…>); |
-| `src/main/controlServer.ts:531` | main | scroll offset could not be confirmed |
-| `src/main/frameCheck.ts:20` | main | frames are not being delivered to the pane (the renderer has not subscribed yet), so the capture sho… |
-| `src/main/frameCheck.ts:21` | main | the renderer did not say which frame it drew, so the capture may show an older frame than the target… |
-| `src/main/ipc.ts:1752` | main | the renderer has not reported the pane bounds yet; captured the full window instead |
-| `src/main/ipc.ts:1753` | main | the renderer has not reported the render bounds yet; captured the whole pane instead |
-| `src/main/ipc.ts:1755` | main | the page was still painting when the capture budget ran out; the PNG may show a transitional frame —… |
-| `src/main/ipc.ts:1759` | main | the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation,… |
-| `src/main/ipc.ts:1790` | main | the page keeps painting (animation or video); this is one frame of it |
-| `src/main/ipc.ts:1793` | main | the page was still painting when the capture budget ran out; the PNG may show a transitional frame |
-| `src/main/ipc.ts:1796` | main | the raster is the target's own frame; the onion skin is not blended into it |
-| `src/mcp/control.ts:318` | mcp | the Obsrv app could not be launched (<…>); rendered headlessly. |
-| `src/mcp/control.ts:350` | mcp | the launch exited immediately without a new instance starting — Obsrv's profile is already in use by… |
-| `src/mcp/control.ts:356` | mcp | Obsrv is running and was asked whether to allow agent control, but nobody answered within <…> s; ren… |
-| `src/mcp/control.ts:357` | mcp | the Obsrv app was launched but did not answer within <…> s; rendered headlessly. It may still be sta… |
 | `src/mcp/lib.ts:581` | mcp | the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT… |
-| `src/mcp/server.ts:871` | mcp | the page was still loading when the app's navigate budget (30 s) ran out; the status, and any captur… |
-| `src/mcp/server.ts:1070` | mcp | the app was still loading the page when the settle budget ran out; the PNG may show a transitional f… |
-| `src/mcp/server.ts:1092` | mcp | this app is older than the capture's settle verdict, so `settled` reports whether the navigation was… |
-| `src/mcp/walk.ts:41` | mcp | the app predates page-wise scrolling (0.41.0); measured without walking. |
 | `src/mcp/walk.ts:105` | mcp | the walk could not return to the top afterwards (<…>); measured where it stopped. |
 | `src/mcp/walk.ts:143` | mcp | the walk stopped after <…> screenful<…> at its <…> s budget without reaching the end of the page; th… |
 | `src/mcp/walk.ts:184` | mcp | the page did not confirm a scroll during the walk; the walk stopped there. |
-| `src/mcp/walk.ts:197` | mcp | the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the p… |
 | `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
-| `src/shared/walkCoverage.ts:168` | cli, mcp | <…>the page has <…>, which the walk does not enter, <…>and nothing in the light DOM scrolls<…> |
 | `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
-| `src/shared/walkCoverage.ts:194` | cli, mcp | <…>content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualise… |
-| `src/shared/walkCoverage.ts:245` | cli, mcp | the walk could not move the page or <…>: this page hides the <…>document's overflow <…>, and neither… |
 
-**Fired since, pinned by a test (16).** Fifteen of these left the list above; the sixteenth is
+**Fired since, pinned by a test (32).** Thirty-one of these left the list above; the other is
 `liveInspect`'s copy, which leaves the ambiguous group. Each test asserts the **whole** sentence, and
 each was shown to fail when that sentence is altered in `src/` — the control runs are
-`35192500426` (#256), `35194537378` (#258, v2 on the corrected head), `35199207359` (#263) and
-`35200051529` (#264, v2; see below).
+`35192500426` (#256), `35194537378` (#258, v2 on the corrected head), `35199207359` (#263),
+`35200051529` (#264, v2; see below), `35203138455` (#270), `35205639766` (#274), `35212544441`
+(#282, v2), `35213404787` (#283), `35218471058` (#292's raster arm) and, for #273 and the rest of
+#292, a local run of the same shape: the producers reworded in `src/main`, every arm red, restored,
+every arm green.
 
 | written at | pinned by | seen firing in |
 | --- | --- | --- |
@@ -325,6 +313,52 @@ each was shown to fail when that sentence is altered in `src/` — the control r
 | `src/cli/lint.ts:526` | `cli-lint.spec:270`, the same shape for text, edges and images | `35199168099` |
 | `src/cli/lint.ts:78` | `cli-lint.spec:270`, the list's own cap | `35199168099` |
 | `src/preload/sync.ts:167` | `live-drive.spec:531`, a selector the browser refuses | `35199881465` |
+| `src/cli/walk.ts:165` | `cli-walk-limits.spec:91`, a page that locks its scroll mid-walk | `35211676500` |
+| `src/mcp/walk.ts:197` | `cli-walk-limits.spec:174`, the same page, live | `35211676500` |
+| `src/shared/walkCoverage.ts:245` | `cli-walk-limits.spec:107`, a dialog that scrolls only sideways | `35211676500` |
+| `src/shared/walkCoverage.ts:168` | `cli-walk-limits.spec:116`, an app shell whose content is behind one open root | `35211676500` |
+| `src/main/ipc.ts:1796` | `live-capture-notes.spec:71`, the onion skin on, a raster capture | `35218827856` |
+| `src/main/ipc.ts:1790` | `live-capture-notes.spec:88`, an animating page, a raster capture | `35218827856` |
+| `src/main/ipc.ts:1759` | `live-capture-notes.spec:99`, an animating page with the skin on, a window capture | `35218827856` |
+| `src/mcp/control.ts:350` | `mcp-launch.spec:92`, a launch that loses the single-instance lock | `35205619883` |
+| `src/mcp/control.ts:356` | `mcp-launch.spec:116`, a consent nobody answers | `35205619883` |
+| `src/mcp/server.ts:871` | `mcp-live.spec:878`, a page whose load never finishes | `35210865781` |
+| `src/mcp/server.ts:1070` | `mcp-live.spec:878`, the same page's settle budget | `35210865781` |
+| `src/cli/stuckProbe.ts:98` | `cli-snap-tiled.spec:229`, a page that replaces its document once during the probe | `35213379890` |
+| `src/cli/stuckProbe.ts:76` | `cli-snap-tiled.spec:239`, the same page replacing it twice | `35213379890` |
+| `src/main/controlServer.ts:531` | `live-capture-notes.spec:234`, a scroll a page holding its main thread cannot answer | `35218827856` |
+| `src/main/ipc.ts:1755` | `live-capture-notes.spec:115`, an animating page under a throttle, a window capture | `35218827856` |
+| `src/main/ipc.ts:1793` | `live-capture-notes.spec:147`, a raster capture under a paused preset cycle | `35218827856` |
+
+**Two of those rows changed meaning the same day (`#293`, open shadow roots).** The measurement
+enters open roots now, so:
+- **`walkCoverage.ts:184`** — *"the page has N open shadow roots, which the walk does not enter"* —
+  fired in `#270` and is now reachable only from an app between 0.58.0 and `#293` driven by a newer
+  MCP. It stays in the fired table, because it did fire and the run that carried it is named; what
+  changed is that nothing in this tree can produce it again. It joins `chore-minimum-app-version`.
+- **`walkCoverage.ts:210`**, the older walk's *"no iframe covers the viewport and the page has no
+  open shadow roots"*, is on the same footing and joins it too.
+
+**Two producers left this file entirely.** `shadowShare.ts`'s share note and `emptyDocument.ts`'s
+web-components branch were deleted with the gap they described, along with `shadowContent`, the
+counts behind both. A producer that no longer exists is not an unfired row; it is removed, and this
+paragraph is the record that it was.
+
+**Named reasons, not observations (9).** Each is written for a state this tree cannot reach, and each
+says why here rather than leaving a row that reads as work nobody has done. They are not counted as
+fired, and none of them is proposed for removal.
+
+| written at | pushed in | why it stays unobserved |
+| --- | --- | --- |
+| `src/main/frameCheck.ts:20` | main | **Measured, 12 launches and 3 reloads.** The earliest call an agent can make — the control file polled every 5 ms, 423–866 ms on a laptop and 1263–6854 ms on a runner (`35216434021`) — never produced it, and neither did three captures fired while the app's own window reloaded. Both checks run after the capture settles, which is ≥ 700 ms on a quiet page and 3 s on a blank one, and the renderer subscribes on mount. Kept as the guard for a renderer slower than any measured (`chore-live-app-race-sentences`). |
+| `src/main/ipc.ts:1752` | main | The same measurement. A report dropped at the tab-switch early return leaves the bounds main already holds, so it cannot make them null after the first report. |
+| `src/main/ipc.ts:1753` | main | The same measurement, one field narrower. |
+| `src/main/frameCheck.ts:21` | main | **Reachable, and proven once** by removing the `drawNow` send (#139's control). A test needs an `OBSRV_TEST` fence in `src/`, and this file's own decision is that the inventory buys no fences: a fence is bought by a defect. If a stale capture nobody was warned about turns up, that defect buys it. |
+| `src/mcp/control.ts:318` | mcp | The lever exists (`OBSRV_ELECTRON_PKG_DIR`) and the control showed it cannot serve this arm: the same resolver serves the headless render, so the call errors instead of answering with the note (`35207583374`, red at `isError`). Reachable in the field, not here without machinery whose only purpose is the arm. |
+| `src/mcp/control.ts:357` | mcp | Needs an app that comes up and never answers, which is a fake of our own making rather than a state a page can produce. |
+| `src/mcp/server.ts:1092` | mcp | Version skew: an app older than the capture's settle verdict. `chore-minimum-app-version`. |
+| `src/mcp/walk.ts:41` | mcp | Version skew: an app older than page-wise scrolling (0.41.0). Same card. |
+| `src/shared/walkCoverage.ts:194` | cli, mcp | Version skew: an app that sends no `blocked` field (pre-0.58.0). Same card, and a unit test pins the whole sentence as a construction guard. |
 
 **A fourth fixture followed for the caps (#263):** `over-caps.html`, 2100 buttons, 3100 paragraphs and
 600 upscaled images, past `AUDIT_MAX_TARGETS`, the 3000 text cap on both tools, and `LINT_MAX_IMAGES`
@@ -361,8 +395,11 @@ description, which both overstated it, were corrected (`#259`, `#260`).
   `timeout`, and both producers fired. The unfired `capture.ts:347` is `uncovered`, which passes
   through, so the router cannot explain an unfired row.
 
-**Written or reworded after the run (4).** These need their own observation, not a place on the list
-above:
+**Written or reworded after the run (7).** These need their own observation, not a place on the list
+above. The last three are `#293`'s: the walk note's opening and its ruled-out wording for a walk that
+entered the roots, and the capture's reworded sentence. Each has a test asserting it
+(`cli-walk.spec`, `mcp-live.spec`, `cli-snap-tiled.spec`, on `app-shell-unreachable.html`); what none
+has is a run of the note log that saw it, which is what this column counts.
 
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
@@ -370,54 +407,37 @@ above:
 | `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
 | `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
+| `src/shared/walkCoverage.ts:165` | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… |
+| `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
+| `src/cli/main.ts:542` | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… |
 
 ## What is left
 
-- **Each of the 43 unfired producers and the 4 newer ones gets one of three outcomes:**
-  - a fixture that fires it on CI;
-  - a finding that it can't fire, and then the sentence goes;
-  - a named reason it stays unobserved.
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292 and #293: fourteen unfired
+producers, seven written or reworded after the run, two ambiguous groups, and nine named reasons.**
 
-  Several are failure paths (an app that can't be launched, a profile already in use), where
-  provoking the state is the work.
+- **Each of the 14 gets one of the same three outcomes:** a fixture that fires it on CI, a finding
+  that it can't fire and then the sentence goes, or a named reason it stays unobserved.
 - **The two ambiguous groups left:** which of the identical places fired.
-- **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the ten
-  this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
-- **What the 43 would take, in clusters:**
-  - **Live-app states (10, `src/main`):** bounds not reported yet, still painting at the budget (two
-    wordings), the onion skin blending two frames, the raster being the target's own frame, a scroll
-    offset that could not be confirmed, frames not delivered, a renderer that did not say which frame
-    it drew. Each is a race or a startup window, so these want a control-server or `ipc` test that
-    holds the state open, not a fixture.
-  - **Walk limits (13, `cli/walk.ts`, `mcp/walk.ts`, `shared/walkCoverage.ts`):** a page that locks
-    its scroll mid-walk, one that never confirms a scroll, content in an iframe, a shadow root or a
-    transform scroller. Some fixtures exist (`locked.html`, `iframe-wall.html`,
-    `replaces-itself-on-scroll.html`); the work is finding which sentence each produces.
-  - **Launch and consent failures (5, `mcp/control.ts`, `mcp/lib.ts`):** the app cannot be launched,
-    the launch meets a profile already in use, consent goes unanswered, the app answers too late,
-    agent control is off. **All five sit behind `OBSRV_TEST`**, whose guard says why:
-    *"OBSRV_TEST=1 is set (the e2e harness must never launch a real Obsrv)"* (`mcp/lib.ts:617`), with
-    `launchApp` refusing again at `mcp/launch.ts:91`. Under the suite as it stands they cannot occur,
-    and a unit test through the injected deps would construct all five — which is the evidence this
-    file exists to reject.
-    - **The safe shape, measured rather than designed around** (Wren's read, 2026-09-17):
-      `tests/e2e/launch.ts:44` already starts the built app with `--user-data-dir=<temp>` **and**
-      `OBSRV_TEST=1`, and `src/main/log.ts:21` moves the logs into that profile under that flag — so
-      an isolated launch is a solved problem on the harness's own path. `launchApp`'s **bundle**
-      target spawns the installed `.app` with no args and can isolate nothing; its **electron**
-      target already carries `args` and `env`, which is how the dev lane passes its own profile.
-    - **So a gate belongs on the electron path only** — the built tree into a temp profile — and the
-      guard for the installed app stays exactly as it is. Nothing points a launch at
-      `Application Support/Obsrv`, and **a local run needs Opeyemi's separate yes**, as the
-      desk-taking specs do.
-  - **Truncation and caps (7, `cli/audit.ts`, `cli/lint.ts`, `cli/main.ts`):** pages with more
-    findings, text elements or bands than one answer carries. One dense fixture may fire several.
-  - **Old-app compatibility (2, `mcp/server.ts:1092`, `mcp/walk.ts:41`):** sentences for an app older
-    than the tree under test (pre-0.41.0 page-wise scrolling, a capture with no settle verdict). They
-    cannot be produced here, so the honest resolutions are a named reason or removal — a decision.
-  - **The rest (6):** an uncovered frame, the stuck-chrome probe's two sentences, an invalid
-    `scrollSelector` live, and what is left of `measureBudget`.
+- **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the
+  ten this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
+- **What the 14 would take:**
+  - **Walk limits (8).** Batch 1 (#270) fired four. What is left is the budget pair
+    (`cli/walk.ts:125`, `mcp/walk.ts:143`), the cut-short pair (`cli/walk.ts:179`, `mcp/walk.ts:211`),
+    the return-to-top pair (`cli/walk.ts:98`, `mcp/walk.ts:105`), `mcp/walk.ts:184` (a scroll the page
+    never confirms, live) and `walkCoverage.ts:174` (a frame that covers part of the viewport).
+  - **Truncation and caps (3, `cli/main.ts:529`, `:620`, `:1479`).** A page taller than the bands one
+    answer carries, and a report with no findings worth featuring.
+  - **The rest (3):** an uncovered frame (`capture.ts:347`), image findings below the height the walk
+    reached (`cli/lint.ts:94`), and agent control turned off (`mcp/lib.ts:581`), which needs a live app
+    with the toggle off.
+- **The named reasons are a standing list, not a backlog.** Two of them are version skew and share
+  `chore-minimum-app-version`; the three live-app ones are measured; `frameCheck.ts:21` waits for a
+  defect to buy its fence.
 - **The 17-row live table at the top is history.** Of its 14 unobserved rows:
   - 7 are `log.warn` lines, which no reply carries, so they're outside the list above;
-  - `sync.ts:175` has fired since (reworded, now `:176`);
-  - the other 6 are in the list above, under `b43a272`'s line numbers.
+  - `sync.ts:175` has fired since (reworded, now `:176`), and `sync.ts:167` in #264;
+  - `ipc.ts:1606`, `:1610` and `:1647` — still painting at the budget, the onion skin blending, and
+    the raster being the target's own frame — fired in #273 and #292 (now `:1755`, `:1759`, `:1796`);
+  - `ipc.ts:1603` and `:1604`, the two bounds, are named reasons now (`:1752` and `:1753`), measured
+    over 12 launches and 3 reloads.
