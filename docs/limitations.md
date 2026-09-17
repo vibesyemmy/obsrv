@@ -95,7 +95,7 @@ by design — so the app's application-support directory grows with use, and
 fastest for the people who use it most. Measured on a working profile: **1.3 GB,
 915 MB of it `Cache`**, 338 MB `Code Cache`, with nothing pruning either.
 
-The disk cache is capped at 256 MiB from 0.62.0 (`src/main/index.ts`). `Code
+The disk cache is capped at 256 MiB from 0.61.0 (`src/main/index.ts`). `Code
 Cache` is Chromium's own and has no such switch, so the directory still grows —
 bounded where it was worst, not everywhere.
 

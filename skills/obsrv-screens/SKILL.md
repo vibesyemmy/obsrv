@@ -14,11 +14,10 @@ semantics for phone presets — with optional cheap-panel simulation
 emulation only changes the viewport; Obsrv changes the rasterisation, which is
 where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
-**Written against `main` with 0.61.0's changes in, 2026-09-14. The newest
-release is 0.60.0, so this page is currently *ahead* of what `npx -y getobsrv`
-installs.** What you have: `obsrv --version` on the CLI, or `obsrv_drive`'s
-`version` field — it is the only reply that carries one, so do not go looking
-for `version` on a snap or an audit.
+**Written against 0.61.0** (last read against the code on 2026-09-14). What
+you have: `obsrv --version` on the CLI, or `obsrv_drive`'s `version` field — it
+is the only reply that carries one, so do not go looking for `version` on a
+snap or an audit.
 
 A difference points two ways and they are not the same problem. **Older than
 the version named here** — the page describes behaviour you do not have yet;
