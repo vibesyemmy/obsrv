@@ -324,7 +324,15 @@ display too.
 - `tests/unit/ipcPayloads.test.ts`: the field across the wire, refused rather than coerced when out of shape.
 - `tests/e2e/diagonal-hint.spec.ts` (desk-safe, run locally): the sentence in a real window and not
   clipped, confirming writing to disk, a pushed display change naming both screens, and an older file
-  asking once. **Control:** with the untouched and unknown states silent, three of the four red.
+  asking once. **Control:** with the untouched and unknown states silent, **all four red — three
+  for their own reasons and the fourth as a cascade.** The first three tests share one app instance
+  (one `describe`, one `beforeAll`); the fourth has its own. With the hint silent, test 2's
+  confirm-click never lands, so test 3 fails downstream of that rather than as an independent check.
+  Idris measured 4 of 4 where this line first said 3, Wren confirmed the structure, and Henry checked
+  it again against the spec (`:46`, `:61`, `:70` share an app, `:106` does not) and corrected the line
+  here while Kenya was unreachable. **The control is not weakened:** three tests are still red for
+  reasons of their own, which is what it was for. It is the `controls.spec:85` shape already in the
+  team's memory — a hidden predecessor making a later test fail for a reason that is not its own.
 
 **Still (b)'s to decide, with Opeyemi through Henry:** one diagonal per display. Nothing here blocks it;
 the field already carries `inches` and up to eight displays.
