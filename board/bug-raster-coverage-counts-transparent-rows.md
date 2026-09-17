@@ -40,29 +40,59 @@ not page content"*. A caller reading the reply has no way to know a band of the 
 That is class 1 under `release-gate.md`: a wrong answer nothing in the reply discloses. And every
 `uncovered` percentage is computed from the same mask, so it can undercount by the same band.
 
-## The mechanism — reasoned, NOT measured
+## MEASURED 2026-09-17 by Idris: the mechanism, confirmed at both levels this card asked for
 
-`captureQuiescent` fills its coverage mask from the **rectangles** paints arrive with, not from what the
-bytes in them are. The candidate: during a grow, Chromium delivers a paint whose rectangle spans the new
-size while the newly exposed rows have not been composited, so the rectangle marks them painted and
-their bytes are transparent. Two sightings fit it; neither proves it. **This is a code reading and
-should be quoted as one** until a probe logs the rectangle and the alpha of the rows it claims.
+**The exact code path.** `src/cli/capture.ts`'s `onFrame`, the branch guarded by
+`x === 0 && y === 0 && w === width && h === height` (currently ~line 311): a frame whose declared rect
+covers the whole current bitmap takes `buffer.set(data)`, `covered = true`, `mask = null` —
+unconditionally, never inspecting the bytes it just accepted. The byte-by-byte mask that would notice
+an unpainted pixel only runs in the other branch, for a partial rect. That asymmetry is the whole
+mechanism; the reading above was right in shape and now has a line number.
+
+**Level 1, synthetic, against `captureQuiescent` itself.** A fake `FrameEmitter` emitting one "full"
+frame whose bottom 6 of 27 rows are alpha 0 (a full-size rect, real byte content otherwise):
+`captureQuiescent` returns `settled: true`, and the caller's buffer carries exactly those 288
+transparent bytes through untouched — `48 × 6`, the predicted count. The identical hole delivered as a
+*partial* rect instead is caught correctly (`settled: false, unsettledReason: 'uncovered'`), confirming
+the asymmetry is exploitable, not merely plausible.
+
+**Level 2, live, against real Chromium.** A genuine offscreen `TargetSource`, `tests/fixtures/tall.html`,
+and a rapid, overlapping series of height changes (500→900→1400→2000→700→1600→300→2000→1100→1900 CSS
+px, 40 ms apart — deliberately shorter than a paint round-trip). **A single clean grow-then-settle
+produced nothing** — checked first, worth recording so nobody re-tries that shape expecting it to
+reproduce: Chromium had time to composite before its one paint fired. The cycle shape is what found it
+originally and what it took here too.
+
+Nine real `'frame'` events captured. Frame 7 of 9: `rect=(0,0,400x1900)`, `frame=400x1900`, **`isFull:
+true`**, its own last three sampled rows **alpha 0 across every sampled column**. Frame 8, milliseconds
+later: same rect, same frame size, **alpha 255 throughout** — the genuine repaint landing right after
+the false "full" one was accepted. That is the two incidental CI sightings (`1280x124 at 0,900`;
+`1280x32 at 0,768`), reproduced on demand rather than waited for again.
+
+**The "measure first" assumption — checked, not left open.** `src/main/targetSource.ts`'s
+`BrowserWindow` construction sets neither `transparent: true` nor a custom `backgroundColor`, so
+Electron's OSR default (opaque) applies; nothing here asks for an alpha-capable surface. The same live
+probe corroborates it directly: every frame where compositing had genuinely finished (0, 1, 3, 6, 8 of
+the 9) read alpha 255 uniformly across every sample; the *only* alpha-0 reading in the whole run was
+frame 7, caught mid-composite. No legitimate transparent-page case turned up, and the code offers no
+path to one.
+
+**Not done, on purpose — the candidate fix and its pinning test, for whoever picks this up next.**
+Unaffected by the above; if anything, better supported now than when the card was opened.
 
 ## Candidate fix, for whoever picks this up
 
 Make the answer true of the bytes **by construction**: before answering, count the fully transparent
 pixels in the buffer, and if there are any, the verdict is `uncovered` with the share and region taken
 from the bytes rather than the mask. That puts Kenya's baseline invariant in the product instead of in
-one test. **Measure first** that an offscreen target never paints alpha-0 as page content — it composites
-onto an opaque background, but that is also a reading — or the check will call a legitimately
-transparent page unpainted.
+one test. The "measure first" caveat above is now closed, not open — Idris's probe is the measurement.
 
 **Headless too, probably:** the mask is `captureQuiescent`'s, which the CLI shares. Unmeasured there.
 
 ## Acceptance, each with a control
 
-- a probe that logs, for a paint during a grow, the rectangle and the alpha of the rows it covers —
-  confirming or killing the mechanism above, written down either way;
+- ~~a probe that logs, for a paint during a grow, the rectangle and the alpha of the rows it
+  covers~~ **met**: Idris's two-level probe above, 2026-09-17;
 - a capture never answers `timeout`, `resizing` or `settled: true` about a PNG with fully transparent
   pixels, pinned by construction in `cliCapture.test.ts` (a fake paint whose rectangle covers rows whose
   bytes are alpha 0). **Control:** reverting the fix reds it;
