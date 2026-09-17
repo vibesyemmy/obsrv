@@ -3,7 +3,7 @@ title: "The target emits no url-changed at all — a second shape, and the test 
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "event: a recurrence carrying the native-side outcome, which CI supplies unasked"
+waiting: "Kenya: read the recurrence of 2026-09-17 00:27Z below, with its account"
 order: 40
 ---
 
@@ -191,3 +191,232 @@ cannot be staged reliably from outside because it is a race.
 The comment describing `ok` was also corrected: `ok` with native commits and no target `url-changed`
 is **(b) or the bus itself**, and this trace cannot separate those two. The first wording said
 "timing", which would have closed the question a step early.
+
+## RECURRED 2026-09-17 00:27Z, on CI, with the native-side outcome — recorded by Henry, not read
+
+**Where:** run `35165446101`, #178's head `e7777ef`. That tree is main plus orientation, and it **already
+includes #171** (a server redirect of an issued load is an echo) **and #184** (a mirrored commit to the
+recorded address isn't an arrival). Both changed this area within the hour before, which is worth knowing
+before reading. First try `✘` in 106 ms, retry `✓`. This was the only sync failure in the run.
+
+**First line:** `Error: the target emitted no url-changed.` (`sync.spec.ts:221`, `seen.length` 0, expected ≥ 1).
+
+**The account, verbatim from the failure** (timestamps absolute ms; each list is its own clock read, so
+compare `at` values, not positions):
+
+```json
+{
+ "mirror": [
+  {
+   "at": 1789604846025,
+   "from": "native",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604846139,
+   "from": "native",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604846145,
+   "from": "target",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604847197,
+   "from": "native",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604847204,
+   "from": "target",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604847221,
+   "from": "target",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "inPage": false,
+   "branch": "issued",
+   "detail": "other was file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html"
+  },
+  {
+   "at": 1789604847231,
+   "from": "native",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "inPage": false,
+   "branch": "echo",
+   "detail": ""
+  },
+  {
+   "at": 1789604847249,
+   "from": "native",
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "inPage": false,
+   "branch": "already-there",
+   "detail": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html"
+  }
+ ],
+ "commits": [
+  {
+   "at": 1789604843739,
+   "url": "about:blank",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  },
+  {
+   "at": 1789604844448,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  },
+  {
+   "at": 1789604845953,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": true
+  },
+  {
+   "at": 1789604846003,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  },
+  {
+   "at": 1789604846145,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  },
+  {
+   "at": 1789604847204,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  },
+  {
+   "at": 1789604847221,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate",
+   "said": true,
+   "mirroring": false
+  }
+ ],
+ "nativeLoads": [
+  {
+   "at": 1789604843601,
+   "url": "about:blank",
+   "outcome": "ok",
+   "tookMs": 177
+  },
+  {
+   "at": 1789604844307,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "outcome": "ok",
+   "tookMs": 146
+  },
+  {
+   "at": 1789604845928,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "outcome": "ok",
+   "tookMs": 19
+  },
+  {
+   "at": 1789604846004,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "outcome": "ok",
+   "tookMs": 25
+  },
+  {
+   "at": 1789604846127,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "outcome": "ok",
+   "tookMs": 19
+  },
+  {
+   "at": 1789604847185,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "outcome": "ok",
+   "tookMs": 23
+  },
+  {
+   "at": 1789604847222,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "outcome": "ok",
+   "tookMs": 16
+  },
+  {
+   "at": 1789604847243,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "outcome": "ok",
+   "tookMs": 16
+  }
+ ],
+ "nativeCommits": [
+  {
+   "at": 1789604843772,
+   "url": "about:blank",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604844321,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604845934,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604846025,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/tall.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604846139,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604847197,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/redirect.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604847231,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate"
+  },
+  {
+   "at": 1789604847249,
+   "url": "file:///Users/runner/work/obsrv/obsrv/tests/fixtures/hairline.html",
+   "kind": "did-navigate"
+  }
+ ]
+}
+```
+
+Kenya is out of usage, so it's recorded here so it survives until she's back. It hasn't been interpreted,
+on purpose: it's her card, and #171/#184 being in the tree is the first thing it needs checked against.
