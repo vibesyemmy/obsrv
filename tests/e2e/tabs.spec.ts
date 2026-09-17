@@ -854,17 +854,27 @@ test.describe('tabs come back on relaunch', () => {
 
     // The whole tab is the drag handle, not the label button inside it.
     const handles = p1.locator('.chrome-tabs .tab')
-    await handles.nth(0).dragTo(handles.nth(2))
+    // Onto the MIDDLE tab, not the last one — and that is the whole difference
+    // between a test that catches a broken drop index and one that cannot.
+    // `moveTab` clamps: `to = min(rest.length, toIndex)` (shared/tabList.ts).
+    // With three tabs, `rest.length` is 2 once the dragged one is removed, so
+    // dropping on the last position clamps 2 and 3 to the same answer and an
+    // off-by-one is invisible. The card suggested dragging the first tab onto
+    // the third; that gesture was measured against a deliberately broken drop
+    // index (`onDrop(index + 1)`, run 35183610866) and stayed GREEN. A drop in
+    // the middle is what the clamp cannot absorb.
+    await handles.nth(0).dragTo(handles.nth(1))
 
     // Main's answer, not the strip's local state: the strip could show a move
     // it only believes in. `snapshot()` is what persists and what a relaunch
     // reads back.
-    await expect.poll(order, { timeout: 5_000 }).toEqual([before[1]!, before[2]!, before[0]!])
+    await expect.poll(order, { timeout: 5_000 }).toEqual([before[1]!, before[0]!, before[2]!])
     await expect(strip(p1).nth(0)).toHaveText('link-fixture')
-    await expect(strip(p1).nth(1)).toHaveText('hairline-fixture')
-    await expect(strip(p1).nth(2)).toHaveText('tall-fixture')
-    // Re-ordering is not selecting: the tab in front is the one that was.
-    await expect(strip(p1).nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(strip(p1).nth(1)).toHaveText('tall-fixture')
+    await expect(strip(p1).nth(2)).toHaveText('hairline-fixture')
+    // Re-ordering is not selecting: the tab in front is the one that was, now
+    // at index 2 because the tab that moved passed under it.
+    await expect(strip(p1).nth(2)).toHaveAttribute('aria-selected', 'true')
 
     // And it survives, which is the half a gesture that reached main earns.
     await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
@@ -874,7 +884,8 @@ test.describe('tabs come back on relaunch', () => {
     const p2 = await rendererWindow(again)
     await expect(strip(p2)).toHaveCount(3)
     await expect(strip(p2).nth(0)).toHaveText('link-fixture')
-    await expect(strip(p2).nth(2)).toHaveText('tall-fixture')
+    await expect(strip(p2).nth(1)).toHaveText('tall-fixture')
+    await expect(strip(p2).nth(2)).toHaveText('hairline-fixture')
     await again.close()
   })
 
