@@ -1,8 +1,8 @@
 ---
 title: "`obsrv --help` on a fresh install downloads Electron (~120 MB) before printing the help"
-column: doing
+column: review
 owner: "Henry"
-waiting: ""
+waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: chore
 criterion: A3
 order: 66
@@ -37,4 +37,22 @@ can't drift. Test it with the `OBSRV_ELECTRON_PKG_DIR` stand-in from #207: `--he
 exit 0, and never reach the binary. That means no launch and no download, and it's desk-safe as a unit
 test. How plain node reaches the help text (a module in `out/` or a generated file) gets decided on
 reading the build.
+
+## In review 2026-09-17: answered in plain Node, from the CLI's own parser
+
+- **`bin/obsrv.js` now answers `--help`, `-h`, `help` and a bare `obsrv`** before the Electron lookup, beside
+  `--version`. The CLI's own `parseArgs` decides what a help request is, and `usage()` writes the text.
+  Both come from `out/cli/args.js`, which the MCP build already compiles for plain Node and the tarball
+  ships (`files: out`). That makes the launcher's text the built CLI's text by construction.
+- **Pure, checked by reading:** `args.ts` and `cli/lint.ts` touch no fs, env, exit or console, and import
+  only local shared modules, never `electron`.
+- **Fallback:** a tree without `out/cli/args.js` falls through to the CLI, which answers the same after the
+  lookup.
+- **Test (`cliLauncher.test.ts`):** the repo's bin runs against a stand-in `electron` package that records
+  being reached.
+  - Every help form prints `usage()` plus a newline, exits 0 with an empty stderr, and never reaches the
+    stand-in.
+  - `snap` does reach it, so the test isn't vacuous.
+- **Control:** with the help branch disabled, it's red at `--help` (`status: 3`, empty stdout: the stand-in
+  answered).
 
