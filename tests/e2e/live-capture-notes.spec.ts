@@ -152,37 +152,35 @@ test('a raster capture while the pane is resized throughout says the page was st
   // for the whole 8 s budget. That is a preset cycle, the state
   // `live-drive.spec.ts` holds for the window capture.
   //
-  // TWO LABELS, AND ONLY ONE OF THEM IS RIGHT (measured on CI: 13 captures of a
-  // back-to-back cycle, `timeout` 5 and `uncovered` 8). `uncovered` means the
-  // budget ran out between a resize and that size's first full frame, so part
-  // of the PNG is transparent, and the painting sentence does not say so:
-  // `bug-live-raster-uncovered-said-as-painting`. On that label this test pins
-  // the CURRENT, DEFECTIVE output, says so in its failure message, and moves
-  // on. The true half is asserted on a `timeout` capture, and the loop runs
-  // until one lands (bounded), so the true half is checked on every run
-  // rather than when the race allows (Wren's review of #292).
+  // THE PAUSE IS THE LEVER, measured on CI. Cycled back to back, 13 captures
+  // came back `timeout` 5 times and `uncovered` 8: the budget kept running out
+  // between a resize and that size's first full frame. With a pause after each
+  // apply, 12 of 12 came back `timeout` (probe 35217795705), because that gap
+  // becomes a small part of each step, and each step stays well under the 2 s
+  // after which a covered page painting steadily leaves as `animating`.
   //
-  // The pause after each apply is what makes `timeout` the common label: it
-  // shrinks the gap between a resize and its first full frame to a small part
-  // of each step, and it stays well under the 2 s after which a covered page
-  // painting steadily leaves as `animating` instead.
+  // `uncovered` is NOT asserted here. On that label this sentence is the wrong
+  // one (part of the PNG is transparent, and it does not say so), and the
+  // paused cycle does not reach it, so a pin of it would be dead code reading
+  // as coverage (Wren's review of #292). It belongs to
+  // `bug-live-raster-uncovered-said-as-painting`, with the back-to-back cycle as
+  // its lever. A stray `uncovered` here is recorded and retried, within a bound.
   test.skip(
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
   )
-  test.setTimeout(240_000)
+  test.setTimeout(120_000)
   const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
   const STEP_PAUSE_MS = 700
-  const MAX_TRIES = 6
-  const PAINTING = 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame'
+  const MAX_TRIES = 3
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
   const before = (await call('status')).presetId as string
 
   const tries: string[] = []
-  let covered: Record<string, unknown> | undefined
+  let shot: Record<string, unknown> | undefined
   try {
-    for (let attempt = 1; attempt <= MAX_TRIES && covered === undefined; attempt++) {
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
       let cycling = true
       let applied = 0
       const spin = (async () => {
@@ -196,36 +194,35 @@ test('a raster capture while the pane is resized throughout says the page was st
       // racing the first apply.
       await new Promise(r => setTimeout(r, 400))
       const started = Date.now()
-      const shot = await call('captureRaster')
+      const reply = await call('captureRaster')
       const finished = Date.now()
       cycling = false
       await spin
 
-      const margin = `try ${attempt}: settled=${String(shot.settled)} label=${String(shot.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(shot.width)}x${String(shot.height)} warnings=${JSON.stringify(warningsOf(shot))}`
+      const margin = `try ${attempt}: settled=${String(reply.settled)} label=${String(reply.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(reply.width)}x${String(reply.height)} warnings=${JSON.stringify(warningsOf(reply))}`
       tries.push(margin)
       console.log(`raster under a preset cycle: ${margin}`)
       // The state first: a stalled cycle would leave nothing below measuring
       // what its name says.
       expect(applied, margin).toBeGreaterThanOrEqual(5)
-      expect(shot.settled, margin).toBe(false)
-      // Any other name on a pane that never stopped changing size is a
-      // finding, not a tolerance to widen.
-      expect(['timeout', 'uncovered'], margin).toContain(shot.unsettledReason)
-      if (shot.unsettledReason === 'uncovered') {
-        expect(
-          warningsOf(shot),
-          `CURRENT, DEFECTIVE output on uncovered, pinned until bug-live-raster-uncovered-said-as-painting replaces it: ${margin}`,
-        ).toContain(PAINTING)
-      } else {
-        covered = shot
+      if (reply.unsettledReason === 'timeout') {
+        shot = reply
+        break
       }
+      // Anything but a stray `uncovered` on a pane that never stopped changing
+      // size (a settled capture, `animating`, `blank`) is a finding, not a
+      // tolerance to widen.
+      expect(reply.unsettledReason, margin).toBe('uncovered')
     }
   } finally {
     await call('setPreset', { id: before })
   }
   test.info().annotations.push({ type: 'raster verdicts', description: tries.join(' | ') })
-  expect(covered, `no capture reached its budget covered in ${MAX_TRIES} tries: ${tries.join(' | ')}`).toBeDefined()
-  expect(warningsOf(covered!), tries.join(' | ')).toContain(PAINTING)
+  expect(shot, `no capture reached its budget covered in ${MAX_TRIES} tries: ${tries.join(' | ')}`).toBeDefined()
+  expect(shot!.settled, tries.join(' | ')).toBe(false)
+  expect(warningsOf(shot!), tries.join(' | ')).toContain(
+    'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
+  )
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
