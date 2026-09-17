@@ -360,3 +360,28 @@ export async function closeSettings(page: Page): Promise<void> {
   await page.click('.settings-done')
   await page.waitForSelector('.settings-modal', { state: 'detached' })
 }
+
+/**
+ * Answers the first-launch calibration hint, so a spec measures the pane
+ * without it (`ux-first-launch-no-calibration`).
+ *
+ * A fresh profile has never had a screen size set, so the target pane carries
+ * the hint, and the hint takes a row of the pane's height while it is up. That
+ * is the honest price of a sentence someone can read, but it is not what a
+ * spec about Fit or centring is measuring: `fit-cap` measured Fit equal to
+ * Actual (368px) and got 357px, and `solo-target` measured a centred render
+ * and found it 26px off — both of them the hint's row.
+ *
+ * Records the current display against the diagonal already in settings, which
+ * is exactly what the hint's own confirm button does, and changes no number.
+ */
+export async function answerDiagonalHint(page: Page): Promise<void> {
+  const hint = page.locator('.pane-hint')
+  if ((await hint.count()) === 0) return
+  // The hint's own confirm button, not `setSettings` through IPC: main
+  // persists what it is sent without pushing it back, so a spec that wrote
+  // the field directly would leave the renderer's store — and the hint —
+  // exactly as they were. Measured: the row stayed up for 63 polls.
+  await page.locator('.pane-hint-action').first().click()
+  await hint.waitFor({ state: 'detached' })
+}

@@ -1,7 +1,7 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { launchApp, openSettings, rendererWindow } from './launch'
+import { answerDiagonalHint, launchApp, openSettings, rendererWindow } from './launch'
 import { drawerSettled, choose } from './helpers/select'
 
 /** The 5000px-spacer fixture sync.spec.ts scrolls; its height is fixed so both
@@ -18,6 +18,9 @@ const nativeVisible = () =>
 test.beforeAll(async () => {
   app = await launchApp()
   page = await rendererWindow(app)
+  // Centring is measured against the pane's height; the calibration hint's
+  // row is answered away first (`answerDiagonalHint`).
+  await answerDiagonalHint(page)
   // Every assertion here is about the native view being on screen, and a tab
   // with no page has no native view to show — it is the empty state's window
   // (see empty-state.spec.ts). Load a page first, so what follows is testing
