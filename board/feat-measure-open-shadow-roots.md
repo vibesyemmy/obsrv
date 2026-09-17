@@ -1,6 +1,8 @@
 ---
 title: "Measure inside open shadow roots: audit, lint, inspect and the walk stop at the shadow boundary today"
-column: backlog
+column: doing
+owner: "Rook"
+waiting: "Henry: go on the traversal, after Opeyemi's review of b2"
 kind: feat
 criterion: B2
 order: 77
@@ -35,3 +37,67 @@ the live app all run, so each item below is one change, not three:
 - `inspect` at a point inside a component names the component's element, not the host;
 - a scroller inside an open root is walked;
 - a live check on caniuse.com and chromestatus.com, reading the figures against a second browser.
+
+## Claimed by Rook 2026-09-17, pulled by Wren — step one only, and the arms are already red on CI
+
+Pulled from Backlog in a sweep rather than picked. **Scope is step one:** the acceptance fixture and
+the arms as tests that fail on current main, each with a light-DOM twin that passes. **No traversal
+code until Henry's go and Opeyemi's review of `b2`.**
+
+**On Henry's terms (#388), taken as decided:** the arms live on a branch, `test/open-shadow-arms`,
+not as `test.fail()` in the suite — `test.fail()` passes on *any* failure, so a gating arm would
+stay green whether or not it still checked anything. Each red is read at its own assertion on a
+throwaway dispatch-only workflow (`probe/shadow-arms-red`, never merged) running just the new spec and
+the two that pin the shared fixture. Minutes, not a suite.
+
+### Two fixtures, because the one the card names is pinned
+
+`half-in-shadow.html` carries arm 1 exactly as the card says — and **`cli-audit.spec.ts:299-303`
+pins it today** at `targets.count === 12` with the share note's exact wording, and `surface-parity`
+uses it too. Its "reverting takes it back to 12" is precisely those assertions. So it is untouched,
+and arms 2–4 got a second pair: `shadow-arms.html` (a dark component background with light text, a
+point to hit-test, the page's only scroller, and a hairline — each inside an open root) and
+`shadow-arms-flat.html`, the same markup and styles with the roots flattened. **The twin is the
+control, in the same job:** a red on the shadow page is then about the boundary and not the harness.
+
+The one coordinate, `(60, 106)`, was measured in a real Chromium at 1366×768 rather than computed —
+a first cut had `y = 84` and forgot the `<p>`'s default margin, which would have made the inspect
+twin hit the card's padding and read as a harness fault. Hosts are `display: block` in both pages,
+since a custom element is inline by default and the twin's hosts are divs.
+
+### First probe read — `35193028970`
+
+| arm | expected | **received** | own assertion | twin |
+| --- | --- | --- | --- | --- |
+| 1 · audit, `half-in-shadow.html` | 52 | **12** | `:70` | `cli-audit.spec:299` (green) |
+| 3 · inspect at a point names the element | `inner` | **`card`** — `x-card#card`, the host | `:100` | green |
+| 2 · contrast reads the component background | `#1f2937` | **`#ffffff`** — the page | `:109` | green |
+| 4 · the walk finds the scroller | > 0 screenfuls | **0** | `:127` | green |
+| 1 · lint, hairline inside the root | ≥ 1 | 0 | `:76` | **red — 0** |
+
+**Arm 4's received value is the product naming its own gap**, and it goes here verbatim because it is
+what turns this card from a feature request into a measured one:
+
+> this page hides the document's overflow and has no scrollable container in its light DOM, so the
+> walk had nothing to scroll: the page has 2 open shadow roots, which the walk does not enter
+
+**The lint arm is not evidence yet, and the twins are what said so.** Its light-DOM twin was also
+red with 0, so that red was about the fixture, not the boundary — the case the twins exist to catch,
+caught on the first run. The rule had `height: 0`; `lint.html`'s proven hairline has `height: 20px`.
+Matched, and the twin's failure message now carries the whole lint summary so a second red says what
+lint *saw*. Re-run: `35193679588`.
+
+**Not claimed, and this stays on the card whatever the re-run says:** that the height was the
+cause. A green after one change is consistent with two causes, and the second is real — Chromium
+reports a 0.5px border as `1px` in a normal window, yet `cli-lint.spec` finds hairlines under the
+CLI's offscreen window with the same border, so that path reports differently. I could not run the
+CLI locally to see which (`cli-*` is CI-only). One green does not choose between them.
+
+**For the note arms still to be written** (the share note retiring for open roots, `walkNothingNote`
+going quiet): assert the **whole sentence**, not a phrase — Henry's #393. A phrase match is how a
+note gets reworded into meaninglessness while its test stays green. The existing
+`cli-audit.spec:302` pins the share note by phrase; when it changes with the feature, that is the
+moment to pin the sentence.
+
+**Not done, and out of scope for step one:** the live check on caniuse.com and chromestatus.com
+against a second browser, and any product code.
