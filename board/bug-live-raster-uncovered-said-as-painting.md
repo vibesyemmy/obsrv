@@ -1,9 +1,8 @@
 ---
 title: "A live raster with never-painted pixels says the page was still painting, and not that part of the PNG is transparent"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: ""
 criterion: C5
 order: 85
 ---
@@ -122,3 +121,31 @@ no deterministic lever without a hook in the capture path.
   (`35230323442`). **Control `35230323442`** (same head, `uncovered` routed back to painting): red on
   both repeats at the sentence assertion, after reaching `uncovered` on tries 5 and 2, not at the
   lever.
+
+## DONE 2026-09-17 by Kenya: merged in #302 (`cf13ce2`), each acceptance item with its control
+
+- **The raster reply carries the capture's own `uncovered` sentence, and not the painting one.**
+  `src/main/rasterWarnings.ts` (no Electron import) keeps the sentence the capture sent through
+  `onWarn`, by reason, and routes reasons with a `never`-defaulted switch. So the text is the CLI's,
+  shared rather than copied. **Controls:** routing `uncovered` back to painting reds 2 of 3 in
+  `tests/unit/rasterWarnings.test.ts`, which goes through the real `captureQuiescent`; dropping a routed
+  reason gives TS2322.
+- **A test reaches `uncovered` on purpose and asserts the sentence there, and that it is true of the
+  PNG.** `live-capture-notes.spec.ts`: dsf-1 presets back to back, up to 8 tries, with the measured rates
+  and miss chances in its comment. The reply's PNG is decoded without Electron. The stated share must
+  match the fully transparent pixels, the stated region must be their exact bounding box, and every
+  covered try must have none. **Control `35230323442`:** red at the sentence assertion on both
+  repeats, not at the lever.
+- **Read on the merged head's suite (`35231915393`):** `uncovered` on try 1. The sentence said
+  *"12.1% of the 1280x1024 frame never painted … (uncovered region 1280x124 at 0,900)"*. The PNG had
+  158,720 transparent pixels, 12.11%, spanning exactly `1280x124 at 0,900`.
+
+**A lead, not a finding, for whoever next reasons about `uncovered`:** in that reading, the unpainted
+band is exactly the 124 rows the frame grew by (1024 − 900) when the cycle stepped from `laptop-900-17`
+to `sxga-19`. One earlier probe reading fits the same shape: 30.6% of 1920x1080 is the area 1080p adds
+over 1600x900. So `uncovered` under this lever may be the newly exposed region not yet painted, not a
+random slice. That rests on two readings.
+
+**Probe branches deleted 2026-09-17:** `probe/raster-uncovered-lever`,
+`probe/raster-uncovered-single-change`, `probe/raster-uncovered-control`. Their runs keep the logs.
+
