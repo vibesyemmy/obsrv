@@ -212,6 +212,14 @@ producer**. The one that doesn't is the dev-lane stamp (`laneStamp`, `src/mcp/de
 `withStamp` adds it under a key computed from the tool's output shape, and a pass that reads names
 can't see that.
 
+**Run that check before trusting any count this pass produces, and treat it as the instrument's own
+baseline.** A pass that misses a whole class of sink reports a smaller, perfectly plausible number,
+and a plausible number is the case where nothing prompts a check. This one was only run because 121
+producers could not be reconciled with the 84 call sites the earlier sieve had counted — the tell was
+a delta nobody could account for, not a number that looked wrong. It then earned its keep twice: it
+found that `log.warn` and a stderr `warn` were being counted as replies (ten sentences), and that a
+`note` property reached a reply through a shorthand the first pass could not follow.
+
 **Where it stops:**
 - **Placement is by text.** An identical sentence written at several places matches all of them, so
   those are listed as ambiguous below, not as fired.
@@ -226,9 +234,9 @@ can't see that.
 
 | | producers | after the tests below |
 | --- | --- | --- |
-| fired, and placed at exactly one producer | 55 | **69** |
+| fired, and placed at exactly one producer | 55 | **73** |
 | fired, but the same text is written at several places | 7 (3 groups) | **4** (2 groups) |
-| not seen to fire | 54 | **43** |
+| not seen to fire | 54 | **39** |
 | written or reworded after the run | 4 | 4 |
 | too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 |
 
@@ -248,16 +256,13 @@ The run's log tags each MCP entry with the tool that answered, and only `mcp:obs
 `mcp:obsrv_lint` carried it — so `liveInspect`'s copy had never run. `#258` pins it
 (`mcp-live.spec:417`), and each of the three is now attributed to a tool.
 
-**Not seen to fire (43).** "Pushed in" is the directory of the sink, not every surface that relays it.
-Eleven rows left this table for the one below.
+**Not seen to fire (39).** "Pushed in" is the directory of the sink, not every surface that relays it.
+Fifteen rows have left this table for the one below.
 
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
-| `src/cli/audit.ts:215` | cli | the page has more elements than one report carries: <…> targets and <…> text elements were counted b… |
 | `src/cli/capture.ts:347` | cli | <…>% of the <…>x<…> frame <…>never painted within <…> ms<…>; those pixels are transparent, not page… |
-| `src/cli/lint.ts:78` | cli, mcp | <…> more finding<…> past the <…> listed; the summary counts them all |
 | `src/cli/lint.ts:94` | cli, mcp | <…> image finding<…> sit<…> below the <…> CSS px the walk reached <…>before its budget ran out, and… |
-| `src/cli/lint.ts:526` | cli | the page has more elements than one report carries: <…> text elements, <…> edges and <…> images were… |
 | `src/cli/main.ts:529` | cli | the page scrolls an inner container <…> CSS px tall; captured the first <…> <…>bands of <…> CSS px (… |
 | `src/cli/main.ts:620` | cli | full page is <…> CSS px tall; captured the first <…> bands of <…> CSS px <…>(<…> at most) — what lie… |
 | `src/cli/main.ts:1479` | cli | the <…> finding<…> worth featuring all <…>, so this screen has no <…>"where the problems are" sectio… |
@@ -291,16 +296,16 @@ Eleven rows left this table for the one below.
 | `src/mcp/walk.ts:184` | mcp | the page did not confirm a scroll during the walk; the walk stopped there. |
 | `src/mcp/walk.ts:197` | mcp | the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the p… |
 | `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
-| `src/preload/sync.ts:167` | preload | scrollSelector <…> is not a valid CSS selector; nothing was scrolled |
 | `src/shared/walkCoverage.ts:168` | cli, mcp | <…>the page has <…>, which the walk does not enter, <…>and nothing in the light DOM scrolls<…> |
 | `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
 | `src/shared/walkCoverage.ts:194` | cli, mcp | <…>content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualise… |
 | `src/shared/walkCoverage.ts:245` | cli, mcp | the walk could not move the page or <…>: this page hides the <…>document's overflow <…>, and neither… |
 
-**Fired since, pinned by a test (12).** Eleven of these left the list above; the twelfth is
+**Fired since, pinned by a test (16).** Fifteen of these left the list above; the sixteenth is
 `liveInspect`'s copy, which leaves the ambiguous group. Each test asserts the **whole** sentence, and
 each was shown to fail when that sentence is altered in `src/` — the control runs are
-`35192500426` (#256) and `35194537378` (#258, v2 on the corrected head).
+`35192500426` (#256), `35194537378` (#258, v2 on the corrected head), `35199207359` (#263) and
+`35200051529` (#264, v2; see below).
 
 | written at | pinned by | seen firing in |
 | --- | --- | --- |
@@ -316,6 +321,24 @@ each was shown to fail when that sentence is altered in `src/` — the control r
 | `src/shared/layoutScale.ts:52` | `cli-layout-scale.spec:137`, `initial-scale` above 1 | `35194508818` |
 | `src/shared/calibration.ts:165` | `mcp.spec:211`, the `orientation` word inverting | `35194508818` |
 | `src/mcp/server.ts:2538` | `mcp-live.spec:417`, live inspect's headless-only key | `35194508818` |
+| `src/cli/audit.ts:215` | `cli-audit.spec:331`, a page past the collection caps | `35199168099` |
+| `src/cli/lint.ts:526` | `cli-lint.spec:270`, the same shape for text, edges and images | `35199168099` |
+| `src/cli/lint.ts:78` | `cli-lint.spec:270`, the list's own cap | `35199168099` |
+| `src/preload/sync.ts:167` | `live-drive.spec:531`, a selector the browser refuses | `35199881465` |
+
+**A fourth fixture followed for the caps (#263):** `over-caps.html`, 2100 buttons, 3100 paragraphs and
+600 upscaled images, past `AUDIT_MAX_TARGETS`, the 3000 text cap on both tools, and `LINT_MAX_IMAGES`
+— every fixture until then fitted inside every cap. The control's received values are the numbers it
+was sized for (100 targets, 2200 text, 100 images, 300 findings past the list), and they also
+corrected an assumption: `edges` is **0**, since a button's own border is not counted, so the test
+asserts text and images alone.
+
+**The live `scrollSelector` (#264) needed no fixture, only the fourth question.** The suite had asked
+for a selector that matched nothing, one that matched something unscrollable, and an empty one — never
+one that is not a selector. **Its first control was invalid and said so by how it failed:** run with
+`-g` on that one test, it went red in 79 ms at the test's *first* assertion, because the test depends
+on state its predecessors leave. A filtered control removes the predecessors, not the product. v2 ran
+the whole file and bit at the arm's own assertion.
 
 **Three needed a fixture that did not exist:** text that is not opaque, text exactly the colour of
 its background, and a page asking for `initial-scale=2` — every fixture until then either had no
@@ -372,7 +395,21 @@ above:
     `replaces-itself-on-scroll.html`); the work is finding which sentence each produces.
   - **Launch and consent failures (5, `mcp/control.ts`, `mcp/lib.ts`):** the app cannot be launched,
     the launch meets a profile already in use, consent goes unanswered, the app answers too late,
-    agent control is off. `mcp-electron.spec` and `single-instance.spec` already drive real launches.
+    agent control is off. **All five sit behind `OBSRV_TEST`**, whose guard says why:
+    *"OBSRV_TEST=1 is set (the e2e harness must never launch a real Obsrv)"* (`mcp/lib.ts:617`), with
+    `launchApp` refusing again at `mcp/launch.ts:91`. Under the suite as it stands they cannot occur,
+    and a unit test through the injected deps would construct all five — which is the evidence this
+    file exists to reject.
+    - **The safe shape, measured rather than designed around** (Wren's read, 2026-09-17):
+      `tests/e2e/launch.ts:44` already starts the built app with `--user-data-dir=<temp>` **and**
+      `OBSRV_TEST=1`, and `src/main/log.ts:21` moves the logs into that profile under that flag — so
+      an isolated launch is a solved problem on the harness's own path. `launchApp`'s **bundle**
+      target spawns the installed `.app` with no args and can isolate nothing; its **electron**
+      target already carries `args` and `env`, which is how the dev lane passes its own profile.
+    - **So a gate belongs on the electron path only** — the built tree into a temp profile — and the
+      guard for the installed app stays exactly as it is. Nothing points a launch at
+      `Application Support/Obsrv`, and **a local run needs Opeyemi's separate yes**, as the
+      desk-taking specs do.
   - **Truncation and caps (7, `cli/audit.ts`, `cli/lint.ts`, `cli/main.ts`):** pages with more
     findings, text elements or bands than one answer carries. One dense fixture may fire several.
   - **Old-app compatibility (2, `mcp/server.ts:1092`, `mcp/walk.ts:41`):** sentences for an app older
