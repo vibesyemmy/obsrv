@@ -606,7 +606,7 @@ describe('rotate reaches the headless surface as the screen the deprecated word 
     expect(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)).toContain('--rotate')
     expect(buildAuditArgs({ url: URL, preset: '1080p-24', rotate: true })).toContain('--rotate')
     expect(buildLintArgs({ url: URL, preset: '1080p-24', rotate: true })).toContain('--rotate')
-    expect(buildReportArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)).toContain('--rotate')
+    expect(buildReportArgs({ url: URL, presets: ['1080p-24'], rotate: true }, OUT)).toContain('--rotate')
     expect(buildInspectArgs({ url: URL, selector: '#a', preset: '1080p-24', rotate: true })).toContain('--rotate')
   })
 
