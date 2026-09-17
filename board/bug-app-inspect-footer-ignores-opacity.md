@@ -1,6 +1,8 @@
 ---
 title: "The app's Inspect footer ignores the element's opacity, so its contrast disagrees with obsrv inspect and obsrv_inspect"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C4
 order: 68
@@ -23,3 +25,14 @@ app is where a person reads it.
 **Fix direction:** pass `r.opacity`, and show the painted colour (or say the stated colour is shown at an
 opacity), matching the readout's wording. A control: a fixture with `opacity: .5` text, where the footer's
 ratio must equal `obsrv inspect`'s.
+
+## Claimed by Henry 2026-09-17, routed by Wren
+
+Pulled from Backlog; it's the other app-side known issue in the 0.61.0 notes. **Plan:**
+- The footer passes the report's `opacity` to `effectiveContrast`, as `inspectReadout` does.
+- It shows the painted colour, or says the stated colour is shown at an opacity, in the readout's words.
+- **The test:** a fixture with `opacity: .5` text, where the footer's ratio must equal what
+  `inspectReadout` computes for the same report. Control: drop the argument, and it goes red.
+- **The desk check comes before any local run.** A spec that hovers the target may need the inspector
+  overlay, which has recorded focus history.
+
