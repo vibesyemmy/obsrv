@@ -283,13 +283,20 @@ test('a raster capture while the pane is resized throughout says the page was st
         shot = reply
         break
       }
-      // Two strays are recorded and retried, each a defect with its own card:
-      // `uncovered` (`bug-live-raster-uncovered-said-as-painting`), and a
-      // capture that came back SETTLED, with no warning, while the preset was
-      // changing under it (`bug-live-raster-settled-while-resizing`, once in 28
-      // paused captures: control run 35218471058). Anything else on a pane that
-      // never stopped changing size (`animating`, `blank`) is a finding, not a
-      // tolerance to widen.
+      // `uncovered` is recorded and retried; it is a defect with its own card
+      // (`bug-live-raster-uncovered-said-as-painting`).
+      //
+      // `settled: true` is allowed here and is NOT a stray. With a 700 ms step
+      // pause and a 400 ms settle window, a pane that reaches the newest
+      // preset's size and goes quiet has genuinely settled. It used to be the
+      // sighting for `bug-live-raster-settled-while-resizing`, and that card
+      // turned out to be about settling at the size the pane had LEFT — which
+      // this loop cannot tell apart from the good case without racing the
+      // cycle it is measuring, and which `cliCapture.test.ts` now pins by
+      // construction instead.
+      //
+      // Anything else on a pane that never stopped changing size (`animating`,
+      // `blank`) is a finding, not a tolerance to widen.
       const stray = reply.unsettledReason === 'uncovered' || reply.settled === true
       expect(stray, margin).toBe(true)
     }
@@ -378,10 +385,12 @@ test('a raster capture whose budget runs out before a resized frame is painted s
         shot = reply
         break
       }
-      // The race's other side is `timeout`, the test above's sentence, and the
-      // rarer settled capture has its own card
-      // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
-      // that never stopped changing size is a finding.
+      // The race's other side is `timeout`, the test above's sentence. A
+      // settled capture is the pane having caught up between two applies, not
+      // the defect `bug-live-raster-settled-while-resizing` named: that one was
+      // settling at the size the pane had left, and it is pinned in
+      // `cliCapture.test.ts`. Anything else on a pane that never stopped
+      // changing size is a finding.
       expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
       // THE BASELINE for the count below, and a cross-check of the coverage
       // mask against the bytes. `timeout` and `settled` are only reached with
