@@ -220,8 +220,16 @@ trigger for deciding again hasn't been met.
    its retry always failed, and any first-try failure became a red run. #230 makes `:83` navigate for
    itself. That removes the confound, not the red: the run stops being red only if a retry that now
    measures a real page would pass, and nobody has measured that. **Not decremented** (Kenya's correction,
-   room #358). Kenya is reading this run to settle it. On run 35176357601, the one she has read, the
-   first try was genuine: `:77` passed a second before, and the canvas stayed blank for 10 s.
+   room #358). **SETTLED 2026-09-17 by Kenya: the first try was genuine, so the row stays red.**
+
+       ✓  375  panes.spec.ts:77  the toolbar navigates both panes (258ms)
+       ✘  376  panes.spec.ts:83  the target canvas shows the page, not a blank (9.8s)
+            Expected: > 1000   Received: 0
+
+   `:77` passed 258 ms earlier, so both panes were on the fixture, and the canvas held **zero** white
+   pixels — nothing drawn at all. Same shape as run 35176357601, and `No frames from target renderer`
+   appears **0 times** here too, so it is `bug-canvas-blank-without-notice` rather than the card it
+   was first filed under.
 2. **5e426fb (35145262453):** `ipc.spec` `:31`, `:134` and `:173` failed both tries, in one file with
    nothing else in the run failing. That's `bug-ipc-native-pane-invisible-once`'s shape.
 3. **5631606 (35170587213):** no test failed. `text-scale:251`'s relaunch test failed once (drawer width
