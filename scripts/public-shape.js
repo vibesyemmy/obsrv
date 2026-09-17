@@ -131,7 +131,7 @@ async function publicShape() {
   return shape
 }
 
-module.exports = { publicShape, schemaKeyPaths }
+module.exports = { publicShape, schemaKeyPaths, listTools }
 
 if (require.main === module) {
   publicShape()

@@ -431,9 +431,9 @@ const snapOutputShape = {
         "'uncovered' — part of the frame never painted within the budget; 'blank' — the frame is one colour end to end and stayed " +
         "that way for 3 s after going quiet: the page's background with nothing on it yet, or a page that really is empty — the PNG " +
         "is not a picture of the page, so pass waitMs for a page that paints late; 'loading' — the load outran timeoutMs (under a " +
-        "resizing' — live only: the target pane was still changing size when the budget ran out, so the page had not " +
-        "finished reflowing to the screen it is being measured on. " +
-        "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load.",
+        "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load; " +
+        "'resizing' — live only: the target pane was still changing size when the budget ran out, so the page had not " +
+        "finished reflowing to the screen it is being measured on.",
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
@@ -2017,10 +2017,11 @@ const readoutShape = z
     color: z.string().describe('Text colour, #rrggbb.'),
     colorPainted: z
       .string()
+      .optional()
       .describe(
         'The colour the screen actually shows: the stated colour after its own alpha and the element\'s effective opacity, composited onto the ' +
           'background. Equal to `color` when the text is fully opaque, which is most of the time; different is the case worth seeing, and it is ' +
-          'the colour the contrast figures describe.',
+          'the colour the contrast figures describe. Absent from an app older than the field.',
       ),
     background: z.string().nullable().describe('The colour the text sits on, composited; null when an image or gradient is under it.'),
     backgroundNote: z.enum(['computed', 'image']),
