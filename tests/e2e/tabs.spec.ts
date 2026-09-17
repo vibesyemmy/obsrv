@@ -219,6 +219,10 @@ test('the router resolves every pane to its own tab, and nothing else', async ()
  */
 test.describe('bus enablement follows the tab', () => {
   const frames = (): Promise<number> => page.evaluate(() => (window as any).__frames.length as number)
+  const seqs = (): Promise<number[]> => page.evaluate(() => [...((window as any).__frames as number[])])
+  // What the bus had sent by the time the gate closed. Everything at or below
+  // it left main before the gate; anything above it left after.
+  const sentSoFar = (): Promise<number> => app.evaluate(() => (globalThis as any).__obsrv.bus.lastSeq() as number)
   const reset = (): Promise<void> =>
     page.evaluate(() => {
       ;(window as any).__frames.length = 0
@@ -244,7 +248,10 @@ test.describe('bus enablement follows the tab', () => {
       const w = window as any
       if (w.__off) w.__off()
       w.__frames = []
-      w.__off = window.obsrv.onFrame(() => w.__frames.push(1))
+      // The frame's `seq`, not a tally. A frame carries no tab id, so a count
+      // alone cannot say whether a delivery belongs to the tab being entered
+      // or the one being left — see the seq comparison in the image-mode test.
+      w.__off = window.obsrv.onFrame((m: { seq?: number }) => w.__frames.push(m.seq ?? -1))
     })
   })
 
@@ -269,8 +276,45 @@ test.describe('bus enablement follows the tab', () => {
     // Activation invalidates the incoming target before the gate closes, so
     // this is not merely "nothing happened": the frame that produces is
     // deliberately dropped on delivery.
+    //
+    // Asserted on `seq` rather than on a count, because a count fits two facts
+    // that are opposite in consequence (`chore-flaky-leaders-0917`, shape 3,
+    // which failed here as `Expected: 0, Received: 1`). A frame carries no tab
+    // id, so a delivery could be the gate leaking a frame for the tab being
+    // ENTERED — the defect this test is for — or a frame for the tab being
+    // LEFT, sent before the gate closed and arriving during the wait. Nothing
+    // in the payload separates them, so a 1 here could not be triaged.
+    //
+    // `lastSeq()` read the moment activation returns is the line between them:
+    // at or below it, the bus sent it before the gate closed; above it, after.
+    // Only the second is this test's failure.
+    const gate = await sentSoFar()
     await page.waitForTimeout(600)
-    expect(await frames()).toBe(0)
+    const late = (await seqs()).filter(n => n > gate)
+    expect(late, `frames delivered after the gate closed: ${JSON.stringify(late)}`).toEqual([])
+  })
+
+  test('a frame already sent when the gate closes is not the leak this is looking for', async () => {
+    // The arm that makes the change above mean something, and it forces the
+    // race rather than waiting for CI to produce it: invalidate the tab being
+    // LEFT and wait until its frame has actually been delivered, so a pre-gate
+    // frame is guaranteed present rather than merely likely. The old
+    // count-based assertion fails here by construction; this one must not.
+    await reset()
+    await activate(live)
+    await app.evaluate(() => (globalThis as any).__obsrv.target.invalidate())
+    await page.waitForFunction(() => ((window as any).__frames as number[]).length > 0, undefined, { timeout: 5_000 })
+    const delivered = await seqs()
+    expect(delivered.length, 'no pre-gate frame arrived, so this arm tested nothing').toBeGreaterThan(0)
+
+    await activate(drawn)
+    const gate = await sentSoFar()
+    await page.waitForTimeout(600)
+
+    // The pre-gate frames are still in the collector — this is not a test that
+    // passes by having nothing to look at — and none of them counts as a leak.
+    expect((await seqs()).length).toBeGreaterThanOrEqual(delivered.length)
+    expect((await seqs()).filter(n => n > gate)).toEqual([])
   })
 })
 
