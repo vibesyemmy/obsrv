@@ -402,9 +402,18 @@ export function tokenEqual(expected: string, provided: unknown): boolean {
 }
 
 /**
+ * The app's name, which Electron appends to the platform's app-data and logs
+ * directories. package.json's `productName` says the same for a packaged app,
+ * but the package's own Electron runs `out/main/index.js` directly, and Electron
+ * names an app launched that way "Electron". The main process sets it from
+ * here, so every launch path lands where `defaultControlFilePath` looks.
+ */
+export const APP_NAME = 'Obsrv'
+
+/**
  * Where the app's discovery file lives for a given platform, derived the way
- * Electron derives `app.getPath('userData')` for productName "Obsrv" — the
- * MCP server runs under plain node and cannot ask Electron.
+ * Electron derives `app.getPath('userData')` for `APP_NAME` — the MCP server
+ * runs under plain node and cannot ask Electron.
  */
 export function defaultControlFilePath(
   platform: NodeJS.Platform,
@@ -413,10 +422,10 @@ export function defaultControlFilePath(
 ): string {
   const appDir =
     platform === 'darwin'
-      ? join(home, 'Library', 'Application Support', 'Obsrv')
+      ? join(home, 'Library', 'Application Support', APP_NAME)
       : platform === 'win32'
-        ? join(env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), 'Obsrv')
-        : join(env['XDG_CONFIG_HOME'] ?? join(home, '.config'), 'Obsrv')
+        ? join(env['APPDATA'] ?? join(home, 'AppData', 'Roaming'), APP_NAME)
+        : join(env['XDG_CONFIG_HOME'] ?? join(home, '.config'), APP_NAME)
   return join(appDir, CONTROL_FILE_NAME)
 }
 
