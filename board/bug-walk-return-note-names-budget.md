@@ -37,8 +37,10 @@ path's lever. Henry deliberately does **not** assert the sentence there, because
 to be wrong is what `bug-live-raster-uncovered-said-as-painting` was filed for. Once the fix lands, the
 assertion is one arm on an existing fixture.
 
-**2. After the walk stops on its budget (`:188`): on a page whose main thread is FREE (reasoned, then
-run on a fake).** A budget exit `break`s out of the loop, then `backToTop` runs with
+**2. After the walk stops on its budget (`:188`): on a page whose main thread is FREE, which means the
+end of every headless walk that reaches its budget. That is an ordinary tall page, not a broken one
+(reasoned, then run on a fake; Wren confirmed the fall-through).** The loop `break`s at
+`deadline.passed()` and falls through to `backToTop`, which runs with
 `deadline.remaining()` at 0. That becomes a race: `withinBudget`'s 0 ms timer against
 `executeJavaScript`'s reply. A scratch vitest run (not committed) drove `walkHeadless` with a fake
 target that always answers, on a 600 ms budget:
@@ -50,8 +52,16 @@ target that always answers, on a 600 ms budget:
 
 So on a page nothing is wrong with, the reply can say *"the measurement covers the whole page
 regardless"* and then *"its main thread was busy or blocked … measured where it stopped"*: two
-sentences that contradict each other, plus a false one about the page. **Not established:** how long
-Electron's real `executeJavaScript` round trip takes, so whether this fires on a real page. **The first
+sentences that contradict each other, plus a false one about the page.
+
+**Predicted: it fires on essentially every budget-exit headless walk.** A real `executeJavaScript` round
+trip through Electron takes milliseconds, not microseconds, and the fake shows the sentence from 2 ms. So
+"unmeasured" does not mean "rare": the CI measurement below settles the prediction either way.
+
+**No existing log answers it (checked 2026-09-17).** The budget sentence never fired before #308's
+`taller-than-the-walk-budget.html`. #308's green run `35230375653`, its control `35231440742`, Henry's
+probe runs on `probe/c5-walk-limits-b2` and batch 1's `35200677199` never print a budget-exit walk's
+whole notes array: the control printed only the sentence its assertion matched. **The first
 measurement:** print `said(m)` for `taller-than-the-walk-budget.html` in `cli-walk-limits.spec.ts`
 headless, on CI (`cli-*` is not desk-safe).
 
