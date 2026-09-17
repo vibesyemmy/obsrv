@@ -248,3 +248,39 @@ test('ARM 6: a main-process ping DOES see it, because main is not the thing that
   // from every side tried.
   expect(log.length, 'a stuck renderer that answers every ping would mean this instrument is useless too').toBeGreaterThan(0)
 })
+
+test('ARM 7: how long does the REAL commit actually take inside the blur handler?', async () => {
+  await openSettings(page, 'display')
+  // The card now says the hang is inside the blur handler chain, and that the
+  // only synchronous work there is `setSettings(next)` and the React re-render
+  // it triggers while the handler is still on the stack (SettingsPanel.tsx:200;
+  // the IPC is queued at :215, not awaited).
+  //
+  // That is a shape, not a mechanism. Before anyone tries to make a re-render
+  // faster, the question is whether this one is anywhere near slow enough to
+  // matter: a handler that returns in a millisecond does not become a
+  // thirty-second hang by degrees, and a card that implies it might would send
+  // the next reader somewhere there is nothing to find.
+  //
+  // Measured from inside the handler, across several commits, with the value
+  // changing each time so no commit is a no-op.
+  const timings = await page.evaluate(async () => {
+    const field = document.querySelector('.host-diagonal') as HTMLInputElement | null
+    if (!field) return { error: 'no field' }
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+    const took: number[] = []
+    for (const v of ['31', '33', '35', '37', '39']) {
+      setter?.call(field, v)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+      field.focus()
+      const t0 = performance.now()
+      // The real thing: React's onBlur -> commit() -> setSettings() and its
+      // render, synchronously, exactly as blurNode would trigger it.
+      field.dispatchEvent(new FocusEvent('blur'))
+      took.push(performance.now() - t0)
+      await new Promise(r => setTimeout(r, 50))
+    }
+    return { took: took.map(t => Math.round(t * 1000) / 1000) }
+  })
+  console.log(`  ARM 7  blur handler, real commit: ${JSON.stringify(timings)}`)
+})
