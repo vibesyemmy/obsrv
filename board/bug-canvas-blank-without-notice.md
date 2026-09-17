@@ -66,3 +66,40 @@ capture path already solves its own version with an explicit handshake. The ques
 whether the **test** should drive a draw the way a capture does, or whether the product should paint
 the canvas when frames arrive regardless of visibility. That is a decision, not a defect, and it
 belongs on this card once the probe has answered.
+
+## The CI probe, run by Henry 2026-09-17 while Kenya was away (Wren's routing, Henry's design in room #361)
+
+**Moved while Kenya was away, as recorded here. Kenya reports to the room first when back.** Run
+`35186562119` on a throwaway branch (`probe/raf-occlusion`, now deleted). Its counts are in the run's
+`raf-probe` artifact. The spec skipped unless `CI` was set. It counted `requestAnimationFrame` ticks in
+the **shell renderer** (the window that draws the target canvas), three samples of 500 ms per arm, with
+`document.visibilityState`:
+
+| arm | ticks in ~500 ms (×3) | visibilityState |
+| --- | --- | --- |
+| shown: the harness as CI leaves it | 27, 28, 28 | visible |
+| hidden: `win.hide()` (Kenya's desk arm) | 28, 27, 30 | visible |
+| shown again: `showInactive()` | 30, 31, 28 | visible |
+| **occluded: a second app launched with `OBSRV_TEST_TAKES_THE_DESK`, covering it** | **30, 27, 28** | **visible** |
+| after that app quit | 29, 24, 29 | visible |
+
+**The occluder was real, checked:**
+- `getFocusedWindow() !== null` in the holder, so it held the front.
+- The holder's window was x 120–1800, y 25–995; the harness's was x 160–1760, y 25–995. It covered
+  the harness completely. The window manager clamped the vertical 40 px margin to the screen, so the
+  top and bottom edges are flush.
+
+**The vacuity arm failed.** Real occlusion didn't throttle animation frames in the shell renderer on a
+runner. Neither did `hide()`, here or on Kenya's desk, and `visibilityState` never left `visible`. So
+**the mechanism this card proposed has no support on CI**: the runner doesn't stop the canvas's
+animation frames. That hypothesis is set aside, and the silent blank canvas needs another explanation.
+
+**What this does not settle, and it isn't overstated:**
+- **A real desk with real occlusion is untested.** That arm takes the desk. A runner's virtual display may
+  not compute occlusion at all, so this doesn't refute `flushRendererDraw`'s premise as measured on a
+  desk. It only shows CI isn't in that state.
+- `backgroundThrottling: false` is set on the **offscreen target** only (`targetSource.ts:330`), not on
+  the shell window counted here. So the app's own setting doesn't explain these counts.
+- Nothing here yet explains the one sighting. The target frames that did arrive in main
+  (`bus.lastSeq()`), and whether the renderer got them, are the next thing to record on a recurrence.
+
