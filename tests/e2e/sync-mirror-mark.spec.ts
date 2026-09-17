@@ -56,7 +56,15 @@ test('a mirrored commit is reported and marked, not withheld', async () => {
 
   // Both commits reported. Withholding them is what made the redirect test
   // depend on which side of `load()` the second one landed.
-  expect(seen.map(s => s.url)).toEqual([REDIRECT, HAIRLINE])
+  //
+  // Reported at least once, not exactly once. The redirect's second address
+  // can commit twice, once for each cause below, when neither load cancels the
+  // other: `hairline.html` twice in a row failed 2 of 20 local runs on one
+  // worker (2026-09-17) and both tries of #206's suite. Two commits to the same
+  // address in a row are one arrival reported by both causes, so they collapse
+  // before the comparison. A withheld commit still fails it.
+  const reported = seen.map(s => s.url).filter((u, i, all) => i === 0 || u !== all[i - 1])
+  expect(reported, `every commit: ${JSON.stringify(seen)}`).toEqual([REDIRECT, HAIRLINE])
   // The bus's own load is the bus's doing, which is what keeps it out of the
   // arrivals count behind "navigated after it loaded".
   expect(seen[0]).toEqual({ url: REDIRECT, mirrored: true })
