@@ -220,7 +220,28 @@ the control cannot be one that was never applied.
 | shown | true | 62 | **32** |
 | hidden | **false** | 62 | **32** |
 
-**Hiding the window changes neither count.** And the reason is structural rather than incidental:
+**And on the runner itself** (dispatch 4, run `35165871681`, both flag arms, `isVisible()` read back
+the same way):
+
+| flag | pass | `isVisible` | `isFocused` | window rAF/s | target rAF/s |
+| --- | --- | --- | --- | --- | --- |
+| ON | shown | true | **true** | 60 | 24 |
+| ON | hidden | **false** | — | 54 | 18 |
+| off | shown | true | false | 53 | 19 |
+| off | hidden | **false** | — | 57 | 21 |
+
+**Which corrects my sentence twice over, and Henry's four counter-facts were right: the runner
+paints.** 53–60 frames a second on the window's renderer is a display session doing its job, not a
+window that is never composited. And the shown/hidden differences do not track visibility — with the
+flag off the window counted *more* frames hidden (57) than shown (53), which is not a direction
+visibility can produce. One run per cell, so the small differences are not worth a verdict; the
+absence of a consistent direction is.
+
+The runner's target sits at 18–24 rather than the 30 it is capped to, which is a slower machine
+missing its budget — and it misses it identically shown and hidden.
+
+**So hiding the window changes neither count, on either machine.** The reason is structural rather
+than incidental:
 the target is not drawn by the display compositor at all. `targetSource.ts:316` creates it as an
 `offscreen:` Chromium window and `:329` sets `wc.setFrameRate(this.fps)`, `DEFAULT_FPS = 30` — which
 is the 32 measured. **Its frames come from Electron's offscreen pipeline at a fixed rate, so no
@@ -233,8 +254,24 @@ explained rather than merely observed: focus and visibility could not have matte
 thing running the growth handler is rendered offscreen either way.
 
 **And it takes the desk session off this card.** The render clause does not need a painting window,
-because the target never used one. What remains genuinely unexplained is the 2026-09-14 reading
-itself — live at 8 screenfuls and `pageHeight` 6832 — and the live walk's own timing is the next
-place to look, not the window's: today's live walk took 1787 ms against headless's 467 ms for the
-same three screenfuls, so the two surfaces give that `scroll` handler very different amounts of wall
-clock even when they agree on the answer.
+because the target never used one — and the runner turns out to have been painting all along.
+
+**Where the desk was, this is now.** Dispatch 4 replicates arms A/B exactly (3 screenfuls, `atEnd`,
+4712, note firing, all four), and with them the one asymmetry that does reproduce every time:
+
+| surface | dispatch 3 | dispatch 4 |
+| --- | --- | --- |
+| headless walk | 467 / 612 ms | 463 / 496 ms |
+| live walk | 1787 / 1874 ms | 1787 / 1770 ms |
+
+**The live walk takes ~3.7× as long for the same three screenfuls**, on both dispatches and in both
+flag arms. The fixture grows from a `scroll` handler, so wall clock between steps is exactly the
+quantity the growth depends on — and the two surfaces hand it very different amounts even when they
+agree on the answer. **That is the next place to look, and it needs no desk and no flag:** what the
+live walk spends 1.3 extra seconds on, and whether a headless walk slowed to match starts following
+the growth. Recorded as a direction, not a finding.
+
+**Desk:** nothing on this card ran on Opeyemi's machine in a way that took the front. The local arm D
+was harness-only — launched without `OBSRV_TEST_TAKES_THE_DESK`, so `showInactive()`, which the run's
+own line confirms (`flag=off`, `focused: false`) — then `hide()`, then `showInactive()` again.
+Everything else was CI.
