@@ -67,11 +67,12 @@ not enter them. A page built from components can measure as almost nothing.
 Obsrv counts what it did not enter and says so: *"N roots hold M of this
 page's K elements, which the measurement does not enter."*
 
-**It will.** The decision is made (2026-09-17, on `b2`): a page built from
-components measured 79% unentered on caniuse.com and entirely unentered on
+**Planned, not built.** Entering open roots was decided by engineering on
+2026-09-17 and is pending Opeyemi's review (`b2`). The evidence: a page built
+from components measured 79% unentered on caniuse.com and entirely unentered on
 chromestatus.com, which is an honest non-answer rather than a measurement.
-Until the traversal ships (`feat-measure-open-shadow-roots`), the count above
-is what you get. Closed shadow roots stay out of reach by design.
+Until `feat-measure-open-shadow-roots` ships, the count above is what you get.
+Closed shadow roots stay out of reach by design.
 
 ### A page it cannot scroll
 
