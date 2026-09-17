@@ -177,11 +177,16 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   // Waited in-process rather than with `expect.poll` so a run that really does
   // emit nothing still reaches the assertions below and carries the full
   // account, which is the whole point of the traces.
-  await app.evaluate(async () => {
+  // Waited on the LAST event being the landing, not on the first event
+  // existing: the first is usually `redirect.html`, and the `urls` poll below
+  // can go green on the pane's URL before the target has emitted `url-changed`
+  // for hairline — leaving `seen.at(-1)` on redirect.html. That is the same
+  // shape as the race above, one step smaller, and @Wren caught it in review.
+  await app.evaluate(async (_e, landing: string) => {
     const g = globalThis as any
     const until = Date.now() + 5_000
-    while (g.__seen.length === 0 && Date.now() < until) await new Promise(r => setTimeout(r, 25))
-  })
+    while (g.__seen.at(-1) !== landing && Date.now() < until) await new Promise(r => setTimeout(r, 25))
+  }, HAIRLINE)
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
 
   const seen: string[] = await app.evaluate(() => {

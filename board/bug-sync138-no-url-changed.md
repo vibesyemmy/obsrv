@@ -462,9 +462,10 @@ and not fact (a).
 left both panes on hairline. The barrier passed instantly, the trace was read mid-flight, and the
 assertion failed for having looked too early rather than for anything the product did.
 
-**So `sync.spec:139` was not measuring what its name says**, and every earlier reading of this card —
-including the CI recurrence recorded at 00:27Z — is a reading of that race rather than of a defect in
-the bus.
+**So `sync.spec:139` was not measuring what its name says.** For the recurrences whose account shows
+`url-changed: 0` **at read time** — this one, and the CI recurrence recorded at 00:27Z — what was
+recorded is that race rather than a defect in the bus. I have not re-read every earlier sighting
+against its own account, so that is the claim, rather than "all readings ever".
 
 **The fix waits for what step 2 produces**, in-process so a run that genuinely emits nothing still
 reaches the assertions and carries the full account, which is the whole point of the traces.
@@ -475,6 +476,14 @@ reaches the assertions and carries the full account, which is the whole point of
 
 Whole-file runs (`--repeat-each 3`, ordering intact) 30 passed; `sync-mirror-mark`, `history` and
 `arrivals` 14 passed.
+
+### A second, smaller race in the fix itself — found by Wren's read
+
+The first version waited for the **first** `url-changed` while the assertion reads the **last**. The
+first event is usually `redirect.html`, and the `urls` poll after it can go green on the pane's URL
+before the target has emitted for hairline — leaving `seen.at(-1)` on `redirect.html`. **The same
+shape as the defect, one step smaller, in the fix for it.** It waits on the landing now. A further
+180 runs: 0 failures, 117 saw 2 events and 3 saw 3.
 
 **What this does NOT say.** It does not prove the bus always tells the target — it proves this test
 was reading before the answer arrived. A genuine silence would now fail after a 5 s wait, with the
