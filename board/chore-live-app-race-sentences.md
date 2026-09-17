@@ -67,3 +67,32 @@ is unmeasured.
 3. **3** — the fenced hook, with the sabotage control that already worked.
 4. **1** — the held main thread.
 5. **2, 4, 5** — measure whether the window exists at all **before** building for it.
+
+## THREE FIRED 2026-09-17 by Kenya — the state ones, and they are ordinary tests
+
+`tests/e2e/live-capture-notes.spec.ts`, its own app with agent control:
+
+| # | sentence | how |
+| --- | --- | --- |
+| 10 | the raster is the target's own frame; the onion skin is not blended into it | skin on, `captureRaster` — **no race, no animation** |
+| 8 | the page keeps painting (animation or video); this is one frame of it | `animated.html`, `captureRaster` |
+| 7 | the onion skin is blending two frames of a page that keeps painting | `animated.html` **and** the skin on, `captureTarget` |
+
+**Controlled, because a test that asserts a sentence is exactly the kind that can pass on the wrong
+one:** with all three producers reworded in `src/main/ipc.ts`, **3 failed**; restored, **3 passed**.
+
+**One correction the run made to my own reading:** I asserted the skin was applied by checking
+`reply.error` was undefined. The reply carries `error: null` and says `applied: true` — the
+assertion was wrong, not the product, and it failed loudly rather than passing on a field that was
+never going to be undefined.
+
+**Seven left**, in the order on this card: 9 and 6 next (a page painting past the budget; a resize
+with a capture inside it), then 3's fenced hook, then 1, then the three window cases behind a
+measurement.
+
+### What 3's hook will NOT prove, recorded before it is built
+
+With the `drawNow` send removed by an `OBSRV_TEST` hook, the sentence fires **because we removed
+it**. So the observation is *"this sentence is reachable when a draw is never acknowledged"* — not
+*"an app in the field reaches this"*. Worth having, and worth not overstating: it is a reachability
+proof, where a fixture firing a sentence is an occurrence proof. (Henry's caution, #271's read.)
