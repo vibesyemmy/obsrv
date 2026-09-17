@@ -338,3 +338,48 @@ reading**, not about live against headless.
 frame would make both walks follow this fixture to its full height and silence the note the fixture
 exists to raise. What is new is that the note is not a near-miss — it is what a same-task `atEnd`
 must produce on a page that grows from its own scroll handler.
+
+## ARCHAEOLOGY 2026-09-17 by Rook — one candidate is impossible, so the missing SHA does not matter
+
+The section above left a narrow question: **which build produced the 2026-09-14 reading that took a
+fourth step?** Two candidates were named — a tree whose live path read `atEnd` in a *later task* than
+it applied the scroll, or a step that genuinely failed to reach the bottom and so honestly reported
+`atEnd: false`.
+
+**No SHA was recorded.** `6832` appears nowhere but this card: not in `docs/research/`, not in the
+C4 field sweep (that one is obsrv-e7 against `6b59868`, and its 8-screenful figure is a different
+page at 8048 px). So the reading cannot be tied to a build directly.
+
+**It does not need to be, because the first candidate never existed.**
+
+Searching the history of the line that computes it, in `src/preload/sync.ts`, returns exactly one
+commit: **`206b0cf` (2026-09-07)**, *"feat(drive): scroll a screenful at a time, and say when the
+page is at its end"* — the commit that introduced `atEnd` at all. The same search across
+`586caab..origin/main` — from the moment `app-shell-grows.html` existed to be walked, through to
+now — returns **nothing**. The line has never changed.
+
+So **on every tree on which this fixture could be walked, the live path has applied the scroll and
+read `atEnd` in the same synchronous handler, in the same `SCROLL_RESULT` send.** There is no build
+in which the read happened a task later. That candidate is not unverified; it is impossible.
+
+### Which leaves the second, and it needs no special build
+
+A step that did not reach the bottom reports `atEnd: false` honestly — `reached = applyTo(el, pos)`
+and then `atEndOf(scrollerEl, reached)`, so a scroll that fell short is exactly what that returns.
+The walk then takes another step, which is the fourth step the reading shows, and that step triggers
+the second growth: 8 screenfuls and `pageHeight` 6832, which is two growths plus the shell chrome.
+
+**And a short scroll is the thing the live path is most exposed to**, for a reason this card already
+measured: the live walk takes ~3.7x as long per step as the headless one. Growth arrives
+asynchronously from the previous step's `scroll` handler, so a step applied while the feed is still
+reflowing can land short of a bottom that is itself moving.
+
+**So the question closes as answered rather than unknowable.** Not "which build", but: the only
+mechanism available on any build is a short scroll on a growing scroller, and that is timing, not a
+tree. Whether to *do* anything about it is unchanged — the card's existing position stands, that
+taking `atEnd` after a frame would silence the note the fixture exists to raise.
+
+**What would still be worth measuring, for whoever wants it:** whether a live walk on this fixture
+ever reports a step short of the bottom, by recording `reached` against the scroller's extent per
+step. That is a probe, it is desk-free, and it would turn the remaining sentence from a reading of
+the code into an observation.
