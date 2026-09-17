@@ -144,6 +144,13 @@ would have recorded the state before the failure rather than at it.
 `main sent frame 4 (delivery subscribed: true, session painting: true)` — so it is not a sentence
 that only exists in the source.
 
+**Why this is new evidence rather than a restatement.** Neither sighting carried
+`No frames from target renderer` — the app's own notice, absent both times — and that notice is the
+only thing the product says when frames stop. **So nothing in either log could name which side was
+quiet**, and every reading of them, including both of mine, had to stop at "the canvas was blank".
+This account is the first thing that can answer it, which is the whole reason it goes in before the
+next recurrence rather than after.
+
 ### How to read it when it fires — the key, on the card rather than only in a PR
 
     lastSeq 0, or ready false     main never sent a frame. The question is main's, and this is
