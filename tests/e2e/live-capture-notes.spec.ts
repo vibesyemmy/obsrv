@@ -152,15 +152,18 @@ test('a raster capture while the pane is resized throughout says the page was st
   // for the whole 8 s budget. That is a preset cycle, the same state
   // `live-drive.spec.ts` holds for the window capture.
   //
-  // MEASURED FIRST, on CI (run 35215978933, six repeats): `timeout` five
-  // times and `uncovered` once, and all six carried this sentence. So this
-  // asserts the state, then the sentence on the label it belongs to, and
-  // records the label, as `live-drive.spec.ts` does for its own race.
+  // MEASURED FIRST, on CI: nine captures over runs 35215978933 and
+  // 35216528983, `timeout` five times and `uncovered` four, and this
+  // sentence on every one. The label is a race, so it is recorded, as
+  // `live-drive.spec.ts` records its own. The state and the sentence are
+  // asserted.
   //
-  // `uncovered` is recorded and NOT asserted. Part of that frame was never
+  // On `uncovered` the sentence is the WRONG one. Part of that frame was never
   // painted, so the PNG has transparent pixels, and "still painting" does not
-  // say so. That is `bug-live-raster-uncovered-said-as-painting`, and this
-  // test must not pin the wording that card replaces.
+  // say so (`bug-live-raster-uncovered-said-as-painting`). It is asserted
+  // anyway: a first version skipped that label, and its control run drew
+  // `uncovered` three times out of three and asserted nothing. That card's fix
+  // changes the `uncovered` half of this check.
   test.skip(
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
@@ -195,13 +198,10 @@ test('a raster capture while the pane is resized throughout says the page was st
   // its name says.
   expect(applied, margin).toBeGreaterThan(20)
   expect(shot.settled, margin).toBe(false)
-  if (shot.unsettledReason === 'timeout') {
-    expect(warningsOf(shot), margin).toContain('the page was still painting when the capture budget ran out; the PNG may show a transitional frame')
-  } else if (shot.unsettledReason !== 'uncovered') {
-    // Any other name on a pane that never stopped changing size is the
-    // finding, not a tolerance to widen.
-    throw new Error(`a raster of a pane still changing size came back as ${String(shot.unsettledReason)}: ${margin}`)
-  }
+  // Any other name on a pane that never stopped changing size is a finding,
+  // not a tolerance to widen.
+  expect(['timeout', 'uncovered'], margin).toContain(shot.unsettledReason)
+  expect(warningsOf(shot), margin).toContain('the page was still painting when the capture budget ran out; the PNG may show a transitional frame')
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
