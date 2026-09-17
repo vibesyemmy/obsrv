@@ -1,9 +1,8 @@
 ---
 title: "A mirrored redirect's second commit can still be counted as an arrival"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: "Henry: the syncBus redirect-mirror fix, which this re-measures on top of"
 criterion: B2
 order: 23
 ---
@@ -60,3 +59,37 @@ guessed at here.
 because a 20-iteration loop is the wrong shape for the suite.
 
 Deferred 2026-09-14 in commit 7d811f8. Two causes race for that commit; when it lands unmarked the arrivals counter counts it, so the spurious 'navigated after it loaded' note can fire on a redirect.
+
+## RESOLVED 2026-09-17 by Kenya — two discriminators, because each alone was measurably wrong
+
+The fix is one line in the counter and one field on the event:
+
+    if (url === arrivals(s).url && !byDocument) return
+
+**A commit to the address the pane is already recorded at, which the document did not start, is not
+the page moving.** It is the bus's mirrored load landing after `loadMirrored`'s flag came down.
+
+**Both halves are load-bearing, and each was refuted alone before this:**
+
+| candidate | spurious arm | truthful arm | verdict |
+| --- | --- | --- | --- |
+| claim a mirrored load by URL | 0/20 | **7/20** | eats real movements |
+| same address, ignoring who started it | 0/20 | 20/20 | **breaks `mcp-live:722`/`:813`** |
+| same address **and** not document-started | **0/20** | **20/20** | every gate green |
+
+`byDocument` comes from Electron's `initiator`, which is present only on a navigation a page began
+itself. There is **no `isRendererInitiated`** on Electron 43's event — measured across both arms, and
+the probe is on `probe/arrivals-repro` — so nothing here rests on a field that does not exist.
+
+**Why the counter and not the attribution.** Marking those commits `mirrored` in `TargetSource`
+would also change what the BUS sees, and the bus drops what is marked when deciding whether to
+mirror back — the loop breaker's own test caught that shape once already (`7d811f8`). So `mirrored`
+is left exactly as it was, and the new fact travels beside it.
+
+**The regression test is `tests/e2e/arrivals.spec.ts`**, its own file with its own app, and it holds
+both halves: the mirrored pane says nothing, and a page that really redirects still says so. With the
+rule removed the first test fails both attempts and the second still passes — so it cannot go vacuous
+in either direction.
+
+**Gates, read from the full summary line rather than a tail:** the four arms above; `mcp-live` 41
+passed including `:722` and `:813`; `sync` + `sync-mirror-mark` + `history` 22 passed; unit 1403/1403.
