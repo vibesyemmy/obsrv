@@ -163,6 +163,34 @@ describe('walkPage on a page with nothing to scroll', () => {
     const w = await walkPage(deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root' }))
     expect(w.notes).toEqual([])
   })
+
+  // Which walk the sentence describes is carried by the ABSENCE of
+  // `shadowHosts` (Wren's trace of #293): an app that enters open roots sends
+  // `{ frames }`, and every app from 0.58.0 up to that change sends both, a
+  // zero included. A parser that normalised a missing count to 0 would put
+  // every new app back on the older walk's words, silently.
+  it('names the walk that entered the open roots when the app sends frames and no shadow-host count', async () => {
+    const w = await walkPage(
+      deps({ scrolled: { x: 0, y: 0 }, atEnd: true, scroller: 'root', hidden: true, blocked: { frames: { count: 0, viewportCoverage: 0 } } }),
+    )
+    const said = w.notes.join(' ')
+    expect(said, said).toContain('has no scrollable container in its light DOM or its open shadow roots')
+    expect(said, said).toContain('or one inside a closed shadow root')
+  })
+  it("keeps the older walk's words when the app sends a shadow-host count, even a count of zero", async () => {
+    const w = await walkPage(
+      deps({
+        scrolled: { x: 0, y: 0 },
+        atEnd: true,
+        scroller: 'root',
+        hidden: true,
+        blocked: { frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 0 },
+      }),
+    )
+    const said = w.notes.join(' ')
+    expect(said, said).toContain('no iframe covers the viewport and the page has no open shadow roots')
+    expect(said, said).not.toContain('in its light DOM or its open shadow roots')
+  })
 })
 
 /**

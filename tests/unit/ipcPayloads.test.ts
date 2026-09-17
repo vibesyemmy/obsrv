@@ -438,6 +438,15 @@ describe('parseScrollReport: the fields a walk reads', () => {
     expect(parseScrollReport({ ...base, blocked })).toMatchObject({ blocked })
   })
 
+  it('keeps a blocked walk with no shadow-host count without one, because the absence says which walk it was', () => {
+    // An app whose walk enters open roots sends `{ frames }` alone, and
+    // `walkNothingNote` reads the missing count as that walk. Normalising it to
+    // 0 here would describe every such walk in the older walk's words.
+    const parsed = parseScrollReport({ ...base, blocked: { frames: { count: 0, viewportCoverage: 0 } } })?.blocked
+    expect(parsed).toEqual({ frames: { count: 0, viewportCoverage: 0 } })
+    expect(parsed).not.toHaveProperty('shadowHosts')
+  })
+
   it.each([
     ['no blocked at all', undefined],
     ['a blocked that measured neither thing', {}],
