@@ -742,6 +742,41 @@ test('a live audit of a page that stays put says nothing about navigating', asyn
 })
 
 /**
+ * After a history move, the page in front is not the one the agent navigated
+ * to. 0.60.0 said so: its live audit counted every commit, and its lint
+ * compared addresses. History moves drive the native pane only, and the sync
+ * bus loads what that pane commits into the target as a mirror
+ * (`loadMirrored`, 56972c7), which the arrivals count skips (7d811f8). So back,
+ * forward and reload went silent on audit and lint
+ * (bug-history-move-silences-navigated-note). The reply's `url` was still
+ * right, so the lost part is the sentence.
+ */
+test('a live audit and lint after going back say the page is not the one navigated to', async () => {
+  // Two pages with something to measure, so the reply is about a real page.
+  const first = fixture('audit.html')
+  const second = fixture('button.html')
+  for (const url of [first, second]) {
+    const r = await call('obsrv_drive', { url })
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+  }
+  const back = await call('obsrv_drive', { back: true })
+  expect(back.isError, JSON.stringify(back.content).slice(0, 300)).toBeFalsy()
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 })
+    .toBe(first)
+  for (const tool of ['obsrv_audit', 'obsrv_lint']) {
+    const r = await call(tool, { mode: 'live', groupsOnly: true })
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+    const s = r.structuredContent as { url?: string; warnings?: string[]; notes?: string[] }
+    const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
+    // The figures are of the page back landed on, and the reply names it...
+    expect(s.url, tool).toBe(first)
+    // ...and says it is not the page the last navigate asked for.
+    expect(said, `${tool} said: ${said}`).toMatch(/the page navigated after it loaded, to /)
+  }
+})
+
+/**
  * `url` means one thing on both surfaces: the address the call asked for.
  * Live reported the page the app had ended on instead, so the same field held
  * the request headless and the landing live — measured 2026-09-13 driving the
