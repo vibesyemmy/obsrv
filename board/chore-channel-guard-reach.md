@@ -1,8 +1,8 @@
 ---
 title: "The preload-channels guard sees only app.ts's IPC.x sends, so six channels could lose their handler unnoticed"
-column: doing
+column: review
 owner: "Henry"
-waiting: ""
+waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: chore
 order: 69
 ---
@@ -38,4 +38,26 @@ Unit-level and desk-free, per the card's direction:
 - count `FrameChannels.subscribe` (including frameBus's default) as a handler.
 
 Control: rename one handler in each shape, and each must go red.
+
+## In review 2026-09-17: the guard reads all three shapes
+
+`tests/unit/preloadChannelsHandled.test.ts` now collects sends from:
+- `ipcRenderer.send|invoke|sendSync(IPC.x` in `src/preload/app.ts` (more than 30, as before);
+- `frameChannel(IPC.x, IPC.y)` in `app.ts`, whose second argument is the channel sent on first subscribe
+  (at least 2);
+- `src/preload/sync.ts`'s `ipcRenderer.send(NAME` through `const NAME = '…' satisfies typeof IPC.x`
+  constants (at least 4). **A send through a name the guard can't resolve fails**, so a new shape can't
+  pass unread.
+
+It counts as handled `on|handle|once(IPC.x` in `src/main`, plus `subscribe: IPC.x` in a `FrameChannels`
+object (frameBus's default, and `tabs.ts`'s reference bus). The latter counts only while `frameBus.ts`
+still registers `ipcMain.on(channels.subscribe`, which the test asserts.
+
+**Controls, one per shape, each red at its own name:**
+- (a) main's `scrollResult` handler renamed → `unhandled: scrollResult`;
+- (b) `tabs.ts`'s `subscribe: IPC.referenceSubscribe` removed → `unhandled: referenceSubscribe`;
+- (c) frameBus registering `channels.frame` instead → "attachFrameBus no longer registers…";
+- (d) the original shape, `moveTab`'s handler renamed → `unhandled: moveTab`.
+
+All four were restored from copies; the test passes on the clean tree.
 
