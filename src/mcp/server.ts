@@ -866,9 +866,19 @@ const LIVE_AUDIT_TIMEOUT_MS = 20_000
 const LIVE_LINT_TIMEOUT_MS = 20_000
 /** How long a live snap waits for `status.url` to reflect the navigation. */
 const LIVE_SETTLE_MS = 5_000
-/** The app answered a navigate with `loading: true`: its budget ran out before both panes finished. */
+/**
+ * The app answered a navigate with `loading: true`: its budget ran out before
+ * both panes finished.
+ *
+ * It used to name the budget — "(30 s)" — which is the app's default and not a
+ * figure this server holds: `NAVIGATE_WAIT_MS` (`src/main/ipc.ts:365`) reads
+ * `OBSRV_NAVIGATE_WAIT_MS`, and anything that sets it (the e2e harness uses
+ * 8 s) made this sentence state a number that was not the budget that ran out.
+ * A sentence keys off facts it holds; the server holds the outcome, not the
+ * budget, so it says the outcome (c5's measurement of this cluster).
+ */
 const NAVIGATE_CUT_NOTE =
-  "the page was still loading when the app's navigate budget (30 s) ran out; the status, and any capture, show it as it stands"
+  "the page was still loading when the app's navigate budget ran out; the status, and any capture, show it as it stands"
 /**
  * How long an `obsrv_drive` click waits for a navigation it may have caused,
  * so the returned status reflects it. Deliberately short: most clicks do not
