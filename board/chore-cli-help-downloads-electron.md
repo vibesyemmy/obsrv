@@ -1,8 +1,7 @@
 ---
 title: "`obsrv --help` on a fresh install downloads Electron (~120 MB) before printing the help"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: chore
 criterion: A3
 order: 66
@@ -56,3 +55,6 @@ reading the build.
 - **Control:** with the help branch disabled, it's red at `--help` (`status: 3`, empty stdout: the stand-in
   answered).
 
+## Merged 2026-09-17: #216 (5bcf081)
+
+`obsrv --help`, `-h`, `help` and a bare `obsrv` are answered in plain Node, before the Electron lookup.

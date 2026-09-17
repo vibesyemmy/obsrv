@@ -1,8 +1,7 @@
 ---
 title: "After back, forward or reload, a live audit or lint no longer says the page moved since the agent's navigate; 0.60.0 did"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: B2
 order: 65
@@ -147,3 +146,7 @@ the counter skips it). That's `bug-arrivals`' hard problem, left for its own car
 - **Timing:** the measured address is the tab's `url`, the pane's last reported commit. If the mirror hasn't
   committed into the target when the measurement starts, the sentence and the figures could briefly
   disagree. Not measured.
+
+## Merged 2026-09-17: #222 (52621ab)
+
+A live inspect, audit or lint after a Back, Forward or Reload says which page it measured and who moved the tab. Links followed inside the native pane stay open, as the card says.
