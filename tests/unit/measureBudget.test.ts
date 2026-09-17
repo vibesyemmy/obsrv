@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cutLoadMeasureNote,
   Deadline,
+  loadTimeoutMessage,
   measureTimeoutNote,
   httpStatusNote,
   landedElsewhereNote,
@@ -186,3 +188,23 @@ describe('a load that landed somewhere else', () => {
     expect(landedElsewhereNote('https://a.test/x', '')).toBeNull()
   })
 })
+
+describe('a load the budget cut, and the throttle it names', () => {
+  const url = 'https://a.test/'
+  it('names a throttle that was in force, and says a slow load is its point', () => {
+    expect(loadTimeoutMessage(1500, '3g', url)).toBe(`load did not finish within 1500 ms under --throttle 3g (a slow load is what a throttle is for): ${url} — raise --timeout for the full load`)
+    expect(cutLoadMeasureNote(1500, '3g', url).startsWith(`load did not finish within 1500 ms under --throttle 3g: ${url} — measured the page as it stood`)).toBe(true)
+  })
+
+  it('names no throttle when none was in force: nothing asked for, a refused one put back to none, or none as a baseline', () => {
+    // After a refusal the conditions in force are the ones put back, `none` on
+    // a fresh target, and the refusal sentence already names the one asked for
+    // (bug-refused-throttle-names-none-in-timeout).
+    for (const throttle of [null, 'none']) {
+      expect(loadTimeoutMessage(1500, throttle, url)).toBe(`load did not finish within 1500 ms: ${url} — raise --timeout for the full load`)
+      expect(cutLoadMeasureNote(1500, throttle, url)).not.toContain('--throttle')
+      expect(cutLoadMeasureNote(1500, throttle, url).startsWith(`load did not finish within 1500 ms: ${url} — measured the page as it stood`)).toBe(true)
+    }
+  })
+})
+

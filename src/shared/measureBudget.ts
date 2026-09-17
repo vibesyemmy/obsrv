@@ -1,3 +1,4 @@
+import { DEFAULT_THROTTLE } from './throttle'
 import { normalizeUrl } from './url'
 
 /**
@@ -121,6 +122,48 @@ export function navigatedAfterLoadNote(from: string, to: string): string {
     `the page navigated after it loaded${same ? ' (to the same address)' : `, to ${to}`}: ` +
     `a bot challenge, an interstitial, a redirect, or a dev server reloading under an edit; ` +
     `the figures are of the page it arrived at`
+  )
+}
+
+/**
+ * The throttle a load-timeout sentence may name: one that was in force and
+ * slows anything. `throttle` is the conditions in force, which after a refusal
+ * are the ones put back (`none` on a fresh target), so a sentence that named
+ * any non-null value said "under --throttle none" to a caller who passed
+ * `--throttle budget-phone` and had it refused. The refusal sentence already
+ * names the throttle asked for (bug-refused-throttle-names-none-in-timeout).
+ * `none` asked for by name, as a baseline, slows nothing either.
+ */
+function throttleInForce(throttle: string | null): string | null {
+  return throttle === null || throttle === DEFAULT_THROTTLE ? null : throttle
+}
+
+/**
+ * The sentence for a load that outran the budget. Under a throttle a slow
+ * load is the point, and bbc.com under budget-phone settles at 70 s: the old
+ * "load did not finish within 30000 ms" named neither the throttle nor the
+ * flag that would have let it finish.
+ */
+export function loadTimeoutMessage(timeoutMs: number, throttle: string | null, url: string): string {
+  const slowed = throttleInForce(throttle)
+  return (
+    `load did not finish within ${timeoutMs} ms` +
+    `${slowed !== null ? ` under --throttle ${slowed} (a slow load is what a throttle is for)` : ''}: ${url} — raise --timeout for the full load`
+  )
+}
+
+/**
+ * The sentence a measurement carries for a load the budget cut: the page was
+ * measured as it stood. apnews.com behind its consent wall never fires
+ * `load` — a partner's beacon never answers — at 30 s or at 60 s, and the
+ * old refusal ("raise --timeout for the full load") could not help; the DOM
+ * was there to measure, as the snap's capture already showed.
+ */
+export function cutLoadMeasureNote(timeoutMs: number, throttle: string | null, url: string): string {
+  const slowed = throttleInForce(throttle)
+  return (
+    `load did not finish within ${timeoutMs} ms${slowed !== null ? ` under --throttle ${slowed}` : ''}: ${url} — measured the page as it stood; ` +
+    `a page still arriving shows more with a longer --timeout, a page whose load never completes (a beacon that never answers) does not`
   )
 }
 
