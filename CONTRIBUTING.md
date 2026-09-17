@@ -427,6 +427,16 @@ silently unchecked and every arm stayed green. Both were found by someone else
 reading it. When you add a check, say plainly which runs it does **not** cover
 and ask for a cold read of that, not of the code.
 
+**An instrument that cannot show you it is working is indistinguishable from a
+product that is quiet.** Both look like nothing. Print the line that must always
+be there — the healthy sample, the control case — beside the line you care
+about, so an absence can be read as an absence. **A number you cannot account
+for is a number to check, and a plausible number needs its baseline more than an
+implausible one does:** an implausible one prompts the check by itself.
+`chore-flaky-leaders-0917` has three worked examples, two of them measurements
+that lied until their baseline went missing — a DOM read where the code used
+React state, and a logging wrapper `contextBridge` had silently frozen.
+
 `-g` filtering is not safe everywhere. Some spec files establish shared state
 in their first test, and a filtered run skips it — you will get a message
 saying so rather than a crash, but the run is not the same conditions as a
