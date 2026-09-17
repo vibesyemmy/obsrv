@@ -745,6 +745,8 @@ test.describe('the tab shortcuts are application-menu items', () => {
 test.describe('tabs come back on relaunch', () => {
   const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
   const LINK = pathToFileURL(resolve(__dirname, '../fixtures/link.html')).href
+  // A third page, so a drag has somewhere to land that is neither end.
+  const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 
   const dirs: string[] = []
   const dir = (): string => {
@@ -808,6 +810,74 @@ test.describe('tabs come back on relaunch', () => {
     await expect(strip(p2).nth(1)).toHaveAttribute('aria-selected', 'true')
     await second.close()
   })
+
+  test('a real drag re-orders the strip, and main is the one that says so', async () => {
+    // `chore-tab-drag-e2e`. The test above moved a tab by calling
+    // `window.obsrv.moveTab` — which is one layer better than the `tabs.move()`
+    // it replaced, and still skips the gesture. Uncovered until this test:
+    // `Tab`'s `dragstart` (which lifts `dragId`), its `dragover` — whose
+    // `preventDefault()` is the only reason a drop happens at all, since the
+    // default answer is "no" — its `drop`, and `TabBar`'s `drop(index)`, which
+    // is where the destination index is computed. A drop index off by one, or a
+    // `dragId` cleared too early, passes every other test in this file.
+    //
+    // Playwright drives HTML5 drag through CDP (`Input.dispatchDragEvent`)
+    // rather than the OS, so it does not move the real cursor and stays
+    // desk-safe. Whether CDP drag reaches an Electron BrowserWindow was
+    // unmeasured when this was written; this test is the measurement. A
+    // `dispatchEvent` stand-in was explicitly not used — it would exercise
+    // synthetic events of my own rather than Chromium's drag, which is the same
+    // shape as the call this test exists to replace.
+    const home = dir()
+    const app = await launchApp([], {}, home)
+    const p1 = await rendererWindow(app)
+
+    await p1.evaluate(u => window.obsrv.navigate(u), TALL)
+    await expect(strip(p1).nth(0)).toHaveText('tall-fixture')
+    await p1.locator('.tab-new').click()
+    await expect(strip(p1)).toHaveCount(2)
+    await p1.evaluate(u => window.obsrv.navigate(u), LINK)
+    await expect(strip(p1).nth(1)).toHaveText('link-fixture')
+    await p1.locator('.tab-new').click()
+    await expect(strip(p1)).toHaveCount(3)
+    await p1.evaluate(u => window.obsrv.navigate(u), HAIRLINE)
+    await expect(strip(p1).nth(2)).toHaveText('hairline-fixture')
+
+    // The tab that moves is NOT the active one, so "the active tab is
+    // unchanged" can be wrong. The third tab is in front after the click
+    // above; the first is the one dragged.
+    await expect(strip(p1).nth(2)).toHaveAttribute('aria-selected', 'true')
+
+    const order = async (): Promise<string[]> =>
+      app.evaluate(() => (globalThis as any).__obsrv.tabs.snapshot().tabs.map((t: { id: string }) => t.id))
+    const before = await order()
+
+    // The whole tab is the drag handle, not the label button inside it.
+    const handles = p1.locator('.chrome-tabs .tab')
+    await handles.nth(0).dragTo(handles.nth(2))
+
+    // Main's answer, not the strip's local state: the strip could show a move
+    // it only believes in. `snapshot()` is what persists and what a relaunch
+    // reads back.
+    await expect.poll(order, { timeout: 5_000 }).toEqual([before[1]!, before[2]!, before[0]!])
+    await expect(strip(p1).nth(0)).toHaveText('link-fixture')
+    await expect(strip(p1).nth(1)).toHaveText('hairline-fixture')
+    await expect(strip(p1).nth(2)).toHaveText('tall-fixture')
+    // Re-ordering is not selecting: the tab in front is the one that was.
+    await expect(strip(p1).nth(1)).toHaveAttribute('aria-selected', 'true')
+
+    // And it survives, which is the half a gesture that reached main earns.
+    await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
+    await app.close()
+
+    const again = await launchApp([], {}, home)
+    const p2 = await rendererWindow(again)
+    await expect(strip(p2)).toHaveCount(3)
+    await expect(strip(p2).nth(0)).toHaveText('link-fixture')
+    await expect(strip(p2).nth(2)).toHaveText('tall-fixture')
+    await again.close()
+  })
+
 
   test('restores the urls, the screen and which tab was in front — and not the scroll', async () => {
     const home = dir()
