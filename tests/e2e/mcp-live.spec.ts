@@ -752,7 +752,7 @@ test('a live audit of a page that stays put says nothing about navigating', asyn
  * a Back the agent issued, a Back made in the app, a Reload, no move, a page
  * that redirects itself, and the navigate record's two sentences that go stale.
  */
-const HISTORY_SENTENCE = /the figures are of .*(after a|most recently by a) (Back|Forward|Reload) (the agent issued|made in the app)/
+const HISTORY_SENTENCE = /the figures are of .*the last move Obsrv recorded (since )?was a (Back|Forward|Reload) (the agent issued|made in the app)/
 const saidIn = (r: CallToolResult): string => {
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   return [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')

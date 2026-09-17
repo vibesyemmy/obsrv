@@ -137,3 +137,13 @@ B, and never the challenge/redirect sentence.
 
 **Still open, as agreed:** a link followed inside the native pane is still silent (the bus mirrors it and
 the counter skips it). That's `bug-arrivals`' hard problem, left for its own card if it matters.
+
+**Limits named in Wren's read of #222:**
+- **Wording:** the sentence says "the last move Obsrv recorded", not "most recently". A link clicked after a
+  recorded Back isn't recorded, so "most recently by a Back" would have been false.
+- **Two sentences can pair oddly:** after a Back to a page that then redirects or reloads itself, the
+  history sentence and `navigatedAfterLoadNote` both appear, and the second names the stale navigate's
+  address as its "from". Rare, and not fixed here.
+- **Timing:** the measured address is the tab's `url`, the pane's last reported commit. If the mirror hasn't
+  committed into the target when the measurement starts, the sentence and the figures could briefly
+  disagree. Not measured.

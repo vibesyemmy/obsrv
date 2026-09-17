@@ -146,9 +146,13 @@ export interface HistoryMove {
 export function historyMoveNote(move: HistoryMove, measured: string, asked: string): string {
   const name = move.kind === 'back' ? 'Back' : move.kind === 'forward' ? 'Forward' : 'Reload'
   const made = `${name} ${move.by === 'agent' ? 'the agent issued' : 'made in the app'}`
+  // "The last move Obsrv recorded", not "most recently": a link followed in the
+  // native pane moves the tab without passing any issue point, so a Back and a
+  // link click after it would otherwise read as though the Back came last
+  // (Wren's read of #222).
   return sameAddress(asked, measured)
-    ? `the figures are of ${measured} after a ${made}, not as the last navigate loaded it`
-    : `the figures are of ${measured}, not of ${asked}, which the last navigate asked for: the tab moved after that navigate, most recently by a ${made}`
+    ? `the figures are of ${measured}, not as the last navigate loaded it: the last move Obsrv recorded since was a ${made}`
+    : `the figures are of ${measured}, not of ${asked}, which the last navigate asked for: the tab moved after that navigate, and the last move Obsrv recorded was a ${made}`
 }
 
 /**
