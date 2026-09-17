@@ -1,8 +1,8 @@
 ---
 title: "`rotate` is in every tool's schema and `--help`, but not in the skill or the README"
-column: doing
+column: review
 owner: "Henry"
-waiting: ""
+waiting: "Wren: the cold read of the docs PR, then Henry merges"
 kind: chore
 criterion: C2
 order: 74
@@ -24,3 +24,18 @@ it or about `orientation` being deprecated.
 - `obsrv_snap` and `obsrv_drive` answer `rotated` and `screenShape`. The CLI's JSON doesn't carry `rotated`.
 - Live audit, lint and inspect measure the screen in force, and say they ignored either field.
 - Marked `0.61.0+`, as the skill's convention asks.
+
+## In review 2026-09-17
+
+- **Skill** (`skills/obsrv-screens/SKILL.md`):
+  - a `--rotate` example in Commands (`iphone-61 --rotate`), with the deprecation and refusal lines;
+  - a **Rotation (0.61.0+)** paragraph in The MCP tools: which six tools take `rotate`, the stored-form
+    meaning `orientation` keeps, the refused pair, `rotated` and `screenShape` on snap and drive (not in
+    the CLI JSON), and live audit/lint/inspect naming the fields they ignored.
+- **README:** a `--rotate` example among the CLI examples, with the same deprecation and refusal line.
+- **Every claim checked in code:**
+  - the CLI's `--rotate and --orientation disagree` refusal (`args.ts`);
+  - `rotated` and `screenShape` declared on `snapOutputShape` and `driveOutputShape`;
+  - the six tools taking `orientation`/`rotate`, which `rotateDeprecated.test.ts` pins;
+  - #207, inside 0.61.0 (`10cd219`), so `0.61.0+` holds.
+
