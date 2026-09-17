@@ -1,6 +1,8 @@
 ---
 title: "CI on main fails about one run in three, from at least three different tests"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: B5
 order: 37
@@ -178,3 +180,18 @@ Those are not contradictory — B5 measured fixtures, these are live e2e — but
 **AND A GATE QUESTION FOR OPEYEMI, because it is a policy decision rather than an engineering one:** at 37% red, CI currently cannot tell anyone whether a change broke something. A red run means nothing, so a green run means nothing either. Either the flakes get fixed or the suite gets quarantined into "gating" and "informational" — and the second is how a suite quietly stops being a gate while still looking like one.
 
 Related: `bug-resizing-test-flaky-ci` is one instance. `ci-second-host` is the measurement this argues for. `chore-guard` is about greens that mean nothing; this is reds that mean nothing, which is the same disease.
+
+## Claimed by Henry 2026-09-17, routed by Wren: the remeasurement is due
+
+**The trigger is met:** 115 push runs on main since #82 merged (2026-09-16 15:19Z), 113 of them complete.
+Remeasured by this card's method:
+- red per **first** attempt, read from the logs, never from `conclusion`;
+- a test counts as failed only when its retry failed too;
+- runs whose suite was skipped (board-only) are excluded, and cancelled runs count as missing;
+- Wilson 95% intervals;
+- the parser is checked first against a run whose answer is known.
+
+The split gets revisited only if main is above ~10% red. **The attribution will name tonight's
+hidden-predecessor finds** (`panes:83` needing `:77`, and `sync:139`'s early barrier): some of what's
+tallied as flakes are test defects that are being fixed.
+
