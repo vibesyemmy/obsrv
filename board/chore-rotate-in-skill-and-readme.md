@@ -1,8 +1,7 @@
 ---
 title: "`rotate` is in every tool's schema and `--help`, but not in the skill or the README"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the docs PR, then Henry merges"
 kind: chore
 criterion: C2
 order: 74
@@ -40,3 +39,6 @@ it or about `orientation` being deprecated.
   - the six tools taking `orientation`/`rotate`, which `rotateDeprecated.test.ts` pins;
   - #207, inside 0.61.0 (`10cd219`), so `0.61.0+` holds.
 
+## Merged 2026-09-17: #242 (34da87b)
+
+The skill and README document `rotate` and `orientation`'s deprecation, marked 0.61.0+. This closes the known issue in the 0.61.0 notes.
