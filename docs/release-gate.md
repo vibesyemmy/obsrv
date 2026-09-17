@@ -6,10 +6,14 @@ What stops a cut, and what ships with disclosure.
 you are told. [`limitations.md`](limitations.md) says what Obsrv cannot do. This
 page is about **when to ship**, which is the question neither of them answers.
 
-**Status: proposed 2026-09-17 by Wren, not yet approved.** The blocking list
-below is Opeyemi's judgement to make, not engineering's; everything else follows
-from it. Until they approve it, this page describes what we have been doing
-implicitly rather than a rule anyone is held to.
+**Status: approved 2026-09-17 by Opeyemi.** The blocking list below — a wrong
+answer the caller cannot detect (including a silence, a zero or an empty list
+that could mean either "nothing" or "couldn't see"), a regression in an
+answer, an artifact or a supported path, install/upgrade/first-run/skew
+failing hard, and data loss — is now the rule a cut is held to, not a
+description of what the team happened to be doing. Everything else on this
+page follows from that approval: the escape hatch, the two evidence gates,
+the cadence, and the `release:` card field.
 
 ## Why "the backlog is empty" cannot be the gate
 
