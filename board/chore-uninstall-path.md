@@ -37,3 +37,35 @@ words are *"the lighter one may be enough"*. **To Backlog, for Opeyemi:** is the
 enough, or is `obsrv uninstall` wanted? If it is, the list above is its specification, and the
 card's cautions (don't delete a profile in use, say what it will remove first) are its
 requirements.
+
+## BEFORE ANYONE WRITES THIS: the obvious way to test it deletes the real profile
+
+Added 2026-09-17 by Rook, unowned and not a claim — this is the one thing whoever takes it needs
+before they start, and it belongs on the card rather than in a room where it scrolls away.
+
+**An uninstaller is the one feature whose tests must exercise deletion of exactly the paths this
+repo forbids touching.** `~/Library/Application Support/Obsrv` is 1.3 GB of real history, tabs and
+Chromium profile on Opeyemi's machine. A test that gets its sandbox wrong here does not leave a
+stray file; it removes his browsing history.
+
+**And the obvious sandbox does not work, which is measured and already on the board.** On macOS
+`os.homedir()` follows `HOME`, and **`app.getPath()` does not** — so an Electron run under a
+`HOME`-only sandbox writes to the *real* profile while every Node-side check reports the sandbox
+clean. That combination is worse than no sandbox: it produces a green test and a real deletion.
+
+- `CFFIXED_USER_HOME` is the lever that actually moves `app.getPath()`.
+- `--user-data-dir` moves the profile but **misses the logs**, so a uninstaller validated only that
+  way will report success with `~/Library/Logs/Obsrv` still there.
+- Neither moves temp.
+
+**So the first task on this card is not the command — it is a fixture that can prove a deletion
+happened somewhere other than `$HOME`,** and a test that fails loudly if the path it is about to
+remove resolves inside the real one. Write the guard before the feature it guards, because the cost
+of finding out afterwards is not a red test.
+
+**A second requirement the card's cautions imply but do not state:** `a4`'s inventory
+(`docs/research/2026-09-14-a4-install-remains.md`) was measured on a packaged build, and
+`~/Library/Caches/electron` is **Electron's directory, not Obsrv's** — other Electron apps share it.
+An `obsrv uninstall` that removes it removes another app's runtime. The README paragraph handles this
+by telling a person to check; a command cannot ask, so it should either leave that path alone and
+name it, or refuse to touch it without an explicit flag.
