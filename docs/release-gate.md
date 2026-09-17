@@ -42,13 +42,29 @@ sentence that is false about the thing it names, with nothing in the reply
 saying so.
 
 - Contrast read against the page instead of the component: 1.24:1 reported
-  where 11.86:1 was painted (`#293`, measured before it shipped).
+  where 11.86:1 was painted. It had shipped that way for months; what `#293`
+  added was the claim in our own docs that it now read the component's
+  backgrounds, which measurement showed false before the claim shipped.
 - A walk blaming a page for 15 s of silence it was never given, after a budget
   that had already run out (`#309`).
 - A raster saying the page was still painting, about pixels that never painted
   at all (`#302`).
 
-**2. A regression against the last release,** on a path that shipped working.
+**A zero, an empty list or an absent warning is an answer too.** If a silence
+fits both "there was nothing" and "we could not see", it is class 1 (Henry, on
+this page). Every example above is a false statement, and this week's worst
+were silences:
+
+- `stuckChrome: []` while two bars were stuck, because the probe threw. Nothing
+  in the reply was false; the list was empty (`#293`, caught by four
+  tiled-capture tests on CI).
+- chromestatus.com answering 0 targets and 0 text, for a page full of controls,
+  for months.
+- a walk answering `screenfuls: 0, atEnd: true`, which reads as a one-screen
+  page.
+
+**2. A regression in an answer, an artifact, or a supported path.** Not any
+regression: a pixel of padding is `disclose`.
 
 **3. Install, upgrade, first run, or version skew failing hard** — an error
 rather than a degraded answer.
@@ -73,6 +89,19 @@ A release note alone does not count. Nobody reads the release notes at the
 moment a wrong number arrives in a tool reply, and an agent reads nothing but
 the reply. This is the rule the policy fails by if it fails: a class 1
 downgraded with a paragraph nobody will see at the point of use.
+
+**The hatch has two holes, and both have bitten** (Henry, reviewing this page).
+
+**An artifact is not a reply.** `snap --tiled` writes a PNG and the report
+writes HTML; a person looks at those, not at the JSON beside them. A warning in
+the reply satisfies the letter of this rule and reaches nobody holding the
+picture. The disclosure has to arrive on the surface the answer is read from.
+
+**Skew disclosure has to live on the newer side,** because the older component
+does not know it is old. `#293` could say what it had stopped sending; a 0.61.0
+server driving today's app loses the walk's `blocked` detail and cannot say so.
+So a change that will be met by older callers carries its disclosure forward,
+in the newer thing, or it is not disclosed at all.
 
 ## What does not block a cut
 
@@ -132,8 +161,13 @@ A `release:` field in the card's frontmatter, set when the card moves columns:
 | `later` | ships, and is not worth a line in the notes. |
 
 The Lead sets it; the PM flags anything that reads like a class 1 and is not
-marked as one; Opeyemi arbitrates disagreements. A card with no `release:` value
-has not been classified, which is itself worth catching before a cut.
+marked as one; Opeyemi arbitrates disagreements.
+
+**Enforce it on `kind: bug` cards only** (Henry). A readiness or chore card
+reaching Done has usually been answered rather than fixed, and a required field
+there would be filled in to satisfy the check rather than to say anything. A bug
+card with no `release:` value has not been classified, and that is worth
+catching before a cut.
 
 ## What this costs
 
