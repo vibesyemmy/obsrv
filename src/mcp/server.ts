@@ -267,11 +267,12 @@ const orientationField = z
   .enum(['portrait', 'landscape'])
   .optional()
   .describe(
-    'Rotate the screen a quarter turn (default portrait). Presets store their natural orientation — ' +
-      'portrait for every mobile preset, landscape for the monitors and laptops — and this swaps the CSS ' +
-      "viewport's two axes on top of that. Nothing else changes: the diagonal, raster density and physical " +
-      'size are orientation-independent, so it is the same panel turned sideways. Use it to check a ' +
-      'landscape phone layout, or a monitor stood on end.',
+    'DEPRECATED, use `rotate`. Kept with its current meaning until a breaking release, because redefining it ' +
+      'would silently change what every existing caller gets. The word names how the preset is stored, not the ' +
+      'shape you get: portrait (the default) is the preset as obsrv_presets lists it, landscape is that turned a ' +
+      'quarter turn. Every mobile preset is stored portrait, so for those the two readings agree; the monitors ' +
+      'and laptops are stored landscape, so landscape turns 1080p-24 into a 1080x1920 portrait screen. A ' +
+      '`rotate` and `orientation` that disagree are refused wherever rotation applies.',
   )
 
 const throttleField = z
@@ -775,9 +776,10 @@ const driveOutputShape = {
   orientation: z
     .string()
     .describe(
-      "The rotation flag: 'portrait' (the preset as its table stores it) or 'landscape' (rotated a quarter " +
-        "turn). This is what to pass back to change it — for the shape the screen actually has, read " +
-        '`screenShape`. Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
+      "The rotation flag, in the words of the deprecated `orientation` input: 'portrait' (the preset as its " +
+        "table stores it) or 'landscape' (rotated a quarter turn). `rotated` says the same as a boolean, and " +
+        '`rotate` is what to pass to change it; for the shape the screen actually has, read `screenShape`. ' +
+        'Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
     ),
   rotated: z
     .boolean()
@@ -1194,7 +1196,7 @@ server.registerTool(
       `through a cheap-panel simulation, and return the PNG. Use it to judge how a page actually looks on the ` +
       `screens users own (1366×768 laptops, 1080p desktops, budget Androids) before declaring frontend work done.\n\n` +
       `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both; either can be ` +
-      `rotated with \`orientation: "landscape"\`, which is how you check a phone's landscape layout. ` +
+      `turned a quarter turn with \`rotate: true\`, which is how you check a phone's landscape layout or a monitor stood on end. ` +
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap ` +
       `(\`inlined: true\`); larger captures (typically fullPage) stay on disk, with \`inlined: false\` and a ` +
