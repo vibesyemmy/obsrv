@@ -91,5 +91,30 @@ Taking the dsf changes out did not make the cycle deterministic. The heads also 
 restore target and a `CONTROL` prefix in `ipc.ts`, and neither should move the rate.
 
 **The `uncovered` half this card was to change no longer exists.** #292 moved the paused test off it
-and retries a stray `uncovered` there. So the fix adds its own test on the back-to-back lever, and a
-CI probe (two arms, every apply timed per preset) sets that test's cycle and bound.
+and retries a stray `uncovered` there. So the fix adds its own test.
+
+## The lever, and why it is a bounded loop, 2026-09-17 by Kenya (#302)
+
+**Henry's call was a deterministic lever.** His suggestion: a page that animates a small region, plus
+one preset change during the capture, on the reading that Chromium repaints a resized surface in
+dirty slices. Probe `35229835046` (branch `probe/raster-uncovered-single-change`), change 800 ms into
+the capture, 4 tries per arm:
+
+| arm | result |
+| --- | --- |
+| 16 px spinner, no change (baseline) | `animating` 4 of 4 |
+| 16 px spinner, one same-dsf change (`1080p-24`) | `animating` 4 of 4 |
+| 16 px spinner, one dsf change (`android-65`) | `animating` 4 of 4 |
+| `animated.html`, one same-dsf change | `animating` 4 of 4 |
+
+**`uncovered` 0 of 16.** One resize gets fully painted well inside the 2 s animating exit, so there is
+no deterministic lever without a hook in the capture path.
+
+**So the work splits:**
+- **The wording is owned by a unit test that needs no race.** `tests/unit/rasterWarnings.test.ts` goes
+  through the real `captureQuiescent`. Control: routing `uncovered` back to painting reds 2 of 3.
+- **The e2e only shows the wiring fires once.** It uses dsf-1 presets back to back, up to 8 tries,
+  with the measured rates and miss chances in its comment: 4 of 8 (`35229152084`), then 2 of 7
+  (`35230323442`). **Control `35230323442`** (same head, `uncovered` routed back to painting): red on
+  both repeats at the sentence assertion, after reaching `uncovered` on tries 5 and 2, not at the
+  lever.
