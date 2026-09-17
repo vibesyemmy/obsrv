@@ -178,6 +178,21 @@ test('spacer files are counted, not judged, and do not spend the image cap', asy
   expect(m.warnings.join(' ')).toContain('300 images are a file of a pixel or two on a side stretched into a gap')
 })
 
+test('text exactly the colour of its background is counted, not judged, and said', async () => {
+  // The twin of the spacer rule for text, and a sentence no reply had carried
+  // (docs/note-inventory.md, c5): no fixture held text at 1:1 until this one.
+  // A reveal mask's duplicate is not text failing a threshold.
+  const r = await runCli(['lint', fixture('invisible-text.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.skipped.invisibleText).toBe(1)
+  expect(m.warnings).toContain('1 text element is the same colour as the background (1:1): hidden by design or broken, not judged')
+  // Counted, so it is not also a contrast finding; the visible twin is judged
+  // and passes, so the page is not simply being skipped.
+  expect(m.findings.map((f: { element: string }) => f.element)).not.toContain('p#masked')
+  expect(m.summary.contrast).toBe(0)
+})
+
 test('a page that holds its main thread after load: the lint answers within the budget with nothing, and says so', async () => {
   const r = await runCli(['lint', fixture('blocks-after-load.html'), '--preset', '1080p-24', '--timeout', '3000'])
   expect(r.code, r.stderr).toBe(0)

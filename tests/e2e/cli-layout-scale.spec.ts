@@ -133,3 +133,19 @@ test('inspect --at: a point in the screen\'s px lands on the page as drawn, not 
   const twin = await runCli(['inspect', WITH_META, '--preset', 'android-65', '--at', centre])
   expect(JSON.parse(twin.stdout).readout).toMatchObject({ element: 'button#b', layoutScale: 1 })
 })
+
+test('audit: a page that asks for initial-scale 2 lays out half as wide, and the note is the other way round', async () => {
+  // The scale-above-1 half of that sentence had never been produced: every
+  // fixture until now either had no viewport meta tag (0.37×) or asked for 1×,
+  // so the branch an agent reads when a page asks to be drawn LARGER was
+  // written and never seen (docs/note-inventory.md, c5).
+  const m = await run('audit', fixture('zoomed-meta.html'))
+  expect(m.layoutScale).toBeCloseTo(2, 2)
+  const warnings: string[] = m.warnings
+  expect(warnings.join(' '), JSON.stringify(warnings)).toMatch(
+    /is drawn at 2\.00× \(an initial-scale above 1\), so its own px are that much larger on the glass than they read/,
+  )
+  // The fallback-width wording belongs to the other direction, and must not
+  // appear here: the two branches say opposite things about the same numbers.
+  expect(warnings.join(' ')).not.toMatch(/to fit — what a page with no viewport meta tag does/)
+})

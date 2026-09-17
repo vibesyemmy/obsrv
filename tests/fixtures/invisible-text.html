@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>invisible text</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 16px/1.5 system-ui, sans-serif }
+  p { margin: 0; padding: 12px }
+  /* Exactly its background: 1:1, so there is no contrast to judge — a reveal
+     mask's duplicate, a decorative layer, or a bug. */
+  #masked { color: #ffffff; background: #ffffff }
+  #visible { color: #111111 }
+</style>
+<p id="masked">A line nobody can see</p>
+<p id="visible">Ordinary text</p>
