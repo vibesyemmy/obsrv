@@ -215,3 +215,40 @@ its block on a 100 ms timer that the blur beat by 96 ms. Both **passed**, having
 control that was not applied reads exactly like a control that found nothing.
 
 **Desk:** harness launch only (`launchApp`, `showInactive`), no `cli-*` specs, nothing fronted.
+
+## WHICH INSTRUMENT CAN SEE IT 2026-09-17 by Rook — two cannot, one can
+
+With a failure reproducible on demand (arm 4), the next question is no longer *what causes it* but
+**what would record it the next time CI hits the real one**. The single sighting left nothing but a
+call log, and that is not bad luck — it is what this failure does.
+
+| instrument | on the reproduced failure |
+| --- | --- |
+| `performance.now()` at blur entry and exit, inside the handler | **cannot fire** |
+| Electron's `unresponsive` on the window | **silent** (measured, arm 5) |
+| the main process pinging the renderer every 500 ms | **sees it** — 27 unanswered pings, timestamped (arm 6) |
+
+**In-handler timing cannot work, and the reason is the failure's definition.** A handler that never
+returns never reaches its exit line; a blocked main thread runs no timer, no microtask and no console
+flush that could carry a partial reading out. **Nothing inside a stuck renderer can report that it is
+stuck.** This was Henry's suggestion and it is the natural first idea — worth writing down as
+excluded rather than leaving for the next reader to try.
+
+**`unresponsive` looks like the answer and is not.** It is the same observation made from the main
+process, which is not blocked, so the reasoning is sound — but it stayed silent through a 20-second
+block. Chromium's hang monitor waits on **input acknowledgements**, and a blur driven through CDP
+queues no input, so nothing trips it. Measured (arm 5), not assumed: a probe that had merely reasoned
+its way to `unresponsive` would have proposed a detector that never fires.
+
+**A main-process ping does see it,** because it asks a question rather than waiting for an event:
+`webContents.executeJavaScript('1')` every 500 ms, recording any that goes unanswered for a second.
+Through the same block it logged **27** of them, each with the time it was sent — which is when the
+renderer stopped answering, and for how long.
+
+**What that is worth:** it turns a ~1-in-591 flake from one that leaves a call log into one that
+leaves a timestamped window. It does not name the cause, and it is not a fix — it is what makes the
+next sighting worth having. **Whether to carry it in the harness is a decision, not a finding**, and
+it belongs to whoever owns the e2e harness: it is a permanent 2 Hz round-trip to the renderer in
+every spec, and this card should not merge it by implication.
+
+Related: `bug-no-traces-when-e2e-hangs` is the same gap seen from the artefact side.
