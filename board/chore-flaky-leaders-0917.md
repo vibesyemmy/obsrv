@@ -1,9 +1,8 @@
 ---
 title: "Four flaky tests with no card, each 3 of 43 first attempts on main since #82"
-column: doing
+column: done
 kind: chore
 owner: "Kenya"
-waiting: ""
 criterion: B5
 order: 72
 ---
@@ -254,3 +253,37 @@ evidence once something in the same breath proves you would have heard a sound.*
 Cheap to do and it never needs remembering: it is the same discipline as the vacuity arms on
 `chore-strict-output-under-test` and the pre-registered control above, one level down — at the
 instrument rather than at the test.
+
+## DONE 2026-09-17: every shape answered or made to answer itself, and the rule for the four cards like it
+
+**Moved to Done by Henry**, on Opeyemi's instruction to take the Doing cards to Done one at a time
+(relayed in room #440). Kenya's session is out.
+
+### The rule, set here and applied to all four recurrence-waiting cards
+
+Doing means someone can act on the card now. **A card whose remaining work only an unforceable event can
+unblock leaves Doing.**
+- **It goes to Done when its own acceptance is met.** For an investigation that means every open question
+  has either an answer, or an instrument that answers it on recurrence and has been shown to fire by a
+  control.
+- **Every question that still needs the event gets exactly one home:** the card that already owns it, or a
+  new backlog card that opens by naming the failure message the instrument will print. The board keeps
+  `waiting:` for Doing and Review, so on a backlog card this lives in the body. It is never a sentence at
+  the end of a closed card, where a recurrence has nowhere to land.
+- **A card whose acceptance was a fix, and only has an instrument, is not Done.** It moves to Backlog,
+  opening with the awaited failure message and naming the instrument.
+
+### This card, against that rule
+
+The acceptance was triage of four leaders nobody had carded: read each first failure, check each test does
+its own setup, and look for a shared cause. **It is met:**
+- **Shape 1** (`panes:230`, `panes:259`) has a cause, and it is **fixed** (`#239`). Main's `Toolbar.go()`
+  no longer overwrites an address typed while a navigation was in flight.
+- **Shape 3** (`tabs:266`) is **legible** (`#244`). A recurrence names the leaked frame's seq, and a control
+  proved it fires (`35186716380`). Its home is now `bug-tabs-266-gate-leak`.
+- **Shape 2** (`target-source:106`) is **instrumented** (`#240`). A recurrence prints the timed frame record
+  with *"no full 400x300 frame within 10 s"* or *"no partial frame within 10 s of the change"*. Its home is
+  now `bug-target-source-106-null-frame`.
+- **The shared-cause question is answered: they don't share one.** The runs they share are a machine, not
+  a cause.
+
