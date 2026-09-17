@@ -110,16 +110,35 @@ test('the target canvas shows the page, not a blank', async () => {
   try {
     await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
   } catch (failure) {
-    const sent = await app.evaluate(() => {
-      const g = globalThis as unknown as { __obsrv: { tabs: { frameSent(): { lastSeq: number; ready: boolean } }; session: { painting: boolean } } }
-      return { ...g.__obsrv.tabs.frameSent(), painting: g.__obsrv.session.painting }
-    })
-    const px = await canvasPixels()
-    throw new Error(
-      `the canvas stayed blank: ${px.white} white of ${px.total} pixels, ${px.distinct} distinct. ` +
+    // Its OWN try/catch: this runs inside the failure path, and a crashed or
+    // closed app is one of the states this test can fail in. An exception here
+    // would replace the failure and lose both the account and the original
+    // message (Wren's read of #267).
+    let state = ''
+    try {
+      const sent = await app.evaluate(() => {
+        const g = globalThis as unknown as { __obsrv: { tabs: { frameSent(): { lastSeq: number; ready: boolean } }; session: { painting: boolean } } }
+        return { ...g.__obsrv.tabs.frameSent(), painting: g.__obsrv.session.painting }
+      })
+      state =
         `main sent frame ${sent.lastSeq} (delivery subscribed: ${sent.ready}, session painting: ${sent.painting}). ` +
         `lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas means it did ` +
-        `and nothing drew it. Original: ${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)}`,
+        // One bus, re-pointed across tabs by `setSource` with a single counter
+        // (`frameBus.ts:77`), so this count is NOT scoped to this tab: a
+        // non-zero value can predate a tab switch with nothing sent since.
+        `and nothing drew it — but the count is the bus's, not this tab's, so a non-zero value may predate a switch.`
+    } catch (e) {
+      state = `main's state could not be read: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`
+    }
+    let px = { white: -1, total: -1, distinct: -1 }
+    try {
+      px = await canvasPixels()
+    } catch {
+      // Left as -1, which reads as "not measured" rather than as zero pixels.
+    }
+    throw new Error(
+      `the canvas stayed blank: ${px.white} white of ${px.total} pixels, ${px.distinct} distinct. ${state} ` +
+        `Original: ${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)}`,
     )
   }
   // Hairlines, grey text and a black-to-white ramp: not a flat fill.
