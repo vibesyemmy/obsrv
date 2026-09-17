@@ -1,8 +1,8 @@
 ---
 title: "The first window never mentions the monitor diagonal, which the README calls the one number that makes Obsrv work"
 column: doing
+waiting: ""
 owner: "Rook"
-waiting: "Opeyemi: ask, hint, or stay quiet on first launch"
 kind: chore
 criterion: A3
 order: 64
@@ -130,3 +130,19 @@ details:
 **Not established:** whether anyone has actually been misled by this. It is inferred from the default,
 the arithmetic, and one cold-machine screenshot — no user has reported it, and nobody has counted how
 many people run Obsrv on a laptop versus a 27" monitor.
+
+## DECIDED 2026-09-17 by Opeyemi: the **Hint** (option 2)
+
+Given in Wren's session and relayed in room #452, with the memo's two sub-decisions left to
+engineering and kept on this card:
+
+1. **The persisted set/untouched bit for the diagonal.** Without it the hint either lies to someone
+   who has set 27" or disappears for the people who need it. It is a new settings field, and it is
+   the only real design work in the option.
+2. **What the hint says on a laptop plugged into an external monitor**, where the true answer changes
+   with the desk.
+
+**Owner:** Rook wrote the memo and is out until Saturday, so his cards sit with Henry. **Offered to
+Kenya** (room #453) — and, on Opeyemi's word through Wren, *behind* the two raster cards she already
+has, not beside them. Whoever takes it states both sub-decisions here before building.
+

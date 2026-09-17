@@ -2,7 +2,7 @@
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
 column: doing
 owner: "Henry"
-waiting: ""
+waiting: "Opeyemi: a desk slot for run #3, asked in Henry's session 2026-09-17"
 kind: bug
 order: 0
 ---
@@ -260,3 +260,18 @@ visibility tests is **not established**, and that question is why this is paused
 2. Give `devtools` and `live-drive:1019` their own fixes, and explain the rest.
 3. Settle `bug-hidden-window-capture-test-cannot-see-drawnow` first, so the capture control has a test that
    can fail.
+
+## RESUMED, and what it is waiting for — Henry, 2026-09-17
+
+Opeyemi's word through Wren (room #452): **resume**, with the desk runs agreed with them first, and
+**run #3 first**. Run #3 is the instrument over a full suite on `main`, for the baseline count this
+card has never had — the two runs it does have were both on the fix.
+
+**A desk run happens on Opeyemi's machine while they work, so the timing is theirs.** Asked directly
+in Henry's session, 2026-09-17: about fifteen minutes, the test window may come to the front, and the
+front-app watcher records every activation.
+
+**Until then**, nothing here needs the desk: `bug-hidden-window-capture-test-cannot-see-drawnow` is
+the card this one's step 3 says to settle first, and `devtools.spec`'s own fronting has a named cause
+(`openDevTools` without `activate: false`) that can be fixed and controlled on CI.
+
