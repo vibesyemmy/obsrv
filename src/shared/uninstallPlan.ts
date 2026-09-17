@@ -27,6 +27,22 @@ export interface Removal {
   path: string
   /** What is in it, for a person about to delete it. */
   what: string
+  /**
+   * What must be true of the file's **content** before it may be claimed as
+   * Obsrv's, for files in a directory Obsrv does not own.
+   *
+   * Raised by Henry on `#197`, and it caught an inconsistency in this file's
+   * own reasoning: the Chromium state in the shared `Electron` directory is
+   * left alone because it cannot be attributed — but `settings.json`,
+   * `history.json` and `tabs.json` are **generic names**, and another unnamed
+   * Electron app could write exactly those. Claiming them on the name alone is
+   * the same attribution guess, made twice and refused once.
+   *
+   * So those three carry a check and the command must apply it before removing
+   * them: if the file does not parse as Obsrv's own, it is named and kept.
+   * `control.json` and `obsrv.log` are distinctive enough to claim by name.
+   */
+  confirm?: string
 }
 
 export interface Kept {
@@ -105,9 +121,13 @@ export function uninstallPlan({ home, platform, includeSkill = false }: PlanOpti
   const legacyUserData = `${home}/Library/Application Support/Electron`
   const legacyLogs = `${home}/Library/Logs/Electron`
   const removeFiles: Removal[] = [
-    { path: `${legacyUserData}/history.json`, what: 'browsing history from an npm-only install that used live MCP before the app was named' },
-    { path: `${legacyUserData}/settings.json`, what: 'settings from that same install' },
-    { path: `${legacyUserData}/tabs.json`, what: 'open tabs from that same install' },
+    {
+      path: `${legacyUserData}/history.json`,
+      what: 'browsing history from an npm-only install that used live MCP before the app was named',
+      confirm: "parses with Obsrv's history reader",
+    },
+    { path: `${legacyUserData}/settings.json`, what: 'settings from that same install', confirm: 'parses with `parseSettings`' },
+    { path: `${legacyUserData}/tabs.json`, what: 'open tabs from that same install', confirm: "parses with Obsrv's tab-list reader" },
     { path: `${legacyUserData}/control.json`, what: "the agent-control discovery file, which may name a port and token from a crashed run" },
     { path: `${legacyLogs}/obsrv.log`, what: 'the log from that same install' },
   ]

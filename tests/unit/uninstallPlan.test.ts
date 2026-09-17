@@ -138,6 +138,27 @@ describe('the legacy "Electron" profile, which is shared and must not be swept',
     expect(plan().keep.find(k => k.path === appSupport)?.why).toMatch(/cannot|attribut|by hand/i)
   })
 
+  it('will not claim a generically-named file on its name alone', () => {
+    // Henry on #197, and it caught this file contradicting itself: the
+    // Chromium state here is left alone because it cannot be attributed, while
+    // settings/history/tabs were claimed on names another unnamed Electron app
+    // could equally write. Same guess, made twice and refused once.
+    const byName = Object.fromEntries(plan().removeFiles.map(f => [f.path.split('/').pop(), f]))
+    for (const generic of ['history.json', 'settings.json', 'tabs.json']) {
+      expect(byName[generic]?.confirm, `${generic} may not be claimed on its name`).toBeTruthy()
+    }
+  })
+
+  it('claims the distinctive two by name, since no attribution guess is involved', () => {
+    const byName = Object.fromEntries(plan().removeFiles.map(f => [f.path.split('/').pop(), f]))
+    expect(byName['control.json']?.confirm).toBeUndefined()
+    expect(byName['obsrv.log']?.confirm).toBeUndefined()
+  })
+
+  it('needs no such check for directories Obsrv owns outright', () => {
+    for (const r of plan().remove) expect(r.confirm, `${r.path} is Obsrv's own directory`).toBeUndefined()
+  })
+
   it('every file it would remove still passes the guard', () => {
     for (const f of plan().removeFiles) {
       const v = checkRemoval(f.path, { realHome: '/Users/someone', sandboxRoot: HOME })
