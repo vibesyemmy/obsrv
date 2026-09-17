@@ -175,10 +175,9 @@ says the walk scrolled *a panel on the page, not the page itself* — the fixtur
 **What this settles:** activation is not the variable. A focused, focusable window walks this page
 exactly as an unfocused one does, on both surfaces.
 
-**What it does not settle, and the card should not be read as if it did:** whether a window that is
-genuinely not rendering behaves differently. CI's window renders in both arms, so that clause is
-still unobserved, and the desk-session unblocker above still stands. What is now unlikely is that
-*focus* was ever the mechanism.
+**What arm C alone does not settle:** whether a window that is genuinely not rendering behaves
+differently. That is the render clause, and arm D below measures it rather than leaving it to the
+desk.
 
 **Dispatch history, because two of the three were void and it would be dishonest to cite "three
 runs":** dispatch 2 died on `require is not defined` inside `app.evaluate` (the electron module
@@ -198,9 +197,44 @@ are untouched. A walk goes exactly as far after it as before.
 screenfuls against a `pageHeight` of **6832**; headless reported 3 against **4712**. Live saw a
 *taller page* — the fixture had grown further under it. No wording change produces that.
 
-**So what is left is the growth timing itself, and the render clause this probe could not reach.**
-CI's window answers `visible: true` with the flag off, which is a claim about the window and not
-about compositing: a runner has no display, and a window that is shown but never painted renders no
-more frames than a hidden one — the exact caution arm C was written to raise, now pointing at the
-probe's own limit rather than at the flag's. **The desk-session unblocker stands, and it is now the
-only one**: walk the fixture live in a window that is genuinely painting, and read `pageHeight`.
+### ARM D: the render clause is refuted too, by mechanism and by measurement
+
+A first draft of this section said the render clause was out of reach, on the grounds that *"a
+runner has no display, and a window that is shown but never painted renders no more frames than a
+hidden one"*. **Henry held the PR on that sentence, and he was right to: it was unmeasured**, and it
+would have sent the render clause to Opeyemi's desk — the one unblocker that costs him something —
+on an assumption. What is actually known points the other way: `ci.yml`'s header says the macOS
+runners provide the display session Electron needs, CI draws classic scrollbars (`#63`),
+`visibility.spec` gets real show/hide events, and `focusWindow` makes a window key.
+
+**So it was measured instead.** Arm D counts `requestAnimationFrame` callbacks over one second on
+two surfaces — the window's own renderer, and the **target's** `webContents`, which is the one the
+hypothesis is about, since the fixture grows from a `scroll` handler that runs at the next frame —
+then hides the same window and counts again, reading `isVisible()` back during the hidden count so
+the control cannot be one that was never applied.
+
+**Locally, on a real display, macOS 25.5, verified `visible: false` for the hidden pass:**
+
+| pass | window `isVisible` | window rAF/s | target rAF/s |
+| --- | --- | --- | --- |
+| shown | true | 62 | **32** |
+| hidden | **false** | 62 | **32** |
+
+**Hiding the window changes neither count.** And the reason is structural rather than incidental:
+the target is not drawn by the display compositor at all. `targetSource.ts:316` creates it as an
+`offscreen:` Chromium window and `:329` sets `wc.setFrameRate(this.fps)`, `DEFAULT_FPS = 30` — which
+is the 32 measured. **Its frames come from Electron's offscreen pipeline at a fixed rate, so no
+amount of showing, hiding, focusing or unfocusing the app window can change how many the page under
+test gets.**
+
+**That refutes the hypothesis at its premise.** *"A visible window renders every frame; a hidden
+harness window may not"* is false for the surface that matters here. Arm B's null result is now
+explained rather than merely observed: focus and visibility could not have mattered, because the
+thing running the growth handler is rendered offscreen either way.
+
+**And it takes the desk session off this card.** The render clause does not need a painting window,
+because the target never used one. What remains genuinely unexplained is the 2026-09-14 reading
+itself — live at 8 screenfuls and `pageHeight` 6832 — and the live walk's own timing is the next
+place to look, not the window's: today's live walk took 1787 ms against headless's 467 ms for the
+same three screenfuls, so the two surfaces give that `scroll` handler very different amounts of wall
+clock even when they agree on the answer.
