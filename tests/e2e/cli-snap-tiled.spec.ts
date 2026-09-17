@@ -218,6 +218,36 @@ test('chrome stuck to the viewport is hidden for the bands after the first, and 
   expect(warnings.some(w => w.startsWith('warning: '))).toBe(false)
 })
 
+// The stuck-chrome probe's two sentences about a page that replaces its
+// document while it is being probed, neither of which a reply had carried
+// (docs/note-inventory.md, c5). The fixture replaces itself the first time a
+// scroll passes one and a half screens — inside the probe's second scroll, so
+// between its mark and its settle — `times` times in all. Its behaviour was
+// replayed against the probe's own sequence in a real Chromium before these
+// were written: replaced once, the controller is gone at the first settle and
+// present at the second; replaced twice, gone at both.
+test('a page that replaces its document once during the probe is measured again, and says so', async () => {
+  const out = join(outDir, 'replaced-once.png')
+  const r = await runCli(['snap', `${fixture('replaces-mid-probe.html')}?times=1`, '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const warnings = (JSON.parse(r.stdout) as { warnings: string[] }).warnings
+  expect(warnings, JSON.stringify(warnings)).toContain('the page replaced its document during the probe; measured again')
+  // Measured again means measured: the give-up sentence belongs to the twice case.
+  expect(warnings.join(' ')).not.toMatch(/could not measure chrome stuck to the viewport/)
+})
+
+test('a page that replaces its document twice during the probe keeps its bands, and says why', async () => {
+  const out = join(outDir, 'replaced-twice.png')
+  const r = await runCli(['snap', `${fixture('replaces-mid-probe.html')}?times=2`, '--preset', 'laptop-768', '--full-page', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const j = JSON.parse(r.stdout) as { warnings: string[]; stuckChrome: unknown[] }
+  expect(j.warnings, JSON.stringify(j.warnings)).toContain(
+    'could not measure chrome stuck to the viewport, so the bands keep it: the page replaced its document twice during the probe',
+  )
+  // It gave up, so it hid nothing — which is what "the bands keep it" claims.
+  expect(j.stuckChrome).toEqual([])
+})
+
 test('--keep-stuck-chrome leaves every band as the capture used to take it', async () => {
   const out = join(outDir, 'stuck-kept.png')
   const r = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--keep-stuck-chrome', '--out', out])

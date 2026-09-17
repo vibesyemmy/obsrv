@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>a page that replaces itself while the stuck-chrome probe runs</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 0; padding: 24px; }
+      .row { height: 200px; }
+    </style>
+  </head>
+  <body>
+    <h1 id="which"></h1>
+    <div id="rows"></div>
+    <script>
+      // The stuck-chrome probe (src/cli/stuckProbe.ts) scrolls to one band,
+      // marks, scrolls to two bands, and settles. A document replaced between
+      // the mark and the settle drops the probe's controller, which is the
+      // state its two sentences are for: replaced once, it measures again;
+      // replaced twice, it gives up and keeps the bands as they are.
+      //
+      // So this page replaces itself the first time a scroll passes one and a
+      // half screens — past the probe's first scroll, inside its second — and
+      // does so `times` times in all (?times=1 or ?times=2), counting in `n`.
+      // A navigation, not document.open(): only a new global drops
+      // `window.__obsrvChrome`.
+      const q = new URLSearchParams(location.search)
+      const times = Number(q.get('times') ?? '1')
+      const n = Number(q.get('n') ?? '0')
+      document.getElementById('which').textContent = `document ${n} of ${times}`
+      const rows = document.getElementById('rows')
+      for (let i = 0; i < 40; i++) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.textContent = `document ${n}, row ${i + 1}`
+        rows.append(d)
+      }
+      if (n < times) {
+        const onScroll = () => {
+          if (scrollY <= innerHeight * 1.5) return
+          removeEventListener('scroll', onScroll)
+          location.replace(`${location.pathname}?times=${times}&n=${n + 1}`)
+        }
+        addEventListener('scroll', onScroll)
+      }
+    </script>
+  </body>
+</html>
