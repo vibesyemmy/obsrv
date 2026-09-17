@@ -352,15 +352,35 @@ page at 8048 px). So the reading cannot be tied to a build directly.
 
 **It does not need to be, because the first candidate never existed.**
 
-Searching the history of the line that computes it, in `src/preload/sync.ts`, returns exactly one
-commit: **`206b0cf` (2026-09-07)**, *"feat(drive): scroll a screenful at a time, and say when the
-page is at its end"* — the commit that introduced `atEnd` at all. The same search across
-`586caab..origin/main` — from the moment `app-shell-grows.html` existed to be walked, through to
-now — returns **nothing**. The line has never changed.
+**A first version of this section proved it with a line search, and that was not good enough** —
+Wren caught it. Searching for the line that computes `atEnd` shows only that *that line* never
+changed. The candidate is about **task ordering**: whether the scroll and the read happen in one
+synchronous turn. An `await` added earlier in the handler, or `applyTo` becoming async, or the send
+moving into a callback, would all break that **without touching the line**. This board already
+records a line-based search giving a false negative ([[grep-false-negatives]]).
 
-So **on every tree on which this fixture could be walked, the live path has applied the scroll and
-read `atEnd` in the same synchronous handler, in the same `SCROLL_RESULT` send.** There is no build
-in which the read happened a task later. That candidate is not unverified; it is impossible.
+**Settled at the level the claim is actually about — the whole handler.** Following
+`ipcRenderer.on(APPLY_SCROLL, …)` through `586caab..origin/main` turns up two commits that touch it,
+`02656b8` and `ed0d99c`, both on 2026-09-14. Each tree in the window, and the base and the head,
+read out the same way:
+
+| tree | handler `async` | suspension points in the body | `applyTo` → `send` |
+| --- | --- | --- | --- |
+| `586caab` (fixture lands) | no | **0** | +4 lines |
+| `02656b8` | no | **0** | +4 lines |
+| `ed0d99c` | no | **0** | +4 lines |
+| `origin/main` | no | **0** | +4 lines |
+
+Suspension points counted as `await`, `async`, `.then(`, `setTimeout`, `requestAnimationFrame` and
+`queueMicrotask` anywhere in the handler body. **There are none, in any of them.** The handler cannot
+yield between applying the scroll and sending the result, so the read cannot land a task later.
+
+So **on every tree on which this fixture could be walked, the live path applied the scroll and read
+`atEnd` in one synchronous turn.** That candidate is not unverified; it is impossible — and now that
+rests on the handler's control flow rather than on one line surviving a grep.
+
+For the record, the line itself was introduced in `206b0cf` (2026-09-07), the commit that added
+`atEnd` at all, and has not changed since. That is true and it was never sufficient.
 
 ### Which leaves the second, and it needs no special build
 
