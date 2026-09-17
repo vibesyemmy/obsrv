@@ -869,6 +869,63 @@ test("after a Back, the navigate record's own sentences stop describing the page
 })
 
 /**
+ * A page whose load never finishes: both sentences about a budget running out
+ * while a page is still loading, neither of which any reply had carried
+ * (docs/note-inventory.md, c5). The app's own navigate budget is 8 s here
+ * (tests/e2e/launch.ts), the MCP settle budget is 5 s, and the fixture's
+ * `/hang.png` is never answered — apnews.com's shape, measured 2026-09-11.
+ */
+test('a page whose load never finishes: the navigate budget and the settle budget each say so', async () => {
+  const held: import('node:net').Socket[] = []
+  const server: Server = createServer((req, res) => {
+    if ((req.url ?? '').startsWith('/hang.png')) {
+      // Never answered, and never closed: the document is complete and painted
+      // while the load keeps going, which is the state both sentences are for.
+      held.push(res.socket!)
+      return
+    }
+    res.setHeader('Content-Type', 'text/html')
+    res.end(
+      '<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Still loading, and readable</h1>' +
+        '<button style="width:220px;height:44px">Accept all</button><img src="/hang.png" alt="" width="1" height="1"></body></html>',
+    )
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    // The app answers the navigate when its own budget runs out, with the page
+    // as it stands. The sentence names the budget without naming a figure the
+    // server does not hold (#279).
+    const drive = await call('obsrv_drive', { url: `${origin}/slow` })
+    expect(drive.isError).toBeFalsy()
+    const d = drive.structuredContent as { warnings?: string[]; loading?: boolean }
+    expect(d.warnings ?? [], JSON.stringify(d.warnings)).toContain(
+      "the page was still loading when the app's navigate budget ran out; the status, and any capture, show it as it stands",
+    )
+
+    // A snap of the page already showing: no navigation, so the other sentence
+    // is the one that applies — the settle budget, not the confirmation.
+    const snapped = await call('obsrv_snap', { url: `${origin}/slow` })
+    expect(snapped.isError).toBeFalsy()
+    const s = snapped.structuredContent as { mode: string; navigated?: boolean; warnings: string[] }
+    expect(s.mode).toBe('live')
+    expect(s.navigated).toBe(false)
+    expect(s.warnings, JSON.stringify(s.warnings)).toContain(
+      'the app was still loading the page when the settle budget ran out; the PNG may show a transitional frame.',
+    )
+    // The navigated wording belongs to a call that asked for a new page.
+    expect(s.warnings.join(' ')).not.toMatch(/did not confirm the navigation/)
+  } finally {
+    // Leave the app somewhere ordinary, so a later test does not inherit a
+    // page that never finishes loading.
+    await call('obsrv_drive', { url: FIXTURE })
+    for (const socket of held) socket.destroy()
+    server.closeAllConnections()
+    await new Promise<void>(r => server.close(() => r()))
+  }
+})
+
+/**
  * `url` means one thing on both surfaces: the address the call asked for.
  * Live reported the page the app had ended on instead, so the same field held
  * the request headless and the landing live — measured 2026-09-13 driving the
