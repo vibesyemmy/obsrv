@@ -1,9 +1,8 @@
 ---
 title: "The ten live-app sentences: what state each needs, and which can be forced"
-column: doing
+column: done
 kind: chore
 owner: "Kenya"
-waiting: ""
 criterion: C5
 order: 73
 ---
@@ -24,7 +23,7 @@ fixture that fights the harness is how a week goes missing, and two of these loo
 | 3 | `frameCheck.ts:21` | the renderer did not say which frame it drew | `acked === null`: no draw acknowledgement | **yes, proven** — removing the `drawNow` send made it fire (#139's control, 2026-09-17) |
 | 4 | `ipc.ts:1752` | the renderer has not reported the pane bounds yet; captured the full window | `targetBounds === null` at capture | no. Lever: the startup window, or the `s.tabId !== tabs.activeId` early return at `:1016` |
 | 5 | `ipc.ts:1753` | the renderer has not reported the render bounds yet; captured the whole pane | `canvasBounds === null` while `targetBounds` is known | no. Same source as 4, narrower |
-| 6 | `ipc.ts:1755` | the target was still resizing when the capture budget ran out | `settled === 'resizing'` | no. Lever: a preset change with a capture issued inside it |
+| 6 | `ipc.ts:1755` | ~~the target was still resizing when the capture budget ran out~~ **the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished** (corrected by Henry: see below) | ~~`settled === 'resizing'`~~ `settled === 'painting'` | ~~no. Lever: a preset change with a capture issued inside it~~ fired, below |
 | 7 | `ipc.ts:1759` | the onion skin is blending two frames of a page that keeps painting | painting/animating **and** `onionSkin > 0` | no. Lever: `animated.html` + skin on + `captureTarget` — **the most straightforward of the ten** |
 | 8 | `ipc.ts:1790` | the page keeps painting (animation or video); this is one frame of it | `unsettledReason === 'animating'`, raster path | no. Lever: `animated.html` + `captureRaster` |
 | 9 | `ipc.ts:1793` | the page was still painting when the capture budget ran out | still painting at the budget, raster path | no. Lever: `loop-slow.html` or a page that paints past `RASTER_CAPTURE_MS` |
@@ -103,3 +102,99 @@ With the `drawNow` send removed by an `OBSRV_TEST` hook, the sentence fires **be
 it**. So the observation is *"this sentence is reachable when a draw is never acknowledged"* — not
 *"an app in the field reaches this"*. Worth having, and worth not overstating: it is a reachability
 proof, where a fixture firing a sentence is an occurrence proof. (Henry's caution, #271's read.)
+
+## THREE MORE FIRED, six of the ten, and the other four have homes — Henry, 2026-09-17, while Kenya was out
+
+**Moved on Opeyemi's instruction**, relayed by Wren (room #440): take the Doing cards to Done one
+at a time, Kenya's included, and record each sentence fired on the card.
+
+**Row 6 named the wrong sentence.** *"The target was still resizing…"* (`ipc.ts:1754`) had fired
+on 2026-09-14, in `live-drive.spec.ts`'s preset-cycling test (the inventory's hand-checked table).
+The unfired producer the inventory lists at that line is its neighbour, `:1755`, for
+`settled === 'painting'`. **Rows 6 and 9 are one condition on the two paths**, which is the
+inventory's "two wordings".
+
+| # | sentence | the state, and how it is shown to be the lever | control (sentence reworded) |
+| --- | --- | --- | --- |
+| 1 | scroll offset could not be confirmed | `blocks-after-load.html` holds the main thread that the target's preload answers from, so no reply lands inside `SCROLL_REPLY_TIMEOUT_MS` (1 s). **Shown against the same scroll on a free page**, which is answered | red at `:212` |
+| 6 | the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished | `animated.html` under `fast-4g`: a throttle turns `quiesce`'s steady-painting exit off, so the page runs the 3 s budget out. **Shown against the unthrottled capture of the same page**, which says "keeps painting steadily". `fast-4g` slows only the network, and a file page makes no requests | red at `:138` |
+| 9 | the page was still painting when the capture budget ran out; the PNG may show a transitional frame | `captureRaster` under an 8-preset cycle with a 700 ms pause after each apply, CI only (below) | red at the sentence assertion in both repeats that reached it (`35218471058`); the third came back settled, a finding (below) |
+
+**Kenya's 7 and 8 now assert whole sentences**, since a phrase check stays green when the rest of
+the sentence is reworded. Red at `:110` and `:96` with those producers reworded.
+
+### Row 9's lever, and why no page reaches it alone
+
+`loop-slow.html`, the card's lever, is a `history.replaceState` page and doesn't keep painting.
+**No page reaches the raster timeout on its own.** `captureQuiescent` stops as soon as it has been
+quiet for 400 ms. Paints closer together than that reach 8 paints and the steady exit (`animating`)
+well inside 8 s. Only a frame of a new size resets its coverage and its paint count, so the pane
+has to keep changing size until the budget runs out. That's a preset cycle, the state
+`live-drive.spec.ts` holds for the window capture.
+
+**Measured on CI before any assertion was written, three times, because the first two answers
+were not good enough.**
+- Cycled back to back, 13 captures (`35215978933`, `35216528983`, `35216907463`) came back
+  `timeout` 5 times and `uncovered` 8. **The first version asserted the sentence only on `timeout`,
+  and its control asserted nothing** (`35216528983`: 3 of 3 `uncovered`, green with the reworded
+  sentence in every reply).
+- The second version asserted the sentence on both labels. **Wren's review of #292 caught it:** on
+  `uncovered` that pinned a sentence already filed as wrong, and the true half ran only when the
+  race allowed.
+- **A 700 ms pause after each apply is the lever** (`35217795705`): 12 of 12 `timeout`, no
+  `uncovered`, and no settled capture. `uncovered` is the budget running out between a resize and
+  that size's first full frame. The pause shrinks that gap to a small part of each step, and each
+  step stays well under the 2 s after which a covered page painting steadily leaves as `animating`.
+
+**The test now** asserts the state (applies), `timeout`, and the sentence. Two strays are recorded
+and retried, at most 3 tries in all, and each is a defect with its own card. The first is
+`uncovered`. The second is a capture that came back **`settled: true` with no warning while the
+preset was changing**: the control run's first repeat, which Wren had predicted
+(**`bug-live-raster-settled-while-resizing`**, Backlog, 1 in 28 paused captures). Any other label
+fails as a finding. **`uncovered` is not
+asserted:** on that label the sentence is the wrong one (the PNG has transparent pixels and it
+doesn't say so), and the paused cycle doesn't reach it, so a pin would be dead code reading as
+coverage. It belongs to **`bug-live-raster-uncovered-said-as-painting`** (Backlog), with the
+back-to-back cycle as its lever.
+
+### Rows 2, 4 and 5: measured, and they do not occur from outside
+
+**Measured before building anything, as the order above asked.** The measurement is a throwaway
+spec, never committed. It launches the app, polls for the control file every 5 ms, and fires
+`captureTarget` then `captureRaster` the moment control answers. That's the earliest call any agent
+can make.
+
+| where | launches | control answered after | rows 2, 4, 5 |
+| --- | --- | --- | --- |
+| laptop | 3 | 423–866 ms | none; the captures said only that the page was blank |
+| CI runner (`35216434021`) | 9 | 1263–6854 ms | none; the same |
+| laptop, **the app window reloaded** under a capture (`webContents.reload()` fired just before `captureTarget`) | 3 captures | — | none; the reloaded renderer re-subscribed inside the capture's settle |
+
+**Why none of them can fire from outside.** Both checks run after the capture has settled. On a
+quiet page that takes at least about 700 ms: two viewport reads 80 ms apart, a frame, 400 ms of
+quiet, and 120 ms to draw. On a blank page it takes 3 s. The renderer's first bounds report and its
+frame subscription both arrive on mount, before the capture can get that far. **Row 4's second lever
+doesn't exist:** a report dropped at `:1016` leaves the bounds main already holds, so it can't make
+them `null` after the first report. **Row 2's reload path is real** (`frameBus.ts:91` clears `ready`
+when the app window navigates), and the reload row above shows the window closing inside a capture.
+
+**Home: a named reason in the inventory, not removal.** They guard a renderer slower than any we
+measured. A renderer that reloads mid-capture on a loaded machine is the case they exist for, and
+nothing outside the app can hold that window open. Folding the reason into
+`docs/note-inventory.md` is `c5`'s, which is next after this card.
+
+### Row 3
+
+**Home: `c5`'s DECISION of 2026-09-17, "the inventory buys no fences".** Its reachability proof
+stands (#139's control). An `OBSRV_TEST` hook in `src/` for it would be bought by an audit, not a
+defect. If a stale capture nobody was warned about ever turns up, that defect buys the hook.
+
+### Desk status, re-checked for the new calls
+
+The spec now also calls `setThrottle` (the target's debugger; nothing on that path fronts a window),
+`scroll` (IPC to the pane and the target) and `status`. The fronting calls in `src/main` are still
+`focusWindow`, `showWindow`'s non-harness branch, the overlay's `wc.focus()`, the DevTools menu, and
+`index.ts`'s guarded focus, and the spec calls none of them. **The preset-cycle test is skipped
+locally unless `OBSRV_E2E_FRONT=1`**, because `live-drive`'s preset-cycling capture pair had recorded
+activations (desk run #2). The rest of the file stays desk-safe, and ran locally: 5 passed, 1
+skipped.
