@@ -181,26 +181,36 @@ eight-viewport cycle rather than the obvious flip.
 
 **What to do:** restart the session after upgrading.
 
-### `obsrv_inspect`'s readout gains `colorPainted` — declared at last, and it was already being sent
+### `obsrv_inspect`'s readout gains `colorPainted`
 
-`InspectReadout` has carried `colorPainted` since `f8d734f` — the colour the
-screen actually shows, after the text's own alpha and the element's effective
-opacity, composited onto the background. It is the colour the contrast figures
-describe. **The MCP output schema never listed it**, and `readoutShape` is
-`additionalProperties: false` in the JSON Schema the server publishes.
+`InspectReadout` carries `colorPainted` from this release (`f8d734f`) — the
+colour the screen actually shows, after the text's own alpha and the element's
+effective opacity, composited onto the background. It is the colour the
+contrast figures describe. It is declared in `readoutShape`, which is
+`additionalProperties: false` in the JSON Schema the server publishes, and it
+is **optional**: a live readout comes from the app, and an app older than the
+field does not send it.
 
 **What breaks:** a client session that listed the tools **before** this
 release rejects an `obsrv_inspect` reply outright — `-32602`, *structured
 content does not match the tool's output schema* — rather than reading an
 extra key it does not know. See the restart note at the top of this release.
 
-**What was already broken, which is why this is a fix and not only a break.**
-Adding the field to the schema is the breaking half; the field has been on the
-wire since `f8d734f` and **every validating client has been rejecting those
-replies ever since**. `tests/e2e/mcp.spec.ts:137` failed its first attempt in
-nine of nine observed runs and passed on retry each time, so the suite called
-it flaky and nobody read the error. An agent in the field got a protocol error
-instead of a measurement.
+**No released version was already broken here.** `f8d734f` is in no tag, so
+the window in which the key was sent and not declared was on `main` only.
+There, `tests/e2e/mcp.spec.ts:137` failed its first attempt in nine of nine
+observed runs and passed on retry each time, so the suite called it flaky and
+nobody read the error.
+
+**Why it is optional**, and why that was a fix too: it was first declared
+required. The plugin moves the MCP server to a new version while `Obsrv.app`
+is updated by hand, so a 0.61.0 server driving a 0.60.0 app would have answered
+`-32602` on every live inspect that found an element, since the app's readout
+has no `colorPainted` (#205, found by the release sweep).
+
+*Corrected before release:* this entry first said the field had been on the
+wire since `f8d734f` and that every validating client had been rejecting those
+replies — true of `main`, not of any version anyone installed.
 
 **Why the server never noticed.** It does validate its own reply — SDK 1.30.0
 runs `safeParseAsync` against the zod output shape — but `readoutShape` is a
@@ -209,8 +219,9 @@ failing, so the server's check passed while the JSON Schema it published to
 clients said `additionalProperties: false`. Two validators, one schema,
 opposite answers. The rejection is always the client's.
 
-**What to do:** restart the session after upgrading. Nothing else changes —
-the field was already in the replies your client was refusing.
+**What to do:** restart the session after upgrading. Read `colorPainted` as
+possibly absent: it is missing whenever the app answering is older than
+0.61.0, and then `color` is the best you have.
 
 ### The CLI's own JSON gains `url` — a third contract, not just the MCP replies
 
@@ -268,18 +279,27 @@ only downward while `inkCoverage.delta` and `rows.ratio` stood above it
 unqualified. It now names those two fields. And the report's HTML no longer
 paints an unsettled ink delta red (`bug-diff-disowns-its-numbers`).
 
-### `obsrv_drive` gains `visionType`, `visionSeverity` and `deviceScaleFactor`
+### `obsrv_drive` declares `visionType` and `visionSeverity`, which it has sent since 0.17.0, and gains `deviceScaleFactor`
 
-`drive` answers with the app's whole status. During this release, status gained
-these three: the colour-vision simulation and the screen's density. The `drive`
-schema never listed them, and it is `additionalProperties: false`, so **every
-client that validates rejected every `drive` reply built from this tree**, not
-only a client holding an old schema (`bug-drive-reply-fails-its-own-schema`).
-They are declared now. No released version sent them: 0.60.0's status has none
-of the three.
+`drive` answers with the app's whole status, spread into its reply. Status has
+carried the colour-vision simulation, `visionType` and `visionSeverity`, since
+0.17.0 (`257e2db`); the screen's density, `deviceScaleFactor`, is new in this
+release. The `drive` schema listed none of the three, and it is
+`additionalProperties: false`, so **a client that validates the published
+schema has rejected every `drive` reply since 0.17.0** — not only a client
+holding an old schema (`bug-drive-reply-fails-its-own-schema`). It is the same
+shape as `onionSkin` and `loading` on `snap`, above. All three are declared now;
+`deviceScaleFactor` is optional, absent from an app older than the field.
+
+*Corrected before release:* this entry first said no released version sent any
+of the three, and that 0.60.0's status had none of them. 0.60.0's
+`parseControlStatus` returns both vision keys, filling them in when an app
+omits them, and `drive` spreads that status into every reply. Found by the
+0.61.0 release sweep.
 
 **What breaks:** a client session that listed the tools before upgrading holds
-the old `drive` schema and rejects the three new keys.
+the old `drive` schema and rejects the three keys — two of which it was already
+rejecting.
 
 **What to do:** restart the session after upgrading, as the note at the top of
 this release says.
