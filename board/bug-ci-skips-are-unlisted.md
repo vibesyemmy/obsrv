@@ -1,8 +1,7 @@
 ---
 title: "A test that skips on CI turns a regression green, and nothing states which skips are expected"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 61
 ---
@@ -95,4 +94,48 @@ Each has its own unit arm, and removing each check turns its arm red.
 
 **The CI control Wren asked for:** a draft PR carrying this check on #141's first head (`eb2b114`,
 whose CI skipped `focusWindow`'s test) must go red, naming that test.
+
+## DONE 2026-09-17, merged as `#156` (093d1c3) on 2026-09-16; closed a night late
+
+**The CI control went red, naming the test.** Draft `#157` (closed, never merged) carried the check on
+#141's first head. In run [`35154669669`](https://github.com/vibesyemmy/obsrv/actions/runs/35154669669)
+the E2E step **passed** (`553 passed`, `1 skipped`), and the new step failed with:
+
+    skipped and not listed: live-drive.spec.ts:351 › focusWindow answers ok and fronts the window (takes the desk: CI, or locally with OBSRV_E2E_FRONT=1) (its reason: "the runner did not grant window focus")
+
+**Checked, because a pull_request run doesn't test the head alone.** The suite checked out `b80450b`,
+GitHub's merge of the control into main at `ae0cfa6`. `ae0cfa6` doesn't contain #141's merge
+(`3a919be`), so nothing from #141's fix was in that tree. Rebuilt locally with `git merge-tree`,
+`git grep` finds **one** `setFocusable` under `src`: `win.setFocusable(false)` at
+`src/main/window.ts:32`. `focusWindow` has no `setFocusable(true)`, so the sabotage was in force. The
+merge also explains `:351`: main had two more lines above the test than `eb2b114`. The list is keyed
+by file and title, so the line doesn't change which row a skip matches.
+
+**The script changed after the control, and the control still applies.** The control's copy is
+byte-identical to `9e5a442`. Wren's reads (`7c03197`) and the retry rule (`6a36222`) came after it.
+Diffed against the control's copy, neither changes how a plain skip is found:
+- the `t.status === 'skipped'` test is unchanged;
+- the reason is still read from the test's annotations (the result's are added);
+- the new walk-vs-`stats` cross-check would have agreed on that run: the list reporter counted
+  `1 skipped`, and the walk found one.
+
+Playwright is `1.62.1` in both trees, so the report shape is the one the control read.
+
+**The vacuity arm, on CI rather than only in the unit arm.** The check throws on a report it can't
+read, and on one that accounts for no tests. Every completed main push run since `#156` merged
+(22:54Z, 85 runs, attempt 1) breaks down as:
+- **30** ran E2E and passed it, and the check passed on every one, so the report is written where
+  the check reads it;
+- **53** were board-only, with both steps skipped;
+- **2** failed E2E (`35170587213`, `35182050784`), where the check doesn't run, by design.
+
+**Neither "Not established" item is still open:**
+- **Local specs:** the check runs only in `ci.yml`, as proposed.
+- **A retry that skips:** the last attempt decides (`6a36222`). Run `35155348601` showed why. Under
+  the "any attempt skipped" rule, the check named `surface-parity.spec.ts:578`, which skipped behind a
+  failing serial sibling and then passed on its retry.
+
+`tests/e2e/expected-skips.json` is still empty. With an empty list, a passing check means no skip.
+**So none of those 30 runs skipped an e2e test**, and the first row added will be a decision someone
+writes down.
 
