@@ -98,8 +98,22 @@ variable to the person who genuinely wants these, and costs nothing to anyone el
 **So CI keeps its full coverage** — the thing worth checking before defaulting anything to "off", and
 the check Idris asked for when reviewing `#324`.
 
-**Acceptance:** the second item — *"the CLI specs refuse a local run unless someone opts in
-explicitly, so the protection does not depend on the runner's pattern"* — is **met**, and by
+**Acceptance: the second item is met in substance and NOT in its own words, and the difference is
+Idris's finding.** The clause reads *"the CLI specs refuse a local run unless someone opts in
+explicitly … **Control:** running one without the opt-in fails with a sentence naming why."* The
+protection is real and by construction — but `testIgnore` **says nothing**. Targeting one of those
+files directly gets Playwright's generic *no tests found*, and a full local run mentions the exclusion
+nowhere. Idris tested it rather than reading the claim, which is the only reason this is written down
+instead of standing as "met".
+
+**Why it is not fixed here, and what would fix it.** A spec that is *ignored* cannot explain itself;
+only a spec that is *collected and skipped* can, and skipping 153 tests would trip
+`check-e2e-skips.js`, which exists to fail a green run that skipped a test nobody listed. The cheap
+honest fix is a line printed once at the start of a local run — *"CLI specs excluded; `OBSRV_E2E_CLI=1`
+to include them"* — which needs a `globalSetup` and deserves its own change rather than being
+smuggled into this one. **Follow-up: `chore-desk-safe-run-says-what-it-left-out`.**
+
+The rest of the item — protection that does not depend on the runner's pattern — is met by
 construction rather than by anyone's memory. The third — code and `CONTRIBUTING.md` saying the same
 thing, with a test that reds if a new spec escapes — is met by
 `deskSafeCoversTheCliFamily.test.ts`, which reads `tests/e2e/` rather than the glob.
