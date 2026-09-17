@@ -215,9 +215,13 @@ With 43 runs the interval still reaches 19%. The number doesn't say the suite is
 trigger for deciding again hasn't been met.
 
 **The three red first attempts, each read to its first line:**
-1. **108e139 (run 35123165259):** `panes.spec:83` failed both tries. **Inflated by a test defect:** `:83`
-   never navigates and relies on `:77`, so its retry always fails. A single first-try failure there
-   is recorded as a red run. The fix is Kenya's, on `bug-target-canvas-no-frames`.
+1. **108e139 (run 35123165259):** `panes.spec:83` failed both tries. **The retry confound is removed by #230;
+   whether the first-try failure was genuine is unread.** `:83` never navigated and relied on `:77`, so
+   its retry always failed, and any first-try failure became a red run. #230 makes `:83` navigate for
+   itself. That removes the confound, not the red: the run stops being red only if a retry that now
+   measures a real page would pass, and nobody has measured that. **Not decremented** (Kenya's correction,
+   room #358). Kenya is reading this run to settle it. On run 35176357601, the one she has read, the
+   first try was genuine: `:77` passed a second before, and the canvas stayed blank for 10 s.
 2. **5e426fb (35145262453):** `ipc.spec` `:31`, `:134` and `:173` failed both tries, in one file with
    nothing else in the run failing. That's `bug-ipc-native-pane-invisible-once`'s shape.
 3. **5631606 (35170587213):** no test failed. `text-scale:251`'s relaunch test failed once (drawer width
