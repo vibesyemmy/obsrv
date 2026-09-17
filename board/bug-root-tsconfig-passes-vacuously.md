@@ -1,14 +1,13 @@
 ---
 title: "`tsc -p tsconfig.json` checks nothing and exits 0, so the obvious typecheck command always passes"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: ""
 order: 61
 ---
 
 FOUND BY ROOK 2026-09-17, after a missing import passed my "typecheck" and then failed 46 unit
-tests at runtime. **CLAIMED BY KENYA 2026-09-17** on Wren's routing — the same ground as `bug-typecheck-covers-no-test-file`, whose TS2304 control this card reuses.
+tests at runtime. **Done by Kenya 2026-09-17.**
 
 ## What happens
 
@@ -66,3 +65,57 @@ that covered too little, this is about a config that covers *nothing* while look
 **The control, and it is the whole point:** delete an import somewhere in `src/`, and the chosen fix
 must go red. If it stays green, the fix changed which files are listed without changing what is
 checked.
+
+## RESOLVED 2026-09-17 by Kenya — option 2 is impossible, measured; option 1 is done and guarded
+
+**Option 2, "make it refuse", has no hook, and that is now measured rather than assumed.** Both
+candidate shapes exit 0 with no output:
+
+    { "files": [],   "references": [...] }   →  tsc --noEmit -p tsconfig.json   exit 0, 0 lines
+    { "include": [], "references": [...] }   →  tsc --noEmit -p tsconfig.json   exit 0, 0 lines
+
+**One correction to the card's own reading.** It says even `tsc --build` from the root would miss
+`mcp` and `tests`. Half right: `--build` follows the references it has, so on `main` it **did** catch
+an error in `src/main` (exit 1) and **missed** one in `src/mcp` (exit 0). The gap was the two missing
+references, not `--build`.
+
+**Option 1, as the references half rather than the include half.** A root `include` was rejected on
+measurement, not taste: `tsconfig.mcp.json` deliberately has **no DOM lib**, so a union root would
+silently allow `document` in the MCP server. The four projects have four different `lib`/`types`
+sets, and one root config would have to weaken all of them to the loosest.
+
+So: the root references all four projects, and `npm run typecheck` is now **`tsc --build
+tsconfig.json`** — one command, complete, and the one CI already runs.
+
+**The card's control, in both projects that were invisible to it:**
+
+    break src/mcp   →  npm run typecheck  exit 1   (6 errors)
+    break tests/    →  npm run typecheck  exit 2   (23 errors)
+    restored        →  exit 0
+
+**And a guard, because a fix that relies on someone remembering is the shape this card is about.**
+`tests/unit/tsconfigReferences.test.ts` fails if a `tsconfig.*.json` is not referenced, if the root
+gains an `include` (which would quietly undo the reasoning above), or if `typecheck` goes back to a
+per-project list that can omit one. Its own controls: dropping the `mcp` reference turns it red, and
+so does reverting the script.
+
+**What is NOT fixed, and cannot be:** `tsc --noEmit -p tsconfig.json` still exits 0 having checked
+nothing. Anyone who types it gets the same worthless green. The file now says so in a comment at the
+top, which is the weakest part of this fix and worth knowing about rather than discovering.
+
+### Correction from Henry's read: `--build` emits, and a typecheck must not
+
+`tsconfig.mcp.json` has an `outDir` and no `noEmit` of its own, because `build:mcp` needs to emit. So
+the first version of this fix made `npm run typecheck` **rewrite `out/mcp/server.js`** — the file a
+dev lane and `publicShape.test` spawn. Measured by planting a 2020 mtime on it and running the
+command: it came back as now.
+
+`tsc --build tsconfig.json --noEmit` fixes it, and each arm was re-run: clean tree exit 0 with the
+planted mtime **untouched**, and breaking `src/mcp` still exit 1 with 6 errors. The guard now pins
+`--noEmit` as well, so the emit cannot come back: dropping the flag turns it red.
+
+**A command named for having no side effects had one**, which is the same family as the rest of this
+card — and it was found by a reader who went and looked at the file's mtime rather than at the diff.
+
+**Verified:** unit 1402/1402 across 89 files, typecheck exit 0 and emitting nothing, guard 3/3 with
+all three controls red.

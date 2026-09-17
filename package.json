@@ -14,7 +14,7 @@
     "dev": "electron-vite dev",
     "lane": "node scripts/lane.js",
     "build": "electron-vite build && npm run build:mcp",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.mcp.json && tsc --noEmit -p tsconfig.tests.json",
+    "typecheck": "tsc --build tsconfig.json --noEmit",
     "test": "node scripts/suite.js unit vitest run --project unit",
     "test:browser": "node scripts/suite.js browser vitest run --project browser",
     "test:e2e": "node scripts/suite.js e2e npm run test:e2e:run",

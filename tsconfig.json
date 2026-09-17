@@ -1,1 +1,22 @@
-{ "files": [], "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.web.json" }] }
+// The SOLUTION ROOT. It lists the projects; it checks nothing itself.
+//
+// `tsc --noEmit -p tsconfig.json` therefore checks ZERO FILES and exits 0 —
+// measured, and it cannot be made to refuse: `files: []` and `include: []` both
+// exit 0 with no output (bug-root-tsconfig-passes-vacuously). So the fix is to
+// make the command that DOES work complete, and to keep it complete:
+//
+//     npm run typecheck        →  tsc --build tsconfig.json, every project below
+//
+// A project missing from `references` is invisible to that command, which is
+// how `tsconfig.mcp.json` and `tsconfig.tests.json` went unchecked by it.
+// `tests/unit/tsconfigReferences.test.ts` fails if a tsconfig.*.json in this
+// repo is not listed here.
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.web.json" },
+    { "path": "./tsconfig.mcp.json" },
+    { "path": "./tsconfig.tests.json" }
+  ]
+}
