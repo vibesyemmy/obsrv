@@ -234,11 +234,11 @@ found that `log.warn` and a stderr `warn` were being counted as replies (ten sen
 
 | | producers | after #256 and #258 | after #270, #273, #274, #282, #283 and #292 |
 | --- | --- | --- | --- |
-| fired, and placed at exactly one producer | 55 | 73 | **89** |
+| fired, and placed at exactly one producer | 55 | 73 | **89** (2 of them since deleted with `#293`) |
 | fired, but the same text is written at several places | 7 (3 groups) | 4 (2 groups) | **4** (2 groups) |
 | not seen to fire | 54 | 39 | **14** |
 | a named reason, not an observation | 0 | 0 | **9** |
-| written or reworded after the run | 4 | 4 | 4 |
+| written or reworded after the run | 4 | 4 | **7** |
 | too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 | 1 |
 
 The right column is this file's state after `#256` and `#258`, below. The left is what the run of
@@ -322,6 +322,20 @@ every arm green.
 | `src/main/ipc.ts:1755` | `live-capture-notes.spec:115`, an animating page under a throttle, a window capture | `35218827856` |
 | `src/main/ipc.ts:1793` | `live-capture-notes.spec:147`, a raster capture under a paused preset cycle | `35218827856` |
 
+**Two of those rows changed meaning the same day (`#293`, open shadow roots).** The measurement
+enters open roots now, so:
+- **`walkCoverage.ts:184`** — *"the page has N open shadow roots, which the walk does not enter"* —
+  fired in `#270` and is now reachable only from an app between 0.58.0 and `#293` driven by a newer
+  MCP. It stays in the fired table, because it did fire and the run that carried it is named; what
+  changed is that nothing in this tree can produce it again. It joins `chore-minimum-app-version`.
+- **`walkCoverage.ts:210`**, the older walk's *"no iframe covers the viewport and the page has no
+  open shadow roots"*, is on the same footing and joins it too.
+
+**Two producers left this file entirely.** `shadowShare.ts`'s share note and `emptyDocument.ts`'s
+web-components branch were deleted with the gap they described, along with `shadowContent`, the
+counts behind both. A producer that no longer exists is not an unfired row; it is removed, and this
+paragraph is the record that it was.
+
 **Named reasons, not observations (9).** Each is written for a state this tree cannot reach, and each
 says why here rather than leaving a row that reads as work nobody has done. They are not counted as
 fired, and none of them is proposed for removal.
@@ -373,8 +387,11 @@ description, which both overstated it, were corrected (`#259`, `#260`).
   `timeout`, and both producers fired. The unfired `capture.ts:347` is `uncovered`, which passes
   through, so the router cannot explain an unfired row.
 
-**Written or reworded after the run (4).** These need their own observation, not a place on the list
-above:
+**Written or reworded after the run (7).** These need their own observation, not a place on the list
+above. The last three are `#293`'s: the walk note's opening and its ruled-out wording for a walk that
+entered the roots, and the capture's reworded sentence. Each has a test asserting it
+(`cli-walk.spec`, `mcp-live.spec`, `cli-snap-tiled.spec`, on `app-shell-unreachable.html`); what none
+has is a run of the note log that saw it, which is what this column counts.
 
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
@@ -382,6 +399,9 @@ above:
 | `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
 | `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
+| `src/shared/walkCoverage.ts:165` | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… |
+| `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
+| `src/cli/main.ts:542` | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… |
 
 ## What is left
 
