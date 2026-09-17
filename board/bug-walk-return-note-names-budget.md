@@ -121,6 +121,19 @@ note — and the return-to-top sentence is in neither. So, on real Electron:
   described, and the page wins it about half the time at a 15 s budget on the CI runner. Two runs is
   not a rate; it is enough to rule out both "never" and "always".
 
+**A third run landed after the lines above were written** — `35242092672`, the suite `#308` merged
+on — and its headless walk carried the sentence again. Live, again, did not. The two-run table is kept
+as written, since the bullets above were drawn from it:
+
+| run | headless carried it | live carried it |
+| --- | --- | --- |
+| `35234853920` | no | no |
+| `35239464603` | yes | no |
+| `35242092672` | yes | no |
+
+**So far: 2 of 3 headless, 0 of 3 live.** Still a race and still not a rate — but it tilts toward the
+sentence, the direction Kenya's original prediction pointed, not mine.
+
 **Two lines above are now stale and are corrected here rather than edited away:** *"No CI log can
 answer it"* and *"prints the list only on failure"* were true of the runs that existed when they were
 written. `#308` changed that on purpose, and the answer cost no run of its own.
