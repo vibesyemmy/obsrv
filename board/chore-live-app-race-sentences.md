@@ -86,6 +86,13 @@ one:** with all three producers reworded in `src/main/ipc.ts`, **3 failed**; res
 assertion was wrong, not the product, and it failed loudly rather than passing on a field that was
 never going to be undefined.
 
+**Desk status, checked rather than assumed:** `live-capture-notes.spec.ts` launches through the
+harness (`launchApp`), sets no `OBSRV_E2E_FRONT` or `OBSRV_TEST_TAKES_THE_DESK`, and carries no
+recorded activation. Its four commands are `navigate`, `setOnionSkin`, `captureRaster` and
+`captureTarget`; **the fronting calls in `ipc.ts` (`setFocusable(true)`, `show()`, `focus()`) belong
+to `focusWindow`**, whose whole job is fronting and which this spec never calls. **Desk-safe
+locally**; CI if any of that changes.
+
 **Seven left**, in the order on this card: 9 and 6 next (a page painting past the budget; a resize
 with a capture inside it), then 3's fenced hook, then 1, then the three window cases behind a
 measurement.
