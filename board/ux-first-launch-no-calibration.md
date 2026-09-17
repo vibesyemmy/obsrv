@@ -1,7 +1,6 @@
 ---
 title: "The first window never mentions the monitor diagonal, which the README calls the one number that makes Obsrv work"
-column: doing
-waiting: ""
+column: done
 owner: "Kenya"
 kind: chore
 criterion: A3
@@ -336,3 +335,41 @@ display too.
 
 **Still (b)'s to decide, with Opeyemi through Henry:** one diagonal per display. Nothing here blocks it;
 the field already carries `inches` and up to eight displays.
+
+## DONE 2026-09-17 by Kenya: merged in #325 (`5f35046`), each acceptance item against what ran
+
+- **The hint is present with the diagonal untouched for this display, and absent once answered.**
+  `diagonalHint` is silent only when the current display is among the recorded ones.
+  **Control, re-run by Kenya on the merged head after Idris corrected the count:** silencing the
+  `untouched` and `unknown-screen` states reds **all four** e2e tests — `:46`, `:61` and `:106` for
+  reasons of their own, and `:70` as a cascade, since it shares an app with `:61` and nothing records
+  the display once that click has nowhere to land. Restored, four pass.
+- **"27″ is right" records the display without changing the number, and it is the only dismissal.**
+  Asserted on disk (`persistedSettings`), not only in the store, because a hint that returned on the
+  next launch is the nag this card was filed against.
+- **A display that does not match shows the mismatch wording with both resolutions named.** Driven by
+  the `hostChanged` push main sends when a window is dragged to another monitor, rather than by moving
+  a window, which would not be desk-safe.
+- **The migration:** an old file holding exactly 27 reads as untouched, anything else as `'unknown'`
+  and asks once. **Control:** reading a legacy chosen diagonal as untouched reds three settings tests.
+- **Desk-safe throughout:** 56 specs swept locally on the merged tree, 441 passed, 12 skipped, 0 failed,
+  0 flaky, read with the summary count and with `grep -ciE '[0-9]+ flaky'` rather than `✘`, which the
+  `line` reporter never prints.
+
+**What this card taught the board, beyond the feature:**
+- **A number that has travelled through three cards deserves recomputing.** Every figure in Rook's memo
+  reproduced exactly through `computeScale` (49 / 52 / 59 / 89 / 100 / 119%), which is the answer being
+  measured rather than inherited.
+- **The hint costs the pane one row while it is up**, found by sweeping rather than by reasoning
+  (`fit-cap` 357 against 368, `solo-target` 26px off centre). Both specs now answer the hint as a user
+  does. The alternatives were a clipped sentence or an overlay inside the canvas bounds, which would
+  ride into every `captureTarget` an agent reads.
+- **Main persists settings without pushing them back to the renderer**, so a spec that presets the field
+  through IPC leaves the store and the row exactly as they were (measured: 63 polls). `answerDiagonalHint`
+  clicks the product's own button instead.
+
+**Still open, and not this card's:** (b), one diagonal per display, with Opeyemi through Henry. The field
+already carries `inches` and up to eight displays, so a yes changes the lookup and the apply, not the
+file format. `diagonalHint`'s silence already spans every recorded display; only the mismatch sentence's
+naming picks the first entry, which is the one line (b) has to decide.
+
