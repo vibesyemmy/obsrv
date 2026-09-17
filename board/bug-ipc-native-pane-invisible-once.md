@@ -2,6 +2,7 @@
 title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
 column: doing
 owner: "Henry"
+waiting: ""
 kind: bug
 order: 60
 ---
