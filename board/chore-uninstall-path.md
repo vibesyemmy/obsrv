@@ -152,7 +152,7 @@ nothing changes, and the default is still to list.
 **The split is drawn one step further in than the listing's was.** The listing half could be pure
 because it never needed a filesystem. This half cannot be — something has to call `rm` — so
 `src/shared/uninstallRemoval.ts` **decides** and the shell **acts**: every decision is unit-tested
-with the filesystem injected, and the destructive call is four lines in `bin/uninstall.js`.
+with the filesystem injected, and the destructive call is one `removeListed` call in `bin/uninstall.js`, the only place `rmSync` is named.
 
 **What it refuses to do, each with a control that fires:**
 

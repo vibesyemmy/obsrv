@@ -12,7 +12,8 @@
 // The listing half stayed reviewable without anyone's data at risk, and the
 // removing half is built to keep that property: every decision it makes lives
 // in a pure module with the filesystem injected, so the part that can be tested
-// without a real file is, and the part that cannot is four lines here.
+// without a real file is, and the part that cannot is the single
+// `removeListed` call below — the one place `rmSync` is named.
 //
 //   - out/shared/uninstallPlan.js    — what Obsrv's data locations are, measured
 //   - out/shared/removalGuard.js     — the check that stands between a path and $HOME
