@@ -275,3 +275,38 @@ front-app watcher records every activation.
 the card this one's step 3 says to settle first, and `devtools.spec`'s own fronting has a named cause
 (`openDevTools` without `activate: false`) that can be fixed and controlled on CI.
 
+## READ AGAINST MAIN 2026-09-17 — the fix is already here, and run #3 is the only thing left before the explanations
+
+The PAUSED section above says *"Nothing was merged. Main's window behaviour is unchanged."* **That is
+stale, and a later reader would have rebuilt what is already on main.** Checked against `main`
+(`6f4da2a`), `git diff origin/main...fix/e2e-does-not-take-the-desk` is **empty**: the branch's work
+arrived through the numbered changes that followed it.
+
+What main carries now:
+- `src/main/window.ts` — under `showsInactive()`: `app.dock?.hide()`, `win.setFocusable(false)` and
+  `win.showInactive()` instead of `show()`;
+- `src/main/menu.ts` — `openDevTools({ mode: 'detach', activate: !showsInactive() })`, which is the
+  named cause `devtools.spec` had;
+- `tests/unit/e2e-leaves-the-desk.test.ts` — the guard that fails when an e2e file calls `win.show()`,
+  `win.focus()` or `app.focus(`.
+
+**Step 3's prerequisite is closed too.** `bug-hidden-window-capture-test-cannot-see-drawnow` is Done
+(Kenya, `#139`/`#143`): the assertion that could not fail was the white-on-white one, and the reply
+had been carrying `frameCheck`'s own doubt all along.
+
+**So what is left is run #3 itself**, which is the one thing that needs the desk: the instrument over
+a full suite on `main`, for the baseline count this card has never had. Both runs it does have were
+on the fix, so there is no "before" to compare them with.
+
+**Ready to go, so the slot costs fifteen minutes and no setup.** The watcher is written and tested
+(`scratchpad/front-watch.sh` in Henry's session): it polls `lsappinfo front` every 100 ms and logs
+name, pid and the process's own command on every change — built into macOS, no Accessibility prompt,
+read-only. The run is:
+
+1. start the watcher, writing to a log beside the run;
+2. `npm run test:e2e` on `main`, in Henry's sync worktree, while Opeyemi works as usual;
+3. count activations, attribute each to a test by timestamp, and re-run alone the ones that fronted.
+
+**Waiting on:** Opeyemi's timing for that run, asked for in Henry's session 2026-09-17. Nothing else
+on this card needs the desk.
+
