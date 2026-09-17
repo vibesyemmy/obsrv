@@ -37,3 +37,59 @@ wait — and `FrameMessage` carries no tab id. It now compares each frame's `seq
 which frame. Evidence: `35186688593` green with all three tests confirmed run, `35186716380` red at
 the seq assertion (`[10]`, then `[8]`). **This does not fix a leak — it makes the next one legible.**
 If shape 3 recurs after this, its message says which of the two facts it was.
+
+## READ 2026-09-17 by Kenya — four leaders, THREE shapes, and the shared runs do not share a cause
+
+**The hidden-predecessor check is negative for all four.** Each does its own setup: `tabs:266` calls
+`reset()` and `activate()`, both `panes` tests fill and submit their own address, and
+`target-source:106` loads its own `data:` URL. So the defect that explained `panes:83` and
+`sync:139` tonight does **not** explain any of these — worth stating, because it was the first thing
+to look for and the answer is no.
+
+### Shape 1 — `panes:230` and `panes:259`: the window state never renders, while the badge does
+
+Both, in run `a6af19e`, identical to the line:
+
+    Error: expect(locator).toBeVisible() failed
+    Locator: locator('.load-error-state')
+    Timeout: 15000ms
+    Error: element(s) not found
+
+**`element(s) not found`** — not present-but-hidden. And `panes:230` fails the same way in `d6e808a`,
+so the shape is consistent across runs.
+
+**What rules out the obvious environmental guess:** `panes:197` — *the same invalid host*, in the
+same app, **294 ms earlier** — passed, as did `:216` at 527 ms. So the bad-host load was failing fast
+right before. The retries then passed in **649 ms and 328 ms**. A slow resolver would have to have
+been slow for exactly two adjacent tests and fast either side of them.
+
+**The difference between the tests that pass and the two that fail is which element they wait on:**
+`:197` waits for `.badge-error`, the toolbar; `:230`/`:259` wait for `.load-error-state`, the
+window-level empty state. **The error reaches the toolbar and not the window.**
+
+**A lead, unmeasured:** `:230` navigates good → bad, and `:216` immediately before it is the test
+that *clears* the badge with a successful navigation. A latch left by clearing an error, so the next
+failure renders no state, would fit — and would fit `:259` too, which runs straight after. Nothing
+here measures that; it is where I would point a repro.
+
+### Shape 2 — `target-source:106`: a null frame in the test's own evaluate
+
+    TypeError: Cannot read properties of null (reading 'frame')
+
+Inside `app.evaluate`, not an assertion. Unrelated to anything in shape 1.
+
+### Shape 3 — `tabs:266`: one frame got through the gate
+
+    expect(received).toBe(expected)   Expected: 0   Received: 1
+
+A frame was delivered that the image-mode gate should have dropped, inside the test's 600 ms window.
+
+## So the card's own suggestion does not hold, and that is the useful part
+
+It asked us to look for one cause behind the shared runs. **In `d6e808a`, `panes:230` and
+`target-source:106` fail with unrelated first lines** — a missing DOM element and a null frame — so
+that run shares a machine and nothing else. **In `a6af19e` the two `panes` tests do share a shape**,
+but they are the two tests that wait on the same element, which is a shared *subject*, not evidence
+of a shared environment.
+
+**Four leaders, three shapes, and only one pair is related.**
