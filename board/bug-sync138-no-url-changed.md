@@ -1,9 +1,8 @@
 ---
 title: "The target emits no url-changed at all — a second shape, and the test named for it"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: "Kenya: the flake now reproduces on demand (below); the recurrence and four x20 runs are recorded"
 order: 40
 ---
 
@@ -440,3 +439,68 @@ introduced today. **What's new is the reproduction:** `playwright test tests/e2e
 redirecting page leaves no stale expectation behind" --repeat-each 20 --retries=0` on a runner gives
 about 1–4 failing accounts per run. **This card no longer waits on an event.** The job logs hold the
 accounts (`[sync138]` lines and the `Error:` JSON).
+
+## ANSWERED 2026-09-17 by Kenya — fact (b), and the cause is the test's own barrier
+
+**Reproduced locally** at about 1 in 80: `-g "a redirecting page leaves no stale expectation behind"
+`--repeat-each 60`, three failures across roughly 240 runs. The instrument printed its line on every
+one of them, and the failing run's was `target url-changed: 0` against a healthy `2`.
+
+**The caught failure, decoded** (absolute ms, one clock):
+
+    nativeLoads     redirect.html ok 9ms (…202)   hairline.html ABORTED (…217)   redirect.html ok 1ms (…224)  ← step 2
+    nativeCommits   … hairline (…218), hairline (…227), redirect.html (…231)
+    target commits  about:blank, redirect.html (…208), hairline.html (…217) — and nothing after
+    mirror (…231)   from native, redirect.html, branch "issued", other was hairline.html
+
+**Step 2's load resolved `ok`. The native committed. The bus issued the mirror to the target.** All of
+it after the test had already read the traces. So this is **fact (b) — it committed after the read** —
+and not fact (a).
+
+**And the reason the read was early is the test's own barrier, which this card predicted.** After step
+2 it polled for `{ native: HAIRLINE, target: HAIRLINE }` — **already true**, because step 1's redirect
+left both panes on hairline. The barrier passed instantly, the trace was read mid-flight, and the
+assertion failed for having looked too early rather than for anything the product did.
+
+**So `sync.spec:139` was not measuring what its name says.** For the recurrences whose account shows
+`url-changed: 0` **at read time** — this one, and the CI recurrence recorded at 00:27Z — what was
+recorded is that race rather than a defect in the bus. I have not re-read every earlier sighting
+against its own account, so that is the claim, rather than "all readings ever".
+
+**The fix waits for what step 2 produces**, in-process so a run that genuinely emits nothing still
+reaches the assertions and carries the full account, which is the whole point of the traces.
+
+    before the fix   3 failures in ~240 runs
+    after the fix    0 failures in 240 runs (4 batches of 60), and `url-changed` is never 0:
+                     179 runs saw 2 events, 1 saw 3
+
+Whole-file runs (`--repeat-each 3`, ordering intact) 30 passed; `sync-mirror-mark`, `history` and
+`arrivals` 14 passed.
+
+### A second, smaller race in the fix itself — found by Wren's read
+
+The first version waited for the **first** `url-changed` while the assertion reads the **last**. The
+first event is usually `redirect.html`, and the `urls` poll after it can go green on the pane's URL
+before the target has emitted for hairline — leaving `seen.at(-1)` on `redirect.html`. **The same
+shape as the defect, one step smaller, in the fix for it.** A further 180 runs on that version: 0
+failures, 117 saw 2 events and 3 saw 3.
+
+### And a THIRD instance, found by Henry's read of the same fix
+
+Waiting on the landing alone is still satisfiable by step 1: its own duplicate `hairline` commit —
+the page's redirect and the bus's mirrored load both committing, the race `#213` handled in
+`sync-mirror-mark` — can land *after* step 2 subscribes, making `__seen` start `[hairline]` and the
+wait pass at once. So the barrier is now **the step-2 chain in order**: the redirect, then the
+landing after it. Only step 2 can satisfy that.
+
+**Its one cost, measured rather than assumed:** the test's own comment allows the target to go
+straight to the landing if the mirrored hairline overtakes, and this barrier cannot be satisfied by
+that path — it would wait the full 5 s and then pass on the assertions. **In 120 runs it never
+happened:** every run finished in about 167 ms, with no 5 s wait anywhere.
+
+**Three instances of one shape in one card, two of them inside its own fix.** That is the useful
+record here: the defect was easy to describe and hard to stop writing.
+
+**What this does NOT say.** It does not prove the bus always tells the target — it proves this test
+was reading before the answer arrived. A genuine silence would now fail after a 5 s wait, with the
+same account, which is a claim the old test could not make.

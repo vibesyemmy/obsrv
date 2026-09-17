@@ -160,6 +160,47 @@ test('a redirecting page leaves no stale expectation behind', async () => {
     await g.__obsrv.native.load(url)
     return at
   }, REDIRECT)
+  // WAIT FOR WHAT STEP 2 PRODUCES, not for the state step 1 left behind.
+  //
+  // This used to poll for `{ native: HAIRLINE, target: HAIRLINE }` — which is
+  // ALREADY TRUE when step 2 begins, because step 1's redirect ended on
+  // hairline in both panes. So the barrier passed instantly and the trace was
+  // read while step 2's chain was still in flight, and the test failed for
+  // having looked too early rather than for anything the product did.
+  //
+  // Measured on the caught failure: step 2's `native.load` resolved ok, the
+  // native committed redirect.html, and the bus issued the mirror to the
+  // target ('issued', 'other was hairline.html') — all AFTER the read. Nothing
+  // was missing; it had not happened yet (bug-sync138-no-url-changed, and the
+  // card's own "NOT DONE" note about this poll).
+  //
+  // Waited in-process rather than with `expect.poll` so a run that really does
+  // emit nothing still reaches the assertions below and carries the full
+  // account, which is the whole point of the traces.
+  // Waited on the LAST event being the landing, not on the first event
+  // existing: the first is usually `redirect.html`, and the `urls` poll below
+  // can go green on the pane's URL before the target has emitted `url-changed`
+  // for hairline — leaving `seen.at(-1)` on redirect.html. That is the same
+  // shape as the race above, one step smaller, and @Wren caught it in review.
+  await app.evaluate(
+    async (_e, [asked, landing]: [string, string]) => {
+      const g = globalThis as any
+      const until = Date.now() + 5_000
+      // Step 2's chain IN ORDER: the redirect, then the landing after it.
+      // Waiting for the landing alone is not enough, because step 1 can leave a
+      // duplicate `hairline` commit in flight — the page's own redirect and the
+      // bus's mirrored load both commit (the double-commit race #213 handled in
+      // sync-mirror-mark). Landing after the subscription, it makes `__seen`
+      // start `[hairline]` and the wait pass at once, reading early again.
+      // Henry's catch, and the third instance of this card's own shape.
+      const arrived = (): boolean => {
+        const i = g.__seen.lastIndexOf(asked)
+        return i !== -1 && g.__seen.slice(i + 1).includes(landing)
+      }
+      while (!arrived() && Date.now() < until) await new Promise(r => setTimeout(r, 25))
+    },
+    [REDIRECT, HAIRLINE] as [string, string],
+  )
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
 
   const seen: string[] = await app.evaluate(() => {
