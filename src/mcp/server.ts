@@ -15,7 +15,7 @@ import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
-import { MAX_SCROLL_SELECTOR } from '../shared/types'
+import { MAX_SCROLL_SELECTOR, type Orientation } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
@@ -203,6 +203,19 @@ function spawnCli(args: string[], killAfterMs: number): Promise<Omit<CliRun, 'el
 }
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
+
+/**
+ * A disagreeing `rotate` and `orientation`, refused before a headless render,
+ * as obsrv_snap refuses it. The argument builders pass `--rotate` only when it
+ * is true — the CLI has no flag for false — so `rotate: false` never reached
+ * the CLI, and `orientation: 'landscape', rotate: false` rendered rotated on
+ * audit, lint, inspect and report with no refusal (Wren's release sweep of
+ * #178). The MCP layer is the last place both values are visible.
+ */
+function refusedRotation(input: { orientation?: Orientation; rotate?: boolean }): CallToolResult | null {
+  const wanted = resolveRotate(input.orientation, input.rotate)
+  return 'refuse' in wanted ? toolError(wanted.refuse) : null
+}
 
 function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) return toolError(killedMessage(command, killAfterMs, run.stderr))
@@ -1524,8 +1537,8 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     // The app answers with the CLI's own result plus the screen it
     // measured on. `textScale` and `throttle` keep the headless contract:
@@ -1634,6 +1647,8 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
+    const auditRotation = refusedRotation(input)
+    if (auditRotation) return auditRotation
     let args: string[]
     try {
       args = buildAuditArgs({ ...input, url: input.url.trim() })
@@ -1828,8 +1843,8 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const { ok: _ok, textScale, ...judged } = answer
     // The app's result says nothing about its capped list (cli/lint.ts): this
@@ -1940,6 +1955,8 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
+    const lintRotation = refusedRotation(input)
+    if (lintRotation) return lintRotation
     let args: string[]
     try {
       args = buildLintArgs({ ...input, url: input.url.trim() })
@@ -2196,6 +2213,8 @@ server.registerTool(
   async (input: ReportToolInput): Promise<CallToolResult> => {
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
+    const reportRotation = refusedRotation(input)
+    if (reportRotation) return reportRotation
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     let args: string[]
     try {
@@ -2384,7 +2403,7 @@ server.registerTool(
       // heavy page whose reload outlasted the apply budget (bbc.com after a
       // phone flip). Wait for a tab that is neither blank nor loading before
       // anything below steers or photographs it, as the snap has since 0.43.0.
-      if (input.preset !== undefined || input.orientation !== undefined) {
+      if (input.preset !== undefined || input.orientation !== undefined || input.rotate !== undefined) {
         const s = await settlePage(
           {
             status: async () => {
@@ -2584,6 +2603,8 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
+    const inspectRotation = refusedRotation(input)
+    if (inspectRotation) return inspectRotation
     let args: string[]
     try {
       args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
