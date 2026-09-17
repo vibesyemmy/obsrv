@@ -393,18 +393,23 @@ belongs to an unrelated package.
 
 ## Privacy and files
 
-**Nothing is uploaded.** Obsrv makes exactly one outbound request of its own:
+**Nothing is uploaded.** The app makes exactly one outbound request of its own:
 a version check to `api.github.com` once a day, which asks for the latest
-release and sends nothing about you (`src/main/updateCheck.ts`). Everything
-else that touches the network is the page you asked it to render, fetched by
-Chromium the way any browser would.
+release and sends nothing about you (`src/main/updateCheck.ts`). The npm
+package makes one more, once: when its Electron binary is missing, it downloads
+it — about 120 MB, from Electron's GitHub releases unless `ELECTRON_MIRROR`
+points elsewhere — as the MCP server starts, or on a CLI run's first use
+(`bin/electronPath.js`). Everything else that touches the network is the page
+you asked it to render, fetched by Chromium the way any browser would.
 
 **Everything it produces is a local file.** PNGs and report HTML go where you
-point `--out` / `--out-dir`. Live captures are written into a fresh
-`obsrv-mcp-*` directory under `os.tmpdir()` and handed back as a path — the
-MCP server prunes its own, older than a day, at startup
-(`src/shared/pruneTemp.ts`). Headless CLI runs use a throwaway Electron
-profile under `os.tmpdir()` and remove it on exit.
+point `--out` / `--out-dir`. The MCP tools don't take an output path: every
+capture, diff and report they make is written into a fresh `obsrv-mcp-*`
+directory under `os.tmpdir()` and handed back as a path — and the MCP server
+prunes those directories, older than a day, at startup
+(`src/shared/pruneTemp.ts`). **Copy anything you want to keep**, a report
+included. Headless CLI runs use a throwaway Electron profile under
+`os.tmpdir()` and remove it on exit.
 
 **The app keeps its own state** in Electron's application-support directory
 for Obsrv: `settings.json`, `history.json` (the addresses you have visited in
@@ -474,7 +479,11 @@ too**, and most of what is there can't be told apart by name:
 **The log records what breaks, not where you went.** `obsrv.log`, in
 Electron's logs directory, is a few lines an hour about GPU processes dying,
 crashed targets and lost WebGL contexts, so a bug report arrives with evidence
-(`src/shared/logFile.ts`). It does not record the URLs you visit.
+(`src/shared/logFile.ts`). It is not a record of the URLs you visit: an address
+appears in only two warnings, both written when something breaks — the page a
+crashed target was showing (`src/main/targetSource.ts`), and the address at
+which a navigation loop between the two panes was stopped
+(`src/main/syncBus.ts`).
 
 **The version a bug report needs** is `obsrv --version` for the CLI (no build
 or Electron required), Settings → Updates in the app, and `version` in any

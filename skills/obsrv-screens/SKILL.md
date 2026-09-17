@@ -14,11 +14,10 @@ semantics for phone presets — with optional cheap-panel simulation
 emulation only changes the viewport; Obsrv changes the rasterisation, which is
 where thin fonts, 0.5px hairlines, and low-contrast grey text actually break.
 
-**Written against `main` with 0.61.0's changes in, 2026-09-14. The newest
-release is 0.60.0, so this page is currently *ahead* of what `npx -y getobsrv`
-installs.** What you have: `obsrv --version` on the CLI, or `obsrv_drive`'s
-`version` field — it is the only reply that carries one, so do not go looking
-for `version` on a snap or an audit.
+**Written against 0.61.0** (last read against the code on 2026-09-14). What
+you have: `obsrv --version` on the CLI, or `obsrv_drive`'s `version` field — it
+is the only reply that carries one, so do not go looking for `version` on a
+snap or an audit.
 
 A difference points two ways and they are not the same problem. **Older than
 the version named here** — the page describes behaviour you do not have yet;
@@ -113,12 +112,16 @@ comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: fal
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
 
-**Which list a sentence lands in:** `warnings` is about the **page**,
-`notes` is about the **call**. A walk that covered a panel rather than the
-page, or a page that grew as it was walked, is a warning; a launch, a cut
-navigation, an ignored argument or a wait for a render slot is a note. The
-live walk's sentences moved from `notes` to `warnings` in 0.61.0, so scan both
-if you support older versions.
+**Which list a sentence lands in:** on `obsrv_audit`, `obsrv_lint` and
+`obsrv_diff`, `warnings` is about the **page** and `notes` is about the
+**call**. A walk that covered a panel rather than the page, or a page that grew
+as it was walked, is a warning; a launch, a cut navigation, an ignored argument
+or a wait for a render slot is a note. `obsrv_report` has `notes` about the
+call and a `warnings` list per screen, about that screen's page.
+`obsrv_inspect` has only `notes`, which carry both.
+`obsrv_snap` and `obsrv_drive` have only `warnings`, which carry both. The live
+walk's sentences moved from `notes` to `warnings` in 0.61.0, so scan both if
+you support older versions.
 
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
