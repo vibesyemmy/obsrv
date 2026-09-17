@@ -118,7 +118,7 @@ inventory's "two wordings".
 | --- | --- | --- | --- |
 | 1 | scroll offset could not be confirmed | `blocks-after-load.html` holds the main thread that the target's preload answers from, so no reply lands inside `SCROLL_REPLY_TIMEOUT_MS` (1 s). **Shown against the same scroll on a free page**, which is answered | red at `:212` |
 | 6 | the page was still painting when the capture budget ran out; the PNG may show a transitional frame — an animation, or a load that had not finished | `animated.html` under `fast-4g`: a throttle turns `quiesce`'s steady-painting exit off, so the page runs the 3 s budget out. **Shown against the unthrottled capture of the same page**, which says "keeps painting steadily". `fast-4g` slows only the network, and a file page makes no requests | red at `:138` |
-| 9 | the page was still painting when the capture budget ran out; the PNG may show a transitional frame | `captureRaster` under an 8-preset cycle, CI only (below) | red at `:204`, 4 of 4 (`35216907463`), after the state checks passed |
+| 9 | the page was still painting when the capture budget ran out; the PNG may show a transitional frame | `captureRaster` under an 8-preset cycle with a 700 ms pause after each apply, CI only (below) | red at the sentence assertion in both repeats that reached it (`35218471058`); the third came back settled, a finding (below) |
 
 **Kenya's 7 and 8 now assert whole sentences**, since a phrase check stays green when the rest of
 the sentence is reworded. Red at `:110` and `:96` with those producers reworded.
@@ -132,18 +132,30 @@ well inside 8 s. Only a frame of a new size resets its coverage and its paint co
 has to keep changing size until the budget runs out. That's a preset cycle, the state
 `live-drive.spec.ts` holds for the window capture.
 
-**Measured on CI before any assertion was written** (`35215978933`, six repeats): `timeout` five
-times, `uncovered` once, and the sentence in all six. **The first version asserted the sentence on
-`timeout` only, and its control run drew `uncovered` three times out of three and asserted
-nothing** (`35216528983`: green, with the reworded sentence in every reply). Thirteen captures in
-all, the second control's four included: `timeout` five, `uncovered` eight. So the label is a race, recorded as `live-drive.spec.ts` records
-its own, and the state (more than 20 applies, `settled: false`, one of those two labels) and the
-sentence are asserted on every run.
+**Measured on CI before any assertion was written, three times, because the first two answers
+were not good enough.**
+- Cycled back to back, 13 captures (`35215978933`, `35216528983`, `35216907463`) came back
+  `timeout` 5 times and `uncovered` 8. **The first version asserted the sentence only on `timeout`,
+  and its control asserted nothing** (`35216528983`: 3 of 3 `uncovered`, green with the reworded
+  sentence in every reply).
+- The second version asserted the sentence on both labels. **Wren's review of #292 caught it:** on
+  `uncovered` that pinned a sentence already filed as wrong, and the true half ran only when the
+  race allowed.
+- **A 700 ms pause after each apply is the lever** (`35217795705`): 12 of 12 `timeout`, no
+  `uncovered`, and no settled capture. `uncovered` is the budget running out between a resize and
+  that size's first full frame. The pause shrinks that gap to a small part of each step, and each
+  step stays well under the 2 s after which a covered page painting steadily leaves as `animating`.
 
-**On `uncovered` it is the wrong sentence.** Part of that frame was never painted, so the PNG has
-transparent pixels, and "still painting" doesn't say so. It's asserted anyway so the check runs every
-time. The defect is its own card, **`bug-live-raster-uncovered-said-as-painting`** (Backlog), and
-that card's fix changes the `uncovered` half of the check.
+**The test now** asserts the state (applies), `timeout`, and the sentence. Two strays are recorded
+and retried, at most 3 tries in all, and each is a defect with its own card. The first is
+`uncovered`. The second is a capture that came back **`settled: true` with no warning while the
+preset was changing**: the control run's first repeat, which Wren had predicted
+(**`bug-live-raster-settled-while-resizing`**, Backlog, 1 in 28 paused captures). Any other label
+fails as a finding. **`uncovered` is not
+asserted:** on that label the sentence is the wrong one (the PNG has transparent pixels and it
+doesn't say so), and the paused cycle doesn't reach it, so a pin would be dead code reading as
+coverage. It belongs to **`bug-live-raster-uncovered-said-as-painting`** (Backlog), with the
+back-to-back cycle as its lever.
 
 ### Rows 2, 4 and 5: measured, and they do not occur from outside
 

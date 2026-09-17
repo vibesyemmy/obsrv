@@ -29,10 +29,12 @@ facts.
 **Acceptance, each with a control:**
 - on `uncovered`, the raster reply carries the capture's own uncovered sentence and not the painting
   one. Share the text with the CLI rather than copying it;
-- in `tests/e2e/live-capture-notes.spec.ts`, the preset-cycle test asserts that sentence on the
-  `uncovered` label. Today it asserts the painting sentence on both labels, so that the check runs on
-  every run, and the `uncovered` half is what this card changes.
+- a test that reaches `uncovered` on purpose and asserts that sentence there. **The lever is a
+  preset cycle with no pause between applies**, which came back `uncovered` 8 of 13 times
+  (`live-capture-notes.spec.ts`'s cycle adds a 700 ms pause precisely to avoid it, 0 of 12). At that
+  rate the test has to loop, bounded, until an `uncovered` capture lands.
 
-**How often:** 8 of 13 captures on a runner (`35215978933`, `35216528983`, `35216907463`), and only while the pane
+**How often:** 8 of 13 captures on a runner under a back-to-back cycle (`35215978933`, `35216528983`,
+`35216907463`), and 0 of 12 with a 700 ms pause after each apply (`35217795705`). Only while the pane
 keeps changing size until the budget's last moment. In the field, that takes a user switching presets
 while an agent's raster capture runs.
