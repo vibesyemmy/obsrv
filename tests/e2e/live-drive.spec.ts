@@ -554,6 +554,21 @@ test('scrollSelector targets a named container, and says so when it matches noth
   const empty = await call('scroll', { x: 0, y: 10, scrollSelector: '   ' })
   expect(empty.status).toBe(400)
   expect(String(empty.body.error)).toContain('scrollSelector')
+
+  // A selector the browser refuses is a fourth outcome, and its sentence had
+  // never been carried by a reply (docs/note-inventory.md, c5): the suite
+  // asked for a selector that matched nothing, one that could not scroll and
+  // an empty one, but never one that is not a selector at all. The headless
+  // surface says this in its own words already (`inspectReadout`); this is the
+  // live one, written in `src/preload/sync.ts`.
+  const invalid = await call('scroll', { x: 0, y: 1500, scrollSelector: 'p[' })
+  expect(invalid.status).toBe(200)
+  expect(invalid.body.ok).toBe(true)
+  expect((invalid.body.warnings as string[]), JSON.stringify(invalid.body.warnings)).toContain(
+    'scrollSelector "p[" is not a valid CSS selector; nothing was scrolled',
+  )
+  // Nothing was scrolled, as the sentence says.
+  expect(await paneElementScrollTop('target', '#scroller')).toBe(900)
 })
 
 test('panTo centres the target pixel in the pane, clamped to the scroll range', async () => {
