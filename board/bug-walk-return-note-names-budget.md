@@ -58,12 +58,13 @@ sentences that contradict each other, plus a false one about the page.
 trip through Electron takes milliseconds, not microseconds, and the fake shows the sentence from 2 ms. So
 "unmeasured" does not mean "rare": the CI measurement below settles the prediction either way.
 
-**No existing log answers it (checked 2026-09-17).** The budget sentence never fired before #308's
-`taller-than-the-walk-budget.html`. #308's green run `35230375653`, its control `35231440742`, Henry's
-probe runs on `probe/c5-walk-limits-b2` and batch 1's `35200677199` never print a budget-exit walk's
-whole notes array: the control printed only the sentence its assertion matched. **The first
-measurement:** print `said(m)` for `taller-than-the-walk-budget.html` in `cli-walk-limits.spec.ts`
-headless, on CI (`cli-*` is not desk-safe).
+**No CI log can answer it (checked 2026-09-17 by Kenya and, on a green main run `35233605462`, by
+Wren).** The budget sentence had never fired on CI before #308's `taller-than-the-walk-budget.html`. #308's
+runs (`35230375653`, `35231440742`, Henry's probes on `probe/c5-walk-limits-b2`) and batch 1's
+`35200677199` never print a budget-exit walk's whole notes array: #308's budget test finds its sentence
+with `said(m).find(…)` and prints the list only on failure. **So the evidence belongs to this card's
+fix, which needs a control anyway:** the control run prints the notes as they are today, and the fixed
+run prints what they say instead.
 
 **Also, smaller:** the cut-short sentence's own number overstates the wait by the walk's elapsed time.
 The step waited `budget − elapsed`, but the sentence says the whole budget: about 0.2 s over on
@@ -91,8 +92,10 @@ and blur both stories.
 
 ## Acceptance, each with a control
 
-- **measure path 2 first**, on CI: does the budget exit on `taller-than-the-walk-budget.html` carry the
-  return-to-top sentence today? Record the notes either way;
+- **measure path 2 inside the fix, not before it:** the fix's CI control run (today's wording) prints
+  the whole `said(m)` for `taller-than-the-walk-budget.html` headless and records whether the
+  return-to-top sentence sits beside the budget sentence. The fixed run prints what it says instead.
+  `cli-*` is not desk-safe, so this runs on CI;
 - the step's timeout sentence names the time the step was actually given, with its own wording when
   that was none. **Control:** restoring `walkTimeoutNote(budgetMs)` reds a test;
 - a unit test driving `walkHeadless` on a fake target covers both paths without the desk: a step that
