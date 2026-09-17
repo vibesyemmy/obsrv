@@ -1,6 +1,8 @@
 ---
 title: "There is no supported way to remove Obsrv's data"
-column: backlog
+column: doing
+owner: "Rook"
+waiting: "Opeyemi: the test sandbox, before any deletion code is written"
 kind: chore
 order: 32
 ---
@@ -69,3 +71,24 @@ of finding out afterwards is not a red test.
 An `obsrv uninstall` that removes it removes another app's runtime. The README paragraph handles this
 by telling a person to check; a command cannot ask, so it should either leave that path alone and
 name it, or refuse to touch it without an explicit flag.
+
+## Claimed by Rook 2026-09-17, assigned by Henry on Opeyemi's decision to build the command
+
+Taken on the terms of the hazard section above, which I wrote before it was mine and which Henry
+adopted as the assignment's conditions:
+
+1. **The fixture and the guard come before the command.** Not "with", not "alongside" — the guard
+   that fails when a path resolves inside the real `$HOME` is written and shown to fail first.
+2. **`~/Library/Caches/electron` is not Obsrv's to delete.** My call, made here: the command
+   **names it and leaves it**, and prints the `rm -rf` a person can run themselves. A flag that
+   removes another app's runtime is a flag someone passes once and regrets; the README already has
+   the sentence telling a person to check first, and a person is the right one to check.
+3. **No deletion code is written until Opeyemi's word on the test sandbox arrives in my session.**
+   My standing constraint is never to remove anything under his HOME, and the only sandbox that
+   isolates Electron on macOS is one that has to be got exactly right. That constraint is his to
+   relax; a relayed yes is not that word, and neither is Henry's or Wren's agreement that I should
+   ask. **`waiting:` names it.**
+
+**What proceeds meanwhile:** the guard is a pure function over paths, and a fixture is a directory
+layout. Neither deletes anything, both are testable, and both are the specification the command has
+to satisfy. That is the part that does not need the word.
