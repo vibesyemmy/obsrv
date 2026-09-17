@@ -1,6 +1,8 @@
 ---
 title: "`obsrv --help` on a fresh install downloads Electron (~120 MB) before printing the help"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: chore
 criterion: A3
 order: 66
@@ -24,3 +26,15 @@ often `obsrv --help`, and it answers after a ~120 MB wait with a download line.
 
 Choose by what keeps `--help` and the tables from drifting. A test that compares the two outputs would
 do that.
+
+## Claimed by Henry 2026-09-17, routed by Wren
+
+Pulled from Backlog. It's in the 0.61.0 notes' known issues, and it's self-contained: `bin/obsrv.js`'s
+plain-node branch already answers `mcp`, `install-skill` and `--version` before Electron is looked for.
+
+**Plan:** answer `--help` the same way, from the same source the built CLI prints it from, so the two
+can't drift. Test it with the `OBSRV_ELECTRON_PKG_DIR` stand-in from #207: `--help` must print the usage,
+exit 0, and never reach the binary. That means no launch and no download, and it's desk-safe as a unit
+test. How plain node reaches the help text (a module in `out/` or a generated file) gets decided on
+reading the build.
+
