@@ -1,6 +1,6 @@
 ---
 title: "A live raster taken while the preset changes can come back settled, with no warning"
-column: backlog
+column: next
 kind: bug
 criterion: C5
 order: 86
@@ -37,3 +37,35 @@ takes a user switching presets while an agent's raster capture runs.
 - a raster capture across a size change does not come back `settled: true` without saying so;
 - `live-capture-notes.spec.ts` stops treating a settled capture as a stray to retry, and asserts it
   cannot happen.
+
+## SECOND SIGHTING 2026-09-17, and it kills this card's explanation — Henry, from Kenya's probe
+
+**Run `35229152084`, the all-eight-presets arm, cycled BACK TO BACK with no pause.** One capture came
+back `settled: true`, no `unsettledReason`, `warnings: []` — the same answer as the first sighting,
+from the opposite cycle shape.
+
+**What that costs the card.** The reading above says the 700 ms pause is what let the reload's
+silence pass for quiet. Wren predicted that shape before the run and I wrote it down as the likeliest
+reading; **it does not survive a sighting with no pause in it.** Whatever makes a capture of a pane
+that never stopped resizing come back settled does not need a gap between applies.
+
+**What both sightings share**, and all they share: a preset cycle, a page that paints continuously,
+and a raster capture that answered `settled: true` with nothing in `warnings`. A preset change
+recreates the offscreen target and reloads the page, so a quiet window around the reload is still the
+candidate worth measuring first — but it is now a candidate, not the explanation, and the pause is
+not part of it.
+
+**Moved to Next.** Two sightings, two cycle shapes, and the answer is a silent wrong one: `settled:
+true` says the capture waited for the page to stop, about a pane that was changing size throughout.
+A rate is no longer the open question; the mechanism is.
+
+**The measurement this card now asks for, unchanged in shape but wider:** record what
+`captureQuiescent` sees around a preset change during a raster capture — frame sizes, the gap since
+the last paint, when coverage resets — on **both** cycle shapes, since the two now have to be
+explained together.
+
+**One guess corrected in passing** (Kenya's probe, same run): the slow applies are the ones that
+change `deviceScaleFactor` — about 150 ms against about 30 ms for a same-dsf apply — and `ipad-109`
+is in the fast group. "Mobile presets are slow" was wrong; "a dsf change is slow" is what the numbers
+say. It belongs wherever a cycle's timing is reasoned about, this card included.
+
