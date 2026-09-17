@@ -275,3 +275,66 @@ the growth. Recorded as a direction, not a finding.
 was harness-only — launched without `OBSRV_TEST_TAKES_THE_DESK`, so `showInactive()`, which the run's
 own line confirms (`flag=off`, `focused: false`) — then `hide()`, then `showInactive()` again.
 Everything else was CI.
+
+## THE MECHANISM, MEASURED 2026-09-17 by Rook — and the card's two numbers are one growth and two
+
+Wren asked where the live walk's extra ~1.3 s goes and whether a headless walk slowed to match
+follows the growth. The first half is arithmetic in the source; the second half turned out to have a
+mechanical answer that makes the experiment unnecessary.
+
+### Where the 1.3 s goes: two constants and a round trip
+
+`WALK_DWELL_MS = 350` (`src/mcp/walk.ts:26`) against `HEADLESS_WALK_DWELL_MS = 150`
+(`src/cli/walk.ts:32`). Over three screenfuls that is 1050 ms against 450 ms — **600 ms of the gap is
+a deliberate difference in the two constants.** Headless measured 463–612 ms total, so it is dwell
+plus almost nothing. Live measured 1770–1874 ms, so after its own 1050 ms of dwell about **720 ms is
+the live path's per-step cost** — the control round trip and the app's own handling, against a direct
+`executeJavaScript` headless. Neither half is mysterious, and neither is a defect.
+
+### Why slowing the headless walk cannot change what it covers
+
+**Measured in a real Chromium against the fixture** (browser pane, no Electron, nothing fronted):
+
+| reading | `feed.scrollHeight` |
+| --- | --- |
+| before the scroll | 2552 |
+| **immediately after `scrollTop = scrollHeight`, same task** | **2552** |
+| 200 ms later | 4672 |
+
+**The growth has not happened when the same task reads back.** `scroll` events are dispatched
+asynchronously, so the fixture's handler has not run yet — and **both** walks compute `atEnd` in the
+same task as the scroll they just applied (`shared/scrollHost.ts` `walkStep` headless;
+`preload/sync.ts` `reached = applyTo(...)` then `atEnd: atEndOf(...)` live). So the end each walk
+reports is always the **pre-growth** end.
+
+The dwell happens *after* that reading. It can only affect what a *next* step would see — and once
+`atEnd` is true there is no next step. **So dwell length cannot change coverage on either surface,
+and the experiment would have measured nothing.** Pre-registered before the measurement, and this is
+why: the prediction was "no change", for this reason.
+
+### The card's two numbers are exactly one growth and two
+
+The fixture grows twice and then stops (`grew >= 2`). Measured heights, and the card's readings
+beside them:
+
+| state | `feed.scrollHeight` | card's `pageHeight` |
+| --- | --- | --- |
+| one growth | 4672 | **4712** (headless, and every walk since) |
+| two growths | 6792 | **6832** (live, 2026-09-14) |
+
+Both card readings are exactly 40 px more, which is the shell chrome outside the feed —
+`document.documentElement.scrollHeight` against the feed's own. **So the 2026-09-14 live walk took
+one step more than today's walks do**, triggering the second growth; it was never measuring a
+different viewport or a different page. The divergence was one extra step.
+
+**What that leaves, and it is now a narrow question:** what let that walk take a fourth step when
+`atEnd` had been reported pre-growth. On the current tree neither surface can, and that is
+structural rather than incidental. The remaining candidates are a tree in which the live path read
+`atEnd` in a later task than it applied the scroll, or a step that failed to reach the bottom and so
+reported `atEnd: false` honestly. Both are questions about **which build produced the 2026-09-14
+reading**, not about live against headless.
+
+**Not a fix on this evidence, and the card's own earlier note still stands:** taking `atEnd` after a
+frame would make both walks follow this fixture to its full height and silence the note the fixture
+exists to raise. What is new is that the note is not a near-miss — it is what a same-task `atEnd`
+must produce on a page that grows from its own scroll handler.
