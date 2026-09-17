@@ -1,11 +1,11 @@
 ---
-title: "The target canvas can stay blank for ten seconds with the app reporting nothing"
-column: doing
+title: "The target canvas can stay blank in CI: once with the app's no-frames notice, twice without it"
+column: backlog
 kind: bug
-owner: "Kenya"
-waiting: ""
 order: 72
 ---
+
+**Waiting on a recurrence:** `panes.spec` *"the target canvas shows the page, not a blank"* failing with `the canvas stayed blank: N white of M pixels, K distinct.`, followed by `main sent frame …` or `main's state could not be read: …`. Nothing can be done until it fires.
 
 FOUND BY KENYA 2026-09-17, reading the `panes:83` recurrence @Henry recorded on
 `bug-target-canvas-no-frames`. **Split from that card deliberately: it is the same symptom with the
@@ -170,3 +170,35 @@ reads only `tabs.frameSent()` and `session.painting`. `panes.spec` stays in the 
 **This is the sync138 move.** That card sat on `waiting: event` for days and was answered from a
 single caught failure, because the trace was already in place when it happened. Nothing here waits on
 Henry's `bus.lastSeq()` recording being run by hand on a recurrence; the recurrence brings it.
+
+## One home for both canvas cards, 2026-09-17 by Henry: `bug-target-canvas-no-frames` now lives here, and this card moves to Backlog
+
+**On Opeyemi's instruction** to take the Doing cards through one at a time (relayed in room #440). Kenya's
+session is out, and Wren's routing suggested this merge.
+
+**Why one card, not two.** Both cards waited on the same event, a `panes:83` failure. Under the rule
+`chore-flaky-leaders-0917` sets, a question that needs an event gets exactly one home, and two cards
+whose awaited text is the same failure would both be re-opened by one recurrence. **The distinction
+Kenya split them on is kept, as two readings of one failure rather than two cards.** The key above
+already routes between them, by whose side went quiet and whether the notice appeared.
+
+**What the other card carried, moved here so nothing is lost:**
+- **The one sighting with the notice.** Run `34988828712`: `panes:83` failed both attempts, and the
+  uploaded `error-context.md` showed the app's own stall notice, *"No frames from target renderer"*.
+  With a blank target, that is the documented signature of a lost WebGL context after GPU helper deaths
+  (`docs/gpu-reset.md`, measured 2026-09-08, where switch-and-recover was validated).
+- **What that sighting never established:** whether the GPU helper actually died, and whether recovery
+  ran. The console line naming a GPU process exit was not in the artefact, because the trace upload
+  carried no traces at the time (`#29` changed that).
+- **A local reproduction that did not match** (Rook, 2026-09-16), and Kenya's reading that
+  `35176357601` is the *silent* shape rather than this one.
+
+**So there are three sightings of one symptom with two tells:** once with the notice (`34988828712`),
+twice without it (`35176357601`, `35123165259`).
+
+**Why Backlog and not Done:** the acceptance is a cause, and there isn't one. The rAF hypothesis lost its
+support on CI (`#247`: occlusion does not throttle a runner's animation frames). `#267`'s instrument now
+says whose side went quiet, and a control showed it prints live values, but whose side is not yet why.
+**When it fires**, it moves back to Doing with the run id, read by the key above. If the notice appears
+too, the lost-context reading applies.
+
