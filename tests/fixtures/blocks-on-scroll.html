@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>blocks its main thread on the first scroll</title>
+<!--
+  c5, walk limits batch 2. A page that answers the first scroll and then holds
+  its main thread, which is what a bot challenge, a heavy scroll handler or a
+  synchronous XHR looks like from outside. The two surfaces meet it
+  differently, and that difference is the point:
+
+  - HEADLESS (`cli/walk.ts:179`): the walk's next step is an
+    `executeJavaScript` that cannot run until the thread lets go, so it times
+    out on the walk's own budget and the step throws — "the walk was cut short
+    after N screenfuls (…); measured after a partial walk", carrying
+    `walkTimeoutNote`'s sentence inside it.
+  - LIVE (`mcp/walk.ts:184`): the scroll goes through the control server, whose
+    reply waits 1 s for the target's preload to confirm and then answers
+    `scrolled: null` — "the page did not confirm a scroll during the walk; the
+    walk stopped there."
+
+  The hold is 25 s: longer than the walk's 15 s budget and the 1 s confirm
+  window, and short enough that the page lets go before a spec's own timeout.
+  It starts on the first scroll EVENT, not on load, so the walk's first step is
+  answered and the count is 1 rather than 0 — a page that blocks before the
+  walk begins is `blocks-after-load.html`, which is a different sentence.
+-->
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #fff; color: #111; }
+  p { margin: 0; height: 768px; padding: 24px; box-sizing: border-box; border-bottom: 1px solid #ddd; }
+</style>
+<h1 style="margin:0;padding:24px;font-size:24px">A page that stops answering once it is scrolled</h1>
+<p>screenful 1 of 6</p>
+<p>screenful 2 of 6</p>
+<p>screenful 3 of 6</p>
+<p>screenful 4 of 6</p>
+<p>screenful 5 of 6</p>
+<p>screenful 6 of 6</p>
+<script>
+  let held = false
+  addEventListener(
+    'scroll',
+    () => {
+      if (held) return
+      held = true
+      const until = Date.now() + 25000
+      while (Date.now() < until) {}
+    },
+    { passive: true },
+  )
+</script>
