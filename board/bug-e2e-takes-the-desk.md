@@ -310,3 +310,48 @@ read-only. The run is:
 **Waiting on:** Opeyemi's timing for that run, asked for in Henry's session 2026-09-17. Nothing else
 on this card needs the desk.
 
+
+## RUN 3 2026-09-17 by Henry — the baseline on today's `main`, on Opeyemi's machine while he used it
+
+**Opeyemi gave the yes directly in my session** (Wren relayed that he was ready; the go itself came
+from him, here). The desk rule held: a relay is notice, not permission.
+
+**The run:** full local e2e on `main` at `006faa7`, built from that tree. **605 passed, 6 skipped,
+16.1 minutes, zero `✘`** — no retry-hidden failure anywhere in it, checked rather than assumed.
+
+**The instrument was verified before its zero was believed.** `front-watch.sh` (`lsappinfo front`,
+polled every 100 ms, prompt-free) recorded Opeyemi's own app switches throughout — Claude, Dia,
+Finder — so a run with no Electron line would have been a measured silence, not a dead watcher. That
+check exists because a zero from an unverified instrument fits two facts.
+
+### One activation in 605 tests
+
+| when | how long | what |
+| --- | --- | --- |
+| 19:23:01 | ~10 s, released 19:23:11 | `Electron` pid 82725, the harness app (`…/Obsrv/node_modules/electron/…`) |
+
+**It took the desk from a person, not from itself.** Opeyemi was in Finder at 19:22:59, two seconds
+before. That is the cost this card is about, and it is still there once per suite.
+
+**Which test — reconstructed, not recorded, and it agrees with this card's own earlier reading.**
+The suite log carries no wall clock, so the point was placed by scaling cumulative test durations to
+the 966 s the run took: the front is taken inside **`stall.spec.ts`** (`:21` at the take, `:77` at the
+release). **The table above already says `main`, `stall.spec`, one launch: yes, at 2 s, for about
+5 s** — measured separately, weeks earlier, by whoever wrote that row. Two independent routes to the
+same spec. It is still a reconstruction; an in-app recorder would make it a recording.
+
+### What the number does NOT cover
+
+**The two specs that take the desk on purpose were skipped, by design** — `live-drive.spec.ts:352`
+(`focusWindow`) and `overlay-focus.spec.ts:39`, both gated to CI or `OBSRV_E2E_FRONT=1`, which this
+run did not set. Four others skipped for unrelated gates (`live-capture-notes` ×2 on the same gate,
+`mcp-launch` ×2 on `OBSRV_E2E_LAUNCH`). **So "1" means one activation from the specs that are not
+supposed to take the desk at all**, which is the number this card cares about, and not a claim about
+the suite as a whole.
+
+### What this changes
+
+Step 1 of "if this is picked up again" is **done**: the baseline on today's `main` is **1**, not the 6
+this card's fix-branch table recorded, so most of the fronting is already gone and what is left is a
+single spec. That makes the remaining work smaller and more specific than the card assumed — one
+spec's launch, not a class of them.
