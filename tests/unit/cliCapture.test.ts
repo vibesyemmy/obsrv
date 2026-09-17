@@ -396,3 +396,184 @@ describe('captureQuiescent on a one-colour frame', () => {
     }
   })
 })
+
+/**
+ * A quiet stretch that straddles a size change — `bug-live-raster-settled-while-resizing`.
+ *
+ * The capture clears `covered` when a frame at a new size **arrives**, and
+ * polls the settle test every 50 ms. Between the last frame of the old size and
+ * the first of the new one, `covered` and `lastPaint` both still belong to the
+ * old size, so a poll landing there past the settle window returns the previous
+ * size's buffer as settled. In the field that is a lottery: probe `35238313231`
+ * saw the sequence 16 times in 6 captures and the poll never landed in the gap
+ * (1.3 sightings expected, 0 seen). Here the gap is scripted, so it is not.
+ */
+describe('a quiet stretch that straddles a size change', () => {
+  /** Emits its script on a clock, so a gap between two frames is a real gap. */
+  class Timed extends EventEmitter {
+    constructor(
+      private readonly script: { at: number; m: FrameMessage }[],
+      private readonly want: { width: number; height: number } | null = null,
+    ) {
+      super()
+    }
+    invalidate(): void {
+      for (const s of this.script) setTimeout(() => this.emit('frame', s.m), s.at)
+    }
+    expectedFrameSize(): { width: number; height: number } | null {
+      return this.want
+    }
+  }
+  /** Covered at 128x102, silence past the window, then the new size lands. */
+  const straddle = (want: { width: number; height: number } | null): Timed =>
+    new Timed(
+      [
+        { at: 0, m: marked(128, 102, 7) },
+        { at: 400, m: marked(144, 90, 9) },
+        { at: 460, m: marked(144, 90, 9) },
+      ],
+      want,
+    )
+
+  it('comes back at the pre-change size when nothing says a resize is under way', async () => {
+    // Not a wish — a record of what the capture can and cannot see. With no
+    // expectation to check, silence after a covered frame is silence, and this
+    // answer is the only one the frames support. It is also the defect, which
+    // is why the fix had to come from the source rather than from here.
+    const got = await captureQuiescent(straddle(null), { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([128, 102])
+  })
+
+  it('waits for the size the source says it is heading for, and settles there', async () => {
+    const got = await captureQuiescent(straddle({ width: 144, height: 90 }), {
+      settleMs: 120,
+      timeoutMs: 5000,
+      ...noGrace,
+      awaitExpectedSize: true,
+    })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([144, 90])
+  })
+
+  it('says `resizing` rather than vouching for an earlier size at the budget', async () => {
+    // The new size never comes. A budget that ran out is not a settled page,
+    // and the sentence names both sizes so the reader knows which PNG this is.
+    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], { width: 144, height: 90 })
+    const warnings: string[] = []
+    const got = await captureQuiescent(src, {
+      settleMs: 120,
+      timeoutMs: 600,
+      ...noGrace,
+      awaitExpectedSize: true,
+      onWarn: m => warnings.push(m),
+    })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('resizing')
+    expect([got.width, got.height]).toEqual([128, 102])
+    expect(warnings.join(' ')).toContain('this frame is 128x102, not the 144x90 it was asked for')
+  })
+
+  it('does not leave by the animating door with the old size either', async () => {
+    // Wren's read of the first fix: the settle test was gated and the steady-
+    // painting exit was not, so a page painting on at the size the pane had
+    // left would come back `animating` carrying that buffer — the same wrong
+    // answer wearing a different label. `resizing` is the true one.
+    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], { width: 144, height: 90 })
+    const noisy = setInterval(() => src.emit('frame', marked(128, 102, 7)), 20)
+    try {
+      const got = await captureQuiescent(src, {
+        settleMs: 120,
+        timeoutMs: ANIMATING_AFTER_MS + 400,
+        ...noGrace,
+        awaitExpectedSize: true,
+      })
+      expect(got.settled).toBe(false)
+      expect(got.unsettledReason).toBe('resizing')
+    } finally {
+      clearInterval(noisy)
+    }
+  })
+
+  /**
+   * The hole Idris measured in the first fix: seven of the 26 presets share a
+   * device extent with another at a different density (1920x1080 is five of
+   * them; 3840x2160 two). Switching between two of those recreates the window
+   * and reloads at the SAME extent, so a gate watching only the size sees
+   * nothing change and hands back the layout from before the switch, at
+   * dimensions that look right.
+   */
+  class Layered extends EventEmitter {
+    epoch = 0
+    constructor(private readonly want: { width: number; height: number }) {
+      super()
+    }
+    invalidate(): void {}
+    expectedFrameSize(): { width: number; height: number } {
+      return this.want
+    }
+    layoutEpoch(): number {
+      return this.epoch
+    }
+  }
+  /** Same extent throughout; only the byte in the pixels says which layout it is. */
+  const sameExtentSwitch = (): Layered => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    setTimeout(() => src.emit('frame', marked(128, 102, 9)), 400)
+    return src
+  }
+
+  it('waits out a density change that keeps the device extent, and returns the new layout', async () => {
+    const got = await captureQuiescent(sameExtentSwitch(), { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([128, 102])
+    // The size cannot tell these apart, so the pixels have to. 9 is the layout
+    // that was asked for; 7 is the one the pane had left.
+    expect(got.bgra[0]).toBe(9)
+  })
+
+  it('says so at the budget, and says the dimensions cannot show it', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    src.emit('frame', marked(128, 102, 7))
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    const warnings: string[] = []
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 600, ...noGrace, awaitExpectedSize: true, onWarn: m => warnings.push(m) })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('resizing')
+    expect(warnings.join(' ')).toContain('its 128x102 is the size that was asked for, so the dimensions do not show it')
+    // And NOT the other wording, which would be absurd here.
+    expect(warnings.join(' ')).not.toContain('not the 128x102 it was asked for')
+  })
+
+  it('leaves what the new layout has not painted reading as never painted', async () => {
+    // The buffer is replaced on a layout change, not kept. Keeping it would
+    // leave the previous layout's pixels under a frame reported as this one's,
+    // and `uncovered`'s sentence is checked against the transparent pixels in
+    // the PNG (`bug-live-raster-uncovered-said-as-painting`, Kenya's arm).
+    const src = new Layered({ width: 4, height: 4 })
+    setTimeout(() => src.emit('frame', marked(4, 4, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    // One row of the new layout only: the other three never paint.
+    setTimeout(
+      () => src.emit('frame', { frame: { x: 0, y: 0, width: 4, height: 1, data: new Uint8Array(16).fill(9) }, frameWidth: 4, frameHeight: 4 }),
+      200,
+    )
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 600, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('uncovered')
+    expect(got.bgra[0]).toBe(9)
+    // Row 1 onwards is the old layout's 7s if the buffer was kept.
+    expect(Array.from(got.bgra.subarray(16, 64))).toEqual(Array(48).fill(0))
+  })
+
+  it('leaves a caller that did not ask exactly as it was', async () => {
+    // The CLI's own captures do not pass the flag, and a source that answers
+    // the size must not change their behaviour by existing.
+    const got = await captureQuiescent(straddle({ width: 144, height: 90 }), { settleMs: 120, timeoutMs: 5000, ...noGrace })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([128, 102])
+  })
+})

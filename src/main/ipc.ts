@@ -1779,7 +1779,12 @@ export function registerIpc(ctx: AppContext): () => void {
       try {
         await awaitViewportStable()
         const said = rasterWarnings(BLANK_LIVE_WARNING)
-        const frame = await captureQuiescent(s.target, { timeoutMs: RASTER_CAPTURE_MS, onWarn: said.onWarn })
+        // `awaitExpectedSize`: the pane can be cycled through presets while
+        // this runs, and without it a poll landing in the silence between the
+        // last frame of one size and the first of the next comes back
+        // `settled: true` with the previous size's pixels and no warning
+        // (`bug-live-raster-settled-while-resizing`, two sightings).
+        const frame = await captureQuiescent(s.target, { timeoutMs: RASTER_CAPTURE_MS, onWarn: said.onWarn, awaitExpectedSize: true })
         const image = nativeImage.createFromBitmap(Buffer.from(frame.bgra.buffer, frame.bgra.byteOffset, frame.bgra.byteLength), {
           width: frame.width,
           height: frame.height,

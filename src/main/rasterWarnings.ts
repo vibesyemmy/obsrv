@@ -40,6 +40,15 @@ export function rasterWarnings(blankWarning: string): RasterWarnings {
           return [RASTER_ANIMATING_WARNING]
         case 'blank':
           return [blankWarning]
+        case 'resizing': {
+          // The capture's own sentence again, for the same reason `uncovered`
+          // uses it: this one names the size in the PNG and the size it was
+          // asked for, and a copy here would drift from it. The window
+          // capture's resize wording is about a different measurement (a
+          // viewport poll), so it is not reused.
+          const own = said.get('resizing')
+          return own === undefined ? [] : [own]
+        }
         case 'uncovered': {
           // `captureQuiescent` warns on the line before it returns this reason,
           // and rasterWarnings.test.ts goes through that call. No fallback: the

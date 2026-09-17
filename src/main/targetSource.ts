@@ -188,6 +188,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private viewport = { ...DEFAULT_VIEWPORT }
   private dsf = 1
   /**
+   * Bumped once per accepted change to what the page is laid out for — the CSS
+   * viewport, the density, or phone-ness. See `layoutEpoch()`.
+   */
+  private epoch = 0
+  /**
    * Whether this screen is a phone or tablet. Told, not inferred: it used to
    * be read off `dsf > 1`, which held only while every laptop and desktop
    * preset was 1x. A Retina laptop is dense *and* a desktop browser, and a
@@ -361,6 +366,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     wc.setUserAgent(this.mobile && this.mobileEmulation ? MOBILE_USER_AGENT : this.defaultUserAgent)
 
     wc.on('paint', (_event, dirty, image) => {
+      // A window this source has already replaced paints nothing anyone wants.
+      // `recreate()` swaps `this.win` before destroying the old one, so a paint
+      // already queued from the old webContents can still be delivered here —
+      // and it carries the layout of the density this source has just left.
+      // Dropping it is what lets `layoutEpoch()` mean what it says.
+      if (this.win !== win) return
       if (dirty.width <= 0 || dirty.height <= 0) return
       // Chromium emits one paint with an empty (0x0) image as a navigation
       // commits; it carries no pixels and would advertise a 0x0 frame.
@@ -579,6 +590,46 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     return this.textScale
   }
 
+  /**
+   * The frame size this source paints at once the offscreen surface has caught
+   * up with the viewport it was last asked for — `FrameEmitter`'s side of
+   * `captureQuiescent`'s `awaitExpectedSize`.
+   *
+   * It is the steady-state answer of `paintedExtent`: when the bitmap is the
+   * size the viewport and density call for, the painted extent is the floor of
+   * their product (Chromium paints the floor of a fractional density; Electron
+   * ceils the bitmap). While a resize is in flight the bitmap is some other
+   * size, so the frames carry that size instead and a capture waiting on this
+   * one knows it has not arrived yet.
+   */
+  expectedFrameSize(): { width: number; height: number } {
+    return {
+      width: Math.floor(this.viewport.width * this.dsf + 1e-6),
+      height: Math.floor(this.viewport.height * this.dsf + 1e-6),
+    }
+  }
+
+  /**
+   * A counter of accepted layout changes — the other half of
+   * `expectedFrameSize()`, and the half that catches what a size cannot.
+   *
+   * **Measured by Idris, reviewing `#314`:** seven of the 26 presets share a
+   * device extent with another at a different density — 1920x1080 is
+   * `1080p-24`, `1080p-27` and `laptop-1080-15` at 1x, `laptop-1080-125` at
+   * 1536x864, and `laptop-1080-150` at 1280x720; 3840x2160 is `4k-27` and
+   * `4k-27-150`. Switching between two of those recreates the window and
+   * reloads the page at **the same extent**, so a capture watching only the
+   * size sees nothing change and hands back the layout from before the switch,
+   * at dimensions that look right. A run through the real `captureQuiescent`
+   * returned exactly that in 151 ms.
+   *
+   * A size cannot see it; a request can. Coverage earned under an older epoch
+   * is coverage of a layout nobody asked for.
+   */
+  layoutEpoch(): number {
+    return this.epoch
+  }
+
   /** The page's cursor as CSS, as last reported (see `cursor` event). */
   getCursor(): string {
     return this.cursor
@@ -760,11 +811,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   setViewport(width: number, height: number, deviceScaleFactor = 1, mobile = false): AppliedViewport {
     const dsf = Number.isFinite(deviceScaleFactor) && deviceScaleFactor >= 1 ? deviceScaleFactor : 1
     const v = clampViewport(width, height, maxCssViewport(dsf))
+    const before = this.viewport
     this.viewport = { width: v.width, height: v.height }
     // The user agent is set at window creation, so a change of phone-ness
     // recreates the window exactly as a change of density does.
     const wasMobile = this.mobile
     this.mobile = mobile
+    // Only a change that actually moves the layout bumps the epoch. A no-op
+    // `setViewport` — the renderer re-sending what is already applied — would
+    // otherwise make a capture in flight wait for a repaint that an idle page
+    // has no reason to produce, and answer `resizing` at its budget about a
+    // surface that never moved.
+    const moved = dsf !== this.dsf || mobile !== wasMobile || v.width !== before.width || v.height !== before.height
+    if (moved) this.epoch++
     if (dsf !== this.dsf || mobile !== wasMobile) {
       this.dsf = dsf
       if (!this.disposed) this.recreate()

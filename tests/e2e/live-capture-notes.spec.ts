@@ -27,6 +27,8 @@ let app: ElectronApplication
 let info: ControlInfo
 const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).href
 const BLOCKS = pathToFileURL(resolve(__dirname, '../fixtures/blocks-after-load.html')).href
+/** A page that paints once and stops: the still case the resize gate must not hold up. */
+const STILL = pathToFileURL(resolve(__dirname, '../fixtures/thin-text.html')).href
 
 const call = (command: string, payload?: Record<string, unknown>): Promise<Record<string, unknown>> =>
   new Promise((done, fail) => {
@@ -94,6 +96,60 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await call('setOnionSkin', { onionSkin: 0 })
   await app.close()
+})
+
+test('a raster capture of a page that has stopped still settles, at the size the pane is on', async () => {
+  // The guard on `awaitExpectedSize` (`bug-live-raster-settled-while-resizing`).
+  // The fix makes the capture refuse to settle until the frame is the size the
+  // target says it is heading for — so if `expectedFrameSize()` ever disagreed
+  // with the frames for an ordinary capture (a fractional density floors the
+  // paint and ceils the bitmap, which is exactly where a size comparison goes
+  // wrong), every live raster would run to its budget and come back `resizing`.
+  // Nothing else in this file would notice: its other pages never settle on
+  // purpose. This one is the still page.
+  await call('navigate', { url: STILL })
+  const status = await call('status')
+  const r = await call('captureRaster')
+  const margin = `${JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}` })} on ${String(status.presetId)}`
+  expect(r.settled, margin).toBe(true)
+  expect(r.unsettledReason, margin).toBeUndefined()
+  expect(warningsOf(r).join(' '), margin).not.toContain('still resizing')
+  // And the pixels are of that size, not of whatever the pane was on before.
+  const png = decodePng(Buffer.from(r.data as string, 'base64'))
+  expect([png.width, png.height], margin).toEqual([r.width, r.height])
+})
+
+test('and still settles at a fractional density, where the two ways of computing the size disagree', async () => {
+  // The case the guard above is really about. `pixel-8` is 412 x 915 at
+  // 2.625: the products are 1081.5 and 2401.875, Chromium paints the floor
+  // (1081 x 2401) and Electron's bitmap is the round. `expectedFrameSize()`
+  // takes the floor, so if it ever took the round instead, every capture on
+  // this preset would run to its budget and answer `resizing` — and every
+  // whole-number preset would stay green while it did.
+  //
+  // **A fractional `deviceScaleFactor` is not the hazard; a fractional PRODUCT
+  // is.** Wren reached for `laptop-1080-150` on a cold read of this fix, which
+  // is the obvious direction and proves nothing: 1280 x 1.5 is 1920 x 1080, and
+  // so are `laptop-1080-125` and `4k-27-150` — whole, every one. Counted over
+  // the table, 26 presets carry exactly one fractional product, and it is this
+  // preset. Do not swap it for a different "fractional density" one.
+  //
+  // `presetId`, not `preset.id`: `status` has no `preset` object, and reading
+  // one silently restored a preset nobody was on (the loops below open on
+  // whatever the app started with, and would have inherited it).
+  const before = (await call('status')).presetId as string
+  try {
+    await call('setPreset', { id: 'pixel-8' })
+    await call('navigate', { url: STILL })
+    const r = await call('captureRaster')
+    const margin = JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}`, warnings: warningsOf(r) })
+    expect(r.settled, margin).toBe(true)
+    // The documented floor, not the round: 1082 x 2402 here would mean the
+    // comment on `pixel-8` and `paintedExtent` disagree with the surface.
+    expect([r.width, r.height], margin).toEqual([1081, 2401])
+  } finally {
+    await call('setPreset', { id: before })
+  }
 })
 
 test('a raster capture with the onion skin on says the skin is not in it', async () => {
@@ -238,13 +294,20 @@ test('a raster capture while the pane is resized throughout says the page was st
         shot = reply
         break
       }
-      // Two strays are recorded and retried, each a defect with its own card:
-      // `uncovered` (`bug-live-raster-uncovered-said-as-painting`), and a
-      // capture that came back SETTLED, with no warning, while the preset was
-      // changing under it (`bug-live-raster-settled-while-resizing`, once in 28
-      // paused captures: control run 35218471058). Anything else on a pane that
-      // never stopped changing size (`animating`, `blank`) is a finding, not a
-      // tolerance to widen.
+      // `uncovered` is recorded and retried; it is a defect with its own card
+      // (`bug-live-raster-uncovered-said-as-painting`).
+      //
+      // `settled: true` is allowed here and is NOT a stray. With a 700 ms step
+      // pause and a 400 ms settle window, a pane that reaches the newest
+      // preset's size and goes quiet has genuinely settled. It used to be the
+      // sighting for `bug-live-raster-settled-while-resizing`, and that card
+      // turned out to be about settling at the size the pane had LEFT — which
+      // this loop cannot tell apart from the good case without racing the
+      // cycle it is measuring, and which `cliCapture.test.ts` now pins by
+      // construction instead.
+      //
+      // Anything else on a pane that never stopped changing size (`animating`,
+      // `blank`) is a finding, not a tolerance to widen.
       const stray = reply.unsettledReason === 'uncovered' || reply.settled === true
       expect(stray, margin).toBe(true)
     }
@@ -333,14 +396,30 @@ test('a raster capture whose budget runs out before a resized frame is painted s
         shot = reply
         break
       }
-      // The race's other side is `timeout`, the test above's sentence, and the
-      // rarer settled capture has its own card
-      // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
-      // that never stopped changing size is a finding.
-      expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
+      // The race's other side is `timeout`, the test above's sentence. A
+      // settled capture is the pane having caught up between two applies, not
+      // the defect `bug-live-raster-settled-while-resizing` named: that one was
+      // settling at the size the pane had left, and it is pinned in
+      // `cliCapture.test.ts`.
+      //
+      // `resizing` is allowed here too, and it is NOT a tolerance widened to
+      // get a PR green. The enum gained the value after this loop was written
+      // (`#314`): on a pane cycled back to back, a capture whose frame never
+      // reached the size last asked for is genuinely still resizing, and that
+      // is the most accurate of the unsettled answers it can give. Without it
+      // this test fails for the product being right — measured, run
+      // `35246279571`, attempt 1: `label=resizing`, covered, 0 transparent,
+      // red at this line; the retry reached `uncovered` and passed. The
+      // distinction worth keeping (Wren): widening a tolerance because the
+      // enum grew is the opposite of silencing a finding, and the assertion
+      // below that catches a real one is untouched.
+      //
+      // Anything else on a pane that never stopped changing size is a finding.
+      expect(reply.unsettledReason === 'timeout' || reply.unsettledReason === 'resizing' || reply.settled === true, margin).toBe(true)
       // THE BASELINE for the count below, and a cross-check of the coverage
-      // mask against the bytes. `timeout` and `settled` are only reached with
-      // `covered` true (`captureQuiescent` branches on it at the deadline), so
+      // mask against the bytes. `timeout`, `resizing` and `settled` are only
+      // reached with `covered` true (`captureQuiescent` branches on it at the
+      // deadline — `resizing` at `capture.ts:404`), so
       // the mask says every pixel painted since the last resize, and this page
       // paints opaque white. A counter blind to alpha, or a PNG that dropped
       // it, fails here rather than agreeing with a sentence.
