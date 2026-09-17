@@ -25,6 +25,15 @@ jobs:
           npm ci > /dev/null
           npm run release:pack 2>&1 | tail -15
           mkdir -p rc && mv getobsrv-*.tgz rc/ && ls -la rc && git log --oneline -1 > rc/commit.txt
+      - name: tarball and per-file shas, to diff against the tarball that gets published
+        run: |
+          cd rc
+          shasum getobsrv-*.tgz | tee tarball.sha
+          mkdir -p x && tar xzf getobsrv-*.tgz -C x
+          (cd x && find . -type f | sort | xargs shasum) > files.sha
+          wc -l < files.sha
+          rm -rf x
+          cat files.sha
       - uses: actions/upload-artifact@v7
         with:
           name: rc-tarball
