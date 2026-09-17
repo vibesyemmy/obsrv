@@ -97,7 +97,8 @@ why.
 **With an app older than 0.61.0** there is no paint-quiet verdict to pass
 through, so `settled` keeps the old meaning, and a warning says so: *this app
 is older than the capture's settle verdict, so `settled` reports whether the
-navigation was confirmed rather than whether the page went paint-quiet*.
+navigation was confirmed rather than whether the page went paint-quiet; update
+the app for the paint-quiet answer.*
 
 **What to do:** read `settled` as paint-quiet on both surfaces. For whether
 the navigation was confirmed, read the warnings.
