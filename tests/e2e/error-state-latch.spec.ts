@@ -97,18 +97,84 @@ test('ARM A, timestamped: what order the renderer sees on a miss', async () => {
     }).observe(document.body, { childList: true, subtree: true })
   })
 
+  // MAIN's side too: `did-fail-load` carries a code, and nativePane.ts filters
+  // ERR_ABORTED (-3) — a navigation replaced rather than failed. If a miss
+  // shows -3 where a hit shows -105, the error never reaches the renderer
+  // because main never sends one, and the question moves off the renderer
+  // entirely.
+  await app.evaluate(() => {
+    const g = globalThis as any
+    g.__fails = [] as { t: number; pane: string; code: number; url: string }[]
+    for (const [pane, wc] of [
+      ['native', g.__obsrv.native.webContents],
+      ['target', g.__obsrv.target.webContents],
+    ] as [string, any][]) {
+      wc.on('did-fail-load', (_e: unknown, code: number, _d: string, url: string, isMainFrame: boolean) => {
+        if (isMainFrame) g.__fails.push({ t: Date.now(), pane, code, url })
+      })
+    }
+  })
+
   const rounds: string[] = []
   let missed = 0
+  let hitShown = false
   for (let i = 0; i < RUNS * 2; i++) {
     await page.evaluate(() => void ((window as unknown as { __log: unknown[] }).__log.length = 0))
+    await app.evaluate(() => void ((globalThis as any).__fails.length = 0))
     await go(FIXTURE)
     await expect(page.locator('.load-error-state')).toHaveCount(0, { timeout: 15_000 })
-    await go(BAD)
+    // What the field ACTUALLY holds at the moment Enter is pressed. The app
+    // writes the committed address into it on `url-changed`, so a late one
+    // from the previous navigation would overwrite what was typed — and the
+    // submit would re-send the old address rather than the bad one.
+    await page.fill('.url-form input', BAD)
+    const atSubmit = await page.inputValue('.url-form input')
+    await page.press('.url-form input', 'Enter')
     const shown = await errorStateAppeared(8_000)
+    if (shown && !hitShown) {
+      hitShown = true
+      // THE INSTRUMENT'S OWN CONTROL: a hit must show a `load-error`. If it
+      // does not, "no load-error on a miss" says nothing about the product.
+      const log = await page.evaluate(() => (window as unknown as { __log: { t: number; what: string; detail: string }[] }).__log)
+      const fails = await app.evaluate(() => (globalThis as any).__fails as { pane: string; code: number }[])
+      const t0 = log[0]?.t ?? 0
+      console.log(
+        `[latch-order] a HIT, for comparison — main's did-fail-load: ${JSON.stringify(fails.map(f => `${f.pane} ${f.code}`))}\n` +
+          log.map(l => `    +${String(l.t - t0).padStart(5)}ms  ${l.what.padEnd(18)} ${l.detail.split('/').pop() ?? ''}`).join('\n'),
+      )
+    }
     if (!shown) {
       missed++
+      // NEVER or LATE? Keep waiting past the 8 s budget and record when the
+      // failure lands, if it ever does. A load that fails at 12 s is a slow
+      // lookup; one that never fails is a lost navigation, and they need
+      // different fixes.
+      const late = await page
+        .locator('.load-error-state')
+        .waitFor({ state: 'visible', timeout: 25_000 })
+        .then(() => 'arrived late')
+        .catch(() => 'never arrived, even at 33 s')
+      const panes = await app.evaluate(() => {
+        const g = globalThis as any
+        return {
+          native: g.__obsrv.native.webContents.getURL(),
+          nativeLoading: g.__obsrv.native.webContents.isLoading(),
+          target: g.__obsrv.target.webContents.getURL(),
+          targetLoading: g.__obsrv.target.webContents.isLoading(),
+        }
+      })
+      rounds.push(
+        `    the field held at submit: ${atSubmit.split('/').pop()}\n` +
+        `    past the budget: ${late}\n` +
+          `    panes now: native=${panes.native.split('/').pop()} loading=${panes.nativeLoading}  ` +
+          `target=${panes.target.split('/').pop()} loading=${panes.targetLoading}`,
+      )
       const log = await page.evaluate(() => (window as unknown as { __log: { t: number; what: string; detail: string }[] }).__log)
+      const fails = await app.evaluate(() => (globalThis as any).__fails as { t: number; pane: string; code: number; url: string }[])
       const t0 = log[0]?.t ?? 0
+      rounds.push(
+        `    main's did-fail-load this round: ${JSON.stringify(fails.map(f => `${f.pane} ${f.code}`))}`,
+      )
       rounds.push(
         `  MISS on round ${i}:\n` +
           log.map(l => `    +${String(l.t - t0).padStart(5)}ms  ${l.what.padEnd(18)} ${l.detail.split('/').pop() ?? ''}`).join('\n'),
