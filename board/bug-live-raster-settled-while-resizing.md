@@ -1,6 +1,8 @@
 ---
 title: "A live raster taken while the preset changes can come back settled, with no warning"
-column: next
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C5
 order: 86
@@ -76,3 +78,69 @@ change `deviceScaleFactor` — about 150 ms against about 30 ms for a same-dsf a
 is in the fast group. "Mobile presets are slow" was wrong; "a dsf change is slow" is what the numbers
 say. It belongs wherever a cycle's timing is reasoned about, this card included.
 
+
+## THE MECHANISM 2026-09-17 by Henry: it is a poll landing in the silence between two sizes
+
+**Claimed, and the first acceptance item is done.** Probe `35238313231` — the paused cycle with the
+settle window cut to 120 ms, six captures — recorded every frame `captureQuiescent` saw. The card
+asked for that measurement on both cycle shapes; this is the paused one, and the mechanism it found
+does not depend on the shape, which is why the back-to-back sighting fits it too.
+
+**What the frames say.** A **straddle** is a frame arriving at a new size while `covered` is still
+true from the previous one — the probe prints it with the *old* size's area in `uncoveredPx`. There
+were **16 straddles across 6 captures**. Four had a quiet gap before them at or past the settle
+window: **124, 138, 140 and 143 ms**.
+
+**The code, read after the frames rather than before them:**
+
+| line | what it does |
+| --- | --- |
+| `cli/capture.ts:238` | clears `covered` when a frame at a new size **arrives** |
+| `cli/capture.ts:285` | settles on `covered && now - lastPaint >= settleMs` |
+| `cli/capture.ts:356` | polls that test every `min(50, settleMs)` ms |
+
+Between the last frame of the old size and the first of the new one, **`covered` and `lastPaint` both
+still belong to the old size**. A poll landing in that gap, past the settle window, breaks out
+`settled: true` and returns the old size's `buffer`, `width` and `height` — with no warning, because
+nothing was wrong as far as the frames go. `main/ipc.ts:1782` calls this same function, which is why
+it is the live raster that was seen.
+
+**Why the probe saw none of it.** The hit window is `gap - settleMs` against a 50 ms poll, so the four
+qualifying straddles were 8%, 36%, 40% and 46%: **1.3 sightings expected, 0 seen** (P(zero) ~ 19%).
+The run was too small, not the reading wrong. **So the lottery is over:** `captureQuiescent` takes a
+`FrameEmitter`, and a fake can script the gap exactly. `tests/unit/cliCapture.test.ts` does, in
+163 ms, with no Electron.
+
+**The fix, and why it cannot live in the capture alone.** The capture cannot tell a page that has
+gone quiet from a surface that was asked for a new size and has not painted it: both are silence
+after a covered frame. Only the source knows it was asked. So `FrameEmitter` gains an optional
+`expectedFrameSize()`, `TargetSource` answers it with the steady-state `paintedExtent`, and a caller
+opting in with `awaitExpectedSize` will not settle until the frame is that size. `captureRaster`
+opts in; the CLI does not, so `resizing` stays live-only and `docs/public-shape.json` is unchanged.
+
+**A hole in the first version, found by Wren and confirmed by control.** Gating only the settle test
+leaves `covered` true from the old size, and the steady-painting exit reads it too: a page painting
+on at the size the pane had left came back **`animating`** with that buffer — the same wrong answer
+wearing a different label. Both exits are gated now. Control: removing the animating gate reds that
+test at `expected 'animating' to be 'resizing'`.
+
+**Controls (unit, local):** removing `atExpectedSize()` from the settle test reds two tests at their
+own assertions — `expected [128,102] to deeply equal [144,90]` and `expected true to be false` —
+while the two arms that pin *unchanged* behaviour stay green.
+
+### The third acceptance item was wrong, and is replaced rather than dropped
+
+It read: *"`live-capture-notes.spec.ts` stops treating a settled capture as a stray to retry, and
+asserts it cannot happen."* **It cannot happen is false.** With `STEP_PAUSE_MS = 700` and a 400 ms
+settle window, a pane that reaches the newest preset's size and goes quiet settles **correctly** —
+`settled: true` there is the capture working, not the defect. The defect was always settling at the
+size the pane had *left*, and the e2e cannot see which size was current at the moment the reply was
+built without racing the cycle it is measuring.
+
+**What replaces it, and what it is worth.** The e2e gains the arm the fix actually needs: a still page
+must still come back `settled: true` at the size the pane is on. If `expectedFrameSize()` ever
+disagreed with the frames for an ordinary capture — a fractional density floors the paint and ceils
+the bitmap, which is exactly where a size comparison goes wrong — **every** live raster would run to
+its budget and answer `resizing`, and nothing else in that file would notice, because its other pages
+never settle on purpose. The wrong-size answer itself stays pinned where it can be pinned by
+construction, in the unit tests.

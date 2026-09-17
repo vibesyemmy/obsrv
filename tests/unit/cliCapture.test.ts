@@ -474,6 +474,27 @@ describe('a quiet stretch that straddles a size change', () => {
     expect(warnings.join(' ')).toContain('this frame is 128x102, not the 144x90 it was asked for')
   })
 
+  it('does not leave by the animating door with the old size either', async () => {
+    // Wren's read of the first fix: the settle test was gated and the steady-
+    // painting exit was not, so a page painting on at the size the pane had
+    // left would come back `animating` carrying that buffer — the same wrong
+    // answer wearing a different label. `resizing` is the true one.
+    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], { width: 144, height: 90 })
+    const noisy = setInterval(() => src.emit('frame', marked(128, 102, 7)), 20)
+    try {
+      const got = await captureQuiescent(src, {
+        settleMs: 120,
+        timeoutMs: ANIMATING_AFTER_MS + 400,
+        ...noGrace,
+        awaitExpectedSize: true,
+      })
+      expect(got.settled).toBe(false)
+      expect(got.unsettledReason).toBe('resizing')
+    } finally {
+      clearInterval(noisy)
+    }
+  })
+
   it('leaves a caller that did not ask exactly as it was', async () => {
     // The CLI's own captures do not pass the flag, and a source that answers
     // the size must not change their behaviour by existing.

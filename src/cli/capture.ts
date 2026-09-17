@@ -359,6 +359,11 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       if (
         options.animationExit !== false &&
         covered &&
+        // Gated for the same reason the settle test is (Wren's read): coverage
+        // earned at the size the pane has left is still coverage, so a page
+        // painting steadily at the OLD size would exit here with the old
+        // buffer, labelled `animating`. Same wrong answer, different word.
+        atExpectedSize() &&
         Date.now() - coveredAt >= ANIMATING_AFTER_MS &&
         paintsSinceCovered >= ANIMATING_MIN_PAINTS
       ) {

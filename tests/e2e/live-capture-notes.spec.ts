@@ -27,6 +27,8 @@ let app: ElectronApplication
 let info: ControlInfo
 const ANIMATED = pathToFileURL(resolve(__dirname, '../fixtures/animated.html')).href
 const BLOCKS = pathToFileURL(resolve(__dirname, '../fixtures/blocks-after-load.html')).href
+/** A page that paints once and stops: the still case the resize gate must not hold up. */
+const STILL = pathToFileURL(resolve(__dirname, '../fixtures/thin-text.html')).href
 
 const call = (command: string, payload?: Record<string, unknown>): Promise<Record<string, unknown>> =>
   new Promise((done, fail) => {
@@ -94,6 +96,27 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await call('setOnionSkin', { onionSkin: 0 })
   await app.close()
+})
+
+test('a raster capture of a page that has stopped still settles, at the size the pane is on', async () => {
+  // The guard on `awaitExpectedSize` (`bug-live-raster-settled-while-resizing`).
+  // The fix makes the capture refuse to settle until the frame is the size the
+  // target says it is heading for — so if `expectedFrameSize()` ever disagreed
+  // with the frames for an ordinary capture (a fractional density floors the
+  // paint and ceils the bitmap, which is exactly where a size comparison goes
+  // wrong), every live raster would run to its budget and come back `resizing`.
+  // Nothing else in this file would notice: its other pages never settle on
+  // purpose. This one is the still page.
+  await call('navigate', { url: STILL })
+  const status = await call('status')
+  const r = await call('captureRaster')
+  const margin = `${JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}` })} on ${JSON.stringify(status.preset)}`
+  expect(r.settled, margin).toBe(true)
+  expect(r.unsettledReason, margin).toBeUndefined()
+  expect(warningsOf(r).join(' '), margin).not.toContain('still resizing')
+  // And the pixels are of that size, not of whatever the pane was on before.
+  const png = decodePng(Buffer.from(r.data as string, 'base64'))
+  expect([png.width, png.height], margin).toEqual([r.width, r.height])
 })
 
 test('a raster capture with the onion skin on says the skin is not in it', async () => {
