@@ -17,10 +17,9 @@ Two different things arrive on the board and look identical there.
 
 **Discovery debt is finite.** Most cards filed this week came from the team
 auditing its own output rather than from the product misbehaving in front of
-anyone. [`note-inventory.md`](note-inventory.md) bounds that work: 121 producers
-counted, 73 shown firing with a control and 39 unfired on `main` as of
-2026-09-17, with `#307` in review taking that to 89 and 14. When the sweep ends,
-that source of cards ends with it.
+anyone. [`note-inventory.md`](note-inventory.md) bounds that work: 122 producers
+in the tree as of 2026-09-17, 89 shown firing with a control and 14 unfired.
+When the sweep ends, that source of cards ends with it.
 
 **Incoming defects are not finite,** and never will be.
 
@@ -114,8 +113,10 @@ that had not.
 1. **Open class 1 bugs at the cut.** Target zero. A class 1 that is downgraded
    must name the warning that made it detectable.
 2. **The share of the product's own sentences shown firing with a control** —
-   73 of 121 on `main` on 2026-09-17, 89 of 124 once `#307` lands. This is the
-   number that says whether the audit is converging.
+   89 of 122 on 2026-09-17. This is the number that says whether the audit is
+   converging. Take it from the inventory's own table rather than recomputing
+   it: that file states its population and what moved it, which is the half
+   most counts leave out.
 
 Backlog size is not one of them, and should not be quoted in a release
 discussion.
