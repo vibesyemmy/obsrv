@@ -37,6 +37,23 @@ export interface Kept {
 
 export interface UninstallPlan {
   remove: Removal[]
+  /**
+   * Individual files to remove from directories that must themselves survive.
+   *
+   * This exists for one measured case and it is the sharpest form of this
+   * card's privacy gap. Until `#201`, an app the MCP server launched from the
+   * npm package — no `Obsrv.app` installed, so `electron out/main/index.js` —
+   * **named itself "Electron"** (measured on CI, run `35168639669`), and wrote
+   * its profile to `~/Library/Application Support/Electron` and its log to
+   * `~/Library/Logs/Electron`. Every other unnamed Electron app on the machine
+   * uses those same directories.
+   *
+   * So `history.json` — the file `bug-history-survives-uninstall` exists for —
+   * can be sitting somewhere no uninstaller may `rm -rf` and the README's
+   * removal list does not mention. Obsrv's own four files are named and
+   * removed; the directory is not.
+   */
+  removeFiles: Removal[]
   keep: Kept[]
   /** True when this platform's paths have not been measured, and `remove` is therefore empty. */
   unmeasured: boolean
@@ -60,6 +77,7 @@ export function uninstallPlan({ home, platform, includeSkill = false }: PlanOpti
   if (platform !== 'darwin') {
     return {
       remove: [],
+      removeFiles: [],
       keep: [],
       unmeasured: true,
       note:
@@ -80,7 +98,32 @@ export function uninstallPlan({ home, platform, includeSkill = false }: PlanOpti
     remove.push({ path: `${home}/.claude/skills/obsrv-screens`, what: 'the Claude skill `obsrv install-skill` wrote' })
   }
 
+  // The legacy "Electron"-named profile. Named files only: the directory is
+  // shared with every other unnamed Electron app, so removing it would take
+  // someone else's data, and leaving `history.json` in it would leave the exact
+  // file this card family exists for.
+  const legacyUserData = `${home}/Library/Application Support/Electron`
+  const legacyLogs = `${home}/Library/Logs/Electron`
+  const removeFiles: Removal[] = [
+    { path: `${legacyUserData}/history.json`, what: 'browsing history from an npm-only install that used live MCP before the app was named' },
+    { path: `${legacyUserData}/settings.json`, what: 'settings from that same install' },
+    { path: `${legacyUserData}/tabs.json`, what: 'open tabs from that same install' },
+    { path: `${legacyUserData}/control.json`, what: "the agent-control discovery file, which may name a port and token from a crashed run" },
+    { path: `${legacyLogs}/obsrv.log`, what: 'the log from that same install' },
+  ]
+
   const keep: Kept[] = [
+    {
+      path: legacyUserData,
+      why:
+        'Obsrv wrote here only because an app launched from the npm package used to name itself "Electron" (fixed by #201). ' +
+        'Every other unnamed Electron app shares this directory, so it is never removed — only Obsrv’s own four files inside it are. ' +
+        'The Chromium state beneath it (Cache, Local Storage) cannot be attributed to one app and is left by hand.',
+    },
+    {
+      path: legacyLogs,
+      why: 'the same shared name, for logs. `obsrv.log` inside it is removed; the directory and anything else in it are not.',
+    },
     {
       path: `${home}/Library/Caches/electron`,
       why:
@@ -101,6 +144,7 @@ export function uninstallPlan({ home, platform, includeSkill = false }: PlanOpti
 
   return {
     remove,
+    removeFiles,
     keep,
     unmeasured: false,
     note: 'Quit Obsrv before removing its profile: a running instance is still writing to it.',

@@ -92,6 +92,60 @@ describe('the plan and the guard agree', () => {
   })
 })
 
+/**
+ * Measured by Henry on CI (run `35168639669`) and fixed forward by `#201`:
+ * until that lands, an app the MCP server launched from the npm package — no
+ * `Obsrv.app` installed, so `electron out/main/index.js` — **named itself
+ * "Electron"**, and wrote its profile to `~/Library/Application Support/Electron`
+ * and its log to `~/Library/Logs/Electron`.
+ *
+ * So an npm-only user who ever used live MCP has Obsrv's files, `history.json`
+ * included, sitting in a directory **other unnamed Electron apps also use**.
+ * That is this card family's privacy gap in its worst form: the file the whole
+ * `bug-history-survives-uninstall` card was about, in a place the README's
+ * removal list does not mention and no uninstaller may `rm -rf`.
+ */
+describe('the legacy "Electron" profile, which is shared and must not be swept', () => {
+  const appSupport = `${HOME}/Library/Application Support/Electron`
+
+  it('never removes the shared directory itself', () => {
+    expect(removedPaths()).not.toContain(appSupport)
+    expect(removedPaths()).not.toContain(`${HOME}/Library/Logs/Electron`)
+  })
+
+  it("removes Obsrv's own named files inside it, because that is where the history is", () => {
+    const files = plan().removeFiles.map(f => f.path)
+    expect(files).toContain(`${appSupport}/history.json`)
+    expect(files).toContain(`${appSupport}/settings.json`)
+    expect(files).toContain(`${appSupport}/tabs.json`)
+    expect(files).toContain(`${appSupport}/control.json`)
+    expect(files).toContain(`${HOME}/Library/Logs/Electron/obsrv.log`)
+  })
+
+  it('says the directory is shared, so a reader knows why only files are named', () => {
+    const kept = plan().keep.find(k => k.path === appSupport)
+    expect(kept, 'the shared directory must be named, not silently skipped').toBeDefined()
+    expect(kept?.why).toMatch(/shared|other/i)
+  })
+
+  it('leaves the Chromium state in there alone, because it cannot be attributed', () => {
+    // Two unnamed Electron apps writing one directory means the Cache and
+    // Local Storage beneath it belong to whichever ran last. Removing them
+    // would take another app's state; claiming they are Obsrv's would be a
+    // guess. Named, not swept.
+    const files = plan().removeFiles.map(f => f.path)
+    expect(files.some(f => f.includes('/Electron/Cache'))).toBe(false)
+    expect(plan().keep.find(k => k.path === appSupport)?.why).toMatch(/cannot|attribut|by hand/i)
+  })
+
+  it('every file it would remove still passes the guard', () => {
+    for (const f of plan().removeFiles) {
+      const v = checkRemoval(f.path, { realHome: '/Users/someone', sandboxRoot: HOME })
+      expect(v.allow, `${f.path}: ${(v as { refuse?: string }).refuse ?? ''}`).toBe(true)
+    }
+  })
+})
+
 describe('platforms it has not measured', () => {
   it('says so rather than guessing paths nobody has checked', () => {
     const win = uninstallPlan({ home: 'C:\\Users\\someone', platform: 'win32' })
