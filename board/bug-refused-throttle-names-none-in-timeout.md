@@ -1,6 +1,8 @@
 ---
 title: "After a refused throttle, a load timeout says \"under --throttle none (a slow load is what a throttle is for)\", naming a flag nobody passed"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C5
 order: 67
@@ -24,3 +26,12 @@ names a value the caller never typed.
 **Fix direction:** the sentences want "was a throttle in force", not "what does the `throttle` field say".
 Pass `null` when the conditions in force are `none`, or pass the refusal state. A control: a stubbed
 refusal plus a load cut by `--timeout`, where the sentence must not contain `--throttle none`.
+
+## Claimed by Henry 2026-09-17, routed by Wren
+
+Pulled from Backlog. It's a wording fix: after a refusal, the timeout sentences must stop naming
+`--throttle none`. The plan is to name a throttle only when one is actually in force, since the refusal
+sentence already says which one was asked for. The two sentence builders move to a module without
+Electron, so they get unit tests with a control. `throttle-refused` is not desk-safe, so it runs on CI
+only.
+
