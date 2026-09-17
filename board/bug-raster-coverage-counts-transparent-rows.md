@@ -73,3 +73,36 @@ transparent page unpainted.
 A green run in this repo was never a claim that nothing failed, only that nothing failed twice. The
 first sighting was in a run that concluded `success` and was merged on. Read the `✘` lines before any
 merge.
+
+## MEASURED 2026-09-17, in the direct form: the stated share is five points low
+
+The two sightings above are the mask calling a frame **covered** while the PNG has transparent bytes.
+This one is the consequence that section only predicted — *"every `uncovered` percentage is computed
+from the same mask, so it can undercount by the same band"* — caught by @Kenya's own truth check, which
+compares the sentence against the image:
+
+```
+stated 19.1%, the PNG is 24.148% transparent:
+try 1: settled=false label=uncovered applied=314 capture=12295ms size=1440x…
+expect(received).toBeLessThanOrEqual(0.051)
+```
+
+Run `35277717542` (`#330` at `c205b0c`), `live-capture-notes.spec.ts:351`, first attempt; it passed on
+the retry, and the run concluded **success** with **3 flaky**.
+
+**What this adds.** The mechanism section is still a code reading, but its *effect* is no longer
+predicted — it is measured, with numbers: the capture told a caller **19.1%** of the frame never
+painted when **24.148%** of it is transparent. A caller sizing anything off that share is off by five
+points, in the direction that understates the damage. The tolerance the assertion allows is
+**0.051 pp**; the gap is **~5.0 pp**, about a hundred times it, so this is not a rounding question.
+
+**It also rules out one innocent explanation.** A share that disagreed because the PNG encoder dropped
+alpha, or because the page painted its own transparency, would disagree in either direction and on
+covered frames too. This is an `uncovered` frame whose *stated* region is smaller than the *actual*
+one — exactly what a mask that marks unpainted rows as painted produces, and not what an encoding
+fault produces.
+
+**Still not established:** the mechanism itself (paint rectangles versus bytes). The acceptance item
+asking for a probe that logs a grow's rectangle against the alpha of the rows it covers stands
+unchanged — but it is now buying an explanation for a measured defect rather than deciding whether
+there is one.
