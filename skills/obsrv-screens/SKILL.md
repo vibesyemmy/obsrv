@@ -112,14 +112,16 @@ comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: fal
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
 
-**Which list a sentence lands in:** on `obsrv_audit`, `obsrv_lint`,
-`obsrv_inspect`, `obsrv_diff` and `obsrv_report`, `warnings` is about the
-**page** and `notes` is about the **call**. A walk that covered a panel rather
-than the page, or a page that grew as it was walked, is a warning; a launch, a
-cut navigation, an ignored argument or a wait for a render slot is a note.
-`obsrv_snap` and `obsrv_drive` have no `notes`: whatever they say, about the
-page or the call, is in `warnings`. The live walk's sentences moved from `notes` to `warnings` in
-0.61.0, so scan both if you support older versions.
+**Which list a sentence lands in:** on `obsrv_audit`, `obsrv_lint` and
+`obsrv_diff`, `warnings` is about the **page** and `notes` is about the
+**call**. A walk that covered a panel rather than the page, or a page that grew
+as it was walked, is a warning; a launch, a cut navigation, an ignored argument
+or a wait for a render slot is a note. `obsrv_report` has `notes` about the
+call and a `warnings` list per screen, about that screen's page.
+`obsrv_inspect` has only `notes`, which carry both.
+`obsrv_snap` and `obsrv_drive` have only `warnings`, which carry both. The live
+walk's sentences moved from `notes` to `warnings` in 0.61.0, so scan both if
+you support older versions.
 
 **Quote a group, not its members.** `obsrv_lint` and `obsrv_audit` both
 answer with `findings` (worst first, at most 200) and `groups`: the same
