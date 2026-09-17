@@ -67,10 +67,14 @@ walk really did not enter the roots.
 
 **The other direction loses one sentence's detail.** A 0.61.0 or older MCP driving
 *this* app reads the walk's `blocked` only when it carries a shadow-host count, which
-this app no longer sends. That MCP then has no measurement to name and falls back to
-its list of three possible causes — true, and less specific than what the app measured.
-Upgrading the server fixes it; nothing else is affected, because the app composes its
-own audit and lint sentences.
+this app no longer sends. **That is the ordinary pairing** — the app is updated by hand
+and the npm package by `npx`, so an updated app in front of an older server is the common
+way round. The walk's "nothing to scroll" sentence then ends with the list rather than a
+measured cause: *"content in an iframe, in a shadow root, or in a container that scrolls
+by transform (a virtualised list or editor) was not brought into view before measuring"*,
+where a current server would name the iframe coverage it measured. It is true and less
+specific; upgrading the server restores the detail. Nothing else is affected, because the
+app composes its own audit and lint sentences.
 
 **Still out of reach:** closed shadow roots and iframes.
 
