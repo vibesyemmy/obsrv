@@ -306,9 +306,19 @@ test('a raster capture while the pane is resized throughout says the page was st
       // cycle it is measuring, and which `cliCapture.test.ts` now pins by
       // construction instead.
       //
+      // `resizing` is the reason the raster path gained when
+      // `bug-live-raster-settled-while-resizing` was fixed: the capture came
+      // back at 720x1600 when 1640x2360 was asked for, and said so. Under a
+      // preset cycle that is the product working, not a stray to explain, so
+      // it is recorded and retried. This test predates the reason and called
+      // it a finding: it failed on its first try and passed on its retry on
+      // run `35262788372`, which is a flaky green rather than a defect.
+      // The back-to-back test below was updated when the reason landed; this
+      // one was missed.
+      //
       // Anything else on a pane that never stopped changing size (`animating`,
       // `blank`) is a finding, not a tolerance to widen.
-      const stray = reply.unsettledReason === 'uncovered' || reply.settled === true
+      const stray = reply.unsettledReason === 'uncovered' || reply.unsettledReason === 'resizing' || reply.settled === true
       expect(stray, margin).toBe(true)
     }
   } finally {
