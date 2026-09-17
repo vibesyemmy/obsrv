@@ -446,17 +446,30 @@ no other Electron app of yours relies on that cache.
 
 **If you used the MCP tools from the npm package before 0.61.0, with no
 `Obsrv.app` installed, one more place holds Obsrv's data.** The app those tools
-launched named itself "Electron", not "Obsrv". Its settings, history and tabs
-went into `~/Library/Application Support/Electron`, and its log into
-`~/Library/Logs/Electron`. **Don't delete those directories:** every other
-unnamed Electron app writes there too. Remove only Obsrv's files, and first
-check that each one is Obsrv's (`history.json` lists the addresses you opened
-in Obsrv):
+launched named itself "Electron", not "Obsrv". Its files went into
+`~/Library/Application Support/Electron`, and its log into
+`~/Library/Logs/Electron`. **Every other unnamed Electron app writes there
+too**, and most of what is there can't be told apart by name:
 
-```bash
-cd ~/Library/Application\ Support/Electron && rm -i history.json settings.json tabs.json control.json
-rm -i ~/Library/Logs/Electron/obsrv.log
-```
+- **Obsrv's own files** are `history.json` (the addresses you opened in
+  Obsrv), `tabs.json` (the tabs it restored), `settings.json` (with
+  `hostDiagonalInches` in it), `control.json` (a `port` and `token`, or
+  `"enabled": false`, with a `pid`), and the log's `obsrv.log`. Check each one
+  is Obsrv's, then remove it:
+
+  ```bash
+  cd ~/Library/Application\ Support/Electron && rm -i history.json settings.json tabs.json control.json
+  rm -i ~/Library/Logs/Electron/obsrv.log
+  ```
+
+- **The Chromium profile is there too:** `Cache`, `Code Cache`, cookies,
+  Local Storage and IndexedDB for every page that app rendered. It's usually
+  most of the disk use, and it carries the sites' cookies. It uses the same
+  names every Electron app uses. **If nothing else on this Mac ever ran as
+  "Electron"** (you don't build or run unpackaged Electron apps), the whole
+  directory is Obsrv's and `rm -rf ~/Library/Application\ Support/Electron
+  ~/Library/Logs/Electron` removes all of it. **If you aren't sure, leave the
+  directory.** Removing another app's profile would take its data with it.
 
 **The log records what breaks, not where you went.** `obsrv.log`, in
 Electron's logs directory, is a few lines an hour about GPU processes dying,
