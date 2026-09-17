@@ -126,3 +126,39 @@ happen when a good navigation precedes the bad one, which is arm A and not arm B
 
 **Not measured:** the event times. Nobody has watched a late `url-changed` land after a
 `did-fail-load`. That is the next step, and it is the difference between this paragraph and a cause.
+
+## SHAPE 1, MEASURED FURTHER — the latch lead is REFUTED, and so are two more
+
+Instrumented arm A end to end on `probe/error-state-latch`: the renderer's own event arrivals
+(subscribed alongside `App.tsx`, so the real path still runs), a DOM observer for the state
+appearing, main's `did-fail-load` codes on both panes, and the URL field's value at the moment Enter
+is pressed. **Every arm below has its own control on a hit**, printed beside the miss.
+
+    HIT    +0    target-navigating
+           +19   target-navigating
+           +90   load-error -105        main's did-fail-load: ["native -105","target -105"]
+           +90   state SHOWN
+
+    MISS   +0    target-navigating
+           +5    url-changed  hairline.html
+           +17   target-navigating
+           (nothing further)            main's did-fail-load: []
+
+**1. The latch is refuted.** A miss shows **no `load-error` at all** — the error is never set, so
+nothing clears it. That is the criterion @Wren pre-registered for the lead failing, and it failed.
+
+**2. A slow lookup is refuted.** Past the 8 s budget the state **never arrives, even at 33 s**, and
+`did-fail-load` never fires on either pane. A lookup that is merely slow would land eventually.
+
+**3. A clobbered URL field is refuted.** The app writes the committed address into the field on
+`url-changed`, so a late one could have overwritten what was typed — but the field **held
+`obsrv-no-such-host.invalid` at the moment Enter was pressed**.
+
+### What is left, stated as narrowly as the evidence allows
+
+**Enter is pressed with the correct address, and no navigation follows.** Both panes still show
+`hairline.html`, **neither is loading**, and nothing failed. The submit is swallowed somewhere
+between the keypress and the panes, about 4.4% of the time, and only after a successful navigation.
+
+**Not yet measured:** whether the renderer's submit handler runs at all, and whether a `navigate`
+reaches main. That is the next step and it is two log lines.
