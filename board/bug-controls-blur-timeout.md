@@ -166,3 +166,52 @@ log) is where that hunt starts.
 at contention rather than at the control. **The vacuity check:** a green `:85` in isolation says
 nothing unless the same command has been shown to reproduce the failure at least once — otherwise
 it is a test that was never going to fail, which is what this whole card family is about.
+
+## THE TRIGGER EXISTS 2026-09-17 by Rook — and the call log tells two hangs apart
+
+`probe/blur-hang`, `tests/e2e/zz-blur-hang-probe.spec.ts` — throwaway, never merged. Four arms, run
+locally against a harness app. This is the deterministic trigger the section above asks for, in place
+of the repetition the power table ruled out.
+
+| arm | condition | result |
+| --- | --- | --- |
+| 1 | control: nothing wrong | blur **returns**, 4 ms |
+| 2 | the target's OSR renderer crashed and **confirmed dead** (`render-process-gone: killed`) | blur **returns**, 3 ms |
+| 3 | the shell renderer's main thread blocked **before** the call | **times out** — at `waiting for locator` |
+| 4 | the block starts **inside the field's own blur handler** | **times out** — after `locator resolved to <input … class="host-diagonal num"/>` |
+
+**Arms 3 and 4 are the same 30-second timeout and different defects, and the call log is the only
+thing that separates them.** A renderer already wedged cannot answer the *query*, so its log stops at
+`waiting for locator`. The recorded CI failure resolved first and then went silent — **which is arm
+4's shape exactly, down to the element**. So at the moment it hung, that renderer was answering, and
+whatever stopped it began between the resolve and the evaluate's return.
+
+**Two things are now ruled out rather than merely unsuspected:**
+- **A dead target renderer.** Arm 2 kills the offscreen renderer, waits for `render-process-gone`,
+  and the blur is unaffected — separate processes, as the honest prior said. This matters because
+  the app documents that OSR renderer segfaulting (`targetSource.ts:223`, "exit 11") and it was the
+  obvious suspect.
+- **A renderer that was already stuck** when the test reached the field. That is arm 3, and its log
+  does not match.
+
+### Where that points: the only synchronous work in the chain
+
+`blurNode` fires the element's blur handler synchronously, so an evaluate that never returns means a
+handler that never returns. The chain is `onBlur` → `commit()` (`SettingsPanel.tsx:92`) →
+`onCommit` → `commit(next)` (`:198`). Its IPC is **not** awaited there — `window.obsrv.setSettings`
+goes onto a promise queue (`:215`), which is why `sendSync` was already excluded and why an IPC
+stall cannot produce this.
+
+**What is synchronous is `setSettings(next)` at `:200`** — the store write, and the React re-render it
+triggers while the blur handler is still on the stack. That is the only thing in the chain that can
+fail to return, and it is the next thing to read.
+
+**Not claimed:** that a re-render *does* take 30 seconds, or how it could. The probe shows the shape
+of the failure and excludes two causes; it does not name the mechanism.
+
+**Both controls needed a second pass, which is the reusable lesson.** Arm 2's first version blurred
+4 ms after asking for the crash — before the process can have gone. Arm 3's first version scheduled
+its block on a 100 ms timer that the blur beat by 96 ms. Both **passed**, having tested nothing. A
+control that was not applied reads exactly like a control that found nothing.
+
+**Desk:** harness launch only (`launchApp`, `showInactive`), no `cli-*` specs, nothing fronted.
