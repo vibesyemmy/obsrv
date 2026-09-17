@@ -76,6 +76,18 @@ describe('a sidebar of components in front of the page scroller', () => {
     expect(findScroller(root)?.id).toBe('main')
   })
 
+  // The property the light-first sweep could have cost, and the arm that stops
+  // a later "return as soon as the light DOM answered" quietly retiring the
+  // feature: a root's scroller still wins on area (Wren's third read of #293).
+  it('lets a scroller inside a root beat a smaller one in the light DOM', () => {
+    const root = mount(`<div id="small" style="overflow-y:auto;width:300px;height:300px">${FILLER}</div>`)
+    const component = document.createElement('div')
+    component.attachShadow({ mode: 'open' }).innerHTML =
+      `<div id="feed" style="overflow-y:auto;width:560px;height:380px"><div style="height:5000px">feed</div></div>`
+    root.append(component)
+    expect(findScroller(root)?.id).toBe('feed')
+  })
+
   // Level order alone was not enough: the 300 hosts sit at one level and their
   // root contents at the next three, about 1,800 elements, so a `main` a few
   // wrappers down was still reached too late (Wren measured 4, 12 and 25
