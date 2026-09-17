@@ -116,8 +116,20 @@ test('emits a partial dirty rect when a small element changes', async () => {
     // the change (the target not painting). This record separates them.
     const t0 = Date.now()
     const record: string[] = []
+    // Runs of the same geometry collapse into one line with a count: ten
+    // seconds of full frames at frame rate would otherwise bury the record in
+    // several hundred identical lines (Wren's read of #240).
+    let run: { key: string; first: number; count: number; at: number } | null = null
     const onFrame = (m: any): void => {
-      record.push(`+${Date.now() - t0} frame ${m.frame.x},${m.frame.y} ${m.frame.width}x${m.frame.height} of ${m.frameWidth}x${m.frameHeight}`)
+      const t = Date.now() - t0
+      const key = `${m.frame.x},${m.frame.y} ${m.frame.width}x${m.frame.height} of ${m.frameWidth}x${m.frameHeight}`
+      if (run && run.key === key && run.at === record.length - 1) {
+        run.count++
+        record[run.at] = `+${run.first}…+${t} frame ${key} ×${run.count}`
+        return
+      }
+      record.push(`+${t} frame ${key}`)
+      run = { key, first: t, count: 1, at: record.length - 1 }
     }
     ctx.target.on('frame', onFrame)
     const step = (s: string): void => {
