@@ -26,6 +26,16 @@ import { launchApp } from './launch'
  *
  * Spawns the CLI's Electron for the headless half, so CI-only.
  */
+/**
+ * Playwright's per-test default is 30 s, and the first live test pays for an
+ * Electron boot before it reads anything: on run 35203626404 it timed out at
+ * 30 s ("MCP error -32000: Connection closed") and passed on the retry, while
+ * every per-call budget in this file is already 150 s. The MCP specs carry
+ * 180 s for the same reason (mcp.spec.ts, mcp-live.spec.ts), so this file does
+ * too rather than leaving a boot to race a budget it was never sized for.
+ */
+test.describe.configure({ timeout: 180_000 })
+
 const ROOT = resolve(__dirname, '../..')
 const BIN = resolve(ROOT, 'bin/obsrv.js')
 const MCP_BIN = resolve(ROOT, 'bin/obsrv-mcp.js')
@@ -96,14 +106,20 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
 
   test('a locked page whose dialog scrolls only sideways: the walk could move neither', async () => {
     const m = await headless('dialog-sideways.html')
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    // The sentence first, as in the locks arm above: it is the thing under
+    // test, and a count asserted ahead of it can fail the test before the
+    // sentence is ever read.
     expect(said(m), JSON.stringify(said(m))).toContain(COULD_NOT_MOVE_DIALOG)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
   test('an app shell whose only content is behind one open root: the note names the root', async () => {
     const m = await headless('shell-with-one-root.html')
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    // The sentence first, as in the locks arm above: it is the thing under
+    // test, and a count asserted ahead of it can fail the test before the
+    // sentence is ever read.
     expect(said(m), JSON.stringify(said(m))).toContain(ONE_OPEN_ROOT)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 })
 
@@ -166,13 +182,19 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
 
   test('a locked page whose dialog scrolls only sideways: the live walk could move neither', async () => {
     const m = await live('dialog-sideways.html')
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    // The sentence first, as in the locks arm above: it is the thing under
+    // test, and a count asserted ahead of it can fail the test before the
+    // sentence is ever read.
     expect(said(m), JSON.stringify(said(m))).toContain(COULD_NOT_MOVE_DIALOG)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
   test('an app shell whose only content is behind one open root: the live note names the root', async () => {
     const m = await live('shell-with-one-root.html')
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    // The sentence first, as in the locks arm above: it is the thing under
+    // test, and a count asserted ahead of it can fail the test before the
+    // sentence is ever read.
     expect(said(m), JSON.stringify(said(m))).toContain(ONE_OPEN_ROOT)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 })
