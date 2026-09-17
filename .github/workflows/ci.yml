@@ -1,434 +1,143 @@
-# Obsrv CI — the full verification the repo runs locally, on every push/PR,
-# plus unsigned DMG artefacts on version tags. A tag also checks that the
-# generated `plugin` branch was rebuilt for it, and the release waits on that.
-#
-# A version tag does NOT re-run the suite. It points at a commit that was
-# pushed to `main` and tested there minutes earlier, so running it again cost
-# ~14 minutes of macOS CI for an answer already held — and, twice in a row
-# (0.54.0's update.spec, 0.55.0's text-scale.spec), a flake in that redundant
-# run skipped the DMG publish and left npm live with no downloads on the
-# release page. The invariant is kept by proving it instead: `tested-on-main`
-# below requires the tagged commit to be on `main` and to have a successful
-# CI run of its own.
-#
-# Everything runs on macOS: the e2e suite drives the real Electron app
-# (offscreen 1x rendering is the product), and macOS runners provide the
-# display session Electron needs.
-
+# PROBE, never for main: a release candidate, verified cold before anyone publishes it.
 name: CI
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
-
-# Newest wins per ref on a branch; on main, EVERY COMMIT GETS ITS OWN GROUP so
-# nothing there can be superseded at all.
-#
-# The obvious form of this is `group: <workflow>-<ref>` with
-# `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and it is what
-# was written here first. It does not work, and the way it fails is worth the
-# paragraph: `cancel-in-progress` only protects a run that is IN PROGRESS. A run
-# still PENDING — queued for a macOS runner, which is most of them here — is
-# cancelled by a newer arrival in the same group whatever that flag says. Three
-# main runs (154c8e3, 5eeb5f8, 4ee2bf9) were cancelled that way within minutes,
-# by the guard written to stop exactly that, with a comment above it claiming it
-# would not happen. Measured, not reasoned: `gh run list` showed them cancelled.
-#
-# Putting the sha in the group on main means a main run is never in a group with
-# another main run, so there is nothing to supersede it. Branches keep sharing a
-# group and cancelling, which is what you want there.
-#
-# Why it matters beyond tidiness: a cancelled run is a commit with NO CI answer,
-# which is worse than a red one — `bug-ci-main-red-37pct` is a tally of which
-# commits went red, and a hole in it is indistinguishable from a commit nobody
-# broke.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    inputs:
+      sha:
+        description: commit to verify
+        required: true
 
 jobs:
-
-  # C2: a public-shape change must be NAMED in the register, in the same change.
-  #
-  # The unit test beside this (tests/unit/publicShape.test.ts) fails when the
-  # published MCP shape moves away from docs/public-shape.json. It cannot see
-  # the other half of the rule — that the move was written down — because that
-  # is a fact about the CHANGE, not about the tree. This job is that half.
-  #
-  # Seconds on ubuntu, reading the same `git diff --name-only` the scope job
-  # below already uses.
-  #
-  # WHAT THIS DOES NOT CHECK, stated because a green here is easy to over-read:
-  # it does not read the register ENTRY, only that the file was touched. Someone
-  # can satisfy it with a typo. It is a prompt to write the entry at the moment
-  # the shape moves, not a proof that a good one exists — the entry itself is
-  # what a reviewer reads. And it says nothing about a field whose MEANING
-  # changed while its shape stayed, which is invisible to a shape diff by
-  # construction (bug-orientation-name).
-  register-names-the-shape-change:
-    name: A public-shape change is named in the register
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          # An unknown base means this could not compare. Say so rather than
-          # pass quietly: a check that cannot see the diff must not leave a
-          # green that reads as "the shape did not move".
-          if [ -z "${BASE:-}" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "::notice::base unknown — this check could not compare, and is NOT reporting that the shape is unchanged"
-            exit 0
-          fi
-          files=$(git diff --name-only "$BASE" "$HEAD_SHA")
-          shape=$(echo "$files" | grep -cx 'docs/public-shape.json' || true)
-          register=$(echo "$files" | grep -cx 'docs/breaking-changes.md' || true)
-          echo "public-shape.json changed: $shape    breaking-changes.md changed: $register"
-          if [ "$shape" -gt 0 ] && [ "$register" -eq 0 ]; then
-            echo "::error::docs/public-shape.json moved but docs/breaking-changes.md was not touched. On the MCP surface every shape change is breaking in BOTH directions (docs/compatibility.md): the schemas are additionalProperties: false, so a client holding the old shape rejects a reply carrying a field it does not know. Name the change in the register, in this change."
-            exit 1
-          fi
-          echo "ok"
-  # Is this change nothing but board cards and the views generated from them?
-  #
-  # Seconds on ubuntu, and it exists so the expensive job can answer cheaply
-  # without ever being ABSENT. `paths-ignore` would have been the obvious fix
-  # and is a trap: `typecheck · unit · shader parity · e2e` is a REQUIRED check,
-  # and a required check that never runs never arrives, so the pull request
-  # cannot merge at all. That is the same deadlock `bug-suite-absent-on-conflict`
-  # measured on a conflicting PR — an absence that reads as "not yet" forever.
-  #
-  # So the job below always runs and always reports. What this decides is which
-  # runner it takes and which steps it does.
-  scope:
-    name: What this change touches
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      board_only: ${{ steps.decide.outputs.board_only }}
-      files: ${{ steps.decide.outputs.files }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0   # the comparison needs both sides
-
-      - id: decide
-        env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          # A first push to a branch, or a force-push, can leave BASE empty or
-          # unreachable. Unknown means run everything: the cheap answer must
-          # never be the one that skips a suite.
-          if [ -z "${BASE:-}" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "base unknown — running the full suite"
-            echo "board_only=false" >> "$GITHUB_OUTPUT"
-            echo "files=(base unknown)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          files=$(git diff --name-only "$BASE" "${{ github.sha }}")
-          echo "changed files:"; echo "$files" | sed 's/^/  /'
-          # Board cards, and nothing else. `docs/board.md` and
-          # `docs/board.html` are generated and gitignored as of `437cdd6`, so
-          # they cannot appear in a diff at all — naming them here would
-          # describe a tree that no longer exists, and a force-added one is an
-          # anomaly that has earned the full suite rather than a pass. The list
-          # is deliberately short: a wrong entry here buys a green that tested
-          # nothing.
-          #
-          # `|| true` because `grep -v` exits 1 exactly when every file IS a
-          # board file — the case this is looking for. Under `set -e` that
-          # would abort the job and strand the required check.
-          outside=$(echo "$files" | grep -vE '^board/' || true)
-          if [ -z "$files" ]; then
-            echo "no files changed — running the full suite"
-            echo "board_only=false" >> "$GITHUB_OUTPUT"
-          elif [ -z "$outside" ]; then
-            echo "board-only change"
-            echo "board_only=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "touches more than the board:"; echo "$outside" | sed 's/^/  /'
-            echo "board_only=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "files<<EOF" >> "$GITHUB_OUTPUT"; echo "$files" >> "$GITHUB_OUTPUT"; echo "EOF" >> "$GITHUB_OUTPUT"
-
-  test:
-    name: typecheck · unit · shader parity · e2e
-    # Not on a version tag: `tested-on-main` proves this tree already passed
-    # here, on the `main` push the tag was cut from.
-    #
-    # `always()` matters more than it looks: without it, a `scope` job that
-    # FAILED would skip this one, the required check would never arrive, and
-    # the pull request would be unmergeable with nothing to click. The cheap
-    # job must never be able to block the expensive one — it can only make it
-    # cheaper. A missing or empty output compares false against 'true'
-    # everywhere below, so anything unexpected lands on the full macOS run,
-    # which is the safe direction.
-    if: ${{ always() && !startsWith(github.ref, 'refs/tags/v') }}
-    needs: scope
-    # The whole point: a board-only change takes a cheap runner and no macOS
-    # queue. The job still runs, still carries this name, and still reports —
-    # it is the required check, and it must arrive.
-    runs-on: ${{ needs.scope.outputs.board_only == 'true' && 'ubuntu-latest' || 'macos-14' }}
+  pack:
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - name: Say what this run did not do
-        if: ${{ needs.scope.outputs.board_only == 'true' }}
-        run: |
-          echo "::notice::Board-only change: the suite was NOT run. This green means the change touches only board/ — not that any test passed. The board's own check runs separately, in board.yml."
-          {
-            echo "## The suite did not run"
-            echo
-            echo "This change touches only \`board/\`."
-            echo "**No typecheck, no unit tests, no shader parity and no e2e ran for this commit.**"
-            echo
-            echo "The check that *does* apply to a board change ran elsewhere, and this change did not"
-            echo "touch it: \`board.yml\` runs \`npm run board:check\` on every push, on \`ubuntu-latest\`."
-            echo "A green here means *nothing outside the board changed*, which is a different fact from *the tests passed*."
-            echo
-            echo "Files:"
-            echo '```'
-            echo "${{ needs.scope.outputs.files }}"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/checkout@v7
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-
-      - uses: actions/setup-node@v7
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        with:
-          node-version-file: .nvmrc   # same toolchain the repo develops on
-          cache: npm
-
-      - name: Install dependencies
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm ci
-
-      - name: Install Chromium (Vitest browser mode)
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright install chromium
-
-      - name: Typecheck
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run typecheck
-
-      # Build BEFORE the unit tests, because one of them needs the built tree.
-      # `tests/unit/publicShape.test.ts` asks the MCP server for its published
-      # schemas over stdio, and `bin/obsrv-mcp.js` runs `out/mcp/server.js` —
-      # so with the old order it could never answer on CI, and would have spent
-      # its 30 s timeout finding that out (Kenya, reading #162). The test now
-      # also fails immediately with "run npm run build" rather than timing out,
-      # so the two guards are independent: this order, and its own check.
-      - name: Build
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run build
-
-      - name: Unit tests
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm test
-
-      - name: Shader parity (browser)
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run test:browser
-
-      # --retries=1 absorbs the known-flaky mobile input-forwarding test on
-      # loaded runners; a persistent failure still fails the job.
-      - name: E2E (Playwright driving the Electron app)
-        id: e2e
-        if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
-
-      # `if-no-files-found: error` is the point of this step, not the upload.
-      # The step is named for traces and uploaded none for a week: the config
-      # set no `trace`, so `test-results/` held `error-context.md` and nothing
-      # else. A green step whose name asserted a capability the config did not
-      # provide is why nobody looked.
-      #
-      # What that setting does and does NOT catch, measured rather than
-      # assumed (Wren, who then re-checked the scope of his own numbers and
-      # corrected them twice — the figure below is the third and complete one):
-      # every e2e failure between this step's creation in 1b0be8f and #29's
-      # merge — 71 ATTEMPTS, being 58 runs plus the 13 first attempts that were
-      # re-run to green and so do not show up under a latest-attempt query —
-      # uploaded a NON-EMPTY `playwright-traces`. None missing, none zero bytes,
-      # 1,235 B on run 34249494196 through 178,059 B on 34107042439, all
-      # error-context.md and no traces. The directory was never empty, so
-      # `error` was silent through the entire week and would be silent again if
-      # `trace` were dropped tomorrow.
-      # **It does not guard the trace setting.** The unit test
-      # tests/unit/e2e-evidence-settings.test.ts does: trace and screenshot on
-      # failure, and a retry wherever the trace is taken only on one
-      # (bug-trace-setting-has-no-guard).
-      #
-      # What it does catch is an e2e failure that wrote NOTHING AT ALL — a real
-      # state, and one this change was verified against (run 35114327271: e2e
-      # red, this step red, `artifacts: none`). That is the reason it stays.
-      #
-      # Gated on the e2e step having actually FAILED, not on the job failing.
-      # `if: failure()` fires for any failure, including a typecheck or unit
-      # failure that happens before Playwright has run and created
-      # `test-results/` — and then `if-no-files-found: error` correctly errors
-      # on a directory that never had a chance to exist. Observed on run
-      # 35102701577: unit tests red, e2e skipped, this step red too. Nothing
-      # was masked, but a second red step named after an artefact the run could
-      # not have produced appeared on every typecheck, unit or build failure,
-      # and a check that cries wolf on runs it has no opinion about is on its
-      # way back to being ignored — which is where this one started
-      # (bug-trace-upload-errors-when-e2e-never-ran).
-      #
-      # `if-no-files-found: error` STAYS, for the reason above: it is the only
-      # thing that speaks when a failing e2e run wrote nothing. The gate
-      # narrows WHEN the step runs; it does not soften what the step says when
-      # it does.
-      #
-      # ON A HANG THIS USUALLY STILL UPLOADS, and the exception is narrow.
-      # Every spec has a finite timeout — the config's 30 s, with describe-level
-      # overrides up to 900 s, and none set to zero — so a test that never
-      # finishes ends as a TEST failure: e2e goes `failure` and this step runs.
-      # Runs 34995218008 and 35086053288 are that shape ("Test timeout of
-      # 30000ms exceeded", e2e red, this step green).
-      #
-      # What ends `cancelled` is a run that outlasts the JOB's 30 minutes (the
-      # e2e step has no `timeout-minutes` of its own). e2e takes ≈17 of those on
-      # a green main, so ≈12 are spare: one hung attempt in
-      # surface-parity.spec.ts (serial, `timeout: 900_000`) spends them by
-      # itself, and so does a hang that catches many tests at once. Then
-      # `steps.e2e.outcome` is `cancelled`, not `failure`, and this step is
-      # skipped. Observed on run 35115147209 — a deliberate hang that really did
-      # exhaust the 30 minutes ("The job has exceeded the maximum execution time
-      # of 30m0s") — which carried a probe step holding the old `if: failure()`
-      # beside this one: e2e `cancelled`, BOTH skipped. NOTE the limit of that
-      # observation: both being skipped also fits "nothing runs after a job
-      # timeout at all", so it shows the outcome, not the mechanism. Either way
-      # the old gate uploaded nothing there either, so this takes nothing away.
-      # Getting traces out of a timed-out run is a different change:
-      # `bug-no-traces-when-e2e-hangs`.
-      # A green e2e run can still have skipped a test, and a skip is silent: #141
-      # made focusWindow's test skip on every CI run, blaming the runner, with the
-      # suite green, and only a person reading the log caught it
-      # (bug-ci-skips-are-unlisted). Every test a CI run skips must be listed, with
-      # its reason, in tests/e2e/expected-skips.json. An unlisted skip fails, and so
-      # does a listed test that ran. Only after a passing e2e: a failure in a serial
-      # group skips the rest of it, which is the failure's news, not a skip's.
-      - name: Every skipped e2e test is listed
-        if: ${{ steps.e2e.outcome == 'success' }}
-        run: node scripts/check-e2e-skips.js playwright-report/results.json tests/e2e/expected-skips.json
-
-      - name: Upload Playwright traces on failure
-        if: ${{ always() && steps.e2e.outcome == 'failure' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-traces
-          path: test-results/
-          if-no-files-found: error
-          retention-days: 7
-
-  # Tags only: `main` between releases is legitimately ahead of the plugin
-  # branch, so this would fail on every ordinary push. On a `v*` tag the two
-  # must agree, because the marketplace entry that ships in that release pins
-  # `plugin-v<version>` — a cut that skipped `npm run plugin:branch` points
-  # every `claude plugin install` at a ref that cannot be cloned. Cheap enough
-  # (no npm ci, the script is node builtins and git) to gate the release on.
-  plugin-tag:
-    name: The plugin tag matches the tree it claims to build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0   # the check compares against plugin-v<version>, so tags must be here
-
+          ref: ${{ inputs.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+      - name: release:pack
+        run: |
+          git log --oneline -1
+          npm ci > /dev/null
+          npm run release:pack 2>&1 | tail -15
+          mkdir -p rc && mv getobsrv-*.tgz rc/ && ls -la rc && git log --oneline -1 > rc/commit.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rc-tarball
+          path: rc
 
-      - name: Compare plugin-v<version> against scripts/build-plugin-branch.js
-        run: node scripts/build-plugin-branch.js --check
-
-  # Tags only, and the reason the suite above can sit this one out: the DMGs
-  # ship from a tree the suite passed, and this says so out loud rather than
-  # assuming it. Two facts, both cheap — the tagged commit is on `main`, and
-  # `main`'s own CI went green for that exact SHA. A tag cut from a side
-  # branch, or pushed before `main` finished, fails here with which of the two
-  # was missing, instead of publishing untested DMGs.
-  tested-on-main:
-    name: The tagged commit is one main tested
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  dist:
+    runs-on: macos-14
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-
-      - name: The tagged commit is on main
-        run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
-            echo "::error::$GITHUB_SHA is not on main. A release is cut from main, so the DMGs would ship a tree nobody reviewed there."
-            exit 1
-          fi
-          echo "$GITHUB_SHA is on main"
-
-      - name: Main's CI passed for this exact commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # The tag's own run is excluded by name: it shares this SHA and is
-          # in flight right now, so only a run of `main` counts as the answer.
-          passed=$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" \
-            --json conclusion,headBranch \
-            --jq '[.[] | select(.headBranch == "main" and .conclusion == "success")] | length')
-          if [ "$passed" -lt 1 ]; then
-            echo "::error::No successful CI run of main for $GITHUB_SHA. Wait for main to go green, then re-run this job."
-            exit 1
-          fi
-          echo "main's CI passed for $GITHUB_SHA"
-
-  release:
-    name: Publish DMGs to a GitHub Release
-    needs: [tested-on-main, plugin-tag]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: macos-14
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-
+          ref: ${{ inputs.sha }}
       - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc   # same toolchain the repo develops on
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build DMGs (unsigned)
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist
-
-      # The app's update check reads this release's tag, so the tag is the
-      # version users are offered. Blockmaps are useless to the check-only
-      # client and are attached because electron-updater wants them if
-      # signing ever lands.
-      - name: Publish the release
-        uses: softprops/action-gh-release@v3
+          node-version-file: .nvmrc
+      - name: unsigned DMG, as the tag workflow builds it
+        run: |
+          npm ci > /dev/null
+          npm run dist 2>&1 | tail -8
+          ls -la dist/*.dmg
+      - uses: actions/upload-artifact@v7
         with:
-          files: |
-            dist/*.dmg
-            dist/*.blockmap
-          fail_on_unmatched_files: true
-          generate_release_notes: true
+          name: rc-dmg
+          path: dist/*arm64.dmg
+
+  cli-cold:
+    needs: pack
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: a3probe
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          name: rc-tarball
+          path: rc
+      - name: serve a page
+        run: |
+          nohup python3 -m http.server 8765 --directory a3probe > server.log 2>&1 &
+          sleep 2
+      - name: install, version, help, skill
+        run: |
+          cat rc/commit.txt
+          { time npm i -g ./rc/getobsrv-*.tgz; } 2>&1 | tail -4
+          obsrv --version; echo "exit $?"
+          obsrv --help | head -12
+          obsrv install-skill; echo "exit $?"
+      - name: first snap, audit
+        run: |
+          { time obsrv snap http://127.0.0.1:8765/page.html --preset laptop-768 --out first.png; echo "exit $?"; } 2>&1 | grep -v "XPC error" | tail -20
+          { time obsrv audit https://example.com --preset android-65 > audit.json; echo "exit $?"; } 2>&1 | grep -v "XPC error" | tail -6
+          head -c 600 audit.json
+
+  mcp-cold:
+    needs: pack
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: a3probe
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          name: rc-tarball
+          path: rc
+      - name: serve a page, client
+        run: |
+          nohup python3 -m http.server 8765 --directory a3probe > server.log 2>&1 &
+          sleep 2
+          mkdir -p "$RUNNER_TEMP/client" && cp a3probe/mcp-client.mjs rc/getobsrv-*.tgz "$RUNNER_TEMP/client/"
+          cd "$RUNNER_TEMP/client" && npm init -y > /dev/null && npm i @modelcontextprotocol/sdk@1 > /dev/null 2>&1
+      - name: first MCP session, no app installed
+        run: |
+          cd "$RUNNER_TEMP/client"
+          ls /Applications | grep -i obsrv || echo "no Obsrv.app installed"
+          node mcp-client.mjs http://127.0.0.1:8765/page.html "./$(ls getobsrv-*.tgz)" 2>&1 | grep -v "npm notice" | cut -c1-700
+      - name: where the launched app wrote
+        run: |
+          find ~/Library/Application\ Support -maxdepth 2 -name control.json -print
+          for d in "$HOME/Library/Application Support/Obsrv" "$HOME/Library/Logs/Obsrv" "$HOME/Library/Application Support/Electron" "$HOME/Library/Logs/Electron"; do if [ -e "$d" ]; then echo "present: $d"; else echo "absent:  $d"; fi; done
+
+  app-cold:
+    needs: dist
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: a3probe
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          name: rc-dmg
+          path: dl
+      - name: mount, copy, launch, read
+        run: |
+          hdiutil attach dl/*.dmg -nobrowse -mountpoint "$RUNNER_TEMP/mnt" | tail -1
+          mkdir -p "$RUNNER_TEMP/Applications" && cp -R "$RUNNER_TEMP/mnt/Obsrv.app" "$RUNNER_TEMP/Applications/"
+          mkdir -p "$RUNNER_TEMP/pw" && cp a3probe/app-launch.mjs "$RUNNER_TEMP/pw/"
+          cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null && npm i playwright@1.62 > /dev/null 2>&1
+          node app-launch.mjs "$RUNNER_TEMP/Applications/Obsrv.app/Contents/MacOS/Obsrv" 2>&1 | tail -30
+          cp rc-app-first-window.png "$GITHUB_WORKSPACE/" 2>/dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: rc-app-window
+          path: rc-app-first-window.png
