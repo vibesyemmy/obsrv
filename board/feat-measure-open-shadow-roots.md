@@ -138,3 +138,38 @@ effect as well as in the diff.
 second fixture pair) and `probe/shadow-arms-red` (throwaway workflow, never merged).
 
 **Still waiting, unchanged:** Henry's go on the traversal, and Opeyemi's review of `b2`.
+
+### Step one complete — all five arms red with green twins (`35194464896`)
+
+Four probe runs to get here, and the last three were about one arm. **The lint arm's twin was red
+because the fixture's hairline was a 0.5px *border*, and the hairline rule has a documented blind
+spot for borders** — `cli-lint.spec.ts:55`: *"Chromium gives a 0.5px border a whole device pixel, so
+div#hair is not here."* The spec pins the rule's findings to a 0.5px-**height** div and a 0.5px
+box-shadow. I copied the fixture's documented negative example and called it the proven shape,
+twice; Henry read the spec (#398). **Height was excluded by the second run, the preset by the
+third, and the third's "the page is the variable" was consistent with the cause without naming it.
+The spec named it.** An arm built on a border measures the blind spot, not the shadow boundary.
+
+| arm | expected | **received** | own assertion | twin |
+| --- | --- | --- | --- | --- |
+| 1 · audit, `half-in-shadow.html` | 52 | **12** | `:70` | `cli-audit.spec:299` (green) |
+| 1 · lint, hairline inside the root | ≥ 1 | **0** | `:76` | **green now** — a 0.5px-height div with a background, `div#rule`'s shape |
+| 3 · inspect at a point names the element | `inner` | **`card`** — the host | `:100` | green |
+| 2 · contrast reads the component background | `#1f2937` | **`#ffffff`** | `:109` | green |
+| 4 · the walk finds the scroller | > 0 screenfuls | **0** | `:127` | green |
+
+`cli-audit` and `surface-parity` green in every run: `half-in-shadow.html` untouched in effect.
+
+**Method, since it is the same shape as the six from the night before:** I read the fixture for an
+element with the right *shape* and did not read the spec three lines below for what it *said about
+that element*. A location was verified and a property was not. **What made it findable at all was
+the twin's failure message carrying the whole lint summary** — zeros across every rule is "measured
+nothing", which only a border fits, where a bare 0 fits both facts. The diagnostic was added after
+the first red and paid for itself on the second.
+
+**Branches:** `test/open-shadow-arms` at `90bb7c7` carries the two fixtures and the arms;
+`probe/shadow-arms-red` is the throwaway dispatch-only workflow and is never merged. Implementation
+builds on the arms branch, turns the arms green, updates `cli-audit.spec:299-303`'s 12 and the
+share-note sentence, and carries the revert control — per Henry's #388.
+
+**Waiting on:** Henry's go, after Opeyemi's review of `b2`.
