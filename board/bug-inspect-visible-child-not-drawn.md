@@ -1,8 +1,7 @@
 ---
 title: "`inspect` says a `visibility: visible` child of a hidden parent is not drawn, and it is"
-column: doing
+column: done
 owner: "Rook"
-waiting: ""
 kind: bug
 order: 71
 ---
@@ -84,3 +83,24 @@ same wrong claim one step along — so each rule now says where it was actually 
 
 **Still not established, unchanged by this:** how common the pattern is. Nobody has counted, and the fix
 does not depend on the count.
+
+## DONE 2026-09-17: merged as #218 (002bbdb); moved by Henry on Opeyemi's instruction
+
+**Moved to Done by Henry**, on Opeyemi's instruction to take the Doing cards to Done one at a time
+(given in Wren's session about 12:00 WAT, relayed in room #440). Rook's session is out. The work was
+already merged, and the card had simply not been moved.
+
+**Every item under "What a fix has to show" is met:**
+- **The rule:** `visibility` is read on the element alone, and ancestors are walked only for
+  `display: none` (#218).
+- **The four arms** are on main in `cli-inspect.spec.ts`, against `hidden-text.html`. The test that
+  holds them passed in run `35211676500` (`cli-inspect.spec.ts:102`, 2.0 s), the suite of `#270`, well
+  after the fix merged.
+- **The control** is recorded above: arm 1 was watched red against the unfixed code, which *is* the
+  ancestor walk the control asks to put back, while arms 2–4 passed. That is the same evidence, taken
+  before the fix rather than after it.
+- **The surface** is named: the shared function, exercised through the CLI.
+
+**Nothing left over becomes a card.** "How common the pattern is" was context, not acceptance, and the
+fix does not depend on the count.
+
