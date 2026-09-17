@@ -1,8 +1,7 @@
 ---
 title: "CI on main fails about one run in three, from at least three different tests"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 criterion: B5
 order: 37
@@ -194,4 +193,52 @@ Remeasured by this card's method:
 The split gets revisited only if main is above ~10% red. **The attribution will name tonight's
 hidden-predecessor finds** (`panes:83` needing `:77`, and `sync:139`'s early barrier): some of what's
 tallied as flakes are test defects that are being fixed.
+
+## REMEASURED 2026-09-17 by Henry: 7% red since #82, so the decision stands
+
+**The window is every `ci.yml` push run on `main` created from #82's merge (2026-09-16 15:19Z) to
+2026-09-17 03:43Z**, 115 runs, read by this card's method. The script and its per-run results are in
+Henry's scratchpad (`ci_remeasure.py`).
+- **Excluded:** 71 board-only runs, whose suite ran only "Say what this run did not do", and 1 run
+  still unfinished.
+- **Checked first against three runs whose answers were known:**
+  - #211's attempt 1: red; `panes:83` failed, `history:72` flaky, 556 passed.
+  - 10cd219: green; 557 passed, 1 flaky.
+  - #217's merge: skipped.
+
+| main, push, first attempts | ran | red | 95% interval (Wilson) |
+| --- | --- | --- | --- |
+| since #82, 09-16 15:19Z → 09-17 03:43Z | 43 | **3 (7.0%)** | **2–19%** |
+
+**Below the ~10% trigger, so the split is not revisited, and "one gate, flakes fixed by weight" stands.**
+With 43 runs the interval still reaches 19%. The number doesn't say the suite is healthy; it says the
+trigger for deciding again hasn't been met.
+
+**The three red first attempts, each read to its first line:**
+1. **108e139 (run 35123165259):** `panes.spec:83` failed both tries. **Inflated by a test defect:** `:83`
+   never navigates and relies on `:77`, so its retry always fails. A single first-try failure there
+   is recorded as a red run. The fix is Kenya's, on `bug-target-canvas-no-frames`.
+2. **5e426fb (35145262453):** `ipc.spec` `:31`, `:134` and `:173` failed both tries, in one file with
+   nothing else in the run failing. That's `bug-ipc-native-pane-invisible-once`'s shape.
+3. **5631606 (35170587213):** no test failed. `text-scale:251`'s relaunch test failed once (drawer width
+   288.122px against 309px) and passed on retry. Then **"Worker teardown timeout of 30000ms exceeded"**,
+   so the relaunched app didn't close within 30 s. Playwright counts that as an error outside any test,
+   which makes the attempt red.
+
+**Flaky by runs, the weight for "fixed by weight"** (a flaky test fails its first try and passes its retry):
+
+| runs | test | status tonight |
+| --- | --- | --- |
+| 5 | `sync-mirror-mark:41` | **fixed by #213** (a redirect's second address commits twice) |
+| 3 | `sync:139` (was `:138`) | **fixing in #224** (Kenya: the barrier read step 1's state) |
+| 3 | `tabs:266` image-mode delivery | no card, filed as `chore-flaky-leaders-0917` |
+| 3 | `panes:259` failed-load empty state | no card, filed as `chore-flaky-leaders-0917` |
+| 3 | `panes:230` failed-load message | no card, filed as `chore-flaky-leaders-0917` |
+| 3 | `target-source:106` partial dirty rect | no card, filed as `chore-flaky-leaders-0917` |
+| 2 | `vision:47` | on `bug-flakes-gate-the-gate` |
+| 1 each | ten more | not weighted |
+
+**What tonight changed in that tally:** the two heaviest, 8 of the flaky tries, were test defects rather
+than product races. One of the three red runs was a test defect too. **Before calling a both-tries
+failure deterministic, read what the test does for itself.**
 
