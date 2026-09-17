@@ -88,6 +88,21 @@ describe('the words', () => {
     expect(said).not.toContain(`rm -rf '${profile}'`)
   })
 
+  it('does not say "nothing has been removed" when a removal is about to happen', () => {
+    // The closing line is the one a person acts on. `--remove` prints this same
+    // listing first and then deletes, so the listing has to describe THIS run:
+    // a "nothing has been removed" above a removal is false by the time they
+    // have finished reading it.
+    const listing = uninstallLines(uninstallReport({ plan, look: here([profile]), check: allow })).join('\n')
+    const removing = uninstallLines(uninstallReport({ plan, look: here([profile]), check: allow }), { removing: true }).join('\n')
+    expect(listing).toContain('This command lists only — nothing has been removed')
+    expect(removing).not.toContain('nothing has been removed')
+    expect(removing).toContain('Removing the above now, each path re-checked against the removal guard as it goes.')
+    // And with nothing there, it says that rather than promising a removal.
+    const empty = uninstallLines(uninstallReport({ plan, look: here([]), check: allow }), { removing: true }).join('\n')
+    expect(empty).toContain('Nothing here to remove.')
+  })
+
   it('names what is left alone and why, rather than leaving it out', () => {
     const said = uninstallLines(uninstallReport({ plan, look: here([]), check: allow })).join('\n')
     expect(said).toContain('Left alone, and why:')
