@@ -725,8 +725,9 @@ export interface PresetEntry {
  */
 export const ORIENTATION_NOTE =
   'cssWidth/cssHeight are each preset\'s natural orientation — portrait for every mobile preset, ' +
-  'landscape for the monitor and laptop ones. Every preset rotates: pass orientation: "landscape" ' +
-  'to obsrv_snap or obsrv_drive to swap the two axes a quarter turn. Rotation changes nothing else — ' +
+  'landscape for the monitor and laptop ones. Every preset rotates: pass rotate: true to obsrv_snap, ' +
+  'obsrv_audit, obsrv_lint, obsrv_inspect, obsrv_report or obsrv_drive to swap the two axes a quarter turn ' +
+  '(the deprecated orientation: "landscape" means the same). Rotation changes nothing else — ' +
   'the diagonal, deviceScaleFactor, ppi and physical size are all orientation-independent, so a ' +
   'rotated screen is the same panel turned sideways rather than a different one.'
 

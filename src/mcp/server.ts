@@ -15,7 +15,7 @@ import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
-import { MAX_SCROLL_SELECTOR } from '../shared/types'
+import { MAX_SCROLL_SELECTOR, type Orientation } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { walkPage, type WalkDeps, type Walked } from './walk'
@@ -204,6 +204,19 @@ function spawnCli(args: string[], killAfterMs: number): Promise<Omit<CliRun, 'el
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
+/**
+ * A disagreeing `rotate` and `orientation`, refused before a headless render,
+ * as obsrv_snap refuses it. The argument builders pass `--rotate` only when it
+ * is true — the CLI has no flag for false — so `rotate: false` never reached
+ * the CLI, and `orientation: 'landscape', rotate: false` rendered rotated on
+ * audit, lint, inspect and report with no refusal (Wren's release sweep of
+ * #178). The MCP layer is the last place both values are visible.
+ */
+function refusedRotation(input: { orientation?: Orientation; rotate?: boolean }): CallToolResult | null {
+  const wanted = resolveRotate(input.orientation, input.rotate)
+  return 'refuse' in wanted ? toolError(wanted.refuse) : null
+}
+
 function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) return toolError(killedMessage(command, killAfterMs, run.stderr))
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
@@ -254,11 +267,12 @@ const orientationField = z
   .enum(['portrait', 'landscape'])
   .optional()
   .describe(
-    'Rotate the screen a quarter turn (default portrait). Presets store their natural orientation — ' +
-      'portrait for every mobile preset, landscape for the monitors and laptops — and this swaps the CSS ' +
-      "viewport's two axes on top of that. Nothing else changes: the diagonal, raster density and physical " +
-      'size are orientation-independent, so it is the same panel turned sideways. Use it to check a ' +
-      'landscape phone layout, or a monitor stood on end.',
+    'DEPRECATED, use `rotate`. Kept with its current meaning until a breaking release, because redefining it ' +
+      'would silently change what every existing caller gets. The word names how the preset is stored, not the ' +
+      'shape you get: portrait (the default) is the preset as obsrv_presets lists it, landscape is that turned a ' +
+      'quarter turn. Every mobile preset is stored portrait, so for those the two readings agree; the monitors ' +
+      'and laptops are stored landscape, so landscape turns 1080p-24 into a 1080x1920 portrait screen. A ' +
+      '`rotate` and `orientation` that disagree are refused wherever rotation applies.',
   )
 
 const throttleField = z
@@ -762,9 +776,10 @@ const driveOutputShape = {
   orientation: z
     .string()
     .describe(
-      "The rotation flag: 'portrait' (the preset as its table stores it) or 'landscape' (rotated a quarter " +
-        "turn). This is what to pass back to change it — for the shape the screen actually has, read " +
-        '`screenShape`. Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
+      "The rotation flag, in the words of the deprecated `orientation` input: 'portrait' (the preset as its " +
+        "table stores it) or 'landscape' (rotated a quarter turn). `rotated` says the same as a boolean, and " +
+        '`rotate` is what to pass to change it; for the shape the screen actually has, read `screenShape`. ' +
+        'Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
     ),
   rotated: z
     .boolean()
@@ -1181,7 +1196,7 @@ server.registerTool(
       `through a cheap-panel simulation, and return the PNG. Use it to judge how a page actually looks on the ` +
       `screens users own (1366×768 laptops, 1080p desktops, budget Androids) before declaring frontend work done.\n\n` +
       `Pass either \`preset\` (list ids with obsrv_presets) or custom \`width\` + \`height\`, never both; either can be ` +
-      `rotated with \`orientation: "landscape"\`, which is how you check a phone's landscape layout. ` +
+      `turned a quarter turn with \`rotate: true\`, which is how you check a phone's landscape layout or a monitor stood on end. ` +
       `Returns structured metadata (applied viewport, profile, \`settled\`, warnings, and \`pngPath\` — the PNG ` +
       `kept in a per-call temp dir) plus the PNG as an inline image when it is within the 1.5 MiB cap ` +
       `(\`inlined: true\`); larger captures (typically fullPage) stay on disk, with \`inlined: false\` and a ` +
@@ -1524,8 +1539,8 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     // The app answers with the CLI's own result plus the screen it
     // measured on. `textScale` and `throttle` keep the headless contract:
@@ -1634,6 +1649,8 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
+    const auditRotation = refusedRotation(input)
+    if (auditRotation) return auditRotation
     let args: string[]
     try {
       args = buildAuditArgs({ ...input, url: input.url.trim() })
@@ -1828,8 +1845,8 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const { ok: _ok, textScale, ...judged } = answer
     // The app's result says nothing about its capped list (cli/lint.ts): this
@@ -1940,6 +1957,8 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
+    const lintRotation = refusedRotation(input)
+    if (lintRotation) return lintRotation
     let args: string[]
     try {
       args = buildLintArgs({ ...input, url: input.url.trim() })
@@ -2197,6 +2216,8 @@ server.registerTool(
   async (input: ReportToolInput): Promise<CallToolResult> => {
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
+    const reportRotation = refusedRotation(input)
+    if (reportRotation) return reportRotation
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     let args: string[]
     try {
@@ -2385,7 +2406,7 @@ server.registerTool(
       // heavy page whose reload outlasted the apply budget (bbc.com after a
       // phone flip). Wait for a tab that is neither blank nor loading before
       // anything below steers or photographs it, as the snap has since 0.43.0.
-      if (input.preset !== undefined || input.orientation !== undefined) {
+      if (input.preset !== undefined || input.orientation !== undefined || input.rotate !== undefined) {
         const s = await settlePage(
           {
             status: async () => {
@@ -2513,8 +2534,8 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     if (Array.isArray(answer['notes'])) notes.unshift(...(answer['notes'] as unknown[]).map(String))
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const structured = {
       mode: 'live',
@@ -2585,6 +2606,8 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
+    const inspectRotation = refusedRotation(input)
+    if (inspectRotation) return inspectRotation
     let args: string[]
     try {
       args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
