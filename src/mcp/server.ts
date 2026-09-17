@@ -401,7 +401,7 @@ const snapOutputShape = {
     .describe(
       'Whether the screen was turned a quarter turn from the preset stored form. Says plainly what the ' +
         'deprecated orientation flag says confusingly: orientation names the STORED form, so landscape on a ' +
-        'monitor preset produces a PORTRAIT screen. Read this, or screenShape for the shape itself.',
+        'monitor preset produces a PORTRAIT screen. Read this; screenShape gives the shape itself on a live reply.',
     ),
   screenShape: z.string().optional().describe('Live only. ' + "The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
         "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
