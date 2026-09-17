@@ -79,3 +79,29 @@ a contended machine rather than about `main`.
 **What would settle it:** the same run with no other Obsrv process alive. Not done, because it
 needs killing another session's app and the app on Opeyemi's desk, neither of which is mine to
 close.
+
+## A `panes:83` recurrence, recorded by Henry 2026-09-17 for Kenya to read (Wren's routing)
+
+Recorded, not interpreted: whether this is the blank-canvas shape is Kenya's call.
+
+- **The run:** 35176357601, **attempt 1**, job `typecheck · unit · shader parity · e2e`, on PR #211, a
+  board-only card edit with no code in it. That run's other results: `history.spec:72` flaky, 556 passed.
+- **First try, in file order after `:77` had navigated to `hairline.html`:**
+  `Timeout 10000ms exceeded while waiting on the predicate`, so the canvas never showed more than 1000
+  white pixels in 10 s. **Nothing else was captured for that try:** the artifact holds only its
+  `error-context.md`, with no screenshot, no trace and no page snapshot.
+- **The retry is not a second sighting.** It failed with `Expected: > 1000, Received: 0`, but `:83` has
+  a hidden predecessor. It never navigates, and relies on `:77` having done so. The retry runs it alone in
+  a fresh app, so it fails whatever the GPU does. **Its screenshot shows the empty new-tab state** (an
+  empty URL field, "Point Obsrv at a page…"), not a loaded page with a blank canvas. So this defect turns
+  any single first-try `:83` failure into a red run, which is worth fixing on its own: `:83` should
+  navigate for itself.
+- **No "No frames from target renderer" or GPU-process-exit line** turned up in the retry trace's console
+  or in attempt 1's job log. The job log may not carry the app's stderr at all, so that absence isn't
+  proof.
+- **Preserved locally** before the artifact expires (2026-09-24 03:18Z), in
+  `/private/tmp/obsrv-evidence/panes83-run35176357601-attempt1/`, which a reboot clears:
+  - `playwright-traces.zip`, artifact 10478991913, sha256 `5be47313b70f…`;
+  - the extracted `:83` folders for both tries;
+  - `attempt1-logs.zip`.
+  Attempt 1's logs also stay at `…/actions/runs/35176357601/attempts/1/logs` after the rerun.
