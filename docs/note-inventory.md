@@ -241,6 +241,14 @@ found that `log.warn` and a stderr `warn` were being counted as replies (ten sen
 | written or reworded after the run | 4 | 4 | **7** |
 | too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 | 1 |
 
+**The third column counts 124 where the first two count 121, and that is a different population
+rather than an error.** 121 is what the pass found at `b43a272`. `#293` **wrote three producers**
+that did not exist then (they are the last three rows of the written-or-reworded table), so 124 have
+now been counted. **Two of the 89 have since been deleted** with `#293` — the share note and the
+empty-page note's web-components branch — and they stay counted as fired, because they did fire and
+the runs that carried them are named. So: **124 counted, 122 in the tree today.** Whoever adds the
+next producer adds to both.
+
 The right column is this file's state after `#256` and `#258`, below. The left is what the run of
 2026-09-17 saw, and it does not change: a test written afterwards says the sentence can be produced,
 not that that run produced it.
@@ -405,8 +413,8 @@ has is a run of the note log that saw it, which is what this column counts.
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283 and #292: fourteen unfired producers,
-four written or reworded after the run, two ambiguous groups, and nine named reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292 and #293: fourteen unfired
+producers, seven written or reworded after the run, two ambiguous groups, and nine named reasons.**
 
 - **Each of the 14 gets one of the same three outcomes:** a fixture that fires it on CI, a finding
   that it can't fire and then the sentence goes, or a named reason it stays unobserved.
