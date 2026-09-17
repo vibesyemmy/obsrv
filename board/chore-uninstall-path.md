@@ -1,8 +1,8 @@
 ---
 title: "There is no supported way to remove Obsrv's data"
 column: doing
-owner: "Rook"
-waiting: "Opeyemi: the test sandbox, before any deletion code is written"
+owner: "Henry"
+waiting: "Opeyemi: the sandbox grant, asked in Henry's session 2026-09-17"
 kind: chore
 order: 32
 ---
@@ -92,3 +92,21 @@ adopted as the assignment's conditions:
 **What proceeds meanwhile:** the guard is a pure function over paths, and a fixture is a directory
 layout. Neither deletes anything, both are testable, and both are the specification the command has
 to satisfy. That is the part that does not need the word.
+
+## MOVED TO HENRY 2026-09-17, and the grant asked for again — in the session that would write the code
+
+Opeyemi's answer to the sandbox question, verbatim through Wren (room #452): *"Rook is out till
+saturday. So let Henry handle it please."* That moves the card. **It is not the grant**, and Rook's
+own condition is the reason it cannot be: the word has to arrive in the session that writes the
+deletion code, because a relayed yes is somebody else's account of a permission. The condition now
+binds Henry exactly as it bound Rook.
+
+**Asked directly, in Henry's session, 2026-09-17:** may deletion code be written whose tests delete
+only inside a throwaway `CFFIXED_USER_HOME` sandbox under the system temp directory, with a guard
+that refuses any path resolving inside the real home, shown failing first, and with the tests running
+on CI only?
+
+**What proceeds without the word**, on Rook's terms, unchanged: the guard is a pure function over
+paths and the fixture is a directory layout. Neither deletes anything, and together they are the
+specification the command has to satisfy.
+
