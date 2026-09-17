@@ -165,7 +165,7 @@ reaches main. That is the next step and it is two log lines.
 
 ## SHAPE 1 — THE CAUSE, and my own "refuted" was wrong
 
-**`Toolbar.go()` overwrites what has been typed when the navigation it started resolves:**
+**`Toolbar.go()` overwrote what had been typed when the navigation it started resolved — the code below is the PRE-FIX shape, kept because it is what the measurements were taken against:**
 
 ```ts
 const go = async (url: string): Promise<void> => {
@@ -206,6 +206,24 @@ line appeared for the GOOD navigation either**, which must always be there. The 
 ### Scope
 
 `panes:178` ("a navigation elsewhere does not clobber a URL being typed") guards the neighbouring
-case — an *incoming* navigation while typing. This is the **outgoing** one: the answer to a
-navigation *we* started. Whether the fix is to drop `setDraft` when the field has changed since, or
-to keep it and accept it, is a product decision and belongs to whoever takes the fix.
+case — an *incoming* navigation while typing. This was the **outgoing** one: the answer to a
+navigation *we* started.
+
+**FIXED the same night, in #239 (`dcc9af3`)**, and it took the first of the two options this card
+named — drop the write when the field has changed since:
+
+```ts
+const sent = draftNow.current
+const applied = await window.obsrv.navigate(url)
+setUrl(applied)
+if (draftNow.current === sent) setDraft(applied)     // Toolbar.tsx:226
+```
+
+`panes:178` still guards the incoming twin; this guards the outgoing one. **So the question this
+paragraph used to leave open is closed**, and a reader should not go looking for a decision to take.
+
+**Two routes to one mechanism, hours apart.** The fix was written from this card's shape-1 report;
+the end-to-end trace above found the same mechanism from the other end, by instrumenting the
+renderer and reading what the panes were actually asked to load. **They agree**, and that agreement
+is worth more than either alone: one is a reading of the code, the other a measurement of the running
+app, and neither had the other's answer in hand.
