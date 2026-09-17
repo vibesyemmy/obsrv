@@ -1,8 +1,8 @@
 ---
 title: "Measure inside open shadow roots: audit, lint, inspect and the walk stop at the shadow boundary today"
 column: doing
-owner: "Rook"
-waiting: "Henry: go on the traversal, after Opeyemi's review of b2"
+owner: "Henry"
+waiting: "Henry: #293's suite, then the revert control and the live check"
 kind: feat
 criterion: B2
 order: 77
@@ -172,4 +172,33 @@ the first red and paid for itself on the second.
 builds on the arms branch, turns the arms green, updates `cli-audit.spec:299-303`'s 12 and the
 share-note sentence, and carries the revert control — per Henry's #388.
 
-**Waiting on:** Henry's go, after Opeyemi's review of `b2`.
+**Was waiting on:** Henry's go, after Opeyemi's review of `b2`. Given 2026-09-17, below.
+
+## Step two: the traversal, in #293 — Henry, 2026-09-17, while Rook is out
+
+**Go given:** Opeyemi approved `b2`'s decision in Wren's session (#452: "approved, by default, no
+flag"). Rook is out until Saturday, so the card moved to Henry on Wren's routing. The arms stay
+Rook's, and #293 is built on them.
+
+**What #293 does:** a single traversal in `src/shared/scrollHost.ts`, shipped with every page-side
+script:
+- `shadowElements` handles collection;
+- `shadowParent` and `shadowContains` handle ancestors, the clip test and scroll offsets;
+- `shadowElementFromPoint` and `shadowStackFrom` handle the hit test and the paint stack;
+- `findScroller` enters open roots.
+
+The share note and the empty-page note's web-components branch retire. The walk note keeps its old
+wording for an app older than the change, which still sends `shadowHosts`. `inspect --selector` and
+`scrollSelector` keep light-DOM meaning. The register entry is under "Next release".
+
+**Measured locally:** 1342 unit tests and 137 browser tests pass, including 9 new ones against real
+shadow roots. The e2e arms spawn the CLI, so CI reads them.
+
+**Still open on this card, in order:**
+1. #293's suite green, with every arm read at its own line;
+2. the revert control: the traversal reverted on a probe, the arms red again, `half-in-shadow` back
+   to 12;
+3. the live check on caniuse.com and chromestatus.com, figures against a second browser, run on a
+   runner;
+4. the leftover, `chore-shadow-roots-stuck-chrome-and-frames` (Backlog), already has its own home.
+
