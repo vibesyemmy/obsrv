@@ -216,31 +216,6 @@ const parseAuditRect = (v: unknown): AuditRect | null => {
  * (`framesInViewport`), when it does and they parse; an older app sends
  * none, and the empty-document sentence then has no iframe clause.
  */
-/** The shadow-root counts a page sent, when it sent them and they are counts. */
-function shadowSeen(raw: unknown): {
-  shadow?: { hosts: number; interactive: number; text: number; lightInteractive?: number; lightText?: number }
-} {
-  if (!isRecord(raw)) return {}
-  const n = (v: unknown): number | null => (isFiniteNumber(v) && v >= 0 && Number.isInteger(v) ? v : null)
-  const hosts = n(raw.hosts)
-  const interactive = n(raw.interactive)
-  const text = n(raw.text)
-  if (hosts === null || interactive === null || text === null) return {}
-  // The light-DOM counts are the share sentence's denominator, and a page
-  // that did not send them gets no share sentence rather than a fraction of
-  // a number that was not measured. Each is carried only if it is a count.
-  const lightInteractive = n(raw.lightInteractive)
-  const lightText = n(raw.lightText)
-  return {
-    shadow: {
-      hosts,
-      interactive,
-      text,
-      ...(lightInteractive === null ? {} : { lightInteractive }),
-      ...(lightText === null ? {} : { lightText }),
-    },
-  }
-}
 
 function frameCoverage(raw: unknown): { frames?: { count: number; viewportCoverage: number } } {
   if (!isRecord(raw) || !isFiniteNumber(raw.count) || !isFiniteNumber(raw.viewportCoverage)) return {}
@@ -303,7 +278,6 @@ export function parseAuditReport(raw: unknown): AuditReport | null {
     truncated: { targets: truncatedTargets, text: truncatedText },
     ...droppedCount({ targets: droppedTargets, text: droppedText }),
     ...frameCoverage(raw.frames),
-    ...shadowSeen(raw.shadow),
   }
 }
 
@@ -498,7 +472,6 @@ export function parseLintReport(raw: unknown): LintReport | null {
     ...droppedCount({ text: droppedText, edges: droppedEdges, images: droppedImages }),
     ...(raw.spacers !== undefined ? { spacers: count(raw.spacers) ?? 0 } : {}),
     ...frameCoverage(raw.frames),
-    ...shadowSeen(raw.shadow),
   }
 }
 
@@ -811,6 +784,8 @@ function parseWalkBlocked(raw: unknown): { blocked: WalkBlocked } | null {
       viewportCoverage: Math.max(0, Math.min(1, frames.viewportCoverage)),
     }
   }
+  // Sent only by a preload older than the walk entering open roots; kept so
+  // the sentence can say what that walk did not do (`walkNothingNote`).
   if (isFiniteNumber(shadowHosts)) blocked.shadowHosts = clampCount(shadowHosts)
   // Both fields are optional on `WalkBlocked`, so an empty object would be a
   // measurement that says nothing while looking like one that was taken.

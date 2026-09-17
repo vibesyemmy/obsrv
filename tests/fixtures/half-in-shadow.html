@@ -7,6 +7,8 @@
   in the light DOM and forty more inside four open shadow roots. Before run 15
   this answered "12 targets, 12 findings, 0 warnings" — the counts were taken
   on the way past and read only when the light DOM was completely empty.
+  Since `feat-measure-open-shadow-roots` the measurement enters open roots and
+  answers 52; reverting the traversal takes it back to 12.
 -->
 <h1>Half in the shadows</h1>
 <p>Twelve controls the measurement can reach.</p>

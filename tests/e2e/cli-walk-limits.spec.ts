@@ -56,9 +56,18 @@ const STOPPED_MOVING_LIVE =
 const COULD_NOT_MOVE_DIALOG =
   "the walk could not move the page or the dialog over it: this page hides the document's overflow while a dialog is open, and neither moved — the figures are of the first screen, and anything below it was never brought into view"
 
-/** `shared/walkCoverage.ts:168` — `walkNothingNote`'s shadow-root tail, both surfaces. */
-const ONE_OPEN_ROOT =
-  "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: the page has 1 open shadow root, which the walk does not enter, and nothing in the light DOM scrolls, and the figures are of the page as it first shows"
+/**
+ * `walkNothingNote`'s opening, on any page. The shell below used to fire its
+ * shadow-root tail ("the page has 1 open shadow root, which the walk does not
+ * enter"). The walk enters open roots now, so that tail is reachable only from
+ * an app older than the change, which `tests/unit/walkCoverage.test.ts` guards.
+ */
+const NOTHING_TO_SCROLL = 'so the walk had nothing to scroll'
+
+/** `shared/walkCoverage.ts` — `walkDialogNote`'s panel wording, which an app shell's walk earns. */
+const PANEL_NOT_THE_PAGE =
+  "the walk scrolled a panel on the page, not the page itself: this page hides the document's overflow and the only scroller the walk found was a panel within it"
+
 
 // --- helpers --------------------------------------------------------------
 
@@ -113,13 +122,16 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
-  test('an app shell whose only content is behind one open root: the note names the root', async () => {
+  test('an app shell whose only content is behind one open root: the walk scrolls the feed, and says it was a panel', async () => {
     const m = await headless('shell-with-one-root.html')
-    // The sentence first, as in the locks arm above: it is the thing under
-    // test, and a count asserted ahead of it can fail the test before the
-    // sentence is ever read.
-    expect(said(m), JSON.stringify(said(m))).toContain(ONE_OPEN_ROOT)
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    // The sentence first, as in the locks arm above: here its absence, and
+    // then the sentence that replaces it. A walk that moves a component's feed
+    // has walked a panel, not the page, and the reader is told which — the
+    // same words a light-DOM app shell gets (Wren's read of #293: this test
+    // never read what the walk said).
+    expect(said(m).join(' '), JSON.stringify(said(m))).not.toContain(NOTHING_TO_SCROLL)
+    expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
   })
 })
 
@@ -189,12 +201,10 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
-  test('an app shell whose only content is behind one open root: the live note names the root', async () => {
+  test('an app shell whose only content is behind one open root: the live walk scrolls the feed, and says it was a panel', async () => {
     const m = await live('shell-with-one-root.html')
-    // The sentence first, as in the locks arm above: it is the thing under
-    // test, and a count asserted ahead of it can fail the test before the
-    // sentence is ever read.
-    expect(said(m), JSON.stringify(said(m))).toContain(ONE_OPEN_ROOT)
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
+    expect(said(m).join(' '), JSON.stringify(said(m))).not.toContain(NOTHING_TO_SCROLL)
+    expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
   })
 })

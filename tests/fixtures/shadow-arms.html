@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>shadow-arms-fixture</title>
+<!--
+  `feat-measure-open-shadow-roots`, arms 2-4. `half-in-shadow.html` carries arm
+  1 (counting) and is pinned by two specs, so it is left alone; this page holds
+  the three things it does not have, each inside an open root:
+
+    x-card   light text on a DARK component background. The contrast ancestor
+             walk stops at the shadow boundary today, so the text composites
+             onto the page's white instead of the card's #1f2937.
+    x-card   a point inside the root, for inspect --at: today it names the host
+             element, not the <p> the point is actually on.
+    x-feed   the page's ONLY scroller, inside the root. The walk looks at the
+             light DOM today ("no scrollable container in its light DOM").
+    x-card   a 0.5px hairline inside the root, for lint. A 0.5px-HEIGHT div
+             with a background, NOT a 0.5px border: Chromium gives a border a
+             whole device pixel, so a border is never a hairline finding —
+             cli-lint.spec.ts:55 records the measurement and pins the rule's
+             findings to a height and a box-shadow. Two probe runs were spent
+             on a border before reading that line.
+
+  `shadow-arms-flat.html` is the same page with the roots flattened into light
+  DOM. It must pass every arm TODAY, in the same run, so a red here is known to
+  be about the boundary and not about the harness, the fixture or a coordinate.
+  The two share their styles and geometry byte for byte apart from where the
+  markup lives; keep them that way.
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #ffffff; font: 16px system-ui; }
+  #shell { height: 100vh; display: flex; flex-direction: column; }
+  h1 { margin: 16px; font-size: 24px; height: 28px; line-height: 28px; }
+  /* A custom element is inline by default; the flat twin's hosts are divs. Same box either way. */
+  x-card, x-feed, #card, #feed { display: block; }
+</style>
+<div id="shell">
+  <h1>Arms for open shadow roots</h1>
+  <x-card id="card"></x-card>
+  <x-feed id="feed"></x-feed>
+</div>
+<script>
+  // Shared markup, so the flat twin can use the identical strings.
+  const CARD_STYLE = '.card { background: #1f2937; color: #d1d5db; padding: 24px; margin: 0 16px; font-size: 14px; }'
+    + ' .rule { height: 0.5px; background: #d1d5db; margin: 12px 0 0; }'
+  const CARD_HTML = '<div class="card"><p id="inner">Light text on a dark card, inside an open root</p><div class="rule"></div></div>'
+  const FEED_STYLE = '.feed { height: 300px; overflow: auto; margin: 16px; } .row { height: 120px; border-bottom: 1px solid #eee; }'
+
+  class XCard extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: 'open' })
+      root.innerHTML = '<style>' + CARD_STYLE + '</style>' + CARD_HTML
+    }
+  }
+  class XFeed extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: 'open' })
+      root.innerHTML = '<style>' + FEED_STYLE + '</style><div class="feed" id="scroller"></div>'
+      const feed = root.querySelector('.feed')
+      for (let i = 0; i < 30; i++) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.textContent = 'row ' + i
+        feed.append(d)
+      }
+    }
+  }
+  customElements.define('x-card', XCard)
+  customElements.define('x-feed', XFeed)
+</script>

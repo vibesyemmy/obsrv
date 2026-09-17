@@ -62,7 +62,6 @@ export function emptyDocumentNote(
   what: 'audit' | 'lint',
   waitedMs: number,
   frames?: FrameCoverage,
-  shadow?: ShadowContent,
   /** The HTTP status the page committed with, when it is known (`httpStatus`). */
   status?: number,
 ): string {
@@ -79,47 +78,16 @@ export function emptyDocumentNote(
       ? `; ${frames.count === 1 ? 'an <iframe> covers' : `${frames.count} <iframe>s cover`} ${coverage}% of the viewport, ` +
         `which the measurement does not enter — a bot wall or an embed, not a blank page`
       : ''
-  // "the page measured", not "this page": on a 404 this note sits under a
-  // status line naming the error page, and a bare "this page" is only right
-  // because that line precedes it — a reorder would turn it back into a claim
-  // about the page the reader asked for. It names its own subject instead.
-  // A page built from web components is not empty, not slow and not a bot
-  // wall, and it will never fill however long it is given: its content is in
-  // shadow roots the measurement does not enter (chromestatus.com, measured
-  // 2026-09-12 — 159 roots holding 136 interactive elements, reported as
-  // "nothing to measure" with three causes, all false). Say the true one and
-  // drop the guesses, including the advice to wait, which cannot help here.
-  if (shadow !== undefined && shadow.hosts > 0 && shadow.interactive + shadow.text > 0) {
-    // The verb agrees with the count: one root *holds*. Measured on a page
-    // with exactly one open host (2026-09-12) — every earlier reading had
-    // many roots, so the plural verb was never seen to be wrong.
-    const roots = shadow.hosts === 1 ? '1 shadow root' : `${shadow.hosts} shadow roots`
-    const holdVerb = shadow.hosts === 1 ? 'holds' : 'hold'
-    const holds = [
-      shadow.interactive > 0 ? `${shadow.interactive} interactive element${shadow.interactive === 1 ? '' : 's'}` : null,
-      shadow.text > 0 ? `${shadow.text} text element${shadow.text === 1 ? '' : 's'}` : null,
-    ]
-      .filter((p): p is string => p !== null)
-      .join(' and ')
-    // "…holds 12 interactive elements the measurement does not enter" is a
-    // reduced relative ("[that] the measurement does not enter"), noticed
-    // 2026-09-12 and kept: it garden-paths — you read "elements the
-    // measurement" as a noun phrase before the verb lands — but it is
-    // grammatical, it is released wording, and rewriting it belongs in a
-    // change made for that reason, not folded into a fix for something else.
-    return (
-      `nothing to measure in the light DOM: the page had ${measured}, ${held}, but ${roots} ` +
-      `${holdVerb} ${holds} the measurement does not enter — the page measured is built from web components, not empty, ` +
-      `and no wait brings its content into the light DOM; the figures are of the light DOM alone` +
-      framed
-    )
-  }
   // An error page that is empty has a cause already named, one line above, by
   // the status sentence: offering "a page rendered by script that had not run
   // yet, a bot wall, or an empty document" repeats guesses it has disproved,
   // and "waitMs gives a page that renders late longer" is advice that cannot
-  // help a 404. The shadow branch above takes precedence — roots are the more
-  // specific cause, and an error page in a component-built app has both.
+  // help a 404.
+  //
+  // There was a branch above this for a page built from web components, whose
+  // content sat in shadow roots the measurement did not enter. The measurement
+  // enters open roots now (`shadowElements` in shared/scrollHost), so that
+  // page is measured rather than empty, and the sentence went with the gap.
   if (status !== undefined && status >= 400) {
     // "the page the server sent", and no closing "the figures are of X": the
     // status sentence and, on a redirect, the landing sentence have each
@@ -133,30 +101,6 @@ export function emptyDocumentNote(
     `the figures are of an empty page, and waitMs (--wait) gives a page that renders late longer` +
     framed
   )
-}
-
-/**
- * What the open shadow roots on the page hold, counted by `shadowContent`
- * in shared/scrollHost. The measurement reads the light DOM, so a page whose
- * content lives in components measures as nothing; these counts are how the
- * answer says that rather than guessing at bot walls.
- */
-export interface ShadowContent {
-  /** Open shadow hosts found, nested ones included. */
-  hosts: number
-  /** Interactive elements inside them — what the audit would have measured. */
-  interactive: number
-  /** Elements with text of their own inside them. */
-  text: number
-  /**
-   * The same two counts taken over the light DOM, with the same selector and
-   * the same text rule, so a share can be stated as a fraction of one page
-   * (`shadowShareNote`). Optional: a payload from an older app has neither,
-   * and the share sentence then stays silent rather than dividing by a
-   * number it did not receive.
-   */
-  lightInteractive?: number
-  lightText?: number
 }
 
 export interface AwaitContentOptions {

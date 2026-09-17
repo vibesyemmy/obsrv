@@ -2,6 +2,10 @@
 <meta charset="utf-8">
 <title>an app shell whose only content is behind one open shadow root</title>
 <!--
+  Since `feat-measure-open-shadow-roots` the walk enters open roots and scrolls
+  the feed below; the sentence this page was written for is reachable only from
+  an older app (`tests/unit/walkCoverage.test.ts`). The history, as it was:
+
   c5, walk limits: `shared/walkCoverage.ts:168` — "the page has 1 open shadow
   root, which the walk does not enter, and nothing in the light DOM scrolls".
 

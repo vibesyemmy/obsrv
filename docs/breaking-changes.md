@@ -22,6 +22,62 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ---
 
+## Next release — *unreleased*
+
+### The measurement enters open shadow roots, and three sentences about not entering them retire
+
+`querySelectorAll`, a tree walk, `parentElement` and `document.elementFromPoint`
+all stop at a shadow boundary. So a page built from web components measured as
+nothing, and a page with some components measured only its light DOM. They're
+entered now (`feat-measure-open-shadow-roots`). **No field is added, removed or
+renamed.** The published shape is unchanged, but several values change meaning
+on a page that has components.
+
+**What changes:**
+- **`audit`** counts the targets and text inside open roots. `summary.targets.count`,
+  `summary.text.count` and the findings grow on such a page: `half-in-shadow.html`
+  goes from 12 targets to 52.
+- **`lint`** reads text, edges and images inside open roots. Contrast and opacity
+  are read through the component's own layers, not the page's.
+- **`inspect` at a point** names the element drawn there, where it used to name the
+  component's host. **`inspect` by selector does not change:** a CSS selector still
+  doesn't pierce a root.
+- **The walk and the full-page capture** find a scroller inside an open root, so
+  `walked.screenfuls` can go from 0 to a count on an app shell built that way.
+- **Three sentences retire:**
+  - the share note, *"N shadow roots hold X of this page's Y interactive elements…"*;
+  - the empty-page note's branch *"nothing to measure in the light DOM… built from
+    web components, not empty…"*;
+  - on a walk that entered the roots, the walk note's *"the page has N open shadow
+    roots, which the walk does not enter"*.
+- The walk note's opening now reads *"has no scrollable container in its light DOM or
+  its open shadow roots"*.
+
+**The caps count what is inside roots too.** `AUDIT_MAX_TARGETS`, `AUDIT_MAX_TEXT` and lint's
+caps are unchanged, so a component-built page reaches them sooner, and `truncated` counts what went.
+What a cap drops is no longer in document order either: an element's shadow tree is visited before
+its own children.
+
+**What breaks:** figures compared across versions on a component-built page grow,
+and code that matched the retired sentences finds nothing.
+
+**An app older than this change, driven by a newer MCP** still sends its walk's
+shadow-host count. For that app the walk note keeps its older wording, because its
+walk really did not enter the roots.
+
+**The other direction loses one sentence's detail.** A 0.61.0 or older MCP driving
+*this* app reads the walk's `blocked` only when it carries a shadow-host count, which
+this app no longer sends. **That is the ordinary pairing** — the app is updated by hand
+and the npm package by `npx`, so an updated app in front of an older server is the common
+way round. The walk's "nothing to scroll" sentence then ends with the list rather than a
+measured cause: *"content in an iframe, in a shadow root, or in a container that scrolls
+by transform (a virtualised list or editor) was not brought into view before measuring"*,
+where a current server would name the iframe coverage it measured. It is true and less
+specific; upgrading the server restores the detail. Nothing else is affected, because the
+app composes its own audit and lint sentences.
+
+**Still out of reach:** closed shadow roots and iframes.
+
 ## 0.61.0 — *unreleased*
 
 > Three at once, all found by the surface-parity sweep (C4) rather than by a

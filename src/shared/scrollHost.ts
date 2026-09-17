@@ -24,6 +24,149 @@ export const MAX_VISITED = 2000
 /** Slack for sub-pixel layout: a one-pixel overflow is not a scroller. */
 const SCROLL_EPSILON = 1
 
+/**
+ * The element a node is drawn inside: its slot when it is slotted, its parent
+ * element, or — at the top of a shadow tree — the root's host. That is the
+ * flat tree the page is painted from, and `parentElement` stops short of it at
+ * every shadow boundary: text inside a component climbed to the root and
+ * composited onto the page's white instead of the component's own dark card.
+ *
+ * Open roots only, by construction: a closed root's host hides it from
+ * script (`assignedSlot` is null, and nothing reaches in), so what the page
+ * closed stays outside every measurement, as it was.
+ */
+export function shadowParent(el: Element): Element | null {
+  if (el.assignedSlot) return el.assignedSlot
+  if (el.parentElement) return el.parentElement
+  const up = el.parentNode
+  return up instanceof ShadowRoot ? up.host : null
+}
+
+/** Whether `inner` is drawn inside `outer`, across shadow boundaries (`shadowParent`). */
+export function shadowContains(outer: Element, inner: Element): boolean {
+  for (let node: Element | null = inner; node !== null; node = shadowParent(node)) {
+    if (node === outer) return true
+  }
+  return false
+}
+
+/**
+ * Every element under `root`, open shadow roots included: an element, then its
+ * shadow tree, then its own children. That is close to the order they are
+ * drawn in but not the flat tree exactly — a slotted child is visited where it
+ * sits in the light DOM, not at the slot that shows it.
+ *
+ * `querySelectorAll` and a TreeWalker both stop at a shadow boundary, so a
+ * page built from web components measured as nothing (chromestatus.com,
+ * 2026-09-12: 159 roots, 136 interactive elements, 0 measured). A slotted
+ * child is a child of its host, not of the slot, so it is visited once, where
+ * it sits in the light DOM; the slot that shows it has no children of its own.
+ */
+export function shadowElements(root: Element | null): Element[] {
+  const out: Element[] = []
+  if (!root) return out
+  const stack: Element[] = [root]
+  while (stack.length > 0) {
+    const el = stack.pop()!
+    out.push(el)
+    // Pushed in reverse, children first, so `pop` yields the shadow tree
+    // before the light children and each in document order.
+    const kids = el.children
+    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]!)
+    const shadow = el.shadowRoot
+    if (shadow) {
+      const inner = shadow.children
+      for (let i = inner.length - 1; i >= 0; i--) stack.push(inner[i]!)
+    }
+  }
+  return out
+}
+
+/**
+ * The element at a viewport point, through open shadow roots:
+ * `document.elementFromPoint` answers with the host, and the host's own root
+ * answers with what is drawn there.
+ */
+export function shadowElementFromPoint(x: number, y: number): Element | null {
+  let el = document.elementFromPoint(x, y)
+  while (el !== null && el.shadowRoot) {
+    const inner = el.shadowRoot.elementFromPoint(x, y)
+    if (inner === null || inner === el) break
+    el = inner
+  }
+  return el
+}
+
+/**
+ * What is painted at a point, top to bottom, from `el` down — across shadow
+ * boundaries.
+ *
+ * `elementsFromPoint` answers in ONE tree scope: everything inside a shadow
+ * root is retargeted to its host, and everything slotted into a root stays in
+ * the scope it was written in. So neither the document's answer nor a single
+ * root's is the whole stack:
+ * - for an element inside a root, the document's answer names the host;
+ * - for an element SLOTTED into a root, the root's own background is drawn
+ *   between the text and the page, and the document's answer skips it. That is
+ *   the ordinary card: the component paints the surface inside its root and
+ *   the page writes the text (Wren's measurement on #293 — text slotted into a
+ *   dark card was judged on the page's white at 1.24:1, where what is painted
+ *   is 11.86:1).
+ *
+ * So every scope the element is composed through is asked — its own, and each
+ * one a slot or a host takes it into — and the answers are merged into a
+ * single order. They are consistent: each is a subsequence of what is really
+ * painted, so an element is taken only once nothing else still has it deeper.
+ * Null when `el` is not painted at the point in any of them.
+ */
+export function shadowStackFrom(el: Element, x: number, y: number): Element[] | null {
+  // The chain the element is drawn through: slots and hosts included.
+  const chain: Element[] = []
+  for (let node: Element | null = el; node !== null; node = shadowParent(node)) chain.push(node)
+  const stacks: Element[][] = []
+  const asked = new Set<Node>()
+  let found = false
+  for (let i = 0; i < chain.length; i++) {
+    const scope: Node = chain[i]!.getRootNode()
+    if (asked.has(scope)) continue
+    asked.add(scope)
+    const stack = (scope instanceof ShadowRoot ? scope : document).elementsFromPoint(x, y)
+    // At ANY index: an element whose centre is covered — by its own block
+    // child, by a click-catcher — is still painted at that point, and the
+    // layers under it are what its text sits on. Requiring index 0 sent those
+    // to the ancestor walk, which is the walk that misses a scrim from another
+    // branch (Wren's second read of #293).
+    if (stack.indexOf(el) >= 0) found = true
+    // Where this scope's answer joins the chain: the element itself, or the
+    // first thing above it that this scope can see (a slot has no box of its
+    // own, and `display: contents` elements are absent too).
+    let at = -1
+    for (let j = i; j < chain.length && at < 0; j++) at = stack.indexOf(chain[j]!)
+    if (at >= 0) stacks.push(stack.slice(at))
+  }
+  if (!found) return null
+  // One order out of several: take the head no other answer still has deeper,
+  // which keeps every scope's relative order and cannot repeat an element.
+  const out: Element[] = []
+  for (;;) {
+    let pick = -1
+    for (let i = 0; i < stacks.length && pick < 0; i++) {
+      const head = stacks[i]![0]
+      if (head === undefined) continue
+      if (!stacks.some((s, j) => j !== i && s.indexOf(head) > 0)) pick = i
+    }
+    if (pick < 0) pick = stacks.findIndex(s => s.length > 0)
+    if (pick < 0) break
+    const head = stacks[pick]![0]!
+    out.push(head)
+    for (const s of stacks) {
+      const k = s.indexOf(head)
+      if (k >= 0) s.splice(k, 1)
+    }
+  }
+  return out.length > 0 ? out : null
+}
+
 /** Whether the document root itself has anything to scroll. */
 export function rootScrolls(): boolean {
   const el = document.scrollingElement
@@ -34,19 +177,27 @@ export function rootScrolls(): boolean {
 /**
  * Whether the page has hidden the document's overflow — `html` or `body`
  * with `overflow-y: hidden` — which is a page saying it manages its own
- * scrolling. With no scroller in its light DOM either, whatever it shows past
- * one screen is somewhere neither a capture nor a walk can reach; both say so.
+ * scrolling. With no scroller anywhere else either (open shadow roots
+ * included), whatever it shows past one screen is somewhere neither a capture
+ * nor a walk can reach; both say so.
  */
 /**
  * Whether an element sits inside a dialog — a `<dialog>`, or the ARIA
  * spelling every modal library reaches for. Used by the walk: a page that
  * locks its own scroll while a dialog is open leaves the dialog's panel as
- * the only scroller in the light DOM, and a walk that scrolls *that* has not
+ * the only scroller left on the page, and a walk that scrolls *that* has not
  * walked the page at all. Named semantics rather than a guess at sizes, so a
  * page locked by an anonymous div says nothing instead of the wrong thing.
  */
 export function inDialog(el: Element | null): boolean {
-  return el !== null && el.closest('dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]') !== null
+  // Across shadow boundaries (`shadowParent`): `closest` stops at a root, so a
+  // dialog whose panel is a component — or a component's scroller inside a
+  // page's dialog — read as a panel on the page (Wren's read of #293).
+  const SELECTOR = 'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]'
+  for (let node: Element | null = el; node !== null; node = shadowParent(node)) {
+    if (node.matches(SELECTOR)) return true
+  }
+  return false
 }
 
 export function overflowHidden(): boolean {
@@ -78,83 +229,6 @@ export function framesInViewport(): { count: number; viewportCoverage: number } 
     }
   }
   return { count, viewportCoverage: vw > 0 && vh > 0 ? Math.min(1, area / (vw * vh)) : 0 }
-}
-
-/**
- * What the open shadow roots on this page hold that the measurement will not
- * see: how many hosts, how many interactive elements inside them, and how
- * many elements with text of their own.
- *
- * The audit and the lint read the light DOM — `querySelectorAll` does not
- * cross a shadow boundary — so a page built from web components measures as
- * nothing at all. chromestatus.com/features (2026-09-12) answered 0 targets
- * and 0 text while holding 159 roots with 136 interactive elements, and was
- * described as a script that had not run, a bot wall, or an empty document.
- * Counting what is behind the boundary is what lets the answer say which.
- *
- * Closed roots are unreachable from script and are not counted: the number
- * is what could have been measured had the measurement entered, not a guess
- * at everything on the page. Bounded by MAX_VISITED, as the scroll-host walk
- * is, so a page of ten thousand components cannot make this expensive.
- */
-export function shadowContent(): {
-  hosts: number
-  interactive: number
-  text: number
-  lightInteractive: number
-  lightText: number
-} {
-  const INTERACTIVE = 'a,button,input,select,textarea,[role="button"],[role="link"],[tabindex]'
-  // Both sides count what a measurement would have kept, not what the DOM
-  // contains. The unfiltered count read "26 of this page's 29 text elements"
-  // beside a sentence saying the page had no visible text — three invisible
-  // elements, true of the DOM and irreconcilable with the figures next to it
-  // (the sweep, 2026-09-13). It is the same defect as reporting airbnb's 267
-  // interactive elements beside an audit that kept 84.
-  //
-  // The consequence is deliberate and worth stating, because the next reader
-  // will be tempted to take the filter off and call it more accurate: a page
-  // whose components render collapsed by default now counts as hiding
-  // nothing, because nothing in them would have been measured either.
-  const shown = (el: Element): boolean => {
-    const check = (el as Element & { checkVisibility?: (o?: unknown) => boolean }).checkVisibility
-    if (typeof check === 'function') return check.call(el, { visibilityProperty: true, opacityProperty: true })
-    return el.getClientRects().length > 0
-  }
-  const hasOwnText = (node: Element): boolean =>
-    shown(node) && Array.from(node.childNodes).some(c => c.nodeType === 3 && (c.textContent ?? '').trim().length > 0)
-  let hosts = 0
-  let interactive = 0
-  let text = 0
-  let visited = 0
-  const walk = (root: Document | ShadowRoot): void => {
-    for (const el of Array.from(root.querySelectorAll('*'))) {
-      if (visited++ > MAX_VISITED) return
-      const shadow = el.shadowRoot
-      if (shadow === null) continue
-      hosts++
-      for (const c of Array.from(shadow.querySelectorAll(INTERACTIVE))) if (shown(c)) interactive++
-      for (const node of Array.from(shadow.querySelectorAll('*'))) {
-        if (hasOwnText(node)) text++
-      }
-      walk(shadow)
-    }
-  }
-  walk(document)
-  // The light DOM counted by the same selector and the same text rule, so
-  // the share can be stated as a fraction of one page rather than two
-  // measurements compared across a difference nobody stated. The audit's own
-  // target count is the wrong denominator: it exempts inline text links
-  // (gov.uk, 102 of 125), so "40 of 12" is a sentence it could produce.
-  let lightText = 0
-  let lightVisited = 0
-  for (const node of Array.from(document.querySelectorAll('*'))) {
-    if (lightVisited++ > MAX_VISITED) break
-    if (hasOwnText(node)) lightText++
-  }
-  let lightInteractive = 0
-  for (const el of Array.from(document.querySelectorAll(INTERACTIVE))) if (shown(el)) lightInteractive++
-  return { hosts, interactive, text, lightInteractive, lightText }
 }
 
 /**
@@ -193,9 +267,12 @@ export function isVisible(el: Element): boolean {
 
 /**
  * The page's real scroll host: the largest-by-client-area visible descendant
- * that is a scroll container with something to scroll. Depth-first, so an
+ * that is a scroll container with something to scroll. Level order, so an
  * exact tie between an ancestor-side and a later candidate keeps the one found
- * first. The walk is bounded by `MAX_VISITED`.
+ * first — and the light DOM is swept before any open root, each on its own
+ * `MAX_VISITED` budget, so a page full of components cannot cost the page's
+ * own scroller its answer. What a budget cuts off is not reported, which is
+ * `chore-scroll-host-budget-is-silent`.
  *
  * Only `display: none` subtrees are pruned, and only after a computed-style
  * check. Client area cannot stand in for "has no box": an inline wrapper
@@ -209,10 +286,11 @@ export function isVisible(el: Element): boolean {
  * all zeroes); the prune is there so a hidden mega-list cannot eat the budget
  * and starve the real scroller.
  *
- * Reach limits: the walk sees light DOM in this document only. A scroller
- * inside a shadow root or an iframe is unreachable — and so is
- * `scrollSelector`, since `document.querySelector` does not cross either
- * boundary — which leaves a web-component app with no escape hatch.
+ * Reach: this document, open shadow roots included (a feed inside a
+ * component is a page's scroller as much as one in the light DOM). A scroller
+ * inside an iframe or a closed root is unreachable, and so is `scrollSelector`
+ * for anything inside a root, since `document.querySelector` does not cross
+ * the boundary.
  *
  * Returns null when nothing qualifies, which the caller reads as "use the
  * root". Exported: the deliberate follow-up that mirrors a *user's*
@@ -222,24 +300,54 @@ export function findScroller(root: Element | null = document.body): Element | nu
   if (!root) return null
   let best: Element | null = null
   let bestArea = 0
-  let visited = 0
-  const stack: Element[] = [root]
-  while (stack.length > 0) {
-    const el = stack.pop()!
-    if (visited++ >= MAX_VISITED) break
+  /** Judge one element; false when its subtree is `display: none` and pruned. */
+  const consider = (el: Element): boolean => {
     const area = el.clientWidth * el.clientHeight
-    if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') continue
+    if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') return false
     // `isVisible` runs last: it is the expensive half, and only an element
     // that would otherwise win needs to answer for its visibility.
     if (area > bestArea && canScroll(el) && isVisible(el)) {
       best = el
       bestArea = area
     }
-    // Pushed in reverse so `pop` yields document order — the depth-first
-    // traversal the tiebreak is defined against.
-    const kids = el.children
-    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]!)
+    return true
   }
+  /**
+   * One level-order sweep on its own budget. Level order because a scroll host
+   * is a large, shallow box; the budget because a pathological DOM must not
+   * stall the preload.
+   */
+  const sweep = (start: Element[], enterRoots: boolean): Element[] => {
+    const hosts: Element[] = []
+    const queue = start.slice()
+    let visited = 0
+    for (let head = 0; head < queue.length; head++) {
+      const el = queue[head]!
+      if (visited++ >= MAX_VISITED) break
+      if (!consider(el)) continue
+      const shadow = el.shadowRoot
+      if (shadow) {
+        if (enterRoots) for (const kid of Array.from(shadow.children)) queue.push(kid)
+        else hosts.push(el)
+      }
+      for (const kid of Array.from(el.children)) queue.push(kid)
+    }
+    return hosts
+  }
+  // THE LIGHT DOM FIRST, AND ON A BUDGET OF ITS OWN. A single sweep spent the
+  // budget inside open roots: a sidebar of 300 components put about 1,800
+  // elements in front of a `main` four wrappers down, and the page's own
+  // scroller lost to the sidebar — measured at 4, 12 and 25 wrappers (Wren, on
+  // #293). Whatever the light DOM answers is now exactly what it answered
+  // before roots were entered at all; the roots then get their own budget and
+  // can only win on area.
+  const hosts = sweep([root], false)
+  const inRoots: Element[] = []
+  for (const host of hosts) {
+    const shadow = host.shadowRoot
+    if (shadow) for (const kid of Array.from(shadow.children)) inRoots.push(kid)
+  }
+  if (inRoots.length > 0) sweep(inRoots, true)
   return best
 }
 
@@ -280,7 +388,9 @@ export function clipTest(host: Element | null): (r: DOMRect, el: Element) => boo
     return box
   }
   return (r: DOMRect, el: Element): boolean => {
-    for (let a = el.parentElement; a; a = a.parentElement) {
+    // Across shadow boundaries: a list inside a component's own scroller is
+    // held out of view by it exactly as a light-DOM sidebar is.
+    for (let a = shadowParent(el); a; a = shadowParent(a)) {
       const box = clipperBox(a)
       if (!box) continue
       // Fully outside the container's box on either axis: not a pixel of it is
@@ -312,11 +422,26 @@ export function clipTest(host: Element | null): (r: DOMRect, el: Element) => boo
  * parked off the page, and pageHeight collapsed to the viewport.
  */
 export function scrollOffset(host: Element | null): (el: Element) => { x: number; y: number } {
+  // `shadowContains`, not `contains`: a host scroller inside a component holds
+  // the light-DOM items slotted into it, which `contains` says it does not.
   return (el: Element) =>
-    host !== null && host !== el && host.contains(el)
+    host !== null && host !== el && shadowContains(host, el)
       ? { x: window.scrollX + host.scrollLeft, y: window.scrollY + host.scrollTop }
       : { x: window.scrollX, y: window.scrollY }
 }
+
+/**
+ * The shadow-tree helpers alone, serialised: what a page-side function that
+ * crosses shadow boundaries needs beside it (`INSPECT_SCRIPT`), and the first
+ * half of `SCROLL_HOST_SCRIPT`.
+ */
+export const SHADOW_TREE_SCRIPT = [
+  shadowParent.toString(),
+  shadowContains.toString(),
+  shadowElements.toString(),
+  shadowElementFromPoint.toString(),
+  shadowStackFrom.toString(),
+].join('\n')
 
 /**
  * The functions above, serialised for `executeJavaScript` in a page the
@@ -328,10 +453,10 @@ export function scrollOffset(host: Element | null): (el: Element) => { x: number
 export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,
+  SHADOW_TREE_SCRIPT,
   rootScrolls.toString(),
   overflowHidden.toString(),
   inDialog.toString(),
-  shadowContent.toString(),
   framesInViewport.toString(),
   canScroll.toString(),
   isVisible.toString(),
@@ -359,13 +484,12 @@ export interface WalkStepResult {
    */
   dialog: boolean
   /**
-   * What was on the page when the walk found nothing to scroll: iframes over
-   * the viewport and open shadow hosts, so the note can name the cause it
-   * measured instead of listing three (`walkNothingNote`). Measured only in
-   * that case — both counts walk the whole document, and a walk that is
-   * moving has no use for them.
+   * What was on the page when the walk found nothing to scroll: the iframes
+   * over the viewport, so the note can name the cause it measured instead of
+   * guessing (`walkNothingNote`). Measured only in that case, since it walks
+   * the whole document and a walk that is moving has no use for it.
    */
-  blocked?: { frames: { count: number; viewportCoverage: number }; shadowHosts: number }
+  blocked?: { frames: { count: number; viewportCoverage: number } }
   /**
    * The document's height when this step was taken. Compared between the
    * walk's first step and its last, it says whether a page taller than the
@@ -421,7 +545,7 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
     // was HELD, and nothing measured which. Read from the document rather
     // than the scroller, because a panel's height is not the page's.
     pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
-    ...(stuck ? { blocked: { frames: framesInViewport(), shadowHosts: shadowContent().hosts } } : {}),
+    ...(stuck ? { blocked: { frames: framesInViewport() } } : {}),
   }
 }
 

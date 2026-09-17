@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>shadow-arms-flat-fixture</title>
+<!--
+  The light-DOM twin of `shadow-arms.html`: the same markup, styles and
+  geometry, with the components flattened so nothing sits behind a shadow
+  boundary. Every arm must pass against THIS page today. That is what makes a
+  red on the shadow page a statement about the boundary rather than about the
+  harness, the fixture or a coordinate — the twin is the control, run in the
+  same job. Keep the two byte-identical apart from where the markup lives.
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #ffffff; font: 16px system-ui; }
+  #shell { height: 100vh; display: flex; flex-direction: column; }
+  h1 { margin: 16px; font-size: 24px; height: 28px; line-height: 28px; }
+  /* A custom element is inline by default; the flat twin's hosts are divs. Same box either way. */
+  x-card, x-feed, #card, #feed { display: block; }
+</style>
+<div id="shell">
+  <h1>Arms for open shadow roots</h1>
+  <div id="card"></div>
+  <div id="feed"></div>
+</div>
+<script>
+  // The identical strings to shadow-arms.html — the only difference on this
+  // page is that they land in the light DOM.
+  const CARD_STYLE = '.card { background: #1f2937; color: #d1d5db; padding: 24px; margin: 0 16px; font-size: 14px; }'
+    + ' .rule { height: 0.5px; background: #d1d5db; margin: 12px 0 0; }'
+  const CARD_HTML = '<div class="card"><p id="inner">Light text on a dark card, inside an open root</p><div class="rule"></div></div>'
+  const FEED_STYLE = '.feed { height: 300px; overflow: auto; margin: 16px; } .row { height: 120px; border-bottom: 1px solid #eee; }'
+
+  const style = document.createElement('style')
+  style.textContent = CARD_STYLE + ' ' + FEED_STYLE
+  document.head.append(style)
+
+  document.getElementById('card').innerHTML = CARD_HTML
+  const feedHost = document.getElementById('feed')
+  feedHost.innerHTML = '<div class="feed" id="scroller"></div>'
+  const feed = feedHost.querySelector('.feed')
+  for (let i = 0; i < 30; i++) {
+    const d = document.createElement('div')
+    d.className = 'row'
+    d.textContent = 'row ' + i
+    feed.append(d)
+  }
+</script>

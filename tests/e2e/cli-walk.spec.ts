@@ -140,7 +140,7 @@ test('a page that hides its overflow with nothing to scroll says so, instead of 
   expect(r.code, r.stderr).toBe(0)
   const m = JSON.parse(r.stdout)
   expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
-  expect(m.warnings.join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll/)
+  expect(m.warnings.join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, so the walk had nothing to scroll/)
 })
 
 test('a page locked behind a dialog says the walk scrolled the dialog, not the page', async () => {

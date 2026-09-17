@@ -34,7 +34,6 @@ import { diffMetrics, inkRows } from './metrics'
 import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
 import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
-import { shadowShareNote } from '../shared/shadowShare'
 import {
   cutLoadMeasureNote,
   Deadline,
@@ -423,8 +422,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           const el = rootScrolls ? null : findScroller()
           window.__obsrvScrollHost = el
           // A page that hides the root's overflow has said it manages its own
-          // scrolling. If nothing in its light DOM scrolls either, whatever it
-          // shows past this screen is somewhere the capture cannot go. The
+          // scrolling. If nothing else scrolls either — open shadow roots
+          // included — whatever it shows past this screen is somewhere the
+          // capture cannot go. The
           // walks ask the same question: overflowHidden, in shared/scrollHost.
           const hidden = overflowHidden()
           if (!el) return { rootScrolls, found: false, hidden, top: 0, height: 0, scrollHeight: 0 }
@@ -540,8 +540,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         // capture is genuinely one screen; saying so is the honest part.
         warn(
           `this page hides the document's overflow and scrolls nothing the capture can reach — no ` +
-            `scrollable container in its light DOM. Content in an iframe, in a shadow root, or in a container ` +
-            `that scrolls by transform (a virtualised list or editor) is past this one screen and not in the PNG`,
+            `scrollable container in its light DOM or its open shadow roots. Content in an iframe, in a closed shadow root, ` +
+            `or in a container that scrolls by transform (a virtualised list or editor) is past this one screen and not in the PNG`,
         )
       } else if (!shell.rootScrolls && shell.found && shell.scrollHeight > shell.height + 1) {
         // Same page, but without --tiled there is nothing to scroll: say what
@@ -1137,12 +1137,7 @@ async function runAudit(cmd: AuditCommand): Promise<void> {
       // web components arrives first and reads as being about the page asked
       // for, and the 404 only lands at the end.
       if (statusNote !== null) notes.push(statusNote)
-      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames, report.shadow, status.code))
-      // And when the page did give something to measure, what it kept back.
-      // Not an `else`: the empty note wins when there is nothing at all,
-      // and `shadowShareNote` stands down for that case itself.
-      const shareNote = shadowShareNote('audit', report.shadow)
-      if (shareNote !== null) notes.push(shareNote)
+      if (m.stillEmpty) notes.push(emptyDocumentNote('audit', m.waitedMs, report.frames, status.code))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = auditFindings(
@@ -1274,9 +1269,7 @@ async function runLint(cmd: LintCommand): Promise<void> {
       if (m.arrivedAt !== null) notes.push(navigatedAfterLoadNote(cmd.url, m.arrivedAt))
       // The arrival, then the status, then what was in it — see the audit.
       if (lintStatusNote !== null) notes.push(lintStatusNote)
-      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames, report.shadow, lintStatus.code))
-      const shareNote = shadowShareNote('lint', report.shadow)
-      if (shareNote !== null) notes.push(shareNote)
+      if (m.stillEmpty) notes.push(emptyDocumentNote('lint', m.waitedMs, report.frames, lintStatus.code))
     }
     for (const n of notes) human(`warning: ${n}`)
     const result = lintFindings(

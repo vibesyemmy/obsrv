@@ -684,8 +684,9 @@ const driveInputShape = {
         .describe(
           'Escape hatch: a CSS selector naming the element to scroll, for pages whose scroll host the automatic ' +
             'detection misjudges (several large scrollers, a virtualised list that translates content). No fallback ' +
-            'if it matches nothing — the result says so. Same reach as the detection: light DOM of the top-level ' +
-            'document only, so a scroller inside a shadow root or an iframe cannot be targeted.',
+            'if it matches nothing — the result says so. A selector reaches the light DOM of the top-level document ' +
+            'only, so a scroller inside a shadow root or an iframe cannot be named (the detection does find one ' +
+            'inside an open shadow root).',
         ),
     })
     .optional()
@@ -1998,7 +1999,15 @@ const inspectInputShape = {
     .object({ x: z.number().min(0), y: z.number().min(0) })
     .optional()
     .describe('A point in CSS px of the target screen — what is drawn there. Exactly one of `at` / `selector`.'),
-  selector: z.string().min(1).max(512).optional().describe('A CSS selector; its first match is inspected. Exactly one of `at` / `selector`.'),
+  selector: z
+    .string()
+    .min(1)
+    .max(512)
+    .optional()
+    .describe(
+      'A CSS selector; its first match is inspected. It does not pierce a shadow root, so a component\'s inside is ' +
+        'reachable by `at` (a point) rather than by selector. Exactly one of `at` / `selector`.',
+    ),
   mode: z
     .enum(['auto', 'headless', 'live'])
     .optional()

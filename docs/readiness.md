@@ -104,14 +104,14 @@ dialog steals the walk are different shapes and only one has a sentence —
 though on fixtures both fired, identically on all five runs, the dialog's in
 its own words ("the walk scrolled a dialog, not the page itself"), so what is
 unproven is live firing rather than the sentence's existence; the dialog note
-has never fired on a live site across four runs; whether the measurement
-should enter open shadow roots at all is undecided, and the evidence that
-decision needs was only being collected for pages that measure as *empty*.
+has never fired on a live site across four runs; the measurement enters open
+shadow roots since `feat-measure-open-shadow-roots` (approved 2026-09-17).
 *Check:* each item either fixed, or present in the limitations page (D1) in a
 sentence a user could act on. **Status: not met.**
 
 **B3. The thresholds can be argued with.** 7 mm for tap targets, 2 mm for
-text, 14 device px for thin text, 15% or 25 elements for the shadow share.
+text, 14 device px for thin text. (The shadow share's 15% or 25 elements retired
+with the share note, when the measurement began entering open roots.)
 The output calls them provisional, which is honest and leaves a reader unable
 to disagree on any ground but taste.
 *Check:* one short section per threshold — what it derives from, what it was
@@ -361,7 +361,7 @@ and is now pinned by `tests/e2e/live-drive.spec.ts`.
 
 **D1. A limitations page.** Scattered across release notes and code comments
 today: macOS Chromium is the rasterisation truth and Windows ClearType will
-differ; `diff` is 1x-only; the measurement does not enter open shadow roots;
+differ; `diff` is 1x-only; the measurement does not enter closed shadow roots;
 captures cap at 4096 device px; content inside an `<iframe>` is not reached;
 there is no Windows or Linux build.
 *Check:* one page, linked from the README, that a user hits before the

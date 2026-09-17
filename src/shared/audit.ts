@@ -3,7 +3,7 @@
 // walk is written here so the CLI can ship it as source; nothing in this
 // file runs outside the target page except the string.
 
-import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowContent } from './scrollHost'
+import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowElements } from './scrollHost'
 
 /**
  * The physical-units audit's raw material: every interactive element and
@@ -58,12 +58,6 @@ export interface AuditReport {
    * viewport. Absent from an older app's reply.
    */
   frames?: { count: number; viewportCoverage: number }
-  /**
-   * What the open shadow roots hold that this measurement did not enter
-   * (`shadowContent`). A page built from web components measures as nothing;
-   * this is how the answer says so instead of guessing.
-   */
-  shadow?: { hosts: number; interactive: number; text: number }
   /**
    * How many entries the checks refused, by kind — absent when none were.
    * A value out of bounds costs its own entry, not the page; the judge says
@@ -171,7 +165,10 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     const named = el.querySelector('[aria-label],[title],img[alt]')
     return named ? named.getAttribute('aria-label') || named.getAttribute('title') || named.getAttribute('alt') || '' : ''
   }
-  for (const el of Array.from(document.querySelectorAll(TARGETS))) {
+  // Open shadow roots included (`shadowElements`): a control inside a
+  // component is a control on the page.
+  for (const el of shadowElements(document.documentElement)) {
+    if (!el.matches(TARGETS)) continue
     const cs = getComputedStyle(el)
     // A link inside running text is as tall as its line and flagged on every
     // page there is; WCAG 2.5.8 exempts inline links for that reason, and so
@@ -203,10 +200,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE', 'HEAD', 'META', 'LINK'])
   const text: AuditText[] = []
   let textOver = 0
-  const root = document.body ?? document.documentElement
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
-  for (let node: Node | null = walker.currentNode; node; node = walker.nextNode()) {
-    const el = node as Element
+  for (const el of shadowElements(document.body ?? document.documentElement)) {
     if (SKIP.has(el.tagName)) continue
     let own = ''
     for (const child of Array.from(el.childNodes)) if (child.nodeType === 3) own += child.textContent ?? ''
@@ -239,7 +233,6 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       ),
     ),
     frames: framesInViewport(),
-    shadow: shadowContent(),
     targets,
     text,
     truncated: { targets: targetsOver, text: textOver },

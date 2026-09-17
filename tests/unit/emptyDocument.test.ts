@@ -93,85 +93,18 @@ describe('a report emptied by dropped entries', () => {
 })
 
 /**
- * chromestatus.com/features (2026-09-12): 0 targets and 0 text, and the
- * note offered three causes — a script that had not run, a bot wall, an
- * empty document. All three were false. The page holds 159 shadow roots
- * with 136 interactive elements in them, which the measurement does not
- * enter. When that is what happened, the note should say so instead of
- * guessing, and should not advise waiting longer: waiting cannot help.
+ * chromestatus.com/features (2026-09-12): 0 targets and 0 text, and the note
+ * offered three causes, all false: the page held 159 open shadow roots. The
+ * note grew a branch naming them. The measurement enters open roots now
+ * (`feat-measure-open-shadow-roots`), so that page is measured rather than
+ * empty, and the branch went with the gap. What is left is the note for a page
+ * that really measured nothing, which says nothing about shadow roots.
  */
-describe('a page whose content is in shadow roots', () => {
-  const shadow = { hosts: 159, interactive: 136, text: 147 }
-
-  it('names the shadow roots and what they hold', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
-    expect(note).toContain('159 shadow roots')
-    expect(note).toContain('136 interactive elements')
-    expect(note).toContain('does not enter')
-  })
-
-  it('drops the three causes that are false, and the advice that cannot help', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
-    expect(note).not.toContain('a bot wall')
-    expect(note).not.toContain('had not run yet')
-    expect(note).not.toContain('renders late longer')
-  })
-
-  it('says what no wait can change, not that no wait is worth making', () => {
-    // A dev app reloading under the measurement is a page where raising
-    // --wait is sensible — to catch a later revision. The flat "no wait will
-    // change that" told the reader otherwise; it is about the shadow content
-    // and should say so (obsrv-4f's cold read of the two notes together).
-    const note = emptyDocumentNote('audit', 3000, undefined, shadow)
-    // What matters is that it names what a wait cannot do, rather than
-    // telling a reader on a reloading page that waiting is pointless.
-    expect(note).toMatch(/no wait brings its content into the light DOM/)
-    expect(note).not.toContain('no wait will change that')
-  })
-
-  it('says the light DOM is what the figures are of', () => {
-    expect(emptyDocumentNote('lint', 3000, undefined, shadow)).toContain('light DOM')
-  })
-
-  it('counts one root in the singular, verb included', () => {
-    // The noun was singularised and the verb was not: a page with exactly one
-    // open host read "1 shadow root hold 12 interactive elements". Shipped in
-    // 0.57.0 and unseen until a fixture had one host — chromestatus had 159,
-    // and every reading since had been of many. The old assertion passed
-    // through it, because it only checked the noun.
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 0 })
-    expect(note).toContain('1 shadow root holds 1 interactive element')
-    expect(note).not.toContain('1 shadow roots')
-    expect(note).not.toContain('root hold ')
-  })
-
-  it('reads with one of everything, which is the same page that has one host', () => {
-    // A page with a single open host is the page most likely to hold one of
-    // each, and that sentence had never been printed either (obsrv-4f).
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 1, interactive: 1, text: 1 })
-    expect(note).toContain('1 shadow root holds 1 interactive element and 1 text element')
-  })
-
-  it('keeps the plural verb for more than one root', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 2, interactive: 3, text: 4 })
-    expect(note).toContain('2 shadow roots hold 3 interactive elements and 4 text elements')
-    expect(note).not.toContain('roots holds')
-  })
-
-  it('names its own subject, so it does not depend on a sentence before it', () => {
-    // On a 404 the note sits under a status line naming the error page, and
-    // "this page is built from web components" then reads as being about the
-    // error page — correct, but only because of what precedes it. A reorder
-    // would silently turn it into a claim about the page the reader asked
-    // for, and no test would notice (obsrv-4f's second cold read). It says
-    // which page it means instead.
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 3, interactive: 4, text: 5 })
-    expect(note).toContain('the page measured is built from web components')
-    expect(note).not.toContain('this page is built from web components')
-  })
-
-  it('leaves the old sentence alone when there are no shadow roots', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 0, interactive: 0, text: 0 })
+describe('a page whose content was in shadow roots', () => {
+  it('is no longer a cause the empty-page note names', () => {
+    const note = emptyDocumentNote('audit', 3000)
+    expect(note).not.toContain('shadow root')
+    expect(note).not.toContain('light DOM')
     expect(note).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
   })
 })
@@ -197,12 +130,11 @@ describe('an iframe too small to matter', () => {
  * Read on a redirect that lands on a 404 (2026-09-12): the status sentence
  * named the cause one line above, and this one still offered three guesses it
  * had just disproved, plus advice to wait longer that cannot help an error
- * page. The same generalisation the shadow-root branch already makes: when
- * the cause is known, the guesses give way to it.
+ * page. When the cause is known, the guesses give way to it.
  */
 describe('an empty page whose status already says why', () => {
   it('drops the guesses and the wait advice when the server answered an error', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, undefined, 404)
+    const note = emptyDocumentNote('audit', 3000, undefined, 404)
     expect(note).toContain('nothing to measure')
     expect(note).not.toContain('a page rendered by script that had not run yet')
     expect(note).not.toContain('bot wall')
@@ -213,16 +145,8 @@ describe('an empty page whose status already says why', () => {
     expect(note).not.toContain('the figures are of')
   })
   it('keeps them for an ordinary 200, where the cause really is unknown', () => {
-    const note = emptyDocumentNote('audit', 3000, undefined, undefined, 200)
+    const note = emptyDocumentNote('audit', 3000, undefined, 200)
     expect(note).toContain('a page rendered by script that had not run yet')
     expect(note).toContain('waitMs')
-  })
-  it('names the shadow roots even on an error page, since that is the more specific cause', () => {
-    // Both conditions true — an error page in a component-built app. The
-    // roots are what we know; the status has already said the rest.
-    const note = emptyDocumentNote('audit', 3000, undefined, { hosts: 3, interactive: 4, text: 5 }, 404)
-    expect(note).toContain('3 shadow roots')
-    expect(note).toContain('the page measured is built from web components')
-    expect(note).not.toContain('waitMs')
   })
 })
