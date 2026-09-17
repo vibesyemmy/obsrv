@@ -1,8 +1,7 @@
 ---
 title: "An address typed while the toolbar's last navigation is still resolving is overwritten by its answer, and Enter re-sends the old one"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: B5
 order: 73
@@ -57,3 +56,6 @@ answer to a navigation *we* started does the same harm. Typing after a submit wi
   is what shows it.** The arms remain a rate check for CI's `panes:230`/`:259` recurrences over the next
   runs.
 
+## Merged 2026-09-17: #239 (dcc9af3)
+
+The toolbar's navigation answer no longer overwrites an address typed while it was in flight. The rate check for `panes:230`/`:259` is CI's, over the next runs.

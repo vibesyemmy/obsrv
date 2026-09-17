@@ -1,8 +1,7 @@
 ---
 title: "The preload-channels guard sees only app.ts's IPC.x sends, so six channels could lose their handler unnoticed"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: chore
 order: 69
 ---
@@ -61,3 +60,6 @@ still registers `ipcMain.on(channels.subscribe`, which the test asserts.
 
 All four were restored from copies; the test passes on the clean tree.
 
+## Merged 2026-09-17: #237 (3d9d040)
+
+The preload-channels guard reads all three send shapes, and fails on a new preload file or on a sendToHost or postMessage send.

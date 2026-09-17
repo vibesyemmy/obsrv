@@ -1,8 +1,7 @@
 ---
 title: "After a refused throttle, a load timeout says \"under --throttle none (a slow load is what a throttle is for)\", naming a flag nobody passed"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: C5
 order: 67
@@ -50,3 +49,6 @@ only.
 - **Kept:** `cli-throttle.spec`'s pins ("under --throttle 3g") are an applied throttle, so they're
   unaffected. `throttle-refused` runs on CI only.
 
+## Merged 2026-09-17: #221 (cb2f320)
+
+A load-timeout sentence names a throttle only when one was in force.

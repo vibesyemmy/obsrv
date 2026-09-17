@@ -1,8 +1,7 @@
 ---
 title: "The app's Inspect footer ignores the element's opacity, so its contrast disagrees with obsrv inspect and obsrv_inspect"
-column: review
+column: done
 owner: "Henry"
-waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: C4
 order: 68
@@ -54,3 +53,6 @@ Pulled from Backlog; it's the other app-side known issue in the 0.61.0 notes. **
 - **Wiring:** `inspect.spec`'s footer test ("#6b7280 on #ffffff", "4.8:1 here") passes locally on the
   built app (harness-only, desk-safe).
 
+## Merged 2026-09-17: #225 (c8e502d)
+
+The app's inspect footer gives the painted colour and the readout's contrast under opacity and alpha.
