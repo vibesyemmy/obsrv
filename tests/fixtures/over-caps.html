@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>more elements than one report carries</title>
+<style>
+  body { margin: 0; font: 12px/1.2 system-ui, sans-serif; color: #111; background: #fff }
+  button { width: 20px; height: 20px; padding: 0; font-size: 8px }
+  p { display: inline-block; margin: 0 2px; font-size: 8px }
+  img { width: 40px; height: 40px }
+</style>
+<!--
+  Past every cap the measurement carries, so the sentences about carrying less
+  than a page holds can fire (docs/note-inventory.md, c5). Built by script to
+  keep the file small; the counts are the point:
+    2100 buttons     > AUDIT_MAX_TARGETS (2000)
+    3100 paragraphs  + the buttons' own labels > AUDIT_MAX_TEXT / LINT_MAX_TEXT (3000)
+    600 images       > LINT_MAX_IMAGES (500), each a 10px file drawn at 40 — upscaled,
+                       and not the "pixel or two" a spacer is, so they are judged
+  and the image findings alone pass the 200 a list carries.
+-->
+<div id="targets"></div>
+<div id="text"></div>
+<div id="images"></div>
+<script>
+  const IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAIAAAACUFjqAAAAEklEQVR4nGM4YWODBzGMSmNDAOtLfQG4w4U1AAAAAElFTkSuQmCC'
+  const add = (host, n, make) => {
+    const f = document.createDocumentFragment()
+    for (let i = 0; i < n; i++) f.appendChild(make(i))
+    document.getElementById(host).appendChild(f)
+  }
+  add('targets', 2100, i => { const b = document.createElement('button'); b.id = 'b' + i; b.textContent = 'x'; return b })
+  add('text', 3100, i => { const p = document.createElement('p'); p.id = 'p' + i; p.textContent = 'text ' + i; return p })
+  add('images', 600, i => { const m = document.createElement('img'); m.id = 'i' + i; m.src = IMG; m.alt = 'a 10px file drawn at 40'; return m })
+</script>

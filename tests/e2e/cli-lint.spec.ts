@@ -266,3 +266,29 @@ test.describe('a report that arrives with something odd in it', () => {
     expect(m.warnings.join(' ')).not.toMatch(/nothing to measure/)
   })
 })
+
+test('a page past the caps: the list says what it left out, and the page says what it never measured', async () => {
+  // Two more sentences nothing had been seen to say (docs/note-inventory.md,
+  // c5). `over-caps.html` holds 600 images of a 10 px file drawn at 40 —
+  // upscaled, and too big to be counted as spacers — past LINT_MAX_IMAGES
+  // (500), so the findings alone pass the 200 a list carries; its 3100
+  // paragraphs and 2100 button labels pass LINT_MAX_TEXT (3000).
+  const r = await runCli(['lint', fixture('over-caps.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.findings).toHaveLength(200)
+  expect(m.truncated.findings).toBeGreaterThan(0)
+  expect(m.truncated.text).toBeGreaterThan(0)
+  expect(m.truncated.images).toBeGreaterThan(0)
+  const warnings: string[] = m.warnings
+  expect(warnings, JSON.stringify(warnings)).toContainEqual(
+    expect.stringMatching(/^\d+ more findings past the 200 listed; the summary counts them all$/),
+  )
+  expect(warnings, JSON.stringify(warnings)).toContainEqual(
+    expect.stringMatching(/^the page has more elements than one report carries: \d+ text elements, \d+ edges and \d+ images were counted but not measured$/),
+  )
+  // The list note's number is the field beside it, and the summary counts
+  // every finding — which is what that sentence promises the reader.
+  expect(warnings.find(w => w.includes('more findings past the 200 listed'))).toContain(`${m.truncated.findings} more findings`)
+  expect(m.summary['image-upscaled']).toBeGreaterThan(200)
+})
