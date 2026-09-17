@@ -122,6 +122,37 @@ jobs:
           find ~/Library/Application\ Support -maxdepth 2 -name control.json -print
           for d in "$HOME/Library/Application Support/Obsrv" "$HOME/Library/Logs/Obsrv" "$HOME/Library/Application Support/Electron" "$HOME/Library/Logs/Electron"; do if [ -e "$d" ]; then echo "present: $d"; else echo "absent:  $d"; fi; done
 
+  skew-0-60-app:
+    needs: pack
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: a3probe
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          name: rc-tarball
+          path: rc
+      - name: install the last released app (v0.60.0) where MCP looks for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.60.0 -R vibesyemmy/obsrv --pattern '*arm64.dmg' --dir dl
+          hdiutil attach dl/*.dmg -nobrowse -mountpoint "$RUNNER_TEMP/mnt" | tail -1
+          cp -R "$RUNNER_TEMP/mnt/Obsrv.app" /Applications/ && ls /Applications | grep -i obsrv
+          defaults read /Applications/Obsrv.app/Contents/Info.plist CFBundleShortVersionString
+      - name: the RC's MCP against that app, live
+        run: |
+          nohup python3 -m http.server 8765 --directory a3probe > server.log 2>&1 &
+          sleep 2
+          mkdir -p "$RUNNER_TEMP/client" && cp a3probe/skew-client.mjs rc/getobsrv-*.tgz "$RUNNER_TEMP/client/"
+          cd "$RUNNER_TEMP/client" && npm init -y > /dev/null && npm i @modelcontextprotocol/sdk@1 > /dev/null 2>&1
+          node skew-client.mjs http://127.0.0.1:8765/page.html "./$(ls getobsrv-*.tgz)" 2>&1 | grep -v "npm notice" | cut -c1-900
+
   app-cold:
     needs: dist
     runs-on: macos-14
