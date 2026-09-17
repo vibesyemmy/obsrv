@@ -1,9 +1,8 @@
 ---
 title: "The target canvas goes blank in CI and the app says why — No frames from target renderer"
-column: doing
+column: done
 kind: bug
 owner: "Kenya"
-waiting: "event: a panes:83 failure recurring under #29's screenshot config, which cannot be forced"
 order: 35
 ---
 
@@ -144,3 +143,19 @@ it inherited the page from `:77` — so a retry, which Playwright runs alone, st
 new-tab state. Measured both ways just now: the old test **fails 5 of 5 alone**, and with the
 navigation added it **passes 5 of 5 alone** and 12/12 in file order. That accounts for the "4/4
 alone" count on `bug-flakes-gate-the-gate` and for the retry in this run.
+
+## MERGED 2026-09-17 into `bug-canvas-blank-without-notice`: closed as merged, which is not answered
+
+**Moved by Henry** on Opeyemi's instruction to take the Doing cards through one at a time (relayed in room
+#440). Kenya's session is out, and Wren's routing suggested this merge.
+
+**This card's question is not answered, and it is not dropped.** Did the GPU helper die, and did recovery
+run? That question, its one sighting with the notice (`34988828712`), and everything it did not establish
+now live on `bug-canvas-blank-without-notice`. That card holds the instrument (`#267`) that will read the
+next `panes:83` failure, and a key that routes it: **if the app's notice appears too, the reading this card
+was named for applies.**
+
+**Why merge rather than keep both:** both waited on the same event, and one recurrence should re-open one
+card, not two. The difference between them is which way one failure reads, and that difference is now on
+the surviving card.
+
