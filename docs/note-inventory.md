@@ -232,7 +232,7 @@ found that `log.warn` and a stderr `warn` were being counted as replies (ten sen
 
 **The split:**
 
-| | producers | after #256 and #258 | after #270, #273, #274, #282, #283 and #292 |
+| | producers | after #256 and #258 | after #270, #273, #274, #282, #283, #292 and #293 |
 | --- | --- | --- | --- |
 | fired, and placed at exactly one producer | 55 | 73 | **89** (2 of them since deleted with `#293`) |
 | fired, but the same text is written at several places | 7 (3 groups) | 4 (2 groups) | **4** (2 groups) |
