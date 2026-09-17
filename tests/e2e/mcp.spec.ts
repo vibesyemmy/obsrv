@@ -150,6 +150,64 @@ test('obsrv_audit/lint/inspect mode: live with custom dimensions blame the opera
   }
 })
 
+// The next three tests pin sentences no run had carried in a reply
+// (docs/note-inventory.md, "Written but not seen to fire", c5). The suite asked
+// for custom dimensions only under mode: "live", where the sentence rides the
+// error above, never in auto mode, where it is a note on a headless answer.
+// One test per tool, so a failure names the tool that dropped its sentence.
+for (const { tool, page, field, sentence, extra } of [
+  { tool: 'obsrv_snap', page: 'solid-red.html', field: 'warnings', sentence: 'custom dimensions are headless-only (live mode drives the preset table); rendered headlessly.', extra: {} },
+  { tool: 'obsrv_audit', page: 'audit.html', field: 'notes', sentence: 'custom dimensions are headless-only (live mode audits the screen in force); audited headlessly.', extra: {} },
+  { tool: 'obsrv_lint', page: 'lint.html', field: 'notes', sentence: 'custom dimensions are headless-only (live mode lints the screen in force); linted headlessly.', extra: {} },
+  { tool: 'obsrv_inspect', page: 'audit.html', field: 'notes', sentence: 'custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly.', extra: { selector: 'button' } },
+] as const) {
+  test(`${tool} in auto mode with custom dimensions renders headlessly, and says why`, async () => {
+    const r = await call(tool, { url: fixture(page), width: 800, height: 600, ...extra })
+    expect(r.isError).toBeFalsy()
+    expect(r.structuredContent).toMatchObject({ mode: 'headless', why: 'headless-only' })
+    expect((r.structuredContent as Record<string, string[]>)[field]).toContain(sentence)
+  })
+}
+
+test("capture: 'pane' on a headless render says it was ignored", async () => {
+  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), mode: 'headless', capture: 'pane' })
+  expect(r.isError).toBeFalsy()
+  expect((r.structuredContent as { warnings: string[] }).warnings).toContain(
+    "capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the option was ignored.",
+  )
+})
+
+test('OBSRV_HEADLESS=1 renders headlessly and names the variable, before the harness is asked', async () => {
+  const env = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
+  const headless = new Client({ name: 'obsrv-mcp-spec-headless', version: '0.0.0' })
+  await headless.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [MCP_BIN],
+      cwd: ROOT,
+      env: { ...env, OBSRV_TEST: '1', OBSRV_HEADLESS: '1', OBSRV_CONTROL_FILE: resolve(ROOT, 'tests/fixtures/no-such-control.json') },
+    }),
+  )
+  try {
+    // Validated against the output schema, as the main client is (see beforeAll).
+    await headless.listTools()
+    const r = (await headless.callTool(
+      { name: 'obsrv_snap', arguments: { url: fixture('solid-red.html'), preset: 'laptop-768' } },
+      undefined,
+      { timeout: CALL_TIMEOUT_MS },
+    )) as CallToolResult
+    expect(r.isError).toBeFalsy()
+    const s = r.structuredContent as { mode: string; why?: string; warnings: string[] }
+    expect(s).toMatchObject({ mode: 'headless', why: 'no-display' })
+    expect(s.warnings).toContain('no display: OBSRV_HEADLESS=1 is set; rendered headlessly.')
+    // The variable decides before a launch is considered, so the harness's own
+    // sentence (OBSRV_TEST forbids launching) never comes up.
+    expect(s.warnings.join(' ')).not.toMatch(/OBSRV_TEST/)
+  } finally {
+    await headless.close()
+  }
+})
+
 test('audit, lint and inspect name why they ran headless, like snap', async () => {
   const a = (await call('obsrv_audit', { url: fixture('audit.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
   const l = (await call('obsrv_lint', { url: fixture('lint.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
