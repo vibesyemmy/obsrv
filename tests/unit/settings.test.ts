@@ -33,6 +33,9 @@ describe('settings', () => {
     writeFileSync(f, JSON.stringify({ hostDiagonalInches: 32, hostNits: 'bad', extra: 1 }))
     expect(loadSettings(f)).toEqual({
       hostDiagonalInches: 32,
+      // A chosen diagonal in a file older than the field: set, for a screen
+      // nobody recorded (see the migration tests below).
+      hostDiagonalSetFor: 'unknown',
       hostNits: 500,
       agentControl: false,
       updateCheck: true,
@@ -64,6 +67,7 @@ describe('settings', () => {
     writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, agentControl: false }))
     expect(loadSettings(f)).toEqual({
       hostDiagonalInches: 27,
+      hostDiagonalSetFor: [],
       hostNits: 500,
       agentControl: false,
       updateCheck: true,
@@ -105,6 +109,7 @@ describe('settings', () => {
     const f = join(dir(), 'nested', 'settings.json')
     const full = {
       hostDiagonalInches: 24,
+      hostDiagonalSetFor: [{ physicalWidth: 3024, physicalHeight: 1964 }],
       hostNits: 350,
       agentControl: true,
       updateCheck: false,
@@ -116,6 +121,53 @@ describe('settings', () => {
     saveSettings(f, full)
     expect(JSON.parse(readFileSync(f, 'utf8'))).toEqual(full)
     expect(loadSettings(f)).toEqual(full)
+  })
+  // `hostDiagonalSetFor`: which display the diagonal was set for. An older
+  // file has no key, and always has a diagonal, because saveSettings writes
+  // the whole object: the number alone cannot say whether anyone chose it.
+  it('reads an older file holding the default diagonal as untouched, so the hint shows', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, lastUpdateCheck: 1700000000000 }))
+    expect(loadSettings(f).hostDiagonalSetFor).toEqual([])
+  })
+  it('reads an older file holding a chosen diagonal as set for an unknown screen, never as silently set for this one', () => {
+    // Henry's rule (2026-09-17): adopting 24″ for whichever screen opens first
+    // is silent exactly when that screen is not the one it was set for.
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 24, hostNits: 500 }))
+    expect(loadSettings(f).hostDiagonalSetFor).toBe('unknown')
+  })
+  it('keeps a recorded display, and an explicit unknown, as written', () => {
+    const f = join(dir(), 'settings.json')
+    const d = { physicalWidth: 3024, physicalHeight: 1964 }
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 13.3, hostNits: 500, hostDiagonalSetFor: [d] }))
+    expect(loadSettings(f).hostDiagonalSetFor).toEqual([d])
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, hostDiagonalSetFor: 'unknown' }))
+    expect(loadSettings(f).hostDiagonalSetFor).toBe('unknown')
+    // An explicit empty list is a file that says "untouched", even beside a
+    // chosen-looking number: the key is the record, the number is not.
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 24, hostNits: 500, hostDiagonalSetFor: [] }))
+    expect(loadSettings(f).hostDiagonalSetFor).toEqual([])
+  })
+  it('reads a hand-edited, unreadable value like a missing one, erring towards the hint rather than silence', () => {
+    const f = join(dir(), 'settings.json')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 24, hostNits: 500, hostDiagonalSetFor: 'the big one' }))
+    expect(loadSettings(f).hostDiagonalSetFor).toBe('unknown')
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 27, hostNits: 500, hostDiagonalSetFor: [{ physicalWidth: -1, physicalHeight: 900 }] }))
+    expect(loadSettings(f).hostDiagonalSetFor).toEqual([])
+    // Valid entries survive beside junk, and the list is held to its bound.
+    const d = { physicalWidth: 1920, physicalHeight: 1080 }
+    writeFileSync(f, JSON.stringify({ hostDiagonalInches: 24, hostNits: 500, hostDiagonalSetFor: ['x', d, ...Array(9).fill(d)] }))
+    expect(loadSettings(f).hostDiagonalSetFor).toHaveLength(8)
+  })
+  it('refuses to save a hostDiagonalSetFor that is not a recorded display list or unknown', () => {
+    const f = join(dir(), 'settings.json')
+    const base = { ...DEFAULT_SETTINGS }
+    expect(() => saveSettings(f, { ...base, hostDiagonalSetFor: [{ physicalWidth: 1920.5, physicalHeight: 1080 }] })).toThrow(RangeError)
+    expect(() => saveSettings(f, { ...base, hostDiagonalSetFor: Array(9).fill({ physicalWidth: 1, physicalHeight: 1 }) })).toThrow(RangeError)
+    expect(() => saveSettings(f, { ...base, hostDiagonalSetFor: 'somewhere' as never })).toThrow(RangeError)
+    // `inches` is allowed from day one, so a diagonal per display is additive.
+    expect(() => saveSettings(f, { ...base, hostDiagonalSetFor: [{ physicalWidth: 1920, physicalHeight: 1080, inches: 24 }] })).not.toThrow()
   })
   it('keeps a split inside the band and treats one outside it as absent', () => {
     const f = join(dir(), 'settings.json')

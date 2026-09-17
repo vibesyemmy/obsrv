@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { choose } from './helpers/select'
 import { captureScale, captureScaleReason, skipWhenCapturesAreScaled } from './helpers/captureScale'
-import { launchApp, rendererWindow } from './launch'
+import { answerDiagonalHint, launchApp, rendererWindow } from './launch'
 
 /**
  * Fit never enlarges past true size, and true size is one thing: the
@@ -30,6 +30,9 @@ const fitScaleOf = (footer: string): number => Number(/fit ×([\d.]+)/.exec(foot
 test.beforeAll(async () => {
   app = await launchApp()
   page = await rendererWindow(app)
+  // The pane's own height is what Fit is measured against, so the
+  // calibration hint's row is answered away first (`answerDiagonalHint`).
+  await answerDiagonalHint(page)
   scale = await captureScale(app)
   await page.evaluate(u => window.obsrv.navigate(u), TALL)
   // A pane the phone fits in with room to spare, so that a cap that moved

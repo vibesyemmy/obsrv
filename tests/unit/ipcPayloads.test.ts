@@ -137,6 +137,7 @@ describe('parseSettings', () => {
       }),
     ).toEqual({
       hostDiagonalInches: 27,
+      hostDiagonalSetFor: [],
       hostNits: 500,
       agentControl: true,
       updateCheck: false,
@@ -153,9 +154,21 @@ describe('parseSettings', () => {
     expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 4 })?.maxTabs).toBe(4)
     expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500, maxTabs: 32 })?.maxTabs).toBe(32)
   })
+  it('carries hostDiagonalSetFor across the wire, and refuses one out of shape rather than coercing it', () => {
+    const base = { hostDiagonalInches: 13.3, hostNits: 500 }
+    const d = { physicalWidth: 3024, physicalHeight: 1964 }
+    expect(parseSettings({ ...base, hostDiagonalSetFor: [d] })?.hostDiagonalSetFor).toEqual([d])
+    expect(parseSettings({ ...base, hostDiagonalSetFor: 'unknown' })?.hostDiagonalSetFor).toBe('unknown')
+    expect(parseSettings({ ...base, hostDiagonalSetFor: [{ physicalWidth: 0, physicalHeight: 1964 }] })).toBeNull()
+    expect(parseSettings({ ...base, hostDiagonalSetFor: 'the big one' })).toBeNull()
+    expect(parseSettings({ ...base, hostDiagonalSetFor: Array(9).fill(d) })).toBeNull()
+  })
   it('defaults a missing agentControl to false (the pre-live-drive wire shape)', () => {
     expect(parseSettings({ hostDiagonalInches: 27, hostNits: 500 })).toEqual({
       hostDiagonalInches: 27,
+      // A renderer from before the field recorded no display: untouched, the
+      // answer that shows the calibration hint rather than hiding it.
+      hostDiagonalSetFor: [],
       hostNits: 500,
       agentControl: false,
       // The opposite default: absent means on, so a renderer from before this

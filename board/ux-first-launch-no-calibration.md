@@ -282,3 +282,57 @@ detail for the build.
   answer above;
 - desk-safe tests only: renderer state and a `hostChanged` push, no window fronting.
 
+
+## BUILT 2026-09-17 by Kenya: what shipped, and the one deviation from the plan above
+
+**The motivating figure, recomputed through the code rather than quoted.** `computeScale`
+(`shared/calibration.ts`) with `DEFAULT_SETTINGS.hostDiagonalInches` against each screen's true
+diagonal, target preset `laptop-768`:
+
+| the screen someone has | assumed | true | share of true size |
+| --- | --- | --- | --- |
+| 13.3″ laptop, 2560x1600 | ×1.113 | ×2.260 | **49%** |
+| 14″ laptop, 3024x1964 | ×1.329 | ×2.564 | 52% |
+| 16″ laptop, 3456x2234 | ×1.517 | ×2.560 | 59% |
+| 24″ monitor, 1920x1080 | ×0.812 | ×0.914 | 89% |
+| 27″ monitor, 2560x1440 | ×1.083 | ×1.083 | 100% |
+| 32″ monitor, 3840x2160 | ×1.624 | ×1.371 | 119% |
+
+Every figure in Rook's memo reproduces exactly, so the card's case is measured, not inherited. (Wren
+asked for this: a number that has travelled through three cards without being recomputed is the kind
+that turns out to have moved.)
+
+**The deviation: the hint has its own row above the footer, not a chip inside it.** `.pane-footer` is
+`white-space: nowrap; overflow: hidden` (`styles.css`), so a sentence in that strip is clipped to
+nothing on a narrow pane — a warning nobody can read is the silence this card exists to remove. The row
+uses the footer's own chrome, so it still reads as the pane talking about itself. **It costs the pane
+body a row of height while it is up**, which is the honest price of showing the sentence; it is gone
+once answered. The e2e asserts the sentence is not clipped (`scrollWidth` against the rendered box),
+which is the check that would have caught the chip version.
+
+**Answering is the only dismissal**, as decided: *"27″ is right"* records this display without changing
+the number, and *"Set screen size"* opens Settings. Committing a diagonal in Settings records the
+display too.
+
+**Tests, each with a control:**
+- `tests/unit/diagonalHint.test.ts`: the four states, the wording, and that confirming ends the hint
+  here while making the other screen the mismatched one. **Control:** routing the `unknown` state to
+  silence reds two tests.
+- `tests/unit/settings.test.ts`: the migration (27 untouched, anything else `'unknown'`), a
+  hand-edited value read like a missing one, the save-side refusal. **Control:** reading a legacy chosen
+  diagonal as untouched reds three tests.
+- `tests/unit/ipcPayloads.test.ts`: the field across the wire, refused rather than coerced when out of shape.
+- `tests/e2e/diagonal-hint.spec.ts` (desk-safe, run locally): the sentence in a real window and not
+  clipped, confirming writing to disk, a pushed display change naming both screens, and an older file
+  asking once. **Control:** with the untouched and unknown states silent, **all four red — three
+  for their own reasons and the fourth as a cascade.** The first three tests share one app instance
+  (one `describe`, one `beforeAll`); the fourth has its own. With the hint silent, test 2's
+  confirm-click never lands, so test 3 fails downstream of that rather than as an independent check.
+  Idris measured 4 of 4 where this line first said 3, Wren confirmed the structure, and Henry checked
+  it again against the spec (`:46`, `:61`, `:70` share an app, `:106` does not) and corrected the line
+  here while Kenya was unreachable. **The control is not weakened:** three tests are still red for
+  reasons of their own, which is what it was for. It is the `controls.spec:85` shape already in the
+  team's memory — a hidden predecessor making a later test fail for a reason that is not its own.
+
+**Still (b)'s to decide, with Opeyemi through Henry:** one diagonal per display. Nothing here blocks it;
+the field already carries `inches` and up to eight displays.
