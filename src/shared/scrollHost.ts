@@ -51,8 +51,10 @@ export function shadowContains(outer: Element, inner: Element): boolean {
 }
 
 /**
- * Every element under `root`, open shadow roots included, in the order they
- * are drawn: an element, then its shadow tree, then its own children.
+ * Every element under `root`, open shadow roots included: an element, then its
+ * shadow tree, then its own children. That is close to the order they are
+ * drawn in but not the flat tree exactly — a slotted child is visited where it
+ * sits in the light DOM, not at the slot that shows it.
  *
  * `querySelectorAll` and a TreeWalker both stop at a shadow boundary, so a
  * page built from web components measured as nothing (chromestatus.com,
@@ -97,32 +99,67 @@ export function shadowElementFromPoint(x: number, y: number): Element | null {
 
 /**
  * What is painted at a point, top to bottom, from `el` down — across shadow
- * boundaries. `document.elementsFromPoint` retargets everything inside a root
- * to its host, so `indexOf(el)` found nothing for an element in a component
- * and the caller fell back to ancestors that stopped at the root. Each tree
- * scope is asked in turn, from the element's own out to the document, and
- * the stacks are joined without repeats. Null when `el` is not at the point.
+ * boundaries.
+ *
+ * `elementsFromPoint` answers in ONE tree scope: everything inside a shadow
+ * root is retargeted to its host, and everything slotted into a root stays in
+ * the scope it was written in. So neither the document's answer nor a single
+ * root's is the whole stack:
+ * - for an element inside a root, the document's answer names the host;
+ * - for an element SLOTTED into a root, the root's own background is drawn
+ *   between the text and the page, and the document's answer skips it. That is
+ *   the ordinary card: the component paints the surface inside its root and
+ *   the page writes the text (Wren's measurement on #293 — text slotted into a
+ *   dark card was judged on the page's white at 1.24:1, where what is painted
+ *   is 11.86:1).
+ *
+ * So every scope the element is composed through is asked — its own, and each
+ * one a slot or a host takes it into — and the answers are merged into a
+ * single order. They are consistent: each is a subsequence of what is really
+ * painted, so an element is taken only once nothing else still has it deeper.
+ * Null when `el` is not painted at the point in any of them.
  */
 export function shadowStackFrom(el: Element, x: number, y: number): Element[] | null {
-  const out: Element[] = []
-  let node: Element | null = el
-  while (node !== null) {
-    const scope: Node = node.getRootNode()
+  // The chain the element is drawn through: slots and hosts included.
+  const chain: Element[] = []
+  for (let node: Element | null = el; node !== null; node = shadowParent(node)) chain.push(node)
+  const stacks: Element[][] = []
+  const asked = new Set<Node>()
+  let found = false
+  for (let i = 0; i < chain.length; i++) {
+    const scope: Node = chain[i]!.getRootNode()
+    if (asked.has(scope)) continue
+    asked.add(scope)
     const stack = (scope instanceof ShadowRoot ? scope : document).elementsFromPoint(x, y)
-    let at = stack.indexOf(node)
-    if (at < 0 && out.length === 0) return null
-    // A host with no box of its own (`display: contents`) is not in its
-    // scope's stack; the nearest ancestor that is drawn stands in for it.
-    while (at < 0 && node !== null) {
-      node = shadowParent(node)
-      if (node !== null) at = stack.indexOf(node)
-    }
-    if (at < 0) return out
-    for (const e of stack.slice(at)) if (!out.includes(e)) out.push(e)
-    if (!(scope instanceof ShadowRoot)) return out
-    node = scope.host
+    if (stack.indexOf(el) === 0) found = true
+    // Where this scope's answer joins the chain: the element itself, or the
+    // first thing above it that this scope can see (a slot has no box of its
+    // own, and `display: contents` elements are absent too).
+    let at = -1
+    for (let j = i; j < chain.length && at < 0; j++) at = stack.indexOf(chain[j]!)
+    if (at >= 0) stacks.push(stack.slice(at))
   }
-  return out
+  if (!found) return null
+  // One order out of several: take the head no other answer still has deeper,
+  // which keeps every scope's relative order and cannot repeat an element.
+  const out: Element[] = []
+  for (;;) {
+    let pick = -1
+    for (let i = 0; i < stacks.length && pick < 0; i++) {
+      const head = stacks[i]![0]
+      if (head === undefined) continue
+      if (!stacks.some((s, j) => j !== i && s.indexOf(head) > 0)) pick = i
+    }
+    if (pick < 0) pick = stacks.findIndex(s => s.length > 0)
+    if (pick < 0) break
+    const head = stacks[pick]![0]!
+    out.push(head)
+    for (const s of stacks) {
+      const k = s.indexOf(head)
+      if (k >= 0) s.splice(k, 1)
+    }
+  }
+  return out.length > 0 ? out : null
 }
 
 /** Whether the document root itself has anything to scroll. */
@@ -148,7 +185,14 @@ export function rootScrolls(): boolean {
  * page locked by an anonymous div says nothing instead of the wrong thing.
  */
 export function inDialog(el: Element | null): boolean {
-  return el !== null && el.closest('dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]') !== null
+  // Across shadow boundaries (`shadowParent`): `closest` stops at a root, so a
+  // dialog whose panel is a component — or a component's scroller inside a
+  // page's dialog — read as a panel on the page (Wren's read of #293).
+  const SELECTOR = 'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"]'
+  for (let node: Element | null = el; node !== null; node = shadowParent(node)) {
+    if (node.matches(SELECTOR)) return true
+  }
+  return false
 }
 
 export function overflowHidden(): boolean {
@@ -218,9 +262,11 @@ export function isVisible(el: Element): boolean {
 
 /**
  * The page's real scroll host: the largest-by-client-area visible descendant
- * that is a scroll container with something to scroll. Depth-first, so an
+ * that is a scroll container with something to scroll. Level order, so an
  * exact tie between an ancestor-side and a later candidate keeps the one found
- * first. The walk is bounded by `MAX_VISITED`.
+ * first. The walk is bounded by `MAX_VISITED`, which open shadow roots share:
+ * what the budget cuts off is not reported, which is
+ * `chore-scroll-host-budget-is-silent`.
  *
  * Only `display: none` subtrees are pruned, and only after a computed-style
  * check. Client area cannot stand in for "has no box": an inline wrapper
@@ -249,9 +295,17 @@ export function findScroller(root: Element | null = document.body): Element | nu
   let best: Element | null = null
   let bestArea = 0
   let visited = 0
-  const stack: Element[] = [root]
-  while (stack.length > 0) {
-    const el = stack.pop()!
+  // BREADTH-FIRST, and the budget is why. Depth-first spent the whole budget
+  // inside one sibling's subtree, and with open roots in it that is a handful
+  // of components: a sidebar of 286 items, each a host with six elements in
+  // its root, starved the search before it reached `main`, and the page's real
+  // scroller lost to the sidebar — or, when the sidebar did not overflow, to
+  // nothing at all (Wren's measurement on #293). A scroll host is a large,
+  // shallow box, so level order reaches every candidate that could win long
+  // before a deep tree can exhaust the budget.
+  const queue: Element[] = [root]
+  for (let head = 0; head < queue.length; head++) {
+    const el = queue[head]!
     if (visited++ >= MAX_VISITED) break
     const area = el.clientWidth * el.clientHeight
     if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') continue
@@ -261,16 +315,13 @@ export function findScroller(root: Element | null = document.body): Element | nu
       best = el
       bestArea = area
     }
-    // Pushed in reverse so `pop` yields document order — the depth-first
-    // traversal the tiebreak is defined against — with an open shadow tree
-    // ahead of the light children, as `shadowElements` orders them.
-    const kids = el.children
-    for (let i = kids.length - 1; i >= 0; i--) stack.push(kids[i]!)
+    // An open shadow tree before the light children, as `shadowElements`
+    // orders them. Level order keeps the tiebreak the comment above states:
+    // an ancestor-side candidate is reached before anything below it, so an
+    // exact tie keeps the one found first.
     const shadow = el.shadowRoot
-    if (shadow) {
-      const inner = shadow.children
-      for (let i = inner.length - 1; i >= 0; i--) stack.push(inner[i]!)
-    }
+    if (shadow) for (const kid of Array.from(shadow.children)) queue.push(kid)
+    for (const kid of Array.from(el.children)) queue.push(kid)
   }
   return best
 }
@@ -355,13 +406,6 @@ export function scrollOffset(host: Element | null): (el: Element) => { x: number
 }
 
 /**
- * The functions above, serialised for `executeJavaScript` in a page the
- * preload is not loaded into — the headless render. Composed from their own
- * source rather than written twice, so the capture and the live scroll can
- * never drift apart. Evaluating it leaves `findScroller` and `scrollOffset`
- * on the page.
- */
-/**
  * The shadow-tree helpers alone, serialised: what a page-side function that
  * crosses shadow boundaries needs beside it (`INSPECT_SCRIPT`), and the first
  * half of `SCROLL_HOST_SCRIPT`.
@@ -374,6 +418,13 @@ export const SHADOW_TREE_SCRIPT = [
   shadowStackFrom.toString(),
 ].join('\n')
 
+/**
+ * The functions above, serialised for `executeJavaScript` in a page the
+ * preload is not loaded into — the headless render. Composed from their own
+ * source rather than written twice, so the capture and the live scroll can
+ * never drift apart. Evaluating it leaves `findScroller` and `scrollOffset`
+ * on the page.
+ */
 export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,

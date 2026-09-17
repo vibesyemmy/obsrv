@@ -1999,7 +1999,15 @@ const inspectInputShape = {
     .object({ x: z.number().min(0), y: z.number().min(0) })
     .optional()
     .describe('A point in CSS px of the target screen — what is drawn there. Exactly one of `at` / `selector`.'),
-  selector: z.string().min(1).max(512).optional().describe('A CSS selector; its first match is inspected. Exactly one of `at` / `selector`.'),
+  selector: z
+    .string()
+    .min(1)
+    .max(512)
+    .optional()
+    .describe(
+      'A CSS selector; its first match is inspected. It does not pierce a shadow root, so a component\'s inside is ' +
+        'reachable by `at` (a point) rather than by selector. Exactly one of `at` / `selector`.',
+    ),
   mode: z
     .enum(['auto', 'headless', 'live'])
     .optional()

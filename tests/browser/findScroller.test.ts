@@ -34,6 +34,46 @@ afterEach(() => {
   host?.remove()
 })
 
+/**
+ * A page whose sidebar is built from components, in front of the scroller the
+ * page really has. Every element inside an open root counts against
+ * `MAX_VISITED`, so a depth-first search spent the whole budget in the sidebar
+ * and never reached `main`: at 286 items it picked the sidebar, and when the
+ * sidebar did not overflow it found nothing at all and the walk said the page
+ * had no scroller (Wren's measurement on #293, at the exact budget edge).
+ */
+describe('a sidebar of components in front of the page scroller', () => {
+  const build = (items: number, itemPx: number, asideHeight: number): HTMLElement => {
+    const root = mount(
+      `<div style="display:flex;width:600px;height:400px">` +
+        `<aside id="aside" style="width:160px;overflow-y:auto;height:${asideHeight}px"></aside>` +
+        `<main id="main" style="flex:1;overflow-y:auto;height:400px">${FILLER}</main>` +
+        `</div>`,
+    )
+    const aside = root.querySelector('#aside')!
+    for (let i = 0; i < items; i++) {
+      const item = document.createElement('div')
+      // Six elements in the root plus the host: the shape of an icon row in a
+      // component library, and what makes the budget bite.
+      item.attachShadow({ mode: 'open' }).innerHTML =
+        `<style></style><div style="height:${itemPx}px"><span></span><span></span><svg><path/></svg></div>`
+      aside.append(item)
+    }
+    return root
+  }
+
+  it('finds the page scroller past 300 components, which is past the budget', () => {
+    const root = build(300, 30, 400)
+    expect(300 * 7).toBeGreaterThan(MAX_VISITED)
+    expect(findScroller(root)?.id).toBe('main')
+  })
+
+  it('finds it when the sidebar does not overflow either, where the search used to come back empty', () => {
+    const root = build(300, 1, 400)
+    expect(findScroller(root)?.id).toBe('main')
+  })
+})
+
 const scrollerStyle = (w: number, h: number): string =>
   `overflow-y:auto;width:${w}px;height:${h}px`
 /** Enough content to overflow any box we build here. */

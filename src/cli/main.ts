@@ -422,8 +422,9 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           const el = rootScrolls ? null : findScroller()
           window.__obsrvScrollHost = el
           // A page that hides the root's overflow has said it manages its own
-          // scrolling. If nothing in its light DOM scrolls either, whatever it
-          // shows past this screen is somewhere the capture cannot go. The
+          // scrolling. If nothing else scrolls either — open shadow roots
+          // included — whatever it shows past this screen is somewhere the
+          // capture cannot go. The
           // walks ask the same question: overflowHidden, in shared/scrollHost.
           const hidden = overflowHidden()
           if (!el) return { rootScrolls, found: false, hidden, top: 0, height: 0, scrollHeight: 0 }

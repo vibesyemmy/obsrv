@@ -121,10 +121,59 @@ describe('at a point inside a component', () => {
     expect(stack).not.toBeNull()
     expect(stack![0]).toBe(inner)
     expect(stack).toContain(root.querySelector('.card'))
+    // Chromium's `ShadowRoot.elementsFromPoint` keeps the outer scopes' own
+    // elements rather than stopping at the root, which is why one query per
+    // scope is enough (measured on #293, both here and by Wren).
     expect(stack).toContain(document.body)
+    expect(stack).toContain(el)
     // In paint order: the card before the body under it.
     expect(stack!.indexOf(root.querySelector('.card')!)).toBeLessThan(stack!.indexOf(document.body))
     expect(el.isConnected).toBe(true)
+  })
+
+  it('reads text SLOTTED into a component against the card the component draws around it', () => {
+    // The ordinary card: the component paints the surface inside its root and
+    // the page writes the text into the slot. `document.elementsFromPoint`
+    // retargets the surface to the host, so the text was judged on the page's
+    // white — 1.24:1 where what is painted is 11.86:1 (Wren's measurement on
+    // #293). Every scope the text is composed through is asked now.
+    const page = mount('')
+    const { el, root } = component(
+      page,
+      '<style>.surface { position: fixed; left: 0; top: 0; width: 240px; height: 80px; background: rgb(31, 41, 55); }</style>' +
+        '<div class="surface"><slot></slot></div>',
+    )
+    el.innerHTML = '<p id="slotted" style="margin: 0; padding: 20px; color: rgb(229, 231, 235); font: 16px Arial, sans-serif">slotted</p>'
+    const slotted = el.querySelector('#slotted')!
+
+    const stack = shadowStackFrom(slotted, 40, 30)
+    expect(stack, 'the text is not at the point').not.toBeNull()
+    expect(stack![0]).toBe(slotted)
+    expect(stack, JSON.stringify(stack?.map(e => e.tagName))).toContain(root.querySelector('.surface'))
+    expect(stack!.indexOf(root.querySelector('.surface')!)).toBeLessThan(stack!.indexOf(document.body))
+
+    const r = inspectAtPoint(40, 30)
+    expect(r?.id).toBe('slotted')
+    expect(r?.background).toEqual([31, 41, 55, 1])
+  })
+
+  it('reads text in a component slotted into another component against the outer card', () => {
+    // Lit composition: <inner-row> is a light child of <outer-card>, so the
+    // outer card's surface is in a scope neither the document nor the inner
+    // root can see.
+    const page = mount('')
+    const outer = component(
+      page,
+      '<style>.outer { position: fixed; left: 0; top: 0; width: 240px; height: 80px; background: rgb(31, 41, 55); }</style>' +
+        '<div class="outer"><slot></slot></div>',
+    )
+    const inner = component(outer.el, '<p id="deep" style="margin: 0; padding: 20px; color: rgb(229, 231, 235); font: 16px Arial, sans-serif">deep</p>')
+    const deep = inner.root.querySelector('#deep')!
+
+    const stack = shadowStackFrom(deep, 40, 30)
+    expect(stack![0]).toBe(deep)
+    expect(stack, JSON.stringify(stack?.map(e => e.tagName))).toContain(outer.root.querySelector('.outer'))
+    expect(inspectAtPoint(40, 30)?.background).toEqual([31, 41, 55, 1])
   })
 
   it('inspect reads the text against the card, not the page', () => {

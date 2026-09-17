@@ -37,6 +37,8 @@
  * viewport when the window is what scrolls.
  */
 
+import { SHADOW_TREE_SCRIPT, shadowContains } from './scrollHost'
+
 /** Fraction of the frame's width at which a stuck element counts as a bar. */
 export const STUCK_BAR_MIN_WIDTH = 0.9
 /** A bar is not the whole frame: past this fraction of its height it is an overlay, not chrome. */
@@ -134,7 +136,11 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
       for (const [el, now] of candidates()) {
         const before = marked.get(el)
         if (!before || !same(before, now)) continue
-        if (anchor && (el === anchor || el.contains(anchor))) continue
+        // `shadowContains`, not `contains`: with a scroller inside an open
+        // root, the host is an ancestor of it that `contains` denies, and
+        // hiding the host would hide the scroller and empty every band after
+        // the first (Wren's read of #293).
+        if (anchor && (el === anchor || shadowContains(el, anchor))) continue
         // Outside the frame it is not in the bands to begin with: an app
         // shell's header sits above the scroller, and every band after the
         // first is sliced down to the scroller's own rows.
@@ -192,6 +198,10 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
  */
 export const STUCK_CHROME_SCRIPT = [
   `const STUCK_EPSILON = ${STUCK_EPSILON}`,
+  // The shadow helpers travel with it: `installStuckChrome` asks whether a
+  // stuck bar holds the scroller, and with the scroller inside an open root
+  // that question crosses a boundary.
+  SHADOW_TREE_SCRIPT,
   installStuckChrome.toString(),
   // `__obsrvScrollHost` is what the full-page capture already left on the
   // page: the element it scrolls, or null when the window is. One script

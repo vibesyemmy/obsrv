@@ -78,9 +78,10 @@ export const INSPECT_WORLD_ID = 7301
 export const MAX_SELECTOR_LENGTH = 512
 
 /**
- * Runs inside the target page. Self-contained on purpose — it is shipped as
- * source (`INSPECT_SCRIPT`) and evaluated there, so it must reference nothing
- * from this module. `'point'` takes a viewport point; `'selector'` takes a
+ * Runs inside the target page. Shipped as source (`INSPECT_SCRIPT`) and
+ * evaluated there, so it may reference only page globals and the shadow-tree
+ * helpers `INSPECT_SCRIPT` puts beside it (`SHADOW_TREE_SCRIPT`) — nothing
+ * else from this module. `'point'` takes a viewport point; `'selector'` takes a
  * CSS selector and reports its first match (an invalid selector, or one that
  * matches nothing, is null). Returns a plain object the parser on the main
  * side checks field by field; the page is not trusted, its DOM merely

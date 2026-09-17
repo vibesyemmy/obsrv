@@ -232,7 +232,7 @@ export const WALK_NOTHING_NOTE = walkNothingNote()
 /**
  * The walk's sentence for a page locked behind a dialog. A consent wall, a
  * paywall or an onboarding modal fixes the body in place, which leaves the
- * dialog's own panel as the only scroller in the light DOM — so the walk
+ * dialog's own panel as the only scroller left — so the walk
  * scrolls *that*, and `walked: { screenfuls: 5, atEnd: true }` vouches for a
  * page it never moved.
  *
