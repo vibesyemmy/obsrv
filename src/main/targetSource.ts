@@ -579,6 +579,25 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     return this.textScale
   }
 
+  /**
+   * The frame size this source paints at once the offscreen surface has caught
+   * up with the viewport it was last asked for — `FrameEmitter`'s side of
+   * `captureQuiescent`'s `awaitExpectedSize`.
+   *
+   * It is the steady-state answer of `paintedExtent`: when the bitmap is the
+   * size the viewport and density call for, the painted extent is the floor of
+   * their product (Chromium paints the floor of a fractional density; Electron
+   * ceils the bitmap). While a resize is in flight the bitmap is some other
+   * size, so the frames carry that size instead and a capture waiting on this
+   * one knows it has not arrived yet.
+   */
+  expectedFrameSize(): { width: number; height: number } {
+    return {
+      width: Math.floor(this.viewport.width * this.dsf + 1e-6),
+      height: Math.floor(this.viewport.height * this.dsf + 1e-6),
+    }
+  }
+
   /** The page's cursor as CSS, as last reported (see `cursor` event). */
   getCursor(): string {
     return this.cursor

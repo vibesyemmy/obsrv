@@ -13,6 +13,16 @@ export interface FrameEmitter {
   off(event: 'frame', cb: (m: FrameMessage) => void): unknown
   /** Forces a full-frame repaint — how a capture guarantees full coverage. */
   invalidate(): void
+  /**
+   * The frame size this source paints at once it has finished resizing, or
+   * null when it cannot say. Read only under `awaitExpectedSize`.
+   *
+   * A capture cannot tell a page that has gone quiet from a surface that has
+   * been asked for a new size and has not painted it yet: both are silence
+   * after a covered frame. The source can, because it is the one that was
+   * asked. See `awaitExpectedSize`.
+   */
+  expectedFrameSize?(): { width: number; height: number } | null
 }
 
 /**
@@ -26,8 +36,11 @@ export interface FrameEmitter {
  * module's finding but the render's: the page load outran the budget (under
  * a throttle, a slow load is the point), and the frame is what had painted by
  * then — quiet or not, it is not the settled page, and `settledMs` is null.
+ * `resizing` — the surface was still on its way to the size it was asked for
+ * when the budget ran out, so the frame in hand is of some earlier size; only
+ * a caller that passes `awaitExpectedSize` can get it (see below).
  */
-export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'blank' | 'loading'
+export type UnsettledReason = 'animating' | 'timeout' | 'uncovered' | 'blank' | 'loading' | 'resizing'
 
 /**
  * After a load the budget cut short, which capture warnings say nothing the
@@ -69,6 +82,12 @@ export function explainedByCutLoad(reason: UnsettledReason | undefined): boolean
     case 'blank':
     case 'uncovered':
     case 'loading':
+    // A load the budget cut short says nothing about the surface's size, and
+    // the resize sentence names sizes the load warning never mentions. It is
+    // also unreachable from here today — only a caller passing
+    // `awaitExpectedSize` can produce it, and the CLI does not — but the
+    // routing is what keeps that true by construction rather than by memory.
+    case 'resizing':
     case undefined:
       return false
     default: {
@@ -124,6 +143,27 @@ export interface CaptureOptions {
    * slowly over 3G paints steadily too.
    */
   animationExit?: boolean
+  /**
+   * Refuse to settle on a frame whose size is not the one the source says it
+   * is heading for (default false; needs `FrameEmitter.expectedFrameSize`).
+   *
+   * **The defect this exists for, measured.** `covered` is cleared when a frame
+   * at a new size *arrives*, and the settle test is polled every 50 ms. Between
+   * the last frame at the old size and the first at the new one, `covered` and
+   * `lastPaint` both still belong to the old size — so a poll landing in that
+   * gap, past the settle window, returns the **previous** size's buffer with
+   * `settled: true` and no warning. A live raster taken while the pane changed
+   * preset came back exactly that way, twice
+   * (`bug-live-raster-settled-while-resizing`); probe `35238313231` caught the
+   * frame sequence 16 times in 6 captures, and `cliCapture.test.ts` scripts it.
+   *
+   * The capture cannot see this from the frames alone: a surface that has been
+   * asked for a new size and has not painted it is silence after a covered
+   * frame, and so is a page that has finished. Only the source knows it was
+   * asked. When the budget runs out having never reached that size the capture
+   * comes back `resizing` rather than pretending.
+   */
+  awaitExpectedSize?: boolean
   /**
    * How long a quiet frame that is one colour end to end is given to paint
    * something before it is returned as blank (default `BLANK_GRACE_MS`).
@@ -278,6 +318,17 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     }
   }
 
+  /**
+   * Is the frame in hand the size the source is heading for? True whenever the
+   * caller did not ask, or the source cannot say — this gate only ever holds a
+   * capture back, and never on a source that has not opted in.
+   */
+  const atExpectedSize = (): boolean => {
+    if (options.awaitExpectedSize !== true) return true
+    const want = source.expectedFrameSize?.() ?? null
+    return want === null || (want.width === width && want.height === height)
+  }
+
   source.on('frame', onFrame)
   try {
     source.invalidate()
@@ -287,7 +338,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     for (;;) {
       const failed = options.failure?.()
       if (failed) throw failed
-      if (covered && Date.now() - lastPaint >= settleMs) {
+      if (covered && Date.now() - lastPaint >= settleMs && atExpectedSize()) {
         // Quiet. A frame that is one colour end to end is the page's
         // background, not the page: espn.com paints white, goes quiet for
         // longer than the settle window, and paints its content a second
@@ -321,6 +372,20 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       }
       if (Date.now() >= deadline) {
         settled = false
+        if (covered && !atExpectedSize()) {
+          // Never reached the size it was asked for. Said before the painting
+          // and blank readings below, because it is the more specific fact:
+          // whatever the pixels are, they are of some earlier size, and that
+          // is what a reader has to know about the PNG in front of them.
+          unsettledReason = 'resizing'
+          const want = source.expectedFrameSize?.() ?? null
+          options.onWarn?.(
+            `the target was still resizing when the capture budget ran out; this frame is ${width}x${height}` +
+              (want === null ? '' : `, not the ${want.width}x${want.height} it was asked for`),
+            'resizing',
+          )
+          break
+        }
         if (covered) {
           // Still painting at the budget — and if every paint left it one
           // colour, blank is the more useful word for what came back.

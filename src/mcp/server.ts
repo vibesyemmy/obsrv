@@ -446,8 +446,9 @@ const snapOutputShape = {
         "that way for 3 s after going quiet: the page's background with nothing on it yet, or a page that really is empty — the PNG " +
         "is not a picture of the page, so pass waitMs for a page that paints late; 'loading' — the load outran timeoutMs (under a " +
         "throttle a slow load is the point) and the PNG is what had painted, settledMs null: raise timeoutMs for the full load; " +
-        "'resizing' — live only: the target pane was still changing size when the budget ran out, so the page had not " +
-        "finished reflowing to the screen it is being measured on.",
+        "'resizing' — live only: the target was still changing size when the budget ran out. For a pane capture that means the " +
+        "page had not finished reflowing to the screen it is being measured on; for a raster capture it means the frame in hand " +
+        "is of an earlier size than the one asked for, and the warning names both.",
     ),
   warnings: z.array(z.string()),
   pngPath: z.string().describe('Absolute path of the captured PNG (kept in a per-call temp dir).'),
