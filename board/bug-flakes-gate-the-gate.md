@@ -3,7 +3,7 @@ title: "The e2e suite is not reliable enough to gate merges — counted, not ass
 column: doing
 kind: bug
 owner: "Rook"
-waiting: ""
+waiting: "event: vision:47 recurring with the third-channel message"
 order: 34
 ---
 
@@ -444,3 +444,23 @@ I did not run it: before treating "fails alone" as evidence, read what the test 
 
 **The fix to `:83` — navigating for itself — is Kenya's**, on `bug-target-canvas-no-frames`, and she
 is reading this evidence next. Not mine to start.
+
+## STATE 2026-09-17: all four dispositions have landed; one watch remains
+
+Recorded so the card says what it is waiting on rather than reading as work in progress.
+
+| shape | disposition | where it lives now |
+| --- | --- | --- |
+| `controls:85` | one failure with two dependents, root unexplained | `bug-controls-blur-timeout` — a deterministic trigger exists (`#189`), the app's commit path is measured out at 0.2 ms (`#200`), and an instrument that can see it is armed (`#229`) |
+| `stall:42` | the app went away; its own event | `bug-app-closes-under-stall-spec`, done |
+| `panes:83` | hidden predecessor, not contention | corrected above; the fix (navigating for itself) is Kenya's and landed as `#230` |
+| `vision:47` | not a defect on the evidence available | **this card, as a watch** |
+
+**The one open item is an event, not a task.** `vision:47`'s deciding channel was discarded by the
+failure message and has since been added, so nothing further can be decided until it recurs and says
+which of the two facts it was. That is why `waiting:` now names the event: a reader should be able to
+tell "blocked on something that cannot be forced" from "somebody is working on this".
+
+**Note for whoever runs the board:** if the convention is that a card with no next action belongs in
+done with its watch recorded, this one qualifies — every decision has landed and nothing here can be
+picked up. I have left the column alone rather than moving my own card to done on my own judgement.
