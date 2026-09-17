@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { usage } from '../../src/cli/args'
 
 /**
  * `obsrv --version` is answered by the plain-Node launcher, before it looks
@@ -39,3 +40,41 @@ describe('bin/obsrv.js --version', () => {
     }
   })
 })
+
+describe('bin/obsrv.js --help', () => {
+  /**
+   * `obsrv --help`, and a bare `obsrv`, are answered by the launcher too: on a
+   * fresh install the Electron lookup below it is a ~120 MB download, and a
+   * stranger's first command waited for it (chore-cli-help-downloads-electron,
+   * measured in the 0.61.0 RC verify). Run from the repo against a stand-in
+   * `electron` package, as rotateRefused.test.ts does, whose binary records that
+   * it was reached. A regression fails here with nothing launched.
+   */
+  const ROOT = join(__dirname, '..', '..')
+  const BIN = join(ROOT, 'bin', 'obsrv.js')
+
+  it("prints the CLI's own usage on stdout, exits 0, and never reaches Electron", () => {
+    expect(existsSync(join(ROOT, 'out', 'cli', 'args.js')), 'out/cli/args.js is missing: run npm run build').toBe(true)
+    const stub = mkdtempSync(join(tmpdir(), 'obsrv-help-'))
+    const reached = join(stub, 'reached')
+    mkdirSync(join(stub, 'dist'))
+    writeFileSync(join(stub, 'path.txt'), 'stand-in\n')
+    writeFileSync(join(stub, 'dist', 'stand-in'), `#!/bin/sh\necho "$@" >> '${reached}'\nexit 3\n`)
+    chmodSync(join(stub, 'dist', 'stand-in'), 0o755)
+    const env = { ...process.env, OBSRV_ELECTRON_PKG_DIR: stub }
+    try {
+      for (const argv of [['--help'], ['-h'], ['help'], []]) {
+        const r = spawnSync(process.execPath, [BIN, ...argv], { encoding: 'utf8', env })
+        // The same text the built CLI prints, from the same function.
+        expect({ status: r.status, stdout: r.stdout, stderr: r.stderr }, argv.join(' ') || '(no arguments)').toEqual({ status: 0, stdout: `${usage()}\n`, stderr: '' })
+      }
+      expect(existsSync(reached), 'a help request reached the Electron binary').toBe(false)
+      // Not vacuous: a command that needs Electron does reach the stand-in.
+      spawnSync(process.execPath, [BIN, 'snap', 'http://127.0.0.1:9/'], { encoding: 'utf8', env })
+      expect(existsSync(reached), 'snap never reached the stand-in, so the help arms prove nothing').toBe(true)
+    } finally {
+      rmSync(stub, { recursive: true, force: true })
+    }
+  })
+})
+
