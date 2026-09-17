@@ -327,3 +327,24 @@ test('a page held by a wall is told which wall, not offered three', async () => 
     expect(coverage).not.toContain('grew after the walk')
   }
 })
+
+test('a page past the collection caps says what it counted but did not measure', async () => {
+  // No reply had carried this sentence (docs/note-inventory.md, c5): every
+  // fixture until now fitted inside the caps, so the sentence that exists for
+  // a page bigger than one answer had never been produced. `over-caps.html`
+  // holds 2100 buttons (AUDIT_MAX_TARGETS is 2000) and 3100 paragraphs, whose
+  // labels and text together pass AUDIT_MAX_TEXT (3000).
+  const r = await runCli(['audit', fixture('over-caps.html'), '--preset', '1080p-24'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.truncated.targets).toBeGreaterThan(0)
+  expect(m.truncated.text).toBeGreaterThan(0)
+  const warnings: string[] = m.warnings
+  expect(warnings, JSON.stringify(warnings)).toContainEqual(
+    expect.stringMatching(/^the page has more elements than one report carries: \d+ targets and \d+ text elements were counted but not measured$/),
+  )
+  // The numbers in the sentence are the ones the answer reports, so a reader
+  // can tie the prose to the fields rather than taking it on trust.
+  const said = warnings.find(w => w.startsWith('the page has more elements'))!
+  expect(said).toContain(`${m.truncated.targets} targets and ${m.truncated.text} text elements`)
+})
