@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME } from '../../src/shared/control'
+import { historyMoveNote } from '../../src/shared/measureBudget'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -774,8 +775,8 @@ test('after a Back the agent issued, a live audit, lint and inspect say which pa
     expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
     const said = saidIn(r)
     expect((r.structuredContent as { url?: string }).url, tool).toBe(first)
-    expect(said, `${tool} said: ${said}`).toContain(`the figures are of ${first}, not of ${second}, which the last navigate asked for`)
-    expect(said, tool).toContain('most recently by a Back the agent issued')
+    // The sentence as the function writes it, so a rewording cannot blind this.
+    expect(said, `${tool} said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'agent' }, first, second))
     // Not the page navigating by itself: none of that sentence's causes happened.
     expect(said, tool).not.toMatch(/navigated after it loaded/)
   }
@@ -789,8 +790,7 @@ test('after a Back made in the app, the sentence says the app moved the tab', as
   await page.evaluate(() => window.obsrv.back())
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(first)
   const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
-  expect(said, `said: ${said}`).toContain(`the figures are of ${first}, not of ${second}`)
-  expect(said).toContain('most recently by a Back made in the app')
+  expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'app' }, first, second))
 })
 
 test('after a Reload the agent issued, the sentence says the page was reloaded', async () => {
@@ -798,7 +798,7 @@ test('after a Reload the agent issued, the sentence says the page was reloaded',
   expect((await call('obsrv_drive', { url: first })).isError).toBeFalsy()
   expect((await call('obsrv_drive', { reload: true })).isError).toBeFalsy()
   const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
-  expect(said, `said: ${said}`).toContain(`the figures are of ${first} after a Reload the agent issued, not as the last navigate loaded it`)
+  expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'reload', by: 'agent' }, first, first))
 })
 
 test('no history move, and a page that redirects itself, draw no history sentence', async () => {
@@ -833,7 +833,7 @@ test("after a Back, the navigate record's own sentences stop describing the page
     expect((await call('obsrv_drive', { back: true })).isError).toBeFalsy()
     await expect.poll(targetUrl, { timeout: 10_000 }).toBe(`${origin}/missing`)
     const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
-    expect(said, `said: ${said}`).toContain(`the figures are of ${origin}/missing, not of ${origin}/private`)
+    expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'agent' }, `${origin}/missing`, `${origin}/private`))
     // Where /private's load landed is about a page these figures are not of.
     expect(said).not.toContain('ended at')
     // The status sentence names the page measured and claims nothing about the page asked for.
