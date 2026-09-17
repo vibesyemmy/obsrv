@@ -1,8 +1,8 @@
 ---
 title: "After back, forward or reload, a live audit or lint no longer says the page moved since the agent's navigate; 0.60.0 did"
-column: doing
+column: review
 owner: "Henry"
-waiting: ""
+waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: B2
 order: 65
@@ -99,3 +99,41 @@ the counter skips it, and telling it apart from a page's own redirect is `bug-ar
 
 **The test changes to match:** after A, B and back, the reply carries the history sentence naming A and
 B, and never the challenge/redirect sentence.
+
+## In review 2026-09-17: the fix, with the arms Wren registered and three controls
+
+**What changed, as agreed on this card:**
+- **Where the move is recorded:** `TabSession.historyMove` (`kind`: back, forward or reload; `by`: agent
+  or app), set where each move is issued.
+  - `goBack`/`goForward`/`reloadBoth` receive `'agent'` from the control server and `'app'` from the
+    renderer's IPC.
+  - The View menu's Reload (Cmd+R) records `'app'`. It reloads both panes directly, not through
+    `reloadBoth`: a third issue point that reading the code turned up.
+  - Back and Forward record only when `canGoBack`/`canGoForward` is true, so a Back with nothing behind
+    it claims no move.
+  - Every navigate clears the record.
+- **One `whichPage` helper** in `ipc.ts` now writes the page sentences for inspect, audit and lint, which
+  used to build them separately. After a move, `historyMoveNote` takes the landed-elsewhere sentence's
+  place, because that sentence describes the page the move replaced. `httpStatusNote` needed no change:
+  a stale `asked` already selects its short contrast.
+- **The sentences** (`src/shared/measureBudget.ts`), read in all 12 shapes:
+  - a different page: *the figures are of X, not of B, which the last navigate asked for: the tab moved
+    after that navigate, most recently by a Back the agent issued*;
+  - the same address: *the figures are of B after a Reload made in the app, not as the last navigate
+    loaded it*.
+  - "Moved", not "moved through its history": a Reload whose server redirects changes the address with
+    no history step.
+
+**Evidence (local, harness-only, desk-safe):**
+- **The five `mcp-live` tests** covering arms 1–7 pass in 3.8 s. Arms: agent Back, app Back, agent Reload,
+  no move, `redirect.html`, stale landed sentence, status contrast. Matchers are derived from
+  `historyMoveNote`.
+- **Control A, main's source:** the 4 move arms fail, and no-move/redirect passes.
+- **Control B, `agent` and `app` swapped:** both issuer arms fail.
+- **Control C, landed sentence kept after a move:** red at `not.toContain('ended at')`.
+- **Regression:** typecheck 0; unit 1351, including 2 new for the sentence; `arrivals`, `history`, `sync`
+  and `sync-mirror-mark` 24 passed; the `mcp-live` navigated-note cases 12 passed. `live-drive`'s
+  back/forward/reload test has recorded desk activations, so it runs on CI only.
+
+**Still open, as agreed:** a link followed inside the native pane is still silent (the bus mirrors it and
+the counter skips it). That's `bug-arrivals`' hard problem, left for its own card if it matters.
