@@ -1,4 +1,6 @@
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openSettings, rendererWindow } from './launch'
@@ -202,6 +204,58 @@ test('a navigation elsewhere does not clobber a URL being typed', async () => {
   // which also proves the URL change did reach the store.
   await input.press('Escape')
   await expect(input).toHaveValue(TALL)
+})
+
+test("the answer to the toolbar's own navigation does not overwrite an address typed while it was in flight", async () => {
+  // The outgoing twin of the test above (bug-toolbar-answer-overwrites-typing,
+  // found by Kenya). `go()` wrote its navigation's answer into the field when
+  // it resolved, over anything typed meanwhile, and the next Enter re-sent the
+  // address already showing: nothing loaded, nothing failed. The response is
+  // held here so the typing always lands before the answer.
+  let release: () => void = () => {}
+  const released = new Promise<void>(r => (release = r))
+  let asked = 0
+  const server: Server = createServer((_req, res) => {
+    asked++
+    void released.then(() => {
+      res.setHeader('Content-Type', 'text/html')
+      res.end('<!doctype html><title>held</title><p>held</p>')
+    })
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const held = `http://127.0.0.1:${(server.address() as AddressInfo).port}/held`
+  const input = page.locator('.url-form input')
+  try {
+    await input.fill(held)
+    await input.press('Enter')
+    await expect.poll(() => asked).toBeGreaterThan(0)
+    await input.fill(FIXTURE)
+    release()
+    await expect.poll(paneUrls).toEqual({ native: held, target: held })
+    await expect
+      .poll(() =>
+        app.evaluate(() => {
+          const ctx = (globalThis as any).__obsrv
+          return ctx.native.webContents.isLoading() || ctx.target.webContents.isLoading()
+        }),
+      )
+      .toBe(false)
+    // The answer reaches the renderer within milliseconds of the loads
+    // finishing. The typing has to survive it, so it is held for longer
+    // than that, not read once.
+    const until = Date.now() + 750
+    while (Date.now() < until) {
+      expect(await input.inputValue(), 'the answer to the held navigation overwrote the typing').toBe(FIXTURE)
+      await page.waitForTimeout(50)
+    }
+    // And Enter sends what was typed, not the address already showing.
+    await input.press('Enter')
+    await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+  } finally {
+    release()
+    server.closeAllConnections()
+    await new Promise<void>(r => server.close(() => r()))
+  }
 })
 
 test('a failed load leaves the error code showing in the toolbar', async () => {

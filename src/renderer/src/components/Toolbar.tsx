@@ -205,13 +205,25 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
     if (readOnly) closeList()
   }, [readOnly])
 
+  // The draft as it is now, for an answer that arrives after later renders:
+  // `go`'s closure holds the draft of the render that called it.
+  const draftNow = useRef(draft)
+  draftNow.current = draft
+
   const go = async (url: string): Promise<void> => {
     closeList()
     setError(null)
+    const sent = draftNow.current
     const applied = await window.obsrv.navigate(url)
     setUrl(applied)
     // The input keeps focus through Enter, so the sync above would skip it.
-    setDraft(applied)
+    // Only while the field still holds what it held when this navigation
+    // started: an address typed while it was in flight is newer than its
+    // answer. Overwriting it made the next Enter re-send the address already
+    // showing, a no-op with no load and no error, the outgoing twin of the
+    // incoming clobber the sync above guards (bug-toolbar-answer-overwrites-typing,
+    // found by Kenya).
+    if (draftNow.current === sent) setDraft(applied)
   }
 
   const submit = (e: FormEvent): void => {
