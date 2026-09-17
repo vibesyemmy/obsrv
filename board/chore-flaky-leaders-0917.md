@@ -227,3 +227,30 @@ the end-to-end trace above found the same mechanism from the other end, by instr
 renderer and reading what the panes were actually asked to load. **They agree**, and that agreement
 is worth more than either alone: one is a reading of the code, the other a measurement of the running
 app, and neither had the other's answer in hand.
+
+## Why the wrong answers were caught — the part worth copying
+
+Three hypotheses were refuted on the way to the cause, and **two of those refutations were themselves
+wrong**. Not because the reasoning was sloppy: because the **measurement** was.
+
+- *"The clobbered field is refuted — it held the bad address when I read it."* The submit reads
+  React state (`draft`), not the DOM. **I measured the wrong object**, and the overwrite lands
+  between the read and the keypress.
+- *"No `navigate()` call on a miss."* The wrapper never ran: `contextBridge` freezes that object, so
+  the assignment failed silently and logged nothing, ever.
+
+**Neither was caught by being careful.** Both were caught because every number was printed beside a
+line that must always appear, and the line went missing:
+
+    the GOOD navigation logged no `navigate() called` either   → the wrapper is dead, not the product quiet
+    main's did-fail-load on a HIT: ["native -105","target -105"] → so `[]` on a miss means something
+    a HIT prints `load-error -105`                              → so a miss with none is an absence, not a blind spot
+
+**The rule this leaves:** *an instrument that cannot show you it is working is indistinguishable from
+a product that is quiet.* Both look like nothing. So print the line that must always be there — the
+control case, the healthy sample, the baseline — beside the line you care about. **A silence is only
+evidence once something in the same breath proves you would have heard a sound.**
+
+Cheap to do and it never needs remembering: it is the same discipline as the vacuity arms on
+`chore-strict-output-under-test` and the pre-registered control above, one level down — at the
+instrument rather than at the test.
