@@ -181,6 +181,12 @@ npx -y getobsrv report http://localhost:5173 --out obsrv-report.html
 # 1.5x the density, and the audit's millimetres grow to match.
 npx -y getobsrv snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out zoomed.png
 
+# The screen turned a quarter turn (0.61.0+): a phone held landscape, or a monitor stood on end.
+# --orientation is deprecated and keeps its meaning, relative to how the preset is stored: portrait is
+# the preset as stored, landscape is it turned, so landscape on a desktop preset (stored landscape) is a
+# portrait screen. A --rotate and --orientation that disagree are refused.
+npx -y getobsrv snap http://localhost:5173 --preset iphone-61 --rotate --out landscape.png
+
 # How the page feels there: Chrome DevTools' network and CPU presets, and the time
 # to paint-quiet in the JSON (settledMs). Compare against --throttle none.
 npx -y getobsrv snap http://localhost:5173 --preset android-65 --throttle budget-phone --out slow.png

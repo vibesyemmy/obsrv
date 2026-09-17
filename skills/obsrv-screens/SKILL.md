@@ -73,6 +73,13 @@ $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 # The page as a user at 150% sees it (browser zoom as reflow; works on every command):
 $OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out shots/laptop-150.png
 
+# The screen turned a quarter turn (0.61.0+): a phone held landscape, a monitor stood on end.
+# --rotate turns the preset however it is stored. --orientation is deprecated and keeps its
+# meaning, which is relative to how the preset is stored: portrait is the preset as stored,
+# landscape is it turned, so --orientation landscape on 1080p-24 (stored landscape) is a
+# PORTRAIT screen. A --rotate and --orientation that disagree are refused.
+$OBSRV snap http://localhost:5173 --preset iphone-61 --rotate --out shots/iphone-landscape.png
+
 # How it feels on a budget phone over 3G with a slow CPU: settledMs in the JSON, next to
 # a --throttle none baseline (presets: fast-4g, slow-4g, 3g, cpu-4x, cpu-6x, mid-phone, budget-phone):
 $OBSRV snap http://localhost:5173 --preset android-65 --throttle budget-phone --out shots/slow.png
@@ -111,6 +118,19 @@ If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
+
+**Rotation (0.61.0+).** `rotate: true` on `obsrv_snap`, `obsrv_audit`,
+`obsrv_lint`, `obsrv_inspect`, `obsrv_report` and `obsrv_drive` turns the screen
+a quarter turn, however the preset is stored: `iphone-61` becomes landscape,
+and `1080p-24` becomes a monitor stood on end. `orientation` is deprecated and
+keeps its meaning, which is relative to how the preset is stored: `portrait`
+is the preset as stored and `landscape` is it turned, so
+`orientation: 'landscape'` on a desktop preset (stored landscape) gives a
+portrait screen. A `rotate` and `orientation` that
+disagree are refused. `obsrv_snap` and `obsrv_drive` answer `rotated`, and
+`screenShape` for the shape itself; the CLI's JSON does not carry `rotated`.
+A live audit, lint or inspect measures the screen already in force, and says
+it ignored either field.
 
 **Which list a sentence lands in:** on `obsrv_audit`, `obsrv_lint` and
 `obsrv_diff`, `warnings` is about the **page** and `notes` is about the
