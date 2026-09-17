@@ -166,3 +166,66 @@ three: the live snap enum (`mcp/server.ts:439`) carries it, drive's field is a f
 `awaitExpectedSize` defaults to false, so nothing on that path can produce it today. **That is a
 constraint, not a coincidence:** wiring the gate into a headless caller means adding `resizing` to
 the report's enum in the same change, and `docs/public-shape.json` with it.
+
+## FAIL 2026-09-17 by Idris on `b43e7fc`, and what it cost the fix
+
+**Acceptance item 2 was not met by the first fix**, and the gap was **run, not read**: seven of the 26
+presets share a device extent with another at a different density — 1920x1080 is `1080p-24`,
+`1080p-27` and `laptop-1080-15` at 1x, `laptop-1080-125` (1536x864) and `laptop-1080-150` (1280x720);
+3840x2160 is `4k-27` and `4k-27-150`. A switch between two of those recreates the window and reloads
+the page **at the same extent**. The frame size never changes, so `covered` never resets and the
+extent gate answers yes at once. Idris's run through the real `captureQuiescent`, with a source using
+`TargetSource`'s own formula:
+
+| switch | answer |
+| --- | --- |
+| 48x27@1 → 40x25@1 (different extent) | settled, **new** layout, 562 ms |
+| 48x27@1 → 32x18@1.5 (same extent) | settled, **pre-change** layout, no warning, 151 ms |
+
+**The PNG carries the dimensions that were asked for, so the caller cannot tell.** That is class 1
+under `release-gate.md`, and it is the card's own title — a live raster taken while the preset changes
+coming back settled, with no warning. Not a regression: `main` does the same today.
+
+### The fix: coverage is earned under a layout epoch, not a size
+
+`TargetSource` counts accepted layout changes (`layoutEpoch()`), bumped once per change that actually
+moves the layout — CSS viewport, density or phone-ness — and **not** on a no-op `setViewport`, which
+would make a capture in flight wait for a repaint an idle page has no reason to produce. The capture
+records which epoch its pixels belong to, starts coverage again when that changes, and will not settle
+under an epoch older than the source's.
+
+**A size cannot see this and a request can**, which is the same shape as the original defect one level
+up: the capture cannot distinguish a page that has gone quiet from a surface that was asked for
+something and has not painted it. Both answers come from the side that did the asking.
+
+**Two smaller things the finding forced:**
+
+- **The paint handler drops frames from a window this source has replaced** (`targetSource.ts:368`).
+  `recreate()` swaps `this.win` before destroying the old one, so a paint already queued from the old
+  webContents could still arrive — carrying the layout just left, at the same extent, and it would
+  have re-earned coverage under the new epoch. Dropping it is what makes the epoch mean what it says.
+- **The budget sentence needed a second wording.** *"not the 1920x1080 it was asked for"* is absurd
+  about a 1920x1080 frame. At a shared extent the capture now says the frame is from before the
+  change and that **its dimensions do not show it**, which is the fact Idris's finding turns on.
+
+**Controls, both halves load-bearing:**
+
+| removed | red |
+| --- | --- |
+| the epoch half of the settle gate | 3 tests, at `expected 7 to be 9`, `expected true to be false`, `expected 'blank' to be 'uncovered'` |
+| the coverage reset on an epoch change | 2 tests, one of them by running the full budget — `expected 'resizing' to be 'uncovered'` |
+
+### What is still not covered, named rather than implied
+
+- **No e2e reaches a same-extent switch during a capture.** Neither preset cycle contains two presets
+  that share an extent, and the control server would have to interleave a `setPreset` with a capture
+  in flight to drive it. The unit tests pin the capture's half by construction; `TargetSource`'s half
+  (the bump and the stale-window drop) is read, not run.
+- **The field case remains unmeasured:** whether a recreate leaves a settle window of silence while a
+  capture is in flight. The fix makes the question moot rather than answering it, which is the right
+  order for a class 1 — but it is not an answer, and this card does not claim one.
+- **Text scale during a capture is the same shape and is NOT fixed here** (Idris, read not run): it
+  changes the layout at the same extent through the same window, and `setTextScale` does not bump the
+  epoch. It gets its own card rather than a quiet inclusion, because bumping there has a race of its
+  own — `applyEmulation` reaches the renderer asynchronously, so a forced repaint can still paint the
+  old layout. Orientation goes through `setViewport` and is covered by the epoch.

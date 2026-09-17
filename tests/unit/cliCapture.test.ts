@@ -495,6 +495,80 @@ describe('a quiet stretch that straddles a size change', () => {
     }
   })
 
+  /**
+   * The hole Idris measured in the first fix: seven of the 26 presets share a
+   * device extent with another at a different density (1920x1080 is five of
+   * them; 3840x2160 two). Switching between two of those recreates the window
+   * and reloads at the SAME extent, so a gate watching only the size sees
+   * nothing change and hands back the layout from before the switch, at
+   * dimensions that look right.
+   */
+  class Layered extends EventEmitter {
+    epoch = 0
+    constructor(private readonly want: { width: number; height: number }) {
+      super()
+    }
+    invalidate(): void {}
+    expectedFrameSize(): { width: number; height: number } {
+      return this.want
+    }
+    layoutEpoch(): number {
+      return this.epoch
+    }
+  }
+  /** Same extent throughout; only the byte in the pixels says which layout it is. */
+  const sameExtentSwitch = (): Layered => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    setTimeout(() => src.emit('frame', marked(128, 102, 9)), 400)
+    return src
+  }
+
+  it('waits out a density change that keeps the device extent, and returns the new layout', async () => {
+    const got = await captureQuiescent(sameExtentSwitch(), { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([128, 102])
+    // The size cannot tell these apart, so the pixels have to. 9 is the layout
+    // that was asked for; 7 is the one the pane had left.
+    expect(got.bgra[0]).toBe(9)
+  })
+
+  it('says so at the budget, and says the dimensions cannot show it', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    src.emit('frame', marked(128, 102, 7))
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    const warnings: string[] = []
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 600, ...noGrace, awaitExpectedSize: true, onWarn: m => warnings.push(m) })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('resizing')
+    expect(warnings.join(' ')).toContain('its 128x102 is the size that was asked for, so the dimensions do not show it')
+    // And NOT the other wording, which would be absurd here.
+    expect(warnings.join(' ')).not.toContain('not the 128x102 it was asked for')
+  })
+
+  it('leaves what the new layout has not painted reading as never painted', async () => {
+    // The buffer is replaced on a layout change, not kept. Keeping it would
+    // leave the previous layout's pixels under a frame reported as this one's,
+    // and `uncovered`'s sentence is checked against the transparent pixels in
+    // the PNG (`bug-live-raster-uncovered-said-as-painting`, Kenya's arm).
+    const src = new Layered({ width: 4, height: 4 })
+    setTimeout(() => src.emit('frame', marked(4, 4, 7)), 0)
+    setTimeout(() => src.epoch++, 30)
+    // One row of the new layout only: the other three never paint.
+    setTimeout(
+      () => src.emit('frame', { frame: { x: 0, y: 0, width: 4, height: 1, data: new Uint8Array(16).fill(9) }, frameWidth: 4, frameHeight: 4 }),
+      200,
+    )
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 600, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('uncovered')
+    expect(got.bgra[0]).toBe(9)
+    // Row 1 onwards is the old layout's 7s if the buffer was kept.
+    expect(Array.from(got.bgra.subarray(16, 64))).toEqual(Array(48).fill(0))
+  })
+
   it('leaves a caller that did not ask exactly as it was', async () => {
     // The CLI's own captures do not pass the flag, and a source that answers
     // the size must not change their behaviour by existing.

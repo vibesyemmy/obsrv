@@ -23,6 +23,15 @@ export interface FrameEmitter {
    * asked. See `awaitExpectedSize`.
    */
   expectedFrameSize?(): { width: number; height: number } | null
+  /**
+   * A counter of the layout changes this source has accepted, or undefined
+   * when it does not keep one. Read only under `awaitExpectedSize`.
+   *
+   * The size alone is not enough: two presets can share a device extent at
+   * different densities, and switching between them changes every pixel of
+   * the layout without changing one number the capture can see.
+   */
+  layoutEpoch?(): number
 }
 
 /**
@@ -271,18 +280,32 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   /** When coverage completed, and the paints since: the animation test's evidence. */
   let coveredAt = 0
   let paintsSinceCovered = 0
+  /** Which layout the pixels in hand belong to; undefined when nobody is counting. */
+  let frameEpoch: number | undefined
+
+  /** The source's layout counter, read only when the caller asked us to wait on it. */
+  const epochNow = (): number | undefined => (options.awaitExpectedSize === true ? source.layoutEpoch?.() : undefined)
 
   const onFrame = (m: FrameMessage): void => {
     lastPaint = Date.now()
     frames++
     if (covered) paintsSinceCovered++
-    if (m.frameWidth !== width || m.frameHeight !== height) {
+    const epoch = epochNow()
+    const resized = m.frameWidth !== width || m.frameHeight !== height
+    // A layout change the size cannot show (a density change at the same
+    // device extent) starts coverage again exactly as a resize does. The
+    // buffer is replaced rather than kept, so that whatever the new layout has
+    // not painted reads as never painted: keeping it would leave the previous
+    // layout's pixels under a frame reported as this one's, and `uncovered`'s
+    // sentence is checked against the transparent pixels in the PNG.
+    if (resized || epoch !== frameEpoch) {
       width = m.frameWidth
       height = m.frameHeight
       buffer = new Uint8Array(width * height * 4)
       covered = false
       mask = new Uint8Array(width * height)
       uncovered = width * height
+      frameEpoch = epoch
     }
     const { x, y, width: w, height: h, data } = m.frame
     if (x === 0 && y === 0 && w === width && h === height) {
@@ -325,6 +348,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
    */
   const atExpectedSize = (): boolean => {
     if (options.awaitExpectedSize !== true) return true
+    if (epochNow() !== frameEpoch) return false
     const want = source.expectedFrameSize?.() ?? null
     return want === null || (want.width === width && want.height === height)
   }
@@ -384,9 +408,18 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
           // is what a reader has to know about the PNG in front of them.
           unsettledReason = 'resizing'
           const want = source.expectedFrameSize?.() ?? null
+          // Two ways to be late, and they need different words. A different
+          // size says itself. The SAME size at a new density does not: the
+          // PNG's dimensions are the ones that were asked for, so a reader
+          // comparing them would conclude the frame is current. Say that the
+          // dimensions cannot be used, rather than printing "not the 1920x1080
+          // it was asked for" about a 1920x1080 frame.
+          const sameExtent = want !== null && want.width === width && want.height === height
           options.onWarn?.(
-            `the target was still resizing when the capture budget ran out; this frame is ${width}x${height}` +
-              (want === null ? '' : `, not the ${want.width}x${want.height} it was asked for`),
+            sameExtent
+              ? `the target was still changing when the capture budget ran out; this frame is from before the change, and its ${width}x${height} is the size that was asked for, so the dimensions do not show it`
+              : `the target was still resizing when the capture budget ran out; this frame is ${width}x${height}` +
+                  (want === null ? '' : `, not the ${want.width}x${want.height} it was asked for`),
             'resizing',
           )
           break
