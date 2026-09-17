@@ -78,7 +78,12 @@ test.describe('arm 1 — collection descends into open roots', () => {
 
   test('TWIN: lint finds the same hairline when it is in the light DOM', async () => {
     const m = await json(['lint', FLAT, '--preset', PRESET])
-    expect(m.summary.hairline).toBeGreaterThanOrEqual(1)
+    // The first probe run had this twin RED with 0, which made the lint arm's
+    // red worthless — it was about the fixture, not the boundary. The rule
+    // then had `height: 0`; lint.html's proven hairline has height 20px. The
+    // message carries the whole summary so the next red says what lint saw
+    // rather than only what it did not.
+    expect(m.summary.hairline, `lint summary on the flat page: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
   })
 })
 
