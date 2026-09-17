@@ -141,3 +141,33 @@ the top, so the page was not asked; measured where it stopped."*
 
 **Acceptance item 1 is met** (the measurement) and is kept for its second half: the fix's control run
 still prints today's wording beside the fixed one. The last three items stand.
+
+## CORRECTION 2026-09-17 by Henry, on Wren's read: my proposed wording was itself false
+
+The paragraph above proposed *"the walk's own budget was gone before it could return to the top, so
+**the page was not asked**"*. **The page is asked.** `backToTop` calls `step('top')`, which issues
+`target.webContents.executeJavaScript(WALK_STEP_SCRIPT('top'))` and only then loses a race against a
+zero-length timer (`walk.ts:88-100`). The page is asked and **not waited for**, which is a different
+thing — and the difference is exactly what someone debugging a page that received a scroll nobody
+acknowledged needs to read.
+
+**Wren's wording, which is true on both paths:**
+
+> the walk had no budget left to return to the top, so it did not wait for the page; measured where it
+> stopped.
+
+On the cut-short path the thread really is blocked and that sentence stays true; it simply stops
+asserting a 15-second silence nobody measured. The blocked-thread fact is not lost — it belongs on the
+step that actually timed out, which is where it was measured.
+
+### A third fault in the same sentence, reasoned and NOT measured
+
+If the page is asked and the walk merely stops waiting, then on a free main thread **the scroll
+usually lands** — a few milliseconds later, before the audit or lint that follows runs. So the note's
+last clause, *"measured where it stopped"*, is probably wrong too on this path: the measurement is of
+the page at the **top**, not where the walk stopped.
+
+**This is a code reading, not a result**, and it is written here as a candidate so that nobody quotes
+it as one. It is cheap to settle on the fake target Kenya already built: have the fake record the
+scroll position it was left at, and assert what the note claims against it. If it holds, the fix has
+three things to correct in one sentence — the duration, the accusation, and the place.
