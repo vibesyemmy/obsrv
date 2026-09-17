@@ -65,6 +65,13 @@ and code that matched the retired sentences finds nothing.
 shadow-host count. For that app the walk note keeps its older wording, because its
 walk really did not enter the roots.
 
+**The other direction loses one sentence's detail.** A 0.61.0 or older MCP driving
+*this* app reads the walk's `blocked` only when it carries a shadow-host count, which
+this app no longer sends. That MCP then has no measurement to name and falls back to
+its list of three possible causes — true, and less specific than what the app measured.
+Upgrading the server fixes it; nothing else is affected, because the app composes its
+own audit and lint sentences.
+
 **Still out of reach:** closed shadow roots and iframes.
 
 ## 0.61.0 — *unreleased*
