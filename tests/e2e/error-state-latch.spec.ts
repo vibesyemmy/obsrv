@@ -154,6 +154,17 @@ test('ARM A, timestamped: what order the renderer sees on a miss', async () => {
         .waitFor({ state: 'visible', timeout: 25_000 })
         .then(() => 'arrived late')
         .catch(() => 'never arrived, even at 33 s')
+      // What the panes were actually ASKED to load. `NativePane.loadTrace()`
+      // (from #129) records every load with its URL, so if the submit sent the
+      // old address this shows it — and unlike wrapping `window.obsrv`, which
+      // is frozen by contextBridge and silently did nothing, this instrument
+      // has a baseline: the good navigation must appear in it too.
+      const loads = await app.evaluate(() =>
+        ((globalThis as any).__obsrv.native.loadTrace() as { url: string; outcome: string }[])
+          .slice(-4)
+          .map(l => `${l.url.split('/').pop()} ${l.outcome}`),
+      )
+      rounds.push(`    the native pane was asked to load: ${JSON.stringify(loads)}`)
       const panes = await app.evaluate(() => {
         const g = globalThis as any
         return {
