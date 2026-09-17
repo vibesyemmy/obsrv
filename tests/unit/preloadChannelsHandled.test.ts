@@ -37,6 +37,11 @@ const matches = (text: string, re: RegExp): string[] => [...text.matchAll(re)].m
 
 describe('preload channels', () => {
   it('every IPC channel a preload sends or invokes is handled in main', () => {
+    // The preloads are read by name, so a third one would send through channels
+    // nothing here reads, and this would stay green (Wren's read of #237).
+    const preloads = readdirSync(join(ROOT, 'src/preload')).filter(n => n.endsWith('.ts')).sort()
+    expect(preloads, 'a new preload file: teach this guard to read its sends').toEqual(['app.ts', 'sync.ts'])
+
     const app = read('src/preload/app.ts')
     const direct = matches(app, /ipcRenderer\.(?:send|invoke|sendSync)\(\s*IPC\.(\w+)/g)
     // Not vacuous: the preload still sends through this shape.
@@ -53,6 +58,10 @@ describe('preload channels', () => {
     expect(unresolved, `sync.ts sends through names that are not \`satisfies typeof IPC.x\` constants: ${unresolved.join(', ')}`).toEqual([])
     expect(viaConstant.length, 'no ipcRenderer.send(CONSTANT) found in src/preload/sync.ts').toBeGreaterThanOrEqual(4)
     const fromSync = viaConstant.map(n => named.get(n)!)
+    // Nor does either send another way the shapes above would miss.
+    for (const [name, text] of [['app.ts', app], ['sync.ts', sync]] as const) {
+      expect(text, `${name} sends through sendToHost or postMessage, which this guard does not read`).not.toMatch(/ipcRenderer\.(?:sendToHost|postMessage)\(/)
+    }
 
     const handled = new Set<string>()
     const subscribeHandlers = new Set<string>()
