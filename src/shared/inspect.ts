@@ -142,15 +142,35 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   // and skips what is not rendered, so on one page `audit` reported the
   // smallest text as 10 px while `inspect` measured a 4 px paragraph and said
   // nothing about it being invisible. Both were right about their own
-  // question; only one said what it did. `visibility` and `display` are the
-  // inherited ones, so an ancestor hides a child that declares neither, which
-  // is why this walks rather than reading the element alone. `opacity: 0` is
-  // already reported through the painted colour and is left to it.
+  // question; only one said what it did. `opacity: 0` is already reported
+  // through the painted colour and is left to it.
+  //
+  // **The two rules are not the same shape, and treating them as one was a
+  // bug** (found by the 0.61.0 release sweep — a classifier's read of #85,
+  // confirmed by Wren and Henry reading the code; `bug-inspect-visible-child-not-drawn`).
+  // `visibility` is inherited *and
+  // overridable*: a descendant may declare `visibility: visible` under a
+  // hidden ancestor and IS painted. Its own computed value already carries the
+  // inheritance, so reading the element alone is both necessary and
+  // sufficient — walking ancestors found the hidden parent and called a
+  // visible child undrawn, which is the opposite of true. `display: none` is
+  // not overridable that way: nothing inside an undisplayed box is rendered
+  // whatever it declares, and the child's own computed `display` does not say
+  // so, which is why that one still walks.
+  //
+  // Reading `visibility` on the element alone is also what `audit`'s `shown`
+  // does (`shared/audit.ts`), which is the agreement the note was added to
+  // deliver in the first place.
   let hidden: 'visibility' | 'display' | null = null
-  for (let node: Element | null = el; node !== null && hidden === null; node = node.parentElement) {
-    const cs = getComputedStyle(node)
-    if (cs.display === 'none') hidden = 'display'
-    else if (cs.visibility === 'hidden' || cs.visibility === 'collapse') hidden = 'visibility'
+  const own = getComputedStyle(el)
+  if (own.visibility === 'hidden' || own.visibility === 'collapse') hidden = 'visibility'
+  if (hidden === null) {
+    for (let node: Element | null = el; node !== null; node = node.parentElement) {
+      if (getComputedStyle(node).display === 'none') {
+        hidden = 'display'
+        break
+      }
+    }
   }
 
   const r = el.getBoundingClientRect()

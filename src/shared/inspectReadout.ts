@@ -148,9 +148,18 @@ export function inspectReadout(
   const hiddenNote =
     report.hidden !== 'display' && report.hidden !== 'visibility'
       ? null
-      : `this element is not drawn: ${
-          report.hidden === 'display' ? 'display: none' : 'visibility: hidden'
-        } on it or on an ancestor. The measurements below are of a box the screen never shows, and the contrast verdict is not a verdict about anything a reader sees.`
+      : // Each rule says where it was found, because the two are not found the
+        // same way. `display: none` anywhere above takes the element off the
+        // screen. `visibility: hidden` is read on the element itself — its
+        // computed value already carries any inheritance, and a descendant
+        // that declares `visible` under a hidden parent IS painted, so naming
+        // an ancestor here would be wrong (see shared/inspect.ts; this lands after
+        // 0.61.0, which was cut without it).
+        `this element is not drawn: ${
+          report.hidden === 'display'
+            ? 'display: none on it or on an ancestor'
+            : 'visibility: hidden in its computed style'
+        }. The measurements below are of a box the screen never shows, and the contrast verdict is not a verdict about anything a reader sees.`
 
   let contrast: InspectContrast | null = null
   if (report.background !== null) {

@@ -17,11 +17,20 @@
       /* Hidden the other way: the box keeps its space, nothing is painted in it. */
       #veiled { visibility: hidden; position: absolute; left: 10px; top: 60px; }
       #veiled p { margin: 0; font-size: 13px; color: #6b7280; }
+      /* And the case that breaks an ancestor walk: `visibility` is inherited
+         but a descendant can override it, so this paragraph IS painted even
+         though its parent is `visibility: hidden`. A reader sees it. Walking
+         ancestors for `visibility` finds the parent and calls this not drawn,
+         which is the opposite of true. */
+      #revealed { visibility: visible; color: #111111; font-size: 13px; }
     </style>
   </head>
   <body>
     <p id="shown">This paragraph is on the screen</p>
     <div id="drawer"><p id="drawer-text">Four pixel text nobody can see</p></div>
-    <div id="veiled"><p id="veiled-text">Space is reserved, nothing is painted</p></div>
+    <div id="veiled">
+      <p id="veiled-text">Space is reserved, nothing is painted</p>
+      <p id="revealed">This one opts back in and IS painted</p>
+    </div>
   </body>
 </html>
