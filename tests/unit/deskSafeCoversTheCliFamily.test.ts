@@ -25,17 +25,17 @@ import { minimatch } from 'minimatch'
 const ROOT = join(__dirname, '..', '..')
 const E2E = join(ROOT, 'tests', 'e2e')
 
-/** The patterns `playwright.config.ts` applies under `OBSRV_DESK_SAFE=1`. */
+/** The patterns `playwright.config.ts` applies when nobody opted in with `OBSRV_E2E_CLI=1`. */
 function deskSafeIgnores(): string[] {
   const config = readFileSync(join(ROOT, 'playwright.config.ts'), 'utf8')
   const line = /testIgnore:\s*\[([^\]]*)\]/.exec(config)
-  expect(line, 'playwright.config.ts no longer declares a testIgnore for OBSRV_DESK_SAFE').not.toBeNull()
+  expect(line, 'playwright.config.ts no longer declares a testIgnore for the CLI family').not.toBeNull()
   return [...line![1]!.matchAll(/'([^']+)'/g)].map(m => m[1]!)
 }
 
 const excluded = (file: string, patterns: string[]): boolean => patterns.some(p => minimatch(`tests/e2e/${file}`, p))
 
-describe('the desk-safe run', () => {
+describe('a local run that nobody opted in', () => {
   it('leaves out every spec whose name starts with `cli`, not only the hyphenated ones', () => {
     const patterns = deskSafeIgnores()
     const specs = readdirSync(E2E).filter(f => f.endsWith('.spec.ts'))

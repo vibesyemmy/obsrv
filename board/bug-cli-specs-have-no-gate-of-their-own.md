@@ -1,6 +1,7 @@
 ---
 title: "The CLI specs run on CI by a rule nobody wrote down, enforced by each person's own regex"
-column: backlog
+column: done
+owner: "Henry"
 kind: bug
 criterion: C5
 order: 97
@@ -68,3 +69,51 @@ recorded in its not-checked column rather than its findings.
   naming why. **Blocked on the `cli.spec.ts` authorization;**
 - whatever the rule becomes, `CONTRIBUTING.md` and the code say the same thing, and a new spec in the
   family cannot fall outside it without a test going red.
+
+## CLOSED 2026-09-17: the opt-out became an opt-in, and it needed no `cli.spec.ts` edit after all
+
+**Opeyemi authorised the `tests/e2e/cli.spec.ts` change in Henry's session.** Designing it with the
+authorization in hand made it clear the per-file guard was the *worse* fix, so the file was not
+touched:
+
+- **A per-file `test.skip` in seventeen files** duplicates the rule seventeen times, and each copy is
+  a place for the eighteenth file to be forgotten.
+- **Inverting the default in `playwright.config.ts` is one edit and defaults to safe.** The specs are
+  excluded from a local run unless `OBSRV_E2E_CLI=1`, and CI is untouched.
+
+**Why the direction matters more than the mechanism.** The first fix (`#324`) was an opt-out:
+`OBSRV_DESK_SAFE=1` left the family out *if you remembered to set it*. But the people who remember a
+flag are the same people who would have written `cli*` instead of `cli-*` in the first place — an
+opt-out protects everyone except the person it exists for. Defaulting to safe costs one environment
+variable to the person who genuinely wants these, and costs nothing to anyone else.
+
+**Measured through Playwright, not inferred from the config:**
+
+| run | tests | files | `cli*` specs |
+| --- | --- | --- | --- |
+| local, nobody opted in | 455 | 56 | **0** |
+| local, `OBSRV_E2E_CLI=1` | 615 | 74 | all |
+| `CI=true` | 615 | 74 | all |
+
+**So CI keeps its full coverage** — the thing worth checking before defaulting anything to "off", and
+the check Idris asked for when reviewing `#324`.
+
+**Acceptance: the second item is met in substance and NOT in its own words, and the difference is
+Idris's finding.** The clause reads *"the CLI specs refuse a local run unless someone opts in
+explicitly … **Control:** running one without the opt-in fails with a sentence naming why."* The
+protection is real and by construction — but `testIgnore` **says nothing**. Targeting one of those
+files directly gets Playwright's generic *no tests found*, and a full local run mentions the exclusion
+nowhere. Idris tested it rather than reading the claim, which is the only reason this is written down
+instead of standing as "met".
+
+**Why it is not fixed here, and what would fix it.** A spec that is *ignored* cannot explain itself;
+only a spec that is *collected and skipped* can, and skipping 153 tests would trip
+`check-e2e-skips.js`, which exists to fail a green run that skipped a test nobody listed. The cheap
+honest fix is a line printed once at the start of a local run — *"CLI specs excluded; `OBSRV_E2E_CLI=1`
+to include them"* — which needs a `globalSetup` and deserves its own change rather than being
+smuggled into this one. **Follow-up: `chore-desk-safe-run-says-what-it-left-out`.**
+
+The rest of the item — protection that does not depend on the runner's pattern — is met by
+construction rather than by anyone's memory. The third — code and `CONTRIBUTING.md` saying the same
+thing, with a test that reds if a new spec escapes — is met by
+`deskSafeCoversTheCliFamily.test.ts`, which reads `tests/e2e/` rather than the glob.
