@@ -210,7 +210,36 @@ interface Reply {
   body: Record<string, unknown>
 }
 
-const reply = (code: number, body: Record<string, unknown>): Reply => ({ code, body })
+
+// PROBE, never for main (c5): every note and warning a reply carries, to a fixed file.
+function probeNotes(surface: string, value: unknown): void {
+  try {
+    const found: { key: string; text: string }[] = []
+    const reasons: string[] = []
+    const walk = (v: unknown, depth: number): void => {
+      if (depth > 8 || v === null || typeof v !== 'object') return
+      if (Array.isArray(v)) {
+        for (const x of v) walk(x, depth + 1)
+        return
+      }
+      for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+        if ((k === 'notes' || k === 'warnings') && Array.isArray(x)) {
+          for (const t of x) if (typeof t === 'string') found.push({ key: k, text: t })
+        } else if (k === 'unsettledReason' && typeof x === 'string') reasons.push(x)
+        else walk(x, depth + 1)
+      }
+    }
+    walk(value, 0)
+    if (found.length === 0 && reasons.length === 0) return
+    ;(process as unknown as { getBuiltinModule: (m: string) => typeof import('node:fs') }).getBuiltinModule('node:fs').appendFileSync('/tmp/obsrv-note-log.jsonl', JSON.stringify({ t: Date.now(), pid: process.pid, surface, found, reasons }) + '\n')
+  } catch {
+    // a probe must never break the reply
+  }
+}
+const reply = (code: number, body: Record<string, unknown>): Reply => {
+  probeNotes('control', body)
+  return { code, body }
+}
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
