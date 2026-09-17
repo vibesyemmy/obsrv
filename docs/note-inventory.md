@@ -224,21 +224,32 @@ can't see that.
 
 **The split:**
 
-| | producers |
-| --- | --- |
-| fired, and placed at exactly one producer | 55 |
-| fired, but the same text is written at several places (3 groups, below) | 7 |
-| not seen to fire | **54** |
-| written or reworded after the run | 4 |
-| too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 |
+| | producers | after the tests below |
+| --- | --- | --- |
+| fired, and placed at exactly one producer | 55 | **69** |
+| fired, but the same text is written at several places | 7 (3 groups) | **4** (2 groups) |
+| not seen to fire | 54 | **43** |
+| written or reworded after the run | 4 | 4 |
+| too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 | 1 |
+
+The right column is this file's state after `#256` and `#258`, below. The left is what the run of
+2026-09-17 saw, and it does not change: a test written afterwards says the sentence can be produced,
+not that that run produced it.
 
 **Ambiguous: at least one place in each group fired, and text can't say which:**
 - `src/cli/main.ts:860` and `:1511`, the `reference: ` label.
-- `src/cli/walk.ts:105` and `src/mcp/walk.ts:113`: "the walk was cut short before it began".
-- `src/mcp/server.ts:1543`, `:1849` and `:2538`: "`preset` (or `profile`) is headless-only and was
-  ignored in live mode".
+- `src/cli/walk.ts:105` and `src/mcp/walk.ts:113`: "the walk was cut short before it began". A
+  headless MCP call relays the CLI's own sentence, so an `mcp:` surface does not prove the MCP copy
+  ran.
 
-**Not seen to fire (54).** "Pushed in" is the directory of the sink, not every surface that relays it.
+**One group is no longer ambiguous.** `src/mcp/server.ts:1543`, `:1849` and `:2538` are the identical
+"`preset` is headless-only and was ignored in live mode" in `liveAudit`, `liveLint` and `liveInspect`.
+The run's log tags each MCP entry with the tool that answered, and only `mcp:obsrv_audit` and
+`mcp:obsrv_lint` carried it — so `liveInspect`'s copy had never run. `#258` pins it
+(`mcp-live.spec:417`), and each of the three is now attributed to a tool.
+
+**Not seen to fire (43).** "Pushed in" is the directory of the sink, not every surface that relays it.
+Eleven rows left this table for the one below.
 
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
@@ -246,7 +257,6 @@ can't see that.
 | `src/cli/capture.ts:347` | cli | <…>% of the <…>x<…> frame <…>never painted within <…> ms<…>; those pixels are transparent, not page… |
 | `src/cli/lint.ts:78` | cli, mcp | <…> more finding<…> past the <…> listed; the summary counts them all |
 | `src/cli/lint.ts:94` | cli, mcp | <…> image finding<…> sit<…> below the <…> CSS px the walk reached <…>before its budget ran out, and… |
-| `src/cli/lint.ts:517` | cli | <…> text element<…> the same colour as the background (1:1): hidden by design or broken, not judged |
 | `src/cli/lint.ts:526` | cli | the page has more elements than one report carries: <…> text elements, <…> edges and <…> images were… |
 | `src/cli/main.ts:529` | cli | the page scrolls an inner container <…> CSS px tall; captured the first <…> <…>bands of <…> CSS px (… |
 | `src/cli/main.ts:620` | cli | full page is <…> CSS px tall; captured the first <…> bands of <…> CSS px <…>(<…> at most) — what lie… |
@@ -272,16 +282,9 @@ can't see that.
 | `src/mcp/control.ts:356` | mcp | Obsrv is running and was asked whether to allow agent control, but nobody answered within <…> s; ren… |
 | `src/mcp/control.ts:357` | mcp | the Obsrv app was launched but did not answer within <…> s; rendered headlessly. It may still be sta… |
 | `src/mcp/lib.ts:581` | mcp | the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT… |
-| `src/mcp/lib.ts:584` | mcp | capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the opt… |
-| `src/mcp/lib.ts:646` | mcp | no display: OBSRV_HEADLESS=1 is set; rendered headlessly. |
-| `src/mcp/lib.ts:679` | mcp | custom dimensions are headless-only (live mode drives the preset table); rendered headlessly. |
-| `src/mcp/lib.ts:681` | mcp | waitMs is headless-only and was ignored in live mode. |
 | `src/mcp/server.ts:871` | mcp | the page was still loading when the app's navigate budget (30 s) ran out; the status, and any captur… |
 | `src/mcp/server.ts:1070` | mcp | the app was still loading the page when the settle budget ran out; the PNG may show a transitional f… |
 | `src/mcp/server.ts:1092` | mcp | this app is older than the capture's settle verdict, so `settled` reports whether the navigation was… |
-| `src/mcp/server.ts:1639` | mcp | custom dimensions are headless-only (live mode audits the screen in force); audited headlessly. |
-| `src/mcp/server.ts:1947` | mcp | custom dimensions are headless-only (live mode lints the screen in force); linted headlessly. |
-| `src/mcp/server.ts:2599` | mcp | custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly. |
 | `src/mcp/walk.ts:41` | mcp | the app predates page-wise scrolling (0.41.0); measured without walking. |
 | `src/mcp/walk.ts:105` | mcp | the walk could not return to the top afterwards (<…>); measured where it stopped. |
 | `src/mcp/walk.ts:143` | mcp | the walk stopped after <…> screenful<…> at its <…> s budget without reaching the end of the page; th… |
@@ -289,13 +292,51 @@ can't see that.
 | `src/mcp/walk.ts:197` | mcp | the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the p… |
 | `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
 | `src/preload/sync.ts:167` | preload | scrollSelector <…> is not a valid CSS selector; nothing was scrolled |
-| `src/shared/calibration.ts:165` | cli | orientation: '<…>' produced a <…> screen (<…>x<…>). <…>That flag names the preset's STORED form rath… |
-| `src/shared/inspectReadout.ts:134` | shared | the page states <…> and the screen shows <…>: <…> composites it onto the background, and the contras… |
-| `src/shared/layoutScale.ts:52` | cli, shared | <…> and is drawn at <…>× (an initial-scale above 1), so its own px are that much larger on the glass… |
 | `src/shared/walkCoverage.ts:168` | cli, mcp | <…>the page has <…>, which the walk does not enter, <…>and nothing in the light DOM scrolls<…> |
 | `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
 | `src/shared/walkCoverage.ts:194` | cli, mcp | <…>content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualise… |
 | `src/shared/walkCoverage.ts:245` | cli, mcp | the walk could not move the page or <…>: this page hides the <…>document's overflow <…>, and neither… |
+
+**Fired since, pinned by a test (12).** Eleven of these left the list above; the twelfth is
+`liveInspect`'s copy, which leaves the ambiguous group. Each test asserts the **whole** sentence, and
+each was shown to fail when that sentence is altered in `src/` — the control runs are
+`35192500426` (#256) and `35194537378` (#258, v2 on the corrected head).
+
+| written at | pinned by | seen firing in |
+| --- | --- | --- |
+| `src/mcp/lib.ts:679` | `mcp.spec:164`, `obsrv_snap` in auto mode with custom dimensions | `35192541543` |
+| `src/mcp/server.ts:1639` | `mcp.spec:164`, `obsrv_audit` | `35192541543` |
+| `src/mcp/server.ts:1947` | `mcp.spec:164`, `obsrv_lint` | `35192541543` |
+| `src/mcp/server.ts:2599` | `mcp.spec:164`, `obsrv_inspect` | `35192541543` |
+| `src/mcp/lib.ts:584` | `mcp.spec:172`, `capture: 'pane'` on a headless render | `35192541543` |
+| `src/mcp/lib.ts:646` | `mcp.spec:180`, `OBSRV_HEADLESS=1` on a second client | `35192541543` |
+| `src/mcp/lib.ts:681` | `mcp-live.spec:176`, `waitMs` on a live snap | `35192541543` |
+| `src/shared/inspectReadout.ts:134` | `cli-inspect.spec:147`, both routes and an opaque twin | `35194508818` |
+| `src/cli/lint.ts:517` | `cli-lint.spec:181`, text at 1:1 | `35194508818` |
+| `src/shared/layoutScale.ts:52` | `cli-layout-scale.spec:137`, `initial-scale` above 1 | `35194508818` |
+| `src/shared/calibration.ts:165` | `mcp.spec:211`, the `orientation` word inverting | `35194508818` |
+| `src/mcp/server.ts:2538` | `mcp-live.spec:417`, live inspect's headless-only key | `35194508818` |
+
+**Three needed a fixture that did not exist:** text that is not opaque, text exactly the colour of
+its background, and a page asking for `initial-scale=2` — every fixture until then either had no
+viewport meta tag (0.37×) or asked for 1×, so the scale-**above**-1 branch could not be produced.
+The rest needed only a call nobody had made.
+
+**One of those tests was wrong, and its control said so.** It expected `screenShape` on a headless
+snap reply; the key is declared `Live only` (`src/mcp/server.ts:406`). The control's red landed on
+the shape assertion rather than the sentence, which is how a control tells you the test is wrong
+rather than the product. The test now pins the key's **absence**, and the skill and the `rotated`
+description, which both overstated it, were corrected (`#259`, `#260`).
+
+**Two sink classes checked and cleared** (Wren's read of the pass):
+- **Report HTML.** One sink is HTML-only: `runReport`'s `lint.warnings.push(unwalked)`
+  (`cli/main.ts:1404`), since the report JSON carries lint's summary and not its warnings. Its
+  producer (`cli/lint.ts:94`) also reaches the CLI lint JSON and MCP lint, so **no producer is
+  HTML-only**. The throttle banner is built inline in the HTML, never in an array, so the pass never
+  counted it.
+- **The cut-load router.** `explainedByCutLoad` (`cli/capture.ts:64`) drops only `animating` and
+  `timeout`, and both producers fired. The unfired `capture.ts:347` is `uncovered`, which passes
+  through, so the router cannot explain an unfired row.
 
 **Written or reworded after the run (4).** These need their own observation, not a place on the list
 above:
@@ -309,16 +350,36 @@ above:
 
 ## What is left
 
-- **Each of the 54 unfired producers and the 4 newer ones gets one of three outcomes:**
+- **Each of the 43 unfired producers and the 4 newer ones gets one of three outcomes:**
   - a fixture that fires it on CI;
   - a finding that it can't fire, and then the sentence goes;
   - a named reason it stays unobserved.
 
   Several are failure paths (an app that can't be launched, a profile already in use), where
   provoking the state is the work.
-- **The three ambiguous groups:** which of the identical places fired.
+- **The two ambiguous groups left:** which of the identical places fired.
 - **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the ten
   this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
+- **What the 43 would take, in clusters:**
+  - **Live-app states (10, `src/main`):** bounds not reported yet, still painting at the budget (two
+    wordings), the onion skin blending two frames, the raster being the target's own frame, a scroll
+    offset that could not be confirmed, frames not delivered, a renderer that did not say which frame
+    it drew. Each is a race or a startup window, so these want a control-server or `ipc` test that
+    holds the state open, not a fixture.
+  - **Walk limits (13, `cli/walk.ts`, `mcp/walk.ts`, `shared/walkCoverage.ts`):** a page that locks
+    its scroll mid-walk, one that never confirms a scroll, content in an iframe, a shadow root or a
+    transform scroller. Some fixtures exist (`locked.html`, `iframe-wall.html`,
+    `replaces-itself-on-scroll.html`); the work is finding which sentence each produces.
+  - **Launch and consent failures (5, `mcp/control.ts`, `mcp/lib.ts`):** the app cannot be launched,
+    the launch meets a profile already in use, consent goes unanswered, the app answers too late,
+    agent control is off. `mcp-electron.spec` and `single-instance.spec` already drive real launches.
+  - **Truncation and caps (7, `cli/audit.ts`, `cli/lint.ts`, `cli/main.ts`):** pages with more
+    findings, text elements or bands than one answer carries. One dense fixture may fire several.
+  - **Old-app compatibility (2, `mcp/server.ts:1092`, `mcp/walk.ts:41`):** sentences for an app older
+    than the tree under test (pre-0.41.0 page-wise scrolling, a capture with no settle verdict). They
+    cannot be produced here, so the honest resolutions are a named reason or removal — a decision.
+  - **The rest (6):** an uncovered frame, the stuck-chrome probe's two sentences, an invalid
+    `scrollSelector` live, and what is left of `measureBudget`.
 - **The 17-row live table at the top is history.** Of its 14 unobserved rows:
   - 7 are `log.warn` lines, which no reply carries, so they're outside the list above;
   - `sync.ts:175` has fired since (reworded, now `:176`);
