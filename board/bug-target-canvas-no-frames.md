@@ -105,3 +105,42 @@ Recorded, not interpreted: whether this is the blank-canvas shape is Kenya's cal
   - the extracted `:83` folders for both tries;
   - `attempt1-logs.zip`.
   Attempt 1's logs also stay at `…/actions/runs/35176357601/attempts/1/logs` after the rerun.
+
+## READ 2026-09-17 by Kenya — the recurrence is NOT this card's shape, and the retry was never a sighting
+
+**Run `35176357601`, attempt 1** (evidence at `/private/tmp/obsrv-evidence/panes83-run…-attempt1/`).
+
+**What the log shows, and it matters that the predecessor passed:**
+
+    03:12:36.953  gpu: compositing enabled, webgl enabled
+    03:12:37.9    ✓  panes.spec:77  the toolbar navigates both panes (142ms)
+    03:12:58.1    ✘  panes.spec:83  the target canvas shows the page, not a blank (10.0s)
+    03:13:10.8    ✘  panes.spec:83  (retry #1) (10.0s)
+
+So on attempt 1 **both panes really were navigated** — `:77` passed a second before — and the canvas
+still showed under 1000 white pixels for a full 10 s. That is a genuine sighting.
+
+**But it is not this card's shape.** The card is named for the app's own notice, *"No frames from
+target renderer"*, after GPU helper deaths. In this run:
+
+- **`No frames from target renderer`: 0 occurrences.** The app said nothing.
+- WebGL was **enabled** at launch and no context loss was logged.
+- No later test contradicts it either: `:111` and `:151` pass, but they read **geometry and click
+  coordinates, not pixels**, so nothing here shows the canvas recovering.
+
+**So this is the silent variant: a blank canvas that the app does not notice.** Worth its own card
+rather than being folded into this one, which is about the case where the app *does* say so.
+
+**A hypothesis, explicitly unmeasured:** the renderer draws the canvas on an animation frame, and
+Chromium fires none while a window is hidden or fully occluded — the fact
+`bug-hidden-window-capture-test-cannot-see-drawnow` turns on, and the reason `flushRendererDraw`
+exists at all. A CI window that is never activated would produce exactly this: frames arriving in
+main, no notice, and a canvas nobody ever draws into. **The probe that would settle it** is to count
+`requestAnimationFrame` ticks in the renderer over half a second in the failing state. It needs CI or
+a deliberately occluded window; it has not been run.
+
+**The retry was never independent evidence, and two readings rested on it.** `:83` did not navigate —
+it inherited the page from `:77` — so a retry, which Playwright runs alone, started from the empty
+new-tab state. Measured both ways just now: the old test **fails 5 of 5 alone**, and with the
+navigation added it **passes 5 of 5 alone** and 12/12 in file order. That accounts for the "4/4
+alone" count on `bug-flakes-gate-the-gate` and for the retry in this run.

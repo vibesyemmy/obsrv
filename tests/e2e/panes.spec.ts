@@ -81,6 +81,16 @@ test('the toolbar navigates both panes', async () => {
 })
 
 test('the target canvas shows the page, not a blank', async () => {
+  // Navigates for itself. It used to inherit the page from the test above, so
+  // a RETRY — which Playwright runs alone — started from the empty new-tab
+  // state and failed for having no page rather than for a blank canvas. Two
+  // readings were taken from that: a "4/4 alone" local count on
+  // `bug-flakes-gate-the-gate`, and the retry of run 35176357601 read as a
+  // second sighting. Neither was about the canvas (Henry, 2026-09-17).
+  await page.fill('.url-form input', FIXTURE)
+  await page.press('.url-form input', 'Enter')
+  await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })
+
   // A canvas nothing has drawn into is black (alpha: false); the fixture is a
   // white page, so white pixels prove a frame was uploaded and drawn.
   await expect.poll(async () => (await canvasPixels()).white).toBeGreaterThan(1000)
