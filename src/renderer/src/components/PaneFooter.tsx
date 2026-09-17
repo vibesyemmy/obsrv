@@ -3,8 +3,7 @@ import type { PanelSection } from './PanelControls'
 import { formatTextScale } from '../../../shared/textScale'
 import { formatOnionSkin } from '../../../shared/onionSkin'
 import { useShallow } from 'zustand/react/shallow'
-import { ppi } from '../../../shared/calibration'
-import { cssPxToMm, effectiveContrast, formatRatio, hex } from '../../../shared/contrast'
+import { inspectFooterFacts } from '../../../shared/inspectFooter'
 import { VISION_TYPES, visionIsIdentity, visionMatrix } from '../../../shared/vision'
 import {
   selectDeviceScaleFactor,
@@ -128,30 +127,14 @@ export function TargetFooter({ onOpenPanel }: { onOpenPanel?: (section: PanelSec
     if (!inspection) {
       inspect = [mode === 'url' ? 'hover the target' : 'not in image mode']
     } else {
-      const r = inspection
-      const firstClass = r.classes.split(/\s+/).find(c => c.length > 0)
-      const element = `${r.tag}${r.id ? `#${r.id}` : ''}${firstClass ? `.${firstClass}` : ''}`
-      // The font size is the page's own CSS px; under a text scale each is
-      // `textScale` device px more, and the density is still the screen's.
-      const mm = cssPxToMm(r.fontSizePx, dsf * textScale, ppi(screen.width * dsf, screen.height * dsf, screen.diagonalInches))
-      const sizeFact = `${Number.isInteger(r.fontSizePx) ? r.fontSizePx : r.fontSizePx.toFixed(1)}px${
-        Number.isFinite(mm) ? ` = ${mm.toFixed(1)} mm` : ''
-      }${r.fontWeight !== 400 ? ` w${r.fontWeight}` : ''}`
-      const fg = hex(r.color)
-      if (r.background) {
-        const matrix = visionOn ? visionMatrix(visionType, visionSeverity) : undefined
-        const c = effectiveContrast(r.color, r.background, params, matrix)
-        const plain = profile.id === 'reference' && !visionOn
-        inspect = [
-          element,
-          sizeFact,
-          `${fg} on ${hex(r.background)}`,
-          `${formatRatio(c.asIs)} here`,
-          ...(plain ? [] : [`${formatRatio(c.onPanel)} on ${profile.label}${visionOn ? ` for ${vision[0]}` : ''}`]),
-        ]
-      } else {
-        inspect = [element, sizeFact, `${fg} on an image`, 'contrast not measurable']
-      }
+      inspect = inspectFooterFacts(inspection, {
+        dsf,
+        textScale,
+        screen,
+        params,
+        profile,
+        vision: visionOn ? { matrix: visionMatrix(visionType, visionSeverity), label: visionText } : null,
+      })
       if (inspectPinned) inspect.push('pinned')
     }
   }
