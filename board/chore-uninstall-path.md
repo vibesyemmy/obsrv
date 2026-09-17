@@ -2,7 +2,7 @@
 title: "There is no supported way to remove Obsrv's data"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: the sandbox grant, asked in Henry's session 2026-09-17"
+waiting: ""
 kind: chore
 order: 32
 ---
