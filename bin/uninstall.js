@@ -9,13 +9,13 @@
 // the absence of a flag, so the output says it in words.
 //
 // Everything it knows comes from three pure modules, and the only things it
-// does itself are read-only: `existsSync`, `statSync` and `readdirSync`.
+// does itself are read-only: `existsSync`, `lstatSync` and `readdirSync`.
 //   - out/shared/uninstallPlan.js  — what Obsrv's data locations are, measured
 //   - out/shared/removalGuard.js   — the check that stands between a path and $HOME
 //   - out/shared/uninstallReport.js — this machine's answer, as data and words
 'use strict'
 
-const { existsSync, readdirSync, statSync } = require('node:fs')
+const { existsSync, lstatSync, readdirSync } = require('node:fs')
 const { join } = require('node:path')
 
 /** Stop counting a directory past this many entries: a size is a hint, not a census. */
@@ -35,7 +35,15 @@ Flags:
 Lists only. It removes nothing, and prints the commands you can run yourself.`
 }
 
-/** Bytes under a path, bounded. Read-only: stat and readdir, never a write. */
+/**
+ * Bytes under a path, bounded. Read-only: lstat and readdir, never a write.
+ *
+ * `lstatSync`, not `statSync`: a symlink inside the profile would otherwise
+ * count its target, and a size that includes files outside the directory
+ * overstates what is there. It matters more for the removal half than for this
+ * one — `rm -rf` does not follow a link either, so a followed size promises
+ * space that removing the directory never frees (Wren's read of #298).
+ */
 function sizeOf(path) {
   let bytes = 0
   let seen = 0
@@ -49,12 +57,16 @@ function sizeOf(path) {
     const next = stack.pop()
     let stats
     try {
-      stats = statSync(next)
+      stats = lstatSync(next)
     } catch {
       continue
     }
     seen++
-    if (stats.isDirectory()) {
+    if (stats.isSymbolicLink()) {
+      // The link itself is a few bytes and removal takes it; whatever it
+      // points at is somebody else's to count.
+      bytes += stats.size
+    } else if (stats.isDirectory()) {
       let entries = []
       try {
         entries = readdirSync(next)

@@ -39,11 +39,25 @@ describe('obsrv uninstall', () => {
     expect(r.stderr).toContain('--include-skill')
   })
 
-  it('lists this machine, removes nothing, and hands the commands over instead (CI: the home is a runner’s)', () => {
-    if (!process.env['CI']) return
-    // The built modules are what the shell requires; a tree without them is a
-    // different arm and it is the next one.
-    if (!existsSync(join(__dirname, '..', '..', 'out', 'shared', 'uninstallReport.js'))) return
+  // SKIPPED, not silently returned: an early `return` reports a pass having
+  // asserted nothing, which is the shape `CONTRIBUTING`'s baseline rule is
+  // about — an instrument that cannot show it is working looks like a quiet
+  // product (Wren's read of #298).
+  //
+  // WHAT THIS ARM REALLY PROVES, said plainly because the name oversells it: a
+  // runner has never run the app, so `present` is empty and the loops below
+  // iterate nothing. It proves the shell runs, reads a home, parses `--json`,
+  // and exits 0 — not that a listing of real data is right. The arm that
+  // proves the shape of a real listing is in `uninstallReport.test.ts`, where
+  // the filesystem is injected.
+  it.skipIf(!process.env['CI'])('runs, reads a home and answers JSON (CI: the home is a runner’s)', () => {
+    // An assertion, not a return: `npm run build` runs before `npm test` in
+    // ci.yml, so a missing `out/` means something upstream broke and a quiet
+    // pass would hide it.
+    expect(
+      existsSync(join(__dirname, '..', '..', 'out', 'shared', 'uninstallReport.js')),
+      'out/shared/uninstallReport.js is missing: the build that runs before the tests did not produce it',
+    ).toBe(true)
 
     const r = run('--json')
     expect(r.status, r.stderr).toBe(0)
@@ -63,8 +77,8 @@ describe('obsrv uninstall', () => {
     // The keep list is the part a reader checks for having been considered.
     expect(answer.keep.length).toBeGreaterThan(0)
     expect(answer.keep.every(k => k.why.length > 0)).toBe(true)
-    // A runner has never run the app, so the profile is absent rather than
-    // present — and absent is the case where a listing must not claim a win.
+    // A runner has never run the app, so this is 0 === 0 — recorded as such
+    // rather than dressed up as coverage.
     expect(answer.commands.length).toBe(answer.present.length)
   })
 

@@ -109,3 +109,36 @@ describe('humanBytes', () => {
     expect(humanBytes(-1)).toBe('?')
   })
 })
+
+/**
+ * The guarantee the command's name makes — **it removes nothing** — proven
+ * where it can be proven by construction rather than by a process that has to
+ * run somewhere safe (Wren's read of #298). The report can only reach the
+ * world through `look` and `check`; a recorder in both shows exactly which
+ * paths it asked about, and that asking is all it did.
+ */
+describe('what the report is able to do at all', () => {
+  it('reads only through what it was given, and hands removal to the caller as text', () => {
+    const asked: { look: string[]; check: string[] } = { look: [], check: [] }
+    const r = uninstallReport({
+      plan,
+      look: path => {
+        asked.look.push(path)
+        return { exists: true, bytes: 8 }
+      },
+      check: path => {
+        asked.check.push(path)
+        return { allow: true }
+      },
+    })
+    // Every path it touched is one the plan named: it invents none.
+    const planned = [...plan.remove, ...plan.removeFiles].map(e => e.path)
+    expect(asked.look).toEqual(planned)
+    expect(asked.check).toEqual(planned)
+    // And what it produces for removal is a list of strings for a person to
+    // run, never a call it made itself.
+    expect(r.commands.every(c => typeof c === 'string' && c.startsWith('rm -rf '))).toBe(true)
+    expect(r.commands).toHaveLength(planned.length)
+  })
+})
+
