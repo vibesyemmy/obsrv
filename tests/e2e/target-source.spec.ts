@@ -107,38 +107,65 @@ test('emits a partial dirty rect when a small element changes', async () => {
   const seen = await app.evaluate(async () => {
     const ctx = (globalThis as any).__obsrv
     const wait = (globalThis as any).__waitForFrame
-    const html =
-      '<body style="margin:0;background:#ffffff">' +
-      '<div id="b" style="position:absolute;left:100px;top:100px;width:20px;height:20px;background:#ffffff"></div>'
-    await ctx.target.load('data:text/html,' + encodeURIComponent(html))
-    ctx.target.setViewport(400, 300)
-    // Settle on a full-frame paint of the white page at the new size first.
-    await wait(
-      ctx.target,
-      (m: any) =>
-        m.frameWidth === 400 && m.frameHeight === 300 && m.frame.width === 400 && m.frame.height === 300,
-      'full 400x300',
-    )
-    const partial = wait(
-      ctx.target,
-      (m: any) => !(m.frame.width === 400 && m.frame.height === 300),
-      'partial',
-    )
-    await ctx.target.webContents.executeJavaScript(
-      'document.getElementById("b").style.background = "#ff0000"; true',
-    )
-    const f = await partial
-    const { x, y, width, height, data } = f.frame
-    // Sample the element's centre (110,110) in slice-local coordinates.
-    const i = ((110 - y) * width + (110 - x)) * 4
-    return {
-      rect: { x, y, width, height },
-      frame: { w: f.frameWidth, h: f.frameHeight },
-      bytes: data.length,
-      px: [data[i], data[i + 1], data[i + 2], data[i + 3]],
+    // Every frame and step from load to the answer, carried out on a failure.
+    // This test failed its first try in 3 of 43 main runs (chore-flaky-leaders-0917,
+    // shape 2) with a TypeError that was a timeout in disguise: the partial wait
+    // resolved null after 10 s, and nothing said which frames had come. The two
+    // readings it could not tell apart are opposite: the change's damage folded
+    // into a full-surface frame (the product behaving), or no frame at all after
+    // the change (the target not painting). This record separates them.
+    const t0 = Date.now()
+    const record: string[] = []
+    const onFrame = (m: any): void => {
+      record.push(`+${Date.now() - t0} frame ${m.frame.x},${m.frame.y} ${m.frame.width}x${m.frame.height} of ${m.frameWidth}x${m.frameHeight}`)
+    }
+    ctx.target.on('frame', onFrame)
+    const step = (s: string): void => {
+      record.push(`+${Date.now() - t0} ${s}`)
+    }
+    try {
+      const html =
+        '<body style="margin:0;background:#ffffff">' +
+        '<div id="b" style="position:absolute;left:100px;top:100px;width:20px;height:20px;background:#ffffff"></div>'
+      await ctx.target.load('data:text/html,' + encodeURIComponent(html))
+      step('loaded')
+      ctx.target.setViewport(400, 300)
+      step('viewport 400x300')
+      // Settle on a full-frame paint of the white page at the new size first.
+      const full = await wait(
+        ctx.target,
+        (m: any) =>
+          m.frameWidth === 400 && m.frameHeight === 300 && m.frame.width === 400 && m.frame.height === 300,
+        'full 400x300',
+      )
+      if (!full) return { failed: 'no full 400x300 frame within 10 s', record }
+      step('full frame')
+      const partial = wait(
+        ctx.target,
+        (m: any) => !(m.frame.width === 400 && m.frame.height === 300),
+        'partial',
+      )
+      await ctx.target.webContents.executeJavaScript(
+        'document.getElementById("b").style.background = "#ff0000"; true',
+      )
+      step('changed')
+      const f = await partial
+      if (!f) return { failed: 'no partial frame within 10 s of the change', record }
+      const { x, y, width, height, data } = f.frame
+      // Sample the element's centre (110,110) in slice-local coordinates.
+      const i = ((110 - y) * width + (110 - x)) * 4
+      return {
+        rect: { x, y, width, height },
+        frame: { w: f.frameWidth, h: f.frameHeight },
+        bytes: data.length,
+        px: [data[i], data[i + 1], data[i + 2], data[i + 3]],
+      }
+    } finally {
+      ctx.target.off('frame', onFrame)
     }
   })
 
+  if (seen.failed !== undefined) throw new Error(`${seen.failed}. Frames and steps:\n${(seen.record ?? []).join('\n')}`)
   expect(seen.frame).toEqual({ w: 400, h: 300 })
   // Not the full frame, but covering the 20x20 element at (100,100).
   expect(seen.rect.width * seen.rect.height).toBeLessThan(400 * 300)
