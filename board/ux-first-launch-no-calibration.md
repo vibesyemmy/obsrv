@@ -2,7 +2,7 @@
 title: "The first window never mentions the monitor diagonal, which the README calls the one number that makes Obsrv work"
 column: doing
 waiting: ""
-owner: "Rook"
+owner: "Kenya"
 kind: chore
 criterion: A3
 order: 64
@@ -145,4 +145,63 @@ engineering and kept on this card:
 **Owner:** Rook wrote the memo and is out until Saturday, so his cards sit with Henry. **Offered to
 Kenya** (room #453) — and, on Opeyemi's word through Wren, *behind* the two raster cards she already
 has, not beside them. Whoever takes it states both sub-decisions here before building.
+
+## CLAIMED BY KENYA 2026-09-17: ownership taken from Rook, not borrowed
+
+Rook is out until Saturday, and Wren routed this card behind the raster card. That card is Done (#302,
+#310), so my Doing was empty on main before this claim. **The decision is Opeyemi's and it stands: the
+Hint.** Below are the two sub-decisions the card leaves to engineering, stated before building as asked.
+They were proposed in room #473, and they are **Henry's to veto in review**.
+
+### What the code says, read 2026-09-17 on `3ef11cd`
+
+- `DEFAULT_SETTINGS.hostDiagonalInches` is 27 (`shared/presets.ts:16`).
+- `saveSettings` writes the **whole** object (`shared/settings.ts`), so an existing `settings.json` holds
+  `hostDiagonalInches: 27` whether or not anyone chose it. The daily update check alone rewrites the file
+  through `lastUpdateCheck`. **So a file cannot tell a chosen 27 from the default.**
+- The host display is re-read on window `move` and on display added, removed or metrics changed
+  (`main/ipc.ts:864-879`), and `calibratedScale` (`renderer/src/state/store.ts`) divides by it. The app
+  already knows when the window moves to a different screen.
+- `settings.json` is not in `docs/public-shape.json`, so a new field is a contract change for the file
+  and the IPC payload (`parseSettings`), not a C2 register entry.
+
+### Sub-decision 1: the set/untouched bit records WHICH display the diagonal was set for
+
+**A new persisted field, `hostDiagonalFor: { physicalWidth, physicalHeight } | null`, not a boolean.**
+- `null` means untouched.
+- Committing a diagonal in Settings, or pressing the hint's *"27″ is right"*, records the current
+  display's physical pixels. The confirm button exists so a real 27″ user can end the hint without
+  changing the number.
+- **Old files (no key):** a value other than 27 counts as set, recorded against the display the window
+  opens on. Exactly 27 counts as untouched, because the file cannot say otherwise. **The cost, stated:**
+  a genuine 27″ user on an old file sees the hint once, and one click ends it.
+- A boolean would answer only "has anyone set this", and sub-decision 2 needs "set for which screen".
+  One field answers both.
+
+### Sub-decision 2: on a laptop plugged into an external monitor, the hint names the mismatch
+
+When the window's display does not match `hostDiagonalFor`, the hint says so instead of going silent,
+for example: *"Screen size was set on a 2560×1600 display; this one is 3840×2160, so this render assumes
+13.3″. [Set size for this screen]"*.
+- **One number cannot be right for two screens**, so moving between them re-shows the hint. That is
+  the honest behaviour. Remembering a diagonal per display would be a feature, not this card; it is
+  noted for Opeyemi if the back-and-forth grates.
+- **A limit, stated:** two displays with the same physical resolution but different sizes cannot be told
+  apart.
+
+### Placement: a footer chip, not the empty state
+
+The chip sits beside `fit ×… · not pixel-exact` in `PaneFooter`. The external-monitor case happens with a
+page already loaded, when the empty state is gone. Whether the chip also shows in the empty state is a
+detail for the build.
+
+### Acceptance, each with a control
+
+- the hint is present with the diagonal untouched, and absent once set on this display. **Control:** a
+  test that forces `hostDiagonalFor` to match reds if the hint still shows;
+- *"27″ is right"* records the display without changing the number;
+- a display that does not match `hostDiagonalFor` shows the mismatch wording, with both resolutions named;
+- the migration: an old file with 27 counts as untouched, and an old file with 13.3 counts as set. Unit tests on
+  `loadSettings` and `parseSettings`;
+- desk-safe tests only: renderer state and a `hostChanged` push, no window fronting.
 
