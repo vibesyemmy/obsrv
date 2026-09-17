@@ -1,8 +1,7 @@
 ---
 title: "`orientation: landscape` produces a portrait screen on every desktop preset"
-column: review
+column: done
 owner: "Rook"
-waiting: "Kenya: the cold read of #178, then Henry merges"
 kind: bug
 criterion: C2
 order: 27
@@ -125,3 +124,21 @@ there.
 
 **Third failure on that run was not mine:** `mcp-live:830` flaked — the same flake seen on `#156`,
 in code `#184` is currently in.
+
+
+## Closed 2026-09-17 by Henry: #178 merged, and #207 closed the gaps it left
+
+**#178** (`d8d0177`) shipped spec items 1–6 in 0.61.0: `rotate` on every surface, `orientation` deprecated
+with its meaning kept, the note where the word inverts, and `rotated` in MCP replies. **#207**, from Wren's
+release sweep, closed four gaps:
+- (a) a disagreeing pair is refused on every headless tool;
+- (b) drive settles after `rotate`;
+- (c) live audit, lint and inspect name an ignored `rotate` and `orientation`;
+- (d) every agent-facing description marks `orientation` deprecated and teaches `rotate`.
+
+**Left open, each on its own card rather than on this one:**
+- **Removing `orientation`**, spec item 7. It's a breaking release, and when to ship one is Opeyemi's call:
+  `chore-remove-orientation-flag`.
+- **`rotated` in the CLI's JSON**, from the amendment above. It needs Opeyemi's yes for `cli.spec.ts`:
+  `chore-cli-json-rotated`.
+- The skill and README don't mention `rotate` yet: `chore-rotate-in-skill-and-readme`.
