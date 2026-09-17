@@ -93,3 +93,36 @@ but they are the two tests that wait on the same element, which is a shared *sub
 of a shared environment.
 
 **Four leaders, three shapes, and only one pair is related.**
+
+## SHAPE 1 REPRODUCED 2026-09-17 by Kenya, with both arms pre-registered
+
+Arms committed to `probe/error-state-latch` **before** running, so the expectations are on the
+record rather than written around the numbers.
+
+    ARM A  good navigation (which clears the error), then a failing one    6/135 missed  (4.4%)
+    ARM B  a failing load straight after a failing one, no clearing        0/135 missed
+                                                        Fisher exact, two-tailed, p = 0.030
+
+**The control never misses, and the latch arm does.** So the condition is not "a failed load
+sometimes fails to draw" — it is **a failed load that follows a cleared one**.
+
+### A correction to my own reading above
+
+I wrote that *"the error reaches the toolbar and not the window"*. **That was an inference across two
+different moments, not an observation.** `Toolbar.tsx:380` reads the **same** `error` field the
+window state reads, so a wiped error would take the badge with it. What is actually established is
+narrower: at the moment `:230` and `:259` looked, no `.load-error-state` existed. `:197` passing
+earlier says the badge existed *then*, about a different navigation.
+
+### The mechanism this points at, and it is a lead rather than a finding
+
+Two handlers clear the error: `onUrlChanged` (`App.tsx:140`) and `onTargetNavigating` (`:149`). The
+comment at `:145` states the ordering the design relies on — *`did-start-navigation` precedes
+`did-fail-load`, so a retry that fails again still ends up badged*.
+
+**A successful navigation's `url-changed` arriving late would clear the error the NEXT, failing
+navigation had already set** — and that is exactly the asymmetry the arms measured: it can only
+happen when a good navigation precedes the bad one, which is arm A and not arm B.
+
+**Not measured:** the event times. Nobody has watched a late `url-changed` land after a
+`did-fail-load`. That is the next step, and it is the difference between this paragraph and a cause.
