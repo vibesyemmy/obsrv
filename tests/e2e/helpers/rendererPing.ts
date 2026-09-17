@@ -58,7 +58,7 @@ export function armRendererPing(app: ElectronApplication, label: string, everyMs
   let rejections = 0
   const saidRejections = new Set<string>()
 
-  const timer = setInterval(() => {
+  const ping = (): void => {
     if (stopped) return
     const sent = Date.now()
     let answered = false
@@ -67,6 +67,12 @@ export function armRendererPing(app: ElectronApplication, label: string, everyMs
     // `misses()` two meanings, which is the defect this instrument exists to
     // help find.
     let nothingToPing = false
+    // One ping, one count. A ping answered late produces TWO events — the
+    // deadline passing, and the answer arriving — and both used to increment,
+    // so a single slow round trip read as two. `misses()` is the number the
+    // next occurrence gets read by, and its doc says it counts pings.
+    // (Henry, on #229.) Both lines still print: they say different things.
+    let timedOut = false
     void app
       .evaluate(async ({ BrowserWindow }) => {
         // The SHELL renderer, chosen explicitly. The app also creates offscreen
@@ -95,7 +101,9 @@ export function armRendererPing(app: ElectronApplication, label: string, everyMs
         answered = true
         const took = Date.now() - sent
         if (took > lateAfterMs) {
-          misses++
+          // Printed either way — "it did come back, after 1.4 s" is worth
+          // knowing — but only counted if the deadline did not already.
+          if (!timedOut) misses++
           console.log(`[renderer-ping ${label}] LATE: answered after ${took}ms (sent ${new Date(sent).toISOString()})`)
         }
       })
@@ -124,12 +132,21 @@ export function armRendererPing(app: ElectronApplication, label: string, everyMs
       // counted here. Left alone: it would need the answer before the deadline
       // to prevent, which is the thing being measured.
       if (answered || stopped || nothingToPing) return
+      timedOut = true
       misses++
       // Printed the moment it happens. A run that ends with the renderer
       // wedged still carries this line, which is the whole point.
       console.log(`[renderer-ping ${label}] UNANSWERED after ${lateAfterMs}ms (sent ${new Date(sent).toISOString()})`)
     }, lateAfterMs)
-  }, everyMs)
+  }
+
+  // Once on arming, then on the interval. `setInterval` alone does nothing for
+  // the first `everyMs`, so a hang that begins the instant the instrument is
+  // armed would go unseen for a whole period — which is the moment it is most
+  // likely to begin, since arming happens right before the call under watch.
+  // Found by the unit test that could not make a single ping fire at all.
+  ping()
+  const timer = setInterval(ping, everyMs)
 
   return {
     stop() {
