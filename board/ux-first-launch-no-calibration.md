@@ -175,9 +175,8 @@ first. Its shape depends on sub-decision 2, below.
   and *"Set size"* opens Settings on this display. So nobody is left with a hint that cannot be answered,
   and a real 27″ user sees it once. **Wren's point:** if dismissing did *not* write the field, a
   genuine 27″ user would see it on every launch, which is worse than what it warns about.
-- **Old files (no key):** a value other than 27 counts as set, and is **adopted for the display the window
-  first opens on, written once and silently** (Henry's #311 review: left unrecorded, it would be "set
-  for an unknown display", and the mismatch rule would nag on every screen). Exactly 27 counts as untouched, because `saveSettings` writes the whole object, so the file
+- **Old files (no key):** exactly 27 counts as untouched. A value other than 27 counts as set, and **the
+  screen it was set for is unknown. That is an OPEN question for Henry, below.** Exactly 27 counts as untouched, because `saveSettings` writes the whole object, so the file
   cannot say otherwise. **The cost, stated:** a genuine 27″ user on an old file sees the hint once, and one
   click ends it.
 - **The wire shape follows `parseSettings`' convention exactly** (`shared/ipcPayloads.ts`): the key is
@@ -188,6 +187,20 @@ first. Its shape depends on sub-decision 2, below.
   changes with it.
 
 ### Sub-decision 2: a laptop on an external monitor. A CHOICE, recommended below, for Henry's call before code
+
+**DECIDED 2026-09-17 by Henry (engineering): build (a) now; (b) goes to Opeyemi.** Henry is putting (b) to
+Opeyemi in his own session. His reason: (b) adds a store of screens and makes the magnification **change
+by itself** when a window moves. A user experiences that without asking for it, and this card had
+already drawn the line ("remembering a diagonal per display would be a feature"). He won't widen that
+quietly. **And (a) is worth shipping on its own:** its hint is not a nag about a preference, it is a true
+statement that *this render is wrong for this screen*. A docking user seeing it at every switch is the
+tool being honest about a number that cannot fit two monitors.
+
+**The build writes the key so (b) is additive, not a migration.** The field is a list from the start,
+`hostDiagonalSetFor: { physicalWidth, physicalHeight, inches? }[]`. Under (a) it holds at most one entry
+with no `inches`, and `hostDiagonalInches` stays the value. The reader accepts up to 8 entries with an
+optional `inches` from day one. So if Opeyemi says yes to (b), the change is the lookup and the apply,
+not the file format again.
 
 **Why this reopens what #311 approved.** Henry approved the single-field version (now (a)) in #311. The
 table below was pushed to #311's branch after it merged, so it never reached main, and it came from
@@ -230,6 +243,24 @@ the resolution key. Neither way of combining them earns its place:
 So the key stays physical resolution, with the limit stated. If same-resolution pairs turn out to matter,
 the answer is something stable per monitor (EDID or a serial), not the session id.
 
+### OPEN for Henry: a legacy non-default diagonal, adopted silently or asked once
+
+An old file with, say, 24″ says the user calibrated, but not for which screen. Two rules:
+
+| | **silent adoption** (Henry, #311 review) | **an `unknown` state, asked once** (Wren) |
+| --- | --- | --- |
+| what happens | the value is recorded for the display the window first opens on, silently | the value is kept, marked as set for an unknown screen, and the chip reads *"24″ was set before Obsrv recorded which screen it was for. Right for this one?"*, one click to confirm |
+| right screen | no hint, correct | one click, then correct |
+| **wrong screen** (24″ set for a desktop monitor, opened on a laptop) | **no hint, and the render is wrong by exactly the ratio this card is about** | the question shows, and the user corrects it |
+| who pays | nobody | everyone who calibrated before this build, once |
+
+**Silent adoption's silence fits two opposite facts** ("right screen" and "wrong screen"), which is the
+defect shape this card was filed for. Henry's review said that assuming the screen in front of the user
+"costs nothing if right and one hint if wrong". But adoption marks that screen as set, so when it is
+wrong there is **no** hint. **Recommendation: the `unknown` state**, at the cost of one click for users
+who had already calibrated. Under (b) it resolves on the first confirmation and never comes back. The
+field carries it as a marker on the list, so (b) stays additive.
+
 ### Placement: a footer chip, not the empty state
 
 The chip sits beside `fit ×… · not pixel-exact` in `PaneFooter`. The external-monitor case happens with a
@@ -238,7 +269,7 @@ detail for the build.
 
 ### Acceptance, each with a control
 
-- **no code until Henry has chosen (a) or (b)** and this card says which;
+- **(a) is chosen (Henry).** No code on the legacy rule until Henry has answered the open question above;
 - the hint is present with the diagonal untouched for this display, and absent once answered.
   **Control:** a test that forces the field to match reds if the hint still shows;
 - *"27″ is right"* records the display without changing the number, and it is the hint's only dismissal;
@@ -246,9 +277,8 @@ detail for the build.
   the hint. Under (a), a mismatched display shows the wording with both resolutions named;
 - the migration: an old file with 27 counts as untouched, and an old file with 13.3 counts as set. Unit tests on
   `loadSettings` and `parseSettings`;
-- **an old file with a non-default diagonal shows no hint on the display it first opens on** (Henry, #311
-  review). The legacy value is adopted for that display, written once and silently. The mismatch wording
-  (a), or the hint for an unknown display (b), fires only after a real display change. Without this, a
-  laptop user who correctly set 13.3 would be told their screen does not match a screen nobody recorded;
+- **an old file with a non-default diagonal never gets the mismatch wording for a screen nobody recorded**
+  (Henry, #311 review). It gets either silent adoption or the one-click `unknown` question, per Henry's
+  answer above;
 - desk-safe tests only: renderer state and a `hostChanged` push, no window fronting.
 
