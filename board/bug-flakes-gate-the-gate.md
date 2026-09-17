@@ -417,3 +417,30 @@ Kenya's.
 **What would settle it, for whoever has a clean machine:** the same run with no other Obsrv
 process alive. I could not do that without killing another session's app and the app on
 Opeyemi's desk, which is not mine to do.
+
+### CORRECTED 2026-09-17: the 4/4 was a hidden predecessor, not a contended machine
+
+**Henry found the cause** (recorded on Kenya's `bug-target-canvas-no-frames`, from the `#211` CI
+red), and it retires the paragraph above rather than adding to it.
+
+**`panes.spec.ts:83` never navigates.** Reading the file settles it: `:77` — *"the toolbar navigates
+both panes"* — fills the URL field and presses Enter, and `:83` only measures the canvas. So `:83`
+depends on `:77` having loaded `hairline.html`. **Run alone, or as a retry, it measures the empty
+new-tab state and fails every time**, whatever the GPU or the machine is doing.
+
+So my 4/4 was deterministic for a reason that has nothing to do with contention, and the 43 stray
+Obsrv processes I was careful to disclose were not the variable — the disclosure was honest and the
+inference on top of it was wrong. **It also explains the loose end I flagged and could not place:**
+no `No frames from target renderer` line locally, because nothing had asked the renderer for a
+frame. I read a missing signature as "two failures that look alike" when it was "one of these is not
+the failure at all".
+
+**And it is the second time tonight I have walked into this, which is the part worth keeping.** The
+same shape is written up on `bug-controls-spec-85-needs-its-predecessor`, by me, from the same
+evidence pattern — a test that fails deterministically alone because a predecessor set up its state,
+and a retry that therefore proves nothing about the original failure. Having documented the trap did
+not stop me reading a 4/4-alone as a measurement. **The check that would have caught it is cheap and
+I did not run it: before treating "fails alone" as evidence, read what the test does for itself.**
+
+**The fix to `:83` — navigating for itself — is Kenya's**, on `bug-target-canvas-no-frames`, and she
+is reading this evidence next. Not mine to start.
