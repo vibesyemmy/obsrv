@@ -2,7 +2,7 @@ import { test, expect, type ElectronApplication } from '@playwright/test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -131,6 +131,37 @@ test('a consent nobody answers is said as that, not as an app that never came up
     // The other wording is for an app that was launched and never answered.
     // Saying that here would blame a startup that already happened.
     expect(s.warnings.join(' ')).not.toMatch(/was launched but did not answer/)
+  } finally {
+    await client.close()
+  }
+})
+
+test('a launch that cannot resolve Electron says the app could not be launched, and launches nothing', async () => {
+  // The third of the launch sentences, and the one that needs no app at all:
+  // `defaultDeps.launch` throws when the target cannot be resolved, and
+  // `OBSRV_ELECTRON_PKG_DIR` (bin/electronPath.js:81) is the lever — pointed at
+  // a directory that is not an electron package, `resolveElectron` answers with
+  // an error rather than downloading anything (measured: the installer it looks
+  // for is absent, so the spawn exits 1 at once).
+  //
+  // Nothing is spawned here, so this arm is as safe as the headless specs; it
+  // sits in this file because every other spec sets OBSRV_TEST, which refuses
+  // the launch earlier and for a different reason.
+  const notElectron = join(lane, 'not-an-electron-package')
+  mkdirSync(notElectron)
+  const client = await connect({ OBSRV_DEV_HOME: lane, OBSRV_ELECTRON_PKG_DIR: notElectron })
+  try {
+    const r = await snap(client)
+    expect(r.isError).toBeFalsy()
+    const s = r.structuredContent as { mode: string; why?: string; warnings: string[] }
+    expect(s).toMatchObject({ mode: 'headless', why: 'launch-timeout' })
+    const said = s.warnings.find(w => w.startsWith('the Obsrv app could not be launched'))
+    expect(said, JSON.stringify(s.warnings)).toBeDefined()
+    // The whole sentence, with the resolver's own reason inside it: an agent
+    // reading this needs to know it was Electron and not the app.
+    expect(said).toMatch(/^the Obsrv app could not be launched \(.*electron.*\); rendered headlessly\.$/)
+    // No app was started, so nothing says one was.
+    expect(s.warnings.join(' ')).not.toMatch(/profile is already in use|nobody answered|did not answer/)
   } finally {
     await client.close()
   }
