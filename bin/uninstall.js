@@ -150,9 +150,14 @@ function main(argv) {
   } else {
     process.stdout.write(`\n${removal.removalLines(done).join('\n')}\n`)
   }
-  // A failure to remove is an exit code, not just a paragraph: a script that
+  // Anything still there is an exit code, not just a paragraph: a script that
   // uninstalls and moves on should not move on.
-  return done.failed.length > 0 ? 1 : 0
+  //
+  // `refused` counts as well as `failed` (Idris, reviewing this). Both mean a
+  // path you asked to remove is still on the disk, and a refusal is the more
+  // alarming of the two: the report allowed it and the guard then said no, so
+  // the two disagree and the caller is the one who needs to know.
+  return removal.removalExitCode(done)
 }
 
 process.exitCode = main(process.argv.slice(2))

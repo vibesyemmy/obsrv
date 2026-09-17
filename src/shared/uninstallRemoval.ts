@@ -129,3 +129,17 @@ export function removalLines(result: RemovalResult): string[] {
   }
   return lines
 }
+
+/**
+ * What the process should exit with. In the module rather than the shell so the
+ * rule is testable: it is a decision, and decisions live here.
+ *
+ * **Refusals count as well as failures** (Idris, reviewing this). Both mean a
+ * path the caller asked to remove is still on the disk, and a refusal is the
+ * more alarming of the two — the report allowed it and the guard then said no,
+ * so the two disagree. A script that uninstalls and moves on should not move on
+ * in either case.
+ */
+export function removalExitCode(result: RemovalResult): number {
+  return result.failed.length > 0 || result.refused.length > 0 ? 1 : 0
+}

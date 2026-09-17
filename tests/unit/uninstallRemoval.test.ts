@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync, lstatSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { removalLines, removeListed } from '../../src/shared/uninstallRemoval'
+import { removalExitCode, removalLines, removeListed } from '../../src/shared/uninstallRemoval'
 import type { UninstallReport } from '../../src/shared/uninstallReport'
 import type { GuardVerdict } from '../../src/shared/removalGuard'
 
 /**
  * The removing half, tested with **no real filesystem for any decision it
- * makes** — and one test that does touch a filesystem, deliberately, under
+ * makes** — and two tests that do touch a filesystem, deliberately, under
  * `os.tmpdir()` and nowhere near a home.
  *
  * An uninstaller's tests are the one place where getting the sandbox wrong
@@ -121,6 +121,37 @@ describe('removeListed', () => {
   })
 })
 
+describe('removalExitCode', () => {
+  it('is non-zero when anything the caller asked to remove is still there', () => {
+    const clean = removeListed({ report: report([{ path: `${HOME}/a` }]), check: allow, remove: () => {} })
+    expect(removalExitCode(clean)).toBe(0)
+
+    const failed = removeListed({
+      report: report([{ path: `${HOME}/a` }]),
+      check: allow,
+      remove: () => {
+        throw new Error('EACCES')
+      },
+    })
+    expect(removalExitCode(failed)).toBe(1)
+
+    // The one Idris found missing: a guard refusal left the exit code at 0, so
+    // a script would carry on as though the uninstall were clean.
+    const refused = removeListed({
+      report: report([{ path: `${HOME}/a` }]),
+      check: () => ({ allow: false, refuse: 'resolves inside the real home' }),
+      remove: () => {},
+    })
+    expect(refused.refused).toHaveLength(1)
+    expect(removalExitCode(refused)).toBe(1)
+  })
+
+  it('is zero on a platform nobody measured, which removed nothing by design', () => {
+    const r = removeListed({ report: report([{ path: 'C:/x/y' }], { unmeasured: true }), check: allow, remove: () => {} })
+    expect(removalExitCode(r)).toBe(0)
+  })
+})
+
 /**
  * The one fact this module asserts about its caller that cannot be reasoned
  * about: `Remove` is specified as link-respecting, and `bin/uninstall.js`
@@ -133,6 +164,30 @@ describe('removeListed', () => {
  * points at must survive.
  */
 describe("what the caller's `rm` does to a symlink, measured", () => {
+  it('unlinks a link that IS the path being removed, and leaves its target alone', () => {
+    // The other shape, which Idris probed while reviewing and this suite did
+    // not cover: not a link nested inside the doomed tree, but the removal
+    // target itself being a symlink to somewhere else. `checkRemoval`
+    // canonicalises before judging, so a link into the home is refused before
+    // it gets here — this pins what happens to the ones that are allowed.
+    const root = mkdtempSync(join(tmpdir(), 'obsrv-rm-linktarget-'))
+    try {
+      const real = join(root, 'real')
+      mkdirSync(real)
+      writeFileSync(join(real, 'precious.txt'), 'do not delete me')
+      const link = join(root, 'link')
+      symlinkSync(real, link)
+
+      rmSync(link, { recursive: true, force: true })
+
+      expect(existsSync(link)).toBe(false)
+      expect(existsSync(real)).toBe(true)
+      expect(readdirSync(real)).toEqual(['precious.txt'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('unlinks the link and leaves its target alone', () => {
     const root = mkdtempSync(join(tmpdir(), 'obsrv-rm-symlink-'))
     try {
