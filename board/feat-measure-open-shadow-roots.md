@@ -1,8 +1,7 @@
 ---
 title: "Measure inside open shadow roots: audit, lint, inspect and the walk stop at the shadow boundary today"
-column: doing
+column: done
 owner: "Henry"
-waiting: "Henry: #293's suite, then the revert control and the live check"
 kind: feat
 criterion: B2
 order: 77
@@ -201,4 +200,92 @@ shadow roots. The e2e arms spawn the CLI, so CI reads them.
 3. the live check on caniuse.com and chromestatus.com, figures against a second browser, run on a
    runner;
 4. the leftover, `chore-shadow-roots-stuck-chrome-and-frames` (Backlog), already has its own home.
+## DONE — merged as #293 (fcac2d1), 2026-09-17
+
+**The traversal, in one place** (`src/shared/scrollHost.ts`), shipped with every page-side script:
+`shadowElements` (collection), `shadowParent`/`shadowContains` (ancestors, the clip test, scroll
+offsets, stuck chrome, `inDialog`), `shadowElementFromPoint` and `shadowStackFrom` (the hit test and
+the paint stack), and `findScroller` entering open roots. `inspect --selector` and `scrollSelector`
+keep light-DOM meaning; closed roots and iframes stay out of reach.
+
+**Every arm Rook wrote is green, and the revert control is what says they mean it** (`35219034011`):
+with the four helpers reverted and everything else left in place, 9 tests failed at their own
+assertions, each with Rook's original red value — 52 back to 12, hairline 0, `card` for `inner`,
+`#ffffff` for `#1f2937`, 0 screenfuls, and "nothing to measure" and "the walk had nothing to scroll"
+back. Every light-DOM twin stayed green.
+
+**The live check** (`35219123120`), and the number it produced explained (`35220629725`):
+
+| site | CLI audit, targets / text | a second browser, all / light | open roots |
+| --- | --- | --- | --- |
+| chromestatus.com/features | **28 / 131** (was 0 / 0), walk 3 screenfuls | 27 / 130, light 0 / 0 | 159 |
+| caniuse.com | 22 / 94 | 21 / 95, light 20 / 95 | 1 |
+
+The +1 was not a double count: running the audit's own script and an independent flat-tree query **in
+the same page** gave 27/27 and 130/130, with an empty set difference both ways. The CLI's extra one
+belongs to its environment — Electron, after a 3-screenful walk, on a page whose own reply said it was
+still moving.
+
+## What Wren's three adversarial reads found, and what each cost
+
+**D1 — slotted text was read against the page.** A light-DOM `<p>` slotted into a component's dark
+card composited onto white: 1.24:1 where 11.86:1 is painted. Not a regression, and it contradicted
+three sentences this change had just written (`limitations.md`, the register, this card's own
+acceptance). `shadowStackFrom` asks every scope the element is composed through now — its own, and
+each one a slot or host takes it into — and merges the answers by taking the head no other answer
+still has deeper.
+
+**D2 — the scroller search starved inside shadow trees.** A sidebar of 286 components in front of
+`main` took the whole 2,000-visit budget, and the page's real scroller lost; with a sidebar that did
+not overflow, the search found nothing and the walk said the page had none. Two rounds: breadth-first
+first, which Wren then measured as still starving once `main` sat four wrappers down, and then the
+light DOM swept first on a budget of its own, which restores base's answer wherever the light DOM has
+one.
+
+**A defect my own fix authored.** Asking "is this element topmost at the point" meant a container with
+a block child lost its stack and fell back to the ancestor walk, which cannot see a scrim from another
+branch. Any index counts now.
+
+**And the arm that protects the feature from a future optimisation:** a 560x380 feed inside a root
+beats a 300x300 light-DOM scroller, so the second sweep cannot quietly become "stop once the light DOM
+answered". Its control is that exact change.
+
+**Two facts worth keeping** (Wren): `findScroller` answers null on chromestatus.com/features and
+caniuse.com alike, on base and head, so neither site is touched by the starvation; and the shape needs
+roughly 2,000 composed elements ahead of the scroller, which is what `chore-scroll-host-budget-is-silent`
+has to detect.
+
+## What left this card rather than being folded in
+
+`chore-shadow-roots-stuck-chrome-and-frames` (two page-side queries that still stop at the boundary),
+`chore-scroll-host-budget-is-silent`, `bug-in-root-feed-becomes-the-page`,
+`chore-shadow-collection-edges`, `chore-capture-adds-page-globals`, `chore-motion-probe-cost-claim`.
+The retired sentences and the two that move to the version-skew group are `c5`'s to fold into
+`docs/note-inventory.md`.
+
+## What it cost, and the defect I authored while fixing one
+
+**Six suites.** Wren read the change three times, each read measured in headless Chromium against the
+PR head and its base rather than reasoned, and each one found something:
+
+1. **D1 and D2** (above).
+2. **A defect my own D1 fix authored:** asking "is this element topmost at the point" meant a
+   container with a block child lost its stack and fell back to the ancestor walk, which cannot see a
+   scrim from another branch. Any index counts now, with the covered-element arm to prove it.
+3. **D2 half-fixed:** breadth-first alone still starved once `main` sat four wrappers behind 300
+   components. The light DOM is swept on its own budget now, so what it answers is what it answered
+   before roots were entered at all — and an arm pins that a root's scroller can still win on area,
+   so a later "stop once the light DOM answered" cannot quietly retire the feature.
+
+**And one the suite caught, not a review:** the stuck-chrome probe ships as SOURCE, and I had it call
+the shared `shadowContains`. The bundler wrote `emptyDocument.shadowContains(el, anchor)` — a
+namespace no page has — so the probe threw and every stuck bar went unfound. Four `cli-snap-tiled`
+tests went red (run `35226322138`). The browser tests could not have caught it: they call the
+function, not the string it ships as. The probe carries its own walk now, and
+`tests/unit/pageScriptsAreSelfContained.test.ts` reads the built bundles for the same shape.
+`chore-page-script-guard-holes` carries what that guard still misses.
+
+**The lesson, in one line, because it has now happened twice in this repo from opposite directions:**
+a function that ships as source and the helpers it calls must live in the same module, and the thing
+to check is the BUILT string, not the TypeScript.
 
