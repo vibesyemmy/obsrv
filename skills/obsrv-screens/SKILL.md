@@ -75,8 +75,9 @@ $OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out sho
 
 # The screen turned a quarter turn (0.61.0+): a phone held landscape, a monitor stood on end.
 # --rotate turns the preset however it is stored. --orientation is deprecated and keeps its
-# meaning: it names the STORED form, so --orientation landscape on 1080p-24 is a PORTRAIT
-# screen. A --rotate and --orientation that disagree are refused.
+# meaning, which is relative to how the preset is stored: portrait is the preset as stored,
+# landscape is it turned, so --orientation landscape on 1080p-24 (stored landscape) is a
+# PORTRAIT screen. A --rotate and --orientation that disagree are refused.
 $OBSRV snap http://localhost:5173 --preset iphone-61 --rotate --out shots/iphone-landscape.png
 
 # How it feels on a budget phone over 3G with a slow CPU: settledMs in the JSON, next to
@@ -122,8 +123,10 @@ alone.
 `obsrv_lint`, `obsrv_inspect`, `obsrv_report` and `obsrv_drive` turns the screen
 a quarter turn, however the preset is stored: `iphone-61` becomes landscape,
 and `1080p-24` becomes a monitor stood on end. `orientation` is deprecated and
-keeps its meaning, which names the **stored** form, so `orientation: 'landscape'`
-on a desktop preset gives a portrait screen. A `rotate` and `orientation` that
+keeps its meaning, which is relative to how the preset is stored: `portrait`
+is the preset as stored and `landscape` is it turned, so
+`orientation: 'landscape'` on a desktop preset (stored landscape) gives a
+portrait screen. A `rotate` and `orientation` that
 disagree are refused. `obsrv_snap` and `obsrv_drive` answer `rotated`, and
 `screenShape` for the shape itself; the CLI's JSON does not carry `rotated`.
 A live audit, lint or inspect measures the screen already in force, and says

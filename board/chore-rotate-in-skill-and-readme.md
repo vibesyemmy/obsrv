@@ -17,8 +17,9 @@ it or about `orientation` being deprecated.
 
 **What to write, each claim checked against the code first:**
 - `rotate: true` / `--rotate` turns the screen a quarter turn, however the preset is stored.
-- `orientation` is deprecated and keeps its meaning: it names the stored form, so `landscape` on a desktop
-  preset gives a portrait screen.
+- `orientation` is deprecated and keeps its meaning, relative to how the preset is stored: `portrait` is the
+  preset as stored and `landscape` is it turned, so `landscape` on a desktop preset (stored landscape) gives a
+  portrait screen. (It first said "names the stored form", which reads backwards; Wren's read of #242.)
 - A disagreeing pair is refused (the CLI's `--rotate and --orientation disagree`, and every MCP tool that
   applies rotation).
 - `obsrv_snap` and `obsrv_drive` answer `rotated` and `screenShape`. The CLI's JSON doesn't carry `rotated`.
