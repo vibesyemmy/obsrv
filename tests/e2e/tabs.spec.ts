@@ -784,14 +784,14 @@ test.describe('tabs come back on relaunch', () => {
     await strip(p1).nth(0).click()
     await expect(strip(p1).nth(0)).toHaveAttribute('aria-selected', 'true')
 
-    // Drag it to the END. Through the same `move` the drop reaches — the drag
-    // gesture is Chromium's and is not what is in doubt; the index surviving
-    // the shuffle and a restart is.
-    await first.evaluate(() => {
-      const g = globalThis as any
-      const ids = g.__obsrv.tabs.snapshot().tabs.map((t: { id: string }) => t.id)
-      g.__obsrv.tabs.move(ids[0], 1)
-    })
+    // Drag it to the END, through what the drop calls: the renderer's
+    // `window.obsrv.moveTab`, over IPC. This used to call `tabs.move()` in main
+    // directly, which skipped the one step that was missing — main never
+    // listened for the move, so a real drag did nothing and this test passed.
+    const ids: string[] = await first.evaluate(() =>
+      (globalThis as any).__obsrv.tabs.snapshot().tabs.map((t: { id: string }) => t.id),
+    )
+    await p1.evaluate(id => window.obsrv.moveTab(id, 1), ids[0]!)
     await expect(strip(p1).nth(0)).toHaveText('link-fixture')
     await expect(strip(p1).nth(1)).toHaveText('tall-fixture')
     await expect(strip(p1).nth(1)).toHaveAttribute('aria-selected', 'true')
