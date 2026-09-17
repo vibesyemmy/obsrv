@@ -54,22 +54,29 @@ export default defineConfig({
   // the report as `[pid=…][err]` Browser logs when the app dies.
   use: { trace: 'on-first-retry', screenshot: 'only-on-failure' },
   /**
-   * `OBSRV_DESK_SAFE=1` leaves out the specs that boot Electron through the
-   * CLI. `npm run test:e2e:desk-safe` sets it.
+   * The specs that boot Electron through the CLI run on CI, and locally only
+   * when someone asks for them with `OBSRV_E2E_CLI=1`.
    *
-   * **Why this is here rather than in each agent's command line.** The rule
-   * that these run on CI was real, was enforced by everyone remembering it,
-   * and was written down nowhere. On 2026-09-17 a sweep excluded them with
-   * `/cli-/` — the pattern anyone would write — and about fourteen
-   * `cli.spec.ts` tests ran on Opeyemi's desk, because sixteen files in that
-   * family are `cli-*` and exactly one is `cli.spec.ts`. The glob that is
-   * right is `cli*`, and the difference is one character.
+   * **This is an opt-IN, and that is the whole point.** It began as an opt-out
+   * (`OBSRV_DESK_SAFE=1`) after a sweep excluded the family with `/cli-/` — the
+   * pattern anyone would write — and about fourteen `cli.spec.ts` tests ran on
+   * the machine someone was working at: sixteen files in that family are
+   * `cli-*` and exactly one is `cli.spec.ts`. An opt-out only protects the
+   * people who remember it, which is the same set of people who would have
+   * written the pattern correctly. Defaulting to safe protects everyone else,
+   * and costs the person who genuinely wants these one environment variable.
    *
    * `testIgnore` matches FILE PATHS. `--grep` matches test titles, which is
    * what makes a hand-written pattern a guess about what it is matching
-   * against. See `bug-cli-specs-have-no-gate-of-their-own`.
+   * against. `deskSafeCoversTheCliFamily.test.ts` reads `tests/e2e/` and fails
+   * if a spec starting with `cli` escapes this list.
+   *
+   * See `bug-cli-specs-have-no-gate-of-their-own`. Opeyemi authorised the move
+   * from opt-out to opt-in on 2026-09-17.
    */
-  ...(process.env['OBSRV_DESK_SAFE'] === '1' ? { testIgnore: ['**/cli*.spec.ts', '**/throttle-refused.spec.ts'] } : {}),
+  ...(process.env['CI'] !== undefined || process.env['OBSRV_E2E_CLI'] === '1'
+    ? {}
+    : { testIgnore: ['**/cli*.spec.ts', '**/throttle-refused.spec.ts'] }),
   // On CI, a JSON report as well, which scripts/check-e2e-skips.js reads to fail
   // a green run that skipped a test nobody listed (bug-ci-skips-are-unlisted).
   // It goes to playwright-report/, not test-results/, because the trace upload's

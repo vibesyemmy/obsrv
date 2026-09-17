@@ -386,16 +386,20 @@ app, `focusWindow` and `overlay-focus.spec` (which launches with
 `app.focus()` on the app under test; use `win.showInactive()`, or gate it the
 same way and say so in its name.
 
-**Run the suite locally with `npm run test:e2e:desk-safe`.** It leaves out the
+**An ordinary local `npm run test:e2e` already leaves your desk alone.** The
 specs that boot Electron through the CLI (`cli*.spec.ts`) and
-`throttle-refused.spec.ts`, which belong on CI. Until 2026-09-17 that rule was
+`throttle-refused.spec.ts` belong on CI, and a local run excludes them unless
+you ask for them with `npm run test:e2e:cli` (`OBSRV_E2E_CLI=1`). CI runs
+everything, as before. Until 2026-09-17 that rule was
 written down nowhere and everyone applied it with a pattern of their own; one
 sweep used `/cli-/`, which is the pattern anyone would write, and about fourteen
 `cli.spec.ts` tests ran on the machine someone was working at. **Sixteen files
 in that family are `cli-*` and exactly one is `cli.spec.ts`**, so the glob that
-is right is `cli*` and the difference is one character. The exclusion now lives
-in `playwright.config.ts` behind `OBSRV_DESK_SAFE=1`, where `testIgnore` matches
-file paths — `--grep` matches test titles, which is what makes a hand-written
+is right is `cli*` and the difference is one character. The exclusion lives in
+`playwright.config.ts` and is the **default**, not a flag you remember: it began
+as an opt-out and became an opt-in once Opeyemi authorised the change, because
+an opt-out only protects the people who would have written the pattern right
+anyway. `testIgnore` matches file paths — `--grep` matches test titles, which is what makes a hand-written
 pattern a guess about what it is matching. `deskSafeCoversTheCliFamily.test.ts`
 reads `tests/e2e/` and fails if a spec starting with `cli` is not covered, so a
 new one cannot fall outside the rule quietly.
