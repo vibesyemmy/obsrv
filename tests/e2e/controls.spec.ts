@@ -118,7 +118,11 @@ test('a field commits on blur or Enter, never on a keystroke', async () => {
     await field.blur()
   } finally {
     ping.stop()
+    // Two counts, said separately: a renderer that stopped answering is the
+    // failure this card is about; one that answered with an error is a
+    // different event wearing the same silence.
     if (ping.misses() > 0) console.log(`[renderer-ping controls:blur] ${ping.misses()} late or unanswered ping(s) around this blur`)
+    if (ping.rejections() > 0) console.log(`[renderer-ping controls:blur] ${ping.rejections()} ping(s) rejected around this blur`)
   }
   await expect.poll(storedSettings).toMatchObject({ hostDiagonalInches: 32 })
 
