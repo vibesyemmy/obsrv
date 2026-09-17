@@ -113,7 +113,14 @@ let app: ElectronApplication
 let client: Client
 
 test.describe('live walk limits (mcp/walk.ts and shared)', () => {
-  test.describe.configure({ mode: 'serial' })
+  // NOT serial. Each live test navigates the app to its own fixture and reads
+  // one reply, so none depends on the one before it, and a red on one must not
+  // cost the others their verdict. The first run of this file was serial by
+  // reflex: one red on the locks fixture skipped the other two live tests, so
+  // their live mirrors went unread for a whole run. The one app and one MCP
+  // client are shared through beforeAll, which is fine — Playwright runs a
+  // describe's tests in order on one worker either way (playwright.config sets
+  // workers: 1 unconditionally); serial only adds "stop at the first red".
 
   test.beforeAll(async () => {
     app = await launchApp([], { OBSRV_AGENT_CONTROL: '1' })
