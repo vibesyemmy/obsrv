@@ -127,8 +127,11 @@ keeps its meaning, which is relative to how the preset is stored: `portrait`
 is the preset as stored and `landscape` is it turned, so
 `orientation: 'landscape'` on a desktop preset (stored landscape) gives a
 portrait screen. A `rotate` and `orientation` that
-disagree are refused. `obsrv_snap` and `obsrv_drive` answer `rotated`, and
-`screenShape` for the shape itself; the CLI's JSON does not carry `rotated`.
+disagree are refused. `obsrv_snap` and `obsrv_drive` answer `rotated`.
+`screenShape`, the shape itself, comes back from the live app — `obsrv_drive`,
+and a snap that drove it — because a headless render has no app screen to
+report; a headless snap says the same thing through `rotated` and the
+`cssWidth`/`cssHeight` it applied. The CLI's JSON does not carry `rotated`.
 A live audit, lint or inspect measures the screen already in force, and says
 it ignored either field.
 
