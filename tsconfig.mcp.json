@@ -14,5 +14,8 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src/mcp/**/*"]
+  // `bin/uninstall.js` is plain Node and requires these three out of `out/`:
+  // the CLI's own build runs under Electron, and a person removing Obsrv
+  // should not need Electron to be told where its data is.
+  "include": ["src/mcp/**/*", "src/shared/uninstallPlan.ts", "src/shared/removalGuard.ts", "src/shared/uninstallReport.ts"]
 }

@@ -29,6 +29,15 @@ if (process.argv[2] === 'install-skill') {
   return
 }
 
+// `obsrv uninstall` lists what Obsrv has written on this machine. Plain node
+// too: someone removing Obsrv should not have to download Electron to be told
+// where its data is, and this command renders nothing.
+if (process.argv[2] === 'uninstall') {
+  process.argv.splice(2, 1)
+  require('./uninstall.js')
+  return
+}
+
 // `obsrv --version` is answered here, before the build or the Electron binary
 // is looked for: a version question must not need either. It is the first
 // thing a bug report asks for, and the machine asking may be the one where
