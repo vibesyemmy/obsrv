@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>an app shell whose only content is behind one open shadow root</title>
+<!--
+  c5, walk limits: `shared/walkCoverage.ts:168` — "the page has 1 open shadow
+  root, which the walk does not enter, and nothing in the light DOM scrolls".
+
+  The document hides its overflow and has no scroller of its own, so the walk
+  is stuck at the root with nowhere to go — and `walkNothingNote` then names
+  what it found in the way. `walkStep` counts open shadow hosts for exactly
+  this sentence, and this page has one. No iframe, so the wall branches above
+  it in the note are not taken.
+
+  The sentence first fired on `shadow-arms.html` (run 35194464896, two roots)
+  on the arms branch. This is the smallest page that produces it on main.
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fff; font: 16px system-ui; }
+  x-panel { display: block; }
+</style>
+<h1>One root, nothing else</h1>
+<x-panel></x-panel>
+<script>
+  class XPanel extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: 'open' })
+      root.innerHTML = '<style>.feed { height: 300px; overflow: auto; } .row { height: 120px; }</style><div class="feed"></div>'
+      const feed = root.querySelector('.feed')
+      for (let i = 0; i < 20; i++) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.textContent = 'row ' + i
+        feed.append(d)
+      }
+    }
+  }
+  customElements.define('x-panel', XPanel)
+</script>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a page that locks its scroll mid-walk</title>
+    <!--
+      c5, walk limits: `cli/walk.ts:165` and `mcp/walk.ts:197` — "the page
+      stopped moving before the end of the walk".
+
+      A normal tall page whose root scrolls, until it doesn't: on the second
+      scroll event the document's overflow is hidden and the position pinned.
+      The walk's next step then lands where the page already was (`y ===
+      lastY`) while the page is plainly not at its end (`atEnd` false, since
+      scrollHeight is untouched) — which is the one branch that produces the
+      sentence. It is NOT the "nothing to scroll" branch: that needs `atEnd`
+      true, and this page is 5000 px tall.
+
+      The lock fires from a scroll handler, so it lands after the step that
+      triggered it has already reported its position. Expected: 2 screenfuls
+      walked, then the sentence, on both surfaces.
+    -->
+    <style>
+      html, body { margin: 0; font: 16px system-ui; background: #fff; color: #111; }
+      .row { height: 200px; border-bottom: 1px solid #eee; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>Scrolls twice, then locks</h1>
+    <script>
+      for (let i = 0; i < 25; i++) {
+        const d = document.createElement('div')
+        d.className = 'row'
+        d.textContent = 'row ' + i
+        document.body.append(d)
+      }
+      let scrolls = 0
+      addEventListener('scroll', () => {
+        scrolls++
+        if (scrolls === 2) {
+          const y = scrollY
+          document.documentElement.style.overflow = 'hidden'
+          // Belt and braces: a scroll that somehow lands anyway is put back.
+          addEventListener('scroll', () => { if (scrollY !== y) scrollTo(0, y) })
+        }
+      })
+    </script>
+  </body>
+</html>
