@@ -1,11 +1,11 @@
 ---
 title: "`controls.spec:85`: `locator.blur` times out on a resolved input, and two tests then read the stale value"
-column: doing
+column: backlog
 kind: bug
-owner: "Rook"
-waiting: ""
 order: 50
 ---
+
+**Waiting on a recurrence:** `controls.spec` failing with `locator.blur: Timeout 30000ms exceeded`, whose log carries `[renderer-ping controls:blur] N late or unanswered ping(s) around this blur`. Nothing can be done until it fires.
 
 FOUND BY KENYA 2026-09-16 from the values; **ordering confirmed by Rook the same day** from the
 log's own failure order. **Claimed by Rook 2026-09-16**, assigned by Henry. Split out of
@@ -298,3 +298,28 @@ not a finding. Both times — the OSR renderer, then the re-render — the candi
 thing adjacent to the evidence, and both times measuring it took it off the list. The card is better
 for it, but the lesson is that "the only thing that could explain this" is a sentence to distrust
 while it is still unmeasured.
+
+## MOVED TO BACKLOG 2026-09-17 by Henry — the acceptance is a fix, and only an instrument exists
+
+**Moved out of Doing, but not to Done**, on Opeyemi's instruction to take the Doing cards through one at
+a time (relayed in room #440), and under the rule `chore-flaky-leaders-0917` sets: a card whose
+acceptance was a fix, and that has only an instrument, goes to Backlog. Rook's session is out, and the
+owner line is dropped rather than left naming an absent session.
+
+**Why it is not Done:** this card's acceptance is a fix (*"What a fix has to do first"*), and there is no
+fix. Rook's work narrowed the defect a long way, and each step is measured on the card:
+- **A trigger exists**, which is arm 4: a block inside the field's own blur handler reproduces the call
+  log exactly.
+- **Two causes are excluded:** a dead target renderer, and a renderer already stuck.
+- **The re-render the chain pointed at takes 0.2 ms.** So what hung was a CDP evaluate that never
+  returned, on a renderer that had just answered a query. That suspect is the transport or the utility
+  world, and it is still a suspect, not a finding.
+
+**Why it is not in Doing:** nothing more can be done without a recurrence. **The instrument is merged and
+was shown to fire.** `#229` arms a main-process ping around the blur, and in arm 6 of the probe that
+same ping logged 27 unanswered pings through a block, each timestamped. On the next real sighting the
+log says when the renderer stopped answering and for how long, which is the evidence this card needs.
+
+**When it fires**, it moves back to Doing with that run id, and the timestamped window is the first thing
+to read.
+
