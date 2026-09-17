@@ -4,6 +4,7 @@ import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { decodePng } from './helpers/decodePng'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -51,6 +52,33 @@ const call = (command: string, payload?: Record<string, unknown>): Promise<Recor
 
 const warningsOf = (reply: Record<string, unknown>): string[] => (reply.warnings as string[] | undefined) ?? []
 
+/**
+ * The fully transparent pixels in a capture reply's PNG, and their bounding
+ * box: what a never-painted region is, read from the image rather than from
+ * the sentence about it. Decoded without Electron (`decodePng`), so a channel
+ * swap in the encoder cannot hide.
+ */
+const transparencyOf = (reply: Record<string, unknown>): { width: number; height: number; transparent: number; box: string } => {
+  const png = decodePng(Buffer.from(reply.data as string, 'base64'))
+  let transparent = 0
+  let x0 = png.width
+  let y0 = png.height
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      if (png.data[(y * png.width + x) * 4 + 3] !== 0) continue
+      transparent++
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+  }
+  const box = transparent === 0 ? 'none' : `${x1 - x0 + 1}x${y1 - y0 + 1} at ${x0},${y0}`
+  return { width: png.width, height: png.height, transparent, box }
+}
+
 test.describe.configure({ timeout: 180_000 })
 
 test.beforeAll(async () => {
@@ -69,7 +97,7 @@ test.afterAll(async () => {
 })
 
 test('a raster capture with the onion skin on says the skin is not in it', async () => {
-  // `ipc.ts:1796`. The easiest sentence in the cluster: no race and no
+  // `ipc.ts:1823`. The easiest sentence in the cluster: no race and no
   // animation — the raster is the target's own frame, so a skin blended in the
   // renderer cannot be in it, and the reply says so rather than letting a
   // caller compare a skinned screenshot with an unskinned raster.
@@ -86,7 +114,7 @@ test('a raster capture with the onion skin on says the skin is not in it', async
 })
 
 test('a raster capture of a page that keeps painting says it is one frame of it', async () => {
-  // `ipc.ts:1790`, the raster path's wording for a page that never settles.
+  // `ipc.ts:1801`, the raster path's wording for a page that never settles.
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
 
@@ -145,7 +173,7 @@ test('a window capture of a page still painting when the budget runs out says so
 })
 
 test('a raster capture while the pane is resized throughout says the page was still painting when the budget ran out (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
-  // `ipc.ts:1793`, the raster path's wording for a capture the budget cut
+  // `ipc.ts:1814`, the raster path's wording for a capture the budget cut
   // short. A page cannot reach it alone. The raster loop leaves early for
   // steady painting, and it goes quiet otherwise. The only thing that restarts
   // its evidence is a frame of a new size, so the pane must keep changing size
@@ -229,6 +257,126 @@ test('a raster capture while the pane is resized throughout says the page was st
   expect(warningsOf(shot!), tries.join(' | ')).toContain(
     'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
   )
+})
+
+test('a raster capture whose budget runs out before a resized frame is painted says those pixels are transparent (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
+  // `bug-live-raster-uncovered-said-as-painting`. `uncovered` means the budget
+  // ran out before every pixel of the frame had painted once since its last
+  // size change. Those pixels are transparent BGRA, and an agent reading the
+  // PNG can take them for a black or empty band of the page. The reply said
+  // "still painting" there, which is about motion. It now carries the
+  // capture's own sentence, the one the CLI prints.
+  //
+  // The WORDING is owned by `tests/unit/rasterWarnings.test.ts`, which goes
+  // through the real `captureQuiescent` and needs no race. This test only has
+  // to show the wiring fires once, on a real frame, and names that PNG.
+  //
+  // THE LEVER IS A RACE, AND THE BOUND WAS CHOSEN, NOT ASSUMED. No
+  // deterministic lever was found: one preset change during the capture, with
+  // a small or a large spinner, came back `animating` 16 of 16 times (probe
+  // 35229835046), because a single resize gets fully painted within two
+  // seconds. Back to back, the budget sometimes lands between a resize and that
+  // size's first full frame. Measured rates for `uncovered`:
+  //   - this cycle (dsf-1 presets only), on this code: 4 of 8 (35229152084),
+  //     then 2 of 7 in this test's control run (35230323442);
+  //   - all eight presets, same run: 3 of 8, and one `settled: true`;
+  //   - all eight presets on earlier heads: 1 of 6, 3 of 3, 4 of 4.
+  // dsf-1 only, because an apply that changes deviceScaleFactor takes ~150 ms
+  // against ~30 ms, and the budget tends to run out covered in that dwell.
+  // Chance that 8 tries all miss: 0.4% at 4 of 8, 6.8% at 2 of 7, 23% at the
+  // worst head's 1 of 6, before the suite's one retry. A red run here that
+  // says "no capture came back uncovered" is that miss. Read the tries it
+  // prints before calling it a product failure.
+  test.skip(
+    !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
+    'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
+  )
+  test.setTimeout(180_000)
+  const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', '1080p-24']
+  const MAX_TRIES = 8
+  const PAINTING = 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame'
+  await call('setOnionSkin', { onionSkin: 0 })
+  await call('navigate', { url: ANIMATED })
+  const before = (await call('status')).presetId as string
+
+  const tries: string[] = []
+  let shot: Record<string, unknown> | undefined
+  try {
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      let cycling = true
+      let applied = 0
+      const spin = (async () => {
+        for (let i = 0; cycling; i++) {
+          const r = await call('setPreset', { id: CYCLE[i % CYCLE.length]! })
+          if (r.ok === true) applied++
+        }
+      })()
+      await new Promise(r => setTimeout(r, 400))
+      const started = Date.now()
+      const reply = await call('captureRaster')
+      const finished = Date.now()
+      cycling = false
+      await spin
+
+      const png = transparencyOf(reply)
+      const margin = `try ${attempt}: settled=${String(reply.settled)} label=${String(reply.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(reply.width)}x${String(reply.height)} png=${png.width}x${png.height} transparent=${png.transparent} (${png.box}) warnings=${JSON.stringify(warningsOf(reply))}`
+      tries.push(margin)
+      console.log(`raster under a back-to-back preset cycle: ${margin}`)
+      // The state first: a stalled cycle would leave nothing below measuring
+      // what its name says.
+      expect(
+        applied,
+        `the preset cycle stalled (applied is the number of presets applied during the capture; a low one is a slow or loaded runner, not the product): ${margin}`,
+      ).toBeGreaterThan(20)
+      expect([png.width, png.height], margin).toEqual([reply.width, reply.height])
+      if (reply.unsettledReason === 'uncovered') {
+        shot = reply
+        break
+      }
+      // The race's other side is `timeout`, the test above's sentence, and the
+      // rarer settled capture has its own card
+      // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
+      // that never stopped changing size is a finding.
+      expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
+      // THE BASELINE for the count below, and a cross-check of the coverage
+      // mask against the bytes. `timeout` and `settled` are only reached with
+      // `covered` true (`captureQuiescent` branches on it at the deadline), so
+      // the mask says every pixel painted since the last resize, and this page
+      // paints opaque white. A counter blind to alpha, or a PNG that dropped
+      // it, fails here rather than agreeing with a sentence.
+      expect(
+        png.transparent,
+        `NOT A FLAKY BASELINE: this capture's coverage mask said every pixel was painted, and its PNG has transparent ones, so the mask and the bytes disagree, and every uncovered percentage is computed from that mask (the one legitimate cause, a page painting its own alpha, does not apply to animated.html): ${margin}`,
+      ).toBe(0)
+    }
+  } finally {
+    await call('setPreset', { id: before })
+  }
+  test.info().annotations.push({ type: 'raster verdicts', description: tries.join(' | ') })
+  expect(shot, `no capture came back uncovered in ${MAX_TRIES} tries: ${tries.join(' | ')}`).toBeDefined()
+  const margin = tries.join(' | ')
+  expect(shot!.settled, margin).toBe(false)
+  const warnings = warningsOf(shot!)
+  // The sentence names its own frame: this PNG's size, not one the cycle
+  // passed through on the way.
+  const own = new RegExp(`^\\d+\\.\\d% of the ${String(shot!.width)}x${String(shot!.height)} frame never painted within \\d+ ms`)
+  expect(warnings.filter(w => own.test(w)), margin).toHaveLength(1)
+  const sentence = warnings.find(w => own.test(w))!
+  expect(sentence, margin).toContain('those pixels are transparent, not page content')
+  expect(warnings, margin).not.toContain(PAINTING)
+
+  // And the sentence is TRUE of this PNG, read from the image: the share it
+  // states is the share of fully transparent pixels, within its one-decimal
+  // rounding, and the region it names is their exact bounding box. The
+  // defect this card fixes was a real sentence about the wrong thing, so a
+  // sentence proved to fire but not to be true would leave the same gap.
+  // Soft, so a red run shows both.
+  const stated = /^(\d+\.\d)% of the \d+x\d+ frame never painted within \d+ ms \(uncovered region (\d+x\d+ at \d+,\d+)\)/.exec(sentence)
+  expect(stated, `the sentence does not state a share and a region: ${sentence}`).not.toBeNull()
+  const png = transparencyOf(shot!)
+  const measured = (png.transparent / (png.width * png.height)) * 100
+  expect.soft(Math.abs(measured - Number(stated![1])), `stated ${stated![1]}%, the PNG is ${measured.toFixed(3)}% transparent: ${margin}`).toBeLessThanOrEqual(0.051)
+  expect.soft(png.box, `stated region ${stated![2]}, transparent pixels span ${png.box}: ${margin}`).toBe(stated![2])
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
