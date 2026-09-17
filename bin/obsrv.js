@@ -40,6 +40,28 @@ if (process.argv[2] === '--version' || process.argv[2] === '-v') {
   return
 }
 
+// `obsrv --help`, and a bare `obsrv`, are answered here too, for the same
+// reason. On a fresh install the next step below is a ~120 MB download, and a
+// stranger's first command waited for it before reading the flag list
+// (measured in the 0.61.0 RC verify, cli-cold). The words are the CLI's own:
+// its argument parser, compiled for plain Node by the MCP build
+// (out/cli/args.js), decides what a help request is and writes the text, so
+// the two cannot drift. A tree without that file falls through to the CLI,
+// which answers the same after the Electron lookup.
+if ([undefined, 'help', '--help', '-h'].includes(process.argv[2])) {
+  let help = null
+  try {
+    const parsed = require('../out/cli/args.js').parseArgs(process.argv.slice(2))
+    if (parsed.command === 'help') help = parsed.text
+  } catch {
+    // Not built, or not a request the parser reads as help: the CLI answers.
+  }
+  if (help !== null) {
+    process.stdout.write(`${help}\n`)
+    return
+  }
+}
+
 const cliEntry = join(__dirname, '..', 'out', 'main', 'cli.js')
 if (!existsSync(cliEntry)) {
   console.error('obsrv: out/main/cli.js is missing — run `npm run build` in the Obsrv repo first')
