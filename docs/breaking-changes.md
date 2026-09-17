@@ -91,6 +91,45 @@ gone. Nothing is lost; it moved.
 **What to do:** read `warnings` for anything about the page. If you scan both
 and concatenate, no change is needed.
 
+### `rotate` arrives; `orientation` is deprecated and keeps its meaning
+
+`orientation` names the preset's **stored** form, so `'landscape'` means "the rotated one" — and on
+every monitor and laptop preset, which are stored landscape-natural, it produces a **portrait**
+screen. `1080p-24` with `orientation: 'landscape'` is 1080x1920. The word inverts its plain meaning
+on half the preset table, and it has already cost a measurement: a session hunting surface-parity
+defects on 2026-09-14 measured two different viewports without noticing and nearly filed it as a
+parity bug.
+
+**What is new:** `rotate: boolean` on every tool that takes `orientation` — `obsrv_snap`,
+`obsrv_audit`, `obsrv_lint`, `obsrv_report`, `obsrv_inspect` and `obsrv_drive` — and `--rotate` on
+the CLI. It says the thing itself: `rotate: true` turns the screen a quarter turn, whatever the
+preset is stored as.
+
+**What breaks:** two additions to the output. The first is a new key, and a new key on the MCP
+surface is breaking because the schemas are `additionalProperties: false` — a session that listed
+the tools before upgrading holds the old shape and can reject a correct reply. Restart the session
+after upgrading (see the note at the top of this release).
+
+- `rotated: boolean` on `obsrv_snap` and `obsrv_drive` — **the MCP surface only**. The CLI's snap
+  JSON is unchanged by this release and still reports rotation as it always has, through the applied
+  `cssWidth`/`cssHeight`. The MCP server derives `rotated` itself: live, from the app's own
+  orientation flag; headless, from the resolved request the render was built from. It is not read out
+  of the CLI's JSON, so the two surfaces answer it identically and neither depends on the other.
+  (Adding the field to the CLI JSON is a separate, still-unscheduled change: that contract is pinned
+  by an e2e spec, and moving it is its own decision rather than a side effect of this one.)
+- a sentence in `warnings` **only where the word contradicted the screen it produced**. A phone asked
+  for `landscape` gets a landscape screen and no sentence; a monitor asked for `landscape` gets a
+  portrait one and is told so. This one **is** on the CLI too — it is a warning, not a new key.
+
+**What does NOT break, and this is deliberate:** `orientation` keeps exactly the meaning it has
+always had. Redefining it to mean "wider than tall" was the other candidate and was rejected — it
+would have silently changed what every existing caller receives, with no error and a plausible
+answer, which is the failure this release series exists to remove. A disagreeing pair
+(`orientation: 'landscape'` with `rotate: false`) is **refused**, not resolved, for the same reason.
+
+**What to do:** use `rotate`. `orientation` still works; removing it is a later release and not yet
+scheduled.
+
 ### Nothing broke here — `docs/public-shape.json` appears, recording the shape as it already is
 
 **Not a breaking change, and it is in the register on purpose.** This release

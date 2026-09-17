@@ -23,6 +23,7 @@ export interface SnapToolInput {
   preset?: string | undefined
   /** Rotates whatever screen the run resolves — preset or custom dims alike. */
   orientation?: Orientation | undefined
+  rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
   deviceScaleFactor?: number | undefined
@@ -57,6 +58,7 @@ export interface AuditToolInput {
   url: string
   preset?: string | undefined
   orientation?: Orientation | undefined
+  rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
   deviceScaleFactor?: number | undefined
@@ -78,6 +80,7 @@ export interface LintToolInput {
   url: string
   preset?: string | undefined
   orientation?: Orientation | undefined
+  rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
   deviceScaleFactor?: number | undefined
@@ -103,6 +106,7 @@ export interface InspectToolInput {
   selector?: string | undefined
   preset?: string | undefined
   orientation?: Orientation | undefined
+  rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
   deviceScaleFactor?: number | undefined
@@ -119,6 +123,7 @@ export interface ReportToolInput {
   /** Preset ids; the CLI's default matrix when omitted. */
   presets?: string[] | undefined
   orientation?: Orientation | undefined
+  rotate?: boolean | undefined
   textScale?: number | undefined
   /** Network and CPU conditions (`--throttle`); see the catalog's `throttles`. */
   throttle?: string | undefined
@@ -175,6 +180,7 @@ export function buildInspectArgs(input: InspectToolInput): string[] {
   else args.push('--selector', input.selector!.trim())
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
@@ -196,6 +202,7 @@ export function buildReportArgs(input: ReportToolInput, outPath: string): string
     args.push('--matrix', input.presets.join(','))
   }
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.rotate === true) args.push('--rotate')
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.throttle !== undefined) args.push('--throttle', input.throttle)
   if (input.profile !== undefined) args.push('--profile', input.profile)
@@ -225,6 +232,7 @@ export function buildLintArgs(input: LintToolInput): string[] {
   const args = ['lint', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
@@ -260,6 +268,7 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
   const args = ['audit', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))
@@ -304,6 +313,7 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
   const args = ['snap', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
   if (input.orientation !== undefined) args.push('--orientation', input.orientation)
+  if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
     if (input.deviceScaleFactor !== undefined) args.push('--dsf', String(input.deviceScaleFactor))

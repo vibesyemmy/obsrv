@@ -86,3 +86,42 @@ now and one loud break later, and the internals can keep `Orientation` until tha
 `orientation: 'landscape'` produce the same screen. The note fires for `1080p-24` + `landscape`, and
 doesn't for a phone + `landscape`. The disagreeing pair is refused. And for each assertion, a sabotaged
 version that goes red.
+
+## AMENDED 2026-09-17 by Henry, after #178 went red on run 35162830036
+
+Spec item 5 said to add `rotated` **"wherever `orientation` is reported today"**, and reported today
+includes the CLI's snap JSON. Following it walked me into changing a contract that
+`tests/e2e/cli.spec.ts:51` guards — a file that is **protected: no session edits it without
+Opeyemi's explicit authorisation**. I did not edit the file; I changed the contract it asserts, which
+is the same thing one step removed, and the spec failed both tries.
+
+**The amendment, in Henry's words:**
+
+- **The CLI's JSON stays unchanged for now.** `--rotate` still works as input.
+- **The MCP layer derives `rotated` from `orientation`** — under the current semantics they are the
+  same flag — and **reports it on both surfaces**. It does **not** read it from the CLI JSON.
+- **Adding `rotated` to the CLI JSON becomes a follow-up card** that needs Opeyemi's yes for
+  `cli.spec.ts`. Not opened yet; it is his authorisation to give, not mine to pre-book.
+
+**What that changed in the code.** `rotated:` is gone from `src/cli/main.ts`. The MCP server now
+derives it in three reply builders — live snap and `obsrv_drive` from the app's own `status.orientation`,
+headless snap from the resolved request the render was built from — through
+`rotatedFromOrientation` / `orientationFromRotate` in `src/shared/calibration.ts`, so no handler
+carries its own ternary. Deriving it where **both** surfaces' replies are built is also what closes
+the `surface-parity:543` C4 gap that failed alongside: `rotated` was present headless and absent live
+on all ten pages.
+
+**A second defect found while implementing this one, and it was mine.** `obsrv_drive` declared
+`rotate` in its input schema (my commit `963714d`) and the handler never read it: the field was
+accepted and silently dropped, and `orientation` was passed to `setOrientation` raw rather than
+through `resolveRotate`. So `obsrv_drive { rotate: true }` did nothing at all, and a disagreeing pair
+was not refused on that tool. Fixed in the same change. Unreleased, so no register entry — but it is
+the [[review-the-fix-harder-than-the-finding]] shape exactly: the N+1th defect authored while fixing
+the first N.
+
+**Register entry amended to match:** `rotated` is now recorded as **MCP-only**, with the CLI JSON
+named as unchanged and the reason why, so the entry cannot be read as promising a CLI key that is not
+there.
+
+**Third failure on that run was not mine:** `mcp-live:830` flaked — the same flake seen on `#156`,
+in code `#184` is currently in.

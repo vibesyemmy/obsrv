@@ -832,7 +832,11 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // reason says whether waiting longer could have helped.
       settled: r.frame.settled,
       ...(r.frame.settled ? {} : { unsettledReason: r.frame.unsettledReason }),
-      warnings: r.warnings,
+      // Said only where the deprecated --orientation word inverted: a phone
+      // asked for landscape got landscape and is owed nothing. In the reply
+      // rather than on stderr alone, because the caller who passed the flag is
+      // usually an agent reading JSON (bug-orientation-name).
+      warnings: spec.orientationNote === undefined ? r.warnings : [...r.warnings, spec.orientationNote],
     })
   }
   await machine(cmd.matrix ? results : results[0])

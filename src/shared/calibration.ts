@@ -88,3 +88,83 @@ export function clampViewport(width: number, height: number, max = MAX_VIEWPORT)
   const h = Math.min(max, Math.max(1, Math.floor(finite(height))))
   return { width: w, height: h, clamped: w !== width || h !== height }
 }
+
+/**
+ * Which of the two rotation flags the caller meant.
+ *
+ * `orientation` names the preset's **stored** form, so `'landscape'` means "the
+ * rotated one" and produces a *portrait* screen on every preset stored
+ * landscape — every monitor and laptop. The word inverts its plain meaning on
+ * half the table, and it cost obsrv-e7 a mis-measured parity hunt on 2026-09-14
+ * (`bug-orientation-name`).
+ *
+ * `rotate` says the thing itself and is the flag to use. `orientation` keeps
+ * its meaning and is deprecated: changing what it means would trade a confusing
+ * name for a silent wrong answer, which is the one outcome this project has
+ * spent the week removing (Henry's call, option 3 of four).
+ *
+ * **A caller giving both, disagreeing, is refused rather than resolved.** There
+ * is no reading of `{ orientation: 'landscape', rotate: false }` that is not a
+ * guess about which half the caller meant, and guessing silently is how the
+ * original defect cost a day.
+ */
+export function resolveRotate(
+  orientation: Orientation | undefined,
+  rotate: boolean | undefined,
+): { rotate: boolean } | { refuse: string } {
+  const fromWord = orientation === undefined ? undefined : orientation === 'landscape'
+  if (fromWord !== undefined && rotate !== undefined && fromWord !== rotate) {
+    return {
+      refuse:
+        `orientation: '${orientation}' and rotate: ${rotate} disagree. ` +
+        `orientation names the preset's STORED form, so 'landscape' means rotated and 'portrait' means as-stored; ` +
+        `rotate says it directly. Pass one — rotate is the one to keep.`,
+    }
+  }
+  return { rotate: rotate ?? fromWord ?? false }
+}
+
+/**
+ * The same equivalence as `resolveRotate`, read in each direction, for the two
+ * places that hold a settled value rather than a caller's request.
+ *
+ * The control server speaks in the word — `setOrientation { orientation }`, and
+ * `status` answers with it — while every MCP reply now also carries `rotated`,
+ * which says the thing itself. These two translations are the join between
+ * those, and they live here so no handler writes its own ternary: a word that
+ * means two things is exactly what `bug-orientation-name` was.
+ */
+export function rotatedFromOrientation(orientation: Orientation): boolean {
+  return orientation === 'landscape'
+}
+
+export function orientationFromRotate(rotate: boolean): Orientation {
+  return rotate ? 'landscape' : 'portrait'
+}
+
+/**
+ * A sentence for the reply **only when the word contradicts the screen it
+ * produced**, and nothing otherwise.
+ *
+ * A phone asked for `'landscape'` gets a landscape screen: the word was true
+ * there and a note would be noise. A monitor asked for `'landscape'` gets a
+ * portrait screen, and that is the case worth a sentence — it is the one that
+ * reads as a defect in the tool rather than a quirk of the flag.
+ *
+ * Returns `null` when `rotate` was used instead: there is no word to contradict.
+ */
+export function orientationWordNote(
+  orientation: Orientation | undefined,
+  finalWidth: number,
+  finalHeight: number,
+): string | null {
+  if (orientation === undefined) return null
+  const shape = screenShape(finalWidth, finalHeight)
+  if (shape === orientation) return null
+  return (
+    `orientation: '${orientation}' produced a ${shape} screen (${finalWidth}x${finalHeight}). ` +
+    `That flag names the preset's STORED form rather than the shape you get, so the word inverts on ` +
+    `presets stored the other way round. Use rotate: ${orientation === 'landscape'} to say it directly; ` +
+    `screenShape always reports what you actually got.`
+  )
+}
