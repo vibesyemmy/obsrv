@@ -213,6 +213,17 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
     await app?.close()
   })
 
+  /** A live audit of a URL, for the one fixture that takes a query. */
+  const liveUrl = async (url: string): Promise<Reply> => {
+    const r = (await client.callTool(
+      { name: 'obsrv_audit', arguments: { url, mode: 'live', groupsOnly: true } },
+      undefined,
+      { timeout: 150_000 },
+    )) as CallToolResult
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+    return (r.structuredContent ?? {}) as Reply
+  }
+
   const live = async (name: string): Promise<Reply> => {
     const r = (await client.callTool(
       { name: 'obsrv_audit', arguments: { url: fixture(name), mode: 'live', groupsOnly: true } },
@@ -261,7 +272,12 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
   // LAST in the file: this page holds the app's target thread for 25 s, and
   // the app is shared by every test above it.
   test('a page that stops answering once scrolled: the live walk says the scroll was never confirmed', async () => {
-    const m = await live('blocks-on-scroll.html')
+    // A 5 s hold, not the fixture's default 25 s: the live audit measures the
+    // page AFTER the walk and needs the same main thread, so a hold longer than
+    // its own 20 s budget refuses the whole audit and the walk's sentence never
+    // reaches a reply (measured, probe 35229526006). 5 s is longer than the 1 s
+    // confirm window and short enough to be measured afterwards.
+    const m = await liveUrl(`${fixture('blocks-on-scroll.html')}?hold=5000`)
     // The same page, met differently: the live scroll goes through the control
     // server, which answers `scrolled: null` after its 1 s confirm window
     // rather than throwing, so the walk stops with this sentence instead of

@@ -17,11 +17,21 @@
     `scrolled: null` — "the page did not confirm a scroll during the walk; the
     walk stopped there."
 
-  The hold is 25 s: longer than the walk's 15 s budget and the 1 s confirm
-  window, and short enough that the page lets go before a spec's own timeout.
-  It starts on the first scroll EVENT, not on load, so the walk's first step is
-  answered and the count is 1 rather than 0 — a page that blocks before the
-  walk begins is `blocks-after-load.html`, which is a different sentence.
+  THE TWO SURFACES NEED DIFFERENT HOLDS, which is why this takes one from the
+  query (`?hold=`, default 25000 ms):
+
+  - headless wants a hold LONGER than the walk's remaining 15 s budget, so the
+    step times out and the walk is cut short. 25 s does it.
+  - live wants one longer than the 1 s confirm window and SHORTER than the live
+    audit's own 20 s budget. The audit measures the page after the walk, and
+    that measurement needs the same main thread: with a 25 s hold the whole
+    audit is refused — "obsrv control audit timed out after 20000 ms" — and the
+    walk's sentence never reaches a reply (measured, probe 35229526006). 5 s
+    holds the scroll open and frees the thread in time to be measured.
+
+  The hold starts on the first scroll EVENT, not on load, so the walk's first
+  step is answered and the count is 1 rather than 0 — a page that blocks before
+  the walk begins is `blocks-after-load.html`, which is a different sentence.
 -->
 <style>
   body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #fff; color: #111; }
@@ -35,13 +45,14 @@
 <p>screenful 5 of 6</p>
 <p>screenful 6 of 6</p>
 <script>
+  const hold = Number(new URLSearchParams(location.search).get('hold')) || 25000
   let held = false
   addEventListener(
     'scroll',
     () => {
       if (held) return
       held = true
-      const until = Date.now() + 25000
+      const until = Date.now() + hold
       while (Date.now() < until) {}
     },
     { passive: true },
