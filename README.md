@@ -444,6 +444,20 @@ kept outside `node_modules` and left behind by `npm rm`; it reached 477 MB on
 the machine this was measured on. Quit Obsrv before removing these, and check
 no other Electron app of yours relies on that cache.
 
+**If you used the MCP tools from the npm package before 0.61.0, with no
+`Obsrv.app` installed, one more place holds Obsrv's data.** The app those tools
+launched named itself "Electron", not "Obsrv". Its settings, history and tabs
+went into `~/Library/Application Support/Electron`, and its log into
+`~/Library/Logs/Electron`. **Don't delete those directories:** every other
+unnamed Electron app writes there too. Remove only Obsrv's files, and first
+check that each one is Obsrv's (`history.json` lists the addresses you opened
+in Obsrv):
+
+```bash
+cd ~/Library/Application\ Support/Electron && rm -i history.json settings.json tabs.json control.json
+rm -i ~/Library/Logs/Electron/obsrv.log
+```
+
 **The log records what breaks, not where you went.** `obsrv.log`, in
 Electron's logs directory, is a few lines an hour about GPU processes dying,
 crashed targets and lost WebGL contexts, so a bug report arrives with evidence
