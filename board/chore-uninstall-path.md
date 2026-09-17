@@ -110,3 +110,35 @@ on CI only?
 paths and the fixture is a directory layout. Neither deletes anything, and together they are the
 specification the command has to satisfy.
 
+## THE LISTING HALF IS BUILT — Henry, 2026-09-17, and it removes nothing
+
+`uninstallPlan` and `removalGuard` have been merged, pure and tested, since `#197`, **and nothing
+called them.** A plan nobody can run is a specification, not a feature, and the part of this card
+that needs no permission was the part that calls them.
+
+**What landed:** `obsrv uninstall`, the listing half.
+- `src/shared/uninstallReport.ts` turns the plan plus what the caller found into this machine's
+  answer: what is here, what the plan merely names, what the guard **refuses**, what is kept and why,
+  and the `rm -rf` lines a person can run. Pure — the filesystem and the guard are both injected — so
+  its eleven tests read no home at all.
+- `bin/uninstall.js` is the shell. Plain Node, because someone removing Obsrv should not download
+  Electron to be told where its data is; read-only (`existsSync`, `statSync`, `readdirSync`); and it
+  says **in words** that it removed nothing, rather than leaving a reader to infer that from the
+  absence of a `--force`.
+- Every path is put through `checkRemoval` **before it is printed**, so a path the guard would refuse
+  appears as a refusal with its reason instead of as a line that looks removable. A person copying
+  three `rm -rf` lines out of the README has no such check; that is the whole reason this beats the
+  README list it complements.
+
+**What is deliberately absent:** deletion. No `--force`, no `--yes`, no dry-run flag that implies a
+wet one. When the grant arrives, the removal half is a separate change against this same report.
+
+**One test decision worth stating:** the shell's reading arm runs on CI only. Listing reads the home
+of whoever runs it, and on a developer's machine that is their own Obsrv profile — proving a listing
+works is not a reason to read someone's data. The arms that need no home (the usage text, an unknown
+flag) run everywhere.
+
+**Still waiting on Opeyemi**, unchanged: may deletion code be written whose tests delete only inside a
+throwaway `CFFIXED_USER_HOME` sandbox under the system temp directory, with the guard shown failing
+first, and the tests running on CI only?
+
