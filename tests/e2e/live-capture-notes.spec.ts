@@ -110,7 +110,7 @@ test('a raster capture of a page that has stopped still settles, at the size the
   await call('navigate', { url: STILL })
   const status = await call('status')
   const r = await call('captureRaster')
-  const margin = `${JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}` })} on ${JSON.stringify(status.preset)}`
+  const margin = `${JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}` })} on ${String(status.presetId)}`
   expect(r.settled, margin).toBe(true)
   expect(r.unsettledReason, margin).toBeUndefined()
   expect(warningsOf(r).join(' '), margin).not.toContain('still resizing')
@@ -133,7 +133,11 @@ test('and still settles at a fractional density, where the two ways of computing
   // so are `laptop-1080-125` and `4k-27-150` — whole, every one. Counted over
   // the table, 26 presets carry exactly one fractional product, and it is this
   // preset. Do not swap it for a different "fractional density" one.
-  const before = ((await call('status')).preset as { id?: string } | undefined)?.id ?? 'laptop-768'
+  //
+  // `presetId`, not `preset.id`: `status` has no `preset` object, and reading
+  // one silently restored a preset nobody was on (the loops below open on
+  // whatever the app started with, and would have inherited it).
+  const before = (await call('status')).presetId as string
   try {
     await call('setPreset', { id: 'pixel-8' })
     await call('navigate', { url: STILL })
