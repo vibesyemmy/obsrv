@@ -27,3 +27,13 @@ both-tries failure deterministic (tonight's `panes:83` and `sync:139` were both 
 The two `panes` failed-load tests share a run (a6af19e), and so do `panes:230` and
 `target-source:106` (d6e808a). Look for a shared cause before treating them as four problems.
 Attempt-1 logs stay at `…/actions/runs/<id>/attempts/1/logs`.
+
+**Shape 3 (`tabs.spec.ts:266`) — the assertion has been made readable, in `#244` (Rook, routed by
+Wren while you were heads-down on shape 1; test-only, and yours to reshape).** `Expected: 0,
+Received: 1` could not be triaged, because a count fits two opposite facts: the gate leaked a frame
+for the tab being ENTERED, or a frame for the tab being LEFT was sent pre-gate and arrived during the
+wait — and `FrameMessage` carries no tab id. It now compares each frame's `seq` against
+`bus.lastSeq()`, read in the **same main-process callback** as the activation, so a failure names
+which frame. Evidence: `35186688593` green with all three tests confirmed run, `35186716380` red at
+the seq assertion (`[10]`, then `[8]`). **This does not fix a leak — it makes the next one legible.**
+If shape 3 recurs after this, its message says which of the two facts it was.
