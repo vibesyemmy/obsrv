@@ -74,6 +74,34 @@ still rejects them.
 
 **What to do:** restart the session after upgrading.
 
+### Live `obsrv_snap`'s `settled` now means what headless `settled` means: the page went paint-quiet
+
+The same name answered two questions. Headless, `settled` has meant the page
+went paint-quiet and every pixel painted. Live, it meant **the app confirmed
+the navigation** — the address had landed — so a live capture of a page still
+animating came back `settled: true`. A live snap now answers with the capture's
+own paint-quiet verdict, which the app measured all along and this path threw
+away, and passes `unsettledReason` through when it is `false`. Whether the
+navigation was confirmed is a warning now, not this field.
+
+*Added before release:* this entry was missing. The field's own description
+said so ("before 0.61.0 the live answer reported that instead"), the register
+did not, and a change of meaning under an unchanged name is the kind this
+register exists for. Found by the 0.61.0 release sweep.
+
+**What breaks:** a live caller that read `settled` as "the page arrived" can
+now get `false` for a page that arrived and kept painting — a carousel, a
+video, a spinner. The capture is still returned, and `unsettledReason` says
+why.
+
+**With an app older than 0.61.0** there is no paint-quiet verdict to pass
+through, so `settled` keeps the old meaning, and a warning says so: *this app
+is older than the capture's settle verdict, so `settled` reports whether the
+navigation was confirmed rather than whether the page went paint-quiet*.
+
+**What to do:** read `settled` as paint-quiet on both surfaces. For whether
+the navigation was confirmed, read the warnings.
+
 ### The live walk's sentences move from `notes` to `warnings`
 
 Sentences about the **page** — the walk covered a panel rather than the page,
