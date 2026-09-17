@@ -66,3 +66,34 @@ capture path already solves its own version with an explicit handshake. The ques
 whether the **test** should drive a draw the way a capture does, or whether the product should paint
 the canvas when frames arrive regardless of visibility. That is a decision, not a defect, and it
 belongs on this card once the probe has answered.
+
+## THE VACUITY ARM FAILED FIRST, 2026-09-17 by Kenya — and that is the result
+
+Ran the probe locally before spending CI on it. Ticks in 500 ms:
+
+    as the harness leaves the window   31
+    hidden (`win.hide()`)              32     ← must have been ~0
+    shown again                        32
+
+**`win.hide()` does not throttle animation frames on this desk.** So the arm that was supposed to
+show the probe can see throttling instead showed it cannot — and a healthy count from CI would
+therefore have meant nothing. **This is the whole reason the vacuity arm goes first**, and it is the
+second time today that an instrument's own control caught it before a number was believed.
+
+**It also agrees with a measurement already on the board.** In #139 the hidden-window capture test
+kept producing correct pixels with the `drawNow` handshake sabotaged out — the canvas was being
+drawn while hidden. Both readings say the same thing from opposite ends: **on this desk, hiding a
+window does not stop the renderer painting.**
+
+**So the hypothesis is not supported by anything yet, and one of its premises is now doubtful.** The
+comment `flushRendererDraw` carries — Chromium fires no animation frames while a window is hidden or
+occluded — holds for *occlusion* as measured when that handshake was written, but **not for
+`win.hide()` here**. CI's state is a third thing again: shown, never activated.
+
+**What a trustworthy probe needs:** an arm where the count genuinely collapses, which means **real
+occlusion** — another window covering the app on the runner — rather than `hide()`. Until that arm
+produces a near-zero, no count from this probe is evidence, and I would rather say the probe is not
+ready than publish a number from it.
+
+**Not done, and not to be read as done:** no CI run has been made. The throwaway branch was not
+pushed.
