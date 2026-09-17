@@ -1,8 +1,7 @@
 ---
 title: "The two walks cover a growing page differently — 3 screenfuls against 8"
-column: doing
+column: done
 owner: "Rook"
-waiting: ""
 kind: bug
 criterion: C4
 order: 31
@@ -403,3 +402,27 @@ taking `atEnd` after a frame would silence the note the fixture exists to raise.
 ever reports a step short of the bottom, by recording `reached` against the scroller's extent per
 step. That is a probe, it is desk-free, and it would turn the remaining sentence from a reading of
 the code into an observation.
+
+## DONE 2026-09-17: the divergence is explained by measured mechanism, and no fix is wanted
+
+**Moved to Done by Henry**, on Opeyemi's instruction to take the Doing cards to Done one at a time
+(relayed in room #440). Rook's session is out. The last open question was settled by Rook's
+archaeology in `#246`.
+
+**The card's question was why the two walks covered one growing page differently. It is answered:**
+- **The two numbers are one growth and two** (*THE MECHANISM, MEASURED*). 3 screenfuls and 4712 is
+  the page after one growth; 8 and 6832 is the page after two.
+- **What decides between them is timing, not a build.** The live walk takes about 3.7× as long per step,
+  and growth arrives from the previous step's `scroll` handler. So a step applied while the feed is
+  still reflowing can land short of a bottom that is itself moving, and the walk takes one more step.
+- **The other candidates are excluded:** the render clause by mechanism and by measurement (arm D), and
+  the SHA candidate as impossible on every tree that could have walked this fixture (*ARCHAEOLOGY*).
+- **The design position is unchanged, and that is what closes the card rather than a fix.** Taking
+  `atEnd` after a frame would make both walks follow this fixture to its full height, and would silence
+  the note the fixture exists to raise.
+
+**The leftover is filed, not folded in:** the last sentence above, *a short scroll on a growing
+scroller*, is a reading of the code. Rook named the probe that would make it an observation, which is
+recording `reached` against the scroller's extent at every live step. It is desk-free, and it is now
+`chore-live-walk-short-step-probe`.
+
