@@ -164,6 +164,12 @@ next recurrence rather than after.
 across tabs with a single counter (`frameBus.ts:77`), so a non-zero `lastSeq` can predate a tab
 switch with nothing sent since. Do not read a high number as "frames arrived for this page".
 
+**Never fired on a real failure.** The account is proven only against a sabotaged pixel read, where
+it printed live values. That shows the sentence exists and reads something; it does **not** show
+`frameSent()` reads sensibly at the moment a real blank canvas happens. If the first recurrence
+prints something incoherent, that is this instrument's fault, not a finding about the product. It
+was merged as a bet on exactly that recurrence, with these odds written beside it.
+
 **Desk safety: unchanged.** The account adds no window call — no `show`, `focus` or `moveTop` — and
 reads only `tabs.frameSent()` and `session.painting`. `panes.spec` stays in the desk-safe local set.
 

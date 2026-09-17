@@ -1,10 +1,14 @@
 ---
 title: "A live raster with never-painted pixels says the page was still painting, and not that part of the PNG is transparent"
-column: backlog
+column: doing
 kind: bug
+owner: "Kenya"
+waiting: ""
 criterion: C5
 order: 85
 ---
+
+**CLAIMED BY KENYA 2026-09-17** from Backlog, queued by Henry in #453 and routed by Wren.
 
 FOUND BY HENRY 2026-09-17 while measuring row 9 of `chore-live-app-race-sentences` on CI (run
 `35215978933`, repeat 2 of 6; then seven of seven across two control runs).
