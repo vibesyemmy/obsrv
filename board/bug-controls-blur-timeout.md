@@ -5,7 +5,12 @@ kind: bug
 order: 50
 ---
 
-**Waiting on a recurrence:** `controls.spec` failing with `locator.blur: Timeout 30000ms exceeded`, whose log carries `[renderer-ping controls:blur] N late or unanswered ping(s) around this blur`. Nothing can be done until it fires.
+**Waiting on a recurrence:** `controls.spec` failing with `locator.blur: Timeout 30000ms exceeded`. Nothing can be done until it fires. **Read every `[renderer-ping controls:blur]` line around it**, since the instrument (`tests/e2e/helpers/rendererPing.ts`) prints more than one outcome:
+- `UNANSWERED after …ms (sent …)` and `LATE: answered after …ms (sent …)`, summarised as `N late or unanswered ping(s) around this blur`: the renderer stopped answering, and the timestamps give the window;
+- `REJECTED: … (sent …)`, summarised as `N ping(s) rejected around this blur`: the renderer answered with an error, which is a **different** event;
+- `NO NON-OFFSCREEN WINDOW to ping — this run's silence is not evidence`: the ping had nothing to ask, so a quiet log there proves nothing.
+
+A timeout with no ping lines at all is also a reading: the instrument did not run. That is a harness fault, not a clean renderer (Wren, reading #289).
 
 FOUND BY KENYA 2026-09-16 from the values; **ordering confirmed by Rook the same day** from the
 log's own failure order. **Claimed by Rook 2026-09-16**, assigned by Henry. Split out of

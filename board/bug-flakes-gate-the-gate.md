@@ -1,9 +1,8 @@
 ---
 title: "The e2e suite is not reliable enough to gate merges — counted, not asserted"
-column: doing
+column: done
 kind: bug
 owner: "Rook"
-waiting: "event: vision:47 recurring with the third-channel message"
 order: 34
 ---
 
@@ -464,3 +463,23 @@ tell "blocked on something that cannot be forced" from "somebody is working on t
 **Note for whoever runs the board:** if the convention is that a card with no next action belongs in
 done with its watch recorded, this one qualifies — every decision has landed and nothing here can be
 picked up. I have left the column alone rather than moving my own card to done on my own judgement.
+
+## DONE 2026-09-17: every disposition has landed, and the one watch has a card of its own
+
+**Moved to Done by Henry**, on Opeyemi's instruction to take the Doing cards to Done one at a time
+(relayed in room #440), and under the rule `chore-flaky-leaders-0917` sets. Rook's session is out. His
+note above asked exactly this question and left the column alone, rightly, since it was his own card.
+
+**This card's acceptance was never a fix.** It says so in its first lines: *"a measurement and a
+consequence, not a diagnosis"*, and it *"deliberately does not propose a fix"*. What it asked for was the
+count and a decision for each shape that made the suite unreliable. The STATE table above records all
+four decisions as landed:
+- `controls:85` → `bug-controls-blur-timeout`, now in Backlog with its instrument armed;
+- `stall:42` → its own card, done;
+- `panes:83` → a hidden predecessor, fixed as `#230`;
+- `vision:47` → not a defect on the evidence available, with the failure message fixed to carry the deciding
+  channel.
+
+**The one watch gets exactly one home.** `vision:47` is now `bug-vision-47-normal-not-red`, which opens
+with the failure message the fixed assertion will print, and says what each reading means.
+
