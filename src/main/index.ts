@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
+import { APP_NAME } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
 import { hooks, readAppVersion, registerIpc, TOOLBAR_H } from './ipc'
@@ -8,6 +9,16 @@ import { Overlay } from './overlay'
 import { TabManager } from './tabs'
 import { exposeForTests } from './testHooks'
 import { createMainWindow, showWindow, showsInactive } from './window'
+
+// Before anything reads a path. Launched as `electron out/main/index.js` (the
+// MCP server's launch when no Obsrv.app is installed), Electron names the app
+// "Electron", so its profile, `control.json` and log landed in
+// `~/Library/Application Support/Electron` and `~/Library/Logs/Electron`
+// (measured on a CI runner, run 35168639669), where the MCP server's
+// `discover()` never looks. The first live call on such a machine launched the
+// app, waited 12 s, and fell back headless saying "the next call will find it";
+// the next call could not either (a3). A packaged app already has this name.
+app.setName(APP_NAME)
 
 // First, so everything below has somewhere to write.
 const logFile = initLog()
