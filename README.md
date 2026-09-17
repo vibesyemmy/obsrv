@@ -439,8 +439,13 @@ the cap costs latency and not correctness.
 **Removing Obsrv does not remove any of that.** Deleting `Obsrv.app` — dragging
 it to the Trash — removes the app and nothing else; `npm rm -g getobsrv`
 removes the CLI and nothing else. Measured on a fresh install: one page
-visited, then the app deleted, and every file below was still there. There is
-no uninstall command yet. On macOS, to remove it by hand:
+visited, then the app deleted, and every file below was still there.
+
+**`obsrv uninstall` will tell you what is actually on your machine** — which of
+these paths exist, how big each one is, what is in it, and what is deliberately
+left alone (Electron's shared cache is not Obsrv's to delete). **It lists only:
+it removes nothing**, and prints the commands below with your own paths filled
+in. On macOS, to remove it by hand:
 
 ```bash
 rm -rf ~/Library/Application\ Support/Obsrv   # settings, history, tabs, the Chromium profile

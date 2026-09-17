@@ -193,6 +193,7 @@ Usage:
                              images; print JSON findings.
   obsrv mcp                  Serve the MCP server on stdio (for Claude Code and other clients).
   obsrv install-skill        Install the obsrv-screens skill for Claude Code (--help for flags).
+  obsrv uninstall            List what Obsrv has written on this machine (--help for flags). Removes nothing.
   obsrv --version            Print the installed version (also -v). No build or Electron needed.
 
 Shared flags:
