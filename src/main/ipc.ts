@@ -27,7 +27,7 @@ import { log } from './log'
 import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMessage, parseMenuRequest, parseMode,parseRect, parseScrollReport, parseSettings, parseSelectOpen,
   parsePickerEvent,
   parsePickerOpen,
-  parsePickerRequest, parseSelectResult, parseTabId, parseUiState } from '../shared/ipcPayloads'
+  parsePickerRequest, parseSelectResult, parseTabId, parseTabMove, parseUiState } from '../shared/ipcPayloads'
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
@@ -1362,6 +1362,16 @@ export function registerIpc(ctx: AppContext): () => void {
     const id = parseTabId(raw)
     if (id === null) return
     tabs.activate(id)
+  })
+  // A tab dropped at a new place on the strip. The preload has sent this since
+  // tab dragging shipped (5ca36ee) and nothing here listened, so every drag was
+  // dropped on the floor; the e2e called `tabs.move()` in main directly and
+  // could not see it (Wren's release sweep).
+  on(IPC.moveTab, (e, raw: unknown) => {
+    if (!fromRenderer(e)) return
+    const move = parseTabMove(raw)
+    if (move === null) return
+    tabs.move(move.id, move.toIndex)
   })
 
   // --- tabs on disk ----------------------------------------------------------
