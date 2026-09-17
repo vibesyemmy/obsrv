@@ -1,9 +1,19 @@
 ---
-title: "Once on main, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
-column: next
+title: "Twice on main, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
+column: backlog
 kind: bug
 order: 60
 ---
+
+**Waiting on a recurrence:** `ipc.spec.ts:31` (*reports the URL the native pane navigated to*) timing
+out at 30 s on **both tries**, with `ipc.spec.ts:134` failing at `:167` on
+`expect(native.isVisible()).toBe(true)` and `ipc.spec.ts:173` failing at `:191` on
+`expect(after.visible).toBe(true)` — all three in the same run, each on both tries.
+
+Two sightings, twelve and a half hours apart, and **no cause**. Nothing can be read from the code
+until it happens again with something new in it; what the card asks a reader to do at the next
+sighting is in "Where to look first" below, and the two runs to compare against are
+`35145262453` (attempt 1) and `35201648560` (attempt 1).
 
 FOUND BY HENRY 2026-09-16, reading why main's CI went red at `5e426fb` (#139's merge). **Unowned.
 Observed once, cause unknown.**
@@ -120,3 +130,26 @@ found not deterministic and free of a hidden predecessor — a known flake, and 
 
 **The card's "where to look first" section is unchanged and now has two runs to look at rather than
 one.** Its attempt-1 logs are at `…/actions/runs/35201648560/attempts/1/logs`.
+
+## THE WINDOW NOBODY HAD SWEPT IS SWEPT — Henry, 2026-09-17, and it is still two sightings
+
+The card said *"the window also starts at 16:05Z, so anything older is unswept"*, and named that
+sweep as the first step before anyone reads `NativePane`. Done, with Rook's detector — anchored to
+the `✘`, because a bare `ipc.spec.ts:31` appears in every log as a passing line.
+
+    80 CI attempts before 2026-09-16T16:05Z, read per attempt
+    all on 2026-09-16, 13:07Z–15:58Z
+    30 of them ran ipc.spec at all (the rest are board-only runs, where the suite does not run)
+    0 sightings
+
+**What the three sweeps now say together:** 30 attempts before the first sighting, 44 across the
+window it sits in (1 sighting), 60 after it (0, Rook), and the second sighting on 2026-09-17. Two in
+roughly 135 attempts that ran the file, and none at all in the three hours before the first.
+
+**What it does not say.** Three hours is not "this is new": the runs before 13:07Z are unread, and
+the API's window is what bounded this, not a decision. It is evidence about rarity, not about cause
+or about age, and it does not implicate or clear `#129` any more than the earlier sweeps did.
+
+**So this is a recurrence-waiter now**, under `c5`'s rule for cards that wait on an unforceable
+event: Backlog, and the body opens with the exact failure text so the next sweep's grep finds it.
+Nothing here needs doing until it fires again.
