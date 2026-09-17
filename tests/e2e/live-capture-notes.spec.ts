@@ -4,6 +4,7 @@ import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
+import { decodePng } from './helpers/decodePng'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -50,6 +51,33 @@ const call = (command: string, payload?: Record<string, unknown>): Promise<Recor
   })
 
 const warningsOf = (reply: Record<string, unknown>): string[] => (reply.warnings as string[] | undefined) ?? []
+
+/**
+ * The fully transparent pixels in a capture reply's PNG, and their bounding
+ * box: what a never-painted region is, read from the image rather than from
+ * the sentence about it. Decoded without Electron (`decodePng`), so a channel
+ * swap in the encoder cannot hide.
+ */
+const transparencyOf = (reply: Record<string, unknown>): { width: number; height: number; transparent: number; box: string } => {
+  const png = decodePng(Buffer.from(reply.data as string, 'base64'))
+  let transparent = 0
+  let x0 = png.width
+  let y0 = png.height
+  let x1 = -1
+  let y1 = -1
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      if (png.data[(y * png.width + x) * 4 + 3] !== 0) continue
+      transparent++
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+  }
+  const box = transparent === 0 ? 'none' : `${x1 - x0 + 1}x${y1 - y0 + 1} at ${x0},${y0}`
+  return { width: png.width, height: png.height, transparent, box }
+}
 
 test.describe.configure({ timeout: 180_000 })
 
@@ -290,12 +318,17 @@ test('a raster capture whose budget runs out before a resized frame is painted s
       cycling = false
       await spin
 
-      const margin = `try ${attempt}: settled=${String(reply.settled)} label=${String(reply.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(reply.width)}x${String(reply.height)} warnings=${JSON.stringify(warningsOf(reply))}`
+      const png = transparencyOf(reply)
+      const margin = `try ${attempt}: settled=${String(reply.settled)} label=${String(reply.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(reply.width)}x${String(reply.height)} png=${png.width}x${png.height} transparent=${png.transparent} (${png.box}) warnings=${JSON.stringify(warningsOf(reply))}`
       tries.push(margin)
       console.log(`raster under a back-to-back preset cycle: ${margin}`)
       // The state first: a stalled cycle would leave nothing below measuring
       // what its name says.
-      expect(applied, margin).toBeGreaterThan(20)
+      expect(
+        applied,
+        `the preset cycle stalled (applied is the number of presets applied during the capture; a low one is a slow or loaded runner, not the product): ${margin}`,
+      ).toBeGreaterThan(20)
+      expect([png.width, png.height], margin).toEqual([reply.width, reply.height])
       if (reply.unsettledReason === 'uncovered') {
         shot = reply
         break
@@ -305,6 +338,11 @@ test('a raster capture whose budget runs out before a resized frame is painted s
       // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
       // that never stopped changing size is a finding.
       expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
+      // THE BASELINE for the count below: a covered frame has every pixel
+      // painted, and this page paints opaque white, so its PNG has no
+      // transparent pixel. A counter that saw transparency everywhere, or a
+      // PNG that dropped alpha, fails here rather than agreeing with a sentence.
+      expect(png.transparent, `a covered capture has transparent pixels: ${margin}`).toBe(0)
     }
   } finally {
     await call('setPreset', { id: before })
@@ -318,8 +356,22 @@ test('a raster capture whose budget runs out before a resized frame is painted s
   // passed through on the way.
   const own = new RegExp(`^\\d+\\.\\d% of the ${String(shot!.width)}x${String(shot!.height)} frame never painted within \\d+ ms`)
   expect(warnings.filter(w => own.test(w)), margin).toHaveLength(1)
-  expect(warnings.find(w => own.test(w)), margin).toContain('those pixels are transparent, not page content')
+  const sentence = warnings.find(w => own.test(w))!
+  expect(sentence, margin).toContain('those pixels are transparent, not page content')
   expect(warnings, margin).not.toContain(PAINTING)
+
+  // And the sentence is TRUE of this PNG, read from the image: the share it
+  // states is the share of fully transparent pixels, within its one-decimal
+  // rounding, and the region it names is their exact bounding box. The
+  // defect this card fixes was a real sentence about the wrong thing, so a
+  // sentence proved to fire but not to be true would leave the same gap.
+  // Soft, so a red run shows both.
+  const stated = /^(\d+\.\d)% of the \d+x\d+ frame never painted within \d+ ms \(uncovered region (\d+x\d+ at \d+,\d+)\)/.exec(sentence)
+  expect(stated, `the sentence does not state a share and a region: ${sentence}`).not.toBeNull()
+  const png = transparencyOf(shot!)
+  const measured = (png.transparent / (png.width * png.height)) * 100
+  expect.soft(Math.abs(measured - Number(stated![1])), `stated ${stated![1]}%, the PNG is ${measured.toFixed(3)}% transparent: ${margin}`).toBeLessThanOrEqual(0.051)
+  expect.soft(png.box, `stated region ${stated![2]}, transparent pixels span ${png.box}: ${margin}`).toBe(stated![2])
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
