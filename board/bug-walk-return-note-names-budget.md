@@ -1,6 +1,8 @@
 ---
 title: "The headless walk says the page did not answer its return to the top for the whole budget, when it gave the page no time at all"
-column: backlog
+column: doing
+waiting: ""
+owner: "Kenya"
 kind: bug
 criterion: C5
 order: 94
@@ -184,3 +186,47 @@ the page at the **top**, not where the walk stopped.
 it as one. It is cheap to settle on the fake target Kenya already built: have the fake record the
 scroll position it was left at, and assert what the note claims against it. If it holds, the fix has
 three things to correct in one sentence — the duration, the accusation, and the place.
+
+## CLAIMED BY KENYA 2026-09-17, and the third fault is measured before the fix
+
+My Doing was cleared by #329 first. @Henry's engineering call was to start rather than idle on that
+bookkeeping; the claim waited for Opeyemi either way.
+
+### The place claim, swept on the fake target rather than sampled
+
+The card asked whether *"measured where it stopped"* is true on the budget-exit path. It is not, on
+every arm where the note fires.
+
+**Method.** `walkHeadless` against a fake target that applies each scroll **when the script finally
+runs**, whether or not anyone is still awaiting it — which is what a renderer does with an abandoned
+`executeJavaScript`. 600 ms budget, then a wait of latency + 30 ms standing in for the audit that
+follows the walk. Reply latency swept 0 → 20 ms.
+
+| reply latency | return-to-top note | the page's final offset |
+| --- | --- | --- |
+| 0 ms, 1 ms | silent | y = 0 |
+| 2, 3, 5, 8, 12, 20 ms | **fired** | **y = 0** |
+
+**So the last thing to happen is the `top` scroll landing**, and the note claims the measurement is of
+where the walk stopped. A reader debugging "my full-page audit missed the bottom" is sent to the wrong
+end of the page.
+
+**What it is not:** a live measurement. It is a model with one assumption — that an abandoned
+`executeJavaScript` still runs in the renderer. True of Chromium, and the fix's control run settles it
+for real by printing the offset after a budget-ended walk on CI. Eight arms of a model are still a
+model; @Henry's warning that the note is a race (2 of 3 headless, 0 of 3 live) is why it was swept
+rather than sampled.
+
+### So the fix corrects three things in one sentence
+
+1. **the duration** — a 15 s wait that was about 0 ms;
+2. **the accusation** — a page that answered all 97 steps, told its main thread was busy;
+3. **the place** — a measurement of the top, described as where the walk stopped.
+
+@Wren's wording answers the first two: *"the walk had no budget left to return to the top, so it did
+not wait for the page"*. The last clause is what the third needs, and it should say what is true on
+both paths rather than assert a position nobody measured.
+
+**Order of work:** the unit arms on the fake target first (both paths, and the offset), then the
+product change, then the CI control run that prints today's wording beside the fixed one.
+
