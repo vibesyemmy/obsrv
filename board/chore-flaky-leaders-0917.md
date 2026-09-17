@@ -1,10 +1,16 @@
 ---
 title: "Four flaky tests with no card, each 3 of 43 first attempts on main since #82"
-column: backlog
+column: doing
 kind: chore
+owner: "Kenya"
+waiting: ""
 criterion: B5
 order: 72
 ---
+
+**PULLED FROM BACKLOG AND CLAIMED BY KENYA 2026-09-17** on Wren's routing. Logs only; anything
+needing a repro goes to CI unless the spec is desk-safe and carries no recorded activation, checked
+per spec rather than per file.
 
 FOUND BY HENRY 2026-09-17, in the remeasurement on `bug-ci-main-red-37pct`. Each failed its first try
 and passed its retry in 3 of main's 43 suite runs since #82. **Nothing here is a cause yet:** read each
