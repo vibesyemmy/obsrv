@@ -3,7 +3,7 @@ title: "The target emits no url-changed at all — a second shape, and the test 
 column: doing
 kind: bug
 owner: "Kenya"
-waiting: "Kenya: read the recurrence of 2026-09-17 00:27Z below, with its account"
+waiting: "Kenya: the flake now reproduces on demand (below); the recurrence and four x20 runs are recorded"
 order: 40
 ---
 
@@ -420,3 +420,23 @@ compare `at` values, not positions):
 
 Kenya is out of usage, so it's recorded here so it survives until she's back. It hasn't been interpreted,
 on purpose: it's her card, and #171/#184 being in the tree is the first thing it needs checked against.
+
+## REPRODUCES ON DEMAND, 2026-09-17, and it is not today's merges — measured by Henry
+
+A second recurrence failed **both tries** on #177's run `35165991550`, and #177 touches only tsconfig
+files. So the question was whether today's merges raised the rate. **The test was run alone ×20 on CI,
+retries 0, one arm per tree:**
+
+| arm | run | failed |
+| --- | --- | --- |
+| main (`87c835a`) | `35167691242` | 1 / 20 |
+| main − #184 | `35167693676` | 2 / 20 |
+| main − #184 − #171 (#171 alone doesn't revert cleanly) | `35167696306` | 2 / 20 |
+| main − #174 − #169 | `35167698746` | 4 / 20 |
+
+Every failure has the same first line, `the target emitted no url-changed`, and carries the card's
+account. **No arm removes it, and at 20 runs per arm the differences are noise.** So it wasn't
+introduced today. **What's new is the reproduction:** `playwright test tests/e2e/sync.spec.ts -g "a
+redirecting page leaves no stale expectation behind" --repeat-each 20 --retries=0` on a runner gives
+about 1–4 failing accounts per run. **This card no longer waits on an event.** The job logs hold the
+accounts (`[sync138]` lines and the `Error:` JSON).
