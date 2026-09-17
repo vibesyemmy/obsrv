@@ -125,6 +125,36 @@ export function navigatedAfterLoadNote(from: string, to: string): string {
   )
 }
 
+/** A history move made in a tab after its last navigate, and who made it. */
+export interface HistoryMove {
+  kind: 'back' | 'forward' | 'reload'
+  /** The agent-control server, or the app itself: its toolbar, keyboard or menu. */
+  by: 'agent' | 'app'
+}
+
+/**
+ * Which page a live measurement's figures are of when a history move came
+ * after the last navigate. Obsrv made that move itself: it drives the native
+ * pane, and the target follows by a mirrored commit or by reloading the address
+ * it already shows. So it is not the page navigating after it loaded, and the
+ * arrivals count rightly stays put (bug-arrivals). It is said anyway, because
+ * the navigate's record no longer describes the page. An agent that went Back
+ * itself reads a short confirmation; one whose user went Back between two calls
+ * has no other way to learn it (bug-history-move-silences-navigated-note). The
+ * page measured leads, and the move is the cause.
+ */
+export function historyMoveNote(move: HistoryMove, measured: string, asked: string): string {
+  const name = move.kind === 'back' ? 'Back' : move.kind === 'forward' ? 'Forward' : 'Reload'
+  const made = `${name} ${move.by === 'agent' ? 'the agent issued' : 'made in the app'}`
+  // "The last move Obsrv recorded", not "most recently": a link followed in the
+  // native pane moves the tab without passing any issue point, so a Back and a
+  // link click after it would otherwise read as though the Back came last
+  // (Wren's read of #222).
+  return sameAddress(asked, measured)
+    ? `the figures are of ${measured}, not as the last navigate loaded it: the last move Obsrv recorded since was a ${made}`
+    : `the figures are of ${measured}, not of ${asked}, which the last navigate asked for: the tab moved after that navigate, and the last move Obsrv recorded was a ${made}`
+}
+
 /**
  * The throttle a load-timeout sentence may name: one that was in force and
  * slows anything. `throttle` is the conditions in force, which after a refusal

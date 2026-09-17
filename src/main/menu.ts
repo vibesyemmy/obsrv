@@ -179,7 +179,11 @@ export function installMenu({ win, tabs, logFile }: AppContext): void {
             // Resolved per click, never destructured at install time: a
             // destructure captures whichever session booted first and keeps
             // reloading it after the user has switched tabs.
-            const { native, target } = tabs.active()
+            const active = tabs.active()
+            const { native, target } = active
+            // A history move like the toolbar's, recorded for the same reason
+            // (`TabSession.historyMove`).
+            active.historyMove = { kind: 'reload', by: 'app' }
             native.reload()
             // A reload commits the URL the target already shows, so the mirror
             // (rightly) does nothing; reload the target on its own.

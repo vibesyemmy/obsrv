@@ -4,6 +4,7 @@ import {
   Deadline,
   loadTimeoutMessage,
   measureTimeoutNote,
+  historyMoveNote,
   httpStatusNote,
   landedElsewhereNote,
   navigatedAfterLoadNote,
@@ -205,6 +206,23 @@ describe('a load the budget cut, and the throttle it names', () => {
       expect(cutLoadMeasureNote(1500, throttle, url)).not.toContain('--throttle')
       expect(cutLoadMeasureNote(1500, throttle, url).startsWith(`load did not finish within 1500 ms: ${url} — measured the page as it stood`)).toBe(true)
     }
+  })
+})
+
+describe('a history move after the last navigate', () => {
+  it('leads with the page measured, then the address the navigate asked for, then who moved the tab', () => {
+    const said = historyMoveNote({ kind: 'back', by: 'agent' }, 'https://a.test/pricing', 'https://a.test/signup')
+    expect(said.startsWith('the figures are of https://a.test/pricing, not of https://a.test/signup')).toBe(true)
+    expect(said.endsWith('and the last move Obsrv recorded was a Back the agent issued')).toBe(true)
+    expect(historyMoveNote({ kind: 'forward', by: 'app' }, 'https://a.test/b', 'https://a.test/a')).toContain('was a Forward made in the app')
+  })
+
+  it('on the address the navigate asked for, says the page was moved rather than claiming another page', () => {
+    const said = historyMoveNote({ kind: 'reload', by: 'app' }, 'https://a.test/x', 'https://a.test/x')
+    expect(said).toBe('the figures are of https://a.test/x, not as the last navigate loaded it: the last move Obsrv recorded since was a Reload made in the app')
+    // Compared as the loader spells it, as the landed-elsewhere sentence is: a
+    // bare host the loader normalised is the same address, not another page.
+    expect(historyMoveNote({ kind: 'reload', by: 'agent' }, 'https://a.test/', 'a.test')).not.toContain(', not of ')
   })
 })
 

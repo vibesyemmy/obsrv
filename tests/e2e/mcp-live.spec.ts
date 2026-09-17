@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME } from '../../src/shared/control'
+import { historyMoveNote } from '../../src/shared/measureBudget'
 import { launchApp, rendererWindow } from './launch'
 
 /**
@@ -739,6 +740,109 @@ test('a live audit of a page that stays put says nothing about navigating', asyn
   const r = await call('obsrv_audit', { url: fixture('tall.html'), mode: 'live', groupsOnly: true })
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).not.toMatch(/navigated after it loaded/)
+})
+
+/**
+ * After a history move, the page in front is not the one the last navigate
+ * asked for. A live measurement says which page its figures are of and who
+ * moved the tab (bug-history-move-silences-navigated-note). Obsrv made the move
+ * itself, so it is not "the page navigated after it loaded": that sentence names
+ * a challenge, an interstitial or a redirect, and the arrivals count rightly
+ * stays put. The arms were registered before the code (Wren's read of #211):
+ * a Back the agent issued, a Back made in the app, a Reload, no move, a page
+ * that redirects itself, and the navigate record's two sentences that go stale.
+ */
+const HISTORY_SENTENCE = /the figures are of .*the last move Obsrv recorded (since )?was a (Back|Forward|Reload) (the agent issued|made in the app)/
+const saidIn = (r: CallToolResult): string => {
+  const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
+  return [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
+}
+const targetUrl = (): Promise<string> => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL())
+
+test('after a Back the agent issued, a live audit, lint and inspect say which page they measured', async () => {
+  const first = fixture('audit.html')
+  const second = fixture('button.html')
+  for (const url of [first, second]) expect((await call('obsrv_drive', { url })).isError).toBeFalsy()
+  expect((await call('obsrv_drive', { back: true })).isError).toBeFalsy()
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(first)
+  const calls: [string, Record<string, unknown>][] = [
+    ['obsrv_audit', { mode: 'live', groupsOnly: true }],
+    ['obsrv_lint', { mode: 'live', groupsOnly: true }],
+    ['obsrv_inspect', { mode: 'live', selector: 'body' }],
+  ]
+  for (const [tool, args] of calls) {
+    const r = await call(tool, args)
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+    const said = saidIn(r)
+    expect((r.structuredContent as { url?: string }).url, tool).toBe(first)
+    // The sentence as the function writes it, so a rewording cannot blind this.
+    expect(said, `${tool} said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'agent' }, first, second))
+    // Not the page navigating by itself: none of that sentence's causes happened.
+    expect(said, tool).not.toMatch(/navigated after it loaded/)
+  }
+})
+
+test('after a Back made in the app, the sentence says the app moved the tab', async () => {
+  const first = fixture('audit.html')
+  const second = fixture('button.html')
+  for (const url of [first, second]) expect((await call('obsrv_drive', { url })).isError).toBeFalsy()
+  const page = await rendererWindow(app)
+  await page.evaluate(() => window.obsrv.back())
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(first)
+  const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
+  expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'app' }, first, second))
+})
+
+test('after a Reload the agent issued, the sentence says the page was reloaded', async () => {
+  const first = fixture('audit.html')
+  expect((await call('obsrv_drive', { url: first })).isError).toBeFalsy()
+  expect((await call('obsrv_drive', { reload: true })).isError).toBeFalsy()
+  const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
+  expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'reload', by: 'agent' }, first, first))
+})
+
+test('no history move, and a page that redirects itself, draw no history sentence', async () => {
+  // The vacuity arm: a navigate on its own says nothing about history.
+  expect((await call('obsrv_drive', { url: fixture('audit.html') })).isError).toBeFalsy()
+  const plain = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
+  expect(plain, `said: ${plain}`).not.toMatch(HISTORY_SENTENCE)
+  // bug-arrivals' repro: the page redirects itself, and the bus mirrors the commit.
+  expect((await call('obsrv_drive', { url: fixture('redirect.html') })).isError).toBeFalsy()
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(fixture('hairline.html'))
+  const redirected = saidIn(await call('obsrv_inspect', { mode: 'live', selector: 'body' }))
+  expect(redirected, `said: ${redirected}`).not.toMatch(HISTORY_SENTENCE)
+})
+
+test("after a Back, the navigate record's own sentences stop describing the page it left", async () => {
+  const server: Server = createServer((req, res) => {
+    const path = req.url ?? ''
+    if (path.startsWith('/private')) {
+      res.writeHead(302, { Location: '/login' })
+      res.end()
+      return
+    }
+    res.setHeader('Content-Type', 'text/html')
+    if (path.startsWith('/missing')) res.statusCode = 404
+    res.end('<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Page</h1><button style="width:220px;height:44px">Go</button></body></html>')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    for (const url of [`${origin}/missing`, `${origin}/private`]) expect((await call('obsrv_drive', { url })).isError).toBeFalsy()
+    await expect.poll(targetUrl, { timeout: 10_000 }).toBe(`${origin}/login`)
+    expect((await call('obsrv_drive', { back: true })).isError).toBeFalsy()
+    await expect.poll(targetUrl, { timeout: 10_000 }).toBe(`${origin}/missing`)
+    const said = saidIn(await call('obsrv_audit', { mode: 'live', groupsOnly: true }))
+    expect(said, `said: ${said}`).toContain(historyMoveNote({ kind: 'back', by: 'agent' }, `${origin}/missing`, `${origin}/private`))
+    // Where /private's load landed is about a page these figures are not of.
+    expect(said).not.toContain('ended at')
+    // The status sentence names the page measured and claims nothing about the page asked for.
+    expect(said).toContain(`for ${origin}/missing: the figures are of the error page it sent —`)
+  } finally {
+    // As the test below: the app keeps its connection alive.
+    server.closeAllConnections()
+    await new Promise<void>(r => server.close(() => r()))
+  }
 })
 
 /**
