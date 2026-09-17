@@ -121,12 +121,89 @@ describe('checkRemoval: paths nothing should ever remove', () => {
   })
 })
 
+/**
+ * Found by Wren's cold read of #197, and confirmed on this machine before being
+ * fixed: `/users/opeyemiajagbe` **exists** on a default APFS volume, and
+ * `'/users/…'.startsWith('/Users/opeyemiajagbe/')` is `false`. So the guard's
+ * central claim — that a path inside the real home is refused whether or not a
+ * sandbox was declared — was not true as written. The same mismatch let a
+ * sandbox root typed in another case, or one that is a symlink into the home,
+ * past the check that exists to catch exactly that.
+ *
+ * `fs.realpathSync.native` closes both at once: it resolves symlinks and
+ * returns the filesystem's own case. Injected here so these arms do not depend
+ * on a particular machine's layout, with one arm that uses the real one.
+ */
+describe('checkRemoval: canonical paths, not string prefixes', () => {
+  const HOME_REAL = '/Users/someone'
+  // A stand-in for the filesystem: lowercases the volume's case back to
+  // canonical, and resolves two symlinks.
+  const links: Record<string, string> = {
+    '/tmp': '/private/tmp',
+    '/tmp/box-into-home': `${HOME_REAL}/secretly`,
+  }
+  const fakeRealpath = (p: string): string => {
+    // Longest key first: a real filesystem resolves the most specific link on
+    // the path, and matching `/tmp` before `/tmp/box-into-home` made this fake
+    // hide the very case it was written for.
+    for (const [from, to] of Object.entries(links).sort((a, b) => b[0].length - a[0].length)) {
+      if (p === from || p.startsWith(from + '/')) return to + p.slice(from.length)
+    }
+    if (p.toLowerCase().startsWith('/users/')) return '/Users/' + p.slice('/users/'.length)
+    return p
+  }
+
+  it('refuses the real home reached through a different case', () => {
+    const v = checkRemoval('/users/someone/Library/Application Support/Obsrv', { realHome: HOME_REAL, realpath: fakeRealpath })
+    expect(v.allow, 'a lowercase path to the real home was allowed').toBe(false)
+    expect((v as { refuse: string }).refuse).toContain('real home')
+  })
+
+  it('refuses a sandbox root that is a symlink into the real home', () => {
+    // Outside the home as a string, inside it on disk. This is the one that
+    // would have deleted a profile while every rule here read green.
+    const v = checkRemoval('/tmp/box-into-home/Obsrv', { realHome: HOME_REAL, sandboxRoot: '/tmp/box-into-home', realpath: fakeRealpath })
+    expect(v.allow, 'a sandbox symlinked into the real home was allowed').toBe(false)
+    expect((v as { refuse: string }).refuse).toContain('real home')
+  })
+
+  it('still allows a genuine sandbox whose root only differs by /tmp → /private/tmp', () => {
+    // The benign version of the same mismatch: both sides canonicalise, so it
+    // must not become a refusal.
+    const v = checkRemoval('/tmp/obsrv-box/Library/Obsrv', { realHome: HOME_REAL, sandboxRoot: '/tmp/obsrv-box', realpath: fakeRealpath })
+    expect(v.allow, (v as { refuse?: string }).refuse ?? '').toBe(true)
+    expect((v as { allow: true; path: string }).path).toBe('/private/tmp/obsrv-box/Library/Obsrv')
+  })
+
+  it('judges a path that does not exist yet, by canonicalising as far as it can', () => {
+    // A target may be absent — that is the ordinary case after a first
+    // uninstall — and `realpath` throws on it. The guard must still judge it.
+    const throwing = (p: string): string => {
+      if (p.includes('not-created-yet')) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      return fakeRealpath(p)
+    }
+    const v = checkRemoval('/users/someone/not-created-yet/Obsrv', { realHome: HOME_REAL, realpath: throwing })
+    expect(v.allow, 'an absent path under the real home was allowed').toBe(false)
+  })
+
+  it('uses the real filesystem by default', () => {
+    // The arms above inject, so one arm must show the default is wired up.
+    // `/tmp` resolving to `/private/tmp` is the cheapest true statement about
+    // this machine that does not depend on anyone's home.
+    const v = checkRemoval('/tmp/obsrv-guard-default-check/x', { realHome: '/Users/nobody-at-all', sandboxRoot: '/tmp/obsrv-guard-default-check' })
+    expect(v).toMatchObject({ allow: true, path: '/private/tmp/obsrv-guard-default-check/x' })
+  })
+})
+
 describe('checkRemoval: what it reports', () => {
-  it('returns the resolved path it judged, so a caller deletes what was checked', () => {
+  it('returns the CANONICAL path it judged, so a caller deletes what was checked', () => {
     // A caller that re-derives the path from the original string could delete
-    // something the guard never saw.
+    // something the guard never saw — and after the case/symlink fix the path
+    // judged is the canonical one, which on this machine means `/tmp` comes
+    // back as `/private/tmp`. That difference is the point: the caller must
+    // remove what was checked, not what was asked for.
     const v = checkRemoval(`${SANDBOX}/./Library/Obsrv`, opts)
-    expect(v).toMatchObject({ allow: true, path: `${SANDBOX}/Library/Obsrv` })
+    expect(v).toMatchObject({ allow: true, path: `/private${SANDBOX}/Library/Obsrv` })
   })
 
   it('names the real home in the refusal, because that is the fact the reader needs', () => {

@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
-import { isAbsolute, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 /**
  * The check that stands between `obsrv uninstall` and someone's home directory.
@@ -35,6 +36,39 @@ export interface GuardOptions {
    * itself must lie outside the real home, or it is not a sandbox.
    */
   sandboxRoot?: string | undefined
+  /**
+   * Canonicalises a path: resolves symlinks and returns the filesystem's own
+   * case. Defaults to `fs.realpathSync.native`; injected by tests so their arms
+   * do not depend on one machine's layout.
+   */
+  realpath?: ((p: string) => string) | undefined
+}
+
+/**
+ * The filesystem's own spelling of a path, for a path that may not exist.
+ *
+ * `realpath` throws on an absent path, and an uninstaller's targets are absent
+ * exactly when it has already run. So the longest existing ancestor is
+ * canonicalised and the remainder re-joined — which is enough, because what
+ * matters here is which volume and which directory a path is *under*, and that
+ * is decided by the part that exists.
+ */
+function canonical(p: string, rp: (s: string) => string): string {
+  let head = p
+  const tail: string[] = []
+  for (;;) {
+    try {
+      const resolved = rp(head)
+      return tail.length === 0 ? resolved : join(resolved, ...tail)
+    } catch {
+      const parent = dirname(head)
+      // Nothing along the path exists: judge the literal path rather than
+      // silently treating an unresolvable one as safe.
+      if (parent === head) return p
+      tail.unshift(basename(head))
+      head = parent
+    }
+  }
 }
 
 export type GuardVerdict = { allow: true; path: string } | { allow: false; refuse: string }
@@ -59,7 +93,8 @@ function within(child: string, parent: string): boolean {
  * descending) rather than expect this to have caught it.
  */
 export function checkRemoval(target: string, options: GuardOptions = {}): GuardVerdict {
-  const home = options.realHome ?? realHomeDir()
+  const rp = options.realpath ?? realpathSync.native
+  const home = canonical(options.realHome ?? realHomeDir(), rp)
   const sandbox = options.sandboxRoot
 
   if (target.trim() === '') return { allow: false, refuse: 'refusing to remove an empty path.' }
@@ -70,13 +105,27 @@ export function checkRemoval(target: string, options: GuardOptions = {}): GuardV
     }
   }
 
-  // Resolved before anything is judged: a prefix test against an unresolved
-  // path passes `<sandbox>/../../Users/...`, which is the traversal that makes
-  // this whole guard worth having.
-  const path = resolve(target)
+  // Resolved AND canonicalised before anything is judged. `resolve` alone
+  // handles `<sandbox>/../../Users/...`; it does not handle the two mismatches
+  // Wren's cold read found, both of which let a path into the real home past a
+  // string prefix:
+  //   - case. A default APFS volume is case-insensitive, so
+  //     `/users/someone/…` IS the real home and does not start with
+  //     `/Users/someone/`. Measured on this machine, not reasoned.
+  //   - symlinks. A sandbox root that is a link into the home is outside it as
+  //     a string and inside it on disk.
+  // `realpath` closes both: it follows links and returns the filesystem's own
+  // case.
+  const path = canonical(resolve(target), rp)
 
-  if (depth(path) < 2) {
-    return { allow: false, refuse: `refusing to remove ${path}: nothing this shallow is an application's data directory.` }
+  // Both spellings, because canonicalising can make a shallow path look deep:
+  // `/tmp` is one segment and resolves to `/private/tmp`, which is two. Judging
+  // only the canonical form would let `obsrv uninstall /tmp` through.
+  const asked = resolve(target)
+  for (const p of [asked, path]) {
+    if (depth(p) < 2) {
+      return { allow: false, refuse: `refusing to remove ${p}: nothing this shallow is an application's data directory.` }
+    }
   }
 
   // The real home first, and whether or not a sandbox was declared — a sandbox
@@ -95,7 +144,7 @@ export function checkRemoval(target: string, options: GuardOptions = {}): GuardV
   }
 
   if (sandbox !== undefined) {
-    const root = resolve(sandbox)
+    const root = canonical(resolve(sandbox), rp)
     if (within(root, home) || within(home, root)) {
       return { allow: false, refuse: `refusing to use ${root} as a sandbox: it is inside the real home (${home}), so nothing removed under it would be sandboxed.` }
     }
