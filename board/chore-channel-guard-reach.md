@@ -1,6 +1,8 @@
 ---
 title: "The preload-channels guard sees only app.ts's IPC.x sends, so six channels could lose their handler unnoticed"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: chore
 order: 69
 ---
@@ -27,3 +29,13 @@ dragging a tab did nothing and no test noticed.
 - Count `subscribe: IPC.x` in a `FrameChannels` object, plus frameBus's default, as a handler.
 - Keep the "not vacuous" floor per file.
 - **Control:** rename one handler in each of the three shapes; each must go red.
+
+## Claimed by Henry 2026-09-17, routed by Wren
+
+Unit-level and desk-free, per the card's direction:
+- resolve `sync.ts`'s `satisfies typeof IPC.x` constants;
+- count `frameChannel(…, IPC.x)`'s subscribe argument as a send;
+- count `FrameChannels.subscribe` (including frameBus's default) as a handler.
+
+Control: rename one handler in each shape, and each must go red.
+
