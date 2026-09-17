@@ -65,6 +65,10 @@ test('a mirrored commit is reported and marked, not withheld', async () => {
   // before the comparison. A withheld commit still fails it.
   const reported = seen.map(s => s.url).filter((u, i, all) => i === 0 || u !== all[i - 1])
   expect(reported, `every commit: ${JSON.stringify(seen)}`).toEqual([REDIRECT, HAIRLINE])
+  // At most once per cause: the redirect, and the second address from each of
+  // the two. The collapse would also hide a regression that multiplied commits,
+  // a mirror committing the same address over and over (Wren's read of #213).
+  expect(seen.length, `every commit: ${JSON.stringify(seen)}`).toBeLessThanOrEqual(3)
   // The bus's own load is the bus's doing, which is what keeps it out of the
   // arrivals count behind "navigated after it loaded".
   expect(seen[0]).toEqual({ url: REDIRECT, mirrored: true })
