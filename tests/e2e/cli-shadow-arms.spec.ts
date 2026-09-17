@@ -78,38 +78,16 @@ test.describe('arm 1 — collection descends into open roots', () => {
 
   test('TWIN: lint finds the same hairline when it is in the light DOM', async () => {
     const m = await json(['lint', FLAT, '--preset', PRESET])
-    // The first probe run had this twin RED with 0, which made the lint arm's
-    // red worthless — it was about the fixture, not the boundary. The rule
-    // then had `height: 0`; lint.html's proven hairline has height 20px. The
-    // message carries the whole summary so the next red says what lint saw
-    // rather than only what it did not.
+    // Two probe runs had this twin RED with 0, which made the lint arm's red
+    // worthless — it was about the fixture, not the boundary. The rule was a
+    // 0.5px BORDER, and the hairline rule has a documented blind spot for
+    // borders: Chromium gives one a whole device pixel (cli-lint.spec.ts:55,
+    // which pins the findings to a 0.5px height and a 0.5px box-shadow and
+    // says div#hair "is not here"). An arm built on a border measures the
+    // blind spot, not the shadow boundary. The message carries the whole
+    // summary so a red says what lint saw rather than only what it did not —
+    // zeros across every rule is what made the blind spot findable.
     expect(m.summary.hairline, `lint summary on the flat page: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
-  })
-})
-
-// --- DIAGNOSTIC, temporary: why is the lint twin red? ------------------------
-// Two probe runs had the flat twin at 0 hairlines — first with the rule at
-// height 0, then at height 20px, with every count in the summary zero. So
-// height was not the cause. What is left: the preset (laptop-768 here,
-// 1080p-24 in cli-lint.spec), or something about this page (an overflow:hidden
-// app shell, a dark card). These three calls separate them in one run, each
-// varying exactly one thing against `lint.html`, which is KNOWN to yield a
-// hairline at 1080p-24. Removed once the cause is on the card.
-
-test.describe('DIAGNOSTIC — separating preset from page for the lint twin', () => {
-  test('lint.html at 1080p-24 — the known-green control', async () => {
-    const m = await json(['lint', fixture('lint.html'), '--preset', '1080p-24'])
-    expect(m.summary.hairline, `lint.html @1080p-24: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
-  })
-
-  test('lint.html at laptop-768 — same page, the arms\' preset', async () => {
-    const m = await json(['lint', fixture('lint.html'), '--preset', PRESET])
-    expect(m.summary.hairline, `lint.html @laptop-768: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
-  })
-
-  test('shadow-arms-flat.html at 1080p-24 — the twin page, cli-lint\'s preset', async () => {
-    const m = await json(['lint', FLAT, '--preset', '1080p-24'])
-    expect(m.summary.hairline, `flat @1080p-24: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
   })
 })
 
