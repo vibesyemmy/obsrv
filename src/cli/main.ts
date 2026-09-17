@@ -35,7 +35,16 @@ import { applyPanelProfile } from './panel'
 import { HEADLESS_WALK_BUDGET_MS, walkHeadless, type HeadlessWalkOutcome } from './walk'
 import { EMPTY_GRACE_MS, awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport, type AwaitContentOutcome } from '../shared/emptyDocument'
 import { shadowShareNote } from '../shared/shadowShare'
-import { Deadline, httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote, unansweredMeasureMessage } from '../shared/measureBudget'
+import {
+  cutLoadMeasureNote,
+  Deadline,
+  httpStatusNote,
+  landedElsewhereNote,
+  loadTimeoutMessage,
+  measureTimeoutNote,
+  navigatedAfterLoadNote,
+  unansweredMeasureMessage,
+} from '../shared/measureBudget'
 import { callChrome, findStuckChrome } from './stuckProbe'
 import { warningSink } from './warnings'
 import { walkCoverageNote, type WalkBlocked } from '../shared/walkCoverage'
@@ -225,40 +234,6 @@ function watchFailures(target: TargetSource): { failed: () => Error | null; load
 }
 
 /**
- * Loads the page within the budget, then sits out `--wait`. `load()` resolves
- * on did-finish-load but a dead server can sit in connect limbo far longer
- * than the render budget, so the load is raced; the wait is polled, not a
- * single sleep, because a renderer crash mid-wait must fail now, not after
- * the wait plus a doomed capture.
- */
-/**
- * The sentence for a load that outran the budget. Under a throttle a slow
- * load is the point, and bbc.com under budget-phone settles at 70 s: the old
- * "load did not finish within 30000 ms" named neither the throttle nor the
- * flag that would have let it finish.
- */
-function loadTimeoutMessage(timeoutMs: number, throttle: string | null, url: string): string {
-  return (
-    `load did not finish within ${timeoutMs} ms` +
-    `${throttle !== null ? ` under --throttle ${throttle} (a slow load is what a throttle is for)` : ''}: ${url} — raise --timeout for the full load`
-  )
-}
-
-/**
- * The sentence a measurement carries for a load the budget cut: the page was
- * measured as it stood. apnews.com behind its consent wall never fires
- * `load` — a partner's beacon never answers — at 30 s or at 60 s, and the
- * old refusal ("raise --timeout for the full load") could not help; the DOM
- * was there to measure, as the snap's capture already showed.
- */
-function cutLoadMeasureNote(timeoutMs: number, throttle: string | null, url: string): string {
-  return (
-    `load did not finish within ${timeoutMs} ms${throttle !== null ? ` under --throttle ${throttle}` : ''}: ${url} — measured the page as it stood; ` +
-    `a page still arriving shows more with a longer --timeout, a page whose load never completes (a beacon that never answers) does not`
-  )
-}
-
-/**
  * After a load the budget cut short, how long the capture gives the page to
  * go quiet before taking the frame as it stands. Short: the budget is spent,
  * and the frame is what a user on that connection was looking at.
@@ -304,6 +279,13 @@ async function throttleForCommand(target: TargetSource, asked: string | null): P
   }
 }
 
+/**
+ * Loads the page within the budget, then sits out `--wait`. `load()` resolves
+ * on did-finish-load but a dead server can sit in connect limbo far longer
+ * than the render budget, so the load is raced; the wait is polled, not a
+ * single sleep, because a renderer crash mid-wait must fail now, not after
+ * the wait plus a doomed capture.
+ */
 async function loadWithin(
   target: TargetSource,
   url: string,
