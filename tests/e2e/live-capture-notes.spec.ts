@@ -257,7 +257,7 @@ test('a raster capture while the pane is resized throughout says the page was st
   test.setTimeout(120_000)
   const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
   const STEP_PAUSE_MS = 700
-  const MAX_TRIES = 3
+  const MAX_TRIES = 5
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
   const before = (await call('status')).presetId as string
@@ -306,9 +306,26 @@ test('a raster capture while the pane is resized throughout says the page was st
       // cycle it is measuring, and which `cliCapture.test.ts` now pins by
       // construction instead.
       //
+      // **`resizing` is allowed here since `#314`, and this loop is the reason
+      // that change needed a second look.** `#314` made a capture refuse to
+      // settle while the frame is not the size the source is heading for, and
+      // answer `resizing` at the budget if it never gets there. On a pane
+      // cycled for the whole 8 s that is sometimes the true answer — so the
+      // sentence THIS test exists to pin is no longer the only outcome of its
+      // own lever. Measured: it failed both tries on run `35264983731`
+      // (`label=resizing`, 720x1600, 15 applies) while passing in four other
+      // runs of the same code.
+      //
+      // The measurement in the header above — 12 of 12 `timeout` on probe
+      // `35217795705` — was taken BEFORE `#314` and no longer describes this
+      // lever. The post-`#314` rate is unmeasured, which is why `MAX_TRIES`
+      // went to 5: three tries was sized against a 12-of-12 rate that no
+      // longer holds, and the miss chance cannot be stated until someone
+      // measures the new one.
+      //
       // Anything else on a pane that never stopped changing size (`animating`,
       // `blank`) is a finding, not a tolerance to widen.
-      const stray = reply.unsettledReason === 'uncovered' || reply.settled === true
+      const stray = reply.unsettledReason === 'uncovered' || reply.unsettledReason === 'resizing' || reply.settled === true
       expect(stray, margin).toBe(true)
     }
   } finally {
