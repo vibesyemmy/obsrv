@@ -1778,20 +1778,47 @@ export function registerIpc(ctx: AppContext): () => void {
       const release = tabs.holdPainting()
       try {
         await awaitViewportStable()
-        const frame = await captureQuiescent(s.target, { timeoutMs: RASTER_CAPTURE_MS })
+        // The capture's own sentence for `uncovered` is the only one that says
+        // part of the PNG is transparent, and it names this frame's size and
+        // the region. Kept from `onWarn`, keyed on the reason, so the raster
+        // says what the CLI says rather than a copy of it.
+        let uncoveredSaid: string | undefined
+        const frame = await captureQuiescent(s.target, {
+          timeoutMs: RASTER_CAPTURE_MS,
+          onWarn: (message, reason) => {
+            if (reason === 'uncovered') uncoveredSaid = message
+          },
+        })
         const image = nativeImage.createFromBitmap(Buffer.from(frame.bgra.buffer, frame.bgra.byteOffset, frame.bgra.byteLength), {
           width: frame.width,
           height: frame.height,
         })
         const warnings: string[] = []
         if (!frame.settled) {
-          warnings.push(
-            frame.unsettledReason === 'animating'
-              ? 'the page keeps painting (animation or video); this is one frame of it'
-              : frame.unsettledReason === 'blank'
-                ? BLANK_LIVE_WARNING
-                : 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
-          )
+          const reason = frame.unsettledReason
+          switch (reason) {
+            case 'animating':
+              warnings.push('the page keeps painting (animation or video); this is one frame of it')
+              break
+            case 'blank':
+              warnings.push(BLANK_LIVE_WARNING)
+              break
+            case 'uncovered':
+              // `captureQuiescent` warns on the line before it returns this
+              // reason (pinned in cliCapture.test.ts), so the sentence is there.
+              if (uncoveredSaid !== undefined) warnings.push(uncoveredSaid)
+              break
+            case 'timeout':
+            case 'loading':
+            case undefined:
+              warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame')
+              break
+            default: {
+              // A new reason does not compile until it is routed above.
+              const unrouted: never = reason
+              void unrouted
+            }
+          }
         }
         if (s.onionSkin > 0) warnings.push("the raster is the target's own frame; the onion skin is not blended into it")
         return {

@@ -69,7 +69,7 @@ test.afterAll(async () => {
 })
 
 test('a raster capture with the onion skin on says the skin is not in it', async () => {
-  // `ipc.ts:1796`. The easiest sentence in the cluster: no race and no
+  // `ipc.ts:1823`. The easiest sentence in the cluster: no race and no
   // animation — the raster is the target's own frame, so a skin blended in the
   // renderer cannot be in it, and the reply says so rather than letting a
   // caller compare a skinned screenshot with an unskinned raster.
@@ -86,7 +86,7 @@ test('a raster capture with the onion skin on says the skin is not in it', async
 })
 
 test('a raster capture of a page that keeps painting says it is one frame of it', async () => {
-  // `ipc.ts:1790`, the raster path's wording for a page that never settles.
+  // `ipc.ts:1801`, the raster path's wording for a page that never settles.
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
 
@@ -145,7 +145,7 @@ test('a window capture of a page still painting when the budget runs out says so
 })
 
 test('a raster capture while the pane is resized throughout says the page was still painting when the budget ran out (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
-  // `ipc.ts:1793`, the raster path's wording for a capture the budget cut
+  // `ipc.ts:1814`, the raster path's wording for a capture the budget cut
   // short. A page cannot reach it alone. The raster loop leaves early for
   // steady painting, and it goes quiet otherwise. The only thing that restarts
   // its evidence is a frame of a new size, so the pane must keep changing size
@@ -229,6 +229,79 @@ test('a raster capture while the pane is resized throughout says the page was st
   expect(warningsOf(shot!), tries.join(' | ')).toContain(
     'the page was still painting when the capture budget ran out; the PNG may show a transitional frame',
   )
+})
+
+test('a raster capture whose budget runs out before a resized frame is painted says those pixels are transparent (CI, or locally with OBSRV_E2E_FRONT=1)', async () => {
+  // `bug-live-raster-uncovered-said-as-painting`. `uncovered` means the budget
+  // ran out before every pixel of the frame had painted once since its last
+  // size change. Those pixels are transparent BGRA, and an agent reading the
+  // PNG can take them for a black or empty band of the page. The reply said
+  // "still painting" there, which is about motion. It now carries the
+  // capture's own sentence, the one the CLI prints.
+  //
+  // THE LEVER is the test above without its pause: back to back, the budget
+  // keeps landing between a resize and that size's first full frame.
+  test.skip(
+    !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
+    'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
+  )
+  test.setTimeout(150_000)
+  const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
+  const MAX_TRIES = 4
+  const PAINTING = 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame'
+  await call('setOnionSkin', { onionSkin: 0 })
+  await call('navigate', { url: ANIMATED })
+  const before = (await call('status')).presetId as string
+
+  const tries: string[] = []
+  let shot: Record<string, unknown> | undefined
+  try {
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      let cycling = true
+      let applied = 0
+      const spin = (async () => {
+        for (let i = 0; cycling; i++) {
+          const r = await call('setPreset', { id: CYCLE[i % CYCLE.length]! })
+          if (r.ok === true) applied++
+        }
+      })()
+      await new Promise(r => setTimeout(r, 400))
+      const started = Date.now()
+      const reply = await call('captureRaster')
+      const finished = Date.now()
+      cycling = false
+      await spin
+
+      const margin = `try ${attempt}: settled=${String(reply.settled)} label=${String(reply.unsettledReason)} applied=${applied} capture=${finished - started}ms size=${String(reply.width)}x${String(reply.height)} warnings=${JSON.stringify(warningsOf(reply))}`
+      tries.push(margin)
+      console.log(`raster under a back-to-back preset cycle: ${margin}`)
+      // The state first: a stalled cycle would leave nothing below measuring
+      // what its name says.
+      expect(applied, margin).toBeGreaterThan(20)
+      if (reply.unsettledReason === 'uncovered') {
+        shot = reply
+        break
+      }
+      // The race's other side is `timeout`, the test above's sentence, and the
+      // rarer settled capture has its own card
+      // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
+      // that never stopped changing size is a finding.
+      expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
+    }
+  } finally {
+    await call('setPreset', { id: before })
+  }
+  test.info().annotations.push({ type: 'raster verdicts', description: tries.join(' | ') })
+  expect(shot, `no capture came back uncovered in ${MAX_TRIES} tries: ${tries.join(' | ')}`).toBeDefined()
+  const margin = tries.join(' | ')
+  expect(shot!.settled, margin).toBe(false)
+  const warnings = warningsOf(shot!)
+  // The sentence names its own frame: this PNG's size, not one the cycle
+  // passed through on the way.
+  const own = new RegExp(`^\\d+\\.\\d% of the ${String(shot!.width)}x${String(shot!.height)} frame never painted within \\d+ ms`)
+  expect(warnings.filter(w => own.test(w)), margin).toHaveLength(1)
+  expect(warnings.find(w => own.test(w)), margin).toContain('those pixels are transparent, not page content')
+  expect(warnings, margin).not.toContain(PAINTING)
 })
 
 test('a scroll the page cannot answer, because it holds its main thread, says the offset could not be confirmed', async () => {
