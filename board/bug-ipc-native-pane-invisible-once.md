@@ -1,22 +1,23 @@
 ---
-title: "Twice on main, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
-column: backlog
+title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 order: 60
 ---
 
-**Waiting on a recurrence:** `ipc.spec.ts:31` (*reports the URL the native pane navigated to*) timing
-out at 30 s on **both tries**, with `ipc.spec.ts:134` failing at `:167` on
-`expect(native.isVisible()).toBe(true)` and `ipc.spec.ts:173` failing at `:191` on
-`expect(after.visible).toBe(true)` — all three in the same run, each on both tries.
+ASSIGNED TO HENRY 2026-09-17 by Opeyemi, on the third sighting. **No longer waiting: it recurred, on
+`main` itself, while this card sat as a recurrence-waiter.** `ipc.spec.ts:31` (*reports the URL the
+native pane navigated to*) timing out at 30 s on **both tries**, with `ipc.spec.ts:134` failing at
+`:167` on `expect(native.isVisible()).toBe(true)` and `ipc.spec.ts:173` failing at `:191` on
+`expect(after.visible).toBe(true)` — all three in the same run, each on both tries, three times now.
 
-Two sightings, twelve and a half hours apart, and **no cause**. Nothing can be read from the code
-until it happens again with something new in it; what the card asks a reader to do at the next
-sighting is in "Where to look first" below, and the two runs to compare against are
-`35145262453` (attempt 1) and `35201648560` (attempt 1).
+Three sightings — 2026-09-16 20:13Z, 2026-09-17 08:48Z, 2026-09-17 20:10Z — and **still no cause**.
+The three runs to compare: `35145262453`, `35201648560`, `35269203926` (all attempt 1). "Where to
+look first" below is unchanged and now has three runs behind it rather than one.
 
-FOUND BY HENRY 2026-09-16, reading why main's CI went red at `5e426fb` (#139's merge). **Unowned.
-Observed once, cause unknown.**
+FOUND BY HENRY 2026-09-16, reading why main's CI went red at `5e426fb` (#139's merge).
 
 ## Observed, in run [`35145262453`](https://github.com/vibesyemmy/obsrv/actions/runs/35145262453), attempt 1
 
@@ -153,3 +154,63 @@ or about age, and it does not implicate or clear `#129` any more than the earlie
 **So this is a recurrence-waiter now**, under `c5`'s rule for cards that wait on an unforceable
 event: Backlog, and the body opens with the exact failure text so the next sweep's grep finds it.
 Nothing here needs doing until it fires again.
+
+## THE THIRD SIGHTING, 2026-09-17 by Wren — run [`35269203926`](https://github.com/vibesyemmy/obsrv/actions/runs/35269203926), attempt 1
+
+Found by the routine sweep, on main's own suite for `5f35046` (#325's merge, the first-launch
+diagonal hint) — a change to renderer settings UI, nothing IPC or native-pane related. Read against
+the raw log before posting, not inferred from a `conclusion`.
+
+**Line for line, the same as both earlier sightings:**
+
+    ipc.spec.ts:31   reports the URL the native pane navigated to   both tries
+                     first line: "Test timeout of 30000ms exceeded."
+    ipc.spec.ts:134  image mode hides the native pane …              both tries
+                     :167  expect(native.isVisible()).toBe(true)   → false
+    ipc.spec.ts:173  ignores malformed payloads                      both tries
+                     :191  expect(after.visible).toBe(true)        → false
+
+Run started 20:10:23Z. Nothing else in the run failed.
+
+**What the third sighting changes:**
+- **Every suspect so far is cleared by distance, not just this one's.** `#129` (the first sighting's
+  suspect) is two days and dozens of merges behind this run; #325 touches no code this card's earlier
+  readings named. Three sightings, three unrelated heads, no shared suspect across all three — the
+  common factor, if there is one, is not in any single PR.
+- **The gap from the second sighting is shorter than the first-to-second gap:** 08:48Z to 20:10Z is
+  **~11h22m**, against ~12h30m before. Roughly one a day, not slowing and not obviously accelerating
+  from three points.
+- **Still no cause, and still the same tell.** `:134`/`:173` failed on their retries again — fresh
+  workers, no inherited state — so all three sightings point at the native pane on the runner at that
+  moment, not at any one test's or PR's state.
+
+**Card reassigned rather than left as a waiter:** three sightings in **24 hours almost exactly**
+(20:13Z to 20:10Z, a day apart) is enough to stop treating this as too rare to act on. Moved to
+Doing, owned by Henry, on Opeyemi's word. The sweep's recurrence-watch grep should no longer match
+this card's opening line — it is not waiting anymore.
+
+### The same commit, re-run: green — so it is the runner, not the tree
+
+**Henry re-ran the failed job** (`gh run rerun --failed`) on the identical commit `5f35046`, before
+merging anything else and before accepting the reading above. **Attempt 2: success, zero `✘`, zero
+flaky, and all three tests ✓** — `:31` in 82 ms where attempt 1 spent its whole 30 s.
+
+**That is the strongest evidence this card has, and it is worth being precise about what it rules
+out.** The three tests failed on **both tries** in attempt 1, which by the team's usual reading
+(`ci-logs-and-local-e2e-traps`) suggests a deterministic failure rather than a flake — a retry runs
+the test alone in a fresh worker, so surviving that normally means the test really is broken. **It
+was not.** The same code, on the same commit, passed completely one attempt later.
+
+So this is the second shape that memory names: **a condition that outlives the retry but not the
+job** — the runner, the machine, the window server, something outside the tree. It is why
+"failed both tries" must not be read as "deterministic" without a second attempt to check it against,
+and this run is now the clearest example of that on record here.
+
+**It also clears `#325` specifically.** All three tests passed on **both parents** of that merge
+(`f57477d`, run `35266612365`; `375d4a8`, run `35264902655`) and on the merge itself once re-run.
+Nothing in the first-launch diagonal hint is implicated, and the revert that was being held over it is
+not needed.
+
+**What it does not tell us:** what the condition is. Three sightings, three heads, and now one
+demonstration that the tree is not the variable. The next thing worth having is what the *runner* was
+doing — which is the "where to look first" section's question, now with a sharper target than before.
