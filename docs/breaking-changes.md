@@ -94,8 +94,11 @@ now get `false` for a page that arrived and kept painting — a carousel, a
 video, a spinner. The capture is still returned, and `unsettledReason` says
 why.
 
-**With an app older than 0.61.0** there is no paint-quiet verdict to pass
-through, so `settled` keeps the old meaning, and a warning says so: *this app
+**The meaning follows the server, not the app.** The app's captures have
+returned their paint-quiet verdict since 0.34.0 (`4756ba9`), so a 0.61.0
+server driving any app from 0.34.0 on, 0.60.0 included, answers the new
+meaning. **Only with an app older than 0.34.0** is there no verdict to pass
+through; then `settled` keeps the old meaning, and a warning says so: *this app
 is older than the capture's settle verdict, so `settled` reports whether the
 navigation was confirmed rather than whether the page went paint-quiet; update
 the app for the paint-quiet answer.*
@@ -338,11 +341,18 @@ this release says.
 `snap`, `inspect`, `audit`, `lint` and `report` given `--throttle` answered with
 that throttle's id even when Chromium refused it, so `throttle: "slow-4g"` sat
 beside a warning saying slow-4g was not applied, over a page that loaded
-unthrottled. The app already answered with the conditions in force (`"none"`,
-with `applied: false`), and every tool schema already described the field that
-way: "the conditions applied", "the conditions the page loaded under". The
-field meant one thing on one surface and another on the other
-(`bug-throttle-field-means-two-things`).
+unthrottled. Every tool schema already described the field as "the conditions
+applied", "the conditions the page loaded under". On `main` the app came to
+answer that way first — `"none"`, with `applied: false` (#81, `8fff360`) — so
+for a while the field meant one thing on one surface and another on the other
+(`bug-throttle-field-means-two-things`). **No released app answered that way:**
+0.60.0 logged a refused throttle and confirmed the one asked for, so its status
+named a throttle that never applied. In 0.61.0 both surfaces answer with the
+conditions in force.
+
+*Corrected before release:* this entry first said the app already answered with
+the conditions in force. That was true of `main`, not of any release; found by
+the fact-check of the 0.61.0 notes.
 
 Now the CLI does what the app does: a refused throttle puts back the conditions
 the target had, and `throttle` names them. That's `"none"` on a fresh render. A
