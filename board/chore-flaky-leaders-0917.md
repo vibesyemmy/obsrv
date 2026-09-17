@@ -162,3 +162,50 @@ between the keypress and the panes, about 4.4% of the time, and only after a suc
 
 **Not yet measured:** whether the renderer's submit handler runs at all, and whether a `navigate`
 reaches main. That is the next step and it is two log lines.
+
+## SHAPE 1 — THE CAUSE, and my own "refuted" was wrong
+
+**`Toolbar.go()` overwrites what has been typed when the navigation it started resolves:**
+
+```ts
+const go = async (url: string): Promise<void> => {
+  setError(null)
+  const applied = await window.obsrv.navigate(url)
+  setUrl(applied)
+  setDraft(applied)     // ← lands whenever the promise settles
+}
+const submit = (e: FormEvent): void => { …; void go(draft) }   // submits DRAFT, not the field
+```
+
+**Measured, on two separate misses, with a baseline:**
+
+    the native pane was asked to load: ["about:blank ok", "hairline.html ok", "hairline.html ok"]
+    the field held at submit: hairline.html
+    panes now: native=hairline.html loading=false  target=hairline.html loading=false
+
+The bad host is **never asked for**. The previous navigation's `setDraft(applied)` lands between the
+typing and the Enter, so the submit re-sends the address already showing — a no-op. Nothing loads,
+nothing fails, no error state. **And that is why the control arm is clean:** in bad → bad the
+overwrite writes the *same* bad address, so the next submit is still the bad address.
+
+### The correction: I refuted this hypothesis once, on an insufficient measurement
+
+Earlier I recorded "a clobbered URL field: refuted", because the field held the bad address at the
+moment I read it. **I measured the DOM value, and the submit uses React state (`draft`)** — and the
+overwrite can land between the read and the keypress. A later miss showed the field itself holding
+`hairline.html` at submit, which is the same defect arriving a few milliseconds earlier. **The
+hypothesis was right and my refutation was too weak to see it.**
+
+### One instrument caught itself, which is why the rest is trustworthy
+
+Wrapping `window.obsrv.navigate` to log what the handler sends **did nothing** — `contextBridge`
+freezes that object, so the assignment failed silently. The tell was that **no `navigate() called`
+line appeared for the GOOD navigation either**, which must always be there. The replacement uses
+`NativePane.loadTrace()` from #129, which has that baseline in every sample above.
+
+### Scope
+
+`panes:178` ("a navigation elsewhere does not clobber a URL being typed") guards the neighbouring
+case — an *incoming* navigation while typing. This is the **outgoing** one: the answer to a
+navigation *we* started. Whether the fix is to drop `setDraft` when the field has changed since, or
+to keep it and accept it, is a product decision and belongs to whoever takes the fix.
