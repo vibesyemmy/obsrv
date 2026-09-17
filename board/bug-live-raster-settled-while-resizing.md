@@ -7,8 +7,9 @@ order: 86
 ---
 
 FOUND BY HENRY 2026-09-17, in a control run for row 9 of `chore-live-app-race-sentences`
-(`35218471058`, repeat 1). Wren predicted the shape before the run: a pause in the cycle could let
-the capture settle.
+(`35218471058`, repeat 1). ~~Wren predicted the shape before the run: a pause in the cycle could let
+the capture settle.~~ **Struck at Wren's request, 2026-09-17:** a back-to-back cycle with no pause
+settled too. See the second sighting below.
 
 **What was seen.** A `captureRaster` taken while the pane was cycled through eight presets, pausing
 700 ms after each apply, came back after 3.8 s:
@@ -27,9 +28,10 @@ verdict for exactly this (`settleTarget` → `resizing`). The raster path has no
 `settled: true` about a pane that never stopped changing size, and nothing tells the reader the PNG
 may be of the previous size.
 
-**How often:** 1 in 28 paused-cycle captures across `35217795705` and `35218471058`, and 0 in 13
-back-to-back captures. So far it has been seen only under a test's preset cycle. In the field, that
-takes a user switching presets while an agent's raster capture runs.
+**How often:** 1 in 28 paused-cycle captures across `35217795705` and `35218471058`, and ~~0 in 13~~
+**1 in 29** back-to-back captures (the 13, plus the 16 of `35229152084`). So far it has been seen
+only under a test's preset cycle. In the field, that takes a user switching presets while an agent's
+raster capture runs.
 
 **Acceptance, each with a control:**
 - measure first: record the frames `captureQuiescent` sees around a preset change during a raster
@@ -58,6 +60,11 @@ not part of it.
 **Moved to Next.** Two sightings, two cycle shapes, and the answer is a silent wrong one: `settled:
 true` says the capture waited for the page to stop, about a pane that was changing size throughout.
 A rate is no longer the open question; the mechanism is.
+
+**The capture itself, for whoever measures it** (Kenya, from the probe's log): try 2 of 8, 1920x1080,
+158 applies, and the reply came back after 10689 ms. The other seven tries in that arm took
+11.5–12.3 s and came back `timeout` or `uncovered`. The dsf-1-only arm in the same run, 8 captures,
+did not settle once.
 
 **The measurement this card now asks for, unchanged in shape but wider:** record what
 `captureQuiescent` sees around a preset change during a raster capture — frame sizes, the gap since

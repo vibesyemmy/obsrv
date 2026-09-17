@@ -239,15 +239,32 @@ test('a raster capture whose budget runs out before a resized frame is painted s
   // "still painting" there, which is about motion. It now carries the
   // capture's own sentence, the one the CLI prints.
   //
-  // THE LEVER is the test above without its pause: back to back, the budget
-  // keeps landing between a resize and that size's first full frame.
+  // The WORDING is owned by `tests/unit/rasterWarnings.test.ts`, which goes
+  // through the real `captureQuiescent` and needs no race. This test only has
+  // to show the wiring fires once, on a real frame, and names that PNG.
+  //
+  // THE LEVER IS A RACE, AND THE BOUND WAS CHOSEN, NOT ASSUMED. No
+  // deterministic lever was found: one preset change during the capture, with
+  // a small or a large spinner, came back `animating` 16 of 16 times (probe
+  // 35229835046), because a single resize gets fully painted within two
+  // seconds. Back to back, the budget sometimes lands between a resize and that
+  // size's first full frame. Measured rates for `uncovered`:
+  //   - this cycle (dsf-1 presets only), on this code: 4 of 8 (35229152084);
+  //   - all eight presets, same run: 3 of 8, and one `settled: true`;
+  //   - all eight presets on earlier heads: 1 of 6, 3 of 3, 4 of 4.
+  // dsf-1 only, because an apply that changes deviceScaleFactor takes ~150 ms
+  // against ~30 ms, and the budget tends to run out covered in that dwell.
+  // Chance that 8 tries all miss: 0.4% at 4 of 8, 2.3% at 3 of 8, 23% at the
+  // worst head's 1 of 6. A red run here that says "no capture came back
+  // uncovered" is that miss. Read the tries it prints before calling it a
+  // product failure.
   test.skip(
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
   )
-  test.setTimeout(150_000)
-  const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
-  const MAX_TRIES = 4
+  test.setTimeout(180_000)
+  const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', '1080p-24']
+  const MAX_TRIES = 8
   const PAINTING = 'the page was still painting when the capture budget ran out; the PNG may show a transitional frame'
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
