@@ -167,27 +167,99 @@ They were proposed in room #473, and they are **Henry's to veto in review**.
 
 ### Sub-decision 1: the set/untouched bit records WHICH display the diagonal was set for
 
-**A new persisted field, `hostDiagonalFor: { physicalWidth, physicalHeight } | null`, not a boolean.**
-- `null` means untouched.
-- Committing a diagonal in Settings, or pressing the hint's *"27″ is right"*, records the current
-  display's physical pixels. The confirm button exists so a real 27″ user can end the hint without
-  changing the number.
-- **Old files (no key):** a value other than 27 counts as set, recorded against the display the window
-  opens on. Exactly 27 counts as untouched, because the file cannot say otherwise. **The cost, stated:**
-  a genuine 27″ user on an old file sees the hint once, and one click ends it.
-- A boolean would answer only "has anyone set this", and sub-decision 2 needs "set for which screen".
-  One field answers both.
+**One persisted field answers both "untouched?" and "wrong screen?".** A boolean would answer only the
+first. Its shape depends on sub-decision 2, below.
 
-### Sub-decision 2: on a laptop plugged into an external monitor, the hint names the mismatch
+- **Answering and dismissing are the same act.** The hint has no bare ×. It has two actions, and both
+  answer the question: *"27″ is right"* records the display in one click without changing the number,
+  and *"Set size"* opens Settings on this display. So nobody is left with a hint that cannot be answered,
+  and a real 27″ user sees it once. **Wren's point:** if dismissing did *not* write the field, a
+  genuine 27″ user would see it on every launch, which is worse than what it warns about.
+- **Old files (no key):** exactly 27 counts as untouched. A value other than 27 counts as set, and **the
+  screen it was set for is unknown. That is an OPEN question for Henry, below.** Exactly 27 counts as untouched, because `saveSettings` writes the whole object, so the file
+  cannot say otherwise. **The cost, stated:** a genuine 27″ user on an old file sees the hint once, and one
+  click ends it.
+- **The wire shape follows `parseSettings`' convention exactly** (`shared/ipcPayloads.ts`): the key is
+  optional, its absence means the pre-feature shape and the comment says so, and an out-of-band value is
+  refused rather than coerced. `loadSettings` stays the lenient side for a hand-edited file. This is the
+  lesson 0.61.0 paid for with `colorPainted`: a key an older writer never wrote has to be optional, with
+  its absence given a stated meaning. `tests/e2e/ipc.spec.ts:197` pins the exact settings key set and
+  changes with it.
 
-When the window's display does not match `hostDiagonalFor`, the hint says so instead of going silent,
-for example: *"Screen size was set on a 2560×1600 display; this one is 3840×2160, so this render assumes
-13.3″. [Set size for this screen]"*.
-- **One number cannot be right for two screens**, so moving between them re-shows the hint. That is
-  the honest behaviour. Remembering a diagonal per display would be a feature, not this card; it is
-  noted for Opeyemi if the back-and-forth grates.
-- **A limit, stated:** two displays with the same physical resolution but different sizes cannot be told
-  apart.
+### Sub-decision 2: a laptop on an external monitor. A CHOICE, recommended below, for Henry's call before code
+
+**DECIDED 2026-09-17 by Henry (engineering): build (a) now; (b) goes to Opeyemi.** Henry is putting (b) to
+Opeyemi in his own session. His reason: (b) adds a store of screens and makes the magnification **change
+by itself** when a window moves. A user experiences that without asking for it, and this card had
+already drawn the line ("remembering a diagonal per display would be a feature"). He won't widen that
+quietly. **And (a) is worth shipping on its own:** its hint is not a nag about a preference, it is a true
+statement that *this render is wrong for this screen*. A docking user seeing it at every switch is the
+tool being honest about a number that cannot fit two monitors.
+
+**The build writes the key so (b) is additive, not a migration.** The field is a list from the start,
+`hostDiagonalSetFor: { physicalWidth, physicalHeight, inches? }[]`. Under (a) it holds at most one entry
+with no `inches`, and `hostDiagonalInches` stays the value. The reader accepts up to 8 entries with an
+optional `inches` from day one. So if Opeyemi says yes to (b), the change is the lookup and the apply,
+not the file format again.
+
+**Why this reopens what #311 approved.** Henry approved the single-field version (now (a)) in #311. The
+table below was pushed to #311's branch after it merged, so it never reached main, and it came from
+Wren's read of what a single field costs someone who docks daily. It is here for his call, not assumed.
+
+The app already knows when the window moves to a different display (`ipc.ts:864-879`). What it does
+with that is a choice, and it changes the field's shape:
+
+| | **(a) one diagonal, the hint names the mismatch** | **(b) one diagonal per display (recommended)** |
+| --- | --- | --- |
+| field | `hostDiagonalFor: { physicalWidth, physicalHeight } \| null` | `hostDiagonals: { physicalWidth, physicalHeight, inches }[]`, bounded to the most recent 8 displays |
+| someone who docks daily | asked again at **every** switch, and the render **is** wrong after every switch, because one number cannot fit both screens | asked **once per display**, and after that each screen renders at its own size |
+| what the hint's silence means | "the screen the diagonal was set for", which is not "this render is right" | **"this render is at true size"** |
+| a bound on the nag | only by hiding it, which makes the silence lie | not needed: the hint stops because the answer is right |
+
+**Recommendation: (b).** Bounding (a) (once per display, or up to N) would leave a render that is wrong
+with nothing saying so, and that is the silence this card exists to remove. (b) is the only shape where
+the hint going quiet is true. The Settings section is already titled *"This display"*, so the UI already
+describes the diagonal as a property of a screen. `hostDiagonalInches` stays as the value for a display
+not yet in the list, so the wire shape older code reads is unchanged.
+
+**What (b) changes beyond a hint, stated so it is chosen rather than slipped in:** moving the window to a
+known display changes the magnification automatically (`calibratedScale` reads the entry for the current
+display). That is a behaviour change to the diagonal setting, not only a new chip. If Henry judges it
+Opeyemi's call rather than engineering's, it goes to Opeyemi, and (a) is the fallback, with its costs
+above.
+
+**A limit either way:** two displays with the same physical resolution but different sizes cannot be told
+apart.
+
+**Electron's display `id` was considered and left out** (Wren raised it). It tells same-resolution displays
+apart **within** a session, but it is not promised stable across restarts, which is the mirror image of
+the resolution key. Neither way of combining them earns its place:
+- **"A match on either counts"** does not close the gap. A second same-resolution display still matches
+  on resolution, so it is still read as the display the size was set for.
+- **"The id first, then resolution"** closes it within a session. But after a restart a recorded id can
+  belong to a different screen, and then the *right* screen reads as wrong, which is the nag this card
+  prevents, arriving by reboot.
+
+So the key stays physical resolution, with the limit stated. If same-resolution pairs turn out to matter,
+the answer is something stable per monitor (EDID or a serial), not the session id.
+
+### OPEN for Henry: a legacy non-default diagonal, adopted silently or asked once
+
+An old file with, say, 24″ says the user calibrated, but not for which screen. Two rules:
+
+| | **silent adoption** (Henry, #311 review) | **an `unknown` state, asked once** (Wren) |
+| --- | --- | --- |
+| what happens | the value is recorded for the display the window first opens on, silently | the value is kept, marked as set for an unknown screen, and the chip reads *"24″ was set before Obsrv recorded which screen it was for. Right for this one?"*, one click to confirm |
+| right screen | no hint, correct | one click, then correct |
+| **wrong screen** (24″ set for a desktop monitor, opened on a laptop) | **no hint, and the render is wrong by exactly the ratio this card is about** | the question shows, and the user corrects it |
+| who pays | nobody | everyone who calibrated before this build, once |
+
+**Silent adoption's silence fits two opposite facts** ("right screen" and "wrong screen"), which is the
+defect shape this card was filed for. Henry's review said that assuming the screen in front of the user
+"costs nothing if right and one hint if wrong". But adoption marks that screen as set, so when it is
+wrong there is **no** hint. **Recommendation: the `unknown` state**, at the cost of one click for users
+who had already calibrated. Under (b) it resolves on the first confirmation and never comes back. The
+field carries it as a marker on the list, so (b) stays additive.
 
 ### Placement: a footer chip, not the empty state
 
@@ -197,11 +269,16 @@ detail for the build.
 
 ### Acceptance, each with a control
 
-- the hint is present with the diagonal untouched, and absent once set on this display. **Control:** a
-  test that forces `hostDiagonalFor` to match reds if the hint still shows;
-- *"27″ is right"* records the display without changing the number;
-- a display that does not match `hostDiagonalFor` shows the mismatch wording, with both resolutions named;
+- **(a) is chosen (Henry).** No code on the legacy rule until Henry has answered the open question above;
+- the hint is present with the diagonal untouched for this display, and absent once answered.
+  **Control:** a test that forces the field to match reds if the hint still shows;
+- *"27″ is right"* records the display without changing the number, and it is the hint's only dismissal;
+- under (b), moving to a known display renders at that display's diagonal, and an unknown display shows
+  the hint. Under (a), a mismatched display shows the wording with both resolutions named;
 - the migration: an old file with 27 counts as untouched, and an old file with 13.3 counts as set. Unit tests on
   `loadSettings` and `parseSettings`;
+- **an old file with a non-default diagonal never gets the mismatch wording for a screen nobody recorded**
+  (Henry, #311 review). It gets either silent adoption or the one-click `unknown` question, per Henry's
+  answer above;
 - desk-safe tests only: renderer state and a `hostChanged` push, no window fronting.
 
