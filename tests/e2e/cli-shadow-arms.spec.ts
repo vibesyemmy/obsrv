@@ -87,6 +87,32 @@ test.describe('arm 1 — collection descends into open roots', () => {
   })
 })
 
+// --- DIAGNOSTIC, temporary: why is the lint twin red? ------------------------
+// Two probe runs had the flat twin at 0 hairlines — first with the rule at
+// height 0, then at height 20px, with every count in the summary zero. So
+// height was not the cause. What is left: the preset (laptop-768 here,
+// 1080p-24 in cli-lint.spec), or something about this page (an overflow:hidden
+// app shell, a dark card). These three calls separate them in one run, each
+// varying exactly one thing against `lint.html`, which is KNOWN to yield a
+// hairline at 1080p-24. Removed once the cause is on the card.
+
+test.describe('DIAGNOSTIC — separating preset from page for the lint twin', () => {
+  test('lint.html at 1080p-24 — the known-green control', async () => {
+    const m = await json(['lint', fixture('lint.html'), '--preset', '1080p-24'])
+    expect(m.summary.hairline, `lint.html @1080p-24: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
+  })
+
+  test('lint.html at laptop-768 — same page, the arms\' preset', async () => {
+    const m = await json(['lint', fixture('lint.html'), '--preset', PRESET])
+    expect(m.summary.hairline, `lint.html @laptop-768: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
+  })
+
+  test('shadow-arms-flat.html at 1080p-24 — the twin page, cli-lint\'s preset', async () => {
+    const m = await json(['lint', FLAT, '--preset', '1080p-24'])
+    expect(m.summary.hairline, `flat @1080p-24: ${JSON.stringify(m.summary)}`).toBeGreaterThanOrEqual(1)
+  })
+})
+
 // --- arms 2 and 3: inspect at a point inside a root ------------------------
 // One call, two questions, asserted separately so each reads at its own line.
 
