@@ -67,8 +67,11 @@ not enter them. A page built from components can measure as almost nothing.
 Obsrv counts what it did not enter and says so: *"N roots hold M of this
 page's K elements, which the measurement does not enter."*
 
-Whether it *should* enter them is undecided, and the evidence for deciding is
-still being collected.
+**It will.** The decision is made (2026-09-17, on `b2`): a page built from
+components measured 79% unentered on caniuse.com and entirely unentered on
+chromestatus.com, which is an honest non-answer rather than a measurement.
+Until the traversal ships (`feat-measure-open-shadow-roots`), the count above
+is what you get. Closed shadow roots stay out of reach by design.
 
 ### A page it cannot scroll
 
@@ -211,9 +214,12 @@ client's own request timeout, so fan out in twos.
 Listed because a limitation you have not been told about is worse than one you
 have:
 
-- **A dialog's note has never fired on a live site** across four runs, though
-  it fires reliably on a fixture. Either live pages of that shape are rarer
-  than expected, or something about them differs from the fixture.
+- **A dialog's note is verified on a fixture only.** It fires when a page
+  locks its own scroll and the only scroller left is inside a dialog in the
+  page's own DOM. The consent walls met live took other routes: a wall in an
+  iframe (ft.com) is named as a wall, and a short dialog with nothing to scroll
+  gets the "nothing to scroll" sentence. The note has not yet met its shape
+  live.
 - **The noise ratio has never been measured.** zalando.de answered 143
   findings; nobody has established how many of those a developer would act on.
   Until that exists, treat a long findings list as a list to read, not a
