@@ -482,8 +482,24 @@ Whole-file runs (`--repeat-each 3`, ordering intact) 30 passed; `sync-mirror-mar
 The first version waited for the **first** `url-changed` while the assertion reads the **last**. The
 first event is usually `redirect.html`, and the `urls` poll after it can go green on the pane's URL
 before the target has emitted for hairline — leaving `seen.at(-1)` on `redirect.html`. **The same
-shape as the defect, one step smaller, in the fix for it.** It waits on the landing now. A further
-180 runs: 0 failures, 117 saw 2 events and 3 saw 3.
+shape as the defect, one step smaller, in the fix for it.** A further 180 runs on that version: 0
+failures, 117 saw 2 events and 3 saw 3.
+
+### And a THIRD instance, found by Henry's read of the same fix
+
+Waiting on the landing alone is still satisfiable by step 1: its own duplicate `hairline` commit —
+the page's redirect and the bus's mirrored load both committing, the race `#213` handled in
+`sync-mirror-mark` — can land *after* step 2 subscribes, making `__seen` start `[hairline]` and the
+wait pass at once. So the barrier is now **the step-2 chain in order**: the redirect, then the
+landing after it. Only step 2 can satisfy that.
+
+**Its one cost, measured rather than assumed:** the test's own comment allows the target to go
+straight to the landing if the mirrored hairline overtakes, and this barrier cannot be satisfied by
+that path — it would wait the full 5 s and then pass on the assertions. **In 120 runs it never
+happened:** every run finished in about 167 ms, with no 5 s wait anywhere.
+
+**Three instances of one shape in one card, two of them inside its own fix.** That is the useful
+record here: the defect was easy to describe and hard to stop writing.
 
 **What this does NOT say.** It does not prove the bus always tells the target — it proves this test
 was reading before the answer arrived. A genuine silence would now fail after a 5 s wait, with the

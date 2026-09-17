@@ -182,11 +182,25 @@ test('a redirecting page leaves no stale expectation behind', async () => {
   // can go green on the pane's URL before the target has emitted `url-changed`
   // for hairline — leaving `seen.at(-1)` on redirect.html. That is the same
   // shape as the race above, one step smaller, and @Wren caught it in review.
-  await app.evaluate(async (_e, landing: string) => {
-    const g = globalThis as any
-    const until = Date.now() + 5_000
-    while (g.__seen.at(-1) !== landing && Date.now() < until) await new Promise(r => setTimeout(r, 25))
-  }, HAIRLINE)
+  await app.evaluate(
+    async (_e, [asked, landing]: [string, string]) => {
+      const g = globalThis as any
+      const until = Date.now() + 5_000
+      // Step 2's chain IN ORDER: the redirect, then the landing after it.
+      // Waiting for the landing alone is not enough, because step 1 can leave a
+      // duplicate `hairline` commit in flight — the page's own redirect and the
+      // bus's mirrored load both commit (the double-commit race #213 handled in
+      // sync-mirror-mark). Landing after the subscription, it makes `__seen`
+      // start `[hairline]` and the wait pass at once, reading early again.
+      // Henry's catch, and the third instance of this card's own shape.
+      const arrived = (): boolean => {
+        const i = g.__seen.lastIndexOf(asked)
+        return i !== -1 && g.__seen.slice(i + 1).includes(landing)
+      }
+      while (!arrived() && Date.now() < until) await new Promise(r => setTimeout(r, 25))
+    },
+    [REDIRECT, HAIRLINE] as [string, string],
+  )
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
 
   const seen: string[] = await app.evaluate(() => {
