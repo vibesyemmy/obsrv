@@ -63,3 +63,39 @@ silent for these moves too.
    launch path, no `OBSRV_E2E_FRONT`/`OBSRV_TEST_TAKES_THE_DESK` gate, no recorded activation. Otherwise it
    runs on CI only.
 3. Then the fix, which must not loosen `bug-arrivals`' two discriminators (see above).
+
+## Refined 2026-09-17 by Henry, after the red test and a read of the mechanism
+
+**The red test exists** (local, `fix/history-move-note`, harness-only): `mcp-live` drives A, then B, then
+`back`, then a live audit and lint with no `url`.
+- **On `main`:** `url` is A, which is right, and there's no sentence.
+- **Control:** with 0.60.0's listener (`if (inPage) return`) the note comes back, green in 1.8 s.
+
+**But restoring 0.60.0 would restore a false sentence, so that's not the fix:**
+1. **0.60.0's note misattributes a history move.** It says "the page navigated after it loaded, to A:
+   a bot challenge, an interstitial, a redirect, or a dev server reloading under an edit". None of those
+   happened. The tab went back, whether the agent's `drive { back }` or the toolbar did it (both reach
+   `goBack`).
+2. **Reload isn't lost to the mirror skip.** `reloadBoth` reloads the target directly, not through the
+   bus. Its commit (same address, not started by the document) is skipped by `bug-arrivals`'
+   same-address rule.
+3. **A correction to this card's "fix constraint" line:** Kenya's two measured halves are the **address
+   test and `byDocument`**. The `mirrored` skip is older (7d811f8). Counting mirrored commits again isn't
+   an option either way: Kenya's repro (`redirect.html`, 20/20 spurious) is exactly a mirrored commit
+   landing around the page's own redirect.
+
+**The plan, an engineering decision recorded here so it can be overruled:** leave the arrivals counter
+untouched and state the fact Obsrv already knows.
+- Record each history move where it's issued: `goBack`, `goForward` and `reloadBoth`, the single path
+  for toolbar and agent.
+- A live inspect, audit or lint then compares it with the last navigate's record. It says, in one true
+  sentence, that the tab moved through its history (or was reloaded) since that navigate, and names the
+  page the figures are of.
+- The sentences built from `asked` stop naming the stale address after a history move.
+  `httpStatusNote`'s contrast is the one found.
+
+**Not covered, and left open on purpose:** a link followed inside the native pane. The bus mirrors it,
+the counter skips it, and telling it apart from a page's own redirect is `bug-arrivals`' hard problem.
+
+**The test changes to match:** after A, B and back, the reply carries the history sentence naming A and
+B, and never the challenge/redirect sentence.
