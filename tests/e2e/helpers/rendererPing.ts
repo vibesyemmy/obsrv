@@ -36,26 +36,56 @@ import type { ElectronApplication } from '@playwright/test'
 export interface RendererPing {
   /** Stops the poller. Safe to call twice. */
   stop(): void
-  /** How many pings went unanswered past the deadline, for an assertion or a note. */
+  /**
+   * How many pings went late or unanswered, for an assertion or a note.
+   *
+   * A genuinely late answer can print after `stop()` — the round trip it
+   * describes was still in flight — so a line may land after a summary that
+   * did not count it. That is a real observation arriving late rather than a
+   * stray, which is why it is kept.
+   */
   misses(): number
 }
 
 export function armRendererPing(app: ElectronApplication, label: string, everyMs = 500, lateAfterMs = 1000): RendererPing {
   let misses = 0
   let stopped = false
+  let saidNoWindow = false
 
   const timer = setInterval(() => {
     if (stopped) return
     const sent = Date.now()
     let answered = false
+    // Distinct from `answered`: there was nothing to ask, which is not the
+    // renderer failing to answer. Folding the two into one count would give
+    // `misses()` two meanings, which is the defect this instrument exists to
+    // help find.
+    let nothingToPing = false
     void app
       .evaluate(async ({ BrowserWindow }) => {
-        const w = BrowserWindow.getAllWindows()[0]
-        if (!w) return false
+        // The SHELL renderer, chosen explicitly. The app also creates offscreen
+        // windows for the target (`targetSource.ts`, a fresh one per preset
+        // change), and `getAllWindows()[0]` is a convention rather than a
+        // guarantee. For an instrument that is not good enough: "no misses"
+        // has to rule out "pinged the wrong renderer", or a quiet run fits two
+        // facts and the silence means nothing. (Wren, on #229.)
+        const w = BrowserWindow.getAllWindows().find(win => !win.webContents.isOffscreen())
+        if (!w) return 'no-window'
         await w.webContents.executeJavaScript('1')
-        return true
+        return 'ok'
       })
-      .then(() => {
+      .then(result => {
+        // Said, not swallowed: an instrument that finds nothing to watch must
+        // report that rather than read as a clean run. Once, because the
+        // condition persists and a line every 500 ms would bury the log.
+        if (result === 'no-window') {
+          nothingToPing = true
+          if (!saidNoWindow) {
+            saidNoWindow = true
+            console.log(`[renderer-ping ${label}] NO NON-OFFSCREEN WINDOW to ping — this run's silence is not evidence`)
+          }
+          return
+        }
         answered = true
         const took = Date.now() - sent
         if (took > lateAfterMs) {
@@ -63,9 +93,13 @@ export function armRendererPing(app: ElectronApplication, label: string, everyMs
           console.log(`[renderer-ping ${label}] LATE: answered after ${took}ms (sent ${new Date(sent).toISOString()})`)
         }
       })
+      // An evaluate that rejects (the app has gone, the channel is closed) is
+      // left to the timeout below, which counts it as unanswered. That is the
+      // honest reading: from here it is indistinguishable from a renderer that
+      // stopped answering, and claiming otherwise would be a guess.
       .catch(() => undefined)
     setTimeout(() => {
-      if (answered || stopped) return
+      if (answered || stopped || nothingToPing) return
       misses++
       // Printed the moment it happens. A run that ends with the renderer
       // wedged still carries this line, which is the whole point.
