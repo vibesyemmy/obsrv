@@ -173,6 +173,16 @@ test('obsrv_snap mode:"headless" ignores the running app', async () => {
   expect(meta).toMatchObject({ mode: 'headless', preset: 'laptop-768', cssWidth: 1366, cssHeight: 768 })
 })
 
+test('a live obsrv_snap ignores waitMs, and says so', async () => {
+  // No run had carried this sentence in a reply (docs/note-inventory.md, c5):
+  // no live snap in the suite passed waitMs.
+  const r = await call('obsrv_snap', { url: FIXTURE, waitMs: 250 })
+  expect(r.isError).toBeFalsy()
+  const s = r.structuredContent as { mode: string; warnings: string[] }
+  expect(s.mode).toBe('live')
+  expect(s.warnings).toContain('waitMs is headless-only and was ignored in live mode.')
+})
+
 test('one obsrv_drive call combines preset + scroll + highlight and returns the final status', async () => {
   const TALL = pathToFileURL(resolve(__dirname, '../fixtures/tall.html')).href
   const r = await call('obsrv_drive', {
