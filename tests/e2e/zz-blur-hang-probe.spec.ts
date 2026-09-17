@@ -148,3 +148,103 @@ test('ARM 4: the block starts INSIDE the blur handler, which is where the call l
   })
   await timedBlur('block inside blur handler', true)
 })
+
+test('ARM 5: can the failure report itself? `unresponsive` fires from OUTSIDE the stuck renderer', async () => {
+  await openSettings(page, 'display')
+  // Henry's suggestion was to time the handler from inside — `performance.now()`
+  // at blur entry and exit. **That instrument cannot fire on this failure:** a
+  // handler that never returns never reaches its exit line, and a blocked main
+  // thread runs no timer, no microtask and no console flush that could carry a
+  // partial reading out. Nothing inside a stuck renderer can report that it is
+  // stuck.
+  //
+  // Electron's `unresponsive` is the same observation made from the main
+  // process, which is not blocked. So the question is whether it fires on the
+  // signature arm 4 reproduces — and that is checkable, rather than assumable.
+  const armed = await app.evaluate(async () => {
+    const h = (globalThis as { __obsrv?: { win?: Electron.BrowserWindow } }).__obsrv
+    if (h?.win === undefined) return false
+    const g = globalThis as { __blurProbeEvents?: string[] }
+    g.__blurProbeEvents = []
+    h.win.on('unresponsive', () => g.__blurProbeEvents?.push(`unresponsive @${Date.now()}`))
+    h.win.on('responsive', () => g.__blurProbeEvents?.push(`responsive @${Date.now()}`))
+    return true
+  })
+  expect(armed, 'no window to watch').toBe(true)
+
+  await page.fill('.host-diagonal', '32')
+  await page.evaluate(() => {
+    document.querySelector('.host-diagonal')?.addEventListener(
+      'blur',
+      () => {
+        const until = Date.now() + 20_000
+        while (Date.now() < until) {
+          /* the same block arm 4 uses, so this is the same failure */
+        }
+      },
+      { once: true },
+    )
+  })
+  await timedBlur('with unresponsive watch', true)
+
+  const events = await app.evaluate(() => (globalThis as { __blurProbeEvents?: string[] }).__blurProbeEvents ?? [])
+  console.log(`  ARM 5  events: ${events.length === 0 ? 'NONE — the instrument is silent on this failure' : JSON.stringify(events)}`)
+})
+
+test('ARM 6: a main-process ping DOES see it, because main is not the thing that is stuck', async () => {
+  await openSettings(page, 'display')
+  // Arms 5 and Henry's suggestion are both silent, for two different reasons —
+  // an in-handler timer never reaches its exit line, and `unresponsive` waits
+  // on input acks that a CDP-driven blur never queues. What is left is the
+  // main process asking the renderer a question on a timer and noticing when an
+  // answer does not come back. Main is not blocked, so it can always report.
+  await app.evaluate(async () => {
+    const h = (globalThis as { __obsrv?: { win?: Electron.BrowserWindow } }).__obsrv
+    if (h?.win === undefined) return
+    const g = globalThis as { __pingLog?: string[]; __pingTimer?: NodeJS.Timeout }
+    g.__pingLog = []
+    const wc = h.win.webContents
+    g.__pingTimer = setInterval(() => {
+      const sent = Date.now()
+      let answered = false
+      void wc
+        .executeJavaScript('1')
+        .then(() => {
+          answered = true
+          const took = Date.now() - sent
+          if (took > 1000) g.__pingLog?.push(`ping answered LATE after ${took}ms (sent ${sent})`)
+        })
+        .catch(() => undefined)
+      setTimeout(() => {
+        if (!answered) g.__pingLog?.push(`ping UNANSWERED after 1000ms (sent ${sent})`)
+      }, 1000)
+    }, 500)
+  })
+
+  await page.fill('.host-diagonal', '32')
+  await page.evaluate(() => {
+    document.querySelector('.host-diagonal')?.addEventListener(
+      'blur',
+      () => {
+        const until = Date.now() + 20_000
+        while (Date.now() < until) {
+          /* the same block as arms 4 and 5 */
+        }
+      },
+      { once: true },
+    )
+  })
+  await timedBlur('with a main-process ping', true)
+
+  const log = await app.evaluate(() => {
+    const g = globalThis as { __pingLog?: string[]; __pingTimer?: NodeJS.Timeout }
+    if (g.__pingTimer) clearInterval(g.__pingTimer)
+    return g.__pingLog ?? []
+  })
+  console.log(`  ARM 6  ping log: ${log.length} entries`)
+  for (const l of log.slice(0, 4)) console.log(`         ${l}`)
+  // This is the arm with a verdict in it: if the ping never misses, there is no
+  // instrument here either and the card must say the failure is unobservable
+  // from every side tried.
+  expect(log.length, 'a stuck renderer that answers every ping would mean this instrument is useless too').toBeGreaterThan(0)
+})
