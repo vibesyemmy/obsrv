@@ -208,6 +208,25 @@ test('OBSRV_HEADLESS=1 renders headlessly and names the variable, before the har
   }
 })
 
+test('a deprecated orientation that inverts on this preset says so, and the answer says what the screen actually is', async () => {
+  // `orientation` names the preset's STORED form, so 'landscape' on a preset
+  // stored landscape turns it and gives a PORTRAIT screen. #241 wrote the
+  // sentence for exactly that trap and no reply had carried it (c5): the
+  // suite only ever passed an orientation that agreed with the shape.
+  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: '1080p-24', orientation: 'landscape' })
+  expect(r.isError).toBeFalsy()
+  const s = r.structuredContent as { rotated?: boolean; screenShape?: string; cssWidth: number; cssHeight: number; warnings: string[] }
+  expect(s).toMatchObject({ rotated: true, cssWidth: 1080, cssHeight: 1920 })
+  // `screenShape` is live-only, as its schema says, so a headless answer states
+  // the shape through `rotated` and the applied dimensions instead. Asserted
+  // because the first draft of this test expected it and CI said otherwise.
+  expect(s.screenShape).toBeUndefined()
+  expect(s.warnings.join('\n'), JSON.stringify(s.warnings)).toContain(
+    "orientation: 'landscape' produced a portrait screen (1080x1920). That flag names the preset's STORED form rather than the shape you get, " +
+      'so the word inverts on presets stored the other way round. Use rotate: true to say it directly; screenShape always reports what you actually got.',
+  )
+})
+
 test('audit, lint and inspect name why they ran headless, like snap', async () => {
   const a = (await call('obsrv_audit', { url: fixture('audit.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }
   const l = (await call('obsrv_lint', { url: fixture('lint.html'), preset: 'laptop-768' })).structuredContent as { mode: string; why?: string }

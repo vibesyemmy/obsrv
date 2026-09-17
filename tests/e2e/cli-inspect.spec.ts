@@ -144,6 +144,37 @@ test('an element the screen never shows is measured, and the readout says it is 
   expect(notDrawn(g.notes)).toEqual([expect.stringContaining('display: none')])
 })
 
+test('text that is not opaque: the readout says what the page states, what the screen shows, and which of the two made it so', async () => {
+  // No reply had ever carried this sentence (docs/note-inventory.md, c5): every
+  // fixture inspected until now states the colour it paints. A reader who
+  // checks the contrast figure against the stylesheet finds a different hex
+  // there, and this is the sentence that stops that reading like an error.
+  const composite = (notes: string[]): string[] => notes.filter(n => n.includes('and the screen shows'))
+  const page = fixture('translucent-text.html')
+
+  const faded = await runCli(['inspect', page, '--preset', 'laptop-768', '--selector', '#faded'])
+  expect(faded.code, faded.stderr).toBe(0)
+  const f = JSON.parse(faded.stdout)
+  expect(f.found).toBe(true)
+  expect(composite(f.notes), JSON.stringify(f.notes)).toEqual([
+    expect.stringMatching(
+      /^the page states #0b0c0c and the screen shows #[0-9a-f]{6}: an opacity of 0\.5 composites it onto the background, and the contrast figures are of what is shown$/,
+    ),
+  ])
+
+  // The other route to the same fact: an opaque element whose colour carries
+  // the alpha. The sentence names which one it was.
+  const alpha = await runCli(['inspect', page, '--preset', 'laptop-768', '--selector', '#alpha'])
+  expect(alpha.code, alpha.stderr).toBe(0)
+  const a = JSON.parse(alpha.stdout)
+  expect(composite(a.notes), JSON.stringify(a.notes)).toEqual([expect.stringContaining('own alpha composites it onto the background')])
+
+  // Opaque text carries no such note: the note has to mean something.
+  const solid = await runCli(['inspect', page, '--preset', 'laptop-768', '--selector', '#solid'])
+  expect(solid.code, solid.stderr).toBe(0)
+  expect(composite(JSON.parse(solid.stdout).notes)).toEqual([])
+})
+
 test('a point off the screen says so, naming the viewport it is off; a point on the screen does not', async () => {
   // bug-inspect-offscreen-point-is-silent: found: false for a point the screen
   // does not have read as nothing drawn there, with nothing saying otherwise.

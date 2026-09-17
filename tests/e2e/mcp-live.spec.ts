@@ -437,6 +437,19 @@ test('obsrv_inspect (auto) inspects the running app: the page it is navigated to
   const badOut = bad.structuredContent as { mode: string; found: boolean; notes: string[] }
   expect(badOut).toMatchObject({ mode: 'live', found: false })
   expect(badOut.notes, JSON.stringify(badOut.notes)).toEqual([expect.stringContaining('is not a valid CSS selector')])
+
+  // Live audit and live lint were both watched saying this; live inspect's own
+  // copy of the sentence had never been produced (docs/note-inventory.md, c5 —
+  // it is written at server.ts:2538, and the three copies are identical text,
+  // so only the tool that answered tells them apart).
+  const noted = await call('obsrv_inspect', { selector: '#grey', preset: 'android-65' })
+  const notedOut = noted.structuredContent as { mode: string; preset: string; notes: string[] }
+  expect(notedOut.mode).toBe('live')
+  expect(notedOut.notes, JSON.stringify(notedOut.notes)).toContain(
+    "`preset` is headless-only and was ignored in live mode; the app's own screen was used.",
+  )
+  // Ignored means ignored: the screen in force answered, not android-65.
+  expect(notedOut.preset).not.toBe('android-65')
 })
 
 test('obsrv_audit (auto) audits the running app on the screen in force, and names the tab', async () => {

@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>translucent text</title>
+<style>
+  body { margin: 0; background: #ffffff; font: 16px/1.5 system-ui, sans-serif }
+  p { margin: 0; padding: 16px }
+  /* The element is half-transparent: the page states #0b0c0c and the screen
+     shows the composite over white. */
+  #faded { color: #0b0c0c; opacity: 0.5 }
+  /* The same shape by the other route: an opaque element whose COLOUR carries
+     the alpha. The readout names which of the two it was. */
+  #alpha { color: rgba(11, 12, 12, 0.5) }
+  /* Opaque, for a readout that must carry no such note. */
+  #solid { color: #0b0c0c }
+</style>
+<p id="faded">A half-transparent element</p>
+<p id="alpha">A half-transparent colour</p>
+<p id="solid">Opaque text</p>
