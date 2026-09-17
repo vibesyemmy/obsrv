@@ -252,3 +252,49 @@ it belongs to whoever owns the e2e harness: it is a permanent 2 Hz round-trip to
 every spec, and this card should not merge it by implication.
 
 Related: `bug-no-traces-when-e2e-hangs` is the same gap seen from the artefact side.
+
+## I READ THE THING I SAID TO READ, AND IT IS 0.2 ms — 2026-09-17 by Rook
+
+The section above ended by naming `setSettings(next)` and its synchronous re-render
+(`SettingsPanel.tsx:200`) as *"the only thing in the chain that can fail to return, and it is the
+next thing to read"*. **Read. It is not slow, and this card should stop pointing there.**
+
+Measured from inside the handler (`probe/blur-hang` arm 7), five commits with a changing value so
+none is a no-op, timed around the real `blur` dispatch that runs React's `onBlur` → `commit()` →
+`setSettings` synchronously:
+
+    0.2 ms, 0, 0, 0, 0
+
+**Five orders of magnitude short.** A handler that returns in a fifth of a millisecond does not
+become a thirty-second one by degrees, and no amount of machine slowness closes that gap. The app's
+own commit path is not the mechanism.
+
+### What that leaves, and it is a different kind of suspect
+
+The signature still holds: the locator **resolved**, so the renderer was answering at that moment,
+and then the evaluate never returned (arm 4). If the work inside the handler is ~0 ms, then what
+took thirty seconds was not the page doing something — it was the call not completing.
+
+Between the resolve and the evaluate there is a **CDP round trip**. Arm 3 showed that a renderer
+already wedged fails earlier, at `waiting for locator`, so the channel was working microseconds
+before. That points at the *transport or the utility world*, not at the app's code:
+
+- the evaluate's message never reaching the renderer, or its reply never coming back
+- the utility-world execution context being unavailable for that one call
+
+**Which fits the rate better than an app bug does.** A defect in `commit()` would not be
+1-in-591 — that path runs in every full suite, many times. A transport stall that rare looks like
+the environment, and the environment is what the main-process ping in the section above would
+timestamp.
+
+### What this changes for anyone picking the card up
+
+**Do not optimise the re-render.** That is the reading the previous section invited and it would be
+work against a measurement. The open question is now *why a CDP evaluate did not return on a
+renderer that had just answered a query*, and the instrument for catching it is already identified.
+
+**And the general form, since this is the second time on this card:** a narrowing is a place to look,
+not a finding. Both times — the OSR renderer, then the re-render — the candidate was the plausible
+thing adjacent to the evidence, and both times measuring it took it off the list. The card is better
+for it, but the lesson is that "the only thing that could explain this" is a sentence to distrust
+while it is still unmeasured.
