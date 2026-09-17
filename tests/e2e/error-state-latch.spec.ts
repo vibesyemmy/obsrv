@@ -78,3 +78,42 @@ test('ARM B, the control: a failing load straight after a failing load', async (
   }
   console.log(`[latch] ARM B (bad → bad, the control): ${missed}/${RUNS} missed — it must be 0`)
 })
+
+test('ARM A, timestamped: what order the renderer sees on a miss', async () => {
+  // Subscribes ALONGSIDE App.tsx rather than replacing it: the preload's
+  // `on*` helpers add a listener and hand back an unsubscribe, so the app's
+  // own handlers still run and the timings are of the real path. The DOM
+  // observer records the effect — when the window state actually appears and
+  // disappears — because the store is not exposed to the page.
+  await page.evaluate(() => {
+    const w = window as unknown as { __log: { t: number; what: string; detail: string }[]; obsrv: Record<string, (cb: (a: never) => void) => void> }
+    w.__log = []
+    const at = (what: string, detail = ''): void => void w.__log.push({ t: Date.now(), what, detail })
+    w.obsrv.onUrlChanged(((e: { url: string }) => at('url-changed', e.url)) as never)
+    w.obsrv.onTargetNavigating((() => at('target-navigating')) as never)
+    w.obsrv.onLoadError((({ error }: { error: { url?: string; code?: number } }) => at('load-error', `${error?.url ?? ''} ${error?.code ?? ''}`)) as never)
+    new MutationObserver(() => {
+      at(document.querySelector('.load-error-state') === null ? 'state GONE' : 'state SHOWN')
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+
+  const rounds: string[] = []
+  let missed = 0
+  for (let i = 0; i < RUNS * 2; i++) {
+    await page.evaluate(() => void ((window as unknown as { __log: unknown[] }).__log.length = 0))
+    await go(FIXTURE)
+    await expect(page.locator('.load-error-state')).toHaveCount(0, { timeout: 15_000 })
+    await go(BAD)
+    const shown = await errorStateAppeared(8_000)
+    if (!shown) {
+      missed++
+      const log = await page.evaluate(() => (window as unknown as { __log: { t: number; what: string; detail: string }[] }).__log)
+      const t0 = log[0]?.t ?? 0
+      rounds.push(
+        `  MISS on round ${i}:\n` +
+          log.map(l => `    +${String(l.t - t0).padStart(5)}ms  ${l.what.padEnd(18)} ${l.detail.split('/').pop() ?? ''}`).join('\n'),
+      )
+    }
+  }
+  console.log(`[latch-order] ${missed}/${RUNS * 2} missed\n${rounds.join('\n') || '  (no miss captured this run)'}`)
+})
