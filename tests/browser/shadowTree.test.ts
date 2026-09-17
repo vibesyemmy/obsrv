@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { auditPage } from '../../src/shared/audit'
-import { inspectAtPoint } from '../../src/shared/inspect'
+import { inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
 import {
   SHADOW_TREE_SCRIPT,
   shadowContains,
@@ -174,6 +174,23 @@ describe('at a point inside a component', () => {
     expect(stack![0]).toBe(deep)
     expect(stack, JSON.stringify(stack?.map(e => e.tagName))).toContain(outer.root.querySelector('.outer'))
     expect(inspectAtPoint(40, 30)?.background).toEqual([31, 41, 55, 1])
+  })
+
+  it('keeps the stack for an element whose centre is covered, over a backdrop in another branch', () => {
+    // The fix for slotted text asked "is this element the topmost thing at the
+    // point", which a container with a block child never is. That sent it to
+    // the ancestor walk, which cannot see a scrim from another branch — the
+    // lemonde.fr case (Wren's second read of #293). Any index counts.
+    const page = mount(
+      '<div id="backdrop" style="position: fixed; left: 0; top: 0; width: 240px; height: 80px; background: rgb(31, 41, 55)"></div>' +
+        '<div id="covered" style="position: fixed; left: 0; top: 0; width: 240px; height: 80px; color: rgb(229, 231, 235); font: 16px Arial, sans-serif">' +
+        '<div style="height: 80px">a block child over its parent\'s centre</div></div>',
+    )
+    const covered = page.querySelector('#covered')!
+    expect(document.elementsFromPoint(40, 30).indexOf(covered), 'the parent should be under its child at that point').toBeGreaterThan(0)
+    expect(shadowStackFrom(covered, 40, 30), 'the covered element lost its stack').not.toBeNull()
+    const r = inspectTarget('selector', '#covered') as { background: number[] } | null
+    expect(r?.background).toEqual([31, 41, 55, 1])
   })
 
   it('inspect reads the text against the card, not the page', () => {

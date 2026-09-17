@@ -43,11 +43,14 @@ afterEach(() => {
  * had no scroller (Wren's measurement on #293, at the exact budget edge).
  */
 describe('a sidebar of components in front of the page scroller', () => {
-  const build = (items: number, itemPx: number, asideHeight: number): HTMLElement => {
+  const build = (items: number, itemPx: number, asideHeight: number, wrappers = 0): HTMLElement => {
+    // `main` under N wrappers, which is an ordinary app shell's markup.
+    const open = '<div style="flex:1;display:flex">'.repeat(wrappers)
+    const close = '</div>'.repeat(wrappers)
     const root = mount(
       `<div style="display:flex;width:600px;height:400px">` +
         `<aside id="aside" style="width:160px;overflow-y:auto;height:${asideHeight}px"></aside>` +
-        `<main id="main" style="flex:1;overflow-y:auto;height:400px">${FILLER}</main>` +
+        `${open}<main id="main" style="flex:1;overflow-y:auto;height:400px">${FILLER}</main>${close}` +
         `</div>`,
     )
     const aside = root.querySelector('#aside')!
@@ -70,6 +73,15 @@ describe('a sidebar of components in front of the page scroller', () => {
 
   it('finds it when the sidebar does not overflow either, where the search used to come back empty', () => {
     const root = build(300, 1, 400)
+    expect(findScroller(root)?.id).toBe('main')
+  })
+
+  // Level order alone was not enough: the 300 hosts sit at one level and their
+  // root contents at the next three, about 1,800 elements, so a `main` a few
+  // wrappers down was still reached too late (Wren measured 4, 12 and 25
+  // wrappers, all lost). The light DOM gets its own budget now.
+  it.each([4, 12, 25])('finds it with the page scroller %i wrappers down, where the light DOM alone would find it', wrappers => {
+    const root = build(300, 30, 400, wrappers)
     expect(findScroller(root)?.id).toBe('main')
   })
 })

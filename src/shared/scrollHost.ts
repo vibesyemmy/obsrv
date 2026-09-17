@@ -131,7 +131,12 @@ export function shadowStackFrom(el: Element, x: number, y: number): Element[] | 
     if (asked.has(scope)) continue
     asked.add(scope)
     const stack = (scope instanceof ShadowRoot ? scope : document).elementsFromPoint(x, y)
-    if (stack.indexOf(el) === 0) found = true
+    // At ANY index: an element whose centre is covered — by its own block
+    // child, by a click-catcher — is still painted at that point, and the
+    // layers under it are what its text sits on. Requiring index 0 sent those
+    // to the ancestor walk, which is the walk that misses a scrim from another
+    // branch (Wren's second read of #293).
+    if (stack.indexOf(el) >= 0) found = true
     // Where this scope's answer joins the chain: the element itself, or the
     // first thing above it that this scope can see (a slot has no box of its
     // own, and `display: contents` elements are absent too).
@@ -264,8 +269,9 @@ export function isVisible(el: Element): boolean {
  * The page's real scroll host: the largest-by-client-area visible descendant
  * that is a scroll container with something to scroll. Level order, so an
  * exact tie between an ancestor-side and a later candidate keeps the one found
- * first. The walk is bounded by `MAX_VISITED`, which open shadow roots share:
- * what the budget cuts off is not reported, which is
+ * first — and the light DOM is swept before any open root, each on its own
+ * `MAX_VISITED` budget, so a page full of components cannot cost the page's
+ * own scroller its answer. What a budget cuts off is not reported, which is
  * `chore-scroll-host-budget-is-silent`.
  *
  * Only `display: none` subtrees are pruned, and only after a computed-style
@@ -294,35 +300,54 @@ export function findScroller(root: Element | null = document.body): Element | nu
   if (!root) return null
   let best: Element | null = null
   let bestArea = 0
-  let visited = 0
-  // BREADTH-FIRST, and the budget is why. Depth-first spent the whole budget
-  // inside one sibling's subtree, and with open roots in it that is a handful
-  // of components: a sidebar of 286 items, each a host with six elements in
-  // its root, starved the search before it reached `main`, and the page's real
-  // scroller lost to the sidebar — or, when the sidebar did not overflow, to
-  // nothing at all (Wren's measurement on #293). A scroll host is a large,
-  // shallow box, so level order reaches every candidate that could win long
-  // before a deep tree can exhaust the budget.
-  const queue: Element[] = [root]
-  for (let head = 0; head < queue.length; head++) {
-    const el = queue[head]!
-    if (visited++ >= MAX_VISITED) break
+  /** Judge one element; false when its subtree is `display: none` and pruned. */
+  const consider = (el: Element): boolean => {
     const area = el.clientWidth * el.clientHeight
-    if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') continue
+    if (area <= 0 && el.getClientRects().length === 0 && window.getComputedStyle(el).display === 'none') return false
     // `isVisible` runs last: it is the expensive half, and only an element
     // that would otherwise win needs to answer for its visibility.
     if (area > bestArea && canScroll(el) && isVisible(el)) {
       best = el
       bestArea = area
     }
-    // An open shadow tree before the light children, as `shadowElements`
-    // orders them. Level order keeps the tiebreak the comment above states:
-    // an ancestor-side candidate is reached before anything below it, so an
-    // exact tie keeps the one found first.
-    const shadow = el.shadowRoot
-    if (shadow) for (const kid of Array.from(shadow.children)) queue.push(kid)
-    for (const kid of Array.from(el.children)) queue.push(kid)
+    return true
   }
+  /**
+   * One level-order sweep on its own budget. Level order because a scroll host
+   * is a large, shallow box; the budget because a pathological DOM must not
+   * stall the preload.
+   */
+  const sweep = (start: Element[], enterRoots: boolean): Element[] => {
+    const hosts: Element[] = []
+    const queue = start.slice()
+    let visited = 0
+    for (let head = 0; head < queue.length; head++) {
+      const el = queue[head]!
+      if (visited++ >= MAX_VISITED) break
+      if (!consider(el)) continue
+      const shadow = el.shadowRoot
+      if (shadow) {
+        if (enterRoots) for (const kid of Array.from(shadow.children)) queue.push(kid)
+        else hosts.push(el)
+      }
+      for (const kid of Array.from(el.children)) queue.push(kid)
+    }
+    return hosts
+  }
+  // THE LIGHT DOM FIRST, AND ON A BUDGET OF ITS OWN. A single sweep spent the
+  // budget inside open roots: a sidebar of 300 components put about 1,800
+  // elements in front of a `main` four wrappers down, and the page's own
+  // scroller lost to the sidebar — measured at 4, 12 and 25 wrappers (Wren, on
+  // #293). Whatever the light DOM answers is now exactly what it answered
+  // before roots were entered at all; the roots then get their own budget and
+  // can only win on area.
+  const hosts = sweep([root], false)
+  const inRoots: Element[] = []
+  for (const host of hosts) {
+    const shadow = host.shadowRoot
+    if (shadow) for (const kid of Array.from(shadow.children)) inRoots.push(kid)
+  }
+  if (inRoots.length > 0) sweep(inRoots, true)
   return best
 }
 
