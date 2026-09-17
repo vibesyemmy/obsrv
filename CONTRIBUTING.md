@@ -480,6 +480,18 @@ nothing when all is well and nothing when it cannot see is not reassuring.
 reads what they meant. Print every shape the output can take, read the joins
 between them, and have a peer read them before calling a sentence done.
 
+**The README on `main` is not what a stranger runs.** GitHub shows `main`'s
+README; npm serves the last release. So a README sentence describing behaviour
+that is only on `main` is wrong for whoever reads it first, and stays wrong
+until the next publish — four days, the time it took to notice
+(`chore-readme-documents-unreleased`: the README said `--version` needed
+neither a build nor Electron while npm's `latest` answered *"unknown command:
+--version"* after a 120 MB download). When a change makes a README sentence
+true, the sentence lands with the release, not with the change — or it says
+which version it starts in. **The same holds for anything else a reader meets
+before the code:** the skill, the tool descriptions an agent lists, and the
+help text a package prints.
+
 Commit messages here are long on purpose. They carry what a card cannot: a
 card can be edited by anyone, a commit travels with the change. If you find
 something while fixing something else, put it in the message.
