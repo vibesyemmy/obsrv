@@ -160,6 +160,28 @@ test('a redirecting page leaves no stale expectation behind', async () => {
     await g.__obsrv.native.load(url)
     return at
   }, REDIRECT)
+  // WAIT FOR WHAT STEP 2 PRODUCES, not for the state step 1 left behind.
+  //
+  // This used to poll for `{ native: HAIRLINE, target: HAIRLINE }` — which is
+  // ALREADY TRUE when step 2 begins, because step 1's redirect ended on
+  // hairline in both panes. So the barrier passed instantly and the trace was
+  // read while step 2's chain was still in flight, and the test failed for
+  // having looked too early rather than for anything the product did.
+  //
+  // Measured on the caught failure: step 2's `native.load` resolved ok, the
+  // native committed redirect.html, and the bus issued the mirror to the
+  // target ('issued', 'other was hairline.html') — all AFTER the read. Nothing
+  // was missing; it had not happened yet (bug-sync138-no-url-changed, and the
+  // card's own "NOT DONE" note about this poll).
+  //
+  // Waited in-process rather than with `expect.poll` so a run that really does
+  // emit nothing still reaches the assertions below and carries the full
+  // account, which is the whole point of the traces.
+  await app.evaluate(async () => {
+    const g = globalThis as any
+    const until = Date.now() + 5_000
+    while (g.__seen.length === 0 && Date.now() < until) await new Promise(r => setTimeout(r, 25))
+  })
   await expect.poll(() => urls(app), { timeout: 5_000 }).toEqual({ native: HAIRLINE, target: HAIRLINE })
 
   const seen: string[] = await app.evaluate(() => {
