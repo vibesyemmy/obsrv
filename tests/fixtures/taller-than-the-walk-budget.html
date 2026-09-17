@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>taller than the walk's budget</title>
+<!--
+  c5, walk limits batch 2: `cli/walk.ts:125` and `mcp/walk.ts:143` — "the walk
+  stopped after N screenfuls at its 15 s budget without reaching the end of the
+  page".
+
+  The walk's budget is 15 s on both surfaces. Headless it dwells 150 ms a
+  screenful, live 350 ms, so the budget buys roughly 75 screenfuls headless and
+  35 live. This page is 150 screenfuls at laptop-768 (115,200 px), which is
+  past both with room to spare on a slow runner and a fast one alike — the
+  count the sentence names is whatever the budget reached, and the test ties it
+  to `walked.screenfuls` rather than pinning a number the machine decides.
+
+  Nothing else about it is unusual: one heading, one paragraph per screenful so
+  a walk has something to find, and no lazy loading, no locks and no scroll
+  handlers. It is a long page and nothing more.
+-->
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #fff; color: #111; }
+  h1 { margin: 0; padding: 24px; font-size: 24px; }
+  p { margin: 0; height: 768px; padding: 24px; box-sizing: border-box; border-bottom: 1px solid #ddd; }
+</style>
+<h1>A page taller than the walk's budget</h1>
+<div id="rows"></div>
+<script>
+  const rows = document.getElementById('rows')
+  let html = ''
+  for (let i = 0; i < 150; i++) html += `<p>screenful ${i + 1} of 150</p>`
+  rows.innerHTML = html
+</script>

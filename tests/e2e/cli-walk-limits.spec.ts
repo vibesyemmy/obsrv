@@ -64,6 +64,17 @@ const COULD_NOT_MOVE_DIALOG =
  */
 const NOTHING_TO_SCROLL = 'so the walk had nothing to scroll'
 
+/** `cli/walk.ts:125` and `mcp/walk.ts:143` — the budget sentence. The CLI rounds its seconds from what is left of its own deadline, so the shape is fixed and the number is not. */
+const BUDGET_SENTENCE =
+  /^the walk stopped after (\d+) screenfuls at its \d+(\.\d)? s budget without reaching the end of the page; the measurement covers the whole page regardless\.$/
+
+/** `cli/walk.ts:179` — a step the page never answered, carrying `walkTimeoutNote`'s own sentence inside it. */
+const CUT_SHORT_HEADLESS =
+  /^the walk was cut short after (\d+) screenfuls? \(the page did not answer a scroll within \d+(\.\d)? s \(its main thread was busy or blocked\)\); measured after a partial walk\.$/
+
+/** `mcp/walk.ts:184` — the live walk's scroll that came back unconfirmed. */
+const NOT_CONFIRMED_LIVE = 'the page did not confirm a scroll during the walk; the walk stopped there.'
+
 /** `shared/walkCoverage.ts` — `walkDialogNote`'s panel wording, which an app shell's walk earns. */
 const PANEL_NOT_THE_PAGE =
   "the walk scrolled a panel on the page, not the page itself: this page hides the document's overflow and the only scroller the walk found was a panel within it"
@@ -133,6 +144,43 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
     expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
   })
+
+  test('a page taller than the budget: the walk says where it stopped, and the count in the sentence is the count in the reply', async () => {
+    // 150 screenfuls at 150 ms of dwell each is well past the 15 s budget. The
+    // seconds in the sentence are what the CLI had left of its own deadline
+    // rather than a constant, so the shape is asserted and the count is tied
+    // to `walked.screenfuls`, which is the field a reader compares it against.
+    const m = await headless('taller-than-the-walk-budget.html')
+    // RECORDED, not asserted: every sentence this walk produced. A budget-ended
+    // walk falls straight through to `backToTop` with nothing left, so the
+    // return-to-top note may be here too — carrying `walkTimeoutNote`'s "did
+    // not answer a scroll within 15 s (its main thread was busy or blocked)"
+    // about a page that answered every step (Kenya's reading, Wren's code
+    // check). This page's thread is free, so whatever appears beside the budget
+    // sentence here is the answer, and it costs a run nobody has to schedule.
+    console.log(`budget-ended walk said: ${JSON.stringify(said(m))}`)
+    const budget = said(m).find(w => w.includes('budget without reaching the end of the page'))
+    expect(budget, JSON.stringify(said(m))).toBeTruthy()
+    expect(budget).toMatch(BUDGET_SENTENCE)
+    expect(BUDGET_SENTENCE.exec(budget!)?.[1]).toBe(String(m.walked?.screenfuls))
+    expect(m.walked?.atEnd, JSON.stringify(m.walked)).toBe(false)
+    // It really did walk: a budget that stopped it at zero would be a
+    // different failure wearing this sentence.
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(3)
+  })
+
+  // LAST in this describe: the page holds its main thread for 25 s after the
+  // first scroll, and the CLI process it holds is this test's own.
+  test('a page that stops answering once scrolled: the walk says it was cut short, and how far it got', async () => {
+    const m = await headless('blocks-on-scroll.html')
+    const cut = said(m).find(w => w.includes('cut short'))
+    expect(cut, JSON.stringify(said(m))).toBeTruthy()
+    expect(cut).toMatch(CUT_SHORT_HEADLESS)
+    expect(CUT_SHORT_HEADLESS.exec(cut!)?.[1]).toBe(String(m.walked?.screenfuls))
+    // One screenful, because the hold starts on the first scroll EVENT: the
+    // step that caused it is answered, and the one after it is not.
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(1)
+  })
 })
 
 // --- live: mcp/walk.ts + shared ---------------------------------------------
@@ -173,6 +221,17 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
     await app?.close()
   })
 
+  /** A live audit of a URL, for the one fixture that takes a query. */
+  const liveUrl = async (url: string): Promise<Reply> => {
+    const r = (await client.callTool(
+      { name: 'obsrv_audit', arguments: { url, mode: 'live', groupsOnly: true } },
+      undefined,
+      { timeout: 150_000 },
+    )) as CallToolResult
+    expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
+    return (r.structuredContent ?? {}) as Reply
+  }
+
   const live = async (name: string): Promise<Reply> => {
     const r = (await client.callTool(
       { name: 'obsrv_audit', arguments: { url: fixture(name), mode: 'live', groupsOnly: true } },
@@ -206,5 +265,36 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
     expect(said(m).join(' '), JSON.stringify(said(m))).not.toContain(NOTHING_TO_SCROLL)
     expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
+  })
+
+  test('a page taller than the budget: the live walk says where it stopped too', async () => {
+    const m = await live('taller-than-the-walk-budget.html')
+    // The same recording on the live surface, where the scroll carries no
+    // budget of its own and so has no number to misreport: the pair is what
+    // says whether this is headless-only.
+    console.log(`budget-ended live walk said: ${JSON.stringify(said(m))}`)
+    const budget = said(m).find(w => w.includes('budget without reaching the end of the page'))
+    expect(budget, JSON.stringify(said(m))).toBeTruthy()
+    expect(budget).toMatch(BUDGET_SENTENCE)
+    expect(BUDGET_SENTENCE.exec(budget!)?.[1]).toBe(String(m.walked?.screenfuls))
+    expect(m.walked?.atEnd, JSON.stringify(m.walked)).toBe(false)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(3)
+  })
+
+  // LAST in the file: this page holds the app's target thread for 25 s, and
+  // the app is shared by every test above it.
+  test('a page that stops answering once scrolled: the live walk says the scroll was never confirmed', async () => {
+    // A 5 s hold, not the fixture's default 25 s: the live audit measures the
+    // page AFTER the walk and needs the same main thread, so a hold longer than
+    // its own 20 s budget refuses the whole audit and the walk's sentence never
+    // reaches a reply (measured, probe 35229526006). 5 s is longer than the 1 s
+    // confirm window and short enough to be measured afterwards.
+    const m = await liveUrl(`${fixture('blocks-on-scroll.html')}?hold=5000`)
+    // The same page, met differently: the live scroll goes through the control
+    // server, which answers `scrolled: null` after its 1 s confirm window
+    // rather than throwing, so the walk stops with this sentence instead of
+    // the headless one.
+    expect(said(m), JSON.stringify(said(m))).toContain(NOT_CONFIRMED_LIVE)
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(1)
   })
 })
