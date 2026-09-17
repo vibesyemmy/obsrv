@@ -93,3 +93,25 @@ in either direction.
 
 **Gates, read from the full summary line rather than a tail:** the four arms above; `mcp-live` 41
 passed including `:722` and `:813`; `sync` + `sync-mirror-mark` + `history` 22 passed; unit 1403/1403.
+
+## TWO LIMITS, from Henry's read of #184 — recorded because neither is visible from the fix
+
+**1. A document-started navigation that is SERVER-redirected reads as not document-started.**
+`startedByDocument(url)` looks up a start recorded *for the committed URL*. On a 302 the commit URL
+has no start record of its own, so `byDocument` reads false — and a page reloading itself **through a
+302** back to the recorded address would be silenced, which is the case `mcp-live:722`/`:813` exist
+for. Not measured, and not a case the four arms cover: they use a client-side `location.replace`,
+which commits the URL it started. **#171 gives `TargetSource` a `redirected` event**, so recording the
+redirect's URL in `starts` with the in-flight start's `byDocument` would close it. A cheap follow-up,
+and it needs its own arm before anyone believes it is fixed.
+
+**2. Attribution is by URL, not by navigation identity.** When the bus's mirrored load and the page's
+own navigation go to one URL together, the *latest start* for that URL decides, not the navigation
+that actually committed. Electron 43 exposes no navigation id on `did-navigate` — checked while
+measuring `initiator` — so this is a **known heuristic, not an oversight**. The 0/20 and 20/20 arms
+show it holds on these paths; they do not show it holds on every path.
+
+**And a question Henry raised that this card does not answer:** mirrored commits into the target are
+never counted, which was true before #184 as well. So if a user moves the *native* pane to a
+different page mid-measurement, does the agent's reply say so anywhere — through `landedAt`, or at
+all? Nobody has checked. It is not a defect until someone does, and it is not this card's.
