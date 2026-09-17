@@ -2531,8 +2531,8 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     if (Array.isArray(answer['notes'])) notes.unshift(...(answer['notes'] as unknown[]).map(String))
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
-      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k} was used.`)
+    for (const k of ['preset', 'orientation', 'rotate', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+      if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const structured = {
       mode: 'live',
