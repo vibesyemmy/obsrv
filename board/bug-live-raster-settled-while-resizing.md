@@ -144,3 +144,25 @@ the bitmap, which is exactly where a size comparison goes wrong — **every** li
 its budget and answer `resizing`, and nothing else in that file would notice, because its other pages
 never settle on purpose. The wrong-size answer itself stays pinned where it can be pinned by
 construction, in the unit tests.
+
+### Which preset can actually catch a wrong `expectedFrameSize`, counted
+
+Wren's cold read of `#314` found the still-page arm capturing on whatever preset the pane was already
+on, and proposed `laptop-1080-125`, `laptop-1080-150` or `4k-27-150` as fractional-density covers.
+**All three would have stayed green.** What breaks a size comparison is not a fractional
+`deviceScaleFactor` but a fractional **product**, and those three are 1536x1.25, 1280x1.5 and
+2560x1.5 — 1920x1080, 1920x1080 and 3840x2160, every one whole.
+
+Counted over the whole table: **26 presets, and exactly one** where the floor and the round of the
+product differ — `pixel-8`, 412 x 915 at 2.625, which is 1081.5 x 2401.875 and paints 1081 x 2401.
+The arm uses that one and pins those numbers, so a disagreement between `paintedExtent`, the
+`pixel-8` comment and the surface is a red test rather than a stale comment.
+
+### Where `resizing` can and cannot arrive, so the next caller need not re-derive it
+
+`resizing` reaching a schema that does not list it is the `0.61.0` failure shape, so Wren checked the
+three: the live snap enum (`mcp/server.ts:439`) carries it, drive's field is a free `z.string()`
+(`:832`), and **the report's enum (`:2174`) does not**. The report is headless and
+`awaitExpectedSize` defaults to false, so nothing on that path can produce it today. **That is a
+constraint, not a coincidence:** wiring the gate into a headless caller means adding `resizing` to
+the report's enum in the same change, and `docs/public-shape.json` with it.
