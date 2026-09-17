@@ -180,15 +180,146 @@ aren't placed in the table.
 element (`sync.ts:182`). Also `scrollSelector` matching an element that could not reach the offset
 (`sync.ts:176`, reworded since that table) and the stale-frame note (`frameCheck.ts:23`).
 
-**Still to do (c5):** the other half, every note that can be written but didn't fire here. Each one
-needs a fixture that provokes it, a finding that it can't be provoked (and then the sentence goes), or
-a named reason it stays unobserved.
+**Still to do (c5):** the other half, every note that can be written but didn't fire here. The next
+section lists it.
+
+## Written but not seen to fire: the producer list, 2026-09-17
+
+**What this adds.** The section above lists what fired. This one lists everything the code can put in
+a reply's `notes` or `warnings`, by producer, at `b43a272`, and splits it by whether run
+`35166342003` saw it. It is mechanical, and this section says where the mechanism stops.
+
+**How the list was made.** A TypeScript-compiler pass over `src/` (not `src/renderer`, which builds no
+reply) found **173 sinks**:
+- a `push` or `unshift` onto an array named `notes` or `warnings` (or `…Notes`, `…Warnings`);
+- a `notes:` or `warnings:` property (not the zod schemas);
+- the `warn(…)` and `onWarn(…)` callbacks, which land in the CLI's warnings (not `log.warn`, which writes
+  the log file, and not `strictOutput.ts`'s `warn`, which defaults to stderr);
+- `orientationNote`.
+
+From each sink it followed the value back through conditionals, concatenations, variables and what is
+pushed onto them, helper calls (to their `return`s), parameters (to every call site), destructured
+results, and injected dependencies (to the implementation of the same name).
+
+**A producer is one sentence:** a string literal, a template or a concatenation, placed at its first
+literal. A literal inside a template's `${…}` is a value, not a producer. **The pass found 121, and
+left nothing unresolved.** Every value it followed ended in a literal, or in an array read from
+another result, which is counted where that array was built. A producer **fired** when a sentence in
+the run's log contains all of its literal pieces of 8 characters or more, in order.
+
+**Checked against the run, not assumed.** Of the 110 distinct sentences the run logged, **109 place at a
+producer**. The one that doesn't is the dev-lane stamp (`laneStamp`, `src/mcp/devLane.ts:29`, dev-only).
+`withStamp` adds it under a key computed from the tool's output shape, and a pass that reads names
+can't see that.
+
+**Where it stops:**
+- **Placement is by text.** An identical sentence written at several places matches all of them, so
+  those are listed as ambiguous below, not as fired.
+- **A branch inside one sentence isn't its own row.** A `${cond ? 'a' : 'b'}` clause belongs to its
+  producer, so a producer that fired can have a branch nobody saw.
+- **Line numbers are `b43a272`'s, and the run measured `87c835a`.** Four producers were written or
+  reworded since, so the run couldn't have seen them. They're listed apart from the unfired ones.
+- **The net is still replies' `notes` and `warnings`**, as above. A sentence that reaches only stderr,
+  the app's UI or the log is outside it, such as the eight `log.warn` sentences in `src/main`.
+
+**The split:**
+
+| | producers |
+| --- | --- |
+| fired, and placed at exactly one producer | 55 |
+| fired, but the same text is written at several places (3 groups, below) | 7 |
+| not seen to fire | **54** |
+| written or reworded after the run | 4 |
+| too short to match (`src/cli/main.ts:859`, the `target: ` label) | 1 |
+
+**Ambiguous: at least one place in each group fired, and text can't say which:**
+- `src/cli/main.ts:860` and `:1511`, the `reference: ` label.
+- `src/cli/walk.ts:105` and `src/mcp/walk.ts:113`: "the walk was cut short before it began".
+- `src/mcp/server.ts:1543`, `:1849` and `:2538`: "`preset` (or `profile`) is headless-only and was
+  ignored in live mode".
+
+**Not seen to fire (54).** "Pushed in" is the directory of the sink, not every surface that relays it.
+
+| written at | pushed in | the sentence, shaped |
+| --- | --- | --- |
+| `src/cli/audit.ts:215` | cli | the page has more elements than one report carries: <…> targets and <…> text elements were counted b… |
+| `src/cli/capture.ts:347` | cli | <…>% of the <…>x<…> frame <…>never painted within <…> ms<…>; those pixels are transparent, not page… |
+| `src/cli/lint.ts:78` | cli, mcp | <…> more finding<…> past the <…> listed; the summary counts them all |
+| `src/cli/lint.ts:94` | cli, mcp | <…> image finding<…> sit<…> below the <…> CSS px the walk reached <…>before its budget ran out, and… |
+| `src/cli/lint.ts:517` | cli | <…> text element<…> the same colour as the background (1:1): hidden by design or broken, not judged |
+| `src/cli/lint.ts:526` | cli | the page has more elements than one report carries: <…> text elements, <…> edges and <…> images were… |
+| `src/cli/main.ts:529` | cli | the page scrolls an inner container <…> CSS px tall; captured the first <…> <…>bands of <…> CSS px (… |
+| `src/cli/main.ts:620` | cli | full page is <…> CSS px tall; captured the first <…> bands of <…> CSS px <…>(<…> at most) — what lie… |
+| `src/cli/main.ts:1479` | cli | the <…> finding<…> worth featuring all <…>, so this screen has no <…>"where the problems are" sectio… |
+| `src/cli/stuckProbe.ts:76` | cli | could not measure chrome stuck to the viewport, so the bands keep it: <…> |
+| `src/cli/stuckProbe.ts:98` | cli | the page replaced its document during the probe; measured again |
+| `src/cli/walk.ts:98` | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. |
+| `src/cli/walk.ts:125` | cli | the walk stopped after <…> screenful<…> at its <…> s budget without reaching the end of the page; th… |
+| `src/cli/walk.ts:165` | cli | the page stopped moving before the end of the walk (a locked scroll, or a page that scrolls by other… |
+| `src/cli/walk.ts:179` | cli | the walk was cut short after <…> screenful<…> (<…>); |
+| `src/main/controlServer.ts:531` | main | scroll offset could not be confirmed |
+| `src/main/frameCheck.ts:20` | main | frames are not being delivered to the pane (the renderer has not subscribed yet), so the capture sho… |
+| `src/main/frameCheck.ts:21` | main | the renderer did not say which frame it drew, so the capture may show an older frame than the target… |
+| `src/main/ipc.ts:1752` | main | the renderer has not reported the pane bounds yet; captured the full window instead |
+| `src/main/ipc.ts:1753` | main | the renderer has not reported the render bounds yet; captured the whole pane instead |
+| `src/main/ipc.ts:1755` | main | the page was still painting when the capture budget ran out; the PNG may show a transitional frame —… |
+| `src/main/ipc.ts:1759` | main | the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation,… |
+| `src/main/ipc.ts:1790` | main | the page keeps painting (animation or video); this is one frame of it |
+| `src/main/ipc.ts:1793` | main | the page was still painting when the capture budget ran out; the PNG may show a transitional frame |
+| `src/main/ipc.ts:1796` | main | the raster is the target's own frame; the onion skin is not blended into it |
+| `src/mcp/control.ts:318` | mcp | the Obsrv app could not be launched (<…>); rendered headlessly. |
+| `src/mcp/control.ts:350` | mcp | the launch exited immediately without a new instance starting — Obsrv's profile is already in use by… |
+| `src/mcp/control.ts:356` | mcp | Obsrv is running and was asked whether to allow agent control, but nobody answered within <…> s; ren… |
+| `src/mcp/control.ts:357` | mcp | the Obsrv app was launched but did not answer within <…> s; rendered headlessly. It may still be sta… |
+| `src/mcp/lib.ts:581` | mcp | the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it (the AGENT… |
+| `src/mcp/lib.ts:584` | mcp | capture: 'pane' applies to live mode only; the headless render is the page raster itself, so the opt… |
+| `src/mcp/lib.ts:646` | mcp | no display: OBSRV_HEADLESS=1 is set; rendered headlessly. |
+| `src/mcp/lib.ts:679` | mcp | custom dimensions are headless-only (live mode drives the preset table); rendered headlessly. |
+| `src/mcp/lib.ts:681` | mcp | waitMs is headless-only and was ignored in live mode. |
+| `src/mcp/server.ts:871` | mcp | the page was still loading when the app's navigate budget (30 s) ran out; the status, and any captur… |
+| `src/mcp/server.ts:1070` | mcp | the app was still loading the page when the settle budget ran out; the PNG may show a transitional f… |
+| `src/mcp/server.ts:1092` | mcp | this app is older than the capture's settle verdict, so `settled` reports whether the navigation was… |
+| `src/mcp/server.ts:1639` | mcp | custom dimensions are headless-only (live mode audits the screen in force); audited headlessly. |
+| `src/mcp/server.ts:1947` | mcp | custom dimensions are headless-only (live mode lints the screen in force); linted headlessly. |
+| `src/mcp/server.ts:2599` | mcp | custom dimensions are headless-only (live mode inspects the screen in force); inspected headlessly. |
+| `src/mcp/walk.ts:41` | mcp | the app predates page-wise scrolling (0.41.0); measured without walking. |
+| `src/mcp/walk.ts:105` | mcp | the walk could not return to the top afterwards (<…>); measured where it stopped. |
+| `src/mcp/walk.ts:143` | mcp | the walk stopped after <…> screenful<…> at its <…> s budget without reaching the end of the page; th… |
+| `src/mcp/walk.ts:184` | mcp | the page did not confirm a scroll during the walk; the walk stopped there. |
+| `src/mcp/walk.ts:197` | mcp | the page stopped moving before the end of the walk (a locked scroll: a modal or a menu holding the p… |
+| `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
+| `src/preload/sync.ts:167` | preload | scrollSelector <…> is not a valid CSS selector; nothing was scrolled |
+| `src/shared/calibration.ts:165` | cli | orientation: '<…>' produced a <…> screen (<…>x<…>). <…>That flag names the preset's STORED form rath… |
+| `src/shared/inspectReadout.ts:134` | shared | the page states <…> and the screen shows <…>: <…> composites it onto the background, and the contras… |
+| `src/shared/layoutScale.ts:52` | cli, shared | <…> and is drawn at <…>× (an initial-scale above 1), so its own px are that much larger on the glass… |
+| `src/shared/walkCoverage.ts:168` | cli, mcp | <…>the page has <…>, which the walk does not enter, <…>and nothing in the light DOM scrolls<…> |
+| `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
+| `src/shared/walkCoverage.ts:194` | cli, mcp | <…>content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualise… |
+| `src/shared/walkCoverage.ts:245` | cli, mcp | the walk could not move the page or <…>: this page hides the <…>document's overflow <…>, and neither… |
+
+**Written or reworded after the run (4).** These need their own observation, not a place on the list
+above:
+
+| written at | pushed in | the sentence, shaped |
+| --- | --- | --- |
+| `src/cli/main.ts:278` | cli | <…>; and <…>, so `throttle` names the conditions put back, not ones known to be in force |
+| `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
+| `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
+| `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
 
 ## What is left
 
-- The 14 live-surface notes above with no observation. Each needs a fixture that produces
-  the state or a finding that it cannot be produced — and where it cannot, the honest
-  resolution is removing the sentence, not leaving it admitted.
-- The headless and MCP call sites (41 of the 58) have not been hand-checked. The sieve's
-  guesses are in the branch history, not here, because a guess recorded as a result is the
-  failure this file exists to prevent.
+- **Each of the 54 unfired producers and the 4 newer ones gets one of three outcomes:**
+  - a fixture that fires it on CI;
+  - a finding that it can't fire, and then the sentence goes;
+  - a named reason it stays unobserved.
+
+  Several are failure paths (an app that can't be launched, a profile already in use), where
+  provoking the state is the work.
+- **The three ambiguous groups:** which of the identical places fired.
+- **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the ten
+  this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
+- **The 17-row live table at the top is history.** Of its 14 unobserved rows:
+  - 7 are `log.warn` lines, which no reply carries, so they're outside the list above;
+  - `sync.ts:175` has fired since (reworded, now `:176`);
+  - the other 6 are in the list above, under `b43a272`'s line numbers.
