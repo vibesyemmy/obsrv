@@ -4,10 +4,12 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /**
- * `feat-measure-open-shadow-roots`, step one: the acceptance arms, written to
- * FAIL on current main and kept on this branch until implementation starts
+ * `feat-measure-open-shadow-roots`: the acceptance arms. Rook wrote them first,
+ * red on main by design and kept on a branch until the traversal existed
  * (Henry, #388 — not `test.fail()`, which passes on any failure and would stay
- * green in a gating suite whether or not an arm still checked anything).
+ * green in a gating suite whether or not an arm still checked anything). Each
+ * was read red at its own assertion on run 35194464896; the traversal turns
+ * them green, and reverting it is the control.
  *
  * Every red arm has a light-DOM twin in this file that is green today, against
  * `shadow-arms-flat.html`: the same markup, styles and geometry with the
@@ -66,13 +68,13 @@ const json = async (args: string[]): Promise<Record<string, any>> => {
 test.describe('arm 1 — collection descends into open roots', () => {
   test('audit counts every button on half-in-shadow.html, not only the light-DOM twelve', async () => {
     const m = await json(['audit', fixture('half-in-shadow.html'), '--preset', PRESET])
-    // RED TODAY: 12. The count is 12 light + 4 roots × 10.
+    // 12 before the traversal. The count is 12 light + 4 roots × 10.
     expect(m.summary.targets.count, 'audit stopped at the shadow boundary').toBe(52)
   })
 
   test('lint finds the hairline inside the card', async () => {
     const m = await json(['lint', SHADOW, '--preset', PRESET])
-    // RED TODAY: 0. The 0.5px rule lives inside x-card's root.
+    // 0 before the traversal. The 0.5px rule lives inside x-card's root.
     expect(m.summary.hairline, 'lint stopped at the shadow boundary').toBeGreaterThanOrEqual(1)
   })
 
@@ -98,7 +100,7 @@ test.describe('arms 2 and 3 — inspect at a point inside a root', () => {
   test('arm 3: names the element under the point, not the host', async () => {
     const m = await json(['inspect', SHADOW, '--preset', PRESET, '--at', IN_THE_CARD])
     expect(m.found).toBe(true)
-    // RED TODAY: 'card' (the x-card host). document.elementFromPoint stops
+    // Before the traversal: 'card' (the x-card host). document.elementFromPoint stops
     // at the boundary; shadowRoot.elementFromPoint from the host is what
     // reaches the <p>.
     expect(m.readout.id, `inspect stopped at the host: ${m.readout.element}`).toBe('inner')
@@ -107,7 +109,7 @@ test.describe('arms 2 and 3 — inspect at a point inside a root', () => {
   test('arm 2: reads contrast against the component background it sits on', async () => {
     const m = await json(['inspect', SHADOW, '--preset', PRESET, '--at', IN_THE_CARD])
     expect(m.found).toBe(true)
-    // RED TODAY: the ancestor walk climbs parentElement, which stops at the
+    // Before the traversal: the ancestor walk climbed parentElement, which stops at the
     // boundary, so the text composites onto the page's white rather than the
     // card's #1f2937. Through the composed parent it reaches the card.
     expect(m.readout.background, 'contrast read against the page, not the card').toBe('#1f2937')
@@ -126,7 +128,7 @@ test.describe('arms 2 and 3 — inspect at a point inside a root', () => {
 test.describe('arm 4 — the walk scrolls a scroller inside a root', () => {
   test('audit walks the feed inside x-feed', async () => {
     const m = await json(['audit', SHADOW, '--preset', PRESET])
-    // RED TODAY: 0 screenfuls, and the note says the page "has no scrollable
+    // Before the traversal: 0 screenfuls, and the note said the page "has no scrollable
     // container in its light DOM" — which is exactly true and exactly the gap.
     expect(m.walked?.screenfuls, `walk found nothing: ${JSON.stringify(m.warnings)}`).toBeGreaterThan(0)
   })

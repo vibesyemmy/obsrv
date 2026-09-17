@@ -12,6 +12,8 @@
  * produces it.
  */
 
+import { SHADOW_TREE_SCRIPT, shadowElementFromPoint, shadowParent, shadowStackFrom } from './scrollHost'
+
 /** A colour as the page states it, 0..255 channels and 0..1 alpha. */
 export type RGBA = [number, number, number, number]
 
@@ -87,9 +89,13 @@ export const MAX_SELECTOR_LENGTH = 512
 export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?: number): InspectReport | { invalidSelector: true } | null {
   let el: Element | null = null
   if (mode === 'point') {
-    const hit = document.elementFromPoint(Number(a), Number(b))
+    // Through open shadow roots: the element drawn at the point, not the
+    // component's host (`shadowElementFromPoint`).
+    const hit = shadowElementFromPoint(Number(a), Number(b))
     el = hit instanceof Element ? hit : null
   } else {
+    // A selector keeps the light DOM's meaning, as `document.querySelector`
+    // gives it: it does not pierce a shadow root. A point does.
     try {
       el = document.querySelector(String(a))
     } catch {
@@ -132,7 +138,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   // here or it reaches nothing: before this, text greyed that way was judged
   // as though it were white (docs/research/2026-09-15-contrast-figure.md).
   let opacity = 1
-  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+  for (let node: Element | null = el; node !== null; node = shadowParent(node)) {
     const o = Number.parseFloat(getComputedStyle(node).opacity)
     if (Number.isFinite(o)) opacity *= Math.min(1, Math.max(0, o))
   }
@@ -165,7 +171,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   const own = getComputedStyle(el)
   if (own.visibility === 'hidden' || own.visibility === 'collapse') hidden = 'visibility'
   if (hidden === null) {
-    for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    for (let node: Element | null = el; node !== null; node = shadowParent(node)) {
       if (getComputedStyle(node).display === 'none') {
         hidden = 'display'
         break
@@ -189,13 +195,13 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     const x = r.left + r.width / 2
     const y = r.top + r.height / 2
     if (!(r.width > 0 && r.height > 0) || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null
-    const stack = document.elementsFromPoint(x, y)
-    const at = stack.indexOf(el)
-    return at < 0 ? null : stack.slice(at)
+    // Across shadow boundaries: the component's own backgrounds, then the
+    // page's under it (`shadowStackFrom`).
+    return shadowStackFrom(el, x, y)
   }
   const ancestors = (): Element[] => {
     const chain: Element[] = []
-    for (let node: Element | null = el; node; node = node.parentElement) chain.push(node)
+    for (let node: Element | null = el; node; node = shadowParent(node)) chain.push(node)
     return chain
   }
   const layers: RGBA[] = []
@@ -255,5 +261,8 @@ export function inspectAtPoint(x: number, y: number): InspectReport | null {
   return r !== null && 'invalidSelector' in r ? null : r
 }
 
-/** `inspectTarget` as source, for `executeJavaScriptInIsolatedWorld`. */
-export const INSPECT_SCRIPT = `(${inspectTarget.toString()})`
+/**
+ * `inspectTarget` as source, for `executeJavaScriptInIsolatedWorld`, with the
+ * shadow-tree helpers it calls beside it.
+ */
+export const INSPECT_SCRIPT = `(() => {\n${SHADOW_TREE_SCRIPT}\n return (${inspectTarget.toString()})\n})()`

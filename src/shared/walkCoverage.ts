@@ -123,7 +123,11 @@ export function walkCoverageNote(
 export interface WalkBlocked {
   /** Iframes overlapping the viewport, and how much of it they cover. */
   frames?: { count: number; viewportCoverage: number }
-  /** Open shadow hosts on the page (`shadowContent().hosts`). */
+  /**
+   * Open shadow hosts on the page, sent only by an app whose walk did not
+   * enter open roots. An app that enters them sends `frames` alone, and that
+   * absence is how the sentence knows which walk it is describing.
+   */
   shadowHosts?: number
 }
 
@@ -145,10 +149,22 @@ const FRAME_WALL_COVERAGE = 0.5
  * 2026-09-12). The same defect the empty-document note had before 0.57.0,
  * one function over. It names what was measured, and keeps the list only for
  * the case where nothing measured explains it.
+ *
+ * **Two walks, and the sentence has to know which it describes.** The walk
+ * enters open shadow roots now (`findScroller`), so a page that scrolls
+ * nothing has no open root to blame, and a closed root, which nobody can
+ * count, joins the guesses. An app older than that walk did not enter them,
+ * and an MCP at this version driving it must still say so. An app that
+ * entered the roots sends `frames` without `shadowHosts`; everything else —
+ * a count of hosts, or no `blocked` at all — is the older walk, and keeps
+ * its sentences word for word.
  */
 export function walkNothingNote(blocked?: WalkBlocked): string {
-  const opening =
-    "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: "
+  const enteredRoots = blocked?.frames !== undefined && blocked.shadowHosts === undefined
+  const opening = enteredRoots
+    ? "this page hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, " +
+      'so the walk had nothing to scroll: '
+    : "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: "
   const tail = ', and the figures are of the page as it first shows'
   const coverage = Math.round((blocked?.frames?.viewportCoverage ?? 0) * 100)
   const frameCount = blocked?.frames?.count ?? 0
@@ -175,7 +191,16 @@ export function walkNothingNote(blocked?: WalkBlocked): string {
       `scrolls is either inside it or scrolls by transform (a virtualised list or editor)${tail}`
     )
   }
-  // Nothing measured explains it: a frame was looked for and not found, a
+  // Nothing measured explains it, on the walk that entered the roots: a frame
+  // was looked for and not found, and an open root would have been walked.
+  // What is left cannot be counted from outside.
+  if (enteredRoots) {
+    return (
+      `${opening}no iframe covers the viewport, so what scrolls is a container that scrolls by transform ` +
+      `(a virtualised list or editor) or one inside a closed shadow root${tail}`
+    )
+  }
+  // And on the older walk: a frame was looked for and not found, a
   // root was looked for and not found. What is left is a container that
   // scrolls by transform, which cannot be counted from outside, so this one
   // case keeps a guess — one guess, about a page two facts have been ruled

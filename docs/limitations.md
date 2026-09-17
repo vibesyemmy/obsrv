@@ -60,19 +60,21 @@ app measures as nearly empty, and a consent wall in an iframe can cover the
 whole page. Obsrv names both cases rather than reporting a confident zero —
 when a frame covers the viewport, the warning says so and gives the coverage.
 
-### Anything inside an open shadow root
+### Anything inside a closed shadow root
 
-Web components keep their content in shadow roots, and the measurement does
-not enter them. A page built from components can measure as almost nothing.
-Obsrv counts what it did not enter and says so: *"N roots hold M of this
-page's K elements, which the measurement does not enter."*
+Web components keep their content in shadow roots. **Open roots are measured**
+(`feat-measure-open-shadow-roots`, approved by Opeyemi on 2026-09-17): the audit,
+lint, `inspect` at a point, and the walk all go inside them, and contrast is read
+against a component's own backgrounds. Before that, a page built from components
+measured as almost nothing (79% unentered on caniuse.com, all of chromestatus.com).
 
-**Planned, not built.** Entering open roots was decided by engineering on
-2026-09-17 and is pending Opeyemi's review (`b2`). The evidence: a page built
-from components measured 79% unentered on caniuse.com and entirely unentered on
-chromestatus.com, which is an honest non-answer rather than a measurement.
-Until `feat-measure-open-shadow-roots` ships, the count above is what you get.
-Closed shadow roots stay out of reach by design.
+What stays out of reach:
+- **Closed roots.** Script cannot see into them, and cannot tell that they are
+  there, so nothing is measured and nothing is said.
+- **`inspect --selector`** keeps light-DOM meaning: a CSS selector does not
+  pierce a shadow root. `inspect --at` a point inside a component does reach it.
+- **`scrollSelector`** cannot name a scroller inside a root, for the same
+  reason. The automatic detection does find one inside an open root.
 
 ### A page it cannot scroll
 

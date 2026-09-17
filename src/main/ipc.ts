@@ -1,5 +1,4 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
-import { shadowShareNote } from '../shared/shadowShare'
 import { historyMoveNote, httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote, type HistoryMove } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
@@ -1908,13 +1907,9 @@ export function registerIpc(ctx: AppContext): () => void {
         notes.push(measureTimeoutNote('audit', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, targets: [], text: [], truncated: { targets: 0, text: 0 } }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, report.shadow, st.code))
+        notes.push(emptyDocumentNote('audit', held.waitedMs, report.frames, st.code))
       }
-      // The live path says the same thing as the CLI: a page that measures
-      // fine and hides half of itself was silent on both surfaces.
       if (report) {
-        const shareNote = shadowShareNote('audit', report.shadow)
-        if (shareNote !== null) notes.push(shareNote)
         // The headless path asks every page whether its boxes stay put; so
         // does this one, or the two surfaces answer the same question
         // differently (shared/pageMotion).
@@ -1970,7 +1965,7 @@ export function registerIpc(ctx: AppContext): () => void {
         notes.push(measureTimeoutNote('lint', LIVE_MEASURE_BUDGET_MS))
         report = { viewport: { width: vp.width, height: vp.height }, pageHeight: vp.height, text: [], edges: [], images: [], truncated: { text: 0, edges: 0, images: 0 }, spacers: 0 }
       } else if (held.stillEmpty) {
-        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, report.shadow, st.code))
+        notes.push(emptyDocumentNote('lint', held.waitedMs, report.frames, st.code))
       }
       if (report) {
         const motion = await motionAfter(
@@ -1980,8 +1975,6 @@ export function registerIpc(ctx: AppContext): () => void {
         )
         const movedNote = motion === null ? null : pageMovedNote('lint', motion, motion.afterMs)
         if (movedNote !== null) notes.push(movedNote)
-        const shareNote = shadowShareNote('lint', report.shadow)
-        if (shareNote !== null) notes.push(shareNote)
       }
       let profile
       try {

@@ -706,7 +706,7 @@ test('a live audit of a page with nothing to scroll says the walk found nothing,
   expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
   const s = r.structuredContent as { walked?: { screenfuls: number; atEnd: boolean }; warnings?: string[]; notes?: string[] }
   expect(s.walked).toMatchObject({ screenfuls: 0, atEnd: true })
-  expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll/)
+  expect([...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, so the walk had nothing to scroll/)
 })
 
 /**

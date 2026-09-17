@@ -253,28 +253,20 @@ test('an empty document that is an iframe says so: a bot wall is not a blank pag
   expect(m.warnings.join(' ')).toMatch(/nothing to measure: .*an <iframe> covers 100% of the viewport, which the measurement does not enter/)
 })
 
-test('a page built from web components is named as one, not called empty', async () => {
+test('a page built from web components is measured, not called empty', async () => {
   // chromestatus.com/features (2026-09-12): 0 targets, 0 text, and three
-  // causes offered — a script that had not run, a bot wall, an empty
-  // document. All false; the page held 159 shadow roots with 136 interactive
-  // elements the measurement does not enter. The answer says which now.
+  // causes offered, all false: the page held 159 open shadow roots. For a
+  // while the answer named the roots instead. The measurement enters open
+  // roots now (`feat-measure-open-shadow-roots`), so this page is measured,
+  // and neither sentence has anything to say.
   const r = await runCli(['audit', fixture('web-components.html'), '--preset', '1080p-24'])
   expect(r.code, r.stderr).toBe(0)
   const m = JSON.parse(r.stdout)
-  expect(m.summary.targets.count).toBe(0)
-  const first = m.warnings[0]
-  expect(first).toMatch(/^nothing to measure in the light DOM/)
-  // 17, not the 26 this asserted before 2026-09-13: both sides of the count
-  // are now filtered to what a measurement would have kept, and nine of the
-  // fixture's text-bearing elements inside those roots are not drawn — a
-  // <style> element has a text child and is not text on the page. The old
-  // number sat beside "the page had no visible text" and contradicted it.
-  expect(first).toMatch(/9 shadow roots hold 16 interactive elements and 17 text elements the measurement does not enter/)
-  expect(first).toContain('built from web components, not empty')
-  // The three that were false, and the advice that cannot help, are gone.
-  expect(first).not.toContain('a bot wall')
-  expect(first).not.toContain('had not run yet')
-  expect(first).not.toContain('renders late longer')
+  const said = (m.warnings as string[]).join(' ')
+  expect(said, said).not.toMatch(/nothing to measure/)
+  expect(said, said).not.toMatch(/shadow root/)
+  expect(m.summary.targets.count, JSON.stringify(m.summary)).toBeGreaterThan(0)
+  expect(m.summary.text.count, JSON.stringify(m.summary)).toBeGreaterThan(0)
 })
 
 test('an ordinary empty page still gets the old sentence', async () => {
@@ -287,22 +279,20 @@ test('an ordinary empty page still gets the old sentence', async () => {
   expect(first).toContain('a page rendered by script that had not run yet, a bot wall, or an empty document')
 })
 
-test('a page that measures fine and hides most of itself says how much it hid', async () => {
+test('a page with most of its controls inside components measures every one of them', async () => {
   // Run 15, 2026-09-12: twelve buttons in the light DOM and forty behind four
-  // open roots answered "12 targets, 12 findings, 0 warnings". The counts had
-  // been taken — `shadowContent` runs on every measurement — and were read in
-  // four places, all of them inside a `stillEmpty` guard, so the rare case
-  // was covered and the common one was silent.
+  // open roots answered "12 targets, 12 findings, 0 warnings". A sentence then
+  // said how much was hidden. The measurement enters open roots now
+  // (`feat-measure-open-shadow-roots`), so all 52 are measured and nothing is
+  // hidden to say. Reverting the traversal takes this back to 12, which is the
+  // card's control.
   const r = await runCli(['audit', fixture('half-in-shadow.html'), '--preset', '1080p-24'])
   expect(r.code, r.stderr).toBe(0)
   const m = JSON.parse(r.stdout)
-  expect(m.summary.targets.count).toBe(12)
-  const share = (m.warnings as string[]).find(w => w.includes('shadow roots hold'))
-  expect(share, `warnings were ${JSON.stringify(m.warnings)}`).toBeTruthy()
-  expect(share).toContain("4 shadow roots hold 40 of this page's 52 interactive elements")
-  expect(share).toContain('the figures are of the light DOM alone')
-  // It is not the empty page's sentence: this page measured something.
-  expect(share).not.toContain('built from web components')
+  expect(m.summary.targets.count, JSON.stringify(m.summary)).toBe(52)
+  const said = (m.warnings as string[]).join(' ')
+  expect(said, said).not.toMatch(/shadow roots? holds?/)
+  expect(said, said).not.toMatch(/light DOM/)
 })
 
 test('a page held by a wall is told which wall, not offered three', async () => {

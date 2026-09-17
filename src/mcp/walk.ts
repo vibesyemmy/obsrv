@@ -82,15 +82,18 @@ function blockedFrom(raw: unknown): WalkBlocked | undefined {
   if (raw === null || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
   const f = r['frames']
-  const hosts = r['shadowHosts']
-  if (f === null || typeof f !== 'object' || typeof hosts !== 'number' || !Number.isFinite(hosts)) return undefined
+  if (f === null || typeof f !== 'object') return undefined
   const fr = f as Record<string, unknown>
   const count = fr['count']
   const cover = fr['viewportCoverage']
   if (typeof count !== 'number' || !Number.isFinite(count) || typeof cover !== 'number' || !Number.isFinite(cover)) return undefined
+  // `shadowHosts` comes only from an app whose walk did not enter open roots
+  // (0.58.0 up to this change); an app that enters them no longer counts them.
+  // Its presence is what tells `walkNothingNote` which walk it is describing.
+  const hosts = r['shadowHosts']
   return {
     frames: { count: Math.max(0, Math.floor(count)), viewportCoverage: Math.min(1, Math.max(0, cover)) },
-    shadowHosts: Math.max(0, Math.floor(hosts)),
+    ...(typeof hosts === 'number' && Number.isFinite(hosts) ? { shadowHosts: Math.max(0, Math.floor(hosts)) } : {}),
   }
 }
 

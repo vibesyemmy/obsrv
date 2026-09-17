@@ -555,10 +555,10 @@ those cards, and CI fails if either has drifted from them:
   every band but the first. `--keep-stuck-chrome` leaves all of it, as the capture used
   to; `--single-surface` avoids bands entirely, at the price of a page sized against the
   viewport laying out differently and an inner scroller not being followed at all.
-- Scroll targeting stops at the light DOM of the top-level document. A scroller inside a
-  shadow root or an iframe can't be found automatically *or* named with `scrollSelector`
-  (`document.querySelector` doesn't cross either boundary), so a web-component app that
-  hides its scroller in a shadow root has no escape hatch.
+- Scroll targeting stops at the top-level document. The automatic detection finds a scroller
+  inside an open shadow root, but not one inside an iframe or a closed root, and
+  `scrollSelector` can't name a scroller inside any root or iframe
+  (`document.querySelector` doesn't cross either boundary).
 - Frame delivery has no renderer-side backpressure mailbox (see plan header); at 30 fps
   with dirty rects it has not been needed.
 - Tabs are a first cut. They cannot be reordered, dragged out into another window, or

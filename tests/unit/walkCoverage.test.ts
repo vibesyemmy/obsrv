@@ -152,11 +152,43 @@ describe('walkNothingNote', () => {
     // the sentence asserted "no iframe covers the viewport and the page has
     // no open shadow roots" from a caller that had looked for neither —
     // which is the defect the whole function removes, produced by it.
-    for (const blocked of [undefined, { frames: { count: 0, viewportCoverage: 0 } }, { shadowHosts: 0 }]) {
+    for (const blocked of [undefined, { shadowHosts: 0 }]) {
       const note = walkNothingNote(blocked)
       expect(note).toContain('content in an iframe, in a shadow root, or in a container')
       expect(note).not.toContain('no iframe covers the viewport')
     }
+  })
+
+  /**
+   * The walk enters open shadow roots now (`feat-measure-open-shadow-roots`),
+   * so an app that did sends `frames` and no `shadowHosts`, and a page that
+   * scrolls nothing has no open root to blame. A closed root cannot be
+   * counted by anyone, so it joins the guesses.
+   */
+  it('on a walk that entered the open roots, blames none of them and names a closed root as a guess', () => {
+    const note = walkNothingNote({ frames: { count: 0, viewportCoverage: 0 } })
+    expect(note).toBe(
+      "this page hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, " +
+        'so the walk had nothing to scroll: no iframe covers the viewport, so what scrolls is a container that scrolls by ' +
+        'transform (a virtualised list or editor) or one inside a closed shadow root, and the figures are of the page as it first shows',
+    )
+  })
+
+  it('on a walk that entered the open roots, still names a wall it measured', () => {
+    const note = walkNothingNote({ frames: { count: 1, viewportCoverage: 1 } })
+    expect(note).toContain('has no scrollable container in its light DOM or its open shadow roots')
+    expect(note).toContain('an <iframe> covers 100% of the viewport')
+    expect(note).not.toContain('open shadow roots, which the walk does not enter')
+  })
+
+  it("keeps the older walk's words for an app that counted the roots instead of entering them", () => {
+    // Version skew: an MCP at this version driving an app between 0.58.0 and
+    // this change. That app sends `shadowHosts`, and its walk really did not
+    // enter the roots.
+    expect(walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 12 })).toContain(
+      'the page has 12 open shadow roots, which the walk does not enter',
+    )
+    expect(walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, shadowHosts: 0 })).not.toContain('its open shadow roots')
   })
 
   it('construction guard, version skew: an app older than the `blocked` field gets the whole list, verbatim', () => {

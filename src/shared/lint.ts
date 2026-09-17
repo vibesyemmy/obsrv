@@ -1,7 +1,7 @@
 import type { RGBA } from './inspect'
 
 
-import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowContent } from './scrollHost'
+import { SCROLL_HOST_SCRIPT, clipTest, findScroller, framesInViewport, rootScrolls, scrollOffset, shadowElements, shadowParent, shadowStackFrom } from './scrollHost'
 
 /**
  * The lint's page walk: one pass over the rendered DOM that brings back
@@ -119,12 +119,6 @@ export interface LintReport {
    */
   frames?: { count: number; viewportCoverage: number }
   /**
-   * What the open shadow roots hold that this measurement did not enter
-   * (`shadowContent`). A page built from web components measures as nothing;
-   * this is how the answer says so instead of guessing.
-   */
-  shadow?: { hosts: number; interactive: number; text: number }
-  /**
    * How many entries the checks refused, by kind — absent when none were.
    * See `AuditReport.dropped`: the entry goes, not the page, and the judge
    * says how many and of what kind.
@@ -212,9 +206,11 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   const PAINTED = new Set(['IMG', 'VIDEO', 'CANVAS', 'PICTURE', 'SVG', 'IFRAME', 'OBJECT', 'EMBED'])
   // The product of `opacity` down the ancestor chain: `opacity` composites a
   // whole subtree, so a parent's .5 greys its children whatever they declare.
+  // The chain crosses shadow boundaries (`shadowParent`): a component's own
+  // opacity greys what is inside it.
   const effectiveOpacity = (el: Element): number => {
     let o = 1
-    for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    for (let node: Element | null = el; node !== null; node = shadowParent(node)) {
       const v = Number.parseFloat(getComputedStyle(node).opacity)
       if (Number.isFinite(v)) o *= Math.min(1, Math.max(0, v))
     }
@@ -226,13 +222,11 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
     const x = r.left + r.width / 2
     const y = r.top + r.height / 2
     if (r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight) {
-      const stack = document.elementsFromPoint(x, y)
-      const at = stack.indexOf(el)
-      if (at >= 0) under = stack.slice(at)
+      under = shadowStackFrom(el, x, y)
     }
     if (under === null) {
       under = []
-      for (let node: Element | null = el; node; node = node.parentElement) under.push(node)
+      for (let node: Element | null = el; node; node = shadowParent(node)) under.push(node)
     }
     const layers: RGBA[] = []
     for (const node of under) {
@@ -265,10 +259,8 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   let imagesOver = 0
   let spacers = 0
 
-  const root = document.body ?? document.documentElement
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
-  for (let node: Node | null = walker.currentNode; node; node = walker.nextNode()) {
-    const el = node as Element
+  // Open shadow roots included (`shadowElements`), as the audit walks them.
+  for (const el of shadowElements(document.body ?? document.documentElement)) {
     if (SKIP.has(el.tagName)) continue
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
@@ -485,7 +477,6 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
       ),
     ),
     frames: framesInViewport(),
-    shadow: shadowContent(),
     text,
     edges,
     images,
