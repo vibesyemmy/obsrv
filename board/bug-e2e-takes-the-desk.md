@@ -2,7 +2,7 @@
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: a desk slot for run #3, asked in Henry's session 2026-09-17"
+waiting: ""
 kind: bug
 order: 0
 ---
