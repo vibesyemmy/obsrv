@@ -142,4 +142,3 @@ release sweep, closed four gaps:
 - **`rotated` in the CLI's JSON**, from the amendment above. It needs Opeyemi's yes for `cli.spec.ts`:
   `chore-cli-json-rotated`.
 - The skill and README don't mention `rotate` yet: `chore-rotate-in-skill-and-readme`.
-\n
