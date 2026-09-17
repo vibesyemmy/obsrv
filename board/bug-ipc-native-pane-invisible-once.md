@@ -90,3 +90,33 @@ needing a trigger nobody has found. It does not clear `#129`, and it does not im
 failed on their **retries**, which run alone in a freshly launched app, so inherited state from `:31`
 is excluded and the pane read invisible in a fresh worker — pointing at the runner at that moment
 rather than at those tests.
+
+## THE RECURRENCE, 2026-09-17 by Henry — run [`35201648560`](https://github.com/vibesyemmy/obsrv/actions/runs/35201648560), attempt 1
+
+Seen while reading a red run on **#267**, a PR that touches `tests/e2e/panes.spec.ts` and one board
+card and nothing else — so this is main's behaviour, on a branch cut from it.
+
+**It repeats the first sighting line for line, including the assertions:**
+
+    ipc.spec.ts:31   reports the URL the native pane navigated to   30.0 s, both tries
+                     first line: "Test timeout of 30000ms exceeded."
+    ipc.spec.ts:134  image mode hides the native pane …   1.2 s / 1.3 s, both tries
+                     :167  expect(native.isVisible()).toBe(true)   → false
+    ipc.spec.ts:173  ignores malformed payloads           232 ms / 253 ms, both tries
+                     :191  expect(after.visible).toBe(true)        → false
+
+Nothing else in the run failed except `cli-walk.spec:173`, which Rook examined on 2026-09-16 and
+found not deterministic and free of a hidden predecessor — a known flake, and a different shape.
+
+**What the second sighting changes:**
+- **`#129`'s proximity is no longer the salient fact.** The first was 48 minutes after it merged;
+  this is **12½ hours and many merges later** (2026-09-16 20:13Z → 2026-09-17 08:48Z). A change that
+  broke this would have had far more than two chances in between.
+- **The rate stands at rare and real**, not at one-off: one in Henry's 44-attempt sweep, zero in
+  Rook's 60 since, and this. **Two sightings, two heads, twelve hours apart, the same three tests in
+  the same file with the same assertions.**
+- **Still no cause.** Both sightings say the native pane read invisible in a freshly launched worker,
+  which points at the app's own startup on that runner rather than at inherited state.
+
+**The card's "where to look first" section is unchanged and now has two runs to look at rather than
+one.** Its attempt-1 logs are at `…/actions/runs/35201648560/attempts/1/logs`.
