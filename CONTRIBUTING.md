@@ -386,6 +386,20 @@ app, `focusWindow` and `overlay-focus.spec` (which launches with
 `app.focus()` on the app under test; use `win.showInactive()`, or gate it the
 same way and say so in its name.
 
+**Run the suite locally with `npm run test:e2e:desk-safe`.** It leaves out the
+specs that boot Electron through the CLI (`cli*.spec.ts`) and
+`throttle-refused.spec.ts`, which belong on CI. Until 2026-09-17 that rule was
+written down nowhere and everyone applied it with a pattern of their own; one
+sweep used `/cli-/`, which is the pattern anyone would write, and about fourteen
+`cli.spec.ts` tests ran on the machine someone was working at. **Sixteen files
+in that family are `cli-*` and exactly one is `cli.spec.ts`**, so the glob that
+is right is `cli*` and the difference is one character. The exclusion now lives
+in `playwright.config.ts` behind `OBSRV_DESK_SAFE=1`, where `testIgnore` matches
+file paths — `--grep` matches test titles, which is what makes a hand-written
+pattern a guess about what it is matching. `deskSafeCoversTheCliFamily.test.ts`
+reads `tests/e2e/` and fails if a spec starting with `cli` is not covered, so a
+new one cannot fall outside the rule quietly.
+
 **The server checks its own replies under test.** Every MCP tool compares the
 keys it emits against the keys its own output schema declares, nested ones
 included, and fails the call on a key that is not declared — naming the tool
