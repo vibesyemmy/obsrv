@@ -1,8 +1,7 @@
 ---
 title: "A live raster taken while the preset changes can come back settled, with no warning"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 criterion: C5
 order: 86
@@ -229,3 +228,27 @@ something and has not painted it. Both answers come from the side that did the a
   epoch. It gets its own card rather than a quiet inclusion, because bumping there has a race of its
   own — `applyEmulation` reaches the renderer asynchronously, so a forced repaint can still paint the
   old layout. Orientation goes through `setViewport` and is covered by the epoch.
+
+## FIXED 2026-09-17 by Henry, merged as `#314` (`241cad2`) after a QA PASS on `443b662`
+
+**Each acceptance item, against what ran:**
+
+| item | met by | evidence |
+| --- | --- | --- |
+| 1. measure first: the frames around a preset change, and which frame came back | probe `35238313231` | 16 straddles in 6 captures; the mechanism read in the code after the frames, not before |
+| 2. a raster across a size change does not come back `settled: true` without saying so | the extent gate **and** the layout epoch | unit controls red at their own assertions; Idris's FAIL on the extent-only version re-run against the epoch and returning the new layout |
+| 3. (replaced in the open) a still page still settles, at the size the pane is on | `live-capture-notes.spec.ts:101` and `:122` (`pixel-8`) | first-try ✓ on suite `35250655036`, which Idris read raw rather than by its conclusion |
+
+**The QA gate's first case.** Idris FAILed the extent-only fix on `b43e7fc` with a run, not a reading
+— seven presets share a device extent across densities — and FAILed the suite on the same head when a
+test predating `resizing` went red on it. Both closed; PASS on `443b662` in the room (#494).
+
+**What this card handed on rather than folded in:**
+- **text scale during a capture** — same shape, confirmed by Idris's run, **not** fixed: its own card,
+  `bug-live-raster-text-scale-mid-capture`, because bumping the epoch there has an async race of its
+  own. Until it lands it is a class 1 nothing discloses, which is flagged there.
+- **a covered frame with a transparent band** — seen while this card's suites ran, and found to be
+  **pre-existing on `main`** (it fired on #313's branch, with none of this card's code): its own card,
+  `bug-raster-coverage-counts-transparent-rows`, credited to Kenya's lead.
+
+**Not checked, as the verdict said:** nothing on the desk; orientation mid-capture read, not run.
