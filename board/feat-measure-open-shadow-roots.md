@@ -101,3 +101,40 @@ moment to pin the sentence.
 
 **Not done, and out of scope for step one:** the live check on caniuse.com and chromestatus.com
 against a second browser, and any product code.
+
+## Probe 4, 2026-09-17: all five arms red on their own assertions, and every twin green
+
+Recorded by Henry while Rook's session was away, relayed by Wren and **read from the run's own log
+rather than from the relay**. Run [`35194464896`](https://github.com/vibesyemmy/obsrv/actions/runs/35194464896),
+`probe/shadow-arms-red` at `b11de03`: **5 failed, 33 passed, 3.3 minutes.**
+
+| arm | assertion | expected | **received** |
+| --- | --- | --- | --- |
+| 1 · audit on `half-in-shadow.html` | `:70` | 52 | **12** — *"audit stopped at the shadow boundary"* |
+| 1 · lint finds the hairline in the card | `:76` | ≥ 1 | **0** — *"lint stopped at the shadow boundary"* |
+| 3 · inspect names the element under the point | `:104` | `inner` | **`card`** — *"inspect stopped at the host: x-card#card"* |
+| 2 · contrast against the component background | `:113` | `#1f2937` | **`#ffffff`** — *"contrast read against the page, not the card"* |
+| 4 · the walk reaches a scroller inside a root | `:131` | > 0 screenfuls | **0**, with the note below |
+
+> this page hides the document's overflow and has no scrollable container in its light DOM, so the
+> walk had nothing to scroll: the page has 2 open shadow roots, which the walk does not enter
+
+**The spec holds 8 tests: these 5 arms and 3 twins, and only the 5 failed** — so every twin passed,
+including the lint twin at `:79`, which was red in probes 1–3. **That is what turns all five into
+evidence about the shadow boundary rather than about the fixture.**
+
+**Why the lint twin had been red, which probes 2 and 3 could not tell:** the fixture's rule was a
+`0.5px` **border**, and `cli-lint.spec.ts:55` records the measurement that Chromium gives a 0.5px
+border a whole device pixel, so `div#hair` is never a hairline finding — the spec pins `hairline` to
+exactly `div#rule` (a 0.5px height) and `div#shadow` (a 0.5px box-shadow). An arm built on a border
+measures the rule's blind spot, not the boundary. Fixed at `90bb7c7` by making the rule a 0.5px
+height. Rook's zeros-across-every-rule diagnostic is what made that findable, since "saw the rule and
+didn't flag it" and "measured nothing" are different facts.
+
+`cli-audit` and `surface-parity` passed in the same run, so `half-in-shadow.html` is untouched in
+effect as well as in the diff.
+
+**Branches, for whoever picks this up:** `test/open-shadow-arms` at `90bb7c7` (the arms and the
+second fixture pair) and `probe/shadow-arms-red` (throwaway workflow, never merged).
+
+**Still waiting, unchanged:** Henry's go on the traversal, and Opeyemi's review of `b2`.
