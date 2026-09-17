@@ -158,6 +158,23 @@ describe('walkNothingNote', () => {
       expect(note).not.toContain('no iframe covers the viewport')
     }
   })
+
+  it('construction guard, version skew: an app older than the `blocked` field gets the whole list, verbatim', () => {
+    // NOT an observation. This sentence (`walkCoverage.ts:194`) is reachable
+    // in the field only when an MCP at or after 0.58.0 drives an installed
+    // app from before it — the app sends no `blocked`, `mcp/walk.ts`'s
+    // `blockedFrom` gives undefined, and this is what the user reads. The
+    // suite builds one tree, so no e2e can produce it; and a stub of a
+    // version we no longer ship would assert our belief about what 0.57
+    // sent. What this test does is stop the sentence being reworded or
+    // dropped while it stays unobservable (c5, room #421). To be re-read
+    // when the minimum supported app version moves.
+    expect(walkNothingNote(undefined)).toBe(
+      "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: " +
+        'content in an iframe, in a shadow root, or in a container that scrolls by transform (a virtualised list or editor) ' +
+        'was not brought into view before measuring, and the figures are of the page as it first shows',
+    )
+  })
 })
 
 describe('walkCoverageNote beside a named wall', () => {

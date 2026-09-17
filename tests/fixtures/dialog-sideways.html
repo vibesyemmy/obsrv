@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>a locked page whose dialog scrolls sideways only</title>
+    <!--
+      c5, walk limits: `shared/walkCoverage.ts:245` — "the walk could not move
+      the page or the dialog over it".
+
+      `dialog-locked.html`'s shape, with the dialog's panel a horizontal strip:
+      a modal holding a carousel. The page hides its overflow, so the walk looks
+      for another scroller; `canScroll` picks the panel because it overflows
+      SIDEWAYS (overflow-x: auto, content wider than the box); the walk's `next`
+      is vertical, `pageTarget` and `atEndOf` are Y-only, and the panel has no
+      Y to give — so the step lands where it started AND reads as at its end.
+      Zero screenfuls with a dialog as the scroller, which is the one branch of
+      `walkDialogNote` nothing had reached.
+
+      A first cut of this fixture cut the dialog's text short instead. That
+      panel had nothing below its fold, so `canScroll` never chose it, and the
+      walk fell through to the root and the "nothing to scroll" note — the
+      sibling sentence, not this one. Verified in a real Chromium before this
+      version was kept.
+    -->
+    <style>
+      body { margin: 0; font: 16px/1.4 system-ui, sans-serif; color: #111; background: #fff;
+             position: fixed; top: 0; left: 0; right: 0; overflow: hidden; }
+      header { height: 64px; display: flex; gap: 16px; align-items: center; padding: 0 24px; }
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px; }
+      .card { border: 1px solid #ddd; padding: 12px; height: 160px; }
+      .save { height: 28px; }
+      .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: grid; place-items: center; }
+      /* Scrolls, but only sideways: a strip of slides wider than the box. */
+      .panel { background: #fff; width: 420px; max-height: 300px; overflow-x: auto; overflow-y: hidden; padding: 20px 24px; }
+      .strip { display: flex; gap: 16px; width: max-content; }
+      .slide { width: 240px; height: 160px; background: #eee; flex: none; }
+    </style>
+  </head>
+  <body>
+    <header><a href="#home">Home</a><button type="button">Sign in</button></header>
+    <main class="grid">
+      <article class="card"><button class="save" type="button">Save 1</button></article>
+      <article class="card"><button class="save" type="button">Save 2</button></article>
+      <article class="card"><button class="save" type="button">Save 3</button></article>
+      <article class="card"><button class="save" type="button">Save 4</button></article>
+      <article class="card"><button class="save" type="button">Save 5</button></article>
+      <article class="card"><button class="save" type="button">Save 6</button></article>
+      <article class="card"><button class="save" type="button">Save 7</button></article>
+      <article class="card"><button class="save" type="button">Save 8</button></article>
+      <article class="card"><button class="save" type="button">Save 9</button></article>
+      <article class="card"><button class="save" type="button">Save 10</button></article>
+      <article class="card"><button class="save" type="button">Save 11</button></article>
+      <article class="card"><button class="save" type="button">Save 12</button></article>
+      <article class="card"><button class="save" type="button">Save 13</button></article>
+      <article class="card"><button class="save" type="button">Save 14</button></article>
+      <article class="card"><button class="save" type="button">Save 15</button></article>
+      <article class="card"><button class="save" type="button">Save 16</button></article>
+    </main>
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="panel">
+        <h1>Pick a plan</h1>
+        <div class="strip">
+          <div class="slide">Starter</div>
+          <div class="slide">Team</div>
+          <div class="slide">Business</div>
+          <div class="slide">Enterprise</div>
+        </div>
+        <button type="button">Continue</button>
+      </div>
+    </div>
+  </body>
+</html>
