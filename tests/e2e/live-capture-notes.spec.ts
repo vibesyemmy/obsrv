@@ -249,15 +249,16 @@ test('a raster capture whose budget runs out before a resized frame is painted s
   // 35229835046), because a single resize gets fully painted within two
   // seconds. Back to back, the budget sometimes lands between a resize and that
   // size's first full frame. Measured rates for `uncovered`:
-  //   - this cycle (dsf-1 presets only), on this code: 4 of 8 (35229152084);
+  //   - this cycle (dsf-1 presets only), on this code: 4 of 8 (35229152084),
+  //     then 2 of 7 in this test's control run (35230323442);
   //   - all eight presets, same run: 3 of 8, and one `settled: true`;
   //   - all eight presets on earlier heads: 1 of 6, 3 of 3, 4 of 4.
   // dsf-1 only, because an apply that changes deviceScaleFactor takes ~150 ms
   // against ~30 ms, and the budget tends to run out covered in that dwell.
-  // Chance that 8 tries all miss: 0.4% at 4 of 8, 2.3% at 3 of 8, 23% at the
-  // worst head's 1 of 6. A red run here that says "no capture came back
-  // uncovered" is that miss. Read the tries it prints before calling it a
-  // product failure.
+  // Chance that 8 tries all miss: 0.4% at 4 of 8, 6.8% at 2 of 7, 23% at the
+  // worst head's 1 of 6, before the suite's one retry. A red run here that
+  // says "no capture came back uncovered" is that miss. Read the tries it
+  // prints before calling it a product failure.
   test.skip(
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
