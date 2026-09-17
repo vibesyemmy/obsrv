@@ -5,6 +5,7 @@ import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcM
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
 import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, captureQuiescent } from '../cli/capture'
+import { rasterWarnings } from './rasterWarnings'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout, invalidSelectorNote, pointOffScreenNote } from '../shared/inspectReadout'
@@ -1778,48 +1779,13 @@ export function registerIpc(ctx: AppContext): () => void {
       const release = tabs.holdPainting()
       try {
         await awaitViewportStable()
-        // The capture's own sentence for `uncovered` is the only one that says
-        // part of the PNG is transparent, and it names this frame's size and
-        // the region. Kept from `onWarn`, keyed on the reason, so the raster
-        // says what the CLI says rather than a copy of it.
-        let uncoveredSaid: string | undefined
-        const frame = await captureQuiescent(s.target, {
-          timeoutMs: RASTER_CAPTURE_MS,
-          onWarn: (message, reason) => {
-            if (reason === 'uncovered') uncoveredSaid = message
-          },
-        })
+        const said = rasterWarnings(BLANK_LIVE_WARNING)
+        const frame = await captureQuiescent(s.target, { timeoutMs: RASTER_CAPTURE_MS, onWarn: said.onWarn })
         const image = nativeImage.createFromBitmap(Buffer.from(frame.bgra.buffer, frame.bgra.byteOffset, frame.bgra.byteLength), {
           width: frame.width,
           height: frame.height,
         })
-        const warnings: string[] = []
-        if (!frame.settled) {
-          const reason = frame.unsettledReason
-          switch (reason) {
-            case 'animating':
-              warnings.push('the page keeps painting (animation or video); this is one frame of it')
-              break
-            case 'blank':
-              warnings.push(BLANK_LIVE_WARNING)
-              break
-            case 'uncovered':
-              // `captureQuiescent` warns on the line before it returns this
-              // reason (pinned in cliCapture.test.ts), so the sentence is there.
-              if (uncoveredSaid !== undefined) warnings.push(uncoveredSaid)
-              break
-            case 'timeout':
-            case 'loading':
-            case undefined:
-              warnings.push('the page was still painting when the capture budget ran out; the PNG may show a transitional frame')
-              break
-            default: {
-              // A new reason does not compile until it is routed above.
-              const unrouted: never = reason
-              void unrouted
-            }
-          }
-        }
+        const warnings: string[] = said.forVerdict(frame.settled, frame.unsettledReason)
         if (s.onionSkin > 0) warnings.push("the raster is the target's own frame; the onion skin is not blended into it")
         return {
           data: image.toPNG().toString('base64'),
