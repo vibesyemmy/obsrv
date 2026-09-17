@@ -1,6 +1,6 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
 import { shadowShareNote } from '../shared/shadowShare'
-import { httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote } from '../shared/measureBudget'
+import { historyMoveNote, httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote, type HistoryMove } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
@@ -247,6 +247,37 @@ export function registerIpc(ctx: AppContext): () => void {
     })
   }
 
+  /**
+   * Which page a live measurement's figures are of, said before anything about
+   * what was in it: where the last navigate's load landed, or the history move
+   * made since, then whether the page navigated by itself after it loaded, then
+   * the status its server answered. One place for inspect, audit and lint,
+   * which said these separately and drifted (lint compared addresses where
+   * audit counted commits).
+   */
+  const whichPage = (s: TabSession, st: { code: number; text: string; url: string }): string[] => {
+    const asked = askedOf.get(s)
+    const pre: string[] = []
+    if (asked) {
+      // Where the navigate's load landed describes the page it loaded, which a
+      // history move has since replaced; the move is the news instead.
+      if (s.historyMove !== null) pre.push(historyMoveNote(s.historyMove, s.url, asked.asked))
+      else {
+        const landed = landedElsewhereNote(asked.asked, asked.landedAt, st.code)
+        if (landed !== null) pre.push(landed)
+      }
+      // A navigation committed after the load settled: the page moved under the
+      // agent between `navigate` and this measurement. Counted, not compared: a
+      // page that reloads itself to the same address moves just as much as a
+      // redirect to another one, and comparing addresses cannot see it.
+      const seen = arrivals(s)
+      if (seen.count > asked.atCount && seen.url) pre.push(navigatedAfterLoadNote(asked.asked, seen.url))
+    }
+    const statusNote = httpStatusNote(st.code, st.text, st.url, asked?.asked)
+    if (statusNote !== null) pre.push(statusNote)
+    return pre
+  }
+
   // An explicit `navigate` drives both panes. History moves (back, forward,
   // reload) drive the native pane only: SyncBus mirrors whatever it commits
   // into the target, whose own history is not user-facing. Driving both would
@@ -269,6 +300,8 @@ export function registerIpc(ctx: AppContext): () => void {
     // session, because it drives tabs that are deliberately in the background.
     const s = session ?? tab()
     watchArrivals(s)
+    // A navigate starts a new record, so no earlier history move describes it.
+    s.historyMove = null
     await s.ready
     let wanted = url
     try {
@@ -371,19 +404,31 @@ export function registerIpc(ctx: AppContext): () => void {
       s.target.on('loading', on)
     })
 
-  const reloadBoth = (): Promise<void> => {
+  const reloadBoth = (by: HistoryMove['by']): Promise<void> => {
     const s = tab()
+    s.historyMove = { kind: 'reload', by }
     s.native.reload()
     // A reload commits the URL the target already shows, so the mirror
     // (rightly) does nothing; reload the target on its own.
     s.target.reload()
     return awaitTargetLoad(s, RELOAD_WAIT_MS)
   }
-  const goBack = (): void => tab().native.back()
-  const goForward = (): void => tab().native.forward()
+  // Recorded only when the pane has somewhere to go: a Back with no history
+  // moves nothing, and a sentence about it would describe a move that never
+  // happened.
+  const goBack = (by: HistoryMove['by']): void => {
+    const s = tab()
+    if (s.native.webContents.navigationHistory.canGoBack()) s.historyMove = { kind: 'back', by }
+    s.native.back()
+  }
+  const goForward = (by: HistoryMove['by']): void => {
+    const s = tab()
+    if (s.native.webContents.navigationHistory.canGoForward()) s.historyMove = { kind: 'forward', by }
+    s.native.forward()
+  }
   on(IPC.reload, e => {
     if (!fromRenderer(e)) return
-    void reloadBoth()
+    void reloadBoth('app')
   })
   // The target canvas's last resort once Chromium has given up on the GPU for
   // the session (see `TargetCanvas`): only a new process gets WebGL back.
@@ -404,11 +449,11 @@ export function registerIpc(ctx: AppContext): () => void {
   })
   on(IPC.back, e => {
     if (!fromRenderer(e)) return
-    goBack()
+    goBack('app')
   })
   on(IPC.forward, e => {
     if (!fromRenderer(e)) return
-    goForward()
+    goForward('app')
   })
 
   // --- target ---------------------------------------------------------------
@@ -1799,16 +1844,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // live inspect of a route that redirects, or of a 404, described the
       // page it landed on and never said it had landed anywhere.
       const st = t.httpStatus()
-      const askedHere = askedOf.get(tab())
-      const pre: string[] = []
-      if (askedHere) {
-        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
-        if (landed !== null) pre.push(landed)
-        const seen = arrivals(tab())
-        if (seen.count > askedHere.atCount && seen.url) pre.push(navigatedAfterLoadNote(askedHere.asked, seen.url))
-      }
-      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
-      if (statusNote !== null) pre.push(statusNote)
+      const pre = whichPage(tab(), st)
       // A point the screen does not have, in the same words as the headless
       // inspect: the viewport the point was read inside is this tab's, now.
       const offScreen = 'selector' in req ? null : pointOffScreenNote(req, vp)
@@ -1863,20 +1899,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // it. Same order the headless path settled on: where the load landed,
       // then the status, then the contents.
       const st = t.httpStatus()
-      const askedHere = askedOf.get(tab())
-      const pre: string[] = []
-      if (askedHere) {
-        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
-        if (landed !== null) pre.push(landed)
-        // A navigation committed after the load settled: the page moved under
-        // the agent between `navigate` and this measurement. Counted, not
-        // compared — a reload to the same address moves the page just as much
-        // as a redirect to another one.
-        const seen = arrivals(tab())
-        if (seen.count > askedHere.atCount && seen.url) pre.push(navigatedAfterLoadNote(askedHere.asked, seen.url))
-      }
-      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
-      if (statusNote !== null) pre.push(statusNote)
+      const pre = whichPage(tab(), st)
       const held = await awaitContent(() => t.auditPage(LIVE_MEASURE_BUDGET_MS), isEmptyAuditReport)
       let report = held.report
       const notes: string[] = [...pre]
@@ -1938,21 +1961,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // it. Same order the headless path settled on: where the load landed,
       // then the status, then the contents.
       const st = t.httpStatus()
-      const askedHere = askedOf.get(tab())
-      const pre: string[] = []
-      if (askedHere) {
-        const landed = landedElsewhereNote(askedHere.asked, askedHere.landedAt, st.code)
-        if (landed !== null) pre.push(landed)
-        // A navigation committed after the load settled: the page moved under
-        // the agent between `navigate` and this measurement. Counted, not
-        // compared — as the audit's site above, which this one was left
-        // behind by: a reload to the same address moves the page just as much
-        // as a redirect to another one, and comparing addresses cannot see it.
-        const seen = arrivals(tab())
-        if (seen.count > askedHere.atCount && seen.url) pre.push(navigatedAfterLoadNote(askedHere.asked, seen.url))
-      }
-      const statusNote = httpStatusNote(st.code, st.text, st.url, askedHere?.asked)
-      if (statusNote !== null) pre.push(statusNote)
+      const pre = whichPage(tab(), st)
       const held = await awaitContent(() => t.lintPage(1 / (deviceScaleFactor * textScale), LIVE_MEASURE_BUDGET_MS), isEmptyLintReport)
       let report = held.report
       const notes: string[] = [...pre]
@@ -2020,9 +2029,9 @@ export function registerIpc(ctx: AppContext): () => void {
         // Electron rejected the event; the click is lost, the app is not.
       }
     },
-    back: goBack,
-    forward: goForward,
-    reload: reloadBoth,
+    back: () => goBack('agent'),
+    forward: () => goForward('agent'),
+    reload: () => reloadBoth('agent'),
     focusWindow: () => {
       if (win.isDestroyed()) return
       // Fronting the app is this command's whole job, so it first undoes what

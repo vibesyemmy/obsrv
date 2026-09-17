@@ -9,6 +9,7 @@ import type { AgentViewMode } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import { DEFAULT_ORIENTATION } from '../shared/presets'
 import type { LoadError, Orientation } from '../shared/types'
+import type { HistoryMove } from '../shared/measureBudget'
 import { NativePane } from './nativePane'
 import { attachSyncBus, type SyncBus } from './syncBus'
 import { TargetSource } from './targetSource'
@@ -82,6 +83,14 @@ export class TabSession {
    */
   loadError: LoadError | null = null
   title = ''
+  /**
+   * The last history move made in this tab since its last navigate (Back,
+   * Forward or Reload, by the agent or in the app), or null. Every navigate
+   * clears it. A live measurement reads it to say which page its figures are of
+   * (`historyMoveNote`). Recorded where the move is issued, because nothing
+   * downstream can tell a Back from the bus keeping the panes in step.
+   */
+  historyMove: HistoryMove | null = null
 
   /** A preset change is in flight; a capture or scroll must wait for it. */
   viewportPending = false
