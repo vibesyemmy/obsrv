@@ -188,3 +188,29 @@ Run started 20:10:23Z. Nothing else in the run failed.
 (20:13Z to 20:10Z, a day apart) is enough to stop treating this as too rare to act on. Moved to
 Doing, owned by Henry, on Opeyemi's word. The sweep's recurrence-watch grep should no longer match
 this card's opening line — it is not waiting anymore.
+
+### The same commit, re-run: green — so it is the runner, not the tree
+
+**Henry re-ran the failed job** (`gh run rerun --failed`) on the identical commit `5f35046`, before
+merging anything else and before accepting the reading above. **Attempt 2: success, zero `✘`, zero
+flaky, and all three tests ✓** — `:31` in 82 ms where attempt 1 spent its whole 30 s.
+
+**That is the strongest evidence this card has, and it is worth being precise about what it rules
+out.** The three tests failed on **both tries** in attempt 1, which by the team's usual reading
+(`ci-logs-and-local-e2e-traps`) suggests a deterministic failure rather than a flake — a retry runs
+the test alone in a fresh worker, so surviving that normally means the test really is broken. **It
+was not.** The same code, on the same commit, passed completely one attempt later.
+
+So this is the second shape that memory names: **a condition that outlives the retry but not the
+job** — the runner, the machine, the window server, something outside the tree. It is why
+"failed both tries" must not be read as "deterministic" without a second attempt to check it against,
+and this run is now the clearest example of that on record here.
+
+**It also clears `#325` specifically.** All three tests passed on **both parents** of that merge
+(`f57477d`, run `35266612365`; `375d4a8`, run `35264902655`) and on the merge itself once re-run.
+Nothing in the first-launch diagonal hint is implicated, and the revert that was being held over it is
+not needed.
+
+**What it does not tell us:** what the condition is. Three sightings, three heads, and now one
+demonstration that the tree is not the variable. The next thing worth having is what the *runner* was
+doing — which is the "where to look first" section's question, now with a sharper target than before.
