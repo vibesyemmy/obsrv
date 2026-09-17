@@ -710,3 +710,61 @@ for whoever runs next. A 3.2 s settle did **not** fix it; three attempts at
 timing the handover failed. It lives in `sync-mirror-mark.spec.ts` with its
 own app instead — the coupling was shared state, not timing, and the remedy
 for shared state is not sharing it.
+
+## `target-source.spec.ts:234`: one click that did not land, on the day its subject changed
+
+**Seen once**, 2026-09-17, on `#324`'s suite (`35261737827`, head `014095e`): *"forwards clicks into the
+offscreen page"* failed its first attempt and passed its retry. The assertion is the page's own title
+after the click:
+
+```
+> 271 |   expect(title).toBe('clicked')
+Received: "data:text/html,<body style%3D…<button …onclick%3D…"
+```
+
+The title was still the document's URL, so the `onclick` had not run — the click did not reach the
+page, or had not yet when the title was read.
+
+**Why it was chased rather than shrugged at.** `target-source.spec.ts` covers `TargetSource`, and
+`#314` had changed `TargetSource` that same afternoon — a new guard dropping paints from a window the
+source has already replaced, plus a layout-epoch counter. A first-try failure in the spec covering
+code you changed hours earlier is the one you do not get to call a flake by assertion.
+
+**What says it is not `#314`:** five `main` runs contain that merge — `241cad2`, `8aed03c`, `006faa7`,
+`eab17fe`, `3653511` — and **none** has a `target-source` failure of any kind. `#324` itself changes
+only `playwright.config.ts` behind a flag CI never sets, a `package.json` script, a unit test and
+prose; nothing on the input path. The change it would have to be is a dropped *paint* breaking a
+*click*, and the two do not meet.
+
+**What is NOT established:** the cause. One sighting, no repeat, no instrumentation. It is recorded
+here so the second sighting is a pattern rather than a rediscovery, and so nobody re-derives the
+"is it `#314`?" question that five clean runs already answer.
+
+**Not the same test as** `target-source:106` (the partial dirty rect), which
+`chore-flaky-leaders-0917` counted. That one is about paints; this one is about input.
+
+## `vision.spec.ts:47`: the pixel was white, which answers a question the card left open
+
+**Seen again** 2026-09-17 on `#325`'s suite (`35266612365`, head `f57477d`), first attempt, passing on
+the retry. Same test and the **same numbers** `bug-flakes-gate-the-gate` recorded — `expected > 295,
+received 255` — so this is that flake and not a new one.
+
+**What is new is the rest of the message.** The assertion prints the whole pixel, and it was
+`middle pixel rgb: [255,255,255]`. **Pure white: all three channels equal, nothing painted there
+yet.** The assertion is `normal[0] > normal[1] + 40`, so it fails on white for the same reason it
+would fail on a weak red — a magnitude comparison cannot tell "the colour came out 14% short" from
+"there is no colour here at all".
+
+**That matters because the card asks exactly this question.** `bug-flakes-gate-the-gate` singles this
+test out as *"a number that came out wrong … it may be the only one here that is a rendering defect
+rather than a scheduling one, and it should not be filed alongside the others without someone looking
+at that separately."* A white pixel is the scheduling answer, not the rendering one: the frame the
+assertion read had not been painted. **One sighting does not settle it** — the card's own sighting
+may have carried a different pixel, and nobody recorded it — but the next person to look should start
+by printing the pixel rather than the channel, because the two hypotheses are distinguishable and this
+assertion already prints what distinguishes them.
+
+**Not caused by `#325`,** which was the reason it was chased: that PR shortens the target pane by 26 px
+while the hint shows, and it had already shifted two measurement specs. A 26 px shift moves the sampled
+point *within* the content; it does not turn it white. And the four `diagonal-hint` tests passed on
+their first attempt in the same run.
