@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { isDiagonalSetFor, isDisplayKey, MAX_RECORDED_DISPLAYS } from './diagonalHint'
 import { DEFAULT_SETTINGS, MAX_TABS_MAX, MAX_TABS_MIN, SPLIT_MAX, SPLIT_MIN } from './presets'
 import type { Settings } from './types'
 
@@ -27,11 +28,41 @@ const readTabCap = (v: unknown): number =>
     ? Math.min(MAX_TABS_MAX, Math.max(MAX_TABS_MIN, v))
     : DEFAULT_SETTINGS.maxTabs
 
+/**
+ * The on-disk reading of `hostDiagonalSetFor`: which display the diagonal was
+ * set for (`shared/diagonalHint.ts`).
+ *
+ * **A file without the key** predates it. Every such file holds a
+ * `hostDiagonalInches`, because `saveSettings` writes the whole object and the
+ * daily update check rewrites it, so the number alone cannot say whether
+ * anyone chose it:
+ * - the default, 27, reads as untouched (`[]`). A real 27″ user sees the hint
+ *   once, and one click ends it;
+ * - any other value was chosen, but not for a recorded screen: `'unknown'`.
+ *   Adopting it silently for whichever screen opens first would be wrong with
+ *   nothing saying so when that screen is not the one it was set for.
+ *
+ * A present key that is not a valid value is read the same way as a missing
+ * one, so a hand-edited file errs towards the hint showing rather than towards
+ * silence. A list keeps its valid entries, up to the bound.
+ */
+const readDiagonalSetFor = (raw: Record<string, unknown>, inches: number): Settings['hostDiagonalSetFor'] => {
+  const v = raw.hostDiagonalSetFor
+  if (v === 'unknown') return 'unknown'
+  if (Array.isArray(v)) {
+    const kept = v.filter(isDisplayKey).slice(0, MAX_RECORDED_DISPLAYS)
+    if (kept.length > 0 || v.length === 0) return kept
+  }
+  return inches === DEFAULT_SETTINGS.hostDiagonalInches ? [] : 'unknown'
+}
+
 export function loadSettings(file: string): Settings {
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    const hostDiagonalInches = isPositive(raw.hostDiagonalInches) ? raw.hostDiagonalInches : DEFAULT_SETTINGS.hostDiagonalInches
     return {
-      hostDiagonalInches: isPositive(raw.hostDiagonalInches) ? raw.hostDiagonalInches : DEFAULT_SETTINGS.hostDiagonalInches,
+      hostDiagonalInches,
+      hostDiagonalSetFor: readDiagonalSetFor(raw, hostDiagonalInches),
       hostNits: isPositive(raw.hostNits) ? raw.hostNits : DEFAULT_SETTINGS.hostNits,
       // Anything but a literal true (older files have no key at all) means off:
       // a network-facing capability must never be enabled by a malformed file.
@@ -62,6 +93,9 @@ export function loadSettings(file: string): Settings {
 
 export function saveSettings(file: string, s: Settings): void {
   if (!isPositive(s.hostDiagonalInches) || !isPositive(s.hostNits)) throw new RangeError('settings values must be finite and > 0')
+  if (!isDiagonalSetFor(s.hostDiagonalSetFor)) {
+    throw new RangeError(`hostDiagonalSetFor must be 'unknown' or at most ${MAX_RECORDED_DISPLAYS} displays with whole positive physical pixels`)
+  }
   if (typeof s.agentControl !== 'boolean') throw new RangeError('agentControl must be a boolean')
   if (typeof s.updateCheck !== 'boolean') throw new RangeError('updateCheck must be a boolean')
   if (!isStamp(s.lastUpdateCheck)) throw new RangeError('lastUpdateCheck must be a finite epoch ms >= 0')

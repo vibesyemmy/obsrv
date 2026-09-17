@@ -126,6 +126,7 @@ describe('presets', () => {
     expect(MAX_VIEWPORT).toBe(4096)
     expect(DEFAULT_SETTINGS).toEqual({
       hostDiagonalInches: 27,
+      hostDiagonalSetFor: [],
       hostNits: 500,
       agentControl: false,
       updateCheck: true,

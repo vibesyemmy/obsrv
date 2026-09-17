@@ -50,8 +50,26 @@ export interface HostInfo {
   scaleFactor: number
 }
 
+/**
+ * A display as the monitor diagonal knows it: its physical pixels, as
+ * `HostInfo` reports them. `inches` is room for a diagonal per display and is
+ * not written today (`shared/diagonalHint.ts`).
+ */
+export interface DisplayKey {
+  physicalWidth: number
+  physicalHeight: number
+  inches?: number
+}
+
 export interface Settings {
   hostDiagonalInches: number
+  /**
+   * Which display `hostDiagonalInches` was set for: `[]` nobody has set it,
+   * one entry the display it was set on, `'unknown'` set before this field
+   * existed. The target footer's calibration hint reads it
+   * (`shared/diagonalHint.ts`).
+   */
+  hostDiagonalSetFor: DisplayKey[] | 'unknown'
   hostNits: number
   /**
    * Whether the loopback agent-control server runs (spec §14 "Live drive").

@@ -14,6 +14,7 @@ export const MAX_TABS_MAX = 32
 
 export const DEFAULT_SETTINGS: Settings = {
   hostDiagonalInches: 27,
+  hostDiagonalSetFor: [],
   hostNits: 500,
   agentControl: false,
   updateCheck: true,

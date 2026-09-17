@@ -1,3 +1,4 @@
+import { isDiagonalSetFor } from './diagonalHint'
 import { LINT_OBJECT_FITS } from './lint'
 import type { WalkBlocked } from './walkCoverage'
 import type { MenuGroup, MenuOption, MenuRequest, Rect } from './api'
@@ -566,7 +567,14 @@ export function parseSettings(raw: unknown): Settings | null {
   // arriving here is a bug rather than a hand-edited file.
   const maxTabs = raw.maxTabs ?? DEFAULT_SETTINGS.maxTabs
   if (!isFiniteNumber(maxTabs) || !Number.isInteger(maxTabs) || maxTabs < MAX_TABS_MIN || maxTabs > MAX_TABS_MAX) return null
-  return { hostDiagonalInches, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split, maxTabs }
+  // A missing `hostDiagonalSetFor` is the pre-feature wire shape: a renderer
+  // that did not know the field, and so recorded no display. It means `[]`,
+  // untouched, the answer that shows the calibration hint rather than hiding
+  // it. Out of shape it is refused, not coerced: the renderer builds this
+  // value (`recordDiagonalFor`), so a bad one arriving here is a bug.
+  const hostDiagonalSetFor = raw.hostDiagonalSetFor ?? []
+  if (!isDiagonalSetFor(hostDiagonalSetFor)) return null
+  return { hostDiagonalInches, hostDiagonalSetFor, hostNits, agentControl, updateCheck, lastUpdateCheck, recordHistory, split, maxTabs }
 }
 
 /**
