@@ -124,6 +124,23 @@ test('an element the screen never shows is measured, and the readout says it is 
   const sh = JSON.parse(shown.stdout)
   expect(sh.found).toBe(true)
   expect(notDrawn(sh.notes)).toEqual([])
+
+  // `visibility` is inherited AND overridable, so a descendant that opts back
+  // in is painted even under a `visibility: hidden` parent — and a reader can
+  // see it. Walking ancestors for `visibility` found the parent and called
+  // this not drawn, which is the opposite of true. Found by Henry in the
+  // 0.61.0 release sweep; `audit`'s own `shown` rule reads the element alone
+  // (shared/audit.ts:122), which is what this now agrees with.
+  const revealed = await runCli(['inspect', fixture('hidden-text.html'), '--preset', 'laptop-768', '--selector', '#revealed'])
+  expect(revealed.code, revealed.stderr).toBe(0)
+  const rv = JSON.parse(revealed.stdout)
+  expect(rv.found).toBe(true)
+  expect(notDrawn(rv.notes), JSON.stringify(rv.notes)).toEqual([])
+
+  // And `display: none` still walks, because it is NOT overridable that way:
+  // a child of a `display: none` parent is not rendered whatever it declares.
+  // The two rules differ, and the fix is not "stop walking".
+  expect(notDrawn(g.notes)).toEqual([expect.stringContaining('display: none')])
 })
 
 test('a point off the screen says so, naming the viewport it is off; a point on the screen does not', async () => {
