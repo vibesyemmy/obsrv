@@ -1,8 +1,7 @@
 ---
 title: "No e2e drags a tab: the reorder test calls moveTab directly, so the strip's drag handlers are untested"
-column: doing
+column: done
 owner: "Rook"
-waiting: ""
 kind: chore
 order: 70
 ---
@@ -49,3 +48,38 @@ rather than Chromium's drag, which is the same shape as the `moveTab` call this 
 
 **Where it runs:** CI. `tabs.spec` relaunches the app, and after tonight CI is the right default for
 anything in that file from me.
+
+## DONE 2026-09-17, merged as `#245` (5e75eae)
+
+**The card's unmeasured question, answered: Playwright's CDP drag does reach an Electron
+`BrowserWindow`.** `locator.dragTo()` drives `Input.dispatchDragEvent` into the renderer, `Tab`'s
+`dragstart` → `dragover` (with the `preventDefault` that is the only reason a drop fires) → `drop`
+all run, and `TabBar`'s `drop(index)` reaches `moveTab` over IPC. The fallback this card allowed for
+— say so rather than fake it with dispatched events — was not needed. It moves no real cursor, so it
+stays desk-safe, and it ran on CI.
+
+### The control failed to bite first, and that is this card's real finding
+
+The card asked for `onDrop(index + 1)` to turn the test red. Against the gesture the card itself
+suggested — *"`dragTo()` from the first tab onto the third"* — it came back **green**
+(`35183610866`).
+
+**`moveTab` clamps:** `to = Math.max(0, Math.min(rest.length, Math.trunc(toIndex)))`
+(`shared/tabList.ts:48`). With three tabs, `rest.length` is 2 once the dragged tab is removed, so
+dropping on the **last** position sends 2 and 3 to the same answer. **The card named the one drop
+position where an off-by-one cannot be seen.** Following the spec literally produced a test that ran
+in 5 s, asserted main's snapshot rather than the strip, checked persistence across a relaunch — and
+discriminated nothing about the index it exists to check.
+
+Dropping on the **middle** tab is what the clamp cannot absorb: index 1 gives `[link, tall,
+hairline]`, a broken index 2 gives `[link, hairline, tall]`. Control re-run: **red both tries**
+(`35186064483`), expected `[tab-2, tab-1, tab-3]`, received `[tab-2, tab-3, tab-1]` — read
+independently by Henry.
+
+**The reusable half:** a green suite, a confirmed `✓` line and a plausible runtime all said the test
+worked. Only the control said otherwise. **A test that has run and passed is evidence it can pass,
+and nothing else.**
+
+Final evidence: `35187593078` green on the merged head with the drag test confirmed run (3.3 s), and
+the control's spec content diffed byte-identical (1139 lines) against that head, so the control
+validated what merged rather than an ancestor of it.
