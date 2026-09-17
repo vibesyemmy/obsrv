@@ -119,6 +119,28 @@ test('a raster capture of a page that has stopped still settles, at the size the
   expect([png.width, png.height], margin).toEqual([r.width, r.height])
 })
 
+test('and still settles at a fractional density, where the two ways of computing the size disagree', async () => {
+  // The case the guard above is really about. `pixel-8` is 412 x 915 at
+  // 2.625: the products are 1081.5 and 2401.875, Chromium paints the floor
+  // (1081 x 2401) and Electron's bitmap is the round. `expectedFrameSize()`
+  // takes the floor, so if it ever took the round instead, every capture on
+  // this preset would run to its budget and answer `resizing` — and every
+  // whole-number preset would stay green while it did.
+  const before = ((await call('status')).preset as { id?: string } | undefined)?.id ?? 'laptop-768'
+  try {
+    await call('setPreset', { id: 'pixel-8' })
+    await call('navigate', { url: STILL })
+    const r = await call('captureRaster')
+    const margin = JSON.stringify({ settled: r.settled, reason: r.unsettledReason, size: `${String(r.width)}x${String(r.height)}`, warnings: warningsOf(r) })
+    expect(r.settled, margin).toBe(true)
+    // The documented floor, not the round: 1082 x 2402 here would mean the
+    // comment on `pixel-8` and `paintedExtent` disagree with the surface.
+    expect([r.width, r.height], margin).toEqual([1081, 2401])
+  } finally {
+    await call('setPreset', { id: before })
+  }
+})
+
 test('a raster capture with the onion skin on says the skin is not in it', async () => {
   // `ipc.ts:1823`. The easiest sentence in the cluster: no race and no
   // animation — the raster is the target's own frame, so a skin blended in the
