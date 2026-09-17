@@ -254,10 +254,19 @@ test('a raster capture while the pane is resized throughout says the page was st
     !process.env['CI'] && !process.env['OBSRV_E2E_FRONT'],
     'cycles presets under a capture, the shape of a pair with recorded desk activations: runs on CI, or locally with OBSRV_E2E_FRONT=1',
   )
-  test.setTimeout(120_000)
   const CYCLE = ['laptop-768', 'laptop-800-11', 'laptop-900-17', 'sxga-19', '1440x900-19', 'android-65', 'ipad-109', '1080p-24']
   const STEP_PAUSE_MS = 700
   const MAX_TRIES = 5
+  // Computed from the tries rather than fixed, so raising one cannot silently
+  // eat the other's margin — which is exactly what happened here. The timeout
+  // was a flat 120 s, sized when `MAX_TRIES` was 3; taking it to 5 left about
+  // 1.7x headroom instead of 3x (Idris, checking the arithmetic on `#330`).
+  // A try is NOT its 8 s capture budget: the `capture=` figures in tonight's
+  // logs are 8.1, 10.4, 10.4, 10.4 and 12.3 s, because the number includes the
+  // reply and the preset cycle running under it. 30 s a try is ~2.4x the worst
+  // observed, and the whole point is that the next person to change one of
+  // these numbers changes both.
+  test.setTimeout(MAX_TRIES * 30_000)
   await call('setOnionSkin', { onionSkin: 0 })
   await call('navigate', { url: ANIMATED })
   const before = (await call('status')).presetId as string
