@@ -768,3 +768,77 @@ assertion already prints what distinguishes them.
 while the hint shows, and it had already shifted two measurement specs. A 26 px shift moves the sampled
 point *within* the content; it does not turn it white. And the four `diagonal-hint` tests passed on
 their first attempt in the same run.
+## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
+
+`the menu applies a CPU rate to the target: the same work takes several times
+longer, and the footer says so` (`tests/e2e/throttle-live.spec.ts:68`) measures
+three points: `plain` (cold, before any throttle), `slow` (under `cpu-6x`), and
+`back` (after returning to `none`). The failing comparison is the third,
+`expect(back / plain).toBeLessThan(2)` — after un-throttling, the same work
+should cost under 2× its original cold time. Seen 2026-09-17 (`35250655036`,
+`#314`'s PR) at 3.74×; retried green.
+
+Not new. `board/bug-ci-main-red-37pct.md` counts `throttle-live` ×11 among its
+flaky-then-green tally and `throttle-live:55` once in its per-line breakdown —
+twelve sightings now, all recovered on retry, none ever a final red.
+
+No mechanism confirmed. Two candidates, neither measured: the debugger's
+CPU-throttle removal (`Emulation.setCPUThrottlingRate`) settling with some
+latency rather than instantly, or plain CI-runner contention — which this same
+suite's own comments already blame for a different ratio elsewhere ("a low
+[applied count] is a slow or loaded runner, not the product,"
+`live-capture-notes.spec.ts:329`). Twelve for twelve retry recoveries is the
+evidence for calling this noise; nobody has measured which of the two it is.
+
+## `arrivals.spec.ts:89`: the moved note, read once, right after a different signal settles
+
+`a page that really does redirect after loading still says so` polls the
+target's URL until the redirect has landed (`expect.poll(...).toBe(HAIRLINE)`,
+`tests/e2e/arrivals.spec.ts:97`), then makes one unpolled call to `movedNote()`
+(`:52`, an `inspect` control call) and expects the "navigated after it loaded"
+note to be there. Seen failing once (`35242092672`, `Received: undefined`),
+green on retry in 516 ms.
+
+The file's own header comment documents this exact shape for its sibling
+test, measured: "a commit can be delivered after [the load promise] resolves
+— measured at 4 ms late — so the mirror's own landing arrived unmarked." That
+fix (`sync.spec.ts:138`'s entry above has the history) was to mark the event
+rather than poll around it, for a *different* consumer of the same "navigated
+after it loaded" flag. This test's consumer — `movedNote()` — was never given
+the same treatment: the URL settling and the note being computed are two
+different signals, and nothing here waits for the second one once the first
+has settled.
+
+Reasoned, not run (1 sighting; board/CI only). **The sized fix, if it
+recurs:** poll `movedNote()` the way the URL is already polled —
+`expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` in place of the
+single `await` at `:99` — rather than a new mechanism. Left in the register
+rather than a card: one sighting in ten red runs, and the fix is small enough
+to sit here until someone has room for it.
+
+## `sync-trace.spec.ts:77`: the loop fixture's 30 s budget, not a crash
+
+`the loop fixture records trip, and the trace says so rather than only the
+log` failed with `Target page, context or browser has been closed`
+(`35242092672`), the same text this file's "`devtools.spec`: … was the app
+crashing" and "`sync.spec`: the redirect test" entries both trace to a real
+Electron crash. Checked for the crash-watcher's own signature before
+concluding anything — `launchApp` has printed `exited on its own` or `crash
+report for pid` for every confirmed crash since 2026-09-03, and neither line
+appears anywhere in this run's log. That rules a crash out here.
+
+What is in the log: `[launch] app.close() has taken 10003 ms; killing pid
+30903`, and the embedded timestamps in that block match the ones in the
+failing test's own captured browser log byte for byte — the same app
+instance, not a reused pid. The test's own call (`load('native', LOOP)`,
+awaiting Obsrv's `load()` promise on a page built to retrigger the loop
+breaker) ran into the suite's 30 s test timeout; the `afterAll`'s
+`app.close()` then hit the same busy process and was itself force-killed at
+the 10 s bound. The closed-browser error a reader sees is what the test body
+gets once teardown has already killed the process, not the root cause — the
+root cause is this specific operation not finishing inside 30 s once.
+
+Reasoned, not run (1 sighting). If it recurs: raise this test's own timeout
+first, since a loop-breaker fixture racing a fixed 3 s window
+(`LOOP_WINDOW_MS`, see `sync.spec.ts:138`'s entry above) on a loaded runner is
+a narrower margin than most of this suite already accepts elsewhere.
