@@ -1,8 +1,8 @@
 ---
 title: "The app's Inspect footer ignores the element's opacity, so its contrast disagrees with obsrv inspect and obsrv_inspect"
-column: doing
+column: review
 owner: "Henry"
-waiting: ""
+waiting: "Wren: the cold read of the fix PR, then Henry merges"
 kind: bug
 criterion: C4
 order: 68
@@ -35,4 +35,22 @@ Pulled from Backlog; it's the other app-side known issue in the 0.61.0 notes. **
   `inspectReadout` computes for the same report. Control: drop the argument, and it goes red.
 - **The desk check comes before any local run.** A spec that hovers the target may need the inspector
   overlay, which has recorded focus history.
+
+## In review 2026-09-17: the footer's facts come from one pure function, held to the readout's
+
+- **The fix:** the footer's inspect facts move out of `PaneFooter.tsx` into `src/shared/inspectFooter.ts`
+  (`inspectFooterFacts`). It composites the colour at its own alpha and the element's `opacity`, making the
+  same `paintedColor`/`effectiveContrast(…, opacity)` calls as `inspectReadout`. PaneFooter calls it.
+- **What a person reads now** (all five shapes printed and read):
+  - opacity 0.5: `p#dim.caption · 13px = 3.3 mm · #888888 on #ffffff (#111111 at opacity 0.5) · 3.5:1 here`.
+    Before, the footer said `#111111 on #ffffff · 18.9:1 here`.
+  - A colour's own alpha: `#707070 on #ffffff (#111111 at alpha 0.6)`. Before, the pair showed the stated
+    hex beside a ratio that was already composited, so the two disagreed.
+  - Opaque text and text over an image read as before.
+- **Test (`inspectFooter.test.ts`):** for the same report, the footer's "here" and "on Budget TN" figures
+  match `inspectReadout`'s to the footer's one decimal. The pair leads with the readout's `colorPainted`.
+  The opaque ratio is more than 5 away, so the test isn't vacuous.
+- **Control:** `opacity` dropped from the footer's contrast goes red on both parity arms (off by 15.36).
+- **Wiring:** `inspect.spec`'s footer test ("#6b7280 on #ffffff", "4.8:1 here") passes locally on the
+  built app (harness-only, desk-safe).
 
