@@ -70,7 +70,10 @@ measured as almost nothing (79% unentered on caniuse.com, all of chromestatus.co
 
 What stays out of reach:
 - **Closed roots.** Script cannot see into them, and cannot tell that they are
-  there, so nothing is measured and nothing is said.
+  there. What the component draws inside one is not measured and nothing says
+  so. Light-DOM content slotted into a closed root is still measured where it
+  sits, as it always was — but without the component's own layers, so its
+  contrast reads against the page.
 - **`inspect --selector`** keeps light-DOM meaning: a CSS selector does not
   pierce a shadow root. `inspect --at` a point inside a component does reach it.
 - **`scrollSelector`** cannot name a scroller inside a root, for the same

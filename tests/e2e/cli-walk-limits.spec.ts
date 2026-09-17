@@ -64,6 +64,11 @@ const COULD_NOT_MOVE_DIALOG =
  */
 const NOTHING_TO_SCROLL = 'so the walk had nothing to scroll'
 
+/** `shared/walkCoverage.ts` — `walkDialogNote`'s panel wording, which an app shell's walk earns. */
+const PANEL_NOT_THE_PAGE =
+  "the walk scrolled a panel on the page, not the page itself: this page hides the document's overflow and the only scroller the walk found was a panel within it"
+
+
 // --- helpers --------------------------------------------------------------
 
 function runCli(args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -117,10 +122,15 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
-  test('an app shell whose only content is behind one open root: the walk scrolls the feed inside it', async () => {
+  test('an app shell whose only content is behind one open root: the walk scrolls the feed, and says it was a panel', async () => {
     const m = await headless('shell-with-one-root.html')
-    // The sentence first, as in the locks arm above: here its absence.
+    // The sentence first, as in the locks arm above: here its absence, and
+    // then the sentence that replaces it. A walk that moves a component's feed
+    // has walked a panel, not the page, and the reader is told which — the
+    // same words a light-DOM app shell gets (Wren's read of #293: this test
+    // never read what the walk said).
     expect(said(m).join(' '), JSON.stringify(said(m))).not.toContain(NOTHING_TO_SCROLL)
+    expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
   })
 })
@@ -191,10 +201,10 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(0)
   })
 
-  test('an app shell whose only content is behind one open root: the live walk scrolls the feed inside it', async () => {
+  test('an app shell whose only content is behind one open root: the live walk scrolls the feed, and says it was a panel', async () => {
     const m = await live('shell-with-one-root.html')
-    // The sentence first, as in the locks arm above: here its absence.
     expect(said(m).join(' '), JSON.stringify(said(m))).not.toContain(NOTHING_TO_SCROLL)
+    expect(said(m).join(' '), JSON.stringify(said(m))).toContain(PANEL_NOT_THE_PAGE)
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBeGreaterThan(0)
   })
 })

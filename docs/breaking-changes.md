@@ -53,6 +53,11 @@ on a page that has components.
 - The walk note's opening now reads *"has no scrollable container in its light DOM or
   its open shadow roots"*.
 
+**The caps count what is inside roots too.** `AUDIT_MAX_TARGETS`, `AUDIT_MAX_TEXT` and lint's
+caps are unchanged, so a component-built page reaches them sooner, and `truncated` counts what went.
+What a cap drops is no longer in document order either: an element's shadow tree is visited before
+its own children.
+
 **What breaks:** figures compared across versions on a component-built page grow,
 and code that matched the retired sentences finds nothing.
 
