@@ -219,6 +219,25 @@ test('the router resolves every pane to its own tab, and nothing else', async ()
  */
 test.describe('bus enablement follows the tab', () => {
   const frames = (): Promise<number> => page.evaluate(() => (window as any).__frames.length as number)
+  const seqs = (): Promise<(number | null)[]> => page.evaluate(() => [...((window as any).__frames as (number | null)[])])
+  /**
+   * Activates a tab and reads the bus's counter **in the same main-process
+   * callback**, so nothing can be sent between the two.
+   *
+   * Two round trips would leave a window — a frame the bus leaks after
+   * `activate` returns but before a separate `lastSeq()` call lands gets a seq
+   * at or below the line, and reads as pre-gate. The test would then pass on a
+   * real leak, which is the failure it exists to catch. `activate` is
+   * synchronous (tabs.ts) and main runs nothing else inside this callback.
+   */
+  const activateAndGate = (id: string): Promise<number> =>
+    app.evaluate((_electron, tabId: string) => {
+      const o = (globalThis as any).__obsrv
+      o.tabs.activate(tabId)
+      return o.bus.lastSeq() as number
+    }, id)
+  /** Every recorded frame carried a seq. Without this, a lost seq passes silently. */
+  const everySeqReadable = async (): Promise<boolean> => (await seqs()).every(n => Number.isInteger(n) && (n as number) >= 0)
   const reset = (): Promise<void> =>
     page.evaluate(() => {
       ;(window as any).__frames.length = 0
@@ -244,7 +263,14 @@ test.describe('bus enablement follows the tab', () => {
       const w = window as any
       if (w.__off) w.__off()
       w.__frames = []
-      w.__off = window.obsrv.onFrame(() => w.__frames.push(1))
+      // The frame's `seq`, not a tally. A frame carries no tab id, so a count
+      // alone cannot say whether a delivery belongs to the tab being entered
+      // or the one being left — see the seq comparison in the image-mode test.
+      // `null` when the bus sent no seq, never a number: a sentinel like -1 is
+      // below every gate line, so a frame that lost its seq would read as
+      // "arrived before the gate" forever and the leak assertion would pass
+      // vacuously. Null fails the validity check instead.
+      w.__off = window.obsrv.onFrame((m: { seq?: number }) => w.__frames.push(typeof m.seq === 'number' ? m.seq : null))
     })
   })
 
@@ -265,12 +291,51 @@ test.describe('bus enablement follows the tab', () => {
 
   test('entering an image-mode tab stops delivery, so target frames cannot overwrite the drawing', async () => {
     await reset()
-    await activate(drawn)
     // Activation invalidates the incoming target before the gate closes, so
     // this is not merely "nothing happened": the frame that produces is
     // deliberately dropped on delivery.
+    //
+    // Asserted on `seq` rather than on a count, because a count fits two facts
+    // that are opposite in consequence (`chore-flaky-leaders-0917`, shape 3,
+    // which failed here as `Expected: 0, Received: 1`). A frame carries no tab
+    // id, so a delivery could be the gate leaking a frame for the tab being
+    // ENTERED — the defect this test is for — or a frame for the tab being
+    // LEFT, sent before the gate closed and arriving during the wait. Nothing
+    // in the payload separates them, so a 1 here could not be triaged.
+    //
+    // `lastSeq()` read in the SAME main-process callback as the activation is
+    // the line between them: at or below it, the bus sent it before the gate
+    // closed; above it, after. Only the second is this test's failure. Two
+    // round trips would leave a window in which a real leak lands at or below
+    // the line and reads as pre-gate — see `activateAndGate`.
+    const gate = await activateAndGate(drawn)
     await page.waitForTimeout(600)
-    expect(await frames()).toBe(0)
+    expect(await everySeqReadable(), 'a frame arrived without a seq, so this test can no longer see the gate line').toBe(true)
+    const late = (await seqs()).filter(n => n !== null && n > gate)
+    expect(late, `frames delivered after the gate closed: ${JSON.stringify(late)}`).toEqual([])
+  })
+
+  test('a frame already sent when the gate closes is not the leak this is looking for', async () => {
+    // The arm that makes the change above mean something, and it forces the
+    // race rather than waiting for CI to produce it: invalidate the tab being
+    // LEFT and wait until its frame has actually been delivered, so a pre-gate
+    // frame is guaranteed present rather than merely likely. The old
+    // count-based assertion fails here by construction; this one must not.
+    await reset()
+    await activate(live)
+    await app.evaluate(() => (globalThis as any).__obsrv.target.invalidate())
+    await page.waitForFunction(() => ((window as any).__frames as number[]).length > 0, undefined, { timeout: 5_000 })
+    const delivered = await seqs()
+    expect(delivered.length, 'no pre-gate frame arrived, so this arm tested nothing').toBeGreaterThan(0)
+
+    const gate = await activateAndGate(drawn)
+    await page.waitForTimeout(600)
+    expect(await everySeqReadable(), 'a frame arrived without a seq, so this arm cannot see the gate line').toBe(true)
+
+    // The pre-gate frames are still in the collector — this is not a test that
+    // passes by having nothing to look at — and none of them counts as a leak.
+    expect((await seqs()).length).toBeGreaterThanOrEqual(delivered.length)
+    expect((await seqs()).filter(n => n !== null && n > gate)).toEqual([])
   })
 })
 
