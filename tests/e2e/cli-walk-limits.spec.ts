@@ -151,6 +151,14 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
     // rather than a constant, so the shape is asserted and the count is tied
     // to `walked.screenfuls`, which is the field a reader compares it against.
     const m = await headless('taller-than-the-walk-budget.html')
+    // RECORDED, not asserted: every sentence this walk produced. A budget-ended
+    // walk falls straight through to `backToTop` with nothing left, so the
+    // return-to-top note may be here too — carrying `walkTimeoutNote`'s "did
+    // not answer a scroll within 15 s (its main thread was busy or blocked)"
+    // about a page that answered every step (Kenya's reading, Wren's code
+    // check). This page's thread is free, so whatever appears beside the budget
+    // sentence here is the answer, and it costs a run nobody has to schedule.
+    console.log(`budget-ended walk said: ${JSON.stringify(said(m))}`)
     const budget = said(m).find(w => w.includes('budget without reaching the end of the page'))
     expect(budget, JSON.stringify(said(m))).toBeTruthy()
     expect(budget).toMatch(BUDGET_SENTENCE)
@@ -261,6 +269,10 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
 
   test('a page taller than the budget: the live walk says where it stopped too', async () => {
     const m = await live('taller-than-the-walk-budget.html')
+    // The same recording on the live surface, where the scroll carries no
+    // budget of its own and so has no number to misreport: the pair is what
+    // says whether this is headless-only.
+    console.log(`budget-ended live walk said: ${JSON.stringify(said(m))}`)
     const budget = said(m).find(w => w.includes('budget without reaching the end of the page'))
     expect(budget, JSON.stringify(said(m))).toBeTruthy()
     expect(budget).toMatch(BUDGET_SENTENCE)
