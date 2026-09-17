@@ -338,11 +338,16 @@ test('a raster capture whose budget runs out before a resized frame is painted s
       // (`bug-live-raster-settled-while-resizing`). Anything else on a pane
       // that never stopped changing size is a finding.
       expect(reply.unsettledReason === 'timeout' || reply.settled === true, margin).toBe(true)
-      // THE BASELINE for the count below: a covered frame has every pixel
-      // painted, and this page paints opaque white, so its PNG has no
-      // transparent pixel. A counter that saw transparency everywhere, or a
-      // PNG that dropped alpha, fails here rather than agreeing with a sentence.
-      expect(png.transparent, `a covered capture has transparent pixels: ${margin}`).toBe(0)
+      // THE BASELINE for the count below, and a cross-check of the coverage
+      // mask against the bytes. `timeout` and `settled` are only reached with
+      // `covered` true (`captureQuiescent` branches on it at the deadline), so
+      // the mask says every pixel painted since the last resize, and this page
+      // paints opaque white. A counter blind to alpha, or a PNG that dropped
+      // it, fails here rather than agreeing with a sentence.
+      expect(
+        png.transparent,
+        `NOT A FLAKY BASELINE: this capture's coverage mask said every pixel was painted, and its PNG has transparent ones, so the mask and the bytes disagree, and every uncovered percentage is computed from that mask (the one legitimate cause, a page painting its own alpha, does not apply to animated.html): ${margin}`,
+      ).toBe(0)
     }
   } finally {
     await call('setPreset', { id: before })

@@ -10,6 +10,10 @@ order: 85
 
 **CLAIMED BY KENYA 2026-09-17** from Backlog, queued by Henry in #453 and routed by Wren.
 
+**Why the fix's e2e test is a bounded loop:** a single-change lever was measured and does not reach
+`uncovered` (`animating` 16 of 16, since one resize gets fully painted). No deterministic lever exists
+without a hook in the capture path. See "The lever, and why it is a bounded loop" below.
+
 FOUND BY HENRY 2026-09-17 while measuring row 9 of `chore-live-app-race-sentences` on CI (run
 `35215978933`, repeat 2 of 6; then seven of seven across two control runs).
 
