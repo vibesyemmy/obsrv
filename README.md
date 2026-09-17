@@ -397,7 +397,8 @@ belongs to an unrelated package.
 a version check to `api.github.com` once a day, which asks for the latest
 release and sends nothing about you (`src/main/updateCheck.ts`). The npm
 package makes one more, once: when its Electron binary is missing, it downloads
-it (about 120 MB, from Electron's GitHub releases) the first time it needs it
+it — about 120 MB, from Electron's GitHub releases unless `ELECTRON_MIRROR`
+points elsewhere — as the MCP server starts, or on a CLI run's first use
 (`bin/electronPath.js`). Everything else that touches the network is the page
 you asked it to render, fetched by Chromium the way any browser would.
 
