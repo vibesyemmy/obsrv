@@ -126,6 +126,13 @@ test('and still settles at a fractional density, where the two ways of computing
   // takes the floor, so if it ever took the round instead, every capture on
   // this preset would run to its budget and answer `resizing` — and every
   // whole-number preset would stay green while it did.
+  //
+  // **A fractional `deviceScaleFactor` is not the hazard; a fractional PRODUCT
+  // is.** Wren reached for `laptop-1080-150` on a cold read of this fix, which
+  // is the obvious direction and proves nothing: 1280 x 1.5 is 1920 x 1080, and
+  // so are `laptop-1080-125` and `4k-27-150` — whole, every one. Counted over
+  // the table, 26 presets carry exactly one fractional product, and it is this
+  // preset. Do not swap it for a different "fractional density" one.
   const before = ((await call('status')).preset as { id?: string } | undefined)?.id ?? 'laptop-768'
   try {
     await call('setPreset', { id: 'pixel-8' })
