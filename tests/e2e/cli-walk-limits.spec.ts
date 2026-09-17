@@ -80,11 +80,18 @@ const said = (m: Reply): string[] => [...(m.warnings ?? []), ...(m.notes ?? [])]
 test.describe('headless walk limits (cli/walk.ts and shared)', () => {
   test('a page that locks its scroll mid-walk: the walk says it stopped moving', async () => {
     const m = await headless('locks-mid-walk.html')
-    // Two steps moved, the third landed where the second did, and the page
-    // is 5906 px tall — so this is the not-at-end branch, not "nothing to scroll".
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(2)
-    expect(m.walked?.atEnd).toBe(false)
+    // The sentence first: it is the thing under test, and the first run of
+    // this test failed at the count below before ever reaching it.
     expect(said(m), JSON.stringify(said(m))).toContain(STOPPED_MOVING_HEADLESS)
+    // Three, not two, and the reason is the fixture's lock landing a step late:
+    // `overflow: hidden` does not block a scripted `scrollTo`, so the step
+    // after the lock still reads its target synchronously, the pin listener
+    // resets the page afterwards, and the FOLLOWING step lands where the
+    // previous read did. A first cut predicted 2 from a Chromium simulation
+    // that awaited a frame between scroll and readback — a frame the walk does
+    // not have. The page is 5906 px tall, so this is the not-at-end branch.
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(3)
+    expect(m.walked?.atEnd).toBe(false)
   })
 
   test('a locked page whose dialog scrolls only sideways: the walk could move neither', async () => {
@@ -143,9 +150,11 @@ test.describe('live walk limits (mcp/walk.ts and shared)', () => {
 
   test('a page that locks its scroll mid-walk: the live walk says it stopped moving', async () => {
     const m = await live('locks-mid-walk.html')
-    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(2)
-    expect(m.walked?.atEnd).toBe(false)
     expect(said(m), JSON.stringify(said(m))).toContain(STOPPED_MOVING_LIVE)
+    // Same count as headless, for the same reason (see above): the live path
+    // scrolls with the same instant `scrollTo` and reads back in the same task.
+    expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(3)
+    expect(m.walked?.atEnd).toBe(false)
   })
 
   test('a locked page whose dialog scrolls only sideways: the live walk could move neither', async () => {
