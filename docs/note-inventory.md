@@ -107,7 +107,7 @@ length also matches, the row is marked **ambiguous** and names the other locatio
 **Reach** marks the rows no user sees: one fires only because the suite sets `OBSRV_TEST`, one only in
 the dev lane.
 
-**57 producers fired** across 110 distinct sentences and 301 replies that carried at least one. **55 of them a user can see**; 3 of those 55 are placed ambiguously:
+**57 rows fired** across 110 distinct sentences and 301 replies that carried at least one. **55 of the rows are ones a user can see.** 3 of those are ambiguous between producers, so the number of distinct producers behind the 57 rows is between 57 and 61:
 
 | written at | fired | surfaces | reach / placement | the sentence, shaped |
 | --- | --- | --- | --- | --- |
