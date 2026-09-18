@@ -1,7 +1,6 @@
 ---
 title: "The headless walk says the page did not answer its return to the top for the whole budget, when it gave the page no time at all"
-column: doing
-waiting: ""
+column: done
 owner: "Kenya"
 kind: bug
 criterion: C5
@@ -269,3 +268,24 @@ deliberately left out, because the sentence it would have pinned was the wrong o
 or not, which is what Chromium does with an abandoned `executeJavaScript`. The e2e arm above is the live
 half — if a budget-ended walk on CI ever carries the old wording, or the new sentence's last clause
 turns out to describe a page that did *not* reach the top, that is a finding for this card.
+
+## DONE 2026-09-18 by Kenya: merged in #338 (`5b1b4b1`)
+
+All four acceptance items, each against what ran:
+- **the step's timeout sentence names the time it was actually given**, with its own wording when that
+  was none. **Control:** restoring `walkTimeoutNote(budgetMs)` reds the cut-short arm;
+- **the unit arms on a fake target cover both paths without the desk** — four on the spent-budget path,
+  one on the cut-short path, with the latency swept rather than sampled;
+- **`cli-walk-limits.spec.ts` asserts the return-to-top sentence** on `blocks-on-scroll.html`, the arm
+  batch 2 deliberately left out while the wording was still wrong;
+- **path 2's place claim was measured before the fix**, not after: at every latency where the note
+  fires, the abandoned `top` scroll still lands, so the page is at the top.
+
+**Controls, each restoring one fault alone:** the duration reds 1 arm, one sentence for both paths reds
+2, silence on a spent budget reds 4, and the fix as written reds none. Unit suite on the merged tree:
+1548 passed, 1 skipped.
+
+**What is still a model:** the fake applies a scroll when the script runs, awaited or not. The e2e arm
+is the live half — a budget-ended walk on CI carrying the old wording, or a page that did not reach the
+top, is a finding against this card rather than a new one.
+
