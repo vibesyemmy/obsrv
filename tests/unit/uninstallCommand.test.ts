@@ -7,7 +7,7 @@ import { join } from 'node:path'
  * The thin shell of `obsrv uninstall` (`bin/uninstall.js`). Its logic is pure
  * and tested without a filesystem in `uninstallReport.test.ts`; what is left
  * here is the shell — the dispatch, the flags, and the one guarantee worth
- * spending a process on: **it removes nothing.**
+ * spending a process on: **it removes nothing unless `--remove` is passed.**
  *
  * **Why the reading arm is CI-only.** Listing reads the home of whoever runs
  * it, and on a developer's machine that is their own Obsrv profile. Nothing
@@ -23,11 +23,15 @@ const run = (...argv: string[]): { status: number | null; stdout: string; stderr
 }
 
 describe('obsrv uninstall', () => {
-  it('answers --help without Electron, and says in the usage that it removes nothing', () => {
+  it('answers --help without Electron, and says in the usage what removes and what does not', () => {
     const r = run('--help')
     expect(r.status).toBe(0)
     expect(r.stdout).toContain('obsrv uninstall — list what Obsrv has written on this machine')
-    expect(r.stdout).toContain('Lists only. It removes nothing')
+    // The wording changed when `--remove` arrived, and the assertion changed
+    // with it rather than being loosened: the usage has to say BOTH halves —
+    // that the default removes nothing, and that one flag does.
+    expect(r.stdout).toContain('Lists by default, and removes nothing')
+    expect(r.stdout).toContain('--remove')
     expect(r.stderr).toBe('')
   })
 

@@ -2,7 +2,7 @@
 title: "There is no supported way to remove Obsrv's data"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: the sandbox grant, asked in Henry's session 2026-09-17"
+waiting: ""
 kind: chore
 order: 32
 ---
@@ -142,3 +142,47 @@ flag) run everywhere.
 throwaway `CFFIXED_USER_HOME` sandbox under the system temp directory, with the guard shown failing
 first, and the tests running on CI only?
 
+
+## THE REMOVING HALF 2026-09-18 by Henry, on Opeyemi's grant in this session
+
+**The condition this card set is met:** deletion code waited for Opeyemi's direct word in the session
+that writes it, and he gave it on 2026-09-17. `--remove` deletes what the listing lists; without it
+nothing changes, and the default is still to list.
+
+**The split is drawn one step further in than the listing's was.** The listing half could be pure
+because it never needed a filesystem. This half cannot be — something has to call `rm` — so
+`src/shared/uninstallRemoval.ts` **decides** and the shell **acts**: every decision is unit-tested
+with the filesystem injected, and the destructive call is one `removeListed` call in `bin/uninstall.js`, the only place `rmSync` is named.
+
+**What it refuses to do, each with a control that fires:**
+
+| property | control |
+| --- | --- |
+| re-checks every path with the guard **at the moment that path goes**, not once up front | dropping the re-check reds 2 tests, one on call ordering |
+| removes nothing the report did not list as present and allowed — not the absent, the refused, or the `keep` list | asserted directly; an `rm` of an absent path is the empty success this card family exists to refuse |
+| carries on after a failure and names which path is still there | a throwing `remove` leaves the others removed and the failure in `failed`, by name |
+| removes nothing on a platform nobody measured | dropping the early return reds 1 test |
+
+**The one fact that could not be reasoned about was measured.** `removalGuard`'s own comment says it
+narrows the symlink hole rather than closing it, and that a deleter must not descend into links. So
+`rmSync({ recursive: true })` was tested rather than trusted, in a temp tree: it **unlinks the link
+and leaves the target's contents intact**.
+
+**A contradiction the change created, and closed.** The listing's closing line reads *"This command
+lists only — nothing has been removed"*. Printed above a removal it would be false by the time
+someone finished reading it, so `uninstallLines` takes `{ removing }` and says what this run is about
+to do instead. Pinned by its own test.
+
+### Not done, and not implied by the test count
+
+- **Nothing exercises the destructive path end to end on a real filesystem.** The decisions are pure
+  and covered; `rmSync`'s behaviour is measured; but no test runs `--remove` against a populated tree,
+  because doing that safely needs a sandboxed home and `checkRemoval` deliberately reads the **passwd**
+  home to resist exactly that substitution. Closing it means giving the guard a sandbox root the shell
+  can pass, which is a change to the guard and belongs on its own card.
+- **It was never run on Opeyemi's machine** — not `--remove`, and not the listing either. The grant was
+  to write the code, not to point it at his home.
+- **`--remove` takes no second confirmation.** The flag is the confirmation and the listing prints
+  first, so a person sees what is going before it goes. A typed confirmation was considered and left
+  out: this CLI is driven by agents as well as people, and a prompt that an agent cannot answer is a
+  hang rather than a safeguard. **Opeyemi's call if he wants the friction anyway.**

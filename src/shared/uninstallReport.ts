@@ -124,7 +124,7 @@ export function uninstallReport({ plan, look, check }: ReportInput): UninstallRe
  * The report as the words a person reads. Kept beside the data so the two
  * cannot drift, and pure for the same reason the rest of this file is.
  */
-export function uninstallLines(report: UninstallReport): string[] {
+export function uninstallLines(report: UninstallReport, opts: { removing?: boolean } = {}): string[] {
   const lines: string[] = []
   if (report.unmeasured) {
     lines.push(report.note ?? 'Obsrv has nothing measured to remove on this platform.')
@@ -167,10 +167,17 @@ export function uninstallLines(report: UninstallReport): string[] {
     lines.push(report.note)
   }
   lines.push('')
-  if (report.commands.length > 0) {
+  // The closing line is the one a person acts on, so it has to describe THIS
+  // run. Under `--remove` the same listing is printed first and then the paths
+  // go, and a line reading "nothing has been removed" above a removal would be
+  // false by the time they finished reading it.
+  if (opts.removing === true) {
+    if (report.commands.length > 0) lines.push('Removing the above now, each path re-checked against the removal guard as it goes.')
+    else lines.push('Nothing here to remove.')
+  } else if (report.commands.length > 0) {
     // The command lists; it does not remove. Saying so once, plainly, beats a
     // reader inferring it from the absence of a flag.
-    lines.push('This command lists only — nothing has been removed. To remove what is above:')
+    lines.push('This command lists only — nothing has been removed. To remove what is above, pass --remove, or run:')
     for (const c of report.commands) lines.push(`  ${c}`)
   } else {
     lines.push('This command lists only — nothing has been removed, and there is nothing here to remove.')

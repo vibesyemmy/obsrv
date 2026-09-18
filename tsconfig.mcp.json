@@ -14,8 +14,20 @@
     "declaration": false,
     "sourceMap": false
   },
-  // `bin/uninstall.js` is plain Node and requires these three out of `out/`:
+  // `bin/uninstall.js` is plain Node and requires these four out of `out/`:
   // the CLI's own build runs under Electron, and a person removing Obsrv
-  // should not need Electron to be told where its data is.
-  "include": ["src/mcp/**/*", "src/shared/uninstallPlan.ts", "src/shared/removalGuard.ts", "src/shared/uninstallReport.ts"]
+  // should not need Electron to be told where its data is — or to remove it.
+  //
+  // This list is the ONLY thing that emits them. `uninstallRemoval.ts` is
+  // imported by nothing in `src/`, so leaving it out compiled fine, passed its
+  // own unit tests, and made the command answer "this tree is not built" on CI
+  // (run 35285273313). A module the bin requires at runtime has to be named
+  // here, not merely written.
+  "include": [
+    "src/mcp/**/*",
+    "src/shared/uninstallPlan.ts",
+    "src/shared/removalGuard.ts",
+    "src/shared/uninstallReport.ts",
+    "src/shared/uninstallRemoval.ts"
+  ]
 }
