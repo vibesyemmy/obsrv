@@ -286,14 +286,16 @@ it.
 | `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
 | `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
 
-**Fired since, pinned by a test (32).** Thirty-one of these left the list above; the other is
+**Fired since, pinned by a test (37).** Thirty-six of these left the list above; the other is
 `liveInspect`'s copy, which leaves the ambiguous group. Each test asserts the **whole** sentence, and
 each was shown to fail when that sentence is altered in `src/` — the control runs are
 `35192500426` (#256), `35194537378` (#258, v2 on the corrected head), `35199207359` (#263),
 `35200051529` (#264, v2; see below), `35203138455` (#270), `35205639766` (#274), `35212544441`
-(#282, v2), `35213404787` (#283), `35218471058` (#292's raster arm) and, for #273 and the rest of
-#292, a local run of the same shape: the producers reworded in `src/main`, every arm red, restored,
-every arm green.
+(#282, v2), `35213404787` (#283), `35218471058` (#292's raster arm), `35231440742` (#308) and, for #273 and the
+rest of #292, a local run of the same shape: the producers reworded in `src/main`, every arm red,
+restored, every arm green. **#338's controls were local** and are recorded on
+`bug-walk-return-note-names-budget`: each of the three faults restored alone reds a different count of
+arms (1, 2 and 4), and the fix as written reds none.
 
 | written at | pinned by | seen firing in |
 | --- | --- | --- |
@@ -324,6 +326,11 @@ every arm green.
 | `src/mcp/control.ts:356` | `mcp-launch.spec:116`, a consent nobody answers | `35205619883` |
 | `src/mcp/server.ts:871` | `mcp-live.spec:878`, a page whose load never finishes | `35210865781` |
 | `src/mcp/server.ts:1070` | `mcp-live.spec:878`, the same page's settle budget | `35210865781` |
+| `src/cli/walk.ts:157` | `cli-walk-limits.spec:157`, a page taller than the walk's budget | `35242092672` |
+| `src/mcp/walk.ts:145` | `cli-walk-limits.spec:287`, the same page, live | `35242092672` |
+| `src/cli/walk.ts:211` | `cli-walk-limits.spec:183`, a page that stops answering once scrolled | `35242092672` |
+| `src/mcp/walk.ts:187` | `cli-walk-limits.spec:303`, the same page live, where the scroll is never confirmed | `35242092672` |
+| `src/cli/walk.ts:130` | `cli-walk-limits.spec:199`, the return to the top after a spent budget | `35293771341` |
 | `src/cli/stuckProbe.ts:98` | `cli-snap-tiled.spec:229`, a page that replaces its document once during the probe | `35213379890` |
 | `src/cli/stuckProbe.ts:76` | `cli-snap-tiled.spec:239`, the same page replacing it twice | `35213379890` |
 | `src/main/controlServer.ts:531` | `live-capture-notes.spec:234`, a scroll a page holding its main thread cannot answer | `35218827856` |
@@ -413,8 +420,17 @@ has is a run of the note log that saw it, which is what this column counts.
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292 and #293: fourteen unfired
-producers, seven written or reworded after the run, two ambiguous groups, and nine named reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308 and #338: ten unfired
+producers, eight written or reworded after the run, two ambiguous groups, and nine named reasons.**
+
+**What #308 and #338 moved, and the one thing that is not a subtraction.** `#308` fired four — the
+budget pair and, on the cut-short page, the headless cut-short sentence and the live "did not confirm
+a scroll". `#338` fired one, and **created another in the same change**: the return-to-top note used
+to be a single producer, and fixing it split it in two — a spent-budget sentence (fired, pinned) and
+the original wording, kept because it is true when the step failed with budget left (**still
+unfired**). So fourteen minus five is nine, plus one new branch is **ten**, and the reworded count
+goes from seven to eight. A fold that only subtracted would have reported nine and been wrong by the
+sentence the fix wrote.
 
 - **Each of the 14 gets one of the same three outcomes:** a fixture that fires it on CI, a finding
   that it can't fire and then the sentence goes, or a named reason it stays unobserved.
@@ -422,10 +438,13 @@ producers, seven written or reworded after the run, two ambiguous groups, and ni
 - **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the
   ten this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
 - **What the 14 would take:**
-  - **Walk limits (8).** Batch 1 (#270) fired four. What is left is the budget pair
-    (`cli/walk.ts:125`, `mcp/walk.ts:143`), the cut-short pair (`cli/walk.ts:179`, `mcp/walk.ts:211`),
-    the return-to-top pair (`cli/walk.ts:98`, `mcp/walk.ts:105`), `mcp/walk.ts:184` (a scroll the page
-    never confirms, live) and `walkCoverage.ts:174` (a frame that covers part of the viewport).
+  - **Walk limits (4).** Batch 1 (#270) fired four, `#308` four more and `#338` one. Line numbers
+    below are from `main` after `#338`, not the pre-`#308` ones this section used to carry. What is
+    left is **`cli/walk.ts:129`** (the return-to-top note's *other* branch — the original wording, kept
+    for a step that failed with budget left, which no fixture has produced), **`mcp/walk.ts:108`** (the
+    same note live, which `#338` did not touch because the live path passes no budget of its own),
+    **`mcp/walk.ts:213`** (cut short after N screenfuls, the live twin of the headless one `#308`
+    fired) and **`walkCoverage.ts:174`** (a frame that covers part of the viewport).
   - **Truncation and caps (3, `cli/main.ts:529`, `:620`, `:1479`).** A page taller than the bands one
     answer carries, and a report with no findings worth featuring.
   - **The rest (3):** an uncovered frame (`capture.ts:347`), image findings below the height the walk
