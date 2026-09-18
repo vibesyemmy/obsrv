@@ -114,16 +114,34 @@ describe('the walk’s return to the top, when its own budget is already spent',
   })
 
   it('is the same across the latency range, since which side wins the race is not the point', async () => {
+    // **2 ms is not in this range any more, and that is the point of the
+    // title.** The sweep that sized this test measured 0-1 ms silent and 2 ms
+    // upward saying it, so 2 ms is the FIRST latency that fires — the edge of
+    // the race, not a point inside it. Pinning `2:said` pins which side of a
+    // coin flip wins, and on a loaded CI runner a 2 ms fake behaves like a 1 ms
+    // one: run `35337859257` failed here with `2:silent`, alone, on a unit test
+    // that does not retry. Wren then ran it 8 times on a clean checkout without
+    // reproducing, which is exactly what a boundary looks like from a quiet
+    // machine.
+    //
+    // The assertion this test was written to make survives without it: once the
+    // page is slow enough for the race to be decided, the note fires, and the
+    // words do not change with the latency.
     const seen: string[] = []
-    for (const latency of [2, 3, 5, 8, 12, 20]) {
+    const sentences = new Set<string>()
+    for (const latency of [3, 5, 8, 12, 20]) {
       const page: FakePage = { y: 0, applied: [] }
       const out = await walkHeadless(answeringTarget(latency, page) as never, BUDGET_MS)
       const note = noteAbout(out.notes, 'return to the top')
       seen.push(`${latency}:${note === undefined ? 'silent' : 'said'}`)
+      if (note !== undefined) sentences.add(note)
     }
     // Every arm in this range reached the note before the fix; none of them may
     // reach a false one after it.
-    expect(seen.join(' ')).toBe('2:said 3:said 5:said 8:said 12:said 20:said')
+    expect(seen.join(' ')).toBe('3:said 5:said 8:said 12:said 20:said')
+    // And "the same across the range" as a claim about the WORDS, which is what
+    // the title says and what the old assertion never actually checked.
+    expect([...sentences], `the sentence varied with the latency: ${[...sentences].join(' | ')}`).toHaveLength(1)
   })
 })
 
