@@ -109,3 +109,51 @@ them:
 - a spread with slow-but-landing attempts — contention, and the fix is about the budget or about not
   waiting on an animation at all;
 - an attempt that never lands in thirty seconds — stuck, and the tolerance is not the problem.
+
+## PROBE RESULTS 2026-09-18 by Henry: two probes, no reproduction, three hypotheses dead
+
+**Both probes answered the card's question with "not here", and the value is in what they rule out.**
+
+| probe | run | numbers |
+| --- | --- | --- |
+| v1, ten lone opens | `35393993403` | `227 231 233 237 240 262 267 321 340 358` — ten for ten landed |
+| v2, one variable at a time | `35399044461` | A lone `227-340`, B resident app alive `265-309`, C resident + navigate `270-303` — twelve for twelve |
+
+Local baseline for both: **250-260 ms, about 10 ms of spread.**
+
+### The first reading, twice, and why not the second
+
+The card's readings were written before either run. Both land on the **first**: the probe does not
+reproduce it. v1's 131 ms spread is wider than my laptop's 10 ms, and it is tempting to call that
+"contention, confirmed" — but reading two meant attempts near or past the 5 s threshold that still get
+there, and **the slowest attempt in either probe is 358 ms, which is fourteen times inside the
+window.** Wren quoted the numbers rather than a conclusion both times, which is the only reason the
+pre-registered reading did its job.
+
+### Three hypotheses dead
+
+- **A second live app starving the younger one.** v1's tail climbed (262, 321, 358, 340) and this was
+  the obvious suspect — the real failure has the file's `beforeAll` app open alongside. v2's B and C
+  arms sit **inside** A's own spread, and A is the widest of the three. Dead.
+- **Accumulated runner state over a long run.** Both probes ran mid-way through a full suite, roughly
+  where the real failure happens. Dead.
+- **Other specs running alongside.** `workers: 1` with `fullyParallel: false`. Never possible.
+- Earlier, and already dead: **occlusion throttling the compositor**, which Idris retired on the
+  grounds that `--drawer-w` is `@property` `<length>` feeding `flex`, so every frame needs main-thread
+  style recalc and layout rather than compositor work alone.
+
+**On n.** Four per arm cannot resolve a 10% difference and does not have to. The failure is 250 ms
+against 5000 ms — a twentyfold effect — and nothing within a factor of two of it appeared in
+twenty-two attempts across the two probes.
+
+### What is left, and it is not another guess
+
+The watch now sits on `openPanel(p1)` itself — the call that actually fails — inside the real relaunch
+test, and fires only on a miss: it reads `--drawer-w` for thirty seconds at half-second resolution
+with wall-clock offsets, stops the moment the value lands, and rethrows. **Nothing about the
+environment is being simulated any more**, so the next sighting produces the answer rather than
+another candidate. Grep `DRAWER STALL PROBE`.
+
+That answer is still the card's original question, unchanged and still unanswered: **starved and would
+finish, or stuck.** Every candidate fix depends on it and no amount of re-running can say.
+
