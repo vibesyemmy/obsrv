@@ -99,3 +99,37 @@ mine to make unilaterally on a script's first day.
 No unit test written — the thing under test is `gh`'s own CLI output shape, which nothing in
 this repo's test harness invokes; the evidence above is against real run IDs instead, in the
 tradition of how `bug-flakes-gate-the-gate` itself was verified.
+
+## CORRECTED, same day, before review: the "verified against 35285273313" claim above overstated what step-scoping does, and step-scoping alone is not reliable
+
+Found by dogfooding the script against its own PR's CI run (`35295017371`) rather than assumed
+clean because the first four runs checked out.
+
+**First: the `35285273313` evidence above is right in conclusion, wrong about the mechanism.**
+Re-ran the anchored-regex scan (`^(\d+)\s+(failed|flaky|...)`) over that run's **entire** job
+log, with no step filter at all: still zero hits. The anchor — a match has to start the
+(trimmed) line — is what keeps Vitest's `Test Files 1 failed | 96 passed` out; both of its lines
+start with a word and ANSI color codes, never a bare digit. Step-scoping was true but not
+load-bearing for that case, and the card stated it as though it were.
+
+**Second, and this one shipped in the PR before being caught:** step-scoping alone is not safe
+to depend on. `gh run view --log`'s own `--help` warns it can fall back to a slower per-job log
+fetch and mark lines `UNKNOWN STEP` when it can't associate them with a step — measured on
+`35295017371` itself: e2e ran 22 minutes and passed, and **every line in the run** came back
+`UNKNOWN STEP`. The step-only version of `e2eSummary` read that as "e2e step did not run" for a
+run that plainly had — the exact silent-clean failure mode this card's item 3 exists to prevent,
+reproduced by the tool meant to prevent it.
+
+**Fixed:** `e2eSummary` now prefers step-scoped lines when `gh` actually attributed any to the
+e2e step by name; when none were, it checks whether any line in the run reads `UNKNOWN STEP` at
+all — if so, attribution degraded for this run rather than the step genuinely not running, and
+the whole job's lines are scanned instead (safe, per the anchor above). Re-verified against all
+five runs, including the one this broke:
+
+| run | before the fix | after the fix |
+|---|---|---|
+| `35295017371` (own PR, e2e ran 22m, `UNKNOWN STEP` throughout) | `e2e step did not run` — wrong | `failed=0 flaky=1 passed=614` — cross-checked against the raw `1 flaky` / `614 passed (21.3m)` lines directly |
+| `35286751102`, `35290248624`, `35285273313`, `35294477296` | as recorded above | unchanged, re-run to confirm |
+
+Left in the same commit rather than quietly folded in, so the correction is visible next to the
+overclaim it corrects.
