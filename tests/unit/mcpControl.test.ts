@@ -49,6 +49,28 @@ describe('ensureLive', () => {
     expect(await ensureLive(LIVE, d)).toEqual({ path: 'headless', why: 'declined', notes: ['n', DECLINED_NOTE] })
     expect(d.launch).not.toHaveBeenCalled()
   })
+
+  /**
+   * **The words, once, as a literal.** Three tests above assert
+   * `notes: [..., DECLINED_NOTE]`, which compares the constant with itself: it
+   * proves the note is *routed*, and cannot fail on any rewording of it.
+   * Measured rather than argued — prefixing the constant in `src/mcp/lib.ts`
+   * left the whole unit suite green, 1559 passed, and no file under `tests/`
+   * contained the sentence at all.
+   *
+   * This is the one sentence in the pair a user is most likely to act on: it
+   * is the only thing that tells someone why the app they are looking at did
+   * not move, and where the switch is. It says `AGENT chip or Settings → Agent
+   * control`, and those are names on the screen — if one is renamed and this
+   * is not, the sentence sends people somewhere that does not exist, and
+   * nothing in the suite would have noticed.
+   */
+  it('says which switch to ask for, in the words the user will go looking for', () => {
+    expect(DECLINED_NOTE).toBe(
+      'the user turned agent control off in Obsrv, so this ran headlessly; ask them to enable it ' +
+        '(the AGENT chip or Settings → Agent control) if you need the live app.',
+    )
+  })
   it('absent: launches, waits, and uses the app once it answers — launched is true', async () => {
     const d = deps([{ kind: 'absent' }, { kind: 'absent' }, { kind: 'live', app }])
     const r = await ensureLive(LIVE, d)
