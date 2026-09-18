@@ -1,8 +1,7 @@
 ---
 title: "There is no supported way to remove Obsrv's data"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: chore
 order: 32
 ---
@@ -186,3 +185,19 @@ to do instead. Pinned by its own test.
   first, so a person sees what is going before it goes. A typed confirmation was considered and left
   out: this CLI is driven by agents as well as people, and a prompt that an agent cannot answer is a
   hang rather than a safeguard. **Opeyemi's call if he wants the friction anyway.**
+
+## DONE 2026-09-18: there is a supported way to remove Obsrv's data
+
+`obsrv uninstall` lists what Obsrv wrote and what is still there; `--remove` deletes it, each path
+re-checked against the removal guard as it goes. Merged as `9e00667` on Idris's PASS of `d579525`.
+The card's own title is answered: the supported way exists, and it is one command.
+
+**The two things named as not done are split rather than left holding this card open:**
+- **No end-to-end exercise of the destructive path** → `chore-uninstall-remove-end-to-end`, with
+  Idris's reason for why it is a consequence of the guard's design rather than missing effort.
+- **No second confirmation on `--remove`** → **not a work item; a decision, and Opeyemi's.** The
+  argument for leaving it out is on `#335` and, in its strongest form, in Idris's verdict: the real
+  safety boundary was never a person's typed answer, it is the guard's unconditional refusal of the
+  real home, which holds regardless of flags, prompts or anyone's attention. If Opeyemi wants the
+  friction anyway it is a small change, and it should be made because he wants it rather than because
+  a card sat open implying it was owed.
