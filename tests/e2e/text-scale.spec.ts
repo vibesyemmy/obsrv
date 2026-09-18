@@ -262,6 +262,17 @@ test.describe('the scale survives a relaunch', () => {
     // amount of re-running can say. This keeps watching for 30 s after the
     // failure and prints what the value does.
     //
+    // **Two standalone probes could not reproduce it, which is why the watch
+    // is here rather than in a spec of its own.** v1, ten lone opens
+    // (`35393993403`): 227-358 ms, ten for ten landed. v2 (`35399044461`),
+    // adding one variable at a time — A lone 227-340, B with a second live app
+    // 265-309, C resident plus a navigate 270-303. **B and C sit inside A's own
+    // spread**, so a second app is not the variable. Both probes ran mid-way
+    // through a full suite, so accumulated runner state is not it either, and
+    // `workers: 1` with `fullyParallel: false` rules out other specs running
+    // alongside. Nothing is left to reproduce from outside, so the watch goes
+    // on the call that actually fails.
+    //
     // Scoped to this one call on a probe branch: `drawerSettled` is shared,
     // and a 30 s poll inside a 30 s-budget test is the 0.32.0 bug
     // (`docs/e2e-flakes.md:141`) where a poll outlives its test and rejects
@@ -277,6 +288,9 @@ test.describe('the scale survives a relaunch', () => {
           .evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim())
           .catch(err => `ERR ${String(err).slice(0, 40)}`)
         seen.push(`${Date.now() - t0}ms=${w}`)
+        // Stop the moment it lands: the answer is the arrival, and polling on
+        // past it only spends budget this group would rather keep.
+        if (w === '309px') break
         await new Promise(r => setTimeout(r, 500))
       }
       // One line, greppable, with the wall clock the card asked for.
