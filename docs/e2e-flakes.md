@@ -842,3 +842,28 @@ Reasoned, not run (1 sighting). If it recurs: raise this test's own timeout
 first, since a loop-breaker fixture racing a fixed 3 s window
 (`LOOP_WINDOW_MS`, see `sync.spec.ts:138`'s entry above) on a loaded runner is
 a narrower margin than most of this suite already accepts elsewhere.
+
+## `live-capture-notes.spec.ts:183`: the stale-frame note crowds out the onion-skin one
+
+`a window capture of a painting page with the skin on says the ghosting is
+the animation` expects the reply to contain the onion-skin blending sentence
+and instead gets a different, real warning: *"the pane may show an older
+frame: the renderer drew frame N, the latest sent to it is M"*.
+
+Two sightings, the identical shape both times, recovered clean on retry both
+times:
+
+    35340072824  drew 257, latest 269  (main, #351's merge run)
+    35349396117  drew 259, latest 276  (main, #353's merge run)
+
+Henry also read a third instance of this same shape earlier the same night,
+without a run id to hand — noted here as his account, not independently
+re-checked.
+
+Not investigated beyond the shared shape. Both notes can be true of the same
+capture — a frame stale enough to trip the pane-drift check is also stale
+enough that the onion skin's own "keeps painting" comparison should still
+see it — so this reads as one note's producer returning before the other's
+runs, not as either sentence being wrong. Reasoned, not measured: nobody has
+read the two producers' order in `capture.ts` yet. Left in the register
+because it now has a consistent signature across sightings, not a fix.
