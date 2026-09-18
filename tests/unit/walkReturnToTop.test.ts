@@ -114,16 +114,46 @@ describe('the walk’s return to the top, when its own budget is already spent',
   })
 
   it('is the same across the latency range, since which side wins the race is not the point', async () => {
+    // **2 ms is not in this range any more, and that is the point of the
+    // title.** 2 ms is not merely the first latency that fires — it wins by
+    // ONE TIMER TICK, which is the smallest margin that exists, so pinning
+    // `2:said` pins which side of a tie wins.
+    //
+    // The margin is structural, not statistical. `backToTop` runs after the
+    // loop, when the deadline has just run out, so `withinBudget` races the
+    // reply against `setTimeout(..., Math.max(0, ~0))` — and Node clamps a
+    // zero-delay timer to **1 ms**. The fake's reply is `setTimeout(...,
+    // latencyMs)`, registered first (it is the argument, evaluated before the
+    // wrapper). So: at 0 and 1 ms the two timers expire on the same tick and
+    // the earlier-registered reply wins, silently; from 2 ms the timeout wins
+    // and the note fires. That is the whole boundary, and it is why the
+    // original sweep measured 0-1 silent and 2+ saying it.
+    //
+    // Run `35337859257` failed here with `2:silent`, alone, on a unit test
+    // that does not retry. It is rare — one miss in ~330 local repetitions —
+    // and neither load, repetition nor a cold process reproduces it on demand
+    // (all three were tried). That is expected of a one-tick margin and is the
+    // reason re-running it, as Wren did 8 times, proves nothing either way.
+    //
+    // 3 ms upward clears the clamp by two ticks or more, so the outcome is
+    // decided rather than raced. The assertion this test was written to make
+    // survives intact: once the page is slow enough, the note fires, and the
+    // words do not change with the latency.
     const seen: string[] = []
-    for (const latency of [2, 3, 5, 8, 12, 20]) {
+    const sentences = new Set<string>()
+    for (const latency of [3, 5, 8, 12, 20]) {
       const page: FakePage = { y: 0, applied: [] }
       const out = await walkHeadless(answeringTarget(latency, page) as never, BUDGET_MS)
       const note = noteAbout(out.notes, 'return to the top')
       seen.push(`${latency}:${note === undefined ? 'silent' : 'said'}`)
+      if (note !== undefined) sentences.add(note)
     }
     // Every arm in this range reached the note before the fix; none of them may
     // reach a false one after it.
-    expect(seen.join(' ')).toBe('2:said 3:said 5:said 8:said 12:said 20:said')
+    expect(seen.join(' ')).toBe('3:said 5:said 8:said 12:said 20:said')
+    // And "the same across the range" as a claim about the WORDS, which is what
+    // the title says and what the old assertion never actually checked.
+    expect([...sentences], `the sentence varied with the latency: ${[...sentences].join(' | ')}`).toHaveLength(1)
   })
 })
 
