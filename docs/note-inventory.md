@@ -286,7 +286,7 @@ it.
 | `src/mcp/walk.ts:211` | mcp | the walk was cut short after <…> screenful<…> (<…>); |
 | `src/shared/walkCoverage.ts:174` | cli, mcp | <…> <…>% of the viewport, and what <…>scrolls is either inside it or scrolls by transform (a virtual… |
 
-**Fired since, pinned by a test (37).** Thirty-six of these left the list above; the other is
+**Fired since, pinned by a test (40).** Thirty-nine of these left the list above; the other is
 `liveInspect`'s copy, which leaves the ambiguous group. Each test asserts the **whole** sentence, and
 each was shown to fail when that sentence is altered in `src/` — the control runs are
 `35192500426` (#256), `35194537378` (#258, v2 on the corrected head), `35199207359` (#263),
@@ -331,6 +331,9 @@ arms (1, 2 and 4), and the fix as written reds none.
 | `src/cli/walk.ts:211` | `cli-walk-limits.spec:183`, a page that stops answering once scrolled | `35242092672` |
 | `src/mcp/walk.ts:187` | `cli-walk-limits.spec:303`, the same page live, where the scroll is never confirmed | `35242092672` |
 | `src/cli/walk.ts:130` | `cli-walk-limits.spec:199`, the return to the top after a spent budget | `35293771341` |
+| `src/cli/main.ts:620` | `cli-snap-tiled.spec:344`, a full page past the twelve-band cap | `35331754234` |
+| `src/cli/main.ts:528` | `cli-snap-tiled.spec:356`, an app shell whose feed outruns the bands | `35331754234` |
+| `src/cli/main.ts:1472` | `cli-report.spec:218`, every finding out of the capture's reach | `35331754234` |
 | `src/cli/stuckProbe.ts:98` | `cli-snap-tiled.spec:229`, a page that replaces its document once during the probe | `35213379890` |
 | `src/cli/stuckProbe.ts:76` | `cli-snap-tiled.spec:239`, the same page replacing it twice | `35213379890` |
 | `src/main/controlServer.ts:531` | `live-capture-notes.spec:234`, a scroll a page holding its main thread cannot answer | `35218827856` |
@@ -420,8 +423,9 @@ has is a run of the note log that saw it, which is what this column counts.
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308 and #338: ten unfired
-producers, eight written or reworded after the run, two ambiguous groups, and nine named reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338 and #348: seven
+unfired producers, eight written or reworded after the run, two ambiguous groups, and nine named
+reasons.**
 
 **What #308 and #338 moved, and the one thing that is not a subtraction.** `#308` fired four — the
 budget pair and, on the cut-short page, the headless cut-short sentence and the live "did not confirm
@@ -445,8 +449,10 @@ sentence the fix wrote.
     same note live, which `#338` did not touch because the live path passes no budget of its own),
     **`mcp/walk.ts:213`** (cut short after N screenfuls, the live twin of the headless one `#308`
     fired) and **`walkCoverage.ts:174`** (a frame that covers part of the viewport).
-  - **Truncation and caps (3, `cli/main.ts:529`, `:620`, `:1479`).** A page taller than the bands one
-    answer carries, and a report with no findings worth featuring.
+  - ~~**Truncation and caps (3).**~~ **Closed by `#348`**: `cli/main.ts:620` on `lazy-tall.html`
+    (which already produced it — the probe found that before a fixture was written for it), `:528` on
+    a new app shell whose feed is 20,000 px, and `:1472` on a new page whose only findings sit past
+    the cap. Control `35335246705`, each red at its own sentence.
   - **The rest (3):** an uncovered frame (`capture.ts:347`), image findings below the height the walk
     reached (`cli/lint.ts:94`), and agent control turned off (`mcp/lib.ts:581`), which needs a live app
     with the toggle off.
