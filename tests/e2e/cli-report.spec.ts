@@ -220,17 +220,22 @@ test('a page whose findings are all past the capture says why it has no located 
   const r = await runCli(['report', fixture('findings-past-the-cap.html'), '--preset', 'laptop-768', '--out', out])
   expect(r.code, r.stderr).toBe(0)
   const summary = JSON.parse(r.stdout) as {
-    screens: Array<{ problems?: { featured: number; belowCapture: number; inPanel: number }; warnings: string[] }>
+    screens: Array<{ problems?: unknown; audit?: { findings: number }; warnings: string[] }>
   }
   const screen = summary.screens[0]!
 
-  // The state the sentence is about, asserted as numbers before the words:
-  // findings exist, none could be featured, and they are below rather than in
-  // a panel — which is what picks the branch of the sentence below.
-  expect(screen.problems, JSON.stringify(screen.problems)).toMatchObject({ featured: 0, inPanel: 0 })
-  expect(screen.problems!.belowCapture).toBeGreaterThan(0)
+  // **`problems` is absent here, and that is not a bug in this test.** It is
+  // assigned inside `if (featured.length > 0)` (`cli/main.ts:1435`), and this
+  // sentence fires only when `featured` is empty — so the field and the
+  // sentence are mutually exclusive by construction. The first version of this
+  // test asserted on `problems` and could never have passed; a probe
+  // (`probe/c5-caps`, run `35329496899`) printed the whole reply and said so.
+  expect(screen.problems, 'problems is emitted only when something was featured').toBeUndefined()
+  // What IS observable: the audit found things, and none of them made it into
+  // a located section.
+  expect(screen.audit?.findings, JSON.stringify(screen.audit)).toBeGreaterThan(0)
 
-  const n = screen.problems!.belowCapture
+  const n = screen.audit!.findings
   expect(screen.warnings, JSON.stringify(screen.warnings)).toContain(
     `the ${n} finding${n === 1 ? '' : 's'} worth featuring all lie below what the full-page capture could reach, ` +
       `so this screen has no "where the problems are" section; the findings themselves are listed above`,
