@@ -244,3 +244,57 @@ no lead beyond that list**, and says so rather than handing over a card that loo
 it is.
 
 **Nothing here is urgent.** It has been seen three times in 24 hours and has never reached a release.
+
+## FIRST PASS, 2026-09-18 by Dogu — two of Henry's four questions answered, no runs re-executed
+
+Read from existing data only: job-setup logs, uploaded failure artifacts, per-attempt CI logs. No
+suite run of any kind, per Henry's own warning against a fourth baseline run.
+
+**Runner image and region: both cleared, not implicated.** All three sightings' e2e job ran
+`macos-14-arm64` at image release `20260831.0302`, Azure region `westus`. Checked against two
+controls — the passing re-run of the third sighting's own commit (attempt 2) and an unrelated
+clean run the same evening (`35286751102`) — **both controls used the identical image release and
+region.** So this was simply the only image/region in rotation all week; it cannot be what
+separates the three failures from every clean run around them. Answers Henry's "shared a runner
+image" question directly: yes, shared — with everything else too.
+
+**Concurrent job: not answerable from here.** These are GitHub-hosted ephemeral runners; the API
+does not expose physical-host identity, so "was another job sharing this machine" has no data source
+short of a self-hosted runner, which this repo does not use. Naming this as a dead end rather than
+leaving it looking open.
+
+**New: the uploaded failure artifacts exist and nobody had opened them.** `playwright-traces` from
+all three sightings are still live (not expired) — `35145262453`'s artifact `10468022022`,
+`35201648560`'s `10489339240`, `35269203926`'s `10519021701`. Each contains per-test
+`test-failed-*.png` screenshots and, for the retry attempt, a full `trace.zip`. `bug-flakes-gate-the-gate`
+established these uploads were once empty (`if: failure()` on a step order that never fired); that
+is fixed now, and there was real content waiting.
+
+**The screenshot at the moment of `:31`'s timeout is pixel-identical across all three sightings.**
+Full-app screenshot, taken 30 seconds after the test called `navigate` and started waiting: in
+every one of the three, the app is still showing its pristine first-launch "New tab" / "Point Obsrv
+at a page" screen — the empty state from before any navigation, not a frozen mid-load state or a
+blank pane inside an otherwise-normal window. **The native pane did not merely fail to report its
+URL; nothing about the app's own chrome shows any sign the navigate call was ever acted on**,
+across three unrelated heads, byte-for-byte the same image. That is a sharper version of "the pane
+read invisible" than the card had — it is "the app looks exactly as if `navigate` had not been
+called," which narrows where the break can be (something upstream of the pane even starting to
+respond) more than it had been narrowed before.
+
+**One precise correlation found, in ONE of the three sightings only — reporting it as partial, not
+as the cause.** In `35145262453`'s raw log, the app process (pid `13613`) emits
+`[13619:0916/203617.425062:ERROR:gpu/ipc/client/command_buffer_proxy_impl.cc:488] GPU state invalid
+after WaitForGetOffsetInRange` at `20:36:17.425`. `ipc.spec.ts:31`'s first-try timeout fires at
+`20:36:17.4755` — **50 ms later, same process.** This is not the deliberate GPU-crash testing
+elsewhere in the same log (`gpu-reset.spec.ts`, `log.spec.ts:64` — both already ✓ and finished
+several tests earlier, at 20:35:14–20:35:21); this is a second, unplanned GPU/command-buffer error
+landing in the same 100ms window as the hang. **Checked the other two sightings for the same
+signature (`GPU state invalid`, `GPU process exited`, `context lost`, and near variants) — neither
+`35201648560` nor `35269203926` has anything matching, anywhere in the log.** So this either isn't
+the mechanism, or the mechanism has more than one trigger and only one of the three left a log
+trace. Rook's `gpu-reset-webgl-stall` hypothesis is not confirmed by this — but it is the first
+piece of evidence that touches it at all, rather than being argued from shape alone.
+
+**Not yet done, named rather than assumed complete:** the `trace.zip` files (richer than a
+screenshot — action timeline, console, network) are downloaded but not yet opened; that's the next
+thing to read before forming a stronger claim, not another suite run.
