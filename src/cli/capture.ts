@@ -193,49 +193,57 @@ export const DEFAULT_SETTLE_MS = SETTLE_QUIET_MS
 export const ANIMATING_AFTER_MS = 2_000
 export const ANIMATING_MIN_PAINTS = 8
 
+
 /**
- * The uncovered region's bounding box, for the rescue warning: "which part of
- * the frame never painted" is the one thing that makes an unsettled capture
- * actionable. Null when everything is covered.
+ * Ground truth for "did every pixel actually paint", read from the buffer's
+ * own alpha byte rather than the mask `onFrame` maintains. The mask can be
+ * wrong: its full-rect fast path (`onFrame`, the `x === 0 && y === 0 && w ===
+ * width && h === height` branch) accepts a whole-buffer repaint as fully
+ * covered without inspecting its bytes, and Chromium was observed doing
+ * exactly that mid-composite (bug-raster-coverage-counts-transparent-rows,
+ * Idris's two-level reproduction). The buffer starts zero-filled BGRA, so an
+ * unpainted pixel reads alpha 0 and real content never does (the composited
+ * frame is opaque — see `targetSource.ts`'s `BrowserWindow` construction),
+ * which makes "any alpha-0 pixel" true of the bytes regardless of what the
+ * mask believes.
  *
- * Four directional scans with early exit rather than one sweep of the whole
- * raster: each edge stops at the first line that contains an uncovered pixel,
- * so a region touching an edge — which is what an unfinished repaint almost
- * always leaves — costs O(width + height) instead of O(width x height). That
- * matters on `--full-page` at dsf 3, where the full sweep is tens of millions
- * of iterations on an already-slow path. A single uncovered pixel dead centre
- * still degenerates to the old cost; it is one pass either way.
+ * Unconditionally O(width x height): the mask-based bounds finder this
+ * replaced could exit early on the first row/column with a gap, because it
+ * only ever ran once a gap was already known to exist. This one runs on
+ * every capture, including the overwhelmingly common fully-painted case,
+ * where there is nothing to find early — a fully-opaque buffer is the worst
+ * case, not the best one, for this scan.
+ *
+ * Measured (Node, warmed up, 200-iteration average), a fully-opaque
+ * 1920x1080 buffer — 2,073,600 px, worst case, no early exit possible: 2.0
+ * ms/scan. With a 180-row transparent band present: 2.4 ms/scan. Not free,
+ * but not a budget-relevant cost against a capture whose own timeouts run in
+ * seconds — see the board card's scan-cost acceptance item.
  */
-function uncoveredBounds(mask: Uint8Array, width: number, height: number): { x: number; y: number; width: number; height: number } | null {
-  const rowHasGap = (y: number): boolean => {
-    const row = y * width
-    for (let x = 0; x < width; x++) if (mask[row + x] === 0) return true
-    return false
-  }
-  let y0 = -1
+function transparentBoundsFromBytes(
+  buffer: Uint8Array,
+  width: number,
+  height: number,
+): { count: number; box: { x: number; y: number; width: number; height: number } } | null {
+  let count = 0
+  let minX = width
+  let maxX = -1
+  let minY = height
+  let maxY = -1
   for (let y = 0; y < height; y++) {
-    if (rowHasGap(y)) {
-      y0 = y
-      break
+    const rowBase = y * width
+    for (let x = 0; x < width; x++) {
+      if (buffer[(rowBase + x) * 4 + 3] === 0) {
+        count++
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        maxY = y
+      }
     }
   }
-  if (y0 < 0) return null
-  let y1 = y0
-  for (let y = height - 1; y > y0; y--) {
-    if (rowHasGap(y)) {
-      y1 = y
-      break
-    }
-  }
-  const columnHasGap = (x: number): boolean => {
-    for (let y = y0; y <= y1; y++) if (mask[y * width + x] === 0) return true
-    return false
-  }
-  let x0 = 0
-  while (x0 < width && !columnHasGap(x0)) x0++
-  let x1 = width - 1
-  while (x1 > x0 && !columnHasGap(x1)) x1--
-  return { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 }
+  if (count === 0) return null
+  return { count, box: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } }
 }
 
 /**
@@ -439,24 +447,42 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         if (frames === 0 || width === 0 || height === 0) {
           throw new Error(`no frame painted within ${timeoutMs} ms`)
         }
+        // The mask's own count and uncoveredBounds(mask, ...) used to answer
+        // this directly. They still could here — mask is non-null and
+        // uncovered > 0 by construction of this branch — but the bytes check
+        // below is now the single source of truth for the message, so this
+        // branch only has to name the reason.
         unsettledReason = 'uncovered'
-        const total = width * height
-        const box = mask ? uncoveredBounds(mask, width, height) : null
-        // Name what those pixels *are*, not just where: the buffer starts
-        // zero-filled, so an unpainted region is fully transparent BGRA
-        // (0,0,0,0) — which an agent could otherwise read as a black or blank
-        // band of the page.
-        options.onWarn?.(
-          `${((uncovered / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
-            `never painted within ${timeoutMs} ms` +
-            (box ? ` (uncovered region ${box.width}x${box.height} at ${box.x},${box.y})` : '') +
-            `; those pixels are transparent, not page content. ` +
-            `Returning the frame as captured (settled: false)`,
-          'uncovered',
-        )
         break
       }
       await sleep(Math.min(50, settleMs))
+    }
+    // Ground truth, checked once regardless of which branch above set
+    // `settled`/`unsettledReason`: the mask (and the `covered` flag it feeds)
+    // can be wrong. onFrame's full-rect fast path accepts a whole-buffer
+    // repaint as fully covered without inspecting its bytes — Chromium can
+    // and does deliver a "full" rect mid-composite (bug-raster-coverage-
+    // counts-transparent-rows) — so `covered` can read true, and every branch
+    // above that trusts it (the quiet-settle exit, animating, resizing,
+    // blank-or-timeout at the deadline) can hand back a buffer that still has
+    // fully transparent pixels the mask never saw. A capture's own buffer
+    // starts zero-filled BGRA, so an unpainted pixel is alpha 0 by
+    // construction — real content is never alpha 0 (the composited frame is
+    // opaque; see targetSource.ts) — making "any alpha-0 pixel" an
+    // unconditional, mask-independent fact about what actually painted.
+    const transparent = transparentBoundsFromBytes(buffer, width, height)
+    if (transparent) {
+      settled = false
+      unsettledReason = 'uncovered'
+      const total = width * height
+      options.onWarn?.(
+        `${((transparent.count / total) * 100).toFixed(1)}% of the ${width}x${height} frame ` +
+          `never painted within ${timeoutMs} ms ` +
+          `(uncovered region ${transparent.box.width}x${transparent.box.height} at ${transparent.box.x},${transparent.box.y}); ` +
+          `those pixels are transparent, not page content. ` +
+          `Returning the frame as captured (settled: false)`,
+        'uncovered',
+      )
     }
     return { width, height, bgra: buffer.slice(), settled, ...(settled ? {} : { unsettledReason }) }
   } finally {

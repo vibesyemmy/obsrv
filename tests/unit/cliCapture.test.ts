@@ -31,6 +31,16 @@ const marked = (w: number, h: number, byte: number): FrameMessage => {
 }
 /** Compositing tests use one-colour frames; the grace is not what they test. */
 const noGrace = { blankGraceMs: 0 }
+/**
+ * A real opaque black frame — alpha 255 throughout, unlike `fullFrame(w, h,
+ * 0)`, which fills alpha with the colour byte too and is indistinguishable
+ * from an unpainted (zero-init) buffer at the byte level.
+ */
+const opaqueBlack = (w: number, h: number): FrameMessage => {
+  const data = new Uint8Array(w * h * 4)
+  for (let i = 3; i < data.length; i += 4) data[i] = 255
+  return { frame: { x: 0, y: 0, width: w, height: h, data }, frameWidth: w, frameHeight: h }
+}
 
 describe('captureQuiescent', () => {
   it('resolves with the composited full frame once paints go quiet', async () => {
@@ -144,6 +154,42 @@ describe('captureQuiescent', () => {
     const got = await captureQuiescent(new FakeSource([half]), { settleMs: 20, timeoutMs: 150, onWarn: () => {} })
     expect(got.settled).toBe(false)
     expect(got.unsettledReason).toBe('uncovered')
+  })
+
+  /**
+   * `bug-raster-coverage-counts-transparent-rows`. The full-rect fast path
+   * (`onFrame`'s `x === 0 && y === 0 && w === width && h === height` branch)
+   * used to accept a "whole frame" repaint as fully covered without
+   * inspecting its own bytes — exactly what Idris's live reproduction found
+   * Chromium doing mid-composite: a frame declares itself full-size while
+   * part of what it delivers is still alpha 0, never actually painted.
+   *
+   * Control: this test fails (`settled: true`, no warning) with
+   * `transparentBoundsFromBytes`'s call removed from the end of
+   * `captureQuiescent` — checked by hand before this landed.
+   */
+  it('a full-rect paint that lies about one of its own rows is uncovered, not settled true', async () => {
+    // 8x8, not smaller: isFlatFrame samples every FLAT_SAMPLE_STEP-th (4th)
+    // row/column, so the lying row has to land on that grid (y=4) or the
+    // flatness check simply never looks at it and this test would exercise
+    // the wrong branch (blank) regardless of the fix.
+    const w = 8
+    const h = 8
+    const data = new Uint8Array(w * h * 4)
+    for (let i = 3; i < data.length; i += 4) data[i] = 255 // opaque baseline
+    for (let x = 0; x < w; x++) {
+      // Row 4 declares itself part of a full-size paint but never actually
+      // painted: alpha 0, the buffer's own zero-init value.
+      const p = (4 * w + x) * 4
+      data[p] = data[p + 1] = data[p + 2] = data[p + 3] = 0
+    }
+    const lyingFullFrame: FrameMessage = { frame: { x: 0, y: 0, width: w, height: h, data }, frameWidth: w, frameHeight: h }
+    const warnings: string[] = []
+    const got = await captureQuiescent(new FakeSource([lyingFullFrame]), { settleMs: 20, timeoutMs: 2000, onWarn: m => warnings.push(m) })
+    expect(got.settled).toBe(false)
+    expect(got.unsettledReason).toBe('uncovered')
+    expect(warnings.join(' ')).toMatch(/12\.5% of the 8x8 frame never painted/)
+    expect(warnings.join(' ')).toMatch(/uncovered region 8x1 at 0,4/)
   })
 
   /**
@@ -383,7 +429,11 @@ describe('captureQuiescent on a one-colour frame', () => {
     expect(Date.now() - t0).toBeLessThan(700)
   })
   it('still one colour at the budget is blank, not timeout', async () => {
-    const src = new FakeSource([fullFrame(W, H, 0)])
+    // Not `fullFrame(W, H, 0)`: that fills alpha with 0 along with the colour,
+    // which is byte-identical to "never painted" and the raster-coverage fix
+    // (bug-raster-coverage-counts-transparent-rows) now reads that correctly
+    // as uncovered rather than blank. A real black frame is opaque.
+    const src = new FakeSource([opaqueBlack(W, H)])
     const noisy = setInterval(() => src.invalidate(), 10)
     try {
       const warnings: string[] = []
