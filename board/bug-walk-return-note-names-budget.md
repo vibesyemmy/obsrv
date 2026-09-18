@@ -230,3 +230,42 @@ both paths rather than assert a position nobody measured.
 **Order of work:** the unit arms on the fake target first (both paths, and the offset), then the
 product change, then the CI control run that prints today's wording beside the fixed one.
 
+
+## The change, 2026-09-18 by Kenya (#338): all three faults in one sentence, each with its own control
+
+**The change** (`src/cli/walk.ts`):
+- **the duration:** `step` captures `deadline.remaining()` before the call and reports *that*, not
+  `budgetMs`. A step that made no wait no longer claims fifteen seconds;
+- **the accusation and the place:** `backToTop` now has two sentences, because two different things
+  happen. With the budget spent it says *"the walk had no budget left to return to the top, so it asked
+  the page and did not wait for the answer; the page may have scrolled to the top after the measurement
+  began."* — @Wren's subject, and a last clause that claims no position. With budget left and a step
+  that still failed, the original sentence stands, because there the page really was waited for and
+  really did not answer;
+- **silence stays off the table** (Henry): a walk that could not return the page would otherwise read
+  like one that did.
+
+**Tests: `tests/unit/walkReturnToTop.test.ts`**, on the fake target, so the race is a parameter rather
+than the machine's mood. Four arms on the spent path (no accusation, no invented duration, no place
+claim, and the sentence still said at all), one on the cut-short path (the duration is the time the
+step was given, and the accusation is fair there).
+
+**Controls, each restoring one fault on its own:**
+
+| restored | arms red |
+| --- | --- |
+| the duration named as the whole budget | **1** — the cut-short arm |
+| one sentence for both paths | **2** — the accusation and the place |
+| silence when the budget is spent | **4** |
+| nothing (the fix as written) | **0**, all five pass |
+
+**`cli-walk-limits.spec.ts` now pins the new sentence** on `blocks-on-scroll.html` — the arm batch 2
+deliberately left out, because the sentence it would have pinned was the wrong one. That runs on CI;
+`cli-*` is not desk-safe.
+
+**Unit suite on the fixed tree: 1548 passed, 1 skipped, 107 files.**
+
+**What is still a model, and what settles it:** the fake applies a scroll when the script runs, awaited
+or not, which is what Chromium does with an abandoned `executeJavaScript`. The e2e arm above is the live
+half — if a budget-ended walk on CI ever carries the old wording, or the new sentence's last clause
+turns out to describe a page that did *not* reach the top, that is a finding for this card.

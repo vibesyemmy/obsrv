@@ -72,6 +72,15 @@ const BUDGET_SENTENCE =
 const CUT_SHORT_HEADLESS =
   /^the walk was cut short after (\d+) screenfuls? \(the page did not answer a scroll within \d+(\.\d)? s \(its main thread was busy or blocked\)\); measured after a partial walk\.$/
 
+/**
+ * `cli/walk.ts` — the return to the top that the walk's own budget left no room
+ * for. It names the walk rather than the page: the scroll IS issued, and on a
+ * free thread it lands, so this claims nothing about where the page ended up
+ * (`bug-walk-return-note-names-budget`).
+ */
+const RETURN_UNWAITED =
+  'the walk had no budget left to return to the top, so it asked the page and did not wait for the answer; the page may have scrolled to the top after the measurement began.'
+
 /** `mcp/walk.ts:184` — the live walk's scroll that came back unconfirmed. */
 const NOT_CONFIRMED_LIVE = 'the page did not confirm a scroll during the walk; the walk stopped there.'
 
@@ -180,6 +189,14 @@ test.describe('headless walk limits (cli/walk.ts and shared)', () => {
     // One screenful, because the hold starts on the first scroll EVENT: the
     // step that caused it is answered, and the one after it is not.
     expect(m.walked?.screenfuls, JSON.stringify(m.walked)).toBe(1)
+
+    // The arm this batch deliberately left out, now that the sentence it
+    // pins is no longer the wrong one (`bug-walk-return-note-names-budget`).
+    // A cut-short walk has spent its budget, so `backToTop` asks the page and
+    // does not wait, and the note says that rather than blaming a main thread
+    // for a 15 s silence nobody measured.
+    const back = said(m).find(w => w.includes('return to the top'))
+    expect(back, JSON.stringify(said(m))).toBe(RETURN_UNWAITED)
   })
 })
 
