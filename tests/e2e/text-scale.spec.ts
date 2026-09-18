@@ -254,7 +254,35 @@ test.describe('the scale survives a relaunch', () => {
     const p1 = await rendererWindow(first)
     await p1.evaluate(u => window.obsrv.navigate(u), url)
     await expect.poll(() => viewIn(first, 'target').then(v => v.innerWidth), { timeout: 10_000 }).toBe(1920)
-    await openPanel(p1)
+    // PROBE (probe/drawer-stall, `bug-drawer-stalls-part-open`). Not for main.
+    //
+    // The card's question: when the drawer stops ~7% open, is the renderer
+    // STARVED and would finish, or is it STUCK? `drawerSettled` gives up at
+    // 5 s and records nothing after, so neither the two CI sightings nor any
+    // amount of re-running can say. This keeps watching for 30 s after the
+    // failure and prints what the value does.
+    //
+    // Scoped to this one call on a probe branch: `drawerSettled` is shared,
+    // and a 30 s poll inside a 30 s-budget test is the 0.32.0 bug
+    // (`docs/e2e-flakes.md:141`) where a poll outlives its test and rejects
+    // with no test to belong to. This group is `test.slow()`, so its budget is
+    // 90 s and the watch fits — but only here.
+    try {
+      await openPanel(p1)
+    } catch (e) {
+      const t0 = Date.now()
+      const seen: string[] = []
+      for (let i = 0; i < 60; i++) {
+        const w = await p1
+          .evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim())
+          .catch(err => `ERR ${String(err).slice(0, 40)}`)
+        seen.push(`${Date.now() - t0}ms=${w}`)
+        await new Promise(r => setTimeout(r, 500))
+      }
+      // One line, greppable, with the wall clock the card asked for.
+      console.log(`DRAWER STALL PROBE | failed=${String(e).slice(0, 80)} | ${seen.join(' ')}`)
+      throw e
+    }
     await choose(first, p1, '.text-scale-select', '1.5')
     await expect.poll(() => viewIn(first, 'target').then(v => v.innerWidth), { timeout: 5_000 }).toBe(1280)
     await expect.poll(() => existsSync(join(home, 'tabs.json')), { timeout: 5_000 }).toBe(true)
