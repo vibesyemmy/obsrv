@@ -136,3 +136,57 @@ fault produces.
 asking for a probe that logs a grow's rectangle against the alpha of the rows it covers stands
 unchanged — but it is now buying an explanation for a measured defect rather than deciding whether
 there is one.
+
+## THIRD SIGHTING 2026-09-18: the REGION is wrong too, and the error is not a constant
+
+Run `35315388746` (`#341`, a docs-only PR whose suite ran anyway), `live-capture-notes.spec.ts:351`,
+first attempt, passing on the retry:
+
+```
+stated:   10.0% of the 1600x900 frame never painted (uncovered region 160x900 at 1440,0)
+measured: 416000 transparent px = 28.889%, bounding box 1600x900 at 0,0
+```
+
+**The stated region is a 160-wide band at the right edge — exactly the growth from 1440 to 1600. The
+transparent pixels span the whole frame.** So this is not only an undercount of the share; the box
+names the wrong part of the image.
+
+### Two claims this kills, both of them mine, both made from too few readings
+
+**1. "The region agrees; only the share is wrong."** Written on this card after the second sighting,
+where the stated box and the measured box both happened to be the full frame. That was one state's
+coincidence read as a property. **The region and the share can each be wrong, and independently** — a
+fix that corrects the count alone would still hand a caller a box naming the wrong part of the PNG.
+
+**2. "Identical figures twice suggests the undercount is deterministic given the state."** Three
+sightings now:
+
+| run | frame | stated | measured | gap |
+| --- | --- | --- | --- | --- |
+| `35277717542` | 1440x900 | 19.1% | 24.148% | ~5.0 pp |
+| `35295017371` | 1440x900 | 19.1% | 24.148% | ~5.0 pp |
+| `35315388746` | 1600x900 | **10.0%** | **28.889%** | **~18.9 pp** |
+
+**The magnitude varies by nearly four times.** Two identical readings were two samples of the same
+state, not evidence of a fixed ratio.
+
+### What the three together support, kept weaker than it wants to be
+
+- **The mask is internally coherent and externally wrong.** 160×900 ÷ 1600×900 is exactly 10.0%, so
+  the stated share is computed *from* the stated box; the two agree with each other and neither agrees
+  with the bytes.
+- **In this sighting the mask believed only the newly exposed band was unpainted** while 28.9% of the
+  bytes were transparent and spread across the whole frame. A full-frame paint marked everything
+  covered and delivered a mostly-transparent frame.
+- **Whether that fits the mechanism Idris confirmed** — the full-rect branch taking `covered = true`
+  without inspecting bytes — is not established here. That mechanism explains a full-frame paint being
+  trusted; it does not by itself explain why the mask still reported a *narrow* uncovered band
+  afterwards. **Left as an open question rather than folded in**, because a mechanism that explains two
+  sightings and is assumed for the third is how the last two wrong claims on this card were made.
+
+### What this changes about the fix
+
+The candidate fix — count transparent bytes before answering — corrects the share. **It does not
+correct the region**, which comes from `uncoveredBounds(mask, …)`. A fix that leaves the box computed
+from the mask will keep naming the wrong part of the image, and the acceptance below should be read
+with that in mind: *both* numbers in the sentence are derived from the mask, and both are wrong here.
