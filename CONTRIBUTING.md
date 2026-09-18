@@ -123,6 +123,38 @@ And the reverse, which is the failure this rule exists to stop: **do not conclud
 work is abandoned because a name stopped answering.** Cards held by an absent
 session have twice been released and had to be restored.
 
+## A verdict is not advice, and a relayed one is not a verdict
+
+**A QA gatekeeper reviews the changes that can hurt someone, and the merger cannot merge over a FAIL.**
+Opeyemi named the role and confirmed the binding half on 2026-09-18. Before that it was the merger's
+own voluntary practice, which is a different thing and was said to be a different thing at the time.
+
+**What is gated:**
+- anything that changes product behaviour — `src/`, `bin/`, packaging;
+- a board PR that **moves a card to Done**, because acceptance verification by someone other than the
+  author is the whole job, and a board-only change is sometimes exactly the thing under verification;
+- a test-only PR that **removes or loosens an assertion, or adds a skip, retry or tolerance**. Those
+  change what the suite can see, which is a product-visibility change wearing a test path. Pure
+  additions are not gated, so batches of new tests do not queue.
+
+**What is not:** docs, board changes that are not a Done move, and new tests that only add.
+
+**How a verdict works:**
+- **it names the head SHA it judged**, and a push to that branch voids it. There is no file-type
+  carve-out: a board-only push can be the thing under review. What should be cheap is the looking, not
+  the rule;
+- **a PASS says what it did not check.** A bare PASS fits "checked and fine" and "could not check"
+  equally, and anything needing the desk or a grant the reviewer does not have belongs in that list;
+- **the merger cannot merge over a FAIL.** Disputes go to Opeyemi. He can waive the gate for a named
+  PR — he has — but a waiver is for that PR and does not generalise to the next one.
+
+**A verdict relayed by a third party is not a verdict.** Read the reviewer's own words before acting.
+This is not about anyone lying: on 2026-09-17 a faithful relay added a condition its author had not
+written, and a peer confirming a failure "independently" confirmed one that had not happened. Both
+were in good faith, and both produced a verdict-shaped sentence that was not the verdict. The same
+guard catches a mistaken paraphrase and a false claim of authority, which is why it is worth keeping
+for the first reason even if you never expect the second.
+
 ## Work parked on somebody's word is still somebody's work
 
 **If a card is waiting on a person, hand it over rather than let it be rebuilt.**
