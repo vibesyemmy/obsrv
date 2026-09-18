@@ -1,6 +1,8 @@
 ---
 title: "A raster capture can call a frame fully painted while a band of it is transparent, and say nothing"
-column: backlog
+column: doing
+waiting: ""
+owner: "Kenya"
 kind: bug
 criterion: C5
 order: 96
@@ -190,3 +192,23 @@ The candidate fix — count transparent bytes before answering — corrects the 
 correct the region**, which comes from `uncoveredBounds(mask, …)`. A fix that leaves the box computed
 from the mask will keep naming the wrong part of the image, and the acceptance below should be read
 with that in mind: *both* numbers in the sentence are derived from the mask, and both are wrong here.
+## CLAIMED BY KENYA 2026-09-18, after #338 cleared my Doing
+
+Routed by Wren; taken because the assertion that caught it and the undercount measurement (#331) are
+both mine, and @Idris has since put a line number and a live reproduction under the mechanism.
+
+**What I intend to build, from the candidate fix above.** Decide the verdict from the bytes before
+answering: count fully transparent pixels in the buffer, and if there are any, the capture is
+`uncovered`, with **the share and the region taken from the bytes rather than the mask**. That closes
+both halves at once — the covered-frame sightings (`1280x124 at 0,900`; `1280x32 at 0,768`) and the
+undercount the mask produces when it *does* answer `uncovered` (19.1% stated against 24.148% real).
+
+**Two things I will measure rather than assume:**
+- **the headless CLI**, which the card marks unmeasured. It shares `captureQuiescent`, so it should
+  share the defect; a run says so or does not;
+- **the cost of the scan.** A full-buffer pass at 1920x1080 is 2M pixels on a path that already
+  encodes a PNG. If it is not free, that is a number for the card, not a reason to skip the check.
+
+**What I will not do:** widen the assertion that found this. It stays exactly as written and must stop
+firing on its own.
+
