@@ -282,19 +282,54 @@ test.describe('the scale survives a relaunch', () => {
       await openPanel(p1)
     } catch (e) {
       const t0 = Date.now()
+      // **Records whether the renderer is ALIVE, not only what the width is.**
+      // `deskState.ts:5` says this repo has already measured the thing that
+      // makes that worth asking: on macOS, Electron derives a window's hide and
+      // show from its OCCLUSION state, and some desk state keeps a window from
+      // ever counting as visible. A hidden document does not merely lose the
+      // compositor — Chromium stops servicing rAF and the style updates a CSS
+      // transition needs, on the MAIN thread, which is where `--drawer-w` lives
+      // (`@property <length>` feeding `flex`). That predicts exactly what was
+      // seen: one frame painted, then nothing, for five seconds.
+      //
+      // Each sample carries three things, and between them they separate all
+      // three outcomes the card names:
+      //   hidden, rAF dead           -> frozen because hidden; tolerance is irrelevant
+      //   visible, rAF alive, moving -> starved, and it would have finished
+      //   visible, rAF alive, stuck  -> genuinely stuck; tolerance is irrelevant
       const seen: string[] = []
       for (let i = 0; i < 60; i++) {
-        const w = await p1
-          .evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim())
-          .catch(err => `ERR ${String(err).slice(0, 40)}`)
-        seen.push(`${Date.now() - t0}ms=${w}`)
-        // Stop the moment it lands: the answer is the arrival, and polling on
-        // past it only spends budget this group would rather keep.
-        if (w === '309px') break
+        const sample = await p1
+          .evaluate(async () => {
+            const w = getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()
+            // Does the renderer service frames at all? A hidden or throttled
+            // document never calls back, so this is a liveness test, not a
+            // timing measurement.
+            const raf = await new Promise<string>(resolve => {
+              const timer = setTimeout(() => resolve('rafDEAD'), 250)
+              requestAnimationFrame(() => {
+                clearTimeout(timer)
+                resolve('rafOK')
+              })
+            })
+            return `${w}/${document.visibilityState}/${raf}`
+          })
+          .catch(err => `ERR ${String(err).slice(0, 30)}`)
+        // The Electron side's own opinion, which `deskState` says can disagree
+        // with everything else on this platform.
+        const shown = await first
+          .evaluate(() => {
+            const w = (globalThis as never as { __obsrv: { win: { isVisible(): boolean; isMinimized(): boolean } } }).__obsrv.win
+            return `${w.isVisible() ? 'vis' : 'NOTvis'}${w.isMinimized() ? '+min' : ''}`
+          })
+          .catch(() => 'winERR')
+        seen.push(`${Date.now() - t0}ms=${sample}/${shown}`)
+        // Stop the moment it lands: the arrival is the answer, and polling past
+        // it only spends a budget this group would rather keep.
+        if (sample.startsWith('309px/')) break
         await new Promise(r => setTimeout(r, 500))
       }
-      // One line, greppable, with the wall clock the card asked for.
-      console.log(`DRAWER STALL PROBE | failed=${String(e).slice(0, 80)} | ${seen.join(' ')}`)
+      console.log(`DRAWER STALL PROBE | failed=${String(e).slice(0, 70)} | ${seen.join(' ')}`)
       throw e
     }
     await choose(first, p1, '.text-scale-select', '1.5')
