@@ -200,3 +200,43 @@ test('a sidebar that scrolls itself is a panel, not something below the capture'
   // The page's own findings are still pinned; only the panel's are held back.
   expect(html).toContain('button#doc-button')
 })
+
+/**
+ * `c5`'s third truncation-and-caps sentence: every finding worth featuring is
+ * out of the capture's reach, so the report has no "where the problems are"
+ * section and says so instead of quietly omitting it.
+ *
+ * **The fixture is new because the obvious ones do not produce it**, measured
+ * rather than assumed (`probe/c5-caps`, run `35324187068`): `report` over
+ * `app-shell-findings`, `app-shell-unreachable`, `sidebar-panel` and
+ * `anon-panel-locked` produced walk and panel warnings, not this. And
+ * `tall-audit.html`, which looks right, is ~8,700 CSS px — under the twelve-band
+ * cap — with its small controls at the top, where the capture reaches them and
+ * the report pins them. **A featured finding is the one thing this sentence
+ * requires there to be none of.**
+ */
+test('a page whose findings are all past the capture says why it has no located section', async () => {
+  const out = join(outDir, 'past-the-cap.html')
+  const r = await runCli(['report', fixture('findings-past-the-cap.html'), '--preset', 'laptop-768', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const summary = JSON.parse(r.stdout) as {
+    screens: Array<{ problems?: { featured: number; belowCapture: number; inPanel: number }; warnings: string[] }>
+  }
+  const screen = summary.screens[0]!
+
+  // The state the sentence is about, asserted as numbers before the words:
+  // findings exist, none could be featured, and they are below rather than in
+  // a panel — which is what picks the branch of the sentence below.
+  expect(screen.problems, JSON.stringify(screen.problems)).toMatchObject({ featured: 0, inPanel: 0 })
+  expect(screen.problems!.belowCapture).toBeGreaterThan(0)
+
+  const n = screen.problems!.belowCapture
+  expect(screen.warnings, JSON.stringify(screen.warnings)).toContain(
+    `the ${n} finding${n === 1 ? '' : 's'} worth featuring all lie below what the full-page capture could reach, ` +
+      `so this screen has no "where the problems are" section; the findings themselves are listed above`,
+  )
+
+  // And the report says it where a person reads it, not only in the JSON.
+  const html = readFileSync(out, 'utf8')
+  expect(html).not.toContain('Where the problems are')
+})

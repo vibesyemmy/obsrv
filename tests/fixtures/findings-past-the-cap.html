@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Findings only past what a full-page capture can reach</title>
+    <!--
+      For `cli/main.ts`'s report sentence: "the <n> findings worth featuring all
+      lie below what the full-page capture could reach, so this screen has no
+      'where the problems are' section; the findings themselves are listed
+      above".
+
+      THE SHAPE IT NEEDS, and why the obvious fixture is the wrong one.
+      `tall-audit.html` looks like the right page and is not: it is ~8,700 CSS
+      px, which is *under* the twelve-band cap (12 x 768 = 9,216 at
+      `laptop-768`), and its small controls sit at the **top**, where the
+      capture reaches them and the report pins them. A featured finding is
+      exactly what this sentence requires there to be none of.
+
+      So: everything findable is below 9,216 px, and nothing above it is a
+      finding. The spacer is plain, its text is 16 px and its contrast is
+      ordinary, so the only things an audit can complain about are past the cap.
+
+      Measured, not assumed: a probe (`probe/c5-caps`, run 35324187068) ran
+      `report` over the four fixtures whose findings were thought to be out of
+      reach — `app-shell-findings`, `app-shell-unreachable`, `sidebar-panel`,
+      `anon-panel-locked` — and none produced this sentence. They produced walk
+      and panel warnings instead, which is a different complaint about a
+      different thing.
+    -->
+    <style>
+      html, body { margin: 0; background: #fff; font-family: Arial, sans-serif; color: #111; }
+      body { padding: 16px; }
+      /* Past twelve bands of 768 on its own, so the capture stops short and
+         everything below is out of its reach. */
+      #spacer { height: 10400px; background: linear-gradient(#fff, #f6f7f9); }
+      p { font-size: 16px; }
+      /* The findings, and they are only down here. */
+      .tiny-tap { display: block; width: 22px; height: 22px; padding: 0; font-size: 10px; }
+      .tiny-text { font-size: 9px; color: #767676; }
+    </style>
+  </head>
+  <body>
+    <h1>Nothing up here is a finding</h1>
+    <p>Sixteen-pixel body text, ordinary contrast, and no small controls above the cap.</p>
+    <div id="spacer"></div>
+    <p class="tiny-text">Nine-pixel text, far below anything the full-page capture reached.</p>
+    <button class="tiny-tap" type="button" aria-label="Close">×</button>
+    <button class="tiny-tap" type="button" aria-label="Menu">≡</button>
+  </body>
+</html>

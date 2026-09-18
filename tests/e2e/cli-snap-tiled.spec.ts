@@ -327,3 +327,45 @@ test("the shell's two captures are the same size and differ only where the toolb
   expect(dims(a.stdout)).toEqual(dims(b.stdout))
   expect(readFileSync(hidden).equals(readFileSync(kept))).toBe(false)
 })
+
+/**
+ * `c5`'s truncation-and-caps cluster: the two sentences a page taller than
+ * `MAX_TILE_BANDS` produces, one for the document and one for an app shell's
+ * inner scroller.
+ *
+ * **Both were measured before either fixture was written** (`probe/c5-caps`,
+ * run `35324187068`). The document one needed no new page — `lazy-tall.html`
+ * already produces it, and a fixture written for it would have been the second
+ * copy of a page that existed. The shell one needed a new page precisely
+ * because the four app shells that looked like they should produce it do not:
+ * their feeds are a few screens tall against a cap of twelve bands of the
+ * scroller's own height.
+ */
+test('a full page past the band cap says how much of it is not in the raster', async () => {
+  const out = join(outDir, 'lazy-tall-tiled.png')
+  const r = await runCli(['snap', fixture('lazy-tall.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const { warnings } = JSON.parse(r.stdout) as { warnings: string[] }
+  // The whole sentence, not a phrase: a phrase check survives a rewording of
+  // the rest, and the rest is what tells a reader what they are missing.
+  expect(warnings, JSON.stringify(warnings)).toContain(
+    'full page is 11106 CSS px tall; captured the first 12 bands of 768 CSS px (12 at most) — what lies past them is not in the raster',
+  )
+})
+
+test("an app shell whose feed outruns the bands says the same about the container, not the page", async () => {
+  const out = join(outDir, 'shell-past-bands.png')
+  const r = await runCli(['snap', fixture('app-shell-past-the-bands.html'), '--preset', 'laptop-768', '--full-page', '--tiled', '--out', out])
+  expect(r.code, r.stderr).toBe(0)
+  const { warnings } = JSON.parse(r.stdout) as { warnings: string[] }
+  const said = warnings.find(w => w.startsWith('the page scrolls an inner container'))
+  expect(said, `no inner-container band warning: ${JSON.stringify(warnings)}`).toBeDefined()
+  // It names the CONTAINER's height and the container's own band height — the
+  // distinction from the sentence above, which names the document's.
+  expect(said).toMatch(
+    /^the page scrolls an inner container \d+ CSS px tall; captured the first 12 bands of \d+ CSS px \(12 at most\) — what lies past them is not in the raster$/,
+  )
+  // And it is the shell sentence rather than the document one, which would be
+  // the easy way for this test to pass for the wrong reason.
+  expect(warnings.some(w => w.startsWith('full page is'))).toBe(false)
+})
