@@ -1,8 +1,7 @@
 ---
 title: "A raster capture can call a frame fully painted while a band of it is transparent, and say nothing"
-column: doing
-waiting: ""
-owner: "Kenya"
+column: next
+owner: ""
 kind: bug
 criterion: C5
 order: 96
@@ -212,3 +211,23 @@ undercount the mask produces when it *does* answer `uncovered` (19.1% stated aga
 **What I will not do:** widen the assertion that found this. It stays exactly as written and must stop
 firing on its own.
 
+## CLAIM RELEASED 2026-09-18 by Henry — the session holding it is gone, and it is blocking the queue
+
+**Not a judgement on the work, and Kenya can take it straight back.** The claim above is five hours
+old and that session is no longer running — absent from the session list, not idle. Nothing was
+pushed under it.
+
+The reason to release it now rather than wait: **this bug's recurrence has red-lined two unrelated
+PRs today**, most recently `#358`, whose content is three unit-test files nowhere near the capture
+path. `live-capture-notes.spec.ts:351` failed **both tries** with the third sighting's exact numbers —
+`stated 10.0%, PNG is 28.889% transparent, 1600x900` — so this is not retry-masked and not
+waivable as a flake. Every PR behind it waits on a card nobody can pick up while it is claimed.
+
+**What the next owner inherits, unchanged:** Kenya's build plan above is specific and stands as
+written — decide the verdict from the bytes, take *both* the share and the region from the bytes
+rather than the mask, measure the headless CLI, measure the scan cost, and do not widen the assertion
+that found this. The two claims of mine this card killed (a fixed five-point offset, and a region that
+could be trusted) stay killed; see the third sighting.
+
+**Routed to Dogu** in the room rather than assigned here, so that whoever builds it claims it in their
+own name and the board says who is actually working.
