@@ -86,16 +86,49 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   }
   target.on('url-changed', onCommit)
   const step = async (page: 'top' | 'next'): Promise<WalkStepResult> => {
-    const r = await withinBudget(target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`), deadline.remaining())
-    if (r.timedOut) throw new Error(walkTimeoutNote(budgetMs))
+    // The time this step is actually given, captured before the call. The note
+    // used to name `budgetMs`, the walk's whole budget, which is the wait a
+    // step makes only when it is the first thing the walk does
+    // (`bug-walk-return-note-names-budget`).
+    const allowed = deadline.remaining()
+    const r = await withinBudget(target.webContents.executeJavaScript(`${WALK_STEP_SCRIPT}(${JSON.stringify(page)})`), allowed)
+    if (r.timedOut) throw new Error(walkTimeoutNote(allowed))
     return r.value as WalkStepResult
   }
   const message = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+  /**
+   * Returns the page to the top for the measurement that follows, and says so
+   * when it could not — which is nearly always the spent-budget case, since
+   * this runs after the loop has used the deadline up.
+   *
+   * **Two sentences, because two different things happen**
+   * (`bug-walk-return-note-names-budget`, measured on a fake target):
+   *
+   * - **The budget was already gone.** The page is still asked — the scroll is
+   *   issued and, on a free main thread, lands a few milliseconds later — but
+   *   nothing waits for the answer. The old sentence got all three facts wrong:
+   *   it named a 15 s wait that never happened, blamed a main thread that had
+   *   answered every step (97 of them, on run `35239464603`), and called the
+   *   measurement one of where the walk stopped when the page reaches the top.
+   *   So this one names the walk's budget as the cause, says the page was not
+   *   waited for, and claims nothing about where the page ended up.
+   * - **The budget had time left and the step still failed.** Then the page
+   *   really did not answer within a wait that was really made, and the
+   *   original sentence is true as written.
+   *
+   * Silence is not an option for either: a walk that could not return the page
+   * would otherwise read exactly like one that did (Henry).
+   */
   const backToTop = async (): Promise<void> => {
+    const hadBudget = deadline.remaining() > 0
     try {
       await step('top')
     } catch (e) {
-      notes.push(`the walk could not return to the top afterwards (${message(e)}); measured where it stopped.`)
+      notes.push(
+        hadBudget
+          ? `the walk could not return to the top afterwards (${message(e)}); measured where it stopped.`
+          : 'the walk had no budget left to return to the top, so it asked the page and did not wait for the answer; the page may have scrolled to the top after the measurement began.',
+      )
     }
   }
 
