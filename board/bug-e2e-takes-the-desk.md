@@ -2,7 +2,7 @@
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
 column: doing
 owner: "Henry"
-waiting: ""
+waiting: "Opeyemi: a recorder run on his machine, asked for directly in the session that runs it — two baseline runs gave 1 and 0 activations, and a third gives a third number rather than an attribution."
 kind: bug
 order: 0
 ---
