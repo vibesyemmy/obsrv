@@ -185,6 +185,13 @@ describe('the list', () => {
     expect(unwalkedImageNote(res.findings, 10_224)).toBe(
       '2 image findings sit below the 10224 CSS px the walk reached before its budget ran out, and may be placeholders the page never loaded',
     )
+    // The singular, which the plural arm above cannot speak for: three verbs
+    // and the noun all change (`1 image finding sits`, not `1 image findings
+    // sit`), and nothing had ever asked this function for exactly one.
+    expect(unwalkedImageNote(res.findings, 14_000)).toBe(
+      '1 image finding sits below the 14000 CSS px the walk reached before its budget ran out, and may be ' +
+        'placeholders the page never loaded',
+    )
     expect(unwalkedImageNote(res.findings, 20_000)).toBeNull()
     expect(unwalkedImageNote([], 10)).toBeNull()
   })
