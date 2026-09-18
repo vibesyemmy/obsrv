@@ -2,7 +2,7 @@
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: a recorder run on his machine, asked for directly in the session that runs it — two baseline runs gave 1 and 0 activations, and a third gives a third number rather than an attribution."
+waiting: ""
 kind: bug
 order: 0
 ---
@@ -407,3 +407,88 @@ Six: `live-capture-notes` ×2 and `live-drive:352` (`focusWindow`) and `overlay-
 **take the desk on purpose**, gated to CI or `OBSRV_E2E_FRONT=1`, which this run did not set — plus
 `mcp-launch` ×2 on `OBSRV_E2E_LAUNCH`. So "zero" means zero from the specs that are not supposed to
 front at all.
+
+## RUN 5 2026-09-19 by Henry — the recorder run: zero activations, and the ten risky calls are all in TEST code
+
+**Opeyemi's direct yes in my session**, as the desk rule requires. `main` at `28a01ee` plus the probe
+instrumentation (`probe/desk-recorder`, never to merge). `OBSRV_E2E_CLI=1` to match run 4's
+population; no `OBSRV_E2E_FRONT`, so the specs that front on purpose stayed skipped.
+
+**605 passed, 13 skipped, 18.5 minutes, zero `✘`. Zero activations.**
+
+### Three instruments, because the third is what runs 3 and 4 lacked
+
+The front-app watcher says *the desk changed at T*. The in-app recorder says *a call was made at T,
+from here*. Neither says **which test was running**, and this card already records why that mattered:
+the suite log carries no wall clock, so run 3 attributed by arithmetic over cumulative durations and
+named `stall.spec`, which run 4 then cleared. A Playwright reporter logging test boundaries with an ISO
+clock closes the join.
+
+**Verified before its silence was believed**, the same standard runs 3 and 4 held: a single-spec trial
+logged three launches, each `win.showInactive` from `showWindow`, with readable stacks. The watcher
+recorded six of Opeyemi's own app switches during the run.
+
+### What the app did: nothing that fronts it, across 77 launches
+
+    82  win.showInactive        every one from showWindow
+    77  recorder-installed      77 app launches
+     0  win.show / win.focus / win.moveTop / app.focus
+     0  EVENT did-become-active / browser-window-focus / activate
+
+The fix this card shipped holds **under measurement**, not by inspection: 77 separate launches, every
+one taking the inactive path. The three event hooks staying silent agrees independently with the
+watcher's zero — two instruments that could have disagreed, and did not.
+
+### What the TESTS did: ten calls that can front the app, none of them the app's
+
+    9  webContents.focus   tabs.spec.ts:748, :765, :789
+    1  win.restore         visibility.spec.ts:79 "minimising counts as hidden"
+
+Every one from `UtilityScript.eval` — **Playwright's own `app.evaluate`**, not product code. The nine
+are all one helper: `tabs.spec.ts`'s `invoke()` (line ~700), which does
+`__obsrv.native.webContents.focus()` before every menu-shortcut, with a comment explaining why the
+focus is load-bearing — *"an earlier assertion may have clicked the strip, and a shortcut that only
+works from the strip is the defect"*.
+
+**`webContents.focus()` is the call that caused six of the original seven activations on this card**,
+via `Overlay.show`, because on macOS focusing web contents focuses the owning window and activates the
+app. The product was fixed to stop doing it. **A test still does it, ungated.**
+
+### The confound, and it is the whole reason this run cannot close the card
+
+**The screen locked at 23:28:20.779** — `loginwindow` took the front — and **all ten** risky calls
+happened at 23:28:32 or later:
+
+    23:11:05 - 23:28:20   17m15s, ~600 tests, unlocked, user switching apps   0 activations, only showInactive
+    23:28:20 - 23:29:30   70s, LOCKED                                         all 10 risky calls land here
+
+Nothing can come to front over a lock screen. So **this run does not show those ten calls are
+harmless; it shows they were untestable when they ran.** The 17 minutes before the lock are a clean
+result. The last 70 seconds are not a result at all.
+
+### The hypothesis this buys, and what would settle it
+
+`tabs` is one of the five specs the original recorded run listed as *"activations with nothing recorded
+before them"*. That earlier recorder wrapped the **app's** calls; these come from **test** code through
+`app.evaluate`, which is exactly the shape that would have produced an activation with nothing
+recorded before it. **So the remaining intermittent activation may be `tabs.spec.ts`'s own `invoke()`
+helper.** Specific, and testable: a run whose screen stays unlocked through `tabs.spec.ts` either
+records an activation at one of those three tests or does not.
+
+Not claimed as the cause. Run 5 cannot support that, for the reason above.
+
+### A guard gap, which is a finding in its own right
+
+`tests/unit/e2e-leaves-the-desk.test.ts` exists to refuse exactly this, and its pattern is
+
+    /\bwin\.(show|focus)\(\)|\bapp\.focus\(|\bfocus:\s*true\b|\bOBSRV_TEST_TAKES_THE_DESK\b/
+
+**`webContents.focus` is not in it.** The one call responsible for most of the original activations can
+be written in an e2e file today and the guard will not object — and one is. This fence is bought by a
+defect rather than by an audit, which is the bar: it is the call this card measured seven times.
+
+The fix is not simply widening the regex, because `invoke()`'s focus is load-bearing for what that test
+asserts. Either the call is gated behind `OBSRV_E2E_FRONT` like `focusWindow`'s test, or it is replaced
+by something that focuses without activating. That is a decision, and it belongs with whoever writes
+it — not folded in here.
+
