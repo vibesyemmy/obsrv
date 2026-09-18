@@ -132,7 +132,27 @@ describe('walkNothingNote', () => {
 
   it('does not call a small embed a wall', () => {
     const note = walkNothingNote({ frames: { count: 1, viewportCoverage: 0.2 }, shadowHosts: 0 })
-    expect(note).toContain('20% of the viewport')
+    expect(note).not.toContain('consent wall')
+    // The whole sentence, not the two fragments this used to check. `c5`
+    // counted this producer unfired while this very test was running it:
+    // `toContain('20% of the viewport')` passes on the wall sentence too, so
+    // the words that distinguish the under-the-threshold branch — what scrolls
+    // is "either inside it or scrolls by transform" — were asserted by nobody.
+    expect(note).toBe(
+      "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had " +
+        'nothing to scroll: an <iframe> covers 20% of the viewport, and what scrolls is either inside it or scrolls ' +
+        'by transform (a virtualised list or editor), and the figures are of the page as it first shows',
+    )
+  })
+
+  it('counts the embeds, and says so in the plural', () => {
+    // The plural half of the same line. Three small frames are under the wall
+    // threshold together, so this is the branch above, and nothing had ever
+    // asked it for a number other than one — a `<iframe>s cover` that read
+    // `<iframe> covers` would have gone out.
+    const note = walkNothingNote({ frames: { count: 3, viewportCoverage: 0.2 }, shadowHosts: 0 })
+    expect(note).toContain('3 <iframe>s cover 20% of the viewport')
+    expect(note).not.toContain('an <iframe> covers')
     expect(note).not.toContain('consent wall')
   })
 

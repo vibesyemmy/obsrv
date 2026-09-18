@@ -103,7 +103,14 @@ describe('walkPage', () => {
     const d = deps([step(768), new Error('socket hang up')])
     const r = await walkPage(d)
     expect(r.walked).toEqual({ screenfuls: 1, atEnd: false, ms: WALK_DWELL_MS })
-    expect(r.notes.join(' ')).toMatch(/cut short.*socket hang up.*partial walk/)
+    // The WHOLE sentence, not three fragments of it. `/cut short.*socket hang
+    // up.*partial walk/` passes on any text that happens to contain those
+    // three in that order, so it cannot see a reworded middle, a wrong
+    // screenful count, or a singular/plural slip — `c5` counts a sentence as
+    // unpinned until its words are the assertion.
+    expect(r.notes).toContain(
+      'the walk was cut short after 1 screenful (socket hang up); measured after a partial walk.',
+    )
     expect(d.commands.at(-1)?.payload['page']).toBe('top')
   })
 
@@ -129,7 +136,11 @@ describe('walkPage', () => {
     })
     const r = await walkPage(d)
     expect(r.walked).toEqual({ screenfuls: 1, atEnd: true, ms: WALK_DWELL_MS })
-    expect(r.notes.join(' ')).toMatch(/return to the top/)
+    // `/return to the top/` matched the phrase and nothing else: it passes on
+    // the cli walk's OTHER return note ("the walk had no budget left to return
+    // to the top…"), which is a different branch saying a different thing, and
+    // on any rewording that keeps those five words. The sentence is the check.
+    expect(r.notes).toContain('the walk could not return to the top afterwards (gone); measured where it stopped.')
   })
 })
 
