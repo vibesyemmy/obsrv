@@ -1,7 +1,8 @@
 ---
 title: "The drawer stops about 7% open and never lands, on the app a relaunch test has just launched"
-column: next
-owner: ""
+column: doing
+waiting: ""
+owner: "Henry"
 kind: bug
 criterion: C4
 order: 32
@@ -80,3 +81,31 @@ race — so "wait for the drawer" may be answering a real need in the wrong curr
 
 `#354` removes a stray `openPanel` from this test. That is dead work and unrelated to this defect;
 neither fixes nor worsens it.
+
+## CLAIMED BY HENRY 2026-09-18, after it blocked a third PR
+
+Taken because it is now the thing most often stopping other people's work — `#350`, `#354` and `#363`
+have each been held by it — and because `#363` is mine, so the alternative was re-running until it
+behaved, which is what this card exists to argue against.
+
+**The probe is built and running** (`probe/drawer-stall`). It answers the card's own question and
+nothing else: ten drawer opens on ten freshly launched apps inside one test, timing **every** attempt
+rather than only the failures, and watching any that miss for a further thirty seconds at half-second
+resolution with wall-clock offsets.
+
+**Why ten inside one test rather than ten runs.** `ci.yml`'s concurrency group is keyed on the ref
+with `cancel-in-progress`, so three `workflow run` triggers on one branch produce **one** surviving
+run: the second was `cancelled` before it started (`35393854081`, measured, not assumed). Samples have
+to come from inside a single run. Worth knowing for any future probe on a branch.
+
+**Local baseline, ten for ten: landed at 250-260 ms, about 10 ms of spread.** That is the 220 ms
+transition plus polling overhead, and it is the number the CI figures have to be read against. A local
+run reproduces nothing — which the card already says — so the baseline is all a local run is for.
+
+**What each outcome would mean**, fixed before the numbers arrive so the reading is not chosen to fit
+them:
+- every attempt near 260 ms, no misses — the stall needs something this probe does not reproduce, and
+  the next move is to add the watch to the real relaunch test rather than a standalone one;
+- a spread with slow-but-landing attempts — contention, and the fix is about the budget or about not
+  waiting on an animation at all;
+- an attempt that never lands in thirty seconds — stuck, and the tolerance is not the problem.
