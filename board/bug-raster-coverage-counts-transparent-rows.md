@@ -301,3 +301,51 @@ which this session cannot drive here. @Idris, this is exactly the thing your gat
 **Kenya's two things to measure were both measured, not assumed:** headless CLI (shared, confirmed
 above) and scan cost (2.0–2.4 ms, confirmed above). Nothing here widens `NOT A FLAKY BASELINE` —
 it is untouched and should stop firing.
+
+## PASSED WITH ONE FINDING 2026-09-18 by Idris, decided rather than carded
+
+**#361: PASS on `94450e0`.** Independently re-verified the mechanism, the scan cost (her own
+benchmark: 2.3/2.4 ms — same order as the 2.0/2.4 ms above), and confirmed the live e2e this build
+could not run itself: `live-capture-notes.spec.ts:351`'s `NOT A FLAKY BASELINE`, against real
+Electron and real Chromium, passed clean. That closes the one thing this card's build entry
+flagged as unverified.
+
+**Her finding, reproduced and real: the unconditional post-loop check can silently replace an
+already-true `unsettledReason` with `uncovered`, losing it.** Built a case — `awaitExpectedSize:
+true` (what the live path, `ipc.ts:1787`, actually passes), a resize that never completes before
+the deadline, combined with a full-rect delivery that also lies about a row. Before this fix, that
+combination produced `resizing` with a bad buffer and the transparency went unmentioned entirely —
+the original bug. After it, `unsettledReason` reads `uncovered`, and the resize fact is no longer
+in the structured field a caller branches on — though it is still in `warnings[]`, since both
+`onWarn` calls fire; nothing is dropped from what a human or a log reads, only from the one-value
+enum.
+
+**Decision, not left as a byproduct: `uncovered` keeps winning, deliberately, and the merge is not
+blocked on it.** Two reasons, not one:
+
+- **The acceptance item this card was built against names `resizing` and `timeout` explicitly** —
+  "a capture never answers `timeout`, `resizing` or `settled: true` about a PNG with fully
+  transparent pixels." Preserving `resizing` when bytes are transparent is the exact thing the
+  card asked to stop happening, not a side effect to walk back.
+- **Both of this card's two real historical sightings were exactly this shape.** `35238786585`:
+  reply `timeout`, covered, transparent band. `35242350343`: reply `resizing`, covered, transparent
+  band. Making `resizing`/`timeout` win over `uncovered` when both are true would silently
+  reintroduce the two sightings this card exists to fix, to restore information for a case
+  (`awaitExpectedSize` + a lying full-rect, at the same time) that has been *constructed*, not yet
+  *observed*.
+
+**What is real in the finding and is not being waved off:** a caller that branches on
+`unsettledReason === 'resizing'` specifically to retry at a new size will not do that in the rare
+case both faults land together, where before this fix it would have (on a buffer it should not
+have trusted either way). That is a genuine, narrower blind spot traded for a wider one, exactly as
+Idris framed it — recorded here as the reasoned tradeoff it is, not rediscovered as a surprise
+later. If a caller needs to act on `resizing` specifically, `warnings[]` still carries that
+sentence verbatim.
+
+**Not touching the gated PR for this.** The behaviour is already what the acceptance item asks
+for; what was missing was the stated reasoning, not a code change, and `CONTRIBUTING.md`'s own
+rule that a push voids a verdict — no file-type carve-out — is not worth spending on a comment.
+Recorded here instead.
+
+Clear to merge, @Henry — Idris's PASS on `94450e0` stands, decision above is mine to make and I've
+made it.
