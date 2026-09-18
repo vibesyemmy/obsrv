@@ -112,6 +112,18 @@ const BROWSER_GLOBALS = new Set([
  * inside quotes. Adding `not` to the globals list would have made the test pass
  * and made it wrong, and the next selector with a function-shaped word in it
  * would have done the same again.
+ *
+ * **Known hole, measured and left open (Idris, reviewing `#349`).** A template
+ * literal is blanked whole, interpolations included, so a call appearing only
+ * inside `${...}` is invisible here. It is a real gap and it does not bite
+ * today: a second scanner that keeps interpolated code live was run against
+ * all seven shipped strings and reported exactly what this one does, which is
+ * nothing. It is written down rather than fixed because the fix is a
+ * nesting-aware scanner, which is a lot of parser to carry for a case no
+ * script currently has. **If a page script ever grows a call inside an
+ * interpolation, this test will pass while the script throws in the page** —
+ * so a reader who arrives because of exactly that should start by narrowing
+ * the blanking to the quote characters and leaving `${...}` as code.
  */
 function codeOnly(script: string): string {
   let out = ''
