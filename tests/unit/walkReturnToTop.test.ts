@@ -77,6 +77,58 @@ const noteAbout = (notes: string[] | undefined, phrase: string): string | undefi
 
 const BUDGET_MS = 600
 
+/**
+ * A page that walks to its end immediately and then refuses the return scroll,
+ * with the walk's budget barely touched.
+ *
+ * This is the branch `#338` did not reach. `backToTop` picks its sentence on
+ * `deadline.remaining() > 0`: the no-budget half is what a normal walk hits,
+ * because the loop spends the budget before the return is asked for, and it is
+ * the half that card rewrote. The other half needs the return to FAIL while
+ * time is still on the clock — a renderer that went away, not one that ran
+ * late — and no fixture produces that, which is why it sat unfired.
+ */
+const refusesTheReturn = (page: FakePage, e: Error) => {
+  let tops = 0
+  return {
+    on() {},
+    off() {},
+    webContents: {
+      executeJavaScript: (code: string) => {
+        const which = code.endsWith('("top")') ? 'top' : code.endsWith('("next")') ? 'next' : 'other'
+        // The first `top` is the walk lining the page up; the second is the
+        // return this test is about.
+        if (which === 'top' && ++tops === 2) return Promise.reject(e)
+        return new Promise(resolve =>
+          setTimeout(() => {
+            if (which === 'top') page.y = 0
+            else if (which === 'next') page.y += 768
+            page.applied.push(which)
+            return resolve(
+              which === 'other' ? 0 : { y: page.y, atEnd: which === 'next', scroller: 'root', hidden: false, pageHeight: 1e9 },
+            )
+          }, 2),
+        )
+      },
+    },
+  }
+}
+
+describe('the walk\u2019s return to the top, when the page refuses it with budget left', () => {
+  it('says the return failed and names why, rather than reaching for the no-budget sentence', async () => {
+    const page: FakePage = { y: 0, applied: [] }
+    const out = await walkHeadless(refusesTheReturn(page, new Error('the renderer went away')) as never, BUDGET_MS)
+    const note = noteAbout(out.notes, 'return to the top')
+    expect(note, `no return-to-top note at all: ${JSON.stringify(out.notes)}`).toBeTruthy()
+    // The whole sentence. Asserting the phrase alone cannot tell this branch
+    // from the other one, since both contain "return to the top".
+    expect(note).toBe('the walk could not return to the top afterwards (the renderer went away); measured where it stopped.')
+    // And the branch is chosen on budget, so the test is worthless if the
+    // budget was actually spent: the no-budget wording must be absent.
+    expect(note).not.toContain('no budget left')
+  })
+})
+
 describe('the walk’s return to the top, when its own budget is already spent', () => {
   it('does not blame the page’s main thread for a wait it never made', async () => {
     const page: FakePage = { y: 0, applied: [] }
