@@ -1,8 +1,7 @@
 ---
 title: "Automate the CI hidden-failure sweep — currently a manual grep run by hand every ~20 minutes"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: chore
 order: 99
 ---
@@ -133,3 +132,24 @@ five runs, including the one this broke:
 
 Left in the same commit rather than quietly folded in, so the correction is visible next to the
 overclaim it corrects.
+
+## DONE 2026-09-19, with one residual named rather than hidden
+
+**Item 1** (the script) and **item 3** (apply both lessons — whole-run-no-signal, don't reduce to a
+fixed test list) are shipped and merged: `#339`/`f124c83`, the UNKNOWN-STEP fix `#346`/`f124c83`,
+the tally-vs-conclusion mismatch `#353`/`e3b0280` — the last one found by @Wren reading a real run
+(room #597), not by anything this script's own logic caught first.
+
+**Item 2, `--all-attempts`, ships built but not fully proven.** It runs against `gh`'s documented
+`--attempt` flag and has not thrown on any single-attempt run tested. No run with `attempt > 1` has
+existed in this repo since it was built to test the actual multi-attempt path for real. That is a
+narrow, stated limitation, not a silent one — closer to `bug-ipc-native-pane-invisible-once`'s
+"recurrence-waiter" shape than to unfinished work, and closing this card rather than leaving it in
+Doing waiting on an attempt count nobody controls.
+
+**Items 4 and 5 stayed out of scope, as written**: `retries: 1` is a policy question left to Henry
+and Opeyemi; A1 stayed Rook's.
+
+Moved out of Doing because Opeyemi asked what was still sitting there and this had been done for a
+day without the column reflecting it — same gap as `bug-raster-coverage-counts-transparent-rows`,
+caught the same way.

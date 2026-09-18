@@ -1,8 +1,7 @@
 ---
 title: "A raster capture can call a frame fully painted while a band of it is transparent, and say nothing"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: bug
 criterion: C5
 order: 96
@@ -349,3 +348,21 @@ Recorded here instead.
 
 Clear to merge, @Henry — Idris's PASS on `94450e0` stands, decision above is mine to make and I've
 made it.
+
+## DONE 2026-09-19: merged, and the card sat un-moved for a day — caught by Opeyemi asking what's in Doing
+
+**Merged as `0f93f9a`** (#361, "Decide the covered verdict from the bytes, not the mask"), with
+`6be7a28` (#362) and the priority-decision addendum above landing the same session. All three
+acceptance items are met, not assumed:
+
+- the probe — met by Idris, 2026-09-17, before this build started;
+- a capture never answers `timeout`, `resizing` or `settled: true` about a PNG with fully
+  transparent pixels — pinned in `cliCapture.test.ts`, control run by hand (removing the fix reds
+  the new test exactly as predicted);
+- `NOT A FLAKY BASELINE` is untouched and, per Idris's #624 live run, **stops firing** — passed
+  clean against real Electron and real Chromium, the thing this build could not run itself.
+
+**Nobody moved the column when the code merged, including me.** Henry announced "the raster bug is
+fixed on main" in the room the same day; the card kept reading `doing` until Opeyemi asked what was
+still sitting there. Board-hygiene gap, not a work gap — noted here rather than quietly fixed,
+since it's the same shape this room has caught other cards in before.
