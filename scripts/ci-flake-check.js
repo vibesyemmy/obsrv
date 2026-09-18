@@ -52,6 +52,18 @@
 // against real CI logs; --all-attempts is implemented against `gh`'s
 // documented --attempt flag and json `attempt` field, not yet seen firing on
 // a genuine re-run. Flagged here rather than claimed as proven.
+//
+// A fifth mistake, caught by @Wren reading a real run rather than trusting
+// this script's own logic (room #597): Playwright's own summary line is not
+// the whole story even when it prints one. Run 35345417630 printed `1 flaky,
+// 617 passed` — `text-scale.spec.ts:251` failed try 1, passed retry #1 — and
+// GitHub still marked the e2e step (and the run) `failure`, exit code 1,
+// because of a `Worker teardown timeout` that happened after every retried
+// test had already passed. The per-test tally has nothing to say about that;
+// reading counts alone here would report "failed=0, just a flake" for a run
+// that plainly failed. So `formatAttempt` now checks `failed === 0` against
+// the run's own `conclusion` and warns on the mismatch rather than only
+// printing the counts.
 'use strict'
 
 const { execFileSync } = require('node:child_process')
@@ -173,6 +185,14 @@ function formatAttempt(r) {
     lines.push(`  failed=${failed} flaky=${flaky} passed=${passed} skipped=${skipped} interrupted=${interrupted}`)
     if (flaky > 0) lines.push(`  ${flaky} test(s) failed their first try and passed on Playwright's retry`)
     if (failed > 0) lines.push(`  ${failed} test(s) failed even after retry — a real red, not absorbed by --retries=1`)
+    if (failed === 0 && r.conclusion === 'failure') {
+      lines.push(
+        "  WARNING: the tally reads clean (failed=0) but the run's own conclusion is `failure` — " +
+          "something failed outside what Playwright's own summary counts (seen for real: a Worker teardown " +
+          'timeout after every retried test had already passed, exit code 1 regardless). Read the log directly; ' +
+          'counts alone would read this as a plain recovered flake and miss that the job actually failed.',
+      )
+    }
   }
   return lines.join('\n')
 }
