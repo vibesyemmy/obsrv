@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { auditPage } from '../../src/shared/audit'
 import { inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
+import { STUCK_CHROME_SCRIPT } from '../../src/shared/stuckChrome'
 import {
   SHADOW_TREE_SCRIPT,
   shadowContains,
@@ -97,6 +98,72 @@ describe('shadowParent and shadowContains', () => {
     expect(shadowParent(el)).toBe(page)
     expect(shadowContains(frame, slotted)).toBe(true)
     expect(shadowContains(slotted, frame)).toBe(false)
+  })
+})
+
+/**
+ * `installStuckChrome` carries its OWN ancestor walk, `holdsAnchor`, because it
+ * ships as source and a call to the shared `shadowContains` would be namespaced
+ * by the bundler — which is exactly what `#293` shipped and four
+ * `cli-snap-tiled` tests caught on CI. The duplication is deliberate and
+ * documented at both ends.
+ *
+ * **What was missing is anything checking they agree**
+ * (`chore-page-script-guard-holes`, item 3). Wren read them line by line and
+ * they matched; the risk was never today's text, it is an edit to one and not
+ * the other, and a comment saying "same rule as" is not a check.
+ *
+ * It is taken from `STUCK_CHROME_SCRIPT` rather than imported, because
+ * `holdsAnchor` is a local inside `installStuckChrome` and **the shipped string
+ * is the thing that has to be right**. If someone edits the function, the
+ * string changes and this arm compares the new one.
+ */
+describe('holdsAnchor and shadowContains answer the same', () => {
+  const source = /const holdsAnchor = (\([\s\S]*?\n  \})/.exec(STUCK_CHROME_SCRIPT)?.[1]
+  const holdsAnchor = source ? (new Function(`return ${source}`)() as (outer: Element, inner: Element) => boolean) : null
+
+  it('was actually extracted from the shipped script', () => {
+    // Without this the pairs below would run against `null`, skip silently and
+    // report a pass — a check that cannot fail is the thing this card is about.
+    expect(source, `holdsAnchor not found in STUCK_CHROME_SCRIPT`).toBeTruthy()
+    expect(typeof holdsAnchor).toBe('function')
+  })
+
+  it('agrees for every pair across slots, hosts and plain parents', () => {
+    const page = mount('')
+    const { el, root } = component(page, '<div class="frame"><slot></slot></div>')
+    el.innerHTML = '<span id="slotted">slotted</span>'
+    const inner = component(root.querySelector('.frame')!, '<b class="deep">deep</b>')
+
+    const nodes: Element[] = [
+      page,
+      el,
+      root.querySelector('.frame')!,
+      root.querySelector('slot')!,
+      el.querySelector('#slotted')!,
+      inner.el,
+      inner.root.querySelector('.deep')!,
+      document.body,
+    ]
+
+    const disagreed: string[] = []
+    for (const outer of nodes) {
+      for (const inner2 of nodes) {
+        const a = shadowContains(outer, inner2)
+        const b = holdsAnchor!(outer, inner2)
+        if (a !== b) disagreed.push(`${outer.tagName}.${outer.className || '-'} / ${inner2.tagName}.${inner2.className || '-'}: shared=${a} stuck=${b}`)
+      }
+    }
+    expect(disagreed, disagreed.join('\n')).toEqual([])
+  })
+
+  it('agrees that a node in a CLOSED root is contained by nothing outside it', () => {
+    // The one case where the two could plausibly differ: neither walks into a
+    // closed root, and both should say no rather than throw.
+    const page = mount('')
+    const closed = component(page, '<i class="hidden-deep">x</i>', 'closed')
+    const deep = closed.root.querySelector('.hidden-deep')!
+    expect(shadowContains(page, deep)).toBe(holdsAnchor!(page, deep))
   })
 })
 
