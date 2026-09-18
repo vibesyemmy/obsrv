@@ -249,7 +249,6 @@ test.describe('the scale survives a relaunch', () => {
   })
 
   test('a scaled tab comes back scaled, laid out at its scale from the first paint', async () => {
-  await openPanel(page)
     const home = dir()
     const first = await launchApp([], {}, home)
     const p1 = await rendererWindow(first)
