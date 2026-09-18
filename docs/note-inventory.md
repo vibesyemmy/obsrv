@@ -423,9 +423,16 @@ has is a run of the note log that saw it, which is what this column counts.
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338 and #348: seven
-unfired producers, eight written or reworded after the run, two ambiguous groups, and nine named
-reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358 and
+#360: ONE unfired producer, eight written or reworded after the run, two ambiguous groups, and nine
+named reasons.**
+
+**What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
+and `#360` closed, **one had never been produced** and five ran on every green build while nothing
+asserted the words that make them those sentences. "Unfired" was two populations wearing one label,
+and they take different work: the first needs a lever, the rest need somebody to write the sentence
+down. Three of the five were singular/plural gaps — a producer asked only ever for the count it
+happened to get.
 
 **What #308 and #338 moved, and the one thing that is not a subtraction.** `#308` fired four — the
 budget pair and, on the cut-short page, the headless cut-short sentence and the live "did not confirm
@@ -442,20 +449,30 @@ sentence the fix wrote.
 - **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the
   ten this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
 - **What the 14 would take:**
-  - **Walk limits (4).** Batch 1 (#270) fired four, `#308` four more and `#338` one. Line numbers
-    below are from `main` after `#338`, not the pre-`#308` ones this section used to carry. What is
-    left is **`cli/walk.ts:129`** (the return-to-top note's *other* branch — the original wording, kept
-    for a step that failed with budget left, which no fixture has produced), **`mcp/walk.ts:108`** (the
-    same note live, which `#338` did not touch because the live path passes no budget of its own),
-    **`mcp/walk.ts:213`** (cut short after N screenfuls, the live twin of the headless one `#308`
-    fired) and **`walkCoverage.ts:174`** (a frame that covers part of the viewport).
+  - ~~**Walk limits (4).**~~ **Closed by `#358`**, and only one of the four was unfired in the sense
+    this column means. `cli/walk.ts:129` — the return note's branch for a step that failed with budget
+    left — was genuinely never produced, and needed a target that answers the walk and then rejects
+    the second `top`. The other three ran on every green build with fragments asserted instead of
+    sentences: `mcp/walk.ts:108` under `/return to the top/` (which also matches the cli walk's *other*
+    return note), `mcp/walk.ts:213` under `/cut short.*socket hang up.*partial walk/`, and
+    `walkCoverage.ts:174` under `toContain('20% of the viewport')` (which the wall sentence contains
+    too). Control `35377131422`-era run on the branch: five sentences altered, five reds, each at its
+    own assertion. **A test can execute a sentence thoroughly and check none of it**, which is the
+    thing this cluster is worth remembering for.
   - ~~**Truncation and caps (3).**~~ **Closed by `#348`**: `cli/main.ts:620` on `lazy-tall.html`
     (which already produced it — the probe found that before a fixture was written for it), `:528` on
     a new app shell whose feed is 20,000 px, and `:1472` on a new page whose only findings sit past
     the cap. Control `35335246705`, each red at its own sentence.
-  - **The rest (3):** an uncovered frame (`capture.ts:347`), image findings below the height the walk
-    reached (`cli/lint.ts:94`), and agent control turned off (`mcp/lib.ts:581`), which needs a live app
-    with the toggle off.
+  - **The rest (3 → 1).** `#360` closed two. `cli/lint.ts:94` had its **plural** pinned and its
+    singular never spoken (`1 image finding sits` against `2 image findings sit`). `mcp/lib.ts:581`
+    was **asserted against itself** — three tests compared `DECLINED_NOTE` with the constant, proving
+    it is *routed* and unable to fail on any rewording; prefixing it left the whole unit suite green,
+    1559 passed, with no file under `tests/` containing the sentence. `#362` and `#363` then pinned it
+    against the UI it names, since a literal still only fixes the constant against itself and would
+    not catch the Settings section being renamed underneath it.
+    **`capture.ts:347` is the one left, and is parked on purpose:** `#361` moved the `uncovered`
+    verdict to the bytes, taking the share and the region with it, so pinning today's words would
+    either be rewritten by that or quietly constrain it.
 - **The named reasons are a standing list, not a backlog.** Two of them are version skew and share
   `chore-minimum-app-version`; the three live-app ones are measured; `frameCheck.ts:21` waits for a
   defect to buy its fence.
