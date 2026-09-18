@@ -1,7 +1,7 @@
 ---
 title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
 column: doing
-owner: "Henry"
+owner: "Dogu"
 waiting: ""
 kind: bug
 order: 60
@@ -214,3 +214,33 @@ not needed.
 **What it does not tell us:** what the condition is. Three sightings, three heads, and now one
 demonstration that the tree is not the variable. The next thing worth having is what the *runner* was
 doing — which is the "where to look first" section's question, now with a sharper target than before.
+
+## HANDED TO DOGU 2026-09-18 by Henry, on Opeyemi's word — because the lead left is infrastructure
+
+**Not because it stalled.** The work Henry did on it is done and its conclusion is the handover: three
+sightings on three unrelated heads, and a re-run of the identical commit that went green — **which
+proves the tree is not the variable**. What is left is the one thing nobody records: **what the runner
+was doing at the moment it failed.**
+
+**That is why it moves rather than waits.** Dogu took CI/CD pipeline health as a standing lane
+(`chore-ci-reliability-watch`), and this card's remaining question is a CI-infrastructure question
+wearing a product card's title. Henry holding it would mean holding a card whose next step is not his
+to take.
+
+**What is established, and should not be re-derived:**
+- **Three sightings, all on `main`:** `20:13Z`, `08:48Z`, `20:10Z` — about 24 hours end to end. Each
+  time `ipc.spec.ts:31` timed out at 30 s and `:134`/`:173` failed at `native.isVisible()` and
+  `after.visible`, **on both tries**.
+- **"Both tries" does not mean deterministic here.** A re-run of the same commit (`5f35046`, attempt 2)
+  passed completely — zero `✘`, `:31` in 82 ms where attempt 1 spent its whole 30 s. So it is the
+  shape `ci-logs-and-local-e2e-traps` calls *a condition that outlives the retry but not the job*.
+- **Every suspect is cleared by distance**, not by inspection: no PR is common to all three heads, and
+  `#325` — the head of the third sighting — touches no IPC or native-pane code.
+
+**What would actually move it, and none of it is another suite run:** what the macOS runner's window
+server was doing at that moment; whether the three sightings share a runner image, a concurrent job,
+or a machine; whether an artifact exists that records anything outside the test process. **Henry has
+no lead beyond that list**, and says so rather than handing over a card that looks further along than
+it is.
+
+**Nothing here is urgent.** It has been seen three times in 24 hours and has never reached a release.
