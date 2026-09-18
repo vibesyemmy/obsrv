@@ -40,10 +40,34 @@ function settingsAgentLabel(): string {
   return m![1]!
 }
 
-/** The chip's own text, from the button that stops agent control. */
+/**
+ * The chip's own text, from the button that stops agent control.
+ *
+ * **Anchored on the class, not on the aria-label (Idris, reviewing this file).**
+ * The first version keyed off `aria-label="Stop agent control"`, which is
+ * *prose*: an accessibility description reworded in copy passes for reasons
+ * this test does not care about. "Disable agent control" would change neither
+ * the chip's text nor the sentence's truth, and would break this test's ability
+ * to find the button at all — a false alarm costing someone a debugging session
+ * over a change that was never wrong.
+ *
+ * `agent-activity` is a structural identifier: it already ties the chip's
+ * activity-highlight styling to this exact button, so renaming it is a
+ * deliberate, visible refactor rather than a drive-by copy edit. It occurs
+ * **once** in `Toolbar.tsx` — checked, and asserted below, because "unique
+ * today" is the sort of fact that stops being true quietly. `stopAgentControl`
+ * was the other candidate and occurs twice (the import and the use), so it
+ * would need a narrower pattern to say the same thing.
+ */
 function agentChipText(): string {
   const src = read('renderer/src/components/Toolbar.tsx')
-  const m = /aria-label="Stop agent control"[\s\S]{0,200}?>\s*([A-Za-z ]+?)\s*<\/button>/.exec(src)
+  const anchors = src.match(/agent-activity/g) ?? []
+  expect(
+    anchors.length,
+    `agent-activity occurs ${anchors.length} times in Toolbar.tsx, not once — this test anchors on it being ` +
+      'the one button, so pick a narrower pattern before trusting what it says.',
+  ).toBe(1)
+  const m = /agent-activity[\s\S]{0,300}?>\s*([A-Za-z ]+?)\s*<\/button>/.exec(src)
   expect(m, 'could not find the agent chip button in Toolbar.tsx — fix the pattern before trusting this test').toBeTruthy()
   return m![1]!
 }
