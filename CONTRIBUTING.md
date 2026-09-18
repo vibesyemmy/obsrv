@@ -133,9 +133,19 @@ own voluntary practice, which is a different thing and was said to be a differen
 - anything that changes product behaviour — `src/`, `bin/`, packaging;
 - a board PR that **moves a card to Done**, because acceptance verification by someone other than the
   author is the whole job, and a board-only change is sometimes exactly the thing under verification;
-- a test-only PR that **removes or loosens an assertion, or adds a skip, retry or tolerance**. Those
-  change what the suite can see, which is a product-visibility change wearing a test path. Pure
-  additions are not gated, so batches of new tests do not queue.
+- a test-only PR that **removes anything the suite's sight depends on** — an assertion, a setup step
+  an assertion needs, a fixture, an arrange or a wait — **or loosens one, or adds a skip, retry or
+  tolerance**. Those change what the suite can see, which is a product-visibility change wearing a
+  test path. Pure additions are not gated, so batches of new tests do not queue.
+
+  **"Assertion" alone was too narrow, and #354 is why it was widened** (Idris flagged the gap while
+  passing it). That PR deleted a *setup* line, not an `expect`, so on the old wording it fell outside
+  the gate — while the actual question, "does this silently drop coverage", was exactly the one that
+  needed asking, on a file where the author had already got a claim wrong once that day. The review
+  found the line genuinely dead by reading the rest of the test. **The point is that the finding was
+  not available until someone looked**, which is the only thing a gate is for. Read the list as
+  examples of that question, not as the set of words that trigger it: when you cannot tell, it is
+  gated.
 
 **What is not:** docs, board changes that are not a Done move, and new tests that only add.
 
