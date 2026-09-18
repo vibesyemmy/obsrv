@@ -157,3 +157,67 @@ another candidate. Grep `DRAWER STALL PROBE`.
 That answer is still the card's original question, unchanged and still unanswered: **starved and would
 finish, or stuck.** Every candidate fix depends on it and no amount of re-running can say.
 
+## NARROWED 2026-09-19 by Henry, with Idris: one live hypothesis, two dead ends, and the open question answered
+
+### The stall is one painted frame in — now measured forward as well as backward
+
+Idris inverted the `ease` curve against the two sightings and got 1.00 and 1.11 frames. I then produced
+the number **forwards**: sampled a perfectly healthy drawer open one frame in, and read `18.0468px`
+against the sighting's `18.8536px` — 0.97 frames against 1.00. A derivation that predicts a number
+nobody fed it is worth more than the same derivation defended twice. **"One painted frame, then
+nothing" is now a measurement.**
+
+It still says *where* the transition stopped and not *why*: the healthy local arm went on to finish in
+about 400 ms, so a one-frame reading alone is equally consistent with a transition that completes.
+
+### The live hypothesis, with code under it rather than inference
+
+**`window.ts:66` never sets `backgroundThrottling`; `targetSource.ts:335` sets it to `false`.** So the
+throttle that slows or stops exactly this main-thread style-and-layout work is **on** for the chrome
+window, which owns `--drawer-w`, and **off** for the target window. `tabs.ts:43` shows the asymmetry was
+a deliberate decision for the target ("off for it by design") and there is no sign of a decision either
+way for the chrome window.
+
+**Prediction the watch already tests:** at a stall, `document.visibilityState` reads `hidden`, or rAF
+comes back `rafDEAD`, or both. `visible/rafOK` with a still width kills this too.
+
+### Two routes to testing it locally, both blocked, both for reasons already written down
+
+Recorded so nobody spends the hour again:
+
+1. **`win.hide()` on a developer desk does nothing.** `deskState.ts:5` already says why — on macOS
+   Electron derives hide and show from the window's *occlusion state*, and some desk state keeps a
+   window from ever counting as visible. Measured: after `win.hide()`, `document.visibilityState` stayed
+   `visible`, rAF stayed alive, and the drawer completed normally. **The comment I cited as evidence for
+   the hypothesis is also the reason I cannot check it here.**
+2. **Headless Chromium reports every page visible.** `bringToFront()` on a second page leaves both at
+   `visibilityState: visible`, in both directions — checked explicitly rather than inferred from one
+   arm. A background tab there is not a hidden document.
+
+A headed browser would give real visibility transitions and would also put a window on the user's
+screen, so it is not available without asking. **The instrumented CI watch is the only instrument, and
+that is now established rather than assumed.**
+
+### The card's open question is answered, and the answer is "the wait stays" (Idris)
+
+This card asked whether the test needs the slide finished at all, since its subject is text scale. **It
+does, and the dependency is load-bearing rather than decorative.** Immediately after `openPanel(p1)` and
+`choose(...)`, the test polls the target's `innerWidth` for `1280` — and that number comes off the same
+layout the drawer feeds: `calc((100vw - var(--drawer-w) - var(--seam)) * var(--split))`
+(`styles.css:78`). Removing the explicit wait removes the *name* for the failure, not the failure:
+the width poll right after it is stuck on the same stalled value, and reports "the target was never
+1280" instead of "the drawer never reached 309px". **Strictly worse, same root cause.**
+
+### The fix direction, and a constraint on it that is mine to raise
+
+Idris's proposal, if the watch confirms `hidden`/`rafDEAD`: **scope the fix to which window is frontmost
+when it matters**, not to the flag and not to the wait. Flipping `backgroundThrottling` on the chrome
+window is a product regression bought to quiet a test — every user's machine doing full-rate style work
+while they have alt-tabbed away, which is the cost `tabs.ts` already declined to pay for the target.
+
+**The constraint: that fix reaches for the machinery `bug-e2e-takes-the-desk` spent four recorded runs
+removing.** Fronting a window during e2e is exactly what that card drove to zero activations. On CI
+nobody has a desk to take, so it is harmless there — but the helpers are shared with local runs, and a
+fix written without that in mind would hand back the activations that card bought. Any candidate must be
+CI-scoped, or go through `showsInactive`/`OBSRV_SHOW_INACTIVE` semantics rather than a plain focus or
+`show()`. Neither of us is committing to the fix before a watch actually catches one.
