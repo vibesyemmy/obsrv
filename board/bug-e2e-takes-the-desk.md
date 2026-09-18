@@ -355,3 +355,55 @@ Step 1 of "if this is picked up again" is **done**: the baseline on today's `mai
 this card's fix-branch table recorded, so most of the fronting is already gone and what is left is a
 single spec. That makes the remaining work smaller and more specific than the card assumed — one
 spec's launch, not a class of them.
+
+## RUN 4 2026-09-18 by Henry — zero activations, and run 3's conclusion does not survive it
+
+**Opeyemi asked for it directly**, as the desk rule requires, and used the machine throughout: the
+watcher recorded **nine** of his own app switches between 02:13 and 02:30 (Claude, Dia, Claude, …).
+The suite ran 02:13:09 to 02:29:17.
+
+**The run:** `main` at `71290bd`, with `OBSRV_E2E_CLI=1` so the population matches run 3 — `#333` had
+since made a local run exclude the CLI family, and comparing 455 tests against run 3's 605 would have
+compared two different suites. **615 tests, 609 passed, 6 skipped, 16.1 minutes, zero `✘`.**
+
+**Zero activations.** The harness app never took the front.
+
+**The instrument was verified before its silence was believed**, as in run 3: the watcher logged
+Opeyemi's own switches all through the run, and was still running afterwards. An empty Electron
+column here is a measured silence, not a dead poller.
+
+### What this does to run 3's conclusion
+
+Run 3 recorded **one** activation and said *"the baseline on today's `main` is 1, not the 6 this
+card's fix-branch table recorded, so most of the fronting is already gone and what is left is a single
+spec."* **That claim does not survive.**
+
+- **`stall.spec` ran in run 4** — tests 472–475, all green — and nothing took the front. It was run 3's
+  suspect, named there **by reconstruction** from cumulative durations and labelled as one.
+- **Two runs, 1 and 0.** The remaining activation is **intermittent**, and the attribution is neither
+  confirmed nor refuted by this run. What run 3 could honestly claim was "one activation, and here is
+  the spec the arithmetic points at". What it actually claimed was a baseline and a single remaining
+  cause. That was one run's result stated as a rate.
+
+**So the card's position is: zero-or-one activation per suite on today's `main`, cause unattributed.**
+That is weaker than run 3 said and stronger than where this card started (7 activations, two named
+causes, both fixed).
+
+### What would actually attribute it
+
+Not another suite. A third run gives a third number and no more attribution than the first two, because
+**the suite log carries no wall clock** — which is why run 3 needed arithmetic and run 4's timestamp
+sampler had nothing to timestamp. The thing that turns a sighting into an attribution is the one this
+card already used once: **the in-app recorder** wrapping `show`/`focus`/`moveTop`/`restore`,
+`app.focus` and `webContents.focus`, logging `did-become-active` beside the `lsappinfo` watcher. That
+is what found the original seven and named both causes.
+
+**So the next step is a recorder run, not another baseline run** — and it needs Opeyemi's desk again,
+which is a cost worth spending once rather than a suite at a time.
+
+### Skipped, and why the number is bounded
+
+Six: `live-capture-notes` ×2 and `live-drive:352` (`focusWindow`) and `overlay-focus:39` — the two that
+**take the desk on purpose**, gated to CI or `OBSRV_E2E_FRONT=1`, which this run did not set — plus
+`mcp-launch` ×2 on `OBSRV_E2E_LAUNCH`. So "zero" means zero from the specs that are not supposed to
+front at all.
