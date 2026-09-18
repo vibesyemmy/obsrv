@@ -115,17 +115,29 @@ describe('the walk’s return to the top, when its own budget is already spent',
 
   it('is the same across the latency range, since which side wins the race is not the point', async () => {
     // **2 ms is not in this range any more, and that is the point of the
-    // title.** The sweep that sized this test measured 0-1 ms silent and 2 ms
-    // upward saying it, so 2 ms is the FIRST latency that fires — the edge of
-    // the race, not a point inside it. Pinning `2:said` pins which side of a
-    // coin flip wins, and on a loaded CI runner a 2 ms fake behaves like a 1 ms
-    // one: run `35337859257` failed here with `2:silent`, alone, on a unit test
-    // that does not retry. Wren then ran it 8 times on a clean checkout without
-    // reproducing, which is exactly what a boundary looks like from a quiet
-    // machine.
+    // title.** 2 ms is not merely the first latency that fires — it wins by
+    // ONE TIMER TICK, which is the smallest margin that exists, so pinning
+    // `2:said` pins which side of a tie wins.
     //
-    // The assertion this test was written to make survives without it: once the
-    // page is slow enough for the race to be decided, the note fires, and the
+    // The margin is structural, not statistical. `backToTop` runs after the
+    // loop, when the deadline has just run out, so `withinBudget` races the
+    // reply against `setTimeout(..., Math.max(0, ~0))` — and Node clamps a
+    // zero-delay timer to **1 ms**. The fake's reply is `setTimeout(...,
+    // latencyMs)`, registered first (it is the argument, evaluated before the
+    // wrapper). So: at 0 and 1 ms the two timers expire on the same tick and
+    // the earlier-registered reply wins, silently; from 2 ms the timeout wins
+    // and the note fires. That is the whole boundary, and it is why the
+    // original sweep measured 0-1 silent and 2+ saying it.
+    //
+    // Run `35337859257` failed here with `2:silent`, alone, on a unit test
+    // that does not retry. It is rare — one miss in ~330 local repetitions —
+    // and neither load, repetition nor a cold process reproduces it on demand
+    // (all three were tried). That is expected of a one-tick margin and is the
+    // reason re-running it, as Wren did 8 times, proves nothing either way.
+    //
+    // 3 ms upward clears the clamp by two ticks or more, so the outcome is
+    // decided rather than raced. The assertion this test was written to make
+    // survives intact: once the page is slow enough, the note fires, and the
     // words do not change with the latency.
     const seen: string[] = []
     const sentences = new Set<string>()
