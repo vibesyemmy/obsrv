@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
+import { installDeskRecorder } from './deskRecord'
 import { APP_NAME } from '../shared/control'
 import { IPC } from '../shared/ipc'
 import type { AppContext } from './context'
@@ -18,6 +19,9 @@ import { createMainWindow, showWindow, showsInactive } from './window'
 // `discover()` never looks. The first live call on such a machine launched the
 // app, waited 12 s, and fell back headless saying "the next call will find it";
 // the next call could not either (a3). A packaged app already has this name.
+// PROBE ONLY (probe/desk-recorder): no-op unless OBSRV_DESK_RECORD names a path.
+installDeskRecorder()
+
 app.setName(APP_NAME)
 
 // First, so everything below has somewhere to write.
