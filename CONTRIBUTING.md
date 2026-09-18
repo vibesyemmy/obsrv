@@ -407,6 +407,29 @@ are full-length — which is why `ci.yml`'s release gate and `suite-answer.yml`
 are unaffected. It bites in a terminal, where the short SHA is the one already
 in front of you.
 
+**The same defect, a second surface: `gh api .../actions/runs?head_sha=` too.**
+
+```bash
+gh api "repos/OWNER/REPO/actions/runs?head_sha=ea0bf48" --jq '.total_count'
+# 0 — while the run is real, `gh pr view N --json statusCheckRollup` names it
+
+gh api "repos/OWNER/REPO/actions/runs?head_sha=$(git rev-parse HEAD)" --jq '.total_count'
+# 3
+```
+
+Found the same night as the one above, on a different command — this is the REST
+`head_sha` query parameter, not `gh run list --commit`, so it is not the same bug
+recurring; it is the same *kind* of bug, in a second place someone reasonably
+assumed was fine because the first one was already known and fixed elsewhere.
+**The lesson generalises past either command: nothing that filters CI runs by SHA
+in this repo's tooling should be trusted with an abbreviated one, checked or not
+— pass `git rev-parse`'s full output, always, and if a third such surface turns
+up, assume the fourth exists too rather than patching each one as it is found.**
+
+A missing run from a SHA-filtered query is not evidence no run exists — on a code
+PR it reads identically to the legitimate "board-only, nothing runs" case, so it
+fails exactly where you would not think to double-check it.
+
 ## Testing
 
 ```bash
