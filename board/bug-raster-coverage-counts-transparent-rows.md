@@ -1,7 +1,8 @@
 ---
 title: "A raster capture can call a frame fully painted while a band of it is transparent, and say nothing"
-column: next
-owner: ""
+column: doing
+owner: "Dogu"
+waiting: ""
 kind: bug
 criterion: C5
 order: 96
@@ -231,3 +232,72 @@ could be trusted) stay killed; see the third sighting.
 
 **Routed to Dogu** in the room rather than assigned here, so that whoever builds it claims it in their
 own name and the board says who is actually working.
+
+## CLAIMED AND BUILT 2026-09-18 by Dogu, from Kenya's plan as written
+
+Own worktree, `fix/raster-coverage-from-bytes`. Kenya's plan is what got built, unchanged in shape —
+what follows is the build and what it measured, not a redesign.
+
+**The fix.** `captureQuiescent` used to trust `covered` (the mask's flag) for every exit — the
+quiet-settle happy path, `animating`, `resizing`, `blank`-or-`timeout` at the deadline all read it
+as gospel, and only the final `!covered` branch consulted the mask's own count and
+`uncoveredBounds(mask, …)` for a percentage and region. That is exactly backwards for a flag that
+can be wrong: the full-rect fast path in `onFrame` sets `covered = true` on any frame declaring
+itself whole-frame, never inspecting whether the bytes it just accepted are actually painted.
+
+**Now there is one check, run once, right before the single `return`, regardless of which branch
+set `settled`/`unsettledReason` above it:** scan the buffer's own alpha byte for any pixel reading
+0. Real content is never alpha 0 (the composited frame is opaque, confirmed against
+`targetSource.ts`'s `BrowserWindow` construction — no `transparent: true`, no custom
+`backgroundColor`); an unpainted pixel is alpha 0 by construction, because the buffer starts
+zero-filled BGRA. So "any alpha-0 pixel exists" is an unconditional fact about the bytes, independent
+of what the mask or `covered` believe. If any exist, the verdict is forced to
+`settled: false, unsettledReason: 'uncovered'`, with **both the share and the region computed from
+that same scan** — never the mask. `uncoveredBounds(mask, …)` and its call site are gone; nothing
+else read it.
+
+**Headless CLI: confirmed shared, not assumed.** `grep -rl captureQuiescent src/` returns
+`src/cli/main.ts` (the headless entry point) and `src/main/ipc.ts` (the live path) alongside
+`capture.ts` itself — one function, both callers, so the fix is in the one place both share by
+construction. Nothing CLI-specific was needed or written.
+
+**The scan cost, measured rather than assumed a problem or assumed free.** A dedicated Node
+benchmark (warmed up, 200-iteration average) at 1920x1080 (2,073,600 px): **2.0 ms** for a fully
+opaque buffer (the worst case for this scan — nothing to find early, unlike the mask-based scan it
+replaced, which only ever ran once a gap was already known to exist and could exit on the first
+one). With a transparent band present: 2.4 ms. Against a capture whose own budgets run in seconds
+(`timeoutMs` defaults to 30 000), this is not free but is not the dominant cost either — a number
+for the record, per the acceptance item, not a reason to have skipped the check.
+
+**A pre-existing test-fixture gap, found by the fix rather than assumed away.** `still one colour at
+the budget is blank, not timeout` used `fullFrame(W, H, 0)` — a helper that fills every byte
+including alpha with the same value — to represent a black frame. Byte-for-byte, that fixture is
+identical to *never painted*, which nothing noticed until this fix started reading the alpha byte
+for real. Not a regression in the fix: a fixture that was already modelling an impossible frame
+(real content is always opaque) and had never been exercised on that axis. Fixed the one test that
+depended on it (`opaqueBlack`, alpha 255 throughout, RGB 0) rather than touching the shared
+`fullFrame` helper other passing tests rely on with non-zero bytes.
+
+**New pinning test**, per the acceptance item: `a full-rect paint that lies about one of its own
+rows is uncovered, not settled true` — an 8x8 frame (sized to land on `isFlatFrame`'s own 4-pixel
+sampling grid, or the flatness check never looks at the lying row regardless of this fix) whose
+row 4 declares itself part of a whole-frame paint while its bytes are still alpha 0. **Control,
+done by hand**: with the final bytes-check's call removed, this test fails exactly as the
+acceptance item predicts — `settled: true`, no warning. Restored, it passes:
+`12.5% of the 8x8 frame never painted … (uncovered region 8x1 at 0,4)`.
+
+**Verified, this worktree:** `npm run build` clean, `npm run typecheck` clean, full unit suite
+1411/1411 (1410 passed, 1 pre-existing CI-only skip), `tests/unit/cliCapture.test.ts` 33/33
+including the new test.
+
+**Not run here, and said plainly rather than assumed passing:** the live e2e assertion this whole
+card exists to satisfy — `NOT A FLAKY BASELINE` and its bytes-vs-stated tolerance check, both in
+`live-capture-notes.spec.ts`, untouched (confirmed against `origin/main`, zero diff). Reading it:
+the tolerance is 0.051 percentage points and this fix's stated numbers ARE the measured bytes
+(same scan, same call), so the only expected gap is `.toFixed(1)` rounding — well inside tolerance
+by construction, not by luck. But it needs a real Electron app and real Chromium to actually fire,
+which this session cannot drive here. @Idris, this is exactly the thing your gate is for.
+
+**Kenya's two things to measure were both measured, not assumed:** headless CLI (shared, confirmed
+above) and scan cost (2.0–2.4 ms, confirmed above). Nothing here widens `NOT A FLAKY BASELINE` —
+it is untouched and should stop firing.
