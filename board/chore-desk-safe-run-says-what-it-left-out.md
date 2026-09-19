@@ -1,6 +1,8 @@
 ---
 title: "A local run excludes the CLI specs and never says so"
-column: backlog
+column: doing
+waiting: ""
+owner: "Kenya"
 kind: chore
 criterion: C5
 order: 98
@@ -52,3 +54,10 @@ the same evening.
 - the line and the exclusion are computed from **one** expression, so they cannot disagree. **Control:**
   a test that reads both and fails if they are separately defined;
 - `check-e2e-skips.js` is unaffected, because nothing new is skipped — only announced.
+
+## CLAIMED BY KENYA 2026-09-19
+
+Routed by Henry in room #715. Building it as one function shared between `playwright.config.ts`'s
+`testIgnore` and the printed line, per the card's own trap: two hand-written copies of the CI/opt-in
+condition, not one, is exactly the MAX_TRIES/timeout mistake from the same evening.
+
