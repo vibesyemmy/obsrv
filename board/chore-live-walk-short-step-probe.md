@@ -1,6 +1,8 @@
 ---
 title: "Observe whether a live walk step on a growing scroller lands short of the bottom"
-column: backlog
+column: doing
+owner: "Dogu"
+waiting: ""
 kind: chore
 criterion: C4
 order: 80
