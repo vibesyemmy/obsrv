@@ -1,6 +1,8 @@
 ---
 title: "A live raster taken while the text scale changes comes back settled, showing the layout before it"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C5
 order: 95
