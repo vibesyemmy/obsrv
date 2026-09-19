@@ -1,8 +1,7 @@
 ---
 title: "The e2e suite brings the app to the front on every launch, and takes the desk from whoever is using it"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 order: 0
 ---
@@ -563,3 +562,46 @@ attribution above came from matching recorder timestamps against the suite log's
 lines. That worked, and it worked by luck: the log happens to carry per-test timestamps. **An
 instrument half-wired is the failure mode this card has already paid for twice** (run 3's arithmetic,
 run 4's sampler with nothing to sample).
+
+## DONE 2026-09-19 by Henry — all three Done-means conditions met, with the residual named rather than buried
+
+**The reported bug is fixed and measured fixed on the machine that reported it.** Opeyemi filed this
+because the suite kept bringing the app to the front and interrupting his work. Two full runs on his
+own machine, while he used it, brought it to the front **zero** times.
+
+| Done means | met by |
+| --- | --- |
+| **1.** a full run while someone works never fronts the app, except what is opt-in and named — *observed on a desk, not inferred* | **run 4** (`71290bd`, 615 tests, 9 of his own app switches recorded) and **run 5** (605 passed, 6 switches) — zero activations in both, and run 5 adds the recorder: **77 launches, 82 `win.showInactive`, zero `show`/`focus`/`moveTop`/`app.focus`, and `did-become-active` never fired** |
+| **2.** capture and visibility specs still see what they claim, *shown by control rather than by a green run* | done 2026-09-16, both controls able to go red: `main`'s `show` handler removed → `log.spec`'s transition test **failed** (Expected 2, Received 1) and passed on the fix; hidden window with frame delivery off → **the planted stale frame was seen** (`[255,0,0]`), delivery back on → `[255,255,255]` |
+| **3.** a test that needs the foreground says so in its name and is out of the default run | `live-drive.spec.ts:352`, `overlay-focus.spec.ts:39`, `mcp-live.spec.ts:191` — each names it in its own title and is gated `CI || OBSRV_E2E_FRONT`, **verified in the files in run 6** rather than taken from this card |
+
+### The residual, stated plainly because it is the reason to read this twice
+
+**Run 3 recorded one activation and it was never attributed.** Runs 4 and 5 recorded none. So the
+honest claim is *zero in the two most recent recorded runs, one unexplained three runs ago, no
+recurrence*, and **not** "proved impossible".
+
+What run 6 adds is the thing that makes that acceptable rather than hopeful: **on CI, every activation
+is attributed, three of three, all from the specs that front on purpose.** Two recorded runs found no
+app-side call even attempted, and a test making the historically dangerous call (`webContents.focus()`,
+nine times) produced nothing. **There is no app-side cause left to find** — which is what this card was
+filed about. If run 3's activation recurs, it is a desk-side or OS-side question and deserves its own
+card rather than keeping this one open indefinitely.
+
+### Two things this card leaves behind
+
+- **`chore-desk-guard-misses-webcontents-focus`** — `e2e-leaves-the-desk.test.ts` omits the call that
+  was six of the original seven, and `tabs.spec.ts` calls it ungated. Measured **inert** (run 6), because
+  `showsInactive()` makes the windows non-key and nothing can be activated. Carded as defence in depth.
+- **The mechanism worth carrying out of here:** the harness's safety comes from `showInactive()` making
+  windows **non-key**, not from the gate inside `Overlay.focusView`. The same `webContents.focus()` call
+  is dangerous or inert depending on whether the window can become key. That is one
+  `OBSRV_SHOW_INACTIVE` change away from mattering and nothing in the suite would say so.
+
+**And a connection this card predicted in September, before the bug existed as a card.** Its own
+constraint section says the offscreen target runs with `backgroundThrottling: false` *"but the app
+window's own renderer is a separate question"*. That separate question is now
+`bug-drawer-stalls-part-open`: the chrome window never sets `backgroundThrottling`, which is the live
+hypothesis for a drawer transition that paints one frame and stops. The constraint was right and it
+took three days to come back.
+
