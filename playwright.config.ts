@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test'
+import { cliSpecsExcluded } from './tests/e2e/cliSpecsGate'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -74,9 +75,13 @@ export default defineConfig({
    * See `bug-cli-specs-have-no-gate-of-their-own`. Opeyemi authorised the move
    * from opt-out to opt-in on 2026-09-17.
    */
-  ...(process.env['CI'] !== undefined || process.env['OBSRV_E2E_CLI'] === '1'
-    ? {}
-    : { testIgnore: ['**/cli*.spec.ts', '**/throttle-refused.spec.ts'] }),
+  ...(cliSpecsExcluded() ? { testIgnore: ['**/cli*.spec.ts', '**/throttle-refused.spec.ts'] } : {}),
+  // A silent exclusion is a silence fitting two facts — "the suite passed" and
+  // "the suite passed the part of it you ran". `cliSpecsAnnounce.ts` prints
+  // once, before any test runs, when `cliSpecsExcluded()` — the same call
+  // above, not a second copy of the condition — says a local run has left the
+  // CLI-launch specs out (`chore-desk-safe-run-says-what-it-left-out`).
+  globalSetup: require.resolve('./tests/e2e/cliSpecsAnnounce.ts'),
   // On CI, a JSON report as well, which scripts/check-e2e-skips.js reads to fail
   // a green run that skipped a test nobody listed (bug-ci-skips-are-unlisted).
   // It goes to playwright-report/, not test-results/, because the trace upload's
