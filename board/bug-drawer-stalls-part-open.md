@@ -221,3 +221,45 @@ nobody has a desk to take, so it is harmless there — but the helpers are share
 fix written without that in mind would hand back the activations that card bought. Any candidate must be
 CI-scoped, or go through `showsInactive`/`OBSRV_SHOW_INACTIVE` semantics rather than a plain focus or
 `show()`. Neither of us is committing to the fix before a watch actually catches one.
+
+## SIX QUIET RUNS THAT WERE NOT EVIDENCE — Henry, 2026-09-19
+
+**The instrument was on a branch the bug does not run on, and I did not notice for six runs.**
+
+Both sightings happened on **ordinary PR runs** — `35345417630` (`#350`) and `35351133949` (`#354`).
+The watch I built lives on `probe/drawer-stall`, which runs **only when I dispatch it by hand**. So
+across six dispatched runs the instrument was sitting where the bug does not happen, and each clean
+run read as *"it has not recurred"* when part of it was *"nothing was watching where it recurs"*.
+
+The six runs were not wasted — they killed four hypotheses and the instrument got better each time —
+but **"six runs, no sighting" is not the claim I was entitled to make**, and I made it more than once.
+
+### The same mistake twice, at two scales
+
+- **Small:** the watch sat on `openPanel(p1)` in the relaunch test, and `:194` failed eight lines away
+  on the shared app. Fixed by moving it into `drawerSettled`, which every drawer wait goes through.
+- **Large:** the whole instrument sat on a probe branch, and the bug happens in PR traffic. Fixed by
+  `#376`, which puts a budget-safe version on `main`.
+
+**Both times the fix was the same: put the instrument in the shared path everything goes through, not
+in the place I guessed the bug would appear.** The guess was wrong both times, and the shared path
+cost nothing extra.
+
+### What goes to `main`, and why it is smaller than what the probe carries
+
+`#376` records **two samples a second apart** on the failure path, not thirty seconds of polling.
+`drawerSettled` is shared with specs on the default 30 s budget, and a long poll inside one is the
+0.32.0 defect this card already cites (`docs/e2e-flakes.md:141`): the poll outlived its test, rejected
+with no test to belong to, and turned a suite red with every test green. **Two samples still answer
+this card's question** — advancing means slow and would have landed, identical with `rAF` silent means
+the renderer is not servicing frames — and 1.3 s on a path that has already failed is affordable in
+any spec.
+
+The thirty-second watch stays on `probe/drawer-stall` for a deliberate hunt. It is the better
+instrument and the worse place.
+
+### Honest state
+
+Six dispatched runs, no sighting, and **that number does not mean what a reader would assume it
+means.** The real count of runs where the bug could have been caught by an instrument is, so far,
+**zero** — and becomes non-zero when `#376` lands.
