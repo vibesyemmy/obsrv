@@ -1,7 +1,6 @@
 ---
 title: "A local run excludes the CLI specs and never says so"
-column: doing
-waiting: ""
+column: done
 owner: "Kenya"
 kind: chore
 criterion: C5
@@ -60,4 +59,27 @@ the same evening.
 Routed by Henry in room #715. Building it as one function shared between `playwright.config.ts`'s
 `testIgnore` and the printed line, per the card's own trap: two hand-written copies of the CI/opt-in
 condition, not one, is exactly the MAX_TRIES/timeout mistake from the same evening.
+
+## DONE 2026-09-19 by Kenya: merged in #379 (`c60a4b9`), each acceptance item against what ran
+
+- **a local run prints one line naming the exclusion and the variable that lifts it.** `cliSpecsGate.ts`'s
+  `cliSpecsExcluded()` is the one function `playwright.config.ts`'s `testIgnore` and
+  `cliSpecsAnnounce.ts`'s printed line both call, wired in as a `globalSetup`. Verified live, not only
+  in isolation: a default `npx playwright test` run printed the line once and passed 6/6.
+  **Control:** `OBSRV_E2E_CLI=1` made the line disappear and moved `--list` from 456 tests in 56 files
+  to 619 in 74, matching the card's own measured shape;
+- **the line and the exclusion are computed from one expression.** `tests/unit/cliSpecsOneExpression.test.ts`
+  reads both consumers' source and asserts they import `cliSpecsExcluded` rather than re-deriving it.
+  **Control:** a second, hand-written `OBSRV_E2E_CLI` check added to `playwright.config.ts` — one that
+  still agreed with the shared function — reds the test;
+- **`check-e2e-skips.js` is unaffected.** Structurally: `globalSetup` runs before test collection and
+  only calls `console.log`. Checked live against a CI-mode partial run too, not only reasoned: the one
+  line it printed was a pre-existing, unrelated scoping artifact from running one file against the
+  full-suite manifest.
+
+**Idris's independent re-verification (#379, PASS on `c60a4b9`):** ran both sabotages himself in a
+clean worktree rather than trusting mine — the announcer hardcoded to never fire reds 2 of 4 tests, and
+a second hand-written `OBSRV_E2E_CLI` read reds the one-expression test (`expected 1 to be +0`) — both
+reverted clean. CI (`35444030607`): checked for hidden retry-rescued failures before calling it green —
+0 flaky, 0 first-try failures in the log.
 
