@@ -626,4 +626,42 @@ describe('a quiet stretch that straddles a size change', () => {
     expect(got.settled).toBe(true)
     expect([got.width, got.height]).toEqual([128, 102])
   })
+
+  /**
+   * `bug-live-raster-text-scale-mid-capture`: a text-scale change is a third
+   * way to move the layout at the same device extent, alongside the density
+   * case above. `capture.ts` cannot tell the difference between the two —
+   * both are "the epoch changed" — so this pins the SAME mechanism as
+   * `sameExtentSwitch`, and what it actually tests is the contract
+   * `TargetSource.confirmTextScaleLanded` has to uphold: the epoch must not
+   * bump until the new layout has genuinely landed, or a frame painted in
+   * between (the old layout, since nothing the capture watches has moved yet)
+   * arrives under the new epoch, re-earns coverage, and settles wrong — the
+   * exact defect this card is about, one step removed from `TargetSource`
+   * into the thing that reads its epoch.
+   */
+  const lateEpochBump = (): Layered => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    // A frame painted AFTER the text-scale request but BEFORE confirmation —
+    // still the old layout, since nothing has actually reflowed yet. If the
+    // epoch bumped at the request (the fix this card rules out), this frame
+    // would arrive under the new epoch and wrongly settle the capture on it.
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 15)
+    // The epoch only bumps once `confirmTextScaleLanded` has polled the page
+    // and confirmed the new width — modelled here as landing well after the
+    // stale frame above, the way `TEXT_SCALE_CONFIRM_BUDGET_MS`'s poll does.
+    setTimeout(() => src.epoch++, 80)
+    setTimeout(() => src.emit('frame', marked(128, 102, 9)), 400)
+    return src
+  }
+
+  it('does not settle on the frame between the text-scale request and its confirmation', async () => {
+    const got = await captureQuiescent(lateEpochBump(), { settleMs: 60, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    expect([got.width, got.height]).toEqual([128, 102])
+    // 9 is the layout the text-scale change was heading for; 7 is the one
+    // the pane had left, painted again while the confirmation was in flight.
+    expect(got.bgra[0]).toBe(9)
+  })
 })
