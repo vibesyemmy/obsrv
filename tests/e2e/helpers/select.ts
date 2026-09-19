@@ -105,9 +105,76 @@ export async function drawerSettled(page: Page, open: boolean): Promise<void> {
   // poll to outlive a test that relaunches the app on a loaded runner, and a
   // poll rejecting after its test ended is "1 error was not a part of any
   // test" — a red run with every test green (0.32.0 tag job).
-  await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()), { timeout: 5_000 })
-    .toBe(open ? '309px' : '0px')
+  try {
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()), { timeout: 5_000 })
+      .toBe(open ? '309px' : '0px')
+  } catch (e) {
+    await sayWhyItStalled(page, open)
+    throw e
+  }
+}
+
+/**
+ * Two samples, a second apart, on the way out of a failed drawer wait.
+ *
+ * **What this exists for.** `bug-drawer-stalls-part-open`: twice on CI this poll
+ * gave up with the drawer about 7% open — `18.8536px` and `22.1934px` against the
+ * `309px` it wanted — and the card's question is the one thing every candidate fix
+ * depends on and the one thing the failure could not say: **is the renderer
+ * starved and would it have finished, or is it stuck?** A poll that reports only
+ * its last value cannot tell those apart, so three weeks of sightings produced
+ * five dead hypotheses and no answer.
+ *
+ * **Two samples answer it.** If the width advances between them the transition is
+ * merely slow and would have landed; if it is identical and `rAF` did not fire,
+ * the renderer is not servicing frames at all. That is the whole discriminator.
+ *
+ * **Why two and not a thirty-second watch**, which is what I ran on a probe branch
+ * and would rather have here: this helper is shared with specs that have the
+ * default 30 s budget, and a long poll inside one is exactly the 0.32.0 defect in
+ * `docs/e2e-flakes.md:141` — the poll outlived its test, rejected with no test to
+ * belong to, and turned a green suite red. Roughly 1.3 s on a path that has
+ * already spent 5 s failing is affordable anywhere.
+ *
+ * It also records whether the *state* landed. A third shape appeared later —
+ * `0px`, a transition that never started (`text-scale.spec.ts:194`) — and
+ * `aria-pressed`/`data-drawer` separate "the click never registered" from "the
+ * transition never got its first frame", which are different bugs with the same
+ * timeout.
+ *
+ * Diagnostics only: it changes no assertion, and it runs only when one has
+ * already failed.
+ */
+async function sayWhyItStalled(page: Page, open: boolean): Promise<void> {
+  const sample = (): Promise<string> =>
+    page
+      .evaluate(async () => {
+        const app = document.querySelector('.app')
+        if (app === null) return 'no .app element'
+        const width = getComputedStyle(app).getPropertyValue('--drawer-w').trim()
+        const drawer = app.getAttribute('data-drawer') ?? 'none'
+        const pressed = document.querySelector('.toggle-panel')?.getAttribute('aria-pressed') ?? 'none'
+        // Liveness, not timing: a document whose frames are not being serviced
+        // never calls back at all.
+        const raf = await new Promise<string>(resolve => {
+          const timer = setTimeout(() => resolve('rAF-dead'), 250)
+          requestAnimationFrame(() => {
+            clearTimeout(timer)
+            resolve('rAF-ok')
+          })
+        })
+        return `${width} drawer=${drawer} pressed=${pressed} ${document.visibilityState} ${raf}`
+      })
+      .catch(err => `unreadable (${String(err).slice(0, 40)})`)
+
+  const first = await sample()
+  await new Promise(r => setTimeout(r, 1_000))
+  const second = await sample()
+  const verdict =
+    first === second ? 'UNCHANGED over 1 s — not merely slow' : 'ADVANCED over 1 s — slow, would likely have landed'
+  // One line, greppable, naming its card so whoever meets it knows what it is.
+  console.log(`DRAWER STALL (bug-drawer-stalls-part-open) wanted=${open ? '309px' : '0px'} | ${first} | +1s: ${second} | ${verdict}`)
 }
 
 /**
