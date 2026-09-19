@@ -492,3 +492,74 @@ asserts. Either the call is gated behind `OBSRV_E2E_FRONT` like `focusWindow`'s 
 by something that focuses without activating. That is a decision, and it belongs with whoever writes
 it — not folded in here.
 
+## RUN 6 2026-09-19 by Henry — the CI recorder run: every activation attributed, and my own hypothesis refuted
+
+Run 5 could not say whether `tabs.spec.ts`'s nine ungated `webContents.focus()` calls front the app,
+because Opeyemi's screen locked before they ran. A runner has no lock screen. Run `35407877909`,
+`probe/desk-recorder`, same instrumentation.
+
+**Three activations, all three attributed, none of them unexplained.**
+
+| time | recorded cause | spec |
+| --- | --- | --- |
+| 00:15:14 | `win.show` + `app.focus` + `win.focus` from `Object.focusWindow` <- `ControlServer.route` | `live-drive.spec.ts:352`, the `focusWindow` test |
+| 00:16:49 | the same three, same caller | `mcp-live.spec.ts:191`, the combined drive call's `focus: true` |
+| 00:20:45 | `win.show` from `showWindow`, then `webContents.focus` from `Overlay.focusView` <- `Overlay.show`/`hide` | `overlay-focus.spec.ts:39` |
+
+**All three are the specs that take the desk ON PURPOSE**, each gated `CI || OBSRV_E2E_FRONT` — verified
+in the files rather than taken from this card: `live-drive.spec.ts:357`'s `test.skip`,
+`overlay-focus.spec.ts:17`'s `FRONTS`, `mcp-live.spec.ts:191`'s conditional `focus: true`. **So CI has
+zero activations with nothing recorded before them**, which is the shape that has haunted this card
+since the original recorded run reported five of them.
+
+### My hypothesis is dead, and the measurement is what killed it
+
+Run 5 found nine ungated `native.webContents.focus()` calls from `tabs.spec.ts`'s `invoke()` and I
+argued they were a strong candidate for the intermittent activation — on structural grounds I then
+verified: `NativePane` is a `WebContentsView` added to the chrome window's content view, exactly as the
+overlay is, and `overlay.ts:120` says in the product's own words that focusing such a view *"focuses
+its window too, which activates the app"*, naming six of the original seven.
+
+**On CI those nine calls fired at 00:24:40 and produced no activation at all.** The last activation was
+at 00:20:45. Nine calls, no lock screen, nothing.
+
+### Why not, and the mechanism this completes
+
+Because `showsInactive()` makes the harness's windows **non-key**: the app is never active, and
+`webContents.focus()` on a non-key window of an inactive app does not activate it. The original six
+happened when windows were shown *normally* — which is exactly what run 6 caught at 00:20:45, where
+`showWindow` took the `win.show()` branch (`overlay-focus` runs with fronting on) and the activation
+followed immediately, with `Overlay.focusView` calling `wc.focus()` a second later because
+`showsInactive()` was false there too.
+
+**So the same call is dangerous or inert depending on whether the window can become key**, and the
+harness's safety comes from `showInactive()` rather than from the gate inside `focusView`. I had been
+looking for a second gate to explain the silence; the explanation is that there is nothing to gate
+when no window is key.
+
+### What this does to the guard gap
+
+`tests/unit/e2e-leaves-the-desk.test.ts` still omits `webContents.focus` from its pattern, and
+`tabs.spec.ts` still calls it ungated. **But it is now measured as inert rather than suspected as
+live.** Worth closing as defence in depth — it is one `OBSRV_SHOW_INACTIVE` change away from mattering,
+and the product comment it contradicts is three lines long — and **not** worth calling a bug with a
+measurement behind it, because the measurement says the opposite.
+
+### Where the card stands after two recorded runs
+
+- **The app makes no activating call under the harness**: run 5, 77 launches, 82 `showInactive`, zero others.
+- **A test making the dangerous call does not activate either**: run 6, nine calls, nothing.
+- **Every CI activation is by design and attributed**: run 6, three of three.
+- **The residual desk-side activation — 1 in run 3, 0 in runs 4 and 5 — has no app-side cause in any
+  recorded run, and no CI counterpart.** That points away from Obsrv and towards the desk: window
+  layering, or the user's own switching, which is where the original five unexplained ones pointed too.
+
+### A flaw in my own instrument, recorded because it nearly cost the attribution
+
+**The clock file came back empty.** I set `OBSRV_DESK_CLOCK` in the workflow but never registered the
+reporter in CI's `npx playwright test` command — the reporter only loads when passed with `--reporter`,
+which my local run did and CI did not. So the join that run 5 relied on was unavailable, and the
+attribution above came from matching recorder timestamps against the suite log's own `✓ N spec:line`
+lines. That worked, and it worked by luck: the log happens to carry per-test timestamps. **An
+instrument half-wired is the failure mode this card has already paid for twice** (run 3's arithmetic,
+run 4's sampler with nothing to sample).
