@@ -799,6 +799,56 @@ test.describe('the tab shortcuts are application-menu items', () => {
     // A fresh tab, not the one that was closed still wearing its old screen.
     await expect.poll(() => page.getAttribute('.preset-select', 'data-value')).toBe('1080p-24')
   })
+
+  /**
+   * chore-desk-guard-misses-webcontents-focus. `invoke()` above calls
+   * `native.webContents.focus()` before every shortcut so an earlier click on
+   * the strip cannot be why the shortcut worked — but that call is exactly
+   * the one `bug-e2e-takes-the-desk` measured as six of seven real
+   * activations, via `Overlay.show`, before the guard was fixed there.
+   * `NativePane` sits on the chrome window's content view the same way the
+   * overlay does, so the same call on the same kind of object is one
+   * `OBSRV_SHOW_INACTIVE` change away from doing the same thing here — and
+   * `tests/unit/e2e-leaves-the-desk.test.ts`'s pattern does not name it.
+   *
+   * Rather than widen that pattern (which would also flag this call, and
+   * `invoke()`'s own comment says the call is load-bearing, not incidental),
+   * this asserts the actual invariant keeping the desk safe: the window
+   * `NativePane` belongs to never becomes key while a shortcut fires.
+   *
+   * **Cannot hold on CI.** `live-drive.spec.ts:352` runs a test whose whole
+   * job is fronting the window for real, gated on `CI || OBSRV_E2E_FRONT`,
+   * and its own comment says CI's runner grants real window focus where a
+   * local desk may refuse it — so CI's window manager is not guaranteed to
+   * leave an unrelated window non-key the way an ordinary local run does.
+   * This is the inverse case: local only, skipped wherever fronting is
+   * expected.
+   */
+  test('a shortcut invocation never makes the window key, on an ordinary local run', async () => {
+    test.skip(
+      Boolean(process.env['CI']) || Boolean(process.env['OBSRV_E2E_FRONT']),
+      'CI grants real window focus for other specs (live-drive:352); this invariant is only meaningful without it',
+    )
+    let sawKey = false
+    const poll = setInterval(() => {
+      app
+        .evaluate(() => (globalThis as any).__obsrv.win.isFocused() as boolean)
+        .then(focused => {
+          if (focused) sawKey = true
+        })
+        .catch(() => {
+          // The window may be mid-teardown between invokes; a failed read is
+          // not evidence of a key window.
+        })
+    }, 20)
+    try {
+      await invoke('new-tab')
+      await invoke('close-tab')
+    } finally {
+      clearInterval(poll)
+    }
+    expect(sawKey, 'a shortcut invocation made the harness window key (chore-desk-guard-misses-webcontents-focus)').toBe(false)
+  })
 })
 
 /**

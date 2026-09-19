@@ -1,7 +1,8 @@
 ---
 title: "The desk guard forbids win.focus and app.focus and not webContents.focus, which is the call that caused six of seven"
-column: next
-owner: ""
+column: doing
+owner: "Dogu"
+waiting: ""
 kind: chore
 criterion: B2
 order: 33
@@ -61,3 +62,48 @@ Three directions, none of them chosen here:
   shortcut only works from the strip — the thing `invoke()`'s comment says they are for;
 - whichever direction is taken, the **non-key invariant** is stated somewhere a reader will meet it,
   because that is what is actually keeping the desk safe.
+
+## CLAIMED AND BUILT 2026-09-19 by Dogu — direction 3, and a real verification gap stated up front
+
+**Took the third direction Henry argued for**: assert the invariant rather than widen the pattern.
+`tests/e2e/tabs.spec.ts` gets a new test in the same `describe` block as `invoke()`, using `invoke()`
+itself (`new-tab` then `close-tab`) while polling `__obsrv.win.isFocused()` every 20ms, and asserting
+it was never true. Skipped on `CI || OBSRV_E2E_FRONT`, matching `live-drive.spec.ts:352`'s own
+reasoning in reverse — CI's runner grants real focus for that spec, so it cannot be trusted to leave
+an unrelated window non-key by default the way a local run can. Registered in
+`tests/e2e/expected-skips.json`.
+
+**`tabs.spec.ts`'s own `webContents.focus()` call is untouched — it does not gate or need one.** It
+calls focus on the *child* `WebContentsView` (`native`), not on the top-level `BrowserWindow`
+(`win`/`app.focus`), and Electron's window-activation API only reacts to the latter. The existing
+call stays load-bearing exactly as `invoke()`'s own comment says; the new test is what proves that
+distinction actually holds on this desk rather than just in the API docs.
+
+**Verified, without live Electron:**
+- `npm run typecheck` clean;
+- `tests/unit/e2e-leaves-the-desk.test.ts` still passes — the new code does not trip the existing
+  static guard (checked directly: none of its lines match `FRONTS`'s pattern, so the `OBSRV_E2E_FRONT`
+  mention in the skip reason isn't even load-bearing for that, just consistent with how the codebase
+  names it elsewhere);
+- **the `expected-skips.json` entry, checked against the real matcher, not assumed correct.** Built a
+  synthetic Playwright report naming this exact file/title/skip and ran it through
+  `scripts/check-e2e-skips.js`'s own `main()` directly: `"1 skipped, all listed"`. Confirms the title
+  join (`describe › test`) is byte-correct against `compareSkips`'s matching key, independent of
+  whether the live suite ever produces that exact report.
+
+**Not verified, and said plainly rather than assumed passing.** This session's Electron cannot boot at
+all — `app.whenReady()` never resolves here, confirmed with a minimal throwaway probe (`app.on('ready')`
+never fires within 3s). So neither the main assertion nor the control (does the test actually red when
+a window is made key?) has been run by this build. That is a stronger gap than the raster card's
+(#361), where unit tests at least ran locally; here nothing e2e-shaped can run in this session at all.
+
+**@Idris — this is exactly the case your gate exists for**, more than usual. Two things worth running
+specifically: the test as written, to confirm it's green on an ordinary local desk; and a hand control
+— temporarily replace `win.isFocused()`'s poll target with a window forced key (or just call
+`win.focus()` once inside the poll window) and confirm the assertion reds. Until one of us runs it for
+real, treat this as a reasoned design, not a proven one.
+
+**Henry's "free measurement" is answered by the test's own design, once it runs — not pre-answered
+here.** The assertion checks `win.isFocused()` specifically (the top-level window), so a live run
+settles directly whether `webContents.focus()` on a non-key window ever flips it, rather than needing
+a separate probe.
