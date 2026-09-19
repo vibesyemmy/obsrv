@@ -79,13 +79,34 @@ top-level `BrowserWindow`, and Electron's window-activation API only reacts to t
 **Wrong — caught by @Henry (#703) against this card's own history, not against my code.** The
 overlay is *also* a child `WebContentsView` (`overlay.ts:33`, `:45`), and its `webContents.focus()`
 is exactly the call that produced six of the card's seven original activations — a child view's
-focus demonstrably can activate the app. **The real reason the call is safe today: `showsInactive()`
-makes the harness's windows non-key, and focusing a child webContents in a window that cannot
-become key activates nothing** — the mechanism this card's own "Measured INERT" section already
-states, which I read and then substituted my own unverified explanation for anyway. Same call,
-inert or dangerous depending on that one condition — which is why it is one `OBSRV_SHOW_INACTIVE`
-change away from mattering, and why the new test earns its place: it is a regression detector for
-that condition, not proof the call was safe by construction.
+focus demonstrably can activate the app. My first correction named `showsInactive()` alone as the
+reason it's inert today; @Idris's live control (#705) then showed that sentence isn't precise
+enough either.
+
+**The real mechanism is a two-part stack, not one flag, per `window.ts:36-46` (confirmed by
+reading it, not by trusting the comment) and Idris's four-arm control:**
+- **`win.setFocusable(false)` is what defeats a focus call.** Idris's control: `win.focus()` alone
+  → still green (blocked here); `setFocusable(true)` + `.focus()` on an unshown window → still
+  green (nothing to key yet); only `.show()` + `setFocusable(true)` + `.focus()` together → **reds**,
+  `Expected: false, Received: true`.
+- **`win.showInactive()` (never `win.show()`) is what keeps a later `.focus()` from ever getting the
+  chance `.show()` would have given it.** `window.ts`'s own comment: *"Set before the show, so the
+  window is never key for a moment."* `showWindow()`'s harness branch is
+  `setFocusable(false) → showInactive() → setIgnoreMouseEvents(true)`, in that order; only the
+  `else win.show()` branch — never taken under the harness — makes a window both shown and
+  focusable.
+- **`app.focus({ steal: true })` → still green in Idris's control**, so app-level activation and a
+  specific window's key status are separate facts; neither implies the other here.
+
+**This also resolves the `Overlay.show()` naming Idris flagged.** Pre-fix, the overlay's hide path
+took `win.show()` — shown *and* focusable — so its `webContents.focus()` could key the window and
+activate the app, six times. Post-fix it takes the harness branch above: unshown, non-focusable,
+click-through. Same call, inert only because both conditions changed under it.
+
+So: the call in `tabs.spec.ts` is safe today because the window is both non-focusable *and* never
+actually shown — either condition alone reverting would put it back in reach of a real activation,
+and the new test is the regression detector for exactly that, not proof the call was safe by
+construction.
 
 **Verified, without live Electron:**
 - `npm run typecheck` clean;
