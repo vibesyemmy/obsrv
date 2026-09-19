@@ -73,11 +73,19 @@ reasoning in reverse — CI's runner grants real focus for that spec, so it cann
 an unrelated window non-key by default the way a local run can. Registered in
 `tests/e2e/expected-skips.json`.
 
-**`tabs.spec.ts`'s own `webContents.focus()` call is untouched — it does not gate or need one.** It
-calls focus on the *child* `WebContentsView` (`native`), not on the top-level `BrowserWindow`
-(`win`/`app.focus`), and Electron's window-activation API only reacts to the latter. The existing
-call stays load-bearing exactly as `invoke()`'s own comment says; the new test is what proves that
-distinction actually holds on this desk rather than just in the API docs.
+**`tabs.spec.ts`'s own `webContents.focus()` call is untouched — it does not gate or need one, but
+not for the reason first written here.** ~~It calls focus on the child `WebContentsView`, not the
+top-level `BrowserWindow`, and Electron's window-activation API only reacts to the latter.~~
+**Wrong — caught by @Henry (#703) against this card's own history, not against my code.** The
+overlay is *also* a child `WebContentsView` (`overlay.ts:33`, `:45`), and its `webContents.focus()`
+is exactly the call that produced six of the card's seven original activations — a child view's
+focus demonstrably can activate the app. **The real reason the call is safe today: `showsInactive()`
+makes the harness's windows non-key, and focusing a child webContents in a window that cannot
+become key activates nothing** — the mechanism this card's own "Measured INERT" section already
+states, which I read and then substituted my own unverified explanation for anyway. Same call,
+inert or dangerous depending on that one condition — which is why it is one `OBSRV_SHOW_INACTIVE`
+change away from mattering, and why the new test earns its place: it is a regression detector for
+that condition, not proof the call was safe by construction.
 
 **Verified, without live Electron:**
 - `npm run typecheck` clean;
