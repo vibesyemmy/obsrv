@@ -1,4 +1,10 @@
 {
   "why": "Every e2e test a CI run may skip, with the reason it is expected to. scripts/check-e2e-skips.js fails a green CI run whose skips differ from this list, in either direction (bug-ci-skips-are-unlisted). Main skipped nothing on CI across eight runs on 2026-09-16, so it starts empty.",
-  "skips": []
+  "skips": [
+    {
+      "file": "tabs.spec.ts",
+      "title": "the tab shortcuts are application-menu items › a shortcut invocation never makes the window key, on an ordinary local run",
+      "why": "the invariant only holds off CI: live-drive.spec.ts:352 shows CI's runner granting real window focus for another spec, so CI is not guaranteed to leave this window non-key the way a local run is (chore-desk-guard-misses-webcontents-focus)"
+    }
+  ]
 }
