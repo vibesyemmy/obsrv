@@ -91,6 +91,19 @@ const DEFAULT_FPS = 30
 const DEFAULT_VIEWPORT = { width: 1920, height: 1080 }
 
 /**
+ * How long `setTextScale` polls the page for the new emulation before giving
+ * up and bumping `layoutEpoch()` anyway (`bug-live-raster-text-scale-mid-capture`).
+ * A best-effort budget, not a guarantee: an unresponsive page still gets an
+ * epoch bump rather than one that never comes, the same rule `captureQuiescent`
+ * itself applies — a rescued answer beats a hang.
+ */
+const TEXT_SCALE_CONFIRM_BUDGET_MS = 1_000
+/** How often `setTextScale`'s confirmation asks the page again while waiting. */
+const TEXT_SCALE_POLL_MS = 20
+
+const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
+
+/**
  * One Android-style mobile Chrome UA for every mobile preset — the phones and
  * the iPad alike. Deliberate simplification: sites key their mobile layouts on
  * "Mobile"/Android vs desktop, and per-preset UA strings would multiply
@@ -210,6 +223,14 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   private textScale = DEFAULT_TEXT_SCALE
   /** Whether the current window has emulation on, so leaving it can turn it off. */
   private emulating = false
+  /**
+   * Bumped by every `setTextScale` call; a confirmation loop compares its own
+   * copy against the live value before bumping `epoch`, so a text-scale change
+   * that supersedes an earlier one mid-poll leaves nothing for the stale poll
+   * to do (the same supersede-don't-serialise shape as `firstNavigation`
+   * above, not a queue).
+   */
+  private textScaleGeneration = 0
   /** The page's cursor as CSS; a fresh window starts at the arrow. */
   private cursor = DEFAULT_CURSOR
   /**
@@ -584,6 +605,55 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     if (this.disposed || this.win.isDestroyed() || !this.firstNavDone) return
     this.applyEmulation()
     this.win.webContents.invalidate()
+    // Fire-and-forget: callers of setTextScale expect it to return at once,
+    // as it always has. The epoch bump this confirms happens on its own
+    // schedule, below.
+    void this.confirmTextScaleLanded(next, ++this.textScaleGeneration)
+  }
+
+  /**
+   * Bumps `layoutEpoch()` once the page itself shows the new text scale has
+   * actually taken — not merely that it was requested
+   * (`bug-live-raster-text-scale-mid-capture`).
+   *
+   * `enableDeviceEmulation` reaches the renderer through CDP asynchronously
+   * and has no callback, and the `invalidate()` beside it can produce a full
+   * frame **before** the new emulation has landed. Bumping the epoch at the
+   * request, as `setViewport` does, would let that stale frame arrive under
+   * the new epoch, re-earn coverage, and settle a capture on it — the same
+   * defect with an extra counter in front of it. `setViewport` gets away with
+   * bumping early because a dsf/mobile change recreates the window, and the
+   * old window's paints are dropped by identity (`this.win !== win` in the
+   * `paint` handler) regardless of epoch timing; `setTextScale` is the same
+   * window throughout, so there is no such structural guarantee here and the
+   * epoch has to earn its own.
+   *
+   * `innerWidth` is exactly what `applyEmulation`'s `viewSize` sets the page
+   * to see, so asking the renderer for it is asking the one thing that can
+   * actually confirm landing, rather than trusting the request's timing —
+   * `layoutScaleNow` already reads the same field for the same reason. Once
+   * it reports the expected width, one more `invalidate()` guarantees a frame
+   * reflecting the confirmed state gets produced under the epoch this bumps.
+   */
+  private async confirmTextScaleLanded(scale: number, gen: number): Promise<void> {
+    const expected = Math.round(this.viewport.width / scale)
+    const deadline = Date.now() + TEXT_SCALE_CONFIRM_BUDGET_MS
+    try {
+      while (Date.now() < deadline) {
+        if (gen !== this.textScaleGeneration || this.disposed || this.win.isDestroyed()) return
+        const width = await this.ask('innerWidth')
+        if (gen !== this.textScaleGeneration || this.disposed || this.win.isDestroyed()) return
+        if (width === expected) break
+        await sleep(TEXT_SCALE_POLL_MS)
+      }
+    } catch {
+      // A navigation mid-poll, or a page that threw: nothing to confirm, and
+      // nothing this method should throw about. The epoch bump below still
+      // runs — see the class doc on the budget above for why a rescue beats
+      // never bumping at all.
+    }
+    this.epoch++
+    if (!this.win.isDestroyed()) this.win.webContents.invalidate()
   }
 
   getTextScale(): number {
