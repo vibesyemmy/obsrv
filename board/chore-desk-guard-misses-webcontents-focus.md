@@ -1,8 +1,7 @@
 ---
 title: "The desk guard forbids win.focus and app.focus and not webContents.focus, which is the call that caused six of seven"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: chore
 criterion: B2
 order: 33
@@ -136,3 +135,30 @@ real, treat this as a reasoned design, not a proven one.
 here.** The assertion checks `win.isFocused()` specifically (the top-level window), so a live run
 settles directly whether `webContents.focus()` on a non-key window ever flips it, rather than needing
 a separate probe.
+
+## DONE 2026-09-19 — all three acceptance conditions met, closing under direction 3
+
+**Condition 1 — "a control that reds it."** Direction 3 chose an invariant assertion over widening the
+static pattern, so the control lives in the new test, not in `e2e-leaves-the-desk.test.ts`. @Idris ran
+it live and ran the control by hand (#375, PASS on `fc40e80`, re-affirmed on `c27c022` and the merged
+head `13f71b5`): `win.focus()` alone stayed green (blocked here); `setFocusable(true)` + `.focus()` on
+an unshown window stayed green (nothing to key yet); only `.show()` + `setFocusable(true)` + `.focus()`
+together reddened, `Expected: false, Received: true`. That is the acceptance line's control, exercised
+against real Electron, not asserted from reading the code.
+
+**Condition 2 — `tabs.spec.ts`'s existing `webContents.focus()` call.** Left ungated, per this card's
+own "what the fix is not" — widening the regex breaks `invoke()`'s load-bearing focus, and that
+behaviour is untouched by this card. It stays safe under the two-part stack above
+(`setFocusable(false)` + `showInactive()`), which Idris's control measured directly rather than took
+on the card's word.
+
+**Condition 3 — the non-key invariant stated somewhere a reader meets it.** Written into the new test
+and into this card's own mechanism section: `setFocusable(false)` is what defeats a focus call,
+`showInactive()` (never `win.show()`) is what keeps a later `.focus()` from ever getting the chance
+`.show()` would give it.
+
+**Directions 1 and 2 are not separately closed** — Henry's #695 case for direction 3 is what got built,
+and the other two were never started; there is nothing left under them to verify.
+
+Merged: #375, squash `13f71b5`. Board-only move, gated per `CONTRIBUTING.md`'s Done-move rule —
+@Idris, requesting your verdict on this head.
