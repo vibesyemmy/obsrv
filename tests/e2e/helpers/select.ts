@@ -105,9 +105,67 @@ export async function drawerSettled(page: Page, open: boolean): Promise<void> {
   // poll to outlive a test that relaunches the app on a loaded runner, and a
   // poll rejecting after its test ended is "1 error was not a part of any
   // test" — a red run with every test green (0.32.0 tag job).
-  await expect
-    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()), { timeout: 5_000 })
-    .toBe(open ? '309px' : '0px')
+  try {
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.app')!).getPropertyValue('--drawer-w').trim()), { timeout: 5_000 })
+      .toBe(open ? '309px' : '0px')
+  } catch (e) {
+    await watchTheStall(page, open, e)
+    throw e
+  }
+}
+
+/**
+ * PROBE ONLY (`probe/drawer-stall`, `bug-drawer-stalls-part-open`). Not for main.
+ *
+ * **Here rather than on one call site, because my first version watched the
+ * wrong one.** I put it on `openPanel(p1)` in `text-scale.spec.ts`'s relaunch
+ * test, and the next failure was `:194` — eight lines away, on the file's shared
+ * app, where nothing was watching. Every drawer wait in the suite goes through
+ * this function, so this is the only place that cannot miss a sighting.
+ *
+ * **It records whether the renderer is ALIVE and whether the STATE landed**, not
+ * only what the width is, because two different shapes have now been seen and
+ * the width alone cannot tell them apart:
+ *
+ *   ~18-22px  a transition that painted one frame and stopped   (the carded bug)
+ *   0px       a transition that never started at all            (`:194`)
+ *
+ * `aria-pressed` and `data-drawer` are the discriminator for the second. If the
+ * state landed and the width is still `0px`, the transition never got its first
+ * frame — the same story one frame earlier, and the two shapes are one bug. If
+ * the state never landed, the click or its IPC failed and transitions are
+ * irrelevant. `openPanel` only clicks when `aria-pressed !== 'true'`, so a
+ * desynced toggle would skip the click and wait five seconds on a drawer nobody
+ * asked to open.
+ */
+async function watchTheStall(page: Page, open: boolean, cause: unknown): Promise<void> {
+  const want = open ? '309px' : '0px'
+  const t0 = Date.now()
+  const seen: string[] = []
+  for (let i = 0; i < 60; i++) {
+    const sample = await page
+      .evaluate(async () => {
+        const app = document.querySelector('.app')!
+        const w = getComputedStyle(app).getPropertyValue('--drawer-w').trim()
+        const state = app.getAttribute('data-drawer') ?? 'none'
+        const pressed = document.querySelector('.toggle-panel')?.getAttribute('aria-pressed') ?? 'none'
+        // A hidden or throttled document never calls back: liveness, not timing.
+        const raf = await new Promise<string>(resolve => {
+          const timer = setTimeout(() => resolve('rafDEAD'), 250)
+          requestAnimationFrame(() => {
+            clearTimeout(timer)
+            resolve('rafOK')
+          })
+        })
+        return `${w} drawer=${state} pressed=${pressed} ${document.visibilityState} ${raf}`
+      })
+      .catch(err => `ERR ${String(err).slice(0, 30)}`)
+    seen.push(`${Date.now() - t0}ms=[${sample}]`)
+    if (sample.startsWith(`${want} `)) break
+    await new Promise(r => setTimeout(r, 500))
+  }
+  console.log(`DRAWER STALL PROBE | wanted=${want} | ${String(cause).slice(0, 60)} | ${seen.join(' ')}`)
 }
 
 /**
