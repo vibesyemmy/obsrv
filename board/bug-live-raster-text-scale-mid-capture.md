@@ -64,3 +64,58 @@ not cheaper than the first.
   without saying so, pinned where it can be pinned by construction (the fake `FrameEmitter` in
   `cliCapture.test.ts` already carries the epoch);
 - the fix does not make an ordinary capture wait: a still page at a steady text scale still settles.
+
+## MEASURED 2026-09-20 by Henry — the fix holds; a narrow undisclosed case survives it
+
+**Kenya's `#382` is the right fix and the common case is closed.** What follows is the seam it
+deliberately left, with numbers rather than argument.
+
+### The seam
+
+`confirmTextScaleLanded` polls the page's `innerWidth` for `TEXT_SCALE_CONFIRM_BUDGET_MS` (1 s) and
+then **falls through to `this.epoch++` whether or not it confirmed** — documented as a best-effort
+budget, on the same "a rescued answer beats a hang" rule `captureQuiescent` uses. **Nothing tells the
+caller which of the two happened:** there is no field, no warning, no `unsettledReason`, and no
+`textScaleConfirm`/`confirmTimedOut` anywhere in `src/`. @Dogu and @Idris each checked that path
+against `main` independently rather than taking it from my description; both confirm it.
+
+So in the timeout case a stale frame can re-earn coverage under the new epoch and the capture answers
+`settled: true` **saying nothing** — the exact wording this card's acceptance forbids, and the case
+`release-gate.md`'s escape hatch does not cover, because the hatch requires the caller to be told.
+
+### How close the budget actually is: 140x away
+
+Instrumented `confirmTextScaleLanded` to record its own elapsed time and ran `text-scale.spec.ts`,
+which changes the scale **after navigation on a running app** — the only path this code is on.
+
+    17 samples, live path, unthrottled:  0-7 ms, most at 0-1 ms.  Zero timeouts.
+    Budget: 1000 ms.
+
+**So the hole needs a renderer roughly 140x slower than measured.**
+
+### What that kills, including a claim of mine
+
+**I argued this was reachable with `--throttle cpu-6x`, and the measurement says no.** Six times a
+7 ms operation is about 42 ms. Throttling does not come near a second, and I had reasoned from
+"throttling makes renderers slow" without asking what *slow* had to mean here.
+
+**The route that survives is a page that blocks its own main thread for over a second.** The confirm
+asks the renderer for `innerWidth`, which needs that thread; a long synchronous task starves the poll
+while the emulation may or may not have landed. Obsrv exists to look at real pages, and real pages do
+this — so the case is narrow rather than absent.
+
+### What would close it, and what would not
+
+**Disclose the unconfirmed bump.** One flag from `confirmTextScaleLanded` through to the capture's
+reply, so a caller that got a rescued epoch is told. That is a sentence of output, not a redesign.
+
+**Widening the budget would not close it** and would make it worse: a longer wait on a blocked page
+delays every caller for a case that is already rare, and still ends in the same silent fall-through.
+The defect is the silence, not the duration.
+
+### Note on measuring this at all
+
+The headless CLI **cannot** exercise it: `setTextScale` returns early when `!firstNavDone`, and the CLI
+sets the scale before the first navigation, so `confirmTextScaleLanded` never runs there. It is a
+live-path-only code path, which is worth knowing before anyone plans a headless check of it — I
+planned one and was wrong.
