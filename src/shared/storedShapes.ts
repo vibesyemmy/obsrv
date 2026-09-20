@@ -60,9 +60,31 @@ export function isHistoryShape(raw: unknown): boolean {
   return Array.isArray(raw) && raw.length > 0 && raw.every(item => isRecord(item) && typeof item.url === 'string')
 }
 
-/** Obsrv's tab list: an object with a `tabs` array, each tab carrying a `url`. */
+/**
+ * Obsrv's tab list: `tabs` and `activeIndex` together, each tab carrying a
+ * `url`.
+ *
+ * **`activeIndex` is what makes an empty tab list attributable**, and getting
+ * here took two wrong answers. The first accepted `{"tabs": []}` on the
+ * grounds that the `tabs` key was evidence; Idris pointed out while reviewing
+ * that the key only restates what the filename already says, exactly as a bare
+ * array in `history.json` restates *its* filename — a fair hit. The second
+ * answer refused every empty list, which was consistent and threw away a real
+ * case: Obsrv's own `tabs.json` with every tab closed is `{"tabs": [],
+ * "activeIndex": 0}`, and keeping our own file is a worse outcome than we need
+ * to accept.
+ *
+ * `activeIndex` is a required field of `StoredTabs` that Obsrv writes on every
+ * save, and it is not a word another app reaches for while writing a file
+ * named `tabs.json`. So it carries what the container key does not: evidence
+ * about the *writer* rather than a restatement of the name. `history.json` has
+ * no equivalent — an empty history is a bare `[]` with nowhere to put a second
+ * field — which is why that one still refuses empty and this one does not. The
+ * asymmetry is now about what each format can say, not about which wrapper it
+ * happens to use.
+ */
 export function isTabsShape(raw: unknown): boolean {
-  if (!isRecord(raw) || !Array.isArray(raw.tabs)) return false
+  if (!isRecord(raw) || !Array.isArray(raw.tabs) || typeof raw.activeIndex !== 'number') return false
   return raw.tabs.every(tab => isRecord(tab) && typeof tab.url === 'string')
 }
 

@@ -232,7 +232,16 @@ describe('obsrv uninstall --remove, end to end against a real, disposable filesy
       const { home } = populatedHome(sandboxRoot)
       const legacyUserData = join(home, 'Library/Application Support/Electron')
       const foreign = join(legacyUserData, 'history.json')
-      writeFileSync(foreign, 'not json at all, and not an array either way')
+      // **Valid JSON of the wrong shape**, not the bug card's original
+      // `'not json at all'`. Idris found the difference by mutation while
+      // reviewing this PR: unparseable bytes are caught by `bin/uninstall.js`'s
+      // own `JSON.parse` try/catch and never reach `confirmsAs`, so a build
+      // with `confirmsAs` forced to `true` still passed this test. It was
+      // named the control for the shape check and exercised everything except
+      // the shape check. This fixture parses, so the only thing that can keep
+      // it is `confirmsAs` returning false — which is what the control was
+      // always supposed to be about.
+      writeFileSync(foreign, JSON.stringify({ entries: [] }))
 
       const r = run(sandboxRoot, home, '--remove', '--json')
       // Exit 0: the command did its job. A file it could not attribute to

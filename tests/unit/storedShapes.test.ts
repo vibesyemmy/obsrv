@@ -42,7 +42,10 @@ describe('storedShapes: whether a file in the shared Electron directory is Obsrv
     // The case the whole check exists for: valid JSON, plausible for some
     // other Electron app, nothing of Obsrv's in it.
     expect(isHistoryShape([{ title: 'a bookmark' }])).toBe(false)
-    expect(isTabsShape({ tabs: [{ id: 7 }] })).toBe(false)
+    expect(isTabsShape({ tabs: [{ id: 7 }], activeIndex: 0 })).toBe(false)
+    // A bare `tabs` key restates the filename and is no evidence of a writer.
+    expect(isTabsShape({ tabs: [] })).toBe(false)
+    expect(isTabsShape({ tabs: [{ url: 'https://example.com' }] })).toBe(false)
     expect(isSettingsShape({ theme: 'dark', windowWidth: 900 })).toBe(false)
   })
 
@@ -54,8 +57,7 @@ describe('storedShapes: whether a file in the shared Electron directory is Obsrv
 
   it('accepts what Obsrv actually writes', () => {
     expect(isHistoryShape([{ url: 'https://example.com' }])).toBe(true)
-    expect(isTabsShape({ tabs: [] })).toBe(true)
-    expect(isTabsShape({ tabs: [{ url: 'https://example.com' }] })).toBe(true)
+    expect(isTabsShape({ tabs: [{ url: 'https://example.com' }], activeIndex: 0 })).toBe(true)
     expect(isSettingsShape({ hostDiagonalInches: 14, hostNits: 500 })).toBe(true)
   })
 
@@ -78,12 +80,10 @@ describe('the tie to the real readers, which shared code cannot enforce here', (
   // breaks that, it breaks here rather than silently widening what `--remove`
   // deletes.
   //
-  // **An empty tabs file is accepted where an empty history file is not**, and
-  // the difference is the container. `{"tabs": []}` still carries a key Obsrv
-  // chose; `[]` carries nothing at all and is what an untouched list looks
-  // like in any app that stores one. So "loads non-empty" is the tie for the
-  // populated cases, and the empty-container case is asserted below on its own
-  // terms rather than folded into a property it does not satisfy.
+  // The tie is "loads through the real reader", not "loads non-empty": an
+  // empty-but-ours `tabs.json` is claimable on `activeIndex` and legitimately
+  // loads to zero tabs. `history.json` has no second field to carry that, so
+  // it refuses empty. Both cases are asserted rather than described.
 
   it('a history file this module accepts loads as non-empty history', () => {
     const body = JSON.stringify([{ url: 'https://example.com', count: 1, last: 1_700_000_000_000 }])
@@ -94,7 +94,7 @@ describe('the tie to the real readers, which shared code cannot enforce here', (
   })
 
   it('a tabs file this module accepts loads as tabs', () => {
-    const body = JSON.stringify({ tabs: [{ url: 'https://example.com' }] })
+    const body = JSON.stringify({ tabs: [{ url: 'https://example.com' }], activeIndex: 0 })
     expect(isTabsShape(JSON.parse(body))).toBe(true)
     withFile('tabs.json', body, path => {
       expect(loadTabs(path).tabs.length).toBeGreaterThan(0)
@@ -107,13 +107,15 @@ describe('the tie to the real readers, which shared code cannot enforce here', (
     expect(parseSettings(raw), 'accepted by storedShapes and refused by the real parser').not.toBeNull()
   })
 
-  it('an empty tabs file is claimed on its container, and an empty history file is not', () => {
-    // The asymmetry above, asserted rather than described. Flipping either is
-    // then a deliberate edit with a failing test attached.
-    expect(isTabsShape({ tabs: [] })).toBe(true)
+  it('an empty tab list is claimable on `activeIndex`, an empty history is not claimable at all', () => {
+    // Obsrv's own file with every tab closed, which must still be removable.
+    expect(isTabsShape({ tabs: [], activeIndex: 0 })).toBe(true)
+    // The same file without the field that names its writer.
+    expect(isTabsShape({ tabs: [] })).toBe(false)
+    // And history, which has nowhere to put such a field when it is empty.
     expect(isHistoryShape([])).toBe(false)
-    withFile('tabs.json', JSON.stringify({ tabs: [] }), path => {
-      expect(loadTabs(path).tabs.length, 'accepted on its container, and genuinely empty').toBe(0)
+    withFile('tabs.json', JSON.stringify({ tabs: [], activeIndex: 0 }), path => {
+      expect(loadTabs(path).tabs.length, 'claimed on activeIndex, and genuinely empty').toBe(0)
     })
   })
 

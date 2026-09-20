@@ -74,7 +74,7 @@ the deviation to press on in review.
 
 ### Two judgement calls that could go the other way
 
-**An empty `history.json` is refused.** `[]` is what an untouched list looks like in any app, so it
+**An empty `history.json` is refused, and an empty `tabs.json` is not.** `[]` is what an untouched list looks like in any app, so it
 attributes to nobody — which means a clean uninstall can exit 0 with a file of *ours* still on disk.
 The alternative takes an empty file of someone else's. Keeping costs one manual delete; removing
 costs data nobody can restore.
@@ -85,6 +85,26 @@ literally: the caller asked to remove *Obsrv's* files, and a file that failed at
 that set. A non-zero exit would report failure on a machine where the command worked exactly right,
 and the fix a script author reaches for is to stop reading the code. The exit code answers "did it
 work"; the printed lines answer "what is still there".
+
+### Two things the review found that I had not, both by mutation rather than reading
+
+@Idris built the branch and mutated `confirmsAs` instead of reading it, which found two real gaps:
+
+**The e2e control did not exercise the check it was named for.** Its fixture was the card's original
+`'not json at all'` — unparseable, so `bin/uninstall.js`'s own `JSON.parse` try/catch caught it
+*before* `confirmsAs` ran. With `confirmsAs` forced to return `true`, the test still passed. It was
+the control for the shape check and tested everything except the shape check. The fixture is now
+valid JSON of the wrong shape (`{"entries": []}`), so the only thing that can keep it is the check
+itself. **This is the more serious of the two**: a fix for a contract that was never enforced had a
+control that was never exercised, which is the same defect one level up.
+
+**`{"tabs": []}` was claimed on the `tabs` key, and that key is not evidence.** It restates what the
+filename already says, exactly as a bare array in `history.json` restates its own. My first correction
+refused every empty tab list, which was consistent and threw away a real case — Obsrv's own
+`tabs.json` with every tab closed. The answer that survives both objections is `activeIndex`: a
+required field of `StoredTabs` written on every save, which says something about the *writer* rather
+than the name. So an empty tab list is claimable and an empty history is not, and the asymmetry is
+now about what each format can carry rather than which wrapper it uses.
 
 ### Acceptance
 
