@@ -404,6 +404,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+    # Derived once, here, because the `secrets` context cannot be read from a
+    # step's `if` — only from `env`. A condition written against `secrets`
+    # directly is always false, and would silently ship unsigned builds.
+    env:
+      HAS_SIGNING: ${{ secrets.CSC_LINK != '' && secrets.APPLE_API_KEY_ID != '' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -415,10 +420,103 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build DMGs (unsigned)
+      - name: Materialise the App Store Connect key
+        id: apple_key
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          # notarytool wants a path, not the key itself. Written under RUNNER_TEMP
+          # (wiped with the runner) and never into the workspace, so it cannot be
+          # picked up by a build glob or committed by a later step.
+          install -m 700 -d "$RUNNER_TEMP/private_keys"
+          printf '%s' "${{ secrets.APPLE_API_KEY_P8 }}" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/private_keys/AuthKey.p8"
+          echo "path=$RUNNER_TEMP/private_keys/AuthKey.p8" >> "$GITHUB_OUTPUT"
+
+      # Signed and notarised when the secrets exist, unsigned otherwise, so a
+      # fork (and this repo before the certificate landed) still gets a working
+      # DMG rather than a failed release. `CSC_LINK` is the base64 of a
+      # Developer ID Application .p12; the three APPLE_API_* values are an App
+      # Store Connect key, which is preferred over an Apple ID because it does
+      # not expire when the account password changes.
+      - name: Build DMGs
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run dist
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ steps.apple_key.outputs.path }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Auto-discovery would otherwise pick up whatever identity happens to
+          # be on the runner; with no secret set we mean *unsigned*, explicitly.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_SIGNING }}
+        run: |
+          if [ "$HAS_SIGNING" = "true" ]; then
+            npm run dist:signed
+          else
+            echo "No signing secrets configured — building unsigned."
+            npm run dist
+          fi
+
+      # electron-builder reported success once while signed with an unrelated
+      # local identity (docs/signing.md) — `codesign`/`spctl` both accept that
+      # happily, so "signed" is exactly the answer that was true then and
+      # wrong. This asserts what the identity must EQUAL and fails the release
+      # rather than publish a DMG signed as the wrong entity with a green log.
+      #
+      # The identity string itself (which entity users see in Gatekeeper) is
+      # not this workflow's decision, so it is not written here: SIGNING_IDENTITY
+      # is a secret, and choosing its value is a configuration act rather than
+      # a code change. HAS_SIGNING true with no SIGNING_IDENTITY set fails
+      # rather than skips — an unnamed target and no check are the same silent
+      # gap this step exists to close.
+      - name: Verify the signing identity, not just that something is signed
+        if: env.HAS_SIGNING == 'true'
+        env:
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "::error::HAS_SIGNING is true but the SIGNING_IDENTITY secret is not set — nothing to assert the build's identity against. Add it (see docs/signing.md) before this release can ship signed."
+            exit 1
+          fi
+
+          # electron-builder stages one .app per built arch under dist/ before
+          # packing each into its DMG. Walked rather than named: the exact
+          # per-arch folder is electron-builder's own convention, not this
+          # repo's, and the check must survive it changing.
+          apps_checked=0
+          while IFS= read -r -d '' app; do
+            apps_checked=$((apps_checked + 1))
+            authority=$(codesign -dv --verbose=4 "$app" 2>&1)
+            echo "$authority"
+            if ! grep -qF "$SIGNING_IDENTITY" <<<"$authority"; then
+              echo "::error::$app is not signed as '$SIGNING_IDENTITY'"
+              exit 1
+            fi
+            verdict=$(spctl -a -vvv -t install "$app" 2>&1)
+            echo "$verdict"
+            if ! grep -q "source=Notarized Developer ID" <<<"$verdict"; then
+              echo "::error::$app did not pass Gatekeeper as a notarized Developer ID build"
+              exit 1
+            fi
+          done < <(find dist -maxdepth 3 -name '*.app' -print0)
+          if [ "$apps_checked" -eq 0 ]; then
+            echo "::error::HAS_SIGNING is true but no .app bundle was found under dist/ to verify"
+            exit 1
+          fi
+
+          dmgs_checked=0
+          while IFS= read -r -d '' dmg; do
+            dmgs_checked=$((dmgs_checked + 1))
+            # A signature that verifies but is not stapled still shows the
+            # damaged-app dialog on a machine that has never been online.
+            xcrun stapler validate "$dmg"
+          done < <(find dist -maxdepth 1 -name '*.dmg' -print0)
+          if [ "$dmgs_checked" -eq 0 ]; then
+            echo "::error::HAS_SIGNING is true but no .dmg was found under dist/ to validate"
+            exit 1
+          fi
+
+          echo "Verified $apps_checked app bundle(s) and $dmgs_checked DMG(s) as $SIGNING_IDENTITY, notarized, and stapled."
 
       # The app's update check reads this release's tag, so the tag is the
       # version users are offered. Blockmaps are useless to the check-only
