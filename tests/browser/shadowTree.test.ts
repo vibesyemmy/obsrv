@@ -278,4 +278,66 @@ describe('the audit, over a component', () => {
     expect(texts).toEqual(expect.arrayContaining(['light', 'open one', 'open two']))
     expect(texts).not.toContain('closed')
   })
+
+  // `chore-shadow-collection-edges`: a host written to be its own target
+  // (`role="button"`, focusable) that ALSO holds a native control in its open
+  // root matches `TARGETS` twice — the host, and the button inside it — which
+  // reads as two overlapping targets at one box rather than one.
+  it('a host that is itself a target, wrapping a native control in its own root, counts once', () => {
+    const page = mount('')
+    const { el } = component(page, '<button style="width:40px;height:40px">Buy</button>')
+    el.setAttribute('role', 'button')
+    el.setAttribute('tabindex', '0')
+    Object.assign(el.style, { display: 'block', width: '40px', height: '40px' })
+    const targets = auditPage(2000, 3000).targets
+    // Not zero (the control is real and must still be found) and not two
+    // (the host and its own control are the same control on screen).
+    expect(targets).toHaveLength(1)
+    expect(targets[0]!.element).toBe('div')
+  })
+
+  // A page whose component nests its own host inside another (a card that is
+  // itself a button, inside a list item that is also one) must not let the
+  // OUTER host's claim miss an INNER host two levels down — each is checked
+  // against every level of its own shadow-host chain, not just the nearest.
+  it('nested hosts, each a target on its own, still count once per host', () => {
+    const page = mount('')
+    const outer = document.createElement('div')
+    outer.setAttribute('role', 'button')
+    outer.setAttribute('tabindex', '0')
+    Object.assign(outer.style, { display: 'block', width: '80px', height: '80px' })
+    const outerRoot = outer.attachShadow({ mode: 'open' })
+    const inner = document.createElement('div')
+    inner.setAttribute('role', 'button')
+    inner.setAttribute('tabindex', '0')
+    Object.assign(inner.style, { display: 'block', width: '40px', height: '40px' })
+    const innerRoot = inner.attachShadow({ mode: 'open' })
+    innerRoot.innerHTML = '<button style="width:40px;height:40px">deepest</button>'
+    outerRoot.append(inner)
+    page.append(outer)
+    const texts = auditPage(2000, 3000).targets.map(t => t.text)
+    // One target for the whole nested stack, not three.
+    expect(auditPage(2000, 3000).targets).toHaveLength(1)
+    expect(texts).not.toContain('deepest')
+  })
+
+  // A `<slot>` with fallback content (rendered only when nothing is assigned)
+  // is `display: contents` by default, so its own `getBoundingClientRect()`
+  // is always zero — the glyphs are on screen with no box to measure them by.
+  it('an unassigned slot’s fallback text is measured; the same slot with content assigned is not measured by its fallback', () => {
+    const page = mount('')
+    const { el } = component(page, '<div style="font-size:16px"><slot>Buy now</slot></div>')
+    const empty = auditPage(2000, 3000).text.map(t => t.text)
+    expect(empty).toContain('Buy now')
+
+    // Assign real content: the fallback no longer renders, and the assigned
+    // child (light DOM, not inside the root) is what the walk already finds.
+    const child = document.createElement('span')
+    child.textContent = 'Real item'
+    child.style.fontSize = '16px'
+    el.append(child)
+    const filled = auditPage(2000, 3000).text.map(t => t.text)
+    expect(filled).not.toContain('Buy now')
+    expect(filled).toContain('Real item')
+  })
 })

@@ -165,10 +165,33 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     const named = el.querySelector('[aria-label],[title],img[alt]')
     return named ? named.getAttribute('aria-label') || named.getAttribute('title') || named.getAttribute('alt') || '' : ''
   }
+  // A component written `<x-button role="button"><button>...` matches TARGETS
+  // twice: the host, and the native control inside its own open root. Before
+  // #293 only the host was reachable at all; #293 reached the shadow tree and
+  // made both matches visible, which reads as two overlapping targets at one
+  // box rather than one. `shadowElements` visits a host before it descends
+  // into that host's own shadow root (its own comment says so), so a set of
+  // already-added elements is enough to recognise "this is inside a host that
+  // already counted" by walking up through `getRootNode()` — a host can be
+  // shadow content of an outer host too, so this walks every level, not just
+  // one.
+  const shadowHostChain = (el: Element): Element[] => {
+    const hosts: Element[] = []
+    let node: Node = el
+    for (;;) {
+      const root = node.getRootNode()
+      if (!(root instanceof ShadowRoot)) break
+      hosts.push(root.host)
+      node = root.host
+    }
+    return hosts
+  }
+  const matchedTargets = new Set<Element>()
   // Open shadow roots included (`shadowElements`): a control inside a
   // component is a control on the page.
   for (const el of shadowElements(document.documentElement)) {
     if (!el.matches(TARGETS)) continue
+    if (shadowHostChain(el).some(h => matchedTargets.has(h))) continue
     const cs = getComputedStyle(el)
     // A link inside running text is as tall as its line and flagged on every
     // page there is; WCAG 2.5.8 exempts inline links for that reason, and so
@@ -195,6 +218,22 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
       text: snippet(el.textContent || value || iconName(el) || ''),
       rect: pageRect(r, el),
     })
+    matchedTargets.add(el)
+  }
+
+  // `display: contents` generates no box of its own — its children lay out as
+  // though directly under its parent — so `getBoundingClientRect()` on an
+  // element with it is always a zero rect regardless of what is actually
+  // drawn. A `<slot>` is `display: contents` by default, and its own text
+  // node (its fallback content, rendered only when nothing is assigned) is
+  // exactly this shape: real glyphs, on screen, at a real position, with a
+  // zero-box container. Measured over a `Range` on the element's contents
+  // instead, which reports where the rendered content actually is.
+  const ownRect = (cs: CSSStyleDeclaration, el: Element): DOMRect => {
+    if (cs.display !== 'contents') return el.getBoundingClientRect()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    return range.getBoundingClientRect()
   }
 
   const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TITLE', 'HEAD', 'META', 'LINK'])
@@ -206,7 +245,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
     for (const child of Array.from(el.childNodes)) if (child.nodeType === 3) own += child.textContent ?? ''
     if (own.trim().length === 0) continue
     const cs = getComputedStyle(el)
-    const r = el.getBoundingClientRect()
+    const r = ownRect(cs, el)
     if (!shown(cs, r, el)) continue
     const fontSizePx = parseFloat(cs.fontSize)
     if (!(fontSizePx > 0)) continue
