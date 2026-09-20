@@ -117,12 +117,22 @@ function main(argv) {
   // environment and `app.getPath()` does not, which is the trap the guard
   // exists for. A listing that read the moved home would describe a directory
   // the app never wrote to.
-  const home = guard.realHomeDir()
+  //
+  // `OBSRV_TEST_HOME`/`OBSRV_TEST_SANDBOX_ROOT`, gated behind `OBSRV_TEST=1`
+  // like every other test-only knob in this codebase: an end-to-end test
+  // needs a real, disposable home to remove against, and a home substituted
+  // by itself would not be enough — `checkRemoval`'s own `sandboxRoot` is
+  // what makes a caller's mistake refuse loudly instead of reaching the real
+  // one, and this is that option's only caller. Unset (the normal case),
+  // both are `undefined` and behaviour is exactly what it was.
+  const underTest = process.env.OBSRV_TEST === '1'
+  const home = (underTest && process.env.OBSRV_TEST_HOME) || guard.realHomeDir()
+  const sandboxRoot = underTest ? process.env.OBSRV_TEST_SANDBOX_ROOT : undefined
   const built = plan.uninstallPlan({ home, platform: process.platform, includeSkill: argv.includes('--include-skill') })
   const answer = report.uninstallReport({
     plan: built,
     look: path => (existsSync(path) ? { exists: true, ...sizeOf(path) } : { exists: false }),
-    check: path => guard.checkRemoval(path),
+    check: path => guard.checkRemoval(path, { sandboxRoot }),
   })
 
   if (argv.includes('--json') && !argv.includes('--remove')) {
@@ -142,7 +152,7 @@ function main(argv) {
   // not follow links is the caller's.
   const done = removal.removeListed({
     report: answer,
-    check: path => guard.checkRemoval(path),
+    check: path => guard.checkRemoval(path, { sandboxRoot }),
     remove: path => rmSync(path, { recursive: true }),
   })
 
