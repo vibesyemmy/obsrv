@@ -1,6 +1,8 @@
 ---
 title: "A dev app exited between 18:42 and 19:13 with no explicit stop"
-column: backlog
+column: doing
+waiting: ""
+owner: "Kenya"
 kind: bug
 order: 30
 ---
@@ -30,3 +32,21 @@ WHAT CANNOT BE SAID: whether it crashed, was killed from outside the lane, or ex
 COST TO REPRODUCE: a relaunch and an idle half hour, spent watching a process rather than driving anything. Kenya will take it if Opeyemi wants it chased; otherwise it sits here with the timeline intact.
 
 Bears on documentation: nobody should write "the dev app stays up" in `docs/` until this is understood. It is the kind of sentence that becomes a support answer.
+
+## CLAIMED BY KENYA 2026-09-20
+
+Reassigned from Rook (away), per Opeyemi's word (room #775), routed by Wren (#778). `bug-log-attribution`
+merged at `6f19f9b`, which was this card's own stated blocker — checked what it actually shipped rather
+than assuming "unblocked" means "answerable now":
+
+**What the stamp does NOT do for this specific sighting.** It tags lines written *after* `6f19f9b`
+(2026-09-15) with `app#pid` / `lane:<mark>#pid` / `dev:<mark>#pid`. The original death (18:42–19:13 on
+09-14) predates it by a day — there is no retroactive attribution for the log lines that already
+existed then. So "unblocked" means the NEXT recurrence is attributable, not that the 09-14 log can now
+be re-read for an answer it never carried.
+
+**So the actual next step is reproduction, not archaeology.** Relaunch under the dev lane (stamped now),
+leave it idle through an occlusion transition or two (the one held-loosely lead on the card), and watch
+whether it happens again — this time with a log line that can say which process wrote what, if anything,
+around the moment it dies. Cost to reproduce is what the card already said: a relaunch and an idle
+stretch, watching rather than driving.
