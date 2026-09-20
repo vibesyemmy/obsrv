@@ -356,6 +356,23 @@ jobs:
       - name: Compare plugin-v<version> against scripts/build-plugin-branch.js
         run: node scripts/build-plugin-branch.js --check
 
+      # README.md's own ordering rule, documented since 0.4.0's broken release
+      # and skipped anyway on 0.62.0: "push plugin-v<version> only once npm has
+      # that version — a plugin fetched before the publish starts an MCP that
+      # npm cannot install." Prose did not hold twice in one release; this
+      # makes the tag build itself unable to go green ahead of the publish,
+      # same version field `build-plugin-branch.js --check` above already
+      # trusts, so there is one source of truth for what "this version" means.
+      - name: npm already serves this version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          published=$(npm view getobsrv version 2>/dev/null || true)
+          if [ "$published" != "$version" ]; then
+            echo "::error::npm serves '${published:-nothing}', this tag is v$version. README.md: push plugin-v<version> only once npm has that version — a plugin fetched before the publish starts an MCP that npm cannot install. Run npm publish first, then push the plugin tag."
+            exit 1
+          fi
+          echo "npm serves $version, matching this tag"
+
   # Tags only, and the reason the suite above can sit this one out: the DMGs
   # ship from a tree the suite passed, and this says so out loud rather than
   # assuming it. Two facts, both cheap — the tagged commit is on `main`, and
