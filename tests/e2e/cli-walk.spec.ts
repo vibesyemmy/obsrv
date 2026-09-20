@@ -143,6 +143,25 @@ test('a page that hides its overflow with nothing to scroll says so, instead of 
   expect(m.warnings.join(' ')).toMatch(/hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, so the walk had nothing to scroll/)
 })
 
+test('a page whose only scroller is behind a closed shadow root names it as the walk’s best guess', async () => {
+  // walkCoverage.ts:200. No iframe (ruling out the wall/frame branches this
+  // file's neighbouring tests cover), and the walk enters open shadow roots
+  // by default now, so this fixture's one closed root reads as "entered
+  // whatever roots existed, found nothing" rather than as a count of hosts
+  // it could not get into.
+  const r = await runCli(['audit', fixture('scroll-in-closed-root.html'), '--preset', 'laptop-768'])
+  expect(r.code, r.stderr).toBe(0)
+  const m = JSON.parse(r.stdout)
+  expect(m.walked).toMatchObject({ screenfuls: 0, atEnd: true })
+  // The whole sentence, not the shared opening: c5's own lesson is that only
+  // the opening being asserted is how a wrong branch reads as pinned.
+  expect(m.warnings.join(' ')).toContain(
+    "this page hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, " +
+      'so the walk had nothing to scroll: no iframe covers the viewport, so what scrolls is a container that scrolls by ' +
+      'transform (a virtualised list or editor) or one inside a closed shadow root, and the figures are of the page as it first shows',
+  )
+})
+
 test('a page locked behind a dialog says the walk scrolled the dialog, not the page', async () => {
   // The consent wall, the paywall, the onboarding modal: the body is fixed in
   // place, so the only scroller left in the light DOM is the dialog's own
