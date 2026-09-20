@@ -423,9 +423,20 @@ has is a run of the note log that saw it, which is what this column counts.
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358 and
-#360: ONE unfired producer, eight written or reworded after the run, two ambiguous groups, and nine
-named reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358, #360
+and #389: ZERO unfired producers, eight written or reworded after the run, two ambiguous groups, and
+nine named reasons.**
+
+**The unfired column is closed and the card is not.** `#389` pinned the last one — `capture.ts`'s
+`uncovered` sentence, which was produced on every uncovered capture and asserted by its opening and
+one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
+produced every pass, with the words that matter checked by nobody.
+
+**What remains is the eight written or reworded after the run**, and they are unobserved in this
+column's own sense rather than untested: each has a test asserting it, and none has a run of the note
+log that saw it — which is what this column counts. Closing them means a note-log run that reaches
+them, or a named reason each, per step 3 of the card's plan. The two ambiguous groups are the other
+open thing. Neither is an unfired producer, and neither is nothing.
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
 and `#360` closed, **one had never been produced** and five ran on every green build while nothing
