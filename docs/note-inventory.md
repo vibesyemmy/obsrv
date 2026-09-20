@@ -435,7 +435,7 @@ has is a run of the note log that saw it, which is what this column counts.
 | `src/shared/walkCoverage.ts:165` **(observed)** | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… — produced on CI by `cli-walk.spec:143` and `mcp-live.spec:709` |
 | `src/cli/walk.ts:129` **(fired, `#358`)** | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. — written by `#338`, which split the return note in two; **the only row here with an observation**, kept because its provenance still belongs to this list |
 | `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
-| `src/cli/main.ts:542` **(observed)** | cli | this page hides the document's overflow and scrolls no… — produced on CI by `cli-snap-tiled.spec:176`thing the capture can reach — no scrollable c… |
+| `src/cli/main.ts:542` **(observed)** | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… — produced on CI by `cli-snap-tiled.spec:176` |
 
 ## What is left
 
@@ -448,10 +448,18 @@ nine named reasons.**
 one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
 produced every pass, with the words that matter checked by nobody.
 
-**What remains is the eight written or reworded after the run**, and they are unobserved in this
-column's own sense rather than untested: each has a test asserting it, and none has a run of the note
-log that saw it — which is what this column counts. Closing them means a note-log run that reaches
-them, or a named reason each, per step 3 of the card's plan. The two ambiguous groups are the other
+**What remains is five.** Of the eight written or reworded after the run, one (`walk.ts:129`) was
+already fired, and two — `walkCoverage.ts:165` and `cli/main.ts:542` — are **observed** under the
+one-bar standard above: a CI e2e run produces each sentence and a spec asserts it verbatim, cited on
+their rows. That leaves `walkCoverage.ts:200`, `cli/main.ts:278`, `measureBudget.ts:154`,
+`measureBudget.ts:155` and `uninstallPlan.ts:100`, which have **zero** assertions anywhere under
+`tests/e2e` — not a weaker kind of evidence, none. Closing each means a run that reaches its branch,
+or a named reason, per step 3 of the card's plan.
+
+The count moved because the standard was settled, not because the code changed. It is worth saying
+which way the correction cut: when this was raised, two rows were guessed to be already-produced
+(`:165` and `:200`) on the grounds that CI drives their fixtures. Only `:165` was. A spec can load a
+fixture and never take the branch that writes the sentence, and `:200` is asserted nowhere. The two ambiguous groups are the other
 open thing. Neither is an unfired producer, and neither is nothing.
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
