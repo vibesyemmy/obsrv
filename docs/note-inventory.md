@@ -405,7 +405,7 @@ description, which both overstated it, were corrected (`#259`, `#260`).
   `timeout`, and both producers fired. The unfired `capture.ts:347` is `uncovered`, which passes
   through, so the router cannot explain an unfired row.
 
-**Written or reworded after the run (7).** These need their own observation, not a place on the list
+**Written or reworded after the run (8).** These need their own observation, not a place on the list
 above. The last three are `#293`'s: the walk note's opening and its ruled-out wording for a walk that
 entered the roots, and the capture's reworded sentence. Each has a test asserting it
 (`cli-walk.spec`, `mcp-live.spec`, `cli-snap-tiled.spec`, on `app-shell-unreachable.html`); what none
@@ -418,14 +418,26 @@ has is a run of the note log that saw it, which is what this column counts.
 | `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
 | `src/shared/walkCoverage.ts:165` | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… |
+| `src/cli/walk.ts:129` **(fired, `#358`)** | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. — written by `#338`, which split the return note in two; **the only row here with an observation**, kept because its provenance still belongs to this list |
 | `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
 | `src/cli/main.ts:542` | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… |
 
 ## What is left
 
-**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358 and
-#360: ONE unfired producer, eight written or reworded after the run, two ambiguous groups, and nine
-named reasons.**
+**After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358, #360
+and #389: ZERO unfired producers, eight written or reworded after the run, two ambiguous groups, and
+nine named reasons.**
+
+**The unfired column is closed and the card is not.** `#389` pinned the last one — `capture.ts`'s
+`uncovered` sentence, which was produced on every uncovered capture and asserted by its opening and
+one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
+produced every pass, with the words that matter checked by nobody.
+
+**What remains is the eight written or reworded after the run**, and they are unobserved in this
+column's own sense rather than untested: each has a test asserting it, and none has a run of the note
+log that saw it — which is what this column counts. Closing them means a note-log run that reaches
+them, or a named reason each, per step 3 of the card's plan. The two ambiguous groups are the other
+open thing. Neither is an unfired producer, and neither is nothing.
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
 and `#360` closed, **one had never been produced** and five ran on every green build while nothing
