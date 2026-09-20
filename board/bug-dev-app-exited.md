@@ -50,3 +50,54 @@ leave it idle through an occlusion transition or two (the one held-loosely lead 
 whether it happens again — this time with a log line that can say which process wrote what, if anything,
 around the moment it dies. Cost to reproduce is what the card already said: a relaunch and an idle
 stretch, watching rather than driving.
+
+## A SECOND SIGHTING, THIS ONE ATTRIBUTABLE, 2026-09-20 by Kenya
+
+Reproduction fired on the first attempt: relaunched under the dev lane at 05:47:52Z (pid 73184), left it
+idle, and it died at 07:19:27Z — with the stamp `bug-log-attribution` shipped, so this is the first
+sighting the log itself can speak about.
+
+**MEASURED: this is not a crash.** `#pid`-attributed lines around the death:
+
+    07:19:23.081Z window shown; target rasterisation resumed
+    07:19:27.345Z closing: main window; sessions going down
+    07:19:27.357Z closed: sessions down
+    07:19:27.374Z quitting
+    07:19:27.374Z exiting
+
+That is a complete, ordinary shutdown — checked against a dozen other stops in the same log going back
+to 09-17, and every one of them has exactly this shape (`closing → closed → quitting → exiting`). A
+crash truncates; this didn't. `~/Library/Logs/DiagnosticReports/` has nothing from this pid or window —
+the three `.ips` files present are all dated 09-17, unrelated. **So whatever killed this instance asked
+it to quit, and it complied.** The 09-14 sighting cannot inherit this answer (no attribution existed
+then), but it changes what is worth suspecting there too: an ordinary, cooperative stop looks nothing
+like what a crash would leave, and this shape is now the one to check for first on any future sighting.
+
+**Not established: which caller.** `stopApp()` — the only function that produces this exact SIGTERM-then-
+grace sequence — has exactly two call sites in the source: `scripts/lane.js`'s own CLI relaunch (someone
+running `npm run lane` again), and `src/mcp/control.ts`'s `relaunchStaleDevApp()`, fired from inside a
+live `obsrv-dev` MCP tool call when the running app is older than the checkout serving that call.
+Checked both against the file timestamps, after the fact:
+- the lane's pointer and build stamps (`node scripts/lane.js --status`) are unchanged since the 05:47:52
+  launch — rules out a fresh `npm run lane` against this same worktree;
+- the main checkout's own build (`out/main/index.js`, 2026-09-19 14:53 WAT) **predates** this app's
+  start — so a live call served from the main checkout would not have judged it stale by that
+  comparison either.
+
+Five other sessions' `dev-mcp` proxy children were running at the time of death, all still rooted at the
+main checkout rather than this worktree (`ps aux` at the moment of investigation) — present, and each
+one *capable* of triggering the relaunch-on-move path the moment any of them made a live call, but
+nothing here proves one did, and the mtime check above argues against the most obvious version of that
+story. The proxy keeps no log of which call triggered what. **This is the honest state: a real,
+attributable, non-crash death, with the mechanism narrowed to two candidates and neither confirmed.**
+
+**Also checked, and worth recording as ordinary rather than a clue:** at 07:15:33.930Z the window went
+`hidden` — occluded by an unrelated, deliberately-run reproduction (a different Electron instance,
+launched for a separate desk-focus check, briefly became frontmost). It resumed (`shown`) at 07:19:23,
+four seconds before the quit. Nothing here says the occlusion caused the stop; it is offered because the
+card's own held-loosely lead was occlusion, and this is what an occlusion transition actually looked like
+this time — brief, attributed, and not obviously connected to what followed it.
+
+**Asked Opeyemi directly** whether he saw an unexpected Obsrv window and closed it around 08:19:23 WAT
+(the four-second window between resuming and quitting) — the simplest explanation available, and one no
+log can confirm or rule out. Answer pending; recorded here either way rather than left to memory.
