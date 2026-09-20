@@ -454,6 +454,23 @@ sentence and a spec asserts it, cited on their rows: `walkCoverage.ts:165`, `cli
 both branches of `historyMoveNote` (`measureBudget.ts:154` and `:155`). That leaves
 `walkCoverage.ts:200`, `cli/main.ts:278` and `uninstallPlan.ts:100`.
 
+**Two of those three are named reasons rather than test work, and the reasons are about our
+instruments, not about the sentences.**
+
+- **`cli/main.ts:278`** needs a *double* refusal — the throttle apply refuses and the restoring apply
+  refuses too. The only refusal we can force is the harness lever at `targetSource.ts:785`, gated
+  `if (!off && forced)`, so it refuses a call that *applies* conditions and never one that *lifts*
+  them. After a refused apply, `throttleForCommand` restores `had`, which is `NO_THROTTLE` (a target
+  starts there, `targetSource.ts:241`, and each CLI command builds its own at `cli/main.ts:351`,
+  `:989`, `:1082`, `:1201`). The restore is therefore always a lift, and lifts cannot be forced to
+  refuse. Measured on real Electron: a throttled `audit` under the lever prints one refusal, and
+  `report` prints three independent single refusals, never the combined form. **This says our lever
+  cannot reach the branch, not that the branch is dead** — a genuine Chromium refusal on a lift, such
+  as `detach()` throwing, still produces it in production.
+- **`uninstallPlan.ts:100`** is reached only when `platform !== 'darwin'`, and every runner that
+  executes the app or the CLI is `macos-14`. See `board/c5.md`'s decision of 2026-09-20 for what
+  would reopen it.
+
 **How the last two were found, because the method matters more than the count.** They are asserted in
 `mcp-live.spec.ts:802` and `:824`, which do not contain the sentence at all — they **call
 `historyMoveNote` to build the expectation** and assert the live MCP reply contains the result. That
