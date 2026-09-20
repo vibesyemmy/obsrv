@@ -809,12 +809,20 @@ the same treatment: the URL settling and the note being computed are two
 different signals, and nothing here waits for the second one once the first
 has settled.
 
-Reasoned, not run (1 sighting; board/CI only). **The sized fix, if it
-recurs:** poll `movedNote()` the way the URL is already polled —
-`expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` in place of the
-single `await` at `:99` — rather than a new mechanism. Left in the register
-rather than a card: one sighting in ten red runs, and the fix is small enough
-to sit here until someone has room for it.
+**Recurred 2026-09-20 on run `35524174239`** — `#407`, the PR that added the
+`toolbar.spec.ts:112` entry below, which is a docs-only change and so cannot be
+the cause. Same failure, same `Received: undefined`, green on retry again.
+
+**The sized fix is applied**, exactly as this entry specified it after the first
+sighting: `expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` before the
+read at `:99`, rather than a new mechanism. Two sightings, both on branches that
+touch nothing this test reads, and a fix that was written down before it was
+needed — which is the only reason it cost minutes rather than an investigation.
+
+**This entry is the argument for the register.** It was filed as *"reasoned, not
+run"* with a fix nobody had time for, and it sat here until the recurrence made
+it worth doing. The alternative — investigating from scratch on the second
+sighting — is what this file exists to avoid.
 
 ## `sync-trace.spec.ts:77`: the loop fixture's 30 s budget, not a crash
 
@@ -946,3 +954,9 @@ a finding.
 
 **Do not run this spec locally to investigate it** until `node scripts/desk-safe.js toolbar` has
 answered — the standing rule is that an activation on the record is what decides, not the spec's name.
+
+**A second data point, from this PR's own run.** `#407` (this entry) flaked too — but a *different*
+test, `arrivals.spec.ts:89`, already in the register above. Two consecutive docs-only runs, two
+unrelated tests, neither branch touching what it broke. That is what a loaded runner looks like, and
+it is the same reading the `capture.ts` entry above reached from the same evidence. It is two points,
+not a rate, and it says nothing yet about whether `toolbar:112` specifically will return.

@@ -96,6 +96,15 @@ test('a page that really does redirect after loading still says so', async () =>
   await call('navigate', { url: REDIRECT })
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
+  // The URL settling and the note being computed are two different signals,
+  // and this used to wait only for the first: one unpolled `movedNote()` right
+  // after the poll above returned. Seen undefined twice on CI (`35242092672`,
+  // `35524174239`), green on retry both times — the file's own header records
+  // the same shape measured at 4 ms late for a sibling consumer. So poll the
+  // signal this test actually reads, rather than polling a different one and
+  // hoping. `docs/e2e-flakes.md` sized this fix after the first sighting; this
+  // is that fix, applied on the second.
+  await expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()
   const note = await movedNote()
   expect(note, 'the page asked for redirected itself to another page; that is the note doing its job').toBeDefined()
   expect(note).toContain('hairline.html')
