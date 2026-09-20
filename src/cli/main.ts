@@ -415,8 +415,19 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
       // nothing else. Find the element the page really scrolls, using the same
       // walk the live scroll uses (shared/scrollHost.ts), and leave it on the
       // page for the band loop below to drive.
-      const shell = (await target.webContents.executeJavaScript(`${SCROLL_HOST_SCRIPT}
-        ;(() => {
+      // `SCROLL_HOST_SCRIPT`'s own declarations live inside this outer IIFE,
+      // not at the page's true top level — LINT_SCRIPT/AUDIT_SCRIPT/
+      // WALK_STEP_SCRIPT already do this (shared/scrollHost.ts,
+      // shared/lint.ts, shared/audit.ts); this was the one call site that
+      // didn't. A page whose own script declares one of those names with
+      // `const`/`let` (`shadowElements` is a plausible one) binds it in the
+      // realm's persistent global lexical environment, and a later
+      // `executeJavaScript` redeclaring the same name at ITS top level throws
+      // `SyntaxError: Identifier '<name>' has already been declared` — this
+      // capture used to be exactly that second, colliding declaration.
+      const shell = (await target.webContents.executeJavaScript(`(() => {
+        ${SCROLL_HOST_SCRIPT}
+        return (() => {
           const root = document.scrollingElement
           const rootScrolls = !!root && root.scrollHeight > root.clientHeight + 1
           const el = rootScrolls ? null : findScroller()
@@ -437,7 +448,8 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
             height: el.clientHeight,
             scrollHeight: Math.ceil(el.scrollHeight),
           }
-        })()`)) as { rootScrolls: boolean; found: boolean; hidden: boolean; top: number; height: number; scrollHeight: number }
+        })()
+      })()`)) as { rootScrolls: boolean; found: boolean; hidden: boolean; top: number; height: number; scrollHeight: number }
       // Banding is what a full-page capture does now: a single tall surface
       // either lays a viewport-sized page out differently or clamps at the
       // device-pixel cap, and neither is the page. `--single-surface` asks for
