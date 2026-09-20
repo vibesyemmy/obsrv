@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Nothing the walk can enter</title>
+<!--
+  walkCoverage.ts:200 (c5's remainder). The walk enters open shadow roots now
+  (`feat-measure-open-shadow-roots`), so a real page's reply omits
+  `shadowHosts` entirely and `walkNothingNote` reads it as a walk that
+  entered whatever roots existed — none, here, since this one is closed. No
+  iframe (ruling out the wall/frame branches), no light-DOM scroller, and the
+  one thing that actually scrolls is behind `attachShadow({ mode: 'closed' })`,
+  which nothing outside can traverse: `element.shadowRoot` is null for a
+  closed root by spec, not just by this walk's own choice. Unlike
+  `half-in-shadow.html`'s open roots, there is no fixing this by walking
+  further in — a closed root is the one case the branch's own tail names as
+  a guess.
+-->
+<style>html, body { height: 100%; margin: 0; overflow: hidden; font: 16px system-ui; }</style>
+<div id="host"></div>
+<script>
+  const host = document.getElementById('host')
+  const root = host.attachShadow({ mode: 'closed' })
+  root.innerHTML =
+    '<style>.scroller{height:100vh;overflow-y:auto}</style>' +
+    '<div class="scroller"><div style="height:3000px;background:linear-gradient(#fff,#eee)">' +
+    'content the walk cannot reach</div></div>'
+</script>
