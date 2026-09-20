@@ -429,8 +429,8 @@ has is a run of the note log that saw it, which is what this column counts.
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
 | `src/cli/main.ts:278` | cli | <…>; and <…>, so `throttle` names the conditions put back, not ones known to be in force |
-| `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
-| `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
+| `src/shared/measureBudget.ts:154` **(observed)** | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… — produced on CI by `mcp-live.spec:824` |
+| `src/shared/measureBudget.ts:155` **(observed)** | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… — produced on CI by `mcp-live.spec:802` |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
 | `src/shared/walkCoverage.ts:165` **(observed)** | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… — produced on CI by `cli-walk.spec:143` and `mcp-live.spec:709` |
 | `src/cli/walk.ts:129` **(fired, `#358`)** | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. — written by `#338`, which split the return note in two; **the only row here with an observation**, kept because its provenance still belongs to this list |
@@ -448,18 +448,26 @@ nine named reasons.**
 one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
 produced every pass, with the words that matter checked by nobody.
 
-**What remains is five.** Of the eight written or reworded after the run, one (`walk.ts:129`) was
-already fired, and two — `walkCoverage.ts:165` and `cli/main.ts:542` — are **observed** under the
-one-bar standard above: a CI e2e run produces each sentence and a spec asserts it verbatim, cited on
-their rows. That leaves `walkCoverage.ts:200`, `cli/main.ts:278`, `measureBudget.ts:154`,
-`measureBudget.ts:155` and `uninstallPlan.ts:100`, which have **zero** assertions anywhere under
-`tests/e2e` — not a weaker kind of evidence, none. Closing each means a run that reaches its branch,
-or a named reason, per step 3 of the card's plan.
+**What remains is three.** Of the eight written or reworded after the run, one (`walk.ts:129`) was
+already fired, and four are **observed** under the one-bar standard above — a CI e2e run produces the
+sentence and a spec asserts it, cited on their rows: `walkCoverage.ts:165`, `cli/main.ts:542`, and
+both branches of `historyMoveNote` (`measureBudget.ts:154` and `:155`). That leaves
+`walkCoverage.ts:200`, `cli/main.ts:278` and `uninstallPlan.ts:100`.
 
-The count moved because the standard was settled, not because the code changed. It is worth saying
-which way the correction cut: when this was raised, two rows were guessed to be already-produced
-(`:165` and `:200`) on the grounds that CI drives their fixtures. Only `:165` was. A spec can load a
-fixture and never take the branch that writes the sentence, and `:200` is asserted nowhere. The two ambiguous groups are the other
+**How the last two were found, because the method matters more than the count.** They are asserted in
+`mcp-live.spec.ts:802` and `:824`, which do not contain the sentence at all — they **call
+`historyMoveNote` to build the expectation** and assert the live MCP reply contains the result. That
+is the better test (the spec's own comment: *"the sentence as the function writes it, so a rewording
+cannot blind this"*), and it is invisible to any search for the words. Searching this file's rows by
+sentence text will therefore under-report what is observed. **Search for imports of the producing
+module as well as for its text** — `tests/e2e` imports `src/shared/measureBudget`, which is the whole
+signal.
+
+The count has now moved twice, both times because a search was weaker than the thing it searched for.
+When this was raised, two rows were guessed already-produced (`:165` and `:200`) on the grounds that
+CI drives their fixtures; only `:165` was. Then two rows were reported outstanding on a text search
+that could not see a computed assertion; both were already observed. The standard did not move —
+`observed` has meant one thing throughout. What moved was how carefully anyone had looked. The two ambiguous groups are the other
 open thing. Neither is an unfired producer, and neither is nothing.
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
