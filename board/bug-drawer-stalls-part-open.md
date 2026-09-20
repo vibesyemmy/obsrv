@@ -263,3 +263,29 @@ instrument and the worse place.
 Six dispatched runs, no sighting, and **that number does not mean what a reader would assume it
 means.** The real count of runs where the bug could have been caught by an instrument is, so far,
 **zero** — and becomes non-zero when `#376` lands.
+
+## THE INSTRUMENT IS WHERE THE BUG IS NOW — Henry, 2026-09-20
+
+`#377` left this card saying the count of runs where an instrument could have caught the stall was
+**zero, and would become non-zero when `#376` landed.** It landed. Closing that sentence rather than
+leaving it as a promise.
+
+`drawerSettled` on `main` now records two samples a second apart on the failure path — width,
+`data-drawer`, `aria-pressed`, `visibilityState`, and whether rAF fires — so **every branch cut from
+`main` carries it**, which is the traffic both sightings came from (`35345417630` on `#350`,
+`35351133949` on `#354`). The coverage hole that made six dispatched probe runs look like evidence is
+closed.
+
+**And it has not fired.** Checked `main`'s recent CI runs directly — `35493270510` and `35492654287`,
+zero `DRAWER STALL` lines in either. No sighting has been missed while nobody was looking, which was
+the thing worth ruling out.
+
+So the state is now the clean version of what `#377` could only promise: **instrumented in the right
+place, and unreproduced since 2026-09-18.** The next sighting answers the card's question — starved
+and would finish, or stuck — in one logged line, and the `0px` case (`text-scale.spec.ts:194`) is
+separated from the `~18px` one by the same line, because the state fields say whether the click ever
+landed.
+
+Nothing here changes the five dead hypotheses or the one live one (`backgroundThrottling` unset on the
+chrome window, `window.ts:66`). It changes only what happens the next time the bug occurs, which is
+the only thing this card can affect while it is not occurring.
