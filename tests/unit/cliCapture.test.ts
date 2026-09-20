@@ -509,7 +509,8 @@ describe('a quiet stretch that straddles a size change', () => {
   it('says `resizing` rather than vouching for an earlier size at the budget', async () => {
     // The new size never comes. A budget that ran out is not a settled page,
     // and the sentence names both sizes so the reader knows which PNG this is.
-    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], { width: 144, height: 90 })
+    const asked = { width: 144, height: 90 }
+    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], asked)
     const warnings: string[] = []
     const got = await captureQuiescent(src, {
       settleMs: 120,
@@ -520,8 +521,10 @@ describe('a quiet stretch that straddles a size change', () => {
     })
     expect(got.settled).toBe(false)
     expect(got.unsettledReason).toBe('resizing')
-    expect([got.width, got.height]).toEqual([128, 102])
-    expect(warnings.join(' ')).toContain('this frame is 128x102, not the 144x90 it was asked for')
+    // Both sizes checked against the reply's own fields (not retyped as a
+    // second copy of the numbers above), so the sentence is asserted against
+    // what the capture actually returned rather than against the fixture.
+    expect(warnings.join(' ')).toContain(`this frame is ${got.width}x${got.height}, not the ${asked.width}x${asked.height} it was asked for`)
   })
 
   it('does not leave by the animating door with the old size either', async () => {
