@@ -912,3 +912,37 @@ branches that do, that is the finding this entry exists to make cheap.
 (`bug-e2e-takes-the-desk.md:236` — *"fronts alone too"*), and running the single test with `-g` was
 measured on 2026-09-20 to front the app on a developer's desk. `node scripts/desk-safe.js` answers this
 before the run.
+
+## `toolbar.spec.ts:112` — the settings toggle never arrived, 2026-09-20
+
+**First sighting**, on `#400`'s run `35507247365` (`649029f`, the `c5` docs PR). One `✘`, passed on
+retry, so the suite was green:
+
+```
+✘ 594 tests/e2e/toolbar.spec.ts:112:5 › every settings nav row starts its label at the same x (30.0s)
+✓ 595 …(retry #1) (264ms)
+
+    Test timeout of 30000ms exceeded.
+    TimeoutError: page.click: Timeout 30000ms exceeded.
+    Call log:
+      - waiting for locator('.toggle-settings')
+```
+
+**What the numbers say on their own.** Thirty seconds waiting for a toolbar button, then the same test
+passing in **264 ms** — a 113× gap between the two attempts of one test. That is not a slow assertion;
+it is an element that was not there at all and then was there immediately. The first line names the
+failure (`page.click` on `.toggle-settings`), so this is not a timeout wearing a teardown error.
+
+**Why the change cannot be the cause, stated so nobody re-derives it.** `#400` touched
+`docs/note-inventory.md` and `board/c5.md` and nothing else — no `src/`, no `tests/`, no build input.
+A docs-only diff cannot alter when a renderer paints. **This is recorded as a fact about the runner,
+not as a suspicion about a branch.**
+
+**What it does not settle.** One sighting is not a rate ([[one-run-is-a-candidate]] applies to flakes
+as much as to races), and "the renderer was slow to boot" is a story that fits the evidence rather
+than a measurement of it. A second sighting on an unrelated branch would make it runner noise; a
+second sighting clustered on branches that touch the toolbar or the window's show path would make it
+a finding.
+
+**Do not run this spec locally to investigate it** until `node scripts/desk-safe.js toolbar` has
+answered — the standing rule is that an activation on the record is what decides, not the spec's name.
