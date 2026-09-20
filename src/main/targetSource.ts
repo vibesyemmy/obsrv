@@ -635,15 +635,22 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * it reports the expected width, one more `invalidate()` guarantees a frame
    * reflecting the confirmed state gets produced under the epoch this bumps.
    */
+  /** Set by `confirmTextScaleLanded`; read by `unconfirmedLayoutEpoch()`. */
+  private unconfirmedEpoch: number | null = null
+
   private async confirmTextScaleLanded(scale: number, gen: number): Promise<void> {
     const expected = Math.round(this.viewport.width / scale)
     const deadline = Date.now() + TEXT_SCALE_CONFIRM_BUDGET_MS
+    let confirmed = false
     try {
       while (Date.now() < deadline) {
         if (gen !== this.textScaleGeneration || this.disposed || this.win.isDestroyed()) return
         const width = await this.ask('innerWidth')
         if (gen !== this.textScaleGeneration || this.disposed || this.win.isDestroyed()) return
-        if (width === expected) break
+        if (width === expected) {
+          confirmed = true
+          break
+        }
         await sleep(TEXT_SCALE_POLL_MS)
       }
     } catch {
@@ -653,6 +660,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // never bumping at all.
     }
     this.epoch++
+    // The bump happens either way; which KIND of bump it was is what a capture
+    // needs, and only this frame knows it. A page that navigated mid-poll lands
+    // in the catch above and is recorded unconfirmed too: the scale question is
+    // arguably moot there, and saying so costs a sentence while assuming it
+    // costs the guarantee.
+    this.unconfirmedEpoch = confirmed ? null : this.epoch
     if (!this.win.isDestroyed()) this.win.webContents.invalidate()
   }
 
@@ -698,6 +711,21 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    */
   layoutEpoch(): number {
     return this.epoch
+  }
+
+  /**
+   * The epoch `confirmTextScaleLanded` bumped **without** confirming, or `null`
+   * when the last bump was confirmed — `captureQuiescent`'s side of the rescue
+   * this class documents above (`bug-live-raster-text-scale-mid-capture`).
+   *
+   * A rescued bump looks exactly like a real one from the frames, so a capture
+   * settling under it may be showing the layout from before the scale change.
+   * Measured 0-7 ms to confirm across 17 live samples against a 1 s budget, so
+   * a rescue is narrow rather than routine — but a capture must not answer
+   * `settled: true` about one in silence.
+   */
+  unconfirmedLayoutEpoch(): number | null {
+    return this.unconfirmedEpoch
   }
 
   /** The page's cursor as CSS, as last reported (see `cursor` event). */

@@ -32,6 +32,21 @@ export interface FrameEmitter {
    * the layout without changing one number the capture can see.
    */
   layoutEpoch?(): number
+
+  /**
+   * The layout epoch that was bumped **without confirmation**, or `null` when
+   * the last bump was confirmed (`bug-live-raster-text-scale-mid-capture`).
+   *
+   * `TargetSource.confirmTextScaleLanded` waits up to a second for the page to
+   * show the new text scale and then bumps the epoch either way — a rescued
+   * answer beats a hang. A rescued bump is indistinguishable from a real one
+   * at the frame level, so a capture settling under it may be showing the
+   * layout from *before* the scale change. Measured 0-7 ms across 17 live
+   * samples against a 1 s budget, so this is narrow, not routine — but the
+   * capture must not report `settled: true` about it in silence, which is what
+   * the card's acceptance and `release-gate.md`'s escape hatch both require.
+   */
+  unconfirmedLayoutEpoch?(): number | null
 }
 
 /**
@@ -122,6 +137,12 @@ export interface CapturedFrame {
   settled: boolean
   /** Present when `settled` is false. */
   unsettledReason?: UnsettledReason
+  /**
+   * The frame settled under a layout epoch its source could not confirm, so it
+   * may show the layout from before the last text-scale change. `settled` stays
+   * true — the paints really did go quiet — and the caller is told anyway.
+   */
+  scaleUnconfirmed?: true
 }
 
 export interface CaptureOptions {
@@ -484,7 +505,26 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
         'uncovered',
       )
     }
-    return { width, height, bgra: buffer.slice(), settled, ...(settled ? {} : { unsettledReason }) }
+    // Disclosed on a SETTLED frame, which is the whole point: the paints did go
+    // quiet, so `settled` is honest, and the epoch they went quiet under was a
+    // rescued one, so the picture may predate the scale change. Reported only
+    // when the source opted into epochs at all, and only for the exact epoch
+    // this frame settled under — a later confirmed bump must not inherit it.
+    // Not routed through `onWarn`: its signature takes an `UnsettledReason`,
+    // because a warning there accompanies a capture that did NOT settle. This
+    // one did — the paints went quiet honestly — so the disclosure travels as a
+    // field and the reply layer turns it into a sentence. Inventing a reason to
+    // reuse that channel would make the capture say something false about
+    // itself to say something true about the scale.
+    const rescued = options.awaitExpectedSize === true && frameEpoch !== undefined && source.unconfirmedLayoutEpoch?.() === frameEpoch
+    return {
+      width,
+      height,
+      bgra: buffer.slice(),
+      settled,
+      ...(settled ? {} : { unsettledReason }),
+      ...(rescued ? { scaleUnconfirmed: true as const } : {}),
+    }
   } finally {
     source.off('frame', onFrame)
   }

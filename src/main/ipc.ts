@@ -4,7 +4,7 @@ import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcM
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
 import { ANIMATING_AFTER_MS, ANIMATING_MIN_PAINTS, captureQuiescent } from '../cli/capture'
-import { rasterWarnings } from './rasterWarnings'
+import { rasterWarnings, RASTER_SCALE_UNCONFIRMED_WARNING } from './rasterWarnings'
 import type { PickerRequest } from '../shared/pickerPopup'
 import { findThrottle, isThrottleId } from '../shared/throttle'
 import { inspectReadout, invalidSelectorNote, pointOffScreenNote } from '../shared/inspectReadout'
@@ -1790,6 +1790,9 @@ export function registerIpc(ctx: AppContext): () => void {
           height: frame.height,
         })
         const warnings: string[] = said.forVerdict(frame.settled, frame.unsettledReason)
+        // Beside the verdict rather than inside it: `forVerdict` answers for
+        // captures that did not settle, and this one did.
+        if (frame.scaleUnconfirmed === true) warnings.push(RASTER_SCALE_UNCONFIRMED_WARNING)
         if (s.onionSkin > 0) warnings.push("the raster is the target's own frame; the onion skin is not blended into it")
         return {
           data: image.toPNG().toString('base64'),
