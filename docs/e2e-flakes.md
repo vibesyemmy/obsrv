@@ -802,9 +802,14 @@ green on retry in 516 ms.
 The file's own header comment documents this exact shape for its sibling
 test, measured: "a commit can be delivered after [the load promise] resolves
 — measured at 4 ms late — so the mirror's own landing arrived unmarked." That
-fix (`sync.spec.ts:138`'s entry above has the history) was to mark the event
-rather than poll around it, for a *different* consumer of the same "navigated
-after it loaded" flag. This test's consumer — `movedNote()` — was never given
+fix was to mark the event rather than poll around it, for a *different*
+consumer of the same "navigated after it loaded" flag — the history is in
+**this register's own entry** headed `sync.spec.ts:138` (at the line given by
+`grep -n '^## .*sync.spec.ts:138'`), which is a heading here and not a line of
+`tests/e2e/sync.spec.ts`. Idris read it as the latter while reviewing `#407`
+and found a `setTimeout` counter, which is what is at that source line today;
+the ambiguity was the register's, not the reader's, so it is spelled out
+here. This test's consumer — `movedNote()` — was never given
 the same treatment: the URL settling and the note being computed are two
 different signals, and nothing here waits for the second one once the first
 has settled.
@@ -818,6 +823,11 @@ sighting: `expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` before the
 read at `:99`, rather than a new mechanism. Two sightings, both on branches that
 touch nothing this test reads, and a fix that was written down before it was
 needed — which is the only reason it cost minutes rather than an investigation.
+
+**The named follow-up, not done here.** Marking the event is the stronger fix
+and is what the sibling consumer got. Polling is the cheaper one and is what
+this is. If a third sighting arrives, or if anyone touches this signal for
+other reasons, mark it — do not reach for a longer timeout.
 
 **This entry is the argument for the register.** It was filed as *"reasoned, not
 run"* with a fix nobody had time for, and it sat here until the recurrence made
