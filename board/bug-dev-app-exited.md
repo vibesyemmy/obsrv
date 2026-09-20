@@ -1,7 +1,6 @@
 ---
 title: "A dev app exited between 18:42 and 19:13 with no explicit stop"
-column: doing
-waiting: ""
+column: done
 owner: "Kenya"
 kind: bug
 order: 30
@@ -101,3 +100,35 @@ this time — brief, attributed, and not obviously connected to what followed it
 **Asked Opeyemi directly** whether he saw an unexpected Obsrv window and closed it around 08:19:23 WAT
 (the four-second window between resuming and quitting) — the simplest explanation available, and one no
 log can confirm or rule out. Answer pending; recorded here either way rather than left to memory.
+
+## ANSWERED, 2026-09-20 by Opeyemi: he closed it
+
+**"Yes I closed a window that was open."** That settles the second sighting completely: he saw the
+window come back (the 07:19:23 `shown` transition) and closed it, which is what quit the app four
+seconds later.
+
+**A gap in the previous section worth naming plainly, not quietly correcting:** the "not established:
+which caller" analysis enumerated exactly two candidates for the shutdown sequence — `lane.js`'s CLI
+relaunch and `control.ts`'s `relaunchStaleDevApp()` — because `stopApp()` is *a* function that produces
+`closing → closed → quitting → exiting` from an external `SIGTERM`. **It is not the only path to that
+same sequence.** `closing`/`closed` are logged from the main window's own close handler and `quitting`
+from `before-quit` (see the "Dev quirks" note this repo already carries on exactly this) — so an
+ordinary window close, initiated by whoever is sitting at the machine, walks through the identical
+lifecycle hooks and produces an indistinguishable log. The candidate list was two mechanisms deep and
+missed the shallowest one: a person, at the keyboard, closing a window. Worth carrying forward:
+enumerating "what code path produces this signature" is not the same question as "what could produce
+this signature," and the second one should come first.
+
+**So, both sightings, closed out honestly:**
+- **09-14 (the original sighting):** predates log attribution; still cannot be explained from the log
+  alone. Given how ordinary today's answer turned out to be, the most likely account is the same one —
+  someone closed a window they saw — but that is a guess extended from one data point, not a finding,
+  and the card does not claim it as one.
+- **09-20 (the reproduced, attributable sighting):** fully explained. Opeyemi saw the relaunched dev
+  app's window and closed it. Not a crash, not a stale-app relaunch, not the lane reaping anything —
+  an ordinary quit, exactly as the log's own shape said before anyone knew why.
+
+**Bears on documentation, revisited:** the earlier note said nobody should write "the dev app stays up"
+until this was understood. It is now understood, and the answer is unremarkable: the dev app stays up
+exactly as long as nothing — automated or human — asks it to quit. No fix, because there was nothing
+broken.
