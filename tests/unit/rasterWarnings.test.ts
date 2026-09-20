@@ -48,8 +48,19 @@ describe('rasterWarnings: what a live raster says about a frame that did not set
     expect(reason, 'the fixture no longer reaches uncovered, so nothing below is tested').toBe('uncovered')
     expect(warnings).toHaveLength(1)
     // Its own frame: the 2x1 surface, half of it unpainted, at this budget.
-    expect(warnings[0]).toMatch(/^50\.0% of the 2x1 frame never painted within 150 ms/)
-    expect(warnings[0]).toContain('those pixels are transparent, not page content')
+    // **The whole sentence, not two fragments of it** (`c5`, the last unfired
+    // producer in the inventory). This used to assert an opening
+    // (`/^50\.0% of the 2x1 frame never painted within 150 ms/`) and one middle
+    // clause, which left the two halves that carry the actionable part
+    // unasserted: the **region**, which tells a reader WHERE the hole is, and
+    // the closing, which tells them what they are holding. `#361` moved this
+    // verdict to the bytes and took the share and the region with it, so those
+    // are exactly the numbers most likely to move and least likely to be
+    // noticed moving.
+    expect(warnings[0]).toBe(
+      '50.0% of the 2x1 frame never painted within 150 ms (uncovered region 1x1 at 1,0); ' +
+        'those pixels are transparent, not page content. Returning the frame as captured (settled: false)',
+    )
     expect(warnings).not.toContain(RASTER_PAINTING_WARNING)
   })
 
