@@ -565,6 +565,11 @@ describe('a quiet stretch that straddles a size change', () => {
     layoutEpoch(): number {
       return this.epoch
     }
+    /** Null unless a test sets it: the epoch that was bumped without confirmation. */
+    unconfirmed: number | null = null
+    unconfirmedLayoutEpoch(): number | null {
+      return this.unconfirmed
+    }
   }
   /** Same extent throughout; only the byte in the pixels says which layout it is. */
   const sameExtentSwitch = (): Layered => {
@@ -582,6 +587,85 @@ describe('a quiet stretch that straddles a size change', () => {
     // The size cannot tell these apart, so the pixels have to. 9 is the layout
     // that was asked for; 7 is the one the pane had left.
     expect(got.bgra[0]).toBe(9)
+  })
+
+  /**
+   * `bug-live-raster-text-scale-mid-capture`. `confirmTextScaleLanded` waits up
+   * to a second for the page to show the new text scale and then bumps the
+   * layout epoch either way, because a rescued answer beats a hang. A rescued
+   * bump is indistinguishable from a real one at the frame level, so a capture
+   * can settle under it on the layout from *before* the change — and used to
+   * say `settled: true` about that in silence, which is the one thing this
+   * card's acceptance and `release-gate.md`'s escape hatch both forbid.
+   *
+   * Measured 0-7 ms to confirm across 17 live samples against the 1 s budget,
+   * so this is narrow. Narrow is not the same as disclosed.
+   */
+  it('settles under a rescued epoch, says so, and still reports the quiet honestly', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => {
+      src.epoch++
+      // What a timed-out confirmation leaves behind: the epoch moved, and the
+      // source cannot vouch for it.
+      src.unconfirmed = src.epoch
+      src.emit('frame', marked(128, 102, 9))
+    }, 30)
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    // The paints really did go quiet, so `settled` stays honest.
+    expect(got.settled).toBe(true)
+    expect(got.scaleUnconfirmed).toBe(true)
+  })
+
+  /**
+   * @Idris built this from @Kenya's candidate and reproduced it against the
+   * first version of the fix, which read `unconfirmedLayoutEpoch()` at the
+   * RETURN: `settled=true, scaleUnconfirmed=undefined` on a frame that genuinely
+   * was rescued. The source's field holds only the most recent bump's status, so
+   * a later change answers a question about the present when the capture is
+   * asking about the frame in its hand.
+   *
+   * Here the second change clears the mark **without** emitting a frame this
+   * capture ever sees, which is the shape that breaks a read-at-return. The
+   * snapshot taken when the frame arrived is what makes it survive.
+   */
+  it('keeps the mark when the source moves on before the capture returns', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => {
+      src.epoch++
+      src.unconfirmed = src.epoch // a rescue: the epoch moved, unconfirmed
+      src.emit('frame', marked(128, 102, 7))
+    }, 0)
+    // Something else confirms a later scale while this capture is still in its
+    // settle window, and emits nothing this capture would see.
+    setTimeout(() => {
+      src.unconfirmed = null
+    }, 40)
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    // The frame in hand arrived under a rescued epoch. That does not stop being
+    // true because the source later had better news about a different one.
+    expect(got.scaleUnconfirmed).toBe(true)
+  })
+
+  it('does not cry unconfirmed when a later bump was confirmed', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)
+    setTimeout(() => {
+      src.epoch++
+      src.unconfirmed = src.epoch
+      src.emit('frame', marked(128, 102, 8))
+    }, 30)
+    // A confirmed bump after it: the frame settles under an epoch the source
+    // CAN vouch for, and the earlier rescue must not follow it forward.
+    setTimeout(() => {
+      src.epoch++
+      src.unconfirmed = null
+      src.emit('frame', marked(128, 102, 9))
+    }, 120)
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    expect(got.scaleUnconfirmed).toBeUndefined()
   })
 
   it('says so at the budget, and says the dimensions cannot show it', async () => {

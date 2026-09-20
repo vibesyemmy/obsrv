@@ -23,6 +23,17 @@ export interface RasterWarnings {
 }
 
 export const RASTER_ANIMATING_WARNING = 'the page keeps painting (animation or video); this is one frame of it'
+/**
+ * A capture that settled under a layout epoch its source could not confirm
+ * (`bug-live-raster-text-scale-mid-capture`). Not part of `forVerdict`, which
+ * answers only for captures that did NOT settle: this one did, and is told
+ * about anyway, because `settled: true` in silence is the thing that card and
+ * `release-gate.md`'s escape hatch both refuse.
+ */
+export const RASTER_SCALE_UNCONFIRMED_WARNING =
+  'the text scale was not confirmed as applied before this frame settled, so it may show the layout from before ' +
+  'the change; the paints did go quiet, so this is not a timeout — take it again if the scale matters'
+
 export const RASTER_PAINTING_WARNING =
   'the page was still painting when the capture budget ran out; the PNG may show a transitional frame'
 
