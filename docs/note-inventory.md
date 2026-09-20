@@ -432,10 +432,10 @@ has is a run of the note log that saw it, which is what this column counts.
 | `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
 | `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
-| `src/shared/walkCoverage.ts:165` | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… |
+| `src/shared/walkCoverage.ts:165` **(observed)** | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… — produced on CI by `cli-walk.spec:143` and `mcp-live.spec:709` |
 | `src/cli/walk.ts:129` **(fired, `#358`)** | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. — written by `#338`, which split the return note in two; **the only row here with an observation**, kept because its provenance still belongs to this list |
 | `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
-| `src/cli/main.ts:542` | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… |
+| `src/cli/main.ts:542` **(observed)** | cli | this page hides the document's overflow and scrolls no… — produced on CI by `cli-snap-tiled.spec:176`thing the capture can reach — no scrollable c… |
 
 ## What is left
 
