@@ -387,11 +387,21 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     source.invalidate()
     let settled = true
     let unsettledReason: UnsettledReason | undefined
+    /** Set at the settle decision, where the epoch provably matches the frame. */
+    let rescued = false
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const failed = options.failure?.()
       if (failed) throw failed
       if (covered && Date.now() - lastPaint >= settleMs && atExpectedSize()) {
+        // Read HERE, not at the return. `atExpectedSize()` has just confirmed
+        // `layoutEpoch() === frameEpoch`, so this is the one moment the source's
+        // answer provably describes the frame in hand. `unconfirmedEpoch` is a
+        // single mutable field holding only the most recent bump, and a
+        // `setTextScale` completing between this decision and the return would
+        // overwrite it — losing the disclosure rather than misplacing it
+        // (@Kenya, reviewing #388). The window is small; it is also free to close.
+        rescued = options.awaitExpectedSize === true && frameEpoch !== undefined && source.unconfirmedLayoutEpoch?.() === frameEpoch
         // Quiet. A frame that is one colour end to end is the page's
         // background, not the page: espn.com paints white, goes quiet for
         // longer than the settle window, and paints its content a second
@@ -516,7 +526,6 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     // field and the reply layer turns it into a sentence. Inventing a reason to
     // reuse that channel would make the capture say something false about
     // itself to say something true about the scale.
-    const rescued = options.awaitExpectedSize === true && frameEpoch !== undefined && source.unconfirmedLayoutEpoch?.() === frameEpoch
     return {
       width,
       height,
