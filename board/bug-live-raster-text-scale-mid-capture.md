@@ -1,8 +1,7 @@
 ---
 title: "A live raster taken while the text scale changes comes back settled, showing the layout before it"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: bug
 criterion: C5
 order: 95
@@ -60,10 +59,12 @@ not cheaper than the first.
 
 - ~~a run that shows a raster capture returning the pre-change text scale~~ **met**: Idris's run,
   2026-09-17, `settled: true` with the pre-change pixels and no warning;
-- if it happens: a raster capture across a text-scale change does not come back `settled: true`
+- ~~if it happens: a raster capture across a text-scale change does not come back `settled: true`
   without saying so, pinned where it can be pinned by construction (the fake `FrameEmitter` in
-  `cliCapture.test.ts` already carries the epoch);
-- the fix does not make an ordinary capture wait: a still page at a steady text scale still settles.
+  `cliCapture.test.ts` already carries the epoch)~~ **met**: `#388`, two arms on that fake;
+- ~~the fix does not make an ordinary capture wait: a still page at a steady text scale still
+  settles~~ **met**: `#382`'s path runs only inside `setTextScale`, so a capture that never calls it
+  never touches this, and the existing steady-state settle tests cover the rest.
 
 ## MEASURED 2026-09-20 by Henry — the fix holds; a narrow undisclosed case survives it
 
@@ -119,3 +120,43 @@ The headless CLI **cannot** exercise it: `setTextScale` returns early when `!fir
 sets the scale before the first navigation, so `confirmTextScaleLanded` never runs there. It is a
 live-path-only code path, which is worth knowing before anyone plans a headless check of it — I
 planned one and was wrong.
+
+## DONE 2026-09-20 by Henry — all three met, and the one thing this does not do is written down
+
+**Kenya's `#382` closed the bug; my `#388` closed the silence it deliberately left.** Between them the
+card's three acceptance lines are met, each with the control it asked for.
+
+| acceptance | met by |
+| --- | --- |
+| a run showing a raster returning the pre-change scale | Idris's run, 2026-09-17 |
+| a capture across a scale change never answers `settled: true` in silence | **`#388`** — `TargetSource` records which kind of bump it made, `captureQuiescent` marks a frame that settled under exactly that epoch, and the live reply turns the mark into a sentence |
+| the fix does not make an ordinary capture wait | `#382`'s path runs only inside `setTextScale`; a capture that never calls it never touches this |
+
+### The numbers, so nobody re-argues this from intuition
+
+**Confirm latency on the live path: 0-7 ms across 17 samples, against a 1 s budget.** So a rescued
+bump needs a renderer about **140x** slower than measured. My own claim that `--throttle cpu-6x`
+reached it was wrong by a factor of twenty and is retired on this card. The route that survives is a
+page blocking its own main thread for over a second, which real pages do — narrow, not absent.
+
+### What this card does NOT do, stated so the next reader does not assume it
+
+**`#388` makes the rescue visible. It does not make it rarer.** Nothing exercises the real CDP
+round-trip's timing, unchanged from `#382`: `TargetSource` has no unit-test harness, and the headless
+CLI cannot reach this code at all because `setTextScale` returns early when `!firstNavDone` and the CLI
+sets the scale before the first navigation. **If a user ever hits the rescued case, the answer is a
+longer wait plus an integration test against a live renderer — not tightening this disclosure.**
+
+### Two reviews that changed the shape rather than approving it
+
+**@Kenya** found that `unconfirmedEpoch` is a single mutable field and asked whether a mark could be
+*lost* rather than misplaced. **@Idris built it and reproduced it** against the first version, which
+read the field at the return: `settled=true, scaleUnconfirmed=undefined` on a frame that genuinely was
+rescued. My argument said that was impossible. **The reproduction won and the argument was retired** —
+the disclosure is now snapshotted in the frame handler, beside `frameEpoch`, so the capture asks the
+source nothing after the fact. Her control ships with it.
+
+A design error the compiler caught before either of them had to: the disclosure was first routed
+through `onWarn`, whose signature is `(message, reason: UnsettledReason)` — a warning there accompanies
+a capture that did **not** settle. This one did. Reusing it would have made the capture say something
+false about itself in order to say something true about the scale.
