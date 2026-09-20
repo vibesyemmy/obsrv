@@ -1,6 +1,6 @@
 ---
 title: "The raster's resizing sentence has now fired on CI, and nothing asserts it"
-column: backlog
+column: done
 kind: chore
 criterion: C5
 order: 97
@@ -36,3 +36,32 @@ see the loop bound and its measured rates on `bug-live-raster-uncovered-said-as-
 - **control:** rewording the producer reds it;
 - if no bounded lever reaches it at a workable rate, that is a finding for the card, and the unit path
   (`cliCapture.test.ts`, which pins the reason by construction) owns the wording instead.
+
+## DONE, found already covered, 2026-09-20 by Kenya
+
+**Claimed this to build the test above, and found it already existed** — `cliCapture.test.ts`'s
+`'says `resizing` rather than vouching for an earlier size at the budget'`, landed by `7bd8cdf`
+(PR #314, `bug-live-raster-settled-while-resizing`) at 2026-09-17 18:29, **two and a half hours
+before this card was filed the same evening.** The `Timed`/`awaitExpectedSize` scaffolding #314
+built to fix the settle race is exactly the deterministic lever this card asked for — I read #325's
+CI run and reached for the flaky preset-cycle e2e as the only lever I knew of, and never checked
+whether #314's own test suite (merged earlier that day) had already covered the sentence it was
+disclosing. It had.
+
+**Checked against this card's own acceptance, each one measured today rather than taken on the
+test's word:**
+- reaches `resizing` on purpose, deterministically (a scripted `Timed` source, not a race) — ran it,
+  green;
+- asserts the whole sentence, both sizes — it did, but as two literal numbers retyped into the
+  expected string rather than read from `got.width`/`got.height`. **Tightened in this PR**
+  (`tests/unit/cliCapture.test.ts`) to interpolate `` `this frame is ${got.width}x${got.height}, not
+  the ${asked.width}x${asked.height} it was asked for` `` — same coverage, now literally checked
+  against the reply rather than a second copy of the fixture's numbers;
+- **control, re-run after the tightening:** rewording `capture.ts`'s "it was asked for" to "it was
+  requested" reds this exact test with a clear diff. Restored, confirmed clean (`git diff` empty),
+  full suite green after: `npm run build && npm test` — 102 files, 1425 passed, 1 skipped.
+
+No new lever, no new test file — one existing assertion tightened from "two matching literals" to
+"checked against the reply," which is the one part of the acceptance the original didn't quite meet.
+Everything else acceptance asked for was already true on main and simply never linked back to this
+card.

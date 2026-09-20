@@ -509,7 +509,9 @@ describe('a quiet stretch that straddles a size change', () => {
   it('says `resizing` rather than vouching for an earlier size at the budget', async () => {
     // The new size never comes. A budget that ran out is not a settled page,
     // and the sentence names both sizes so the reader knows which PNG this is.
-    const src = new Timed([{ at: 0, m: marked(128, 102, 7) }], { width: 144, height: 90 })
+    const captured = { width: 128, height: 102 }
+    const asked = { width: 144, height: 90 }
+    const src = new Timed([{ at: 0, m: marked(captured.width, captured.height, 7) }], asked)
     const warnings: string[] = []
     const got = await captureQuiescent(src, {
       settleMs: 120,
@@ -520,8 +522,17 @@ describe('a quiet stretch that straddles a size change', () => {
     })
     expect(got.settled).toBe(false)
     expect(got.unsettledReason).toBe('resizing')
-    expect([got.width, got.height]).toEqual([128, 102])
-    expect(warnings.join(' ')).toContain('this frame is 128x102, not the 144x90 it was asked for')
+    // `got.width`/`got.height` checked against `captured` — a value this test
+    // controls independently of the capture's own reply — before either is
+    // used to build the expected sentence below. Idris caught the trap here:
+    // `capture.ts` builds its warning string from the exact same `width`/
+    // `height` locals it returns as `got.width`/`got.height`, so interpolating
+    // `got.width`/`got.height` into the expected string (the prior version of
+    // this test) checks that half of the sentence against itself. Mutating
+    // the fixture's actual frame to 50x60 left that version green; this one
+    // reds on the `toEqual` below, naming the mismatch.
+    expect([got.width, got.height]).toEqual([captured.width, captured.height])
+    expect(warnings.join(' ')).toContain(`this frame is ${captured.width}x${captured.height}, not the ${asked.width}x${asked.height} it was asked for`)
   })
 
   it('does not leave by the animating door with the old size either', async () => {
