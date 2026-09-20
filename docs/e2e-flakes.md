@@ -867,3 +867,48 @@ see it — so this reads as one note's producer returning before the other's
 runs, not as either sentence being wrong. Reasoned, not measured: nobody has
 read the two producers' order in `capture.ts` yet. Left in the register
 because it now has a consistent signature across sightings, not a fix.
+
+## `live-drive.spec.ts:1069`: a resize capture that came back settled, once
+
+**First sighting 2026-09-20**, on `#388`'s run `35493231097`:
+
+```
+✘ live-drive.spec.ts:1069 — a pane still being resized when the budget runs out is
+  captured as moving, and names a motion that matches its warning
+  expect(body.settled).toBe(false)   Expected: false   Received: true
+```
+
+**Why it was chased rather than waved through.** `settled: true` on a pane that is still moving is the
+shape of `bug-live-raster-settled-while-resizing`, and the PR it appeared on changes the settle and
+epoch path (`captureQuiescent`, `bug-live-raster-text-scale-mid-capture`). A flaky in the area a PR
+touches is the one case where "recovered on retry" is not an answer.
+
+**What the samples say, and they are few.**
+
+| | `:1069` |
+| --- | --- |
+| `#388` run `35493231097` (with the change) | **failed**, recovered on retry |
+| `#388` dispatch `35495456722` (same head, second sample) | **passed**, 15.2 s |
+| `#389` run `35493020338` (full suite, without the change) | passed |
+| local, 3 runs on the branch | passed |
+
+The second CI sample was taken as a `workflow_dispatch` on the branch rather than a push, deliberately,
+so the head did not move and a reviewer's verification of the content stayed valid.
+
+**Reasons to read it as runner noise rather than a regression:** the second sample flaked a *different*
+and unrelated test (`inspect.spec.ts:98`, a 30 s timeout — also a first sighting, recorded here by
+mention), which is what a loaded runner looks like; and the code added on that branch is a single field
+read inside an existing `if (resized || epoch !== frameEpoch)` branch, so it runs on size or epoch
+changes rather than per frame, and on `TargetSource` it is `return this.unconfirmedEpoch` with no I/O.
+
+**Reasons not to close the question:** one failure and one pass is not a rate, the local passes were on
+a quiet desk and this project has already learned that a quiet desk cannot speak to a race
+(`bug-drawer-stalls-part-open`), and nobody has read the resize path against the change line by line.
+
+**If it recurs on a branch that does NOT touch `capture.ts`, it is noise.** If it recurs only on
+branches that do, that is the finding this entry exists to make cheap.
+
+**Do not run this spec locally to investigate it.** `live-drive.spec` has a recorded activation
+(`bug-e2e-takes-the-desk.md:236` — *"fronts alone too"*), and running the single test with `-g` was
+measured on 2026-09-20 to front the app on a developer's desk. `node scripts/desk-safe.js` answers this
+before the run.
