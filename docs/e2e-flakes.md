@@ -818,16 +818,37 @@ has settled.
 `toolbar.spec.ts:112` entry below, which is a docs-only change and so cannot be
 the cause. Same failure, same `Received: undefined`, green on retry again.
 
-**The sized fix is applied**, exactly as this entry specified it after the first
-sighting: `expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` before the
-read at `:99`, rather than a new mechanism. Two sightings, both on branches that
-touch nothing this test reads, and a fix that was written down before it was
-needed — which is the only reason it cost minutes rather than an investigation.
+**The sized fix was applied, and its own CI run refuted it. It has been removed.**
+`expect.poll(movedNote, { timeout: 10_000 })` went in, and on run `35525940597`
+it **sat the full 10 s and still got `undefined`** (10.6 s), then passed on retry
+in 684 ms. Idris read that log and stopped the merge.
 
-**The named follow-up, not done here.** Marking the event is the stronger fix
-and is what the sibling consumer got. Polling is the cheaper one and is what
-this is. If a third sighting arrives, or if anyone touches this signal for
-other reasons, mark it — do not reach for a longer timeout.
+**So this is not a late note — it is a missing one**, and no timeout can fix a
+value that is never produced. The poll made things slightly worse: it turned a
+fast, honest failure into a ten-second one that reads like a timeout, which is
+the costume a correctness bug should not be allowed to wear.
+
+**What the mechanism looks like, unproven.** `ipc.ts:245` drops a commit when
+`url === arrivals(s).url && !byDocument`. This test navigates to `hairline.html`,
+then to `redirect.html`, whose `location.replace('hairline.html')` lands back on
+the address the pane is **already recorded at** — so the note depends entirely on
+`byDocument` being true. That comes from `startedByDocument`, which reverse-finds
+`starts` for a matching url, and each entry's `byDocument` is
+`details.initiator !== undefined` from `did-start-navigation`
+(`targetSource.ts:489-495`). If that entry is missing or its `initiator` is
+undefined on a given run, the commit is dropped and the note is **never** set.
+
+That is a candidate **correctness** bug, not a test problem: the same path is how
+a real page's self-redirect gets reported to a real user. Filed as
+`bug-redirect-note-missing-not-late`. **Do not paper over it with a longer
+wait**; the entry above that sized the poll was written before this evidence
+existed and its recommendation is withdrawn.
+
+**On "mark the event instead", which Idris raised before any of this.** Marking
+is what the sibling consumer got and it is the better shape — but on this
+evidence it would not have helped either, because the flag the mark would carry
+is the one that is never set. The fix belongs upstream of both, in whatever
+makes `byDocument` false for a genuine `location.replace`.
 
 **This entry is the argument for the register.** It was filed as *"reasoned, not
 run"* with a fix nobody had time for, and it sat here until the recurrence made
@@ -964,6 +985,11 @@ a finding.
 
 **Do not run this spec locally to investigate it** until `node scripts/desk-safe.js toolbar` has
 answered — the standing rule is that an activation on the record is what decides, not the spec's name.
+
+**And `controls.spec.ts:86` flaked on the same run** (`35525940597`) — *"a field commits on blur or
+Enter, never on a keystroke"*, 30 s, a `field.blur()` timeout. First sighting, not previously in this
+register, and not caused by `#407` (which touches `arrivals.spec.ts` and documentation). Recorded by
+mention so a second sighting has something to land against; nobody has looked at it.
 
 **A second data point, from this PR's own run.** `#407` (this entry) flaked too — but a *different*
 test, `arrivals.spec.ts:89`, already in the register above. Two consecutive docs-only runs, two
