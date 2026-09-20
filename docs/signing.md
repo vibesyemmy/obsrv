@@ -88,7 +88,7 @@ dialog on a fresh machine, so check the stapler line specifically.
 ## 5. Only then, CI
 
 Export the identity from Keychain Access — right-click the **private key** under
-the Developer ID certificate → Export → `.p12`, with a password. Then add four
+the Developer ID certificate → Export → `.p12`, with a password. Then add these
 repository secrets:
 
 | Secret | Value |
@@ -98,11 +98,26 @@ repository secrets:
 | `APPLE_API_KEY_P8` | `base64 -i AuthKey_XXXXXXXXXX.p8` |
 | `APPLE_API_KEY_ID` | the Key ID |
 | `APPLE_API_ISSUER` | the Issuer ID |
+| `SIGNING_IDENTITY` | the exact `codesign` authority line, e.g. `Developer ID Application: <entity> (<team id>)` |
 
 The release job reads `HAS_SIGNING`, derived from whether `CSC_LINK` and
 `APPLE_API_KEY_ID` are both set. Until all of them exist it builds unsigned
 exactly as before, so adding them is what switches signing on — there is no
 separate flag to flip, and a fork with no secrets still gets a working DMG.
+
+**`SIGNING_IDENTITY` is what turns step 4's manual verification into a release
+gate.** Once `HAS_SIGNING` is true, CI runs `codesign`/`spctl` against every
+`.app` this build produced and `xcrun stapler validate` against every `.dmg`,
+and fails the release if the signed identity does not equal `SIGNING_IDENTITY`
+exactly, or if Gatekeeper does not report a notarized Developer ID build. It
+checks equality, not merely "is signed" — an ad-hoc or wrong-account signature
+passes `spctl` too, which is exactly how this project found out it had signed
+with the wrong identity in the first place (§3, above). Which entity that
+string names — this account or a company account — is a decision to make once,
+by setting the secret; the workflow does not choose it and does not default to
+one. `HAS_SIGNING` true with `SIGNING_IDENTITY` unset fails the release rather
+than skipping the check, so a signed release can't ship without that decision
+having been made.
 
 Certificates expire after five years, API keys do not expire but can be revoked.
 When the certificate is replaced, `CSC_LINK` and `CSC_KEY_PASSWORD` are the only

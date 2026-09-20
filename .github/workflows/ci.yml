@@ -456,6 +456,68 @@ jobs:
             npm run dist
           fi
 
+      # electron-builder reported success once while signed with an unrelated
+      # local identity (docs/signing.md) — `codesign`/`spctl` both accept that
+      # happily, so "signed" is exactly the answer that was true then and
+      # wrong. This asserts what the identity must EQUAL and fails the release
+      # rather than publish a DMG signed as the wrong entity with a green log.
+      #
+      # The identity string itself (which entity users see in Gatekeeper) is
+      # not this workflow's decision, so it is not written here: SIGNING_IDENTITY
+      # is a secret, and choosing its value is a configuration act rather than
+      # a code change. HAS_SIGNING true with no SIGNING_IDENTITY set fails
+      # rather than skips — an unnamed target and no check are the same silent
+      # gap this step exists to close.
+      - name: Verify the signing identity, not just that something is signed
+        if: env.HAS_SIGNING == 'true'
+        env:
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "::error::HAS_SIGNING is true but the SIGNING_IDENTITY secret is not set — nothing to assert the build's identity against. Add it (see docs/signing.md) before this release can ship signed."
+            exit 1
+          fi
+
+          # electron-builder stages one .app per built arch under dist/ before
+          # packing each into its DMG. Walked rather than named: the exact
+          # per-arch folder is electron-builder's own convention, not this
+          # repo's, and the check must survive it changing.
+          apps_checked=0
+          while IFS= read -r -d '' app; do
+            apps_checked=$((apps_checked + 1))
+            authority=$(codesign -dv --verbose=4 "$app" 2>&1)
+            echo "$authority"
+            if ! grep -qF "$SIGNING_IDENTITY" <<<"$authority"; then
+              echo "::error::$app is not signed as '$SIGNING_IDENTITY'"
+              exit 1
+            fi
+            verdict=$(spctl -a -vvv -t install "$app" 2>&1)
+            echo "$verdict"
+            if ! grep -q "source=Notarized Developer ID" <<<"$verdict"; then
+              echo "::error::$app did not pass Gatekeeper as a notarized Developer ID build"
+              exit 1
+            fi
+          done < <(find dist -maxdepth 3 -name '*.app' -print0)
+          if [ "$apps_checked" -eq 0 ]; then
+            echo "::error::HAS_SIGNING is true but no .app bundle was found under dist/ to verify"
+            exit 1
+          fi
+
+          dmgs_checked=0
+          while IFS= read -r -d '' dmg; do
+            dmgs_checked=$((dmgs_checked + 1))
+            # A signature that verifies but is not stapled still shows the
+            # damaged-app dialog on a machine that has never been online.
+            xcrun stapler validate "$dmg"
+          done < <(find dist -maxdepth 1 -name '*.dmg' -print0)
+          if [ "$dmgs_checked" -eq 0 ]; then
+            echo "::error::HAS_SIGNING is true but no .dmg was found under dist/ to validate"
+            exit 1
+          fi
+
+          echo "Verified $apps_checked app bundle(s) and $dmgs_checked DMG(s) as $SIGNING_IDENTITY, notarized, and stapled."
+
       # The app's update check reads this release's tag, so the tag is the
       # version users are offered. Blockmaps are useless to the check-only
       # client and are attached because electron-updater wants them if
