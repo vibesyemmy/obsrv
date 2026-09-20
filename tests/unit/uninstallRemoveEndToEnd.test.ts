@@ -222,18 +222,43 @@ describe('obsrv uninstall --remove, end to end against a real, disposable filesy
   // Filed separately as `bug-uninstall-confirm-unenforced` rather than fixed
   // here — implementing the check is its own piece of work, and folding it
   // into this card would be the scope creep `CONTRIBUTING.md` warns against.
-  it('KNOWN GAP: a generically-named file that does not parse as Obsrv’s own is still removed', () => {
+  it('a generically-named file that does not parse as Obsrv\u2019s own survives, and is named', () => {
+    // Was `KNOWN GAP`, inverted by `bug-uninstall-confirm-unenforced`'s fix.
+    // The gap version asserted `existsSync(...) === false` and carried a note
+    // saying to invert it when `Removal.confirm` was finally wired up. This is
+    // that inversion: same fixture, opposite expectation.
     const sandboxRoot = mkdtempSync(join(tmpdir(), 'obsrv-uninstall-e2e-gap-'))
     try {
       const { home } = populatedHome(sandboxRoot)
       const legacyUserData = join(home, 'Library/Application Support/Electron')
-      writeFileSync(join(legacyUserData, 'history.json'), 'not json at all, and not an array either way')
+      const foreign = join(legacyUserData, 'history.json')
+      // **Valid JSON of the wrong shape**, not the bug card's original
+      // `'not json at all'`. Idris found the difference by mutation while
+      // reviewing this PR: unparseable bytes are caught by `bin/uninstall.js`'s
+      // own `JSON.parse` try/catch and never reach `confirmsAs`, so a build
+      // with `confirmsAs` forced to `true` still passed this test. It was
+      // named the control for the shape check and exercised everything except
+      // the shape check. This fixture parses, so the only thing that can keep
+      // it is `confirmsAs` returning false — which is what the control was
+      // always supposed to be about.
+      writeFileSync(foreign, JSON.stringify({ entries: [] }))
 
       const r = run(sandboxRoot, home, '--remove', '--json')
+      // Exit 0: the command did its job. A file it could not attribute to
+      // Obsrv was never in the set the caller asked it to remove, so leaving
+      // it is the check working rather than the removal failing.
       expect(r.status, r.stderr).toBe(0)
-      // If this ever starts failing, `Removal.confirm` has been wired up —
-      // update this test to assert the file survives, and close the gap card.
-      expect(existsSync(join(legacyUserData, 'history.json'))).toBe(false)
+      expect(existsSync(foreign), 'another app\u2019s file was deleted out of a shared directory').toBe(true)
+
+      // And it is named, with a reason. Surviving silently would be the same
+      // defect wearing the opposite outcome: a person cannot act on a file
+      // they are not told about.
+      const out = parseJsonTail(r.stdout) as { removed: { removed: { path: string }[]; unconfirmed: { path: string; because: string }[] } }
+      expect(out.removed.unconfirmed.map(u => u.path), JSON.stringify(out.removed.unconfirmed)).toContain(foreign)
+      expect(out.removed.removed.map(x => x.path)).not.toContain(foreign)
+      // The reason names the shared directory, which is the fact that makes
+      // the refusal make sense to someone reading it cold.
+      expect(out.removed.unconfirmed[0]?.because).toMatch(/shared with every other unnamed Electron app/)
     } finally {
       rmSync(sandboxRoot, { recursive: true, force: true })
     }

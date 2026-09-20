@@ -23,6 +23,8 @@
  *   having considered them.
  */
 
+import type { ConfirmKind } from './storedShapes'
+
 export interface Removal {
   path: string
   /** What is in it, for a person about to delete it. */
@@ -43,6 +45,16 @@ export interface Removal {
    * `control.json` and `obsrv.log` are distinctive enough to claim by name.
    */
   confirm?: string
+
+  /**
+   * Which check `confirm` describes, for the command that must apply it.
+   * `confirm` is the sentence a reader sees; this is what the remover runs.
+   * They are separate so the prose can explain and the code can decide — and
+   * so a file that carries prose but no check cannot quietly be removed on the
+   * strength of the prose alone, which is the bug this pair exists for
+   * (`bug-uninstall-confirm-unenforced`).
+   */
+  confirmWith?: ConfirmKind
 }
 
 export interface Kept {
@@ -125,9 +137,10 @@ export function uninstallPlan({ home, platform, includeSkill = false }: PlanOpti
       path: `${legacyUserData}/history.json`,
       what: 'browsing history from an npm-only install that used live MCP before the app was named',
       confirm: "parses with Obsrv's history reader",
+      confirmWith: 'history',
     },
-    { path: `${legacyUserData}/settings.json`, what: 'settings from that same install', confirm: 'parses with `parseSettings`' },
-    { path: `${legacyUserData}/tabs.json`, what: 'open tabs from that same install', confirm: "parses with Obsrv's tab-list reader" },
+    { path: `${legacyUserData}/settings.json`, what: 'settings from that same install', confirm: 'parses with `parseSettings`', confirmWith: 'settings' },
+    { path: `${legacyUserData}/tabs.json`, what: 'open tabs from that same install', confirm: "parses with Obsrv's tab-list reader", confirmWith: 'tabs' },
     { path: `${legacyUserData}/control.json`, what: "the agent-control discovery file, which may name a port and token from a crashed run" },
     { path: `${legacyLogs}/obsrv.log`, what: 'the log from that same install' },
   ]

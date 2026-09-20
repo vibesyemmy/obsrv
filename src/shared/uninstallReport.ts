@@ -1,3 +1,4 @@
+import type { ConfirmKind } from './storedShapes'
 import type { Kept, Removal, UninstallPlan } from './uninstallPlan'
 
 /**
@@ -48,6 +49,8 @@ export interface ReportEntry {
   what: string
   /** Set only for the legacy shared directories, where one file is claimed and the directory is not. */
   confirm?: string | undefined
+  /** The check the remover must run before this file may be removed. */
+  confirmWith?: ConfirmKind | undefined
   bytes?: number | undefined
   partial?: boolean | undefined
   /** Why the guard refused it, when it did. */
@@ -91,6 +94,7 @@ function entryOf(removal: Removal, look: (p: string) => Presence, check: (p: str
   const seen = look(removal.path)
   const entry: ReportEntry = { path: removal.path, what: removal.what }
   if (removal.confirm !== undefined) entry.confirm = removal.confirm
+  if (removal.confirmWith !== undefined) entry.confirmWith = removal.confirmWith
   if (!seen.exists) return { entry, where: 'absent' }
   entry.bytes = seen.bytes
   entry.partial = seen.partial

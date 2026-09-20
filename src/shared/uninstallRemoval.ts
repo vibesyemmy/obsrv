@@ -1,5 +1,6 @@
 import type { UninstallReport } from './uninstallReport'
 import type { GuardVerdict } from './removalGuard'
+import type { ConfirmKind } from './storedShapes'
 
 /**
  * The removing half of `obsrv uninstall`, as a decision rather than an action.
@@ -51,6 +52,18 @@ export interface RemovalInput {
   /** `checkRemoval`, run again per path at the moment of removal. */
   check: (path: string) => GuardVerdict
   remove: Remove
+  /**
+   * Whether a file whose entry carries a `confirmWith` really is Obsrv's,
+   * decided by reading its content. Injected for the same reason `check` is:
+   * this module reads no files.
+   *
+   * **Omitting it removes nothing that needs confirming.** A caller that
+   * cannot answer the question does not get to skip it — the entries that
+   * carry a check are kept and named. That default is the whole point: the
+   * bug this parameter fixes was a contract that existed in prose and was
+   * never run, so the shape here refuses to remove on prose alone.
+   */
+  confirm?: (path: string, kind: ConfirmKind) => boolean
 }
 
 export interface Removed {
@@ -70,12 +83,18 @@ export interface RemovalResult {
   failed: NotRemoved[]
   /** Refused by the guard at removal time, including any the report had allowed. */
   refused: NotRemoved[]
+  /**
+   * Listed and allowed by the guard, and kept because the file's **content**
+   * did not confirm it as Obsrv's. Separate from `refused` because the two are
+   * different findings: the guard refuses a path, this refuses an attribution.
+   */
+  unconfirmed: NotRemoved[]
   /** True when the report said this platform has nothing measured to remove. */
   unmeasured: boolean
 }
 
-export function removeListed({ report, check, remove }: RemovalInput): RemovalResult {
-  const result: RemovalResult = { removed: [], failed: [], refused: [], unmeasured: report.unmeasured }
+export function removeListed({ report, check, remove, confirm }: RemovalInput): RemovalResult {
+  const result: RemovalResult = { removed: [], failed: [], refused: [], unconfirmed: [], unmeasured: report.unmeasured }
   // A platform nobody measured has a plan of nothing. Removing "nothing" is
   // fine; the point is that this returns before touching a filesystem it has
   // no map of.
@@ -89,6 +108,24 @@ export function removeListed({ report, check, remove }: RemovalInput): RemovalRe
       // the one holding the `rm` wins.
       result.refused.push({ path: entry.path, because: verdict.refuse })
       continue
+    }
+    // The guard says this PATH may be removed. For the three generically-named
+    // files in the shared `Electron` directory that is not enough: the
+    // directory belongs to every unnamed Electron app, so the file must also
+    // look like ours. Claiming it on the name alone is the attribution guess
+    // the plan refuses to make for the directory, made again one level down.
+    if (entry.confirmWith !== undefined) {
+      const ours = confirm?.(entry.path, entry.confirmWith) ?? false
+      if (!ours) {
+        result.unconfirmed.push({
+          path: entry.path,
+          because:
+            confirm === undefined
+              ? `nothing was supplied to check whether this is Obsrv's, and this directory is shared with every other unnamed Electron app`
+              : `its content does not ${entry.confirm ?? 'identify it as Obsrv\'s'}, and this directory is shared with every other unnamed Electron app`,
+        })
+        continue
+      }
     }
     try {
       remove(entry.path)
@@ -117,6 +154,19 @@ export function removalLines(result: RemovalResult): string[] {
       lines.push(`      ${r.because}`)
     }
   }
+  if (result.unconfirmed.length > 0) {
+    lines.push('')
+    // Named, with the reason, rather than quietly skipped. A file left behind
+    // without explanation reads as a bug in the uninstaller; the same file
+    // with "this did not look like Obsrv's" reads as the uninstaller doing
+    // its job, and tells the person the one thing they need to decide it
+    // themselves.
+    lines.push('Left alone — listed, allowed by the guard, and not confirmed as Obsrv\'s:')
+    for (const r of result.unconfirmed) {
+      lines.push(`  ${r.path}`)
+      lines.push(`      ${r.because}`)
+    }
+  }
   if (result.failed.length > 0) {
     lines.push('')
     // Named individually: "some removals failed" leaves a person to work out
@@ -139,6 +189,23 @@ export function removalLines(result: RemovalResult): string[] {
  * more alarming of the two — the report allowed it and the guard then said no,
  * so the two disagree. A script that uninstalls and moves on should not move on
  * in either case.
+ *
+ * **An unconfirmed file does NOT count, and the reasoning moved.** The first
+ * version of this counted it, on the rule above: a path the caller listed is
+ * still on the disk. That reads the rule too literally. The caller asked to
+ * remove **Obsrv's** files, and a file the content check could not attribute
+ * to Obsrv was never in that set — leaving it is the check succeeding, not the
+ * removal failing. A non-zero exit there would tell a script the uninstall
+ * went wrong on a machine where it went exactly right, and the natural fix a
+ * script author reaches for is to stop reading the code at all.
+ *
+ * **What that costs, stated rather than buried:** Obsrv's own `history.json`
+ * is refused when it holds an empty array, so a clean uninstall can exit 0
+ * with a file of ours still there. That is why `removalLines` names every
+ * unconfirmed path and why it says which check it failed — the exit code
+ * carries "did the command work", and the lines carry "what is still on your
+ * disk". Collapsing the two into one integer loses whichever question is
+ * asked second.
  */
 export function removalExitCode(result: RemovalResult): number {
   return result.failed.length > 0 || result.refused.length > 0 ? 1 : 0

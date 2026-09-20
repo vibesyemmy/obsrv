@@ -1,6 +1,6 @@
 ---
 title: "obsrv uninstall --remove deletes a generically-named file without checking it's actually Obsrv's"
-column: backlog
+column: done
 kind: bug
 criterion: C5
 order: 100
@@ -48,3 +48,74 @@ for the ambiguous cases was never wired up.
 - control: the malformed fixture in `uninstallRemoveEndToEnd.test.ts`'s last case survives instead of
   being removed once this ships — that test is written to fail loudly when this lands, with a comment
   pointing here.
+
+## FIXED 2026-09-20 by Henry, on Opeyemi's word (`#1491`), reviewed by Idris
+
+`obsrv uninstall --remove` now reads the three files' content before claiming them, through
+`src/shared/storedShapes.ts` — a dependency-free module the plain-Node CLI can require, wired in as an
+injected `confirm` on `removeListed` so the deciding half stays pure. A file that does not confirm is
+kept and **named, with the reason**, in a new `unconfirmed` list.
+
+### Where I deviated from the acceptance as written, and why
+
+The card asks that removal reuse `loadHistory`/`parseSettings`/`loadTabs` so a second definition of
+"valid" cannot drift. **Taken literally that is not safe, and it took building it to see why.** Those
+readers are forgiving on purpose: `loadHistory` drops a bad row and keeps the file, `loadTabs` returns
+an empty list rather than refusing. Forgiveness is right when *loading* — losing a convenience beats
+refusing to start — and wrong when *attributing*, where the question is not "can I use this" but "is
+this mine". Wiring the strict test into the readers would make `loadHistory` drop every row of a file
+holding one bad entry: a real regression, bought for nothing.
+
+So attribution is **stricter** than loading, and the two are tied by a test rather than by shared
+code: `storedShapes.test.ts` asserts that anything the attribution predicate accepts also loads
+through the real reader, and that the readers stay forgiving. Drift fails a test instead of quietly
+widening what `--remove` deletes. The card's intent is met; its literal wording is not, and that is
+the deviation to press on in review.
+
+### Two judgement calls that could go the other way
+
+**An empty `history.json` is refused, and an empty `tabs.json` is not.** `[]` is what an untouched list looks like in any app, so it
+attributes to nobody — which means a clean uninstall can exit 0 with a file of *ours* still on disk.
+The alternative takes an empty file of someone else's. Keeping costs one manual delete; removing
+costs data nobody can restore.
+
+**An unconfirmed file does not change the exit code, and I changed my mind here.** I first counted it,
+on this module's own rule that a path the caller listed is still on disk. That reads the rule too
+literally: the caller asked to remove *Obsrv's* files, and a file that failed attribution was never in
+that set. A non-zero exit would report failure on a machine where the command worked exactly right,
+and the fix a script author reaches for is to stop reading the code. The exit code answers "did it
+work"; the printed lines answer "what is still there".
+
+### Two things the review found that I had not, both by mutation rather than reading
+
+@Idris built the branch and mutated `confirmsAs` instead of reading it, which found two real gaps:
+
+**The e2e control did not exercise the check it was named for.** Its fixture was the card's original
+`'not json at all'` — unparseable, so `bin/uninstall.js`'s own `JSON.parse` try/catch caught it
+*before* `confirmsAs` ran. With `confirmsAs` forced to return `true`, the test still passed. It was
+the control for the shape check and tested everything except the shape check. The fixture is now
+valid JSON of the wrong shape (`{"entries": []}`), so the only thing that can keep it is the check
+itself. **This is the more serious of the two**: a fix for a contract that was never enforced had a
+control that was never exercised, which is the same defect one level up.
+
+**`{"tabs": []}` was claimed on the `tabs` key, and that key is not evidence.** It restates what the
+filename already says, exactly as a bare array in `history.json` restates its own. My first correction
+refused every empty tab list, which was consistent and threw away a real case — Obsrv's own
+`tabs.json` with every tab closed. The answer that survives both objections is `activeIndex`: a
+required field of `StoredTabs` written on every save, which says something about the *writer* rather
+than the name. So an empty tab list is claimable and an empty history is not, and the asymmetry is
+now about what each format can carry rather than which wrapper it uses.
+
+### Acceptance
+
+- **content is checked before removal** — `storedShapes.confirmsAs`, injected at `bin/uninstall.js`,
+  applied in `removeListed` before any `rm`;
+- **a file that fails is named with a reason, not silently skipped** — `RemovalResult.unconfirmed`,
+  printed by `removalLines` under *"Left alone — listed, allowed by the guard, and not confirmed as
+  Obsrv's"*;
+- **control: the malformed fixture survives** — `uninstallRemoveEndToEnd.test.ts`'s last case was
+  written to fail loudly when this landed, and it did. It is now inverted: same fixture, opposite
+  expectation, plus assertions that the file is named in `unconfirmed` and absent from `removed`.
+
+1599 unit tests pass, typecheck clean. **Shipped in 0.62.0**, so this wants a patch release —
+Opeyemi's call, already given (`#1491`).
