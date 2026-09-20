@@ -24,8 +24,23 @@ below were checked by hand instead.
 
 Text matching also cannot answer the actual question. A unit test that feeds a note builder
 its arguments proves the sentence can be *constructed*; it does not prove any page produces
-the state. Where this file says **observed**, it means a run against a real page in the real
-app produced it.
+the state. Where this file says **observed**, it means **a run — CI or a note-log sweep alike —
+against a real page (fixture or live) in the real app produced the sentence; the specific
+instrument does not matter, only that the run happened and the sentence is in its record.**
+
+**That sentence was one bar written twice until 2026-09-20**, and the two copies disagreed. This
+paragraph said "a run against a real page in the real app"; the column below said "a run of the note
+log that saw it", which reads like a narrower, named mechanism. It is not one: @Idris grepped the
+phrase and it appears **exactly once in the codebase — at that line and nowhere else.** No script, no
+env var, no tool is called that. It was shorthand for "a run that was actually seen to produce it",
+and it hardened into a second standard because the two sections were written weeks apart and never
+read against each other.
+
+The tie-break is what the project actually did: the caps three (`#348`) and the walk four (`#358`)
+both closed on **CI run ids**, reviewed and passed at the time, with no separate sweep. Reading the
+column strictly would have changed the standard retroactively for the rows that happened to be left,
+without anyone deciding to change it. **The person holding the card did not settle this** — the
+cheaper reading closes seven rows in his favour, so it went to the gate.
 
 ## The live surface, checked by hand
 
