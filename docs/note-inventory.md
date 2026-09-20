@@ -24,8 +24,23 @@ below were checked by hand instead.
 
 Text matching also cannot answer the actual question. A unit test that feeds a note builder
 its arguments proves the sentence can be *constructed*; it does not prove any page produces
-the state. Where this file says **observed**, it means a run against a real page in the real
-app produced it.
+the state. Where this file says **observed**, it means **a run — CI or a note-log sweep alike —
+against a real page (fixture or live) in the real app produced the sentence; the specific
+instrument does not matter, only that the run happened and the sentence is in its record.**
+
+**That sentence was one bar written twice until 2026-09-20**, and the two copies disagreed. This
+paragraph said "a run against a real page in the real app"; the column below said "a run of the note
+log that saw it", which reads like a narrower, named mechanism. It is not one: @Idris grepped the
+phrase and it appears **exactly once in the codebase — at that line and nowhere else.** No script, no
+env var, no tool is called that. It was shorthand for "a run that was actually seen to produce it",
+and it hardened into a second standard because the two sections were written weeks apart and never
+read against each other.
+
+The tie-break is what the project actually did: the caps three (`#348`) and the walk four (`#358`)
+both closed on **CI run ids**, reviewed and passed at the time, with no separate sweep. Reading the
+column strictly would have changed the standard retroactively for the rows that happened to be left,
+without anyone deciding to change it. **The person holding the card did not settle this** — the
+cheaper reading closes seven rows in his favour, so it went to the gate.
 
 ## The live surface, checked by hand
 
@@ -414,13 +429,13 @@ has is a run of the note log that saw it, which is what this column counts.
 | written at | pushed in | the sentence, shaped |
 | --- | --- | --- |
 | `src/cli/main.ts:278` | cli | <…>; and <…>, so `throttle` names the conditions put back, not ones known to be in force |
-| `src/shared/measureBudget.ts:154` | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… |
-| `src/shared/measureBudget.ts:155` | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… |
+| `src/shared/measureBudget.ts:154` **(observed)** | main | the figures are of <…>, not as the last navigate loaded it: the last move Obsrv recorded since was a… — produced on CI by `mcp-live.spec:824` |
+| `src/shared/measureBudget.ts:155` **(observed)** | main | the figures are of <…>, not of <…>, which the last navigate asked for: the tab moved after that navi… — produced on CI by `mcp-live.spec:802` |
 | `src/shared/uninstallPlan.ts:100` | mcp | Obsrv's data locations have only been measured on macOS <…>(docs/research/2026-09-14-a4-install-rema… |
-| `src/shared/walkCoverage.ts:165` | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… |
+| `src/shared/walkCoverage.ts:165` **(observed)** | cli, mcp | this page hides the document's overflow and has no scrollable container in its light DOM or its ope… — produced on CI by `cli-walk.spec:143` and `mcp-live.spec:709` |
 | `src/cli/walk.ts:129` **(fired, `#358`)** | cli | the walk could not return to the top afterwards (<…>); measured where it stopped. — written by `#338`, which split the return note in two; **the only row here with an observation**, kept because its provenance still belongs to this list |
 | `src/shared/walkCoverage.ts:200` | cli, mcp | <…>no iframe covers the viewport, so what scrolls is a container that scrolls by transform (a virtu… |
-| `src/cli/main.ts:542` | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… |
+| `src/cli/main.ts:542` **(observed)** | cli | this page hides the document's overflow and scrolls nothing the capture can reach — no scrollable c… — produced on CI by `cli-snap-tiled.spec:176` |
 
 ## What is left
 
@@ -433,10 +448,43 @@ nine named reasons.**
 one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
 produced every pass, with the words that matter checked by nobody.
 
-**What remains is the eight written or reworded after the run**, and they are unobserved in this
-column's own sense rather than untested: each has a test asserting it, and none has a run of the note
-log that saw it — which is what this column counts. Closing them means a note-log run that reaches
-them, or a named reason each, per step 3 of the card's plan. The two ambiguous groups are the other
+**What remains is three.** Of the eight written or reworded after the run, one (`walk.ts:129`) was
+already fired, and four are **observed** under the one-bar standard above — a CI e2e run produces the
+sentence and a spec asserts it, cited on their rows: `walkCoverage.ts:165`, `cli/main.ts:542`, and
+both branches of `historyMoveNote` (`measureBudget.ts:154` and `:155`). That leaves
+`walkCoverage.ts:200`, `cli/main.ts:278` and `uninstallPlan.ts:100`.
+
+**Two of those three are named reasons rather than test work, and the reasons are about our
+instruments, not about the sentences.**
+
+- **`cli/main.ts:278`** needs a *double* refusal — the throttle apply refuses and the restoring apply
+  refuses too. The only refusal we can force is the harness lever at `targetSource.ts:785`, gated
+  `if (!off && forced)`, so it refuses a call that *applies* conditions and never one that *lifts*
+  them. After a refused apply, `throttleForCommand` restores `had`, which is `NO_THROTTLE` (a target
+  starts there, `targetSource.ts:241`, and each CLI command builds its own at `cli/main.ts:351`,
+  `:989`, `:1082`, `:1201`). The restore is therefore always a lift, and lifts cannot be forced to
+  refuse. Measured on real Electron: a throttled `audit` under the lever prints one refusal, and
+  `report` prints three independent single refusals, never the combined form. **This says our lever
+  cannot reach the branch, not that the branch is dead** — a genuine Chromium refusal on a lift, such
+  as `detach()` throwing, still produces it in production.
+- **`uninstallPlan.ts:100`** is reached only when `platform !== 'darwin'`, and every runner that
+  executes the app or the CLI is `macos-14`. See `board/c5.md`'s decision of 2026-09-20 for what
+  would reopen it.
+
+**How the last two were found, because the method matters more than the count.** They are asserted in
+`mcp-live.spec.ts:802` and `:824`, which do not contain the sentence at all — they **call
+`historyMoveNote` to build the expectation** and assert the live MCP reply contains the result. That
+is the better test (the spec's own comment: *"the sentence as the function writes it, so a rewording
+cannot blind this"*), and it is invisible to any search for the words. Searching this file's rows by
+sentence text will therefore under-report what is observed. **Search for imports of the producing
+module as well as for its text** — `tests/e2e` imports `src/shared/measureBudget`, which is the whole
+signal.
+
+The count has now moved twice, both times because a search was weaker than the thing it searched for.
+When this was raised, two rows were guessed already-produced (`:165` and `:200`) on the grounds that
+CI drives their fixtures; only `:165` was. Then two rows were reported outstanding on a text search
+that could not see a computed assertion; both were already observed. The standard did not move —
+`observed` has meant one thing throughout. What moved was how carefully anyone had looked. The two ambiguous groups are the other
 open thing. Neither is an unfired producer, and neither is nothing.
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
