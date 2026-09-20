@@ -617,6 +617,37 @@ describe('a quiet stretch that straddles a size change', () => {
     expect(got.scaleUnconfirmed).toBe(true)
   })
 
+  /**
+   * @Idris built this from @Kenya's candidate and reproduced it against the
+   * first version of the fix, which read `unconfirmedLayoutEpoch()` at the
+   * RETURN: `settled=true, scaleUnconfirmed=undefined` on a frame that genuinely
+   * was rescued. The source's field holds only the most recent bump's status, so
+   * a later change answers a question about the present when the capture is
+   * asking about the frame in its hand.
+   *
+   * Here the second change clears the mark **without** emitting a frame this
+   * capture ever sees, which is the shape that breaks a read-at-return. The
+   * snapshot taken when the frame arrived is what makes it survive.
+   */
+  it('keeps the mark when the source moves on before the capture returns', async () => {
+    const src = new Layered({ width: 128, height: 102 })
+    setTimeout(() => {
+      src.epoch++
+      src.unconfirmed = src.epoch // a rescue: the epoch moved, unconfirmed
+      src.emit('frame', marked(128, 102, 7))
+    }, 0)
+    // Something else confirms a later scale while this capture is still in its
+    // settle window, and emits nothing this capture would see.
+    setTimeout(() => {
+      src.unconfirmed = null
+    }, 40)
+    const got = await captureQuiescent(src, { settleMs: 120, timeoutMs: 5000, ...noGrace, awaitExpectedSize: true })
+    expect(got.settled).toBe(true)
+    // The frame in hand arrived under a rescued epoch. That does not stop being
+    // true because the source later had better news about a different one.
+    expect(got.scaleUnconfirmed).toBe(true)
+  })
+
   it('does not cry unconfirmed when a later bump was confirmed', async () => {
     const src = new Layered({ width: 128, height: 102 })
     setTimeout(() => src.emit('frame', marked(128, 102, 7)), 0)

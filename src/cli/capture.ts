@@ -311,6 +311,8 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
   let paintsSinceCovered = 0
   /** Which layout the pixels in hand belong to; undefined when nobody is counting. */
   let frameEpoch: number | undefined
+  /** Whether that layout's epoch was one the source could not confirm. */
+  let frameRescued = false
 
   /** The source's layout counter, read only when the caller asked us to wait on it. */
   const epochNow = (): number | undefined => (options.awaitExpectedSize === true ? source.layoutEpoch?.() : undefined)
@@ -335,6 +337,15 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       mask = new Uint8Array(width * height)
       uncovered = width * height
       frameEpoch = epoch
+      // **Snapshotted with the frame, not read at the end** (@Idris, reviewing
+      // #388, from @Kenya's candidate — and she reproduced it rather than
+      // reasoning it). `unconfirmedEpoch` on the source is a single mutable
+      // field holding only the MOST RECENT bump's status. Reading it later asks
+      // "is the source's current state a rescue?", when the question is "was
+      // the layout THIS FRAME arrived under a rescue?" — and those differ the
+      // moment anything else changes the scale before the capture returns. The
+      // property belongs to the frame, so it is recorded with the frame.
+      frameRescued = epoch !== undefined && source.unconfirmedLayoutEpoch?.() === epoch
     }
     const { x, y, width: w, height: h, data } = m.frame
     if (x === 0 && y === 0 && w === width && h === height) {
@@ -387,21 +398,11 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
     source.invalidate()
     let settled = true
     let unsettledReason: UnsettledReason | undefined
-    /** Set at the settle decision, where the epoch provably matches the frame. */
-    let rescued = false
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const failed = options.failure?.()
       if (failed) throw failed
       if (covered && Date.now() - lastPaint >= settleMs && atExpectedSize()) {
-        // Read HERE, not at the return. `atExpectedSize()` has just confirmed
-        // `layoutEpoch() === frameEpoch`, so this is the one moment the source's
-        // answer provably describes the frame in hand. `unconfirmedEpoch` is a
-        // single mutable field holding only the most recent bump, and a
-        // `setTextScale` completing between this decision and the return would
-        // overwrite it — losing the disclosure rather than misplacing it
-        // (@Kenya, reviewing #388). The window is small; it is also free to close.
-        rescued = options.awaitExpectedSize === true && frameEpoch !== undefined && source.unconfirmedLayoutEpoch?.() === frameEpoch
         // Quiet. A frame that is one colour end to end is the page's
         // background, not the page: espn.com paints white, goes quiet for
         // longer than the settle window, and paints its content a second
@@ -532,7 +533,7 @@ export async function captureQuiescent(source: FrameEmitter, options: CaptureOpt
       bgra: buffer.slice(),
       settled,
       ...(settled ? {} : { unsettledReason }),
-      ...(rescued ? { scaleUnconfirmed: true as const } : {}),
+      ...(options.awaitExpectedSize === true && frameRescued ? { scaleUnconfirmed: true as const } : {}),
     }
   } finally {
     source.off('frame', onFrame)
