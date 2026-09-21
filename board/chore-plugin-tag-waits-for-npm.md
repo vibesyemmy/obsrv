@@ -97,9 +97,18 @@ Henry, Idris and Kenya independently confirmed the same run and step-level resul
 live test.** This card originally said the refusal arm's only path to live evidence was actually
 publishing a version behind its tag. Idris tested rather than took that on reasoning: `ci.yml:366`'s
 step has no `--registry` pin, so `npm view getobsrv version` resolves through ambient npm config.
-Pointed at a throwaway local server stubbing a fake `getobsrv` packument at `9.9.9`
-(`NPM_CONFIG_REGISTRY` or `--registry`), the step reads the fake version and — untested but clearly
-reachable — would refuse against it, no contact with the real registry at all. So the honest
-statement is **"untested, and reachable via a registry substitution nobody's built the harness for,"**
-not "unreachable by construction." The harness itself is real work nobody has asked for yet, not
-something this correction is claiming to have done.
+**The read is tested. The refusal is inferred. Splitting them, because this is a correction of an
+overclaim and blurring the line here would be the wrong place to blur it** (Henry's read of the first
+wording; details from Idris, who ran it):
+
+- **Tested.** A real local HTTP server (`python3`, port 4874) served a fake `getobsrv` packument at
+  `9.9.9`. `npm view getobsrv version --registry http://127.0.0.1:4874 --loglevel verbose` returned
+  `9.9.9`, with a logged `npm http fetch GET 200 … (cache miss)` — **a real network round-trip, not a
+  simulation.** So the step's read genuinely is not pinned to the public registry.
+- **Inferred, not run.** Nobody executed `ci.yml:366`'s own shell — `published=$(npm view …)`, the
+  `if [ "$published" != "$version" ]`, the `::error`, the `exit 1` — against that server. The refusal
+  is read off a trivial comparison, exactly as the out-of-band arm above already does.
+
+So the honest statement is **"untested, and reachable via a registry substitution nobody has built the
+harness for"** — not "unreachable by construction", and not "we pointed a fake registry at it and
+watched it refuse". The harness is real work nobody has asked for yet.
