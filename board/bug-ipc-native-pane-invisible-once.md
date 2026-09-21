@@ -1,8 +1,7 @@
 ---
 title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed that never came, and two later tests found the native pane invisible on both tries"
-column: doing
+column: backlog
 owner: "Dogu"
-waiting: ""
 kind: bug
 order: 60
 ---
@@ -298,3 +297,79 @@ piece of evidence that touches it at all, rather than being argued from shape al
 **Not yet done, named rather than assumed complete:** the `trace.zip` files (richer than a
 screenshot — action timeline, console, network) are downloaded but not yet opened; that's the next
 thing to read before forming a stronger claim, not another suite run.
+
+## SECOND PASS, 2026-09-21 by Dogu — the `trace.zip` files opened; blank surfaces, not a hang site
+
+All three artifacts (`10468022022`, `10489339240`, `10519021701`) were re-downloaded fresh — none of
+them expired, but none survived to this session either, so this is a first real read, not a review of
+old notes. `trace.zip` for Electron e2e turned out to carry only Playwright's `Test`-class API calls
+(`before`/`after` on each `page.evaluate`/`waitForURL`/etc, with wall-clock times) and the same
+attachments already visible at the top level — no console or network trace exists for these runs,
+because nothing in this suite's config asks Electron's app windows for one. So the richer read the
+prior note hoped for isn't there; what the trace format does add is precise timing and the exact
+stack the hang sat under, which is worth having anyway.
+
+**The hang site, timed exactly.** `ipc.spec.ts:32`'s `page.evaluate` (`await window.obsrv.navigate(u);
+return got`) is a single call from Playwright's side — `before` at `t=492975.099ms`, `after` (error:
+`Target page, context or browser has been closed`) at `t=523596.041ms`, **30620.9ms**, the full test
+budget. Because `navigate()` and the `onUrlChanged` wait are both inside one `evaluate`, the trace
+cannot see whether `navigate()` itself returned or whether only the event was missing — that
+ambiguity survives this read; it was never something a Playwright-level trace could settle. **The
+setup before it is not where the time went**: `rendererWindow()`'s window race (`launch.ts:296`)
+resolved in well under a second in all three sightings, its own five-second-timeout losers being the
+normal "not the renderer, ignore" candidates the function's comment already documents — not failures.
+
+**New: the failure screenshots have real content, sha1-verified against the trace's own attachments,
+and it says more than the prior note's description captured.** Each of the three failing tests in
+each sighting attaches three PNGs — `798×802`, `1920×1080`, `1600×942` — confirmed byte-identical
+(`shasum`) between the top-level `test-failed-N.png` files and the resources embedded in `trace.zip`,
+so this is one dataset read two ways, not new evidence contradicting old. Checked pixel histograms
+(`PIL.Image.getcolors`) rather than eyeballing them, across all **9** instances (3 sightings × 3
+failing tests):
+
+- **`1600×942` always has real content** — 223 distinct colors, dominant `(42,42,42)` in every
+  instance — this is the main renderer window, still showing the "New tab / Point Obsrv at a page"
+  empty state. This is the image the prior FIRST PASS note described as "pixel-identical... pristine
+  first-launch screen," and that description holds; it just wasn't the whole picture.
+- **`798×802` and `1920×1080` are pure white in all 9 instances — one single RGB value, no
+  exceptions.** These sizes are not arbitrary: the app's own status line (visible in the `1600×942`
+  screenshot) reads `NATIVE 798×802 · ×1 host` and `TARGET 1920×1080 landscape`, so these are the
+  native pane's own capture and the offscreen target's own capture, not two views of the same thing.
+  **Both separate rendering surfaces paint nothing, every single time, while the main window paints
+  normally.** That is a sharper, and different, claim than "the pane read invisible" — it is "two
+  independent surfaces, on two different code paths, went blank together," which was not visible from
+  `isVisible()` booleans or screenshots of the app chrome alone.
+
+**Read `:134`'s actual failing assertion before assuming the blank screens explain it, and it doesn't
+— or not directly.** `NativePane.isVisible()` (`nativePane.ts:178`) is `return this.visible` — a
+locally-tracked flag, set only by `setVisible()` (`:173`), which is called from the `setMode`
+handler. It is not a live query of the OS view. So `:134`'s failing
+`expect(native.isVisible()).toBe(true)` — after the test calls `setMode('url')` specifically to bring
+the pane back — means either that handler never ran, or the flag was set and reverted, not that
+Chromium reported the surface as unpainted. **The three failing tests in every sighting are the same
+three, consecutive in the file, and every one of them is an IPC round-trip to the same `NativePane`
+instance** (`navigate`, `setMode`, `setNativeBounds`'s neighbours in the surrounding passes). The
+simplest reading consistent with all three failing together, identically, every time, is one wedged
+pane instance for the rest of the file — not three unrelated defects that happen to share a hang.
+That is a hypothesis this data supports; it is not a demonstration, since nothing here shows *why*
+the instance wedges.
+
+**Re-checked the one GPU correlation from FIRST PASS rather than let it stand unexamined.**
+Re-grepped all three raw CI logs for GPU/crash/surface/compositor lines, excluding the deliberate
+`gpu-reset.spec.ts` markers already in every run. Unchanged from before: the `GPU state invalid after
+WaitForGetOffsetInRange` line exists only in sighting 1 (`35145262453`, 50ms before `:31`'s timeout),
+nothing matching in sighting 2 or 3. Still one-of-three, still worth having, still not a pattern.
+
+**What this pass changes and what it doesn't.** It replaces "the native pane read invisible" with a
+concrete, uniform, 9/9 visual fact — two specific surfaces blank, one specific surface fine — and
+narrows the field to "something IPC/state-side wedges one `NativePane` instance," ahead of "the GPU
+died" or "the app never responded at all." It does not find a cause, does not reproduce anything, and
+does not change what would actually settle this: a fourth sighting, read the same way, ideally with a
+console/network trace enabled for once so the next read isn't limited to screenshots and API timings.
+
+**Backlog, not Done — same shape as `bug-drawer-stalls-part-open`, and for the same reason.** Per
+Henry's #1564: real work happened (a genuine new artifact, opened for the first time, with a sharper
+finding than before), but the card's own open question — why does one pane's IPC wedge — is still
+unanswered, and marking this Done would assert a fix that doesn't exist. `doing` is for work in
+flight; nothing is in flight on this until it fires again. Moving there rather than leaving it, so
+the column reads honestly.
