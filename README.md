@@ -443,9 +443,21 @@ visited, then the app deleted, and every file below was still there.
 
 **`obsrv uninstall` will tell you what is actually on your machine** — which of
 these paths exist, how big each one is, what is in it, and what is deliberately
-left alone (Electron's shared cache is not Obsrv's to delete). **It lists only:
-it removes nothing**, and prints the commands below with your own paths filled
-in. On macOS, to remove it by hand:
+left alone (Electron's shared cache is not Obsrv's to delete). On its own it
+**lists only and removes nothing**, and prints the commands below with your own
+paths filled in.
+
+**`obsrv uninstall --remove` deletes what that listing showed**, re-checking
+every path against the same guard as it goes, and naming anything it did not
+remove and why. Three of the files it knows about live in a directory Obsrv does
+not own — `Application Support/Electron`, shared with any other unnamed Electron
+app — and those are removed only if their **content** shows they are Obsrv's. A
+file there that does not confirm is left alone and listed, because a file we keep
+costs you one manual delete and a file we remove by mistake costs you data you
+cannot get back. (Until `0.62.1` it claimed those three on their filenames alone.
+If you ran `--remove` on `0.62.0`, that is the version to know about.)
+
+On macOS, to remove it by hand instead:
 
 ```bash
 rm -rf ~/Library/Application\ Support/Obsrv   # settings, history, tabs, the Chromium profile

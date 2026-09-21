@@ -25,6 +25,7 @@
   // here, not merely written.
   "include": [
     "src/mcp/**/*",
+    "src/shared/storedShapes.ts",
     "src/shared/uninstallPlan.ts",
     "src/shared/removalGuard.ts",
     "src/shared/uninstallReport.ts",

@@ -19,13 +19,14 @@
 //   - out/shared/removalGuard.js     — the check that stands between a path and $HOME
 //   - out/shared/uninstallReport.js  — this machine's answer, as data and words
 //   - out/shared/uninstallRemoval.js — which of them to remove, and what happened
+//   - out/shared/storedShapes.js     — whether a shared-directory file is Obsrv's at all
 //
 // The two read-only calls it still makes itself are `lstatSync` and
 // `readdirSync` (sizes); the one destructive call is `rmSync`, and it is passed
 // IN to the decision module rather than reached for inside it.
 'use strict'
 
-const { existsSync, lstatSync, readdirSync, rmSync } = require('node:fs')
+const { existsSync, lstatSync, readdirSync, readFileSync, rmSync } = require('node:fs')
 const { join } = require('node:path')
 
 /** Stop counting a directory past this many entries: a size is a hint, not a census. */
@@ -102,12 +103,13 @@ function main(argv) {
     return 2
   }
 
-  let plan, guard, report, removal
+  let plan, guard, report, removal, shapes
   try {
     plan = require('../out/shared/uninstallPlan.js')
     guard = require('../out/shared/removalGuard.js')
     report = require('../out/shared/uninstallReport.js')
     removal = require('../out/shared/uninstallRemoval.js')
+    shapes = require('../out/shared/storedShapes.js')
   } catch {
     process.stderr.write('obsrv uninstall: this tree is not built — run `npm run build` first.\n')
     return 1
@@ -154,6 +156,18 @@ function main(argv) {
     report: answer,
     check: path => guard.checkRemoval(path, { sandboxRoot }),
     remove: path => rmSync(path, { recursive: true }),
+    // The content check the plan has been documenting since `#197` and nobody
+    // ran until `bug-uninstall-confirm-unenforced`. It reads the file and asks
+    // whether it is shaped like the one Obsrv writes; a file that is not JSON
+    // at all is nobody's to claim on content, so a parse failure is a `false`
+    // rather than a throw that would abandon the rest of the removal.
+    confirm: (path, kind) => {
+      try {
+        return shapes.confirmsAs(kind, JSON.parse(readFileSync(path, 'utf8')))
+      } catch {
+        return false
+      }
+    },
   })
 
   if (argv.includes('--json')) {
