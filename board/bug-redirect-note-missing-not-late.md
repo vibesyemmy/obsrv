@@ -120,8 +120,17 @@ url. Not a missing `starts` entry — the entry is there. Not an undefined `init
 start is correctly marked `true`. The other two are ruled out by the same trace that shows the third.
 
 **The intermittency is the 5 ms.** When the mirror's start lands *after* the document's, the note
-dies; when it lands first, or the mirrored load does not happen, the note survives. `:71`'s opposite
-failure — the note present for a pane that only mirrored — is this mechanism with the roles swapped.
+dies; when it lands first, or the mirrored load does not happen, the note survives.
+
+**`:71` is INFERRED, not measured, and the distinction is the point of saying it here.** The reading
+is that a note *present* for a pane that only mirrored is this mechanism with the roles swapped.
+That is symmetry, not evidence — **only the `:89` direction has a trace.** `:71` flaked again the
+same evening, on `#424`'s run `35641299420`, and produced nothing: that branch was cut **before**
+`#422` merged, so its tree carried no instrument (checked: `main` has it, that branch does not), and
+`ci.yml` discarded the screenshots because the suite went green. Two independent reasons the evidence
+was lost, both now closed — `#422` is on `main` for every branch cut after it, and `#425` keeps the
+artefacts from a green run that flaked. **The next `:71` sighting confirms the symmetry or refutes
+it. Until then this card has one direction measured and one assumed.**
 
 **And this is `bug-arrivals`'s LIMIT 2, verbatim:** *"when the bus's mirrored load and the page's own
 navigation go to one URL together, the latest start for that URL decides, not the navigation that
