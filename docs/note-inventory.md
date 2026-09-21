@@ -243,7 +243,7 @@ found that `log.warn` and a stderr `warn` were being counted as replies (ten sen
 - **Line numbers are `b43a272`'s, and the run measured `87c835a`.** Four producers were written or
   reworded since, so the run couldn't have seen them. They're listed apart from the unfired ones.
 - **The net is still replies' `notes` and `warnings`**, as above. A sentence that reaches only stderr,
-  the app's UI or the log is outside it, such as the eight `log.warn` sentences in `src/main`.
+  the app's UI or the log is outside it, such as the nine `log.warn` sentences in `src/main`.
 
 **The split:**
 
@@ -505,7 +505,28 @@ sentence the fix wrote.
   that it can't fire and then the sentence goes, or a named reason it stays unobserved.
 - **The two ambiguous groups left:** which of the identical places fired.
 - **Sentences outside the net** (stderr-only, UI-only, log-only): nobody has listed them, beyond the
-  ten this pass set aside (eight `log.warn`, and two stderr lines in `strictOutput.ts`).
+  ones this pass set aside — and **this file miscounted them**, corrected below.
+
+  **Correction 2026-09-21: the count was wrong when it was written, not drifted since.** Kenya
+  recounted while scoping `chore-sentences-outside-notes-net`; Idris re-ran it independently and
+  agreed. Measured at **`87c835a`**, the commit this pass measured, and not today's tree:
+
+  ```
+  87c835a  src/main/*.ts   log.warn = 9    log.error = 2
+  today    src/main/*.ts   log.warn = 9    log.error = 2
+  ```
+
+  Identical then and now, so nothing was added since. Two errors: it said **eight** `log.warn` where
+  there were **nine**, and it does not mention **`log.error`** at all — two more producers in a
+  category it claims to have enumerated.
+
+  **Where "eight" came from cannot be reconstructed, and no rationale is invented for it here.** Two
+  of the nine are passthroughs logging a variable rather than a literal sentence (`index.ts:165`
+  `log.warn(line)`, `ipc.ts:555` `log.warn(refused)`), so a pass counting *sentences* could defensibly
+  exclude them — but that gives seven. Neither reading produces eight.
+
+  **So "the ten this pass set aside" is what the previous pass believed, not a baseline.** Anyone
+  sweeping this category takes the counts from the tree at the commit they sweep and states them.
 - **What the 14 would take:**
   - ~~**Walk limits (4).**~~ **Closed by `#358`**, and only one of the four was unfired in the sense
     this column means. `cli/walk.ts:129` — the return note's branch for a step that failed with budget
