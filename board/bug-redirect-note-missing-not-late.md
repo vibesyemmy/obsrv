@@ -1,6 +1,8 @@
 ---
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: bug
 criterion: C5
 order: 90
@@ -193,3 +195,29 @@ The entry sized a fix from one sighting, and "reasoned, not run" was on it hones
 applied on recurrence and **its own run refuted it within the hour**. The register is still worth
 keeping — but a sized fix in it is a hypothesis, not a decision, and this is the case that shows the
 difference.
+
+
+## CLAIMED 2026-09-22 by Henry, on Opeyemi's pick for the next release
+
+Taking this because I hold the diagnosis and wrote the `bug-arrivals` LIMIT 2 note it turned out to
+be. `chore-scroll-host-budget-is-silent`, the other half of the release, is routed to Kenya — its
+budget cut-off feeds lint's and audit's page coordinates and she has been inside that shared rect
+logic.
+
+**The shape, written before any code so it can be argued with rather than reviewed after:**
+
+1. `starts.push` (`targetSource.ts:491`) records `mirrored: this.mirroring` beside `byDocument`.
+2. `startedByDocument` skips mirrored entries, so the reverse-find reaches the document's start
+   instead of the bus's — the exact failure the trace above shows.
+3. **Two controls, each of which must go red when the guard is loosened:** the redirect case and the
+   mirrored case. The acceptance says so, and this card family's history is that closing one
+   direction opens the other.
+4. **A sweep of `arrivals.spec.ts`, with the count stated** — not one green run. The bug fires on a
+   5 ms race, so a single pass proves nothing, and this repository has spent two days on single
+   passes read as evidence.
+
+**The risk carried in, named first:** `mirroring` is a flag with a window, and this card exists
+because a *different* flag's window was raced — `loadMirrored`'s promise resolving 4 ms before a
+commit landed (`bug-arrivals`). So the first measurement is whether the mirror's
+`did-start-navigation` genuinely fires **inside** that window on a real run. Reasoning about this
+exact window is what produced the original defect; it gets measured.
