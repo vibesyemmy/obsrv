@@ -107,7 +107,7 @@ export function resolveScroller(): Element | null {
     return null
   }
   if (cachedScroller && cachedScroller.isConnected && canScroll(cachedScroller)) return cachedScroller
-  cachedScroller = findScroller()
+  cachedScroller = findScroller().el
   return cachedScroller
 }
 

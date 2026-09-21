@@ -91,9 +91,11 @@ function blockedFrom(raw: unknown): WalkBlocked | undefined {
   // (0.58.0 up to this change); an app that enters them no longer counts them.
   // Its presence is what tells `walkNothingNote` which walk it is describing.
   const hosts = r['shadowHosts']
+  const trunc = r['truncated']
   return {
     frames: { count: Math.max(0, Math.floor(count)), viewportCoverage: Math.min(1, Math.max(0, cover)) },
     ...(typeof hosts === 'number' && Number.isFinite(hosts) ? { shadowHosts: Math.max(0, Math.floor(hosts)) } : {}),
+    ...(typeof trunc === 'boolean' ? { truncated: trunc } : {}),
   }
 }
 

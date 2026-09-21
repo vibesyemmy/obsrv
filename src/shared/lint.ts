@@ -150,7 +150,7 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   // See audit.ts: the element the capture scrolls, and boxes some *other*
   // scroller holds out of view have coordinates that are the element's, not
   // a place on the page.
-  const host = rootScrolls() ? null : findScroller()
+  const host = rootScrolls() ? null : findScroller().el
   const clipped = clipTest(host)
   // Page coordinates: see `scrollOffset` in scrollHost.ts.
   const offset = scrollOffset(host)

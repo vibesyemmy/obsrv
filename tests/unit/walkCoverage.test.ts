@@ -227,6 +227,28 @@ describe('walkNothingNote', () => {
         'was not brought into view before measuring, and the figures are of the page as it first shows',
     )
   })
+
+  /**
+   * `chore-scroll-host-budget-is-silent`: `findScroller`'s own MAX_VISITED
+   * budget cut its search short, so "nothing to scroll" is where the search
+   * ran out, not a fact about the page. Every other branch above claims a
+   * cause the search measured; none of those claims are honest here.
+   */
+  it('says the search itself stopped early, rather than naming a cause it never measured', () => {
+    const note = walkNothingNote({ frames: { count: 0, viewportCoverage: 0 }, truncated: true })
+    expect(note).toBe(
+      "the search for this page's scroller stopped at its own element budget before it finished, so " +
+        '"nothing to scroll" is where the search ran out, not a fact about the page — a scroller past the ' +
+        'budget would look the same as one that is not there, and the figures are of the page as it first shows',
+    )
+  })
+
+  it('takes priority over a wall it also measured, since a truncated search cannot rule the wall in or out', () => {
+    const note = walkNothingNote({ frames: { count: 1, viewportCoverage: 1 }, truncated: true })
+    expect(note).not.toContain('consent wall')
+    expect(note).not.toContain('an <iframe> covers')
+    expect(note).toContain('stopped at its own element budget')
+  })
 })
 
 describe('walkCoverageNote beside a named wall', () => {

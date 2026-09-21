@@ -95,7 +95,7 @@ export function auditPage(maxTargets: number, maxText: number): AuditReport {
   // The element the capture scrolls — the shell's scroller, or the document
   // when the document is what scrolls. Boxes held out of view by any *other*
   // scroller are marked: their page coordinates are not a place on the page.
-  const host = rootScrolls() ? null : findScroller()
+  const host = rootScrolls() ? null : findScroller().el
   const clipped = clipTest(host)
   // Page coordinates: see `scrollOffset` in scrollHost.ts for why this is not
   // just `window.scrollX`/`scrollY` on an app shell.

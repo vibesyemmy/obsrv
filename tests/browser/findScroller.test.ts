@@ -68,12 +68,12 @@ describe('a sidebar of components in front of the page scroller', () => {
   it('finds the page scroller past 300 components, which is past the budget', () => {
     const root = build(300, 30, 400)
     expect(300 * 7).toBeGreaterThan(MAX_VISITED)
-    expect(findScroller(root)?.id).toBe('main')
+    expect(findScroller(root).el?.id).toBe('main')
   })
 
   it('finds it when the sidebar does not overflow either, where the search used to come back empty', () => {
     const root = build(300, 1, 400)
-    expect(findScroller(root)?.id).toBe('main')
+    expect(findScroller(root).el?.id).toBe('main')
   })
 
   // The property the light-first sweep could have cost, and the arm that stops
@@ -85,7 +85,7 @@ describe('a sidebar of components in front of the page scroller', () => {
     component.attachShadow({ mode: 'open' }).innerHTML =
       `<div id="feed" style="overflow-y:auto;width:560px;height:380px"><div style="height:5000px">feed</div></div>`
     root.append(component)
-    expect(findScroller(root)?.id).toBe('feed')
+    expect(findScroller(root).el?.id).toBe('feed')
   })
 
   // Level order alone was not enough: the 300 hosts sit at one level and their
@@ -94,7 +94,7 @@ describe('a sidebar of components in front of the page scroller', () => {
   // wrappers, all lost). The light DOM gets its own budget now.
   it.each([4, 12, 25])('finds it with the page scroller %i wrappers down, where the light DOM alone would find it', wrappers => {
     const root = build(300, 30, 400, wrappers)
-    expect(findScroller(root)?.id).toBe('main')
+    expect(findScroller(root).el?.id).toBe('main')
   })
 })
 
@@ -110,7 +110,7 @@ describe('findScroller', () => {
       <div id="big" style="${scrollerStyle(500, 300)}">${FILLER}</div>
       <div id="medium" style="${scrollerStyle(200, 200)}">${FILLER}</div>
     `)
-    expect(findScroller(root)?.id).toBe('big')
+    expect(findScroller(root).el?.id).toBe('big')
   })
 
   it('ignores boxes with nothing to scroll, and non-auto/scroll overflow', () => {
@@ -119,7 +119,7 @@ describe('findScroller', () => {
       <div id="clipped" style="overflow:hidden;width:400px;height:300px">${FILLER}</div>
       <div id="real" style="${scrollerStyle(200, 200)}">${FILLER}</div>
     `)
-    expect(findScroller(root)?.id).toBe('real')
+    expect(findScroller(root).el?.id).toBe('real')
   })
 
   it('breaks an exact area tie depth-first, keeping the one found first', () => {
@@ -137,7 +137,7 @@ describe('findScroller', () => {
       return el.clientWidth * el.clientHeight
     })
     expect(new Set(areas).size).toBe(1)
-    expect(findScroller(root)?.id).toBe('outer')
+    expect(findScroller(root).el?.id).toBe('outer')
   })
 
   it('sees through a boxless wrapper: an inline element hides nothing beneath it', () => {
@@ -147,7 +147,7 @@ describe('findScroller', () => {
     const root = mount(`<span id="wrap"><div id="deep" style="${scrollerStyle(400, 300)}">${FILLER}</div></span>`)
     expect(document.getElementById('wrap')!.clientHeight).toBe(0)
     expect(document.getElementById('wrap')!.getClientRects().length).toBeGreaterThan(0)
-    expect(findScroller(root)?.id).toBe('deep')
+    expect(findScroller(root).el?.id).toBe('deep')
   })
 
   it('sees through a display:contents wrapper too', () => {
@@ -157,7 +157,7 @@ describe('findScroller', () => {
     const wrap = document.getElementById('wrap')!
     expect(wrap.getClientRects().length).toBe(0)
     expect(wrap.checkVisibility()).toBe(false)
-    expect(findScroller(root)?.id).toBe('deep')
+    expect(findScroller(root).el?.id).toBe('deep')
   })
 
   it('never picks a hidden drawer that kept its client area', () => {
@@ -168,7 +168,7 @@ describe('findScroller', () => {
       `)
       // The drawer really is the larger box — it is excluded on visibility.
       expect(document.getElementById('drawer')!.clientHeight).toBe(300)
-      expect(findScroller(root)?.id).toBe('shown')
+      expect(findScroller(root).el?.id).toBe('shown')
       host.remove()
     }
   })
@@ -180,26 +180,44 @@ describe('findScroller', () => {
       </div>
       <div id="shown" style="${scrollerStyle(200, 150)}">${FILLER}</div>
     `)
-    expect(findScroller(root)?.id).toBe('shown')
+    expect(findScroller(root).el?.id).toBe('shown')
   })
 
-  it('returns null when the page has no inner scroller at all', () => {
+  it('returns null when the page has no inner scroller at all, and says the search finished', () => {
     const root = mount(`<div style="width:300px;height:100px">plain</div>`)
-    expect(findScroller(root)).toBeNull()
+    const result = findScroller(root)
+    expect(result.el).toBeNull()
+    // Genuinely nothing to find, well inside the budget — a different null
+    // than the one below, and the whole point of `chore-scroll-host-budget-is-silent`
+    // is that a caller could not previously tell these two apart.
+    expect(result.truncated).toBe(false)
   })
 
-  it('degrades predictably past MAX_VISITED instead of walking forever', () => {
+  /**
+   * `chore-scroll-host-budget-is-silent`: past MAX_VISITED, `findScroller`
+   * used to return null exactly as it does for a page with no scroller at
+   * all — indistinguishable from the case above, though the search never
+   * looked at `#late`. The fixture and its control are both here so a
+   * regression in either direction (never sets `truncated`, or sets it when
+   * the search genuinely finished) fails one of these two.
+   */
+  it('degrades predictably past MAX_VISITED instead of walking forever, and says so', () => {
     // A wide fan of empty siblings ahead of the scroller in document order:
     // the budget runs out first, so the scroller is not found and the caller
     // falls back to the root rather than stalling the preload.
     const decoys = `<i></i>`.repeat(MAX_VISITED + 50)
     const root = mount(`${decoys}<div id="late" style="${scrollerStyle(400, 300)}">${FILLER}</div>`)
-    expect(findScroller(root)).toBeNull()
+    const over = findScroller(root)
+    expect(over.el).toBeNull()
+    expect(over.truncated).toBe(true)
 
-    // The same scroller inside the budget is found normally.
+    // The control: the same shape, comfortably inside the budget, must not
+    // report a truncation that did not happen.
     host.remove()
     const near = mount(`${`<i></i>`.repeat(10)}<div id="early" style="${scrollerStyle(400, 300)}">${FILLER}</div>`)
-    expect(findScroller(near)?.id).toBe('early')
+    const under = findScroller(near)
+    expect(under.el?.id).toBe('early')
+    expect(under.truncated).toBe(false)
   })
 })
 
