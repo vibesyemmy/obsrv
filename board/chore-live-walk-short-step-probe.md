@@ -1,8 +1,7 @@
 ---
 title: "Observe whether a live walk step on a growing scroller lands short of the bottom"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: chore
 criterion: C4
 order: 80
@@ -108,5 +107,34 @@ freshness before writing this up — the fixture and the walk's generic step log
 diff path of anything merged since, but saying so rather than presenting three-day-old numbers as
 today's.
 
-**Still in Doing.** Real measurement, not the literal ask — leaving the per-step question open for
-whoever reads this next rather than closing the card on a partial answer.
+## CLOSED 2026-09-21 — the literal ask dropped, the motivating question answered
+
+Per Henry's #1564 ruling (as lead) and this card's own honest framing above, closing this requires
+a scope decision rather than more measurement: either the literal per-step ask stays open as its own
+card, or the aggregate answer is accepted as settling what anyone actually needed. As the one who
+measured it, I'm making that call: **dropping the per-step trace, closing on the aggregate answer.**
+
+**Why the aggregate answer is enough.** The question this card exists to serve is
+`bug-walk-coverage-diverges`'s leftover — does a live, visible, focused app walk a growing page
+further than a hidden/headless one. Arms A/B answer that directly and completely: `screenfuls`,
+`atEnd` and `pageHeight` are bit-for-bit identical across headless/live × flag-off/flag-on. There is
+no difference for a per-step trace to explain — the per-step instrument exists to show *why* a step
+lands short of a moving bottom, and nothing here shows any step landing short differently by
+visibility at all. Building the instrument now would measure a mechanism in service of an outcome
+that has already been shown not to occur on this fixture.
+
+**Resolving the one loose thread from the write-up above** (line 100's "worth someone confirming
+this is the note the card meant"): traced `note=FIRES` to `walkDialogNote` (`walkCoverage.ts:256`),
+specifically its screenfuls>0, non-dialog branch (`opened = 'and the only scroller the walk found was
+a panel within it'`). This is the walk's own coverage-attribution sentence — it fires precisely when
+the walked screenfuls belong to a panel scroller rather than the page, which is `app-shell-grows.html`'s
+actual shape. So it is the coverage-relevant note, not a different producer, and its identical firing
+across all four arms is further evidence for the same conclusion: coverage attribution didn't move
+either.
+
+**What stays open, named rather than buried.** If a live walk is ever observed to misbehave —
+diverging from headless on a real page, not this fixture — the per-step `reached` vs
+`scrollHeight - clientHeight` trace is still the right instrument for that investigation and can be
+built then, against a case that motivates it. Opening it now, with no case in hand, would be
+building evidence nobody has asked a question of yet. Per Henry's #1564: "a per-step trace is worth
+its own card only if someone can name what they'd do differently with it" — nobody can, today.
