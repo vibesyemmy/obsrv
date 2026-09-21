@@ -1039,3 +1039,34 @@ runs.
 recurring. At that point the question to ask is what is *common* to the first attempt — app launch,
 the first window paint, a shared `beforeAll` — rather than anything in the individual test, since the
 tests have nothing else in common.
+
+
+## `live-capture-notes.spec.ts:231` — a resize capture that applied one of five, 2026-09-21
+
+First sighting, on `#407`'s run `35603353610` — a documentation and test-comment branch that touches
+no `src/`, so not the branch's doing. One `✘`, green on retry:
+
+```
+Error: try 2: settled=true label=undefined applied=1 capture=1823ms size=1280x1024 warnings=[]
+expect(received).toBeGreaterThanOrEqual(expected)
+Expected: >= 5
+Received:    1
+```
+
+**What the line already tells you, because someone made the failure print its own state.** The capture
+**settled** (`settled=true`), it took 1823 ms, it ended at the right size, and it raised **no
+warnings** — and only **one** of at least five resizes had been applied when it answered. So this is
+not a capture that failed; it is a capture that succeeded early and said nothing was wrong.
+
+That is the same family as `live-drive.spec.ts:1069` above (*"a resize capture that came back settled,
+once"*), and the pair is worth reading together: both are the raster answering **truthfully about a
+moment** that arrived before the thing under test finished happening. Neither is the app breaking, and
+neither is a timeout — which is why a longer budget is the wrong instinct here, as `arrivals.spec.ts:89`
+above demonstrated the hard way.
+
+**Not established:** whether the resizes were slow to apply or the capture was quick to settle, which
+are different defects with the same line in the log. `applied=1` is the count the test read; nothing
+here says when the other four landed, or whether they did.
+
+**If it recurs**, the cheap next step is printing the timestamp of each applied resize alongside
+`applied=`, so the two readings separate without a debugger.
