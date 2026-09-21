@@ -93,6 +93,57 @@ paths; they do not show it holds on every path"*) turning out to be the operativ
 "match the navigation, not the URL" is not a small fix — whatever closes this has to carry identity
 some other way, or narrow when the heuristic is trusted.
 
+## DIAGNOSED 2026-09-21 — measured on CI, and it is LIMIT 2 exactly as written
+
+`#422`'s instrument printed the guard's inputs and **answered this card on its own CI run, before it
+was merged**. Run `35640624703`, `arrivals.spec.ts`'s note-missing case, first attempt:
+
+```
+starts for hairline.html, in order:
+  …533361  byDocument = true     <- the DOCUMENT's own location.replace
+  …533366  byDocument = false    <- 5 ms later: the bus's mirrored load
+  …534055  byDocument = true     <- again, the second test
+  …534079  byDocument = false    <- 24 ms later: the mirror
+
+matched by startedByDocument:  …534079   byDocument = false
+startsForThisUrl: 6
+```
+
+**The mechanism, no longer a candidate.** `startedByDocument` reverse-finds the **last** start whose
+url matches. Both navigations go to the same address, so it returns the **mirror's** entry, not the
+document's. `byDocument` reads `false`, `ipc.ts:245`'s guard drops the commit, and the note is never
+produced — **while the document's own start sits five milliseconds earlier in the same trace with
+`byDocument: true`.**
+
+**Which of the three candidates it was:** the reverse-find matching the other navigation to the same
+url. Not a missing `starts` entry — the entry is there. Not an undefined `initiator` — the document's
+start is correctly marked `true`. The other two are ruled out by the same trace that shows the third.
+
+**The intermittency is the 5 ms.** When the mirror's start lands *after* the document's, the note
+dies; when it lands first, or the mirrored load does not happen, the note survives. `:71`'s opposite
+failure — the note present for a pane that only mirrored — is this mechanism with the roles swapped.
+
+**And this is `bug-arrivals`'s LIMIT 2, verbatim:** *"when the bus's mirrored load and the page's own
+navigation go to one URL together, the latest start for that URL decides, not the navigation that
+actually committed."* Written by Henry from `#184`, closed as a scoped known heuristic, and now
+observed firing.
+
+## The fix this points at, NOT yet built
+
+Electron 43 exposes no navigation id on `did-navigate` (checked while measuring `initiator` for
+`#184`), so identity has to come from state we already hold — and we already hold it.
+`loadMirrored` sets `this.mirroring = true` for the duration of the mirrored load, so the mirror's
+`did-start-navigation` fires inside that window. Record it on the entry (`mirrored: this.mirroring`
+in the `starts.push` at `targetSource.ts:491`) and have `startedByDocument` skip mirrored entries.
+The reverse-find then reaches the document's start, because the only thing hiding it is an entry we
+can already identify.
+
+**Why it is not in this PR.** It changes a guard whose behaviour is pinned by a measured 0/20
+spurious and 20/20 truthful, and this card family's own history is that **tightening one direction
+breaks the other** — `bug-arrivals` records "without the address test … measured: true notes 20 in 20
+down to 5". It needs its own arms, in both directions, before anyone believes it. The instrument
+stays on `main` either way: it is what will show the fix working.
+
 ## Not yet established
 
 - **which** of the two it is: a missing `starts` entry, an entry whose `initiator` is undefined, or
