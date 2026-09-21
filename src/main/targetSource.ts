@@ -872,7 +872,24 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * redirecting, is news; a load main asked for is not.
    */
   private startedByDocument(url: string): boolean {
-    return [...this.starts].reverse().find(s => s.url === url)?.byDocument === true
+    // **Mirrored starts are skipped, and that is the whole of
+    // `bug-redirect-note-missing-not-late`.** This matched by url alone, so
+    // when a page's own `location.replace` and the bus's mirrored load went to
+    // one address together, the LATEST start won — and the mirror's is later.
+    // Measured on run `35640624703`: the document's start sat in the trace
+    // with `byDocument: true`, five milliseconds before the mirror's
+    // `byDocument: false`, and this returned the mirror's. `ipc.ts`'s guard
+    // then dropped a real redirect as though the page had not moved.
+    //
+    // `bug-arrivals`'s own LIMIT 2 named this before it was seen: "the latest
+    // start for that URL decides, not the navigation that actually committed",
+    // recorded as a known heuristic because Electron 43 exposes no navigation
+    // id on `did-navigate` to match on instead. It does expose the one fact
+    // needed: the bus sets `mirroring` for the duration of its own load, so a
+    // start recorded inside that window is not the document's. Measured on run
+    // `35666072639` before this line was written — `mirrored: true` on the
+    // mirror's start, on both arms.
+    return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)?.byDocument === true
   }
 
   async loadMirrored(input: string): Promise<string> {

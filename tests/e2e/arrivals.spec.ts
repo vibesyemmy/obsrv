@@ -54,6 +54,21 @@ const movedNote = async (): Promise<string | undefined> => {
   return ((r.notes as string[] | undefined) ?? []).find(n => n.includes('navigated after it loaded'))
 }
 
+/** One start as `TargetSource` records it. */
+type Start = { at: number; url: string; byDocument: boolean; mirrored: boolean }
+/** What the probe below reports. `reachable: false` means `__obsrv.target` was gone. */
+type GuardSeen =
+  | { reachable: false }
+  | {
+      reachable: true
+      url: string
+      matched: Start | null
+      matchedIgnoringMirrored: Start | null
+      startsForThisUrl: number
+      starts: Start[]
+      commits: unknown[]
+    }
+
 /**
  * What the arrivals guard was looking at when it decided, printed on failure.
  *
@@ -71,21 +86,25 @@ const movedNote = async (): Promise<string | undefined> => {
  * TypeScript — at runtime it is a field on the same object the specs already
  * reach through `__obsrv.target`.
  */
-async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detail: boolean): Promise<void> {
+async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detail: boolean): Promise<GuardSeen> {
   const seen = await app.evaluate(() => {
     const t = (globalThis as unknown as { __obsrv?: { target?: unknown } }).__obsrv?.target as
-      | { commitTrace?: () => unknown[]; starts?: { at: number; url: string; byDocument: boolean }[]; webContents?: { getURL(): string } }
+      | { commitTrace?: () => unknown[]; starts?: { at: number; url: string; byDocument: boolean; mirrored: boolean }[]; webContents?: { getURL(): string } }
       | undefined
     if (t === undefined) return { reachable: false as const }
     const starts = Array.isArray(t.starts) ? t.starts : []
     const url = t.webContents?.getURL?.() ?? '(no webContents)'
-    // What `startedByDocument(url)` would answer right now, computed the same
-    // way it computes it — the last start recorded FOR THIS URL.
-    const matched = [...starts].reverse().find(x => x.url === url)
+    // Two answers, deliberately: what the reverse-find returns when it skips
+    // mirrored starts (what `startedByDocument` does now) and what it returned
+    // before (`bug-redirect-note-missing-not-late`). Keeping both is what lets
+    // a control fail when the skip is removed.
+    const matched = [...starts].reverse().find(x => x.url === url && !x.mirrored)
+    const matchedIgnoringMirrored = [...starts].reverse().find(x => x.url === url)
     return {
       reachable: true as const,
       url,
       matched: matched ?? null,
+      matchedIgnoringMirrored: matchedIgnoringMirrored ?? null,
       startsForThisUrl: starts.filter(x => x.url === url).length,
       starts: starts.slice(-8),
       commits: (t.commitTrace?.() ?? []).slice(-8),
@@ -106,10 +125,13 @@ async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detai
   // with both numbers in front of you.
   const line = `ARRIVALS GUARD (bug-redirect-note-missing-not-late) ${label}`
   if (!detail || !seen.reachable) {
-    console.log(`${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, startsForThisUrl: seen.startsForThisUrl } : seen)}`)
-    return
+    console.log(
+      `${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, matchedIgnoringMirrored: seen.matchedIgnoringMirrored, startsForThisUrl: seen.startsForThisUrl } : seen)}`,
+    )
+    return seen
   }
   console.log(`${line}: ${JSON.stringify(seen, null, 2)}`)
+  return seen
 }
 
 test.beforeAll(async () => {
@@ -141,8 +163,20 @@ test('the target mirroring the native pane is not the page navigating', async ()
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
   const note = await movedNote()
-  await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
+
+  // **The control for the mirrored direction** (`bug-redirect-note-missing-not-late`).
+  // Asserting only "no note" would pass on the broken code, because the note's
+  // absence here does not depend on the fix. What does: every start recorded
+  // for this address was the bus's, so a reverse-find that SKIPS mirrored
+  // entries must find nothing at all. Remove the `!s.mirrored` from
+  // `startedByDocument` and this fails, because the find then returns the
+  // mirror's start.
+  if (seen.reachable) {
+    expect(seen.matched, `a non-mirrored start exists for a page nobody asked to move: ${JSON.stringify(seen.matched)}`).toBeNull()
+    expect(seen.matchedIgnoringMirrored?.mirrored, 'the fixture no longer produces a mirrored start, so this control proves nothing').toBe(true)
+  }
 })
 
 test('a page that really does redirect after loading still says so', async () => {
@@ -163,7 +197,23 @@ test('a page that really does redirect after loading still says so', async () =>
   // value that is never produced, and a poll here only turns a fast, honest
   // failure into a slow one that reads like a timeout.
   const note = await movedNote()
-  await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined)
   expect(note, 'the page asked for redirected itself to another page; that is the note doing its job').toBeDefined()
   expect(note).toContain('hairline.html')
+
+  // **The control for the redirect direction**, and the reason it asserts the
+  // mechanism rather than the note. Measured on run `35666072639`, BEFORE the
+  // fix: this test passed while `startedByDocument` returned the MIRROR's
+  // start (`byDocument: false, mirrored: true`). The note survived only
+  // because `ipc.ts:245`'s other half — `url === arrivals.url` — happened not
+  // to hold. So "the note appeared" passes on the broken code, and a control
+  // that checks only that is no control at all.
+  //
+  // What must be true is that the guard reached the DOCUMENT's own start.
+  // Remove the `!s.mirrored` from `startedByDocument` and the find returns the
+  // mirror's entry again, and this fails.
+  if (seen.reachable) {
+    expect(seen.matched?.byDocument, `the guard did not reach the document's own start: ${JSON.stringify(seen.matched)}`).toBe(true)
+    expect(seen.matched?.mirrored, `the matched start was the bus own load, not the page own: ${JSON.stringify(seen.matched)}`).toBe(false)
+  }
 })
