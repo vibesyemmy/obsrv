@@ -88,8 +88,18 @@ leaving the card open:**
   not show it refuses a wrong-ordered one — that arm remains the out-of-band verification in
   "Verified, without triggering a real tag push" above (simulated `version=0.63.0` against the real
   registry, exit 1, exact error text). Nothing in `35572139926` or any run since has forced the
-  mismatch path live, and nothing should — the only way to exercise it for real is to actually publish
-  a version behind its tag, which is the failure this check exists to prevent.
+  mismatch path live.
 
 Henry, Idris and Kenya independently confirmed the same run and step-level result (`#1548`, `#1551`,
 `#1552`) before this was written up.
+
+**Correction, 2026-09-21 — "the only way is to publish a bad version" overclaimed, per Idris's #1573
+live test.** This card originally said the refusal arm's only path to live evidence was actually
+publishing a version behind its tag. Idris tested rather than took that on reasoning: `ci.yml:366`'s
+step has no `--registry` pin, so `npm view getobsrv version` resolves through ambient npm config.
+Pointed at a throwaway local server stubbing a fake `getobsrv` packument at `9.9.9`
+(`NPM_CONFIG_REGISTRY` or `--registry`), the step reads the fake version and — untested but clearly
+reachable — would refuse against it, no contact with the real registry at all. So the honest
+statement is **"untested, and reachable via a registry substitution nobody's built the harness for,"**
+not "unreachable by construction." The harness itself is real work nobody has asked for yet, not
+something this correction is claiming to have done.
