@@ -40,9 +40,41 @@ This is the same path a real page takes. A site that bounces a visitor back to t
 at would, on the losing side of this race, be measured with no sentence saying the page moved — which
 is the whole thing the note exists to say.
 
+## The same field fails the other way too, measured the next run
+
+Run `35528436516` (this branch's own next CI) flaked **`arrivals.spec.ts:71`** — the *sibling* test,
+*"the target mirroring the native pane is not the page navigating"* — and it failed for the opposite
+reason:
+
+```
+Error: the pane was never asked to move, and it ended where it began:
+  the page navigated after it loaded (to the same address): a bot challenge, an interstitial,
+  a redirect, or a dev server reloading under an edit; the figures are of the page it arrived at
+expect(received).toBeUndefined()
+```
+
+So on that attempt the note **was** produced for a pane that only mirrored the other one — the exact
+defect `ipc.ts:245`'s guard was written to stop (`bug-arrivals`, recorded there as 17-20 runs in 20).
+
+**Both directions are the same field.** The guard is `url === arrivals(s).url && !byDocument`, so:
+
+| sighting | what `byDocument` must have been | what the user gets |
+| --- | --- | --- |
+| `:89` (note missing) | `false` when the document really did redirect | a real redirect goes unreported |
+| `:71` (note present) | `true` when it was the bus mirroring a load | Obsrv reports its own plumbing as the page moving |
+
+That moves this card from "a note is sometimes missing" to **"the signal the note depends on is
+unreliable in both directions"**, which is a different and larger claim. `byDocument` is
+`details.initiator !== undefined` from `did-start-navigation`, matched by url through
+`startedByDocument`'s reverse-find — and a url-keyed lookup is exactly the shape that returns the
+wrong entry when two navigations to the same address are in flight, which is what both fixtures
+arrange.
+
 ## Not yet established
 
-- **which** of the two it is: a missing `starts` entry, or an entry whose `initiator` is undefined;
+- **which** of the two it is: a missing `starts` entry, an entry whose `initiator` is undefined, or
+  the reverse-find matching the *other* navigation to the same url (the last is now the most likely,
+  since it explains both directions with one mechanism and the others explain only one);
 - whether it reproduces off CI at all, and at what rate;
 - whether `did-redirect-navigation` (handled separately at `targetSource.ts:500`) is involved.
 
@@ -56,6 +88,8 @@ one run that records `starts` and `initiator` at the moment of the dropped commi
   from a code reading;
 - a genuine `location.replace` back to the pane's current address reports the note every time, with a
   control that fails when the guard at `ipc.ts:245` is loosened;
+- **and a mirrored load never reports it**, with its own control — closing one direction while
+  leaving the other is how this arrived here;
 - `arrivals.spec.ts:89` passes on first attempt across a sweep, not on retry;
 - the `docs/e2e-flakes.md` entry is updated to say it was a bug and not a flake.
 

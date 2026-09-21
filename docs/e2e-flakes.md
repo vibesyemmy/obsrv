@@ -986,6 +986,18 @@ a finding.
 **Do not run this spec locally to investigate it** until `node scripts/desk-safe.js toolbar` has
 answered — the standing rule is that an activation on the record is what decides, not the spec's name.
 
+**`arrivals.spec.ts:71` — the sibling, failing the opposite way, 2026-09-20.** Run `35528436516`:
+*"the target mirroring the native pane is not the page navigating"* failed its first attempt because
+the note **was** there (`expect(received).toBeUndefined()` receiving *"the page navigated after it
+loaded (to the same address)"*), then passed on retry in 520 ms. Its neighbour at `:89` fails when the
+note is **missing**. Same guard, same field, opposite directions — recorded on
+`board/bug-redirect-note-missing-not-late.md`, which this promotes from "a note goes missing" to "the
+signal is unreliable both ways".
+
+**Read that pair together before touching either test.** Tightening one direction is how you ship the
+other; the `bug-arrivals` comment in `ipc.ts:230-244` already records both halves being needed, and
+these two flakes are those halves failing.
+
 **And `controls.spec.ts:86` flaked on the same run** (`35525940597`) — *"a field commits on blur or
 Enter, never on a keystroke"*, 30 s, a `field.blur()` timeout. First sighting, not previously in this
 register, and not caused by `#407` (which touches `arrivals.spec.ts` and documentation). Recorded by
