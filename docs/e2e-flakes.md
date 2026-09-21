@@ -802,19 +802,58 @@ green on retry in 516 ms.
 The file's own header comment documents this exact shape for its sibling
 test, measured: "a commit can be delivered after [the load promise] resolves
 — measured at 4 ms late — so the mirror's own landing arrived unmarked." That
-fix (`sync.spec.ts:138`'s entry above has the history) was to mark the event
-rather than poll around it, for a *different* consumer of the same "navigated
-after it loaded" flag. This test's consumer — `movedNote()` — was never given
+fix was to mark the event rather than poll around it, for a *different*
+consumer of the same "navigated after it loaded" flag — the history is in
+**this register's own entry** headed `sync.spec.ts:138` (at the line given by
+`grep -n '^## .*sync.spec.ts:138'`), which is a heading here and not a line of
+`tests/e2e/sync.spec.ts`. Idris read it as the latter while reviewing `#407`
+and found a `setTimeout` counter, which is what is at that source line today;
+the ambiguity was the register's, not the reader's, so it is spelled out
+here. This test's consumer — `movedNote()` — was never given
 the same treatment: the URL settling and the note being computed are two
 different signals, and nothing here waits for the second one once the first
 has settled.
 
-Reasoned, not run (1 sighting; board/CI only). **The sized fix, if it
-recurs:** poll `movedNote()` the way the URL is already polled —
-`expect.poll(movedNote, { timeout: 10_000 }).toBeDefined()` in place of the
-single `await` at `:99` — rather than a new mechanism. Left in the register
-rather than a card: one sighting in ten red runs, and the fix is small enough
-to sit here until someone has room for it.
+**Recurred 2026-09-20 on run `35524174239`** — `#407`, the PR that added the
+`toolbar.spec.ts:112` entry below, which is a docs-only change and so cannot be
+the cause. Same failure, same `Received: undefined`, green on retry again.
+
+**The sized fix was applied, and its own CI run refuted it. It has been removed.**
+`expect.poll(movedNote, { timeout: 10_000 })` went in, and on run `35525940597`
+it **sat the full 10 s and still got `undefined`** (10.6 s), then passed on retry
+in 684 ms. Idris read that log and stopped the merge.
+
+**So this is not a late note — it is a missing one**, and no timeout can fix a
+value that is never produced. The poll made things slightly worse: it turned a
+fast, honest failure into a ten-second one that reads like a timeout, which is
+the costume a correctness bug should not be allowed to wear.
+
+**What the mechanism looks like, unproven.** `ipc.ts:245` drops a commit when
+`url === arrivals(s).url && !byDocument`. This test navigates to `hairline.html`,
+then to `redirect.html`, whose `location.replace('hairline.html')` lands back on
+the address the pane is **already recorded at** — so the note depends entirely on
+`byDocument` being true. That comes from `startedByDocument`, which reverse-finds
+`starts` for a matching url, and each entry's `byDocument` is
+`details.initiator !== undefined` from `did-start-navigation`
+(`targetSource.ts:489-495`). If that entry is missing or its `initiator` is
+undefined on a given run, the commit is dropped and the note is **never** set.
+
+That is a candidate **correctness** bug, not a test problem: the same path is how
+a real page's self-redirect gets reported to a real user. Filed as
+`bug-redirect-note-missing-not-late`. **Do not paper over it with a longer
+wait**; the entry above that sized the poll was written before this evidence
+existed and its recommendation is withdrawn.
+
+**On "mark the event instead", which Idris raised before any of this.** Marking
+is what the sibling consumer got and it is the better shape — but on this
+evidence it would not have helped either, because the flag the mark would carry
+is the one that is never set. The fix belongs upstream of both, in whatever
+makes `byDocument` false for a genuine `location.replace`.
+
+**This entry is the argument for the register.** It was filed as *"reasoned, not
+run"* with a fix nobody had time for, and it sat here until the recurrence made
+it worth doing. The alternative — investigating from scratch on the second
+sighting — is what this file exists to avoid.
 
 ## `sync-trace.spec.ts:77`: the loop fixture's 30 s budget, not a crash
 
@@ -912,6 +951,63 @@ branches that do, that is the finding this entry exists to make cheap.
 (`bug-e2e-takes-the-desk.md:236` — *"fronts alone too"*), and running the single test with `-g` was
 measured on 2026-09-20 to front the app on a developer's desk. `node scripts/desk-safe.js` answers this
 before the run.
+
+## `toolbar.spec.ts:112` — the settings toggle never arrived, 2026-09-20
+
+**First sighting**, on `#400`'s run `35507247365` (`649029f`, the `c5` docs PR). One `✘`, passed on
+retry, so the suite was green:
+
+```
+✘ 594 tests/e2e/toolbar.spec.ts:112:5 › every settings nav row starts its label at the same x (30.0s)
+✓ 595 …(retry #1) (264ms)
+
+    Test timeout of 30000ms exceeded.
+    TimeoutError: page.click: Timeout 30000ms exceeded.
+    Call log:
+      - waiting for locator('.toggle-settings')
+```
+
+**What the numbers say on their own.** Thirty seconds waiting for a toolbar button, then the same test
+passing in **264 ms** — a 113× gap between the two attempts of one test. That is not a slow assertion;
+it is an element that was not there at all and then was there immediately. The first line names the
+failure (`page.click` on `.toggle-settings`), so this is not a timeout wearing a teardown error.
+
+**Why the change cannot be the cause, stated so nobody re-derives it.** `#400` touched
+`docs/note-inventory.md` and `board/c5.md` and nothing else — no `src/`, no `tests/`, no build input.
+A docs-only diff cannot alter when a renderer paints. **This is recorded as a fact about the runner,
+not as a suspicion about a branch.**
+
+**What it does not settle.** One sighting is not a rate ([[one-run-is-a-candidate]] applies to flakes
+as much as to races), and "the renderer was slow to boot" is a story that fits the evidence rather
+than a measurement of it. A second sighting on an unrelated branch would make it runner noise; a
+second sighting clustered on branches that touch the toolbar or the window's show path would make it
+a finding.
+
+**Do not run this spec locally to investigate it** until `node scripts/desk-safe.js toolbar` has
+answered — the standing rule is that an activation on the record is what decides, not the spec's name.
+
+**`arrivals.spec.ts:71` — the sibling, failing the opposite way, 2026-09-20.** Run `35528436516`:
+*"the target mirroring the native pane is not the page navigating"* failed its first attempt because
+the note **was** there (`expect(received).toBeUndefined()` receiving *"the page navigated after it
+loaded (to the same address)"*), then passed on retry in 520 ms. Its neighbour at `:89` fails when the
+note is **missing**. Same guard, same field, opposite directions — recorded on
+`board/bug-redirect-note-missing-not-late.md`, which this promotes from "a note goes missing" to "the
+signal is unreliable both ways".
+
+**Read that pair together before touching either test.** Tightening one direction is how you ship the
+other; the `bug-arrivals` comment in `ipc.ts:230-244` already records both halves being needed, and
+these two flakes are those halves failing.
+
+**And `controls.spec.ts:86` flaked on the same run** (`35525940597`) — *"a field commits on blur or
+Enter, never on a keystroke"*, 30 s, a `field.blur()` timeout. First sighting, not previously in this
+register, and not caused by `#407` (which touches `arrivals.spec.ts` and documentation). Recorded by
+mention so a second sighting has something to land against; nobody has looked at it.
+
+**A second data point, from this PR's own run.** `#407` (this entry) flaked too — but a *different*
+test, `arrivals.spec.ts:89`, already in the register above. Two consecutive docs-only runs, two
+unrelated tests, neither branch touching what it broke. That is what a loaded runner looks like, and
+it is the same reading the `capture.ts` entry above reached from the same evidence. It is two points,
+not a rate, and it says nothing yet about whether `toolbar:112` specifically will return.
 
 
 ## A shape, not yet a cause: a `page.click` that waits its whole budget, then lands instantly

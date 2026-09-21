@@ -96,6 +96,13 @@ test('a page that really does redirect after loading still says so', async () =>
   await call('navigate', { url: REDIRECT })
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
+  // **Deliberately NOT polled.** A poll was tried here and removed: on run
+  // `35525940597` it sat on `movedNote()` for the full 10 s and still got
+  // `undefined`, then passed on retry in 684 ms. The note is not arriving
+  // late, it is not arriving at all on the failing attempt — see
+  // `docs/e2e-flakes.md`'s entry for this test. A longer wait cannot fix a
+  // value that is never produced, and a poll here only turns a fast, honest
+  // failure into a slow one that reads like a timeout.
   const note = await movedNote()
   expect(note, 'the page asked for redirected itself to another page; that is the note doing its job').toBeDefined()
   expect(note).toContain('hairline.html')
