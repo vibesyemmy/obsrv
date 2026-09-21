@@ -912,3 +912,34 @@ branches that do, that is the finding this entry exists to make cheap.
 (`bug-e2e-takes-the-desk.md:236` — *"fronts alone too"*), and running the single test with `-g` was
 measured on 2026-09-20 to front the app on a developer's desk. `node scripts/desk-safe.js` answers this
 before the run.
+
+
+## A shape, not yet a cause: a `page.click` that waits its whole budget, then lands instantly
+
+Two sightings, 2026-09-20 and 2026-09-21, on **different specs in different files**, neither
+previously in this register, both on **documentation-only branches** that cannot have caused them:
+
+| run | test | first attempt | retry |
+| --- | --- | --- | --- |
+| `35507247365` (`#400`) | `toolbar.spec.ts:112` — *every settings nav row starts its label at the same x* | `page.click` timeout, **30.0 s**, waiting for `.toggle-settings` | **264 ms** |
+| `35597133483` (`#411`) | `vision.spec.ts:35` — *choosing a deficiency names it in the footer* | `page.click` timeout, **30.0 s** | **80 ms** |
+
+**The signature is the whole content of this entry:** a click waits the entire 30 s budget for an
+element and then finds it immediately on the next attempt. A 375× gap between two attempts of one
+test is not a slow selector; it is an element that was not there and then was.
+
+**This is a different shape from the `arrivals` pair above, and the difference matters.** Those are a
+real signal arriving wrong — present when it should be absent, absent when it should be present —
+and they turned out to be a product bug. These two are the app apparently not being ready to be
+clicked at all, which is a claim about startup rather than about any code under test.
+
+**What this entry is not.** Two instances is not a rate, nothing here names a cause, and "the runner
+was loaded" is a story that fits rather than a measurement. It is written down now, with both examples
+in hand, because the alternative is two unconnected entries that nobody joins up later — which is
+exactly what happened to the `arrivals` pair until they failed in opposite directions on consecutive
+runs.
+
+**What would make it a finding:** a third sighting of the same signature, or one of these two
+recurring. At that point the question to ask is what is *common* to the first attempt — app launch,
+the first window paint, a shared `beforeAll` — rather than anything in the individual test, since the
+tests have nothing else in common.
