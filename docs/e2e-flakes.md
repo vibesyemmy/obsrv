@@ -1070,3 +1070,31 @@ here says when the other four landed, or whether they did.
 
 **If it recurs**, the cheap next step is printing the timestamp of each applied resize alongside
 `applied=`, so the two readings separate without a debugger.
+
+
+## `live-drive.spec.ts:210` — the control socket hung up, 2026-09-21
+
+First sighting, on `#424`'s run `35641299420` — a **documentation-only** branch, so not its doing.
+One `✘`, green on retry:
+
+```
+2) tests/e2e/live-drive.spec.ts:210:5 › navigate + setPreset over HTTP actually drive the app
+    Test timeout of 30000ms exceeded.
+    Error: socket hang up
+```
+
+**`socket hang up` is the finding, and it is not the same shape as the other timeouts here.** The
+`page.click` pair above (`toolbar.spec.ts:112`, `vision.spec.ts:35`) wait the full budget for an
+element that then appears instantly — the app is up and the thing is not there yet. This one is the
+**agent-control HTTP connection dying mid-request**: the client got a socket closed under it, not a
+slow answer. Different layer, different question.
+
+**Not established, and the log cannot say:** whether the app closed the connection, the server never
+finished writing, or the test's own request was torn down at the 30 s deadline and `socket hang up`
+is the *consequence* of the timeout rather than its cause. The order matters and one sighting does
+not fix it.
+
+**If it recurs**, the thing to read is whether the control server logged the request at all — that
+separates "never arrived" from "arrived and the answer was lost", which no amount of client-side
+timing can. `bug-drive-instance-clobber`'s history is relevant if a second instance is ever in play,
+though nothing here suggests one was.
