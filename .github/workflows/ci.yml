@@ -333,6 +333,42 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # The same artefacts, for the population that actually needs them.
+      #
+      # THE GAP THIS CLOSES. The step above fires only when the e2e step
+      # FAILED. A flaky test — one that fails and then passes on its retry —
+      # leaves that step's outcome `success`, so Playwright writes the PNGs and
+      # the trace to `test-results/` on the runner and this job throws them
+      # away. The failures whose evidence is hardest to get back are exactly
+      # the ones whose evidence was being discarded: a flake is gone by the
+      # time anyone reads the log, and the log is all that survived.
+      #
+      # Measured, not assumed: `#400`'s run 35507247365 (toolbar.spec.ts:112,
+      # 30 s `page.click` timeout, green on retry) and `#411`'s 35597133483
+      # (vision.spec.ts:35, same shape) both report `total_count: 0` artifacts.
+      # Both are in `docs/e2e-flakes.md` with "if it recurs, look at X" notes
+      # that nobody can act on, because X was deleted by this job.
+      #
+      # `playwright.config.ts` already intends this: its comment on
+      # `trace: 'on-first-retry'` says the retry attempt is "exactly the
+      # population every flake card here is about ... plus the first-attempt
+      # failures that a retry rescues and the summary line calls flaky."
+      # The config captured them; this workflow dropped them.
+      #
+      # Separate step rather than loosening the one above, so that step keeps
+      # `if-no-files-found: error` meaning what it means — a real failure MUST
+      # produce files, and an empty upload there is still a defect. Here
+      # `hashFiles` has already established the files exist, so `error` cannot
+      # fire spuriously.
+      - name: Upload Playwright artefacts from a green run that flaked
+        if: ${{ always() && steps.e2e.outcome == 'success' && hashFiles('test-results/**') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-flaky
+          path: test-results/
+          if-no-files-found: error
+          retention-days: 7
+
   # Tags only: `main` between releases is legitimately ahead of the plugin
   # branch, so this would fail on every ordinary push. On a `v*` tag the two
   # must agree, because the marketplace entry that ships in that release pins
