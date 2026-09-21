@@ -1,7 +1,6 @@
 ---
 title: "The drawer stops about 7% open and never lands, on the app a relaunch test has just launched"
-column: doing
-waiting: ""
+column: backlog
 owner: "Henry"
 kind: bug
 criterion: C4
@@ -289,3 +288,32 @@ landed.
 Nothing here changes the five dead hypotheses or the one live one (`backgroundThrottling` unset on the
 chrome window, `window.ts:66`). It changes only what happens the next time the bug occurs, which is
 the only thing this card can affect while it is not occurring.
+
+
+## MOVED TO BACKLOG 2026-09-21 by Henry — not fixed, and not in flight either
+
+**This is not a fix and the column should not be read as one.** The bug has not reproduced since
+2026-09-18 and nobody knows its cause. What changed is that there is nothing left to *do* on it until
+it happens again, which is a different thing from being finished — `doing` should mean work in
+flight, and waiting on an external event is not that.
+
+**The silence, turned into a number rather than left as a feeling.** Seven completed `main` CI runs
+since the instrument landed (`e5e5257`), byte-scanned for `DRAWER STALL`: **zero**. The denominator
+does not come from the logs, because `drawerSettled` is **silent on success** — it comes from the
+tree: **9 `openPanel` call sites plus 2 direct `drawerSettled` calls** across `controls`,
+`onion-skin`, `text-scale` and `throttle-live`. So each suite run settles the drawer about eleven
+times, and seven runs is **roughly seventy settles with no stall**.
+
+**What that does and does not support.** It rules out "it stalls often". It does not rule out the
+bug: both sightings came from **PR traffic rather than `main`**, out of weeks of runs, so seventy
+settles is a thin sample against a defect with that base rate. My first attempt at this measurement
+used "tests whose name mentions the drawer" as the denominator — **1 per run** — which would have let
+me publish "seven runs, zero stalls" while the drawer ran eleven times as often. That is the same
+mistake this card already records under *"six quiet runs that were not evidence"*, and I nearly made
+it a second time on the same card.
+
+**What reopens it, in one line:** a `DRAWER STALL` line in any CI log. The instrument is on `main`,
+so every branch carries it, and the two samples it prints — width, `data-drawer`, `aria-pressed`,
+`visibilityState`, rAF liveness — answer the card's open question (starved and would finish, or
+stuck) without another investigation. The `0px` case (`text-scale.spec.ts:194`) separates from the
+`~18px` one by the same line.
