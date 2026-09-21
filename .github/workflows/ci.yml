@@ -357,11 +357,24 @@ jobs:
       #
       # Separate step rather than loosening the one above, so that step keeps
       # `if-no-files-found: error` meaning what it means — a real failure MUST
-      # produce files, and an empty upload there is still a defect. Here
-      # `hashFiles` has already established the files exist, so `error` cannot
-      # fire spuriously.
+      # produce files, and an empty upload there is still a defect. Here the
+      # `hashFiles` glob has already established the files exist, so `error`
+      # cannot fire spuriously.
+      #
+      # THE GLOB IS NAMED EXTENSIONS, NOT `**`, AND THAT COST A RED BUILD.
+      # The first version asked `hashFiles('test-results/**') != ''`, which was
+      # true on a clean run and failed the job: Playwright 1.62 writes
+      # `test-results/.last-run.json` on EVERY run, `hashFiles` counts dotfiles,
+      # and `upload-artifact@v7` excludes them by default — so the condition
+      # said "files exist", the upload found none, and `if-no-files-found:
+      # error` did exactly what it is there for. Measured on run 35641690850,
+      # which had zero flakes and still tripped it.
+      #
+      # So the glob lists the artefacts this step is FOR. A run that flaked
+      # leaves screenshots and a trace; a clean run leaves only the dotfile,
+      # which no pattern here matches.
       - name: Upload Playwright artefacts from a green run that flaked
-        if: ${{ always() && steps.e2e.outcome == 'success' && hashFiles('test-results/**') != '' }}
+        if: ${{ always() && steps.e2e.outcome == 'success' && hashFiles('test-results/**/*.png', 'test-results/**/*.zip', 'test-results/**/*.webm', 'test-results/**/*.md') != '' }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-flaky
