@@ -430,7 +430,7 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         return (() => {
           const root = document.scrollingElement
           const rootScrolls = !!root && root.scrollHeight > root.clientHeight + 1
-          const el = rootScrolls ? null : findScroller()
+          const { el, truncated } = rootScrolls ? { el: null, truncated: false } : findScroller()
           window.__obsrvScrollHost = el
           // A page that hides the root's overflow has said it manages its own
           // scrolling. If nothing else scrolls either — open shadow roots
@@ -438,18 +438,27 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
           // capture cannot go. The
           // walks ask the same question: overflowHidden, in shared/scrollHost.
           const hidden = overflowHidden()
-          if (!el) return { rootScrolls, found: false, hidden, top: 0, height: 0, scrollHeight: 0 }
+          if (!el) return { rootScrolls, found: false, hidden, truncated, top: 0, height: 0, scrollHeight: 0 }
           const r = el.getBoundingClientRect()
           return {
             rootScrolls,
             found: true,
             hidden,
+            truncated,
             top: Math.round(r.top + window.scrollY),
             height: el.clientHeight,
             scrollHeight: Math.ceil(el.scrollHeight),
           }
         })()
-      })()`)) as { rootScrolls: boolean; found: boolean; hidden: boolean; top: number; height: number; scrollHeight: number }
+      })()`)) as {
+        rootScrolls: boolean
+        found: boolean
+        hidden: boolean
+        truncated: boolean
+        top: number
+        height: number
+        scrollHeight: number
+      }
       // Banding is what a full-page capture does now: a single tall surface
       // either lays a viewport-sized page out differently or clamps at the
       // device-pixel cap, and neither is the page. `--single-surface` asks for
@@ -544,6 +553,16 @@ async function render(url: string, spec: RenderSpec, options: RenderOptions): Pr
         } else {
           human(`the page scrolls an inner container; captured in ${bands.length} band(s) of ${step} CSS px, the scroller's own height`)
         }
+      } else if (!shell.rootScrolls && !shell.found && shell.hidden && shell.truncated) {
+        // chore-scroll-host-budget-is-silent: the search hit its own element
+        // budget before it could answer "does this page have a scroller",
+        // which the branch below asserts confidently. Say what actually
+        // happened instead of a claim the search never earned.
+        warn(
+          `this page hides the document's overflow, and the search for a scrollable container stopped at its own ` +
+            `element budget before it finished — "nothing found" is where the search ran out, not a fact about the ` +
+            `page; a scroller past the budget is missing from this PNG for that reason, not because none exists`,
+        )
       } else if (!shell.rootScrolls && !shell.found && shell.hidden) {
         // Measured on play.tailwindcss.com: root and body both `overflow:
         // hidden`, and not one light-DOM element with `overflow-y: auto` that

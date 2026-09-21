@@ -129,6 +129,14 @@ export interface WalkBlocked {
    * absence is how the sentence knows which walk it is describing.
    */
   shadowHosts?: number
+  /**
+   * `findScroller`'s own `MAX_VISITED` budget cut its search short before it
+   * finished (`chore-scroll-host-budget-is-silent`). When true, "nothing to
+   * scroll" is where the search ran out, not a fact about the page — the
+   * frame/shadow-root counts below are what the search reached, not a
+   * complete account, and `walkNothingNote` says so instead of using them.
+   */
+  truncated?: boolean
 }
 
 /** A frame has to cover a real part of the screen before it explains one. */
@@ -160,12 +168,24 @@ const FRAME_WALL_COVERAGE = 0.5
  * its sentences word for word.
  */
 export function walkNothingNote(blocked?: WalkBlocked): string {
+  const tail = ', and the figures are of the page as it first shows'
+  // The search stopped at its own budget before it could answer the question
+  // this whole function exists to answer. Every branch below claims something
+  // the search measured — no iframe, no shadow root, nothing else scrolls —
+  // and none of those claims survive a search that never finished, so this
+  // takes priority over all of them rather than adding to the list.
+  if (blocked?.truncated) {
+    return (
+      "the search for this page's scroller stopped at its own element budget before it finished, so " +
+      '"nothing to scroll" is where the search ran out, not a fact about the page — a scroller past the ' +
+      `budget would look the same as one that is not there${tail}`
+    )
+  }
   const enteredRoots = blocked?.frames !== undefined && blocked.shadowHosts === undefined
   const opening = enteredRoots
     ? "this page hides the document's overflow and has no scrollable container in its light DOM or its open shadow roots, " +
       'so the walk had nothing to scroll: '
     : "this page hides the document's overflow and has no scrollable container in its light DOM, so the walk had nothing to scroll: "
-  const tail = ', and the figures are of the page as it first shows'
   const coverage = Math.round((blocked?.frames?.viewportCoverage ?? 0) * 100)
   const frameCount = blocked?.frames?.count ?? 0
   const hosts = blocked?.shadowHosts ?? 0

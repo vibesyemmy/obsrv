@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>App shell — the scroller search runs out of budget</title>
+    <!--
+      chore-scroll-host-budget-is-silent. `app-shell-unreachable.html` is the
+      sibling fixture: root and body hide their overflow, and the search
+      genuinely finds nothing within its budget. This one hides overflow the
+      same way but puts MAX_VISITED-plus decoy elements ahead of anything
+      else in document order, so findScroller's own budget runs out before
+      the search finishes — a different cause the capture must not conflate
+      with "this page really has nothing to scroll".
+    -->
+    <style>
+      html, body { height: 100%; margin: 0; overflow: hidden; font: 16px/1.5 system-ui, sans-serif; }
+      .chrome { height: 48px; background: #101828; color: #fff; display: flex; align-items: center; padding: 0 16px; }
+    </style>
+  </head>
+  <body>
+    <header class="chrome">Fixed chrome</header>
+    <div id="decoys"></div>
+    <script>
+      // MAX_VISITED is 2000 (src/shared/scrollHost.ts); comfortably past it,
+      // and none of these can scroll, so the search's own budget is what
+      // stops it, not a page it fully searched.
+      const host = document.getElementById('decoys')
+      let html = ''
+      for (let i = 0; i < 2100; i++) html += '<i></i>'
+      host.innerHTML = html
+    </script>
+  </body>
+</html>

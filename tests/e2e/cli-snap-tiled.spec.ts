@@ -187,6 +187,29 @@ test('an app shell whose content the walk cannot reach says so, and an ordinary 
   expect((JSON.parse(short.stdout).warnings as string[]).join(' ')).not.toMatch(/scrolls nothing the capture can reach/)
 })
 
+test('a scroller search that ran out of budget says so, not that the page has nothing to scroll', async () => {
+  // chore-scroll-host-budget-is-silent. Same shape as the fixture above —
+  // overflow hidden, nothing found — but here the search never finished:
+  // MAX_VISITED decoys sit ahead of anywhere a real scroller could be. The
+  // capture must not tell the same confident story it tells when the search
+  // actually completed.
+  const out = join(outDir, 'truncated.png')
+  const r = await runCli([
+    'snap',
+    fixture('app-shell-scroller-search-truncated.html'),
+    '--preset',
+    'laptop-768',
+    '--full-page',
+    '--tiled',
+    '--out',
+    out,
+  ])
+  expect(r.code, r.stderr).toBe(0)
+  const warned = (JSON.parse(r.stdout).warnings as string[]).join(' ')
+  expect(warned).toMatch(/stopped at its own element budget before it finished/)
+  expect(warned).not.toMatch(/scrolls nothing the capture can reach/)
+})
+
 test('chrome stuck to the viewport is hidden for the bands after the first, and named in the JSON', async () => {
   const out = join(outDir, 'stuck.png')
   const r = await runCli(['snap', fixture('stuck-chrome.html'), '--preset', 'laptop-768', '--full-page', '--out', out])

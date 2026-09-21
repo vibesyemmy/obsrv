@@ -292,14 +292,24 @@ export function isVisible(el: Element): boolean {
  * for anything inside a root, since `document.querySelector` does not cross
  * the boundary.
  *
- * Returns null when nothing qualifies, which the caller reads as "use the
- * root". Exported: the deliberate follow-up that mirrors a *user's*
+ * Returns `el: null` when nothing qualifies, which the caller reads as "use
+ * the root". Exported: the deliberate follow-up that mirrors a *user's*
  * inner-scroller scrolling needs exactly this function.
+ *
+ * `truncated` is true when either sweep below hit `MAX_VISITED` before it
+ * finished. When it is, `el` — including `null` — is where the search ran
+ * out, not a claim about what the page has: `chore-scroll-host-budget-is-silent`.
  */
-export function findScroller(root: Element | null = document.body): Element | null {
-  if (!root) return null
+export interface FindScrollerResult {
+  el: Element | null
+  truncated: boolean
+}
+
+export function findScroller(root: Element | null = document.body): FindScrollerResult {
+  if (!root) return { el: null, truncated: false }
   let best: Element | null = null
   let bestArea = 0
+  let truncated = false
   /** Judge one element; false when its subtree is `display: none` and pruned. */
   const consider = (el: Element): boolean => {
     const area = el.clientWidth * el.clientHeight
@@ -323,7 +333,10 @@ export function findScroller(root: Element | null = document.body): Element | nu
     let visited = 0
     for (let head = 0; head < queue.length; head++) {
       const el = queue[head]!
-      if (visited++ >= MAX_VISITED) break
+      if (visited++ >= MAX_VISITED) {
+        truncated = true
+        break
+      }
       if (!consider(el)) continue
       const shadow = el.shadowRoot
       if (shadow) {
@@ -348,7 +361,7 @@ export function findScroller(root: Element | null = document.body): Element | nu
     if (shadow) for (const kid of Array.from(shadow.children)) inRoots.push(kid)
   }
   if (inRoots.length > 0) sweep(inRoots, true)
-  return best
+  return { el: best, truncated }
 }
 
 
@@ -488,8 +501,11 @@ export interface WalkStepResult {
    * over the viewport, so the note can name the cause it measured instead of
    * guessing (`walkNothingNote`). Measured only in that case, since it walks
    * the whole document and a walk that is moving has no use for it.
+   * `truncated`: `findScroller`'s own budget cut its search short —
+   * `chore-scroll-host-budget-is-silent` — so the frame count above is what
+   * the search reached, not a complete account.
    */
-  blocked?: { frames: { count: number; viewportCoverage: number } }
+  blocked?: { frames: { count: number; viewportCoverage: number }; truncated: boolean }
   /**
    * The document's height when this step was taken. Compared between the
    * walk's first step and its last, it says whether a page taller than the
@@ -517,7 +533,7 @@ export interface WalkStepResult {
  * "cut short before it began").
  */
 export function walkStep(page: 'top' | 'next'): WalkStepResult {
-  const el = rootScrolls() ? null : findScroller()
+  const { el, truncated } = rootScrolls() ? { el: null, truncated: false } : findScroller()
   const view = el ? el.clientHeight : window.innerHeight
   const height = el ? el.scrollHeight : document.documentElement.scrollHeight
   const max = Math.max(0, height - view)
@@ -545,7 +561,7 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
     // was HELD, and nothing measured which. Read from the document rather
     // than the scroller, because a panel's height is not the page's.
     pageHeight: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0),
-    ...(stuck ? { blocked: { frames: framesInViewport() } } : {}),
+    ...(stuck ? { blocked: { frames: framesInViewport(), truncated } } : {}),
   }
 }
 
