@@ -1,8 +1,7 @@
 ---
 title: "The plugin tag can be pushed before npm has that version — documented twice, skipped twice, in one release"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: chore
 order: 100
 ---
@@ -69,3 +68,28 @@ disagreement, caught by Wren. Henry broke the tie towards this build (posted pla
 the file; the reliability lane is Dogu's; Kenya was mid-fix on `#396`). A brief cross-post handed
 Kenya the already-drafted step in case it helped, then a correction when Henry's ruling turned out
 to have landed a message earlier — both sides stood down cleanly once the collision was named.
+
+## Closed 2026-09-21 — the condition this card called "months from now" arrived in six hours
+
+The card's own "Not verified" line said the live-tag-push arm would have to wait for the next real
+release cut, timed months out. That cut was the same night's `0.62.1` patch (built for
+`bug-uninstall-confirm-unenforced`, an unrelated data-loss fix). On the `v0.62.1` tag run
+(`35572139926`), the `plugin-tag` job's *"npm already serves this version"* step (`ci.yml:366`) ran
+for real and passed — first live exercise of this check outside the extracted-shell tests above.
+
+**Stating both halves, per Henry's #1548 ask, because answering one half only would be worse than
+leaving the card open:**
+
+- **The live pass.** `35572139926` had npm genuinely serving `0.62.1` when the `v0.62.1` tag went up
+  — the ordering was correct, so this run shows the check runs on a real tag and does not
+  false-positive against a correctly-ordered release. That is new evidence; the extracted-shell test
+  above never exercised the job itself, only its logic in isolation.
+- **The refusal is still not live-demonstrated.** A passing check on a correctly-ordered release does
+  not show it refuses a wrong-ordered one — that arm remains the out-of-band verification in
+  "Verified, without triggering a real tag push" above (simulated `version=0.63.0` against the real
+  registry, exit 1, exact error text). Nothing in `35572139926` or any run since has forced the
+  mismatch path live, and nothing should — the only way to exercise it for real is to actually publish
+  a version behind its tag, which is the failure this check exists to prevent.
+
+Henry, Idris and Kenya independently confirmed the same run and step-level result (`#1548`, `#1551`,
+`#1552`) before this was written up.
