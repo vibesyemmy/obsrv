@@ -70,11 +70,45 @@ unreliable in both directions"**, which is a different and larger claim. `byDocu
 wrong entry when two navigations to the same address are in flight, which is what both fixtures
 arrange.
 
+## This was named before it happened, and by me — cite it rather than re-derive it
+
+`board/bug-arrivals.md`'s **"TWO LIMITS, from Henry's read of `#184`"**, closed `done` 2026-09-17,
+already describes the mechanism this card calls its leading hypothesis:
+
+> **2. Attribution is by URL, not by navigation identity.** When the bus's mirrored load and the
+> page's own navigation go to one URL together, the *latest start* for that URL decides, not the
+> navigation that actually committed. Electron 43 exposes no navigation id on `did-navigate` —
+> checked while measuring `initiator` — so this is a **known heuristic, not an oversight**. The 0/20
+> and 20/20 arms show it holds on these paths; they do not show it holds on every path.
+
+That is the url-keyed reverse-find picking the wrong entry, written down as a **scoped, deliberately
+unclosed gap** before either sighting existed. Idris found it while reviewing this card; I had
+reconstructed it from the CI logs without recognising my own earlier note.
+
+**This makes the claim stronger, not weaker.** It is not two adjacent flakes promoted into a story —
+it is a previously-named risk materialising, with its original author's own caveat (*"holds on these
+paths; they do not show it holds on every path"*) turning out to be the operative sentence.
+
+**And the ceiling is recorded there too:** Electron 43 exposes no navigation id on `did-navigate`. So
+"match the navigation, not the URL" is not a small fix — whatever closes this has to carry identity
+some other way, or narrow when the heuristic is trusted.
+
 ## Not yet established
 
 - **which** of the two it is: a missing `starts` entry, an entry whose `initiator` is undefined, or
   the reverse-find matching the *other* navigation to the same url (the last is now the most likely,
   since it explains both directions with one mechanism and the others explain only one);
+- **and, distinctly: LIMIT 2 as originally scoped, or something that changed since `#184`.** These
+  point at different follow-ups and must not be collapsed. `bug-arrivals`'s four arms measured
+  **0/20 spurious and 20/20 truthful** on this very fixture shape — a client-side `location.replace`,
+  which commits the URL it started — and found it clean. So `:89` failing now means either a
+  low-probability tail those twenty runs missed, a change since that measurement, or LIMIT 2 firing
+  under CI timing a desk run never exercised. A sweep that reproduces the rate is what separates
+  them; one sighting cannot.
+- **`LIMIT 1` is scoped out for these fixtures and should stay out of the diagnosis.** It covers a
+  *server* 302, whose commit URL has no start record. Both fixtures here use client-side
+  `location.replace`. Naming it anyway would send the next person to `#171`'s `redirected` event for a
+  case that is not this one.
 - whether it reproduces off CI at all, and at what rate;
 - whether `did-redirect-navigation` (handled separately at `targetSource.ts:500`) is involved.
 
