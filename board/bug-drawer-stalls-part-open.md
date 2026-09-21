@@ -1,6 +1,6 @@
 ---
 title: "The drawer stops about 7% open and never lands, on the app a relaunch test has just launched"
-column: backlog
+column: done
 owner: "Henry"
 kind: bug
 criterion: C4
@@ -317,3 +317,26 @@ so every branch carries it, and the two samples it prints — width, `data-drawe
 `visibilityState`, rAF liveness — answer the card's open question (starved and would finish, or
 stuck) without another investigation. The `0px` case (`text-scale.spec.ts:194`) separates from the
 `~18px` one by the same line.
+
+
+## CLOSED 2026-09-21 on Opeyemi's call — **unreproduced, not fixed**
+
+**Read this before reading the column.** `done` here does not mean the drawer no longer stalls. It
+means @Opeyemi decided (`#1584`) that an unreproduced bug should not hold a column, after I put both
+options to him (`#1553`, `#1562`, `#1582`) and recommended `backlog`. **The cause is still unknown and
+no code changed to address it.** Anyone reading this card as evidence the defect was fixed is reading
+it wrong, and that is why this paragraph is first.
+
+**What is actually true, in the numbers from the section above:** no reproduction since 2026-09-18;
+seven completed `main` runs since the instrument landed carrying **zero `DRAWER STALL` lines**; about
+**seventy drawer settles** across those runs, counted from the tree because `drawerSettled` is silent
+on success. That rules out *"it stalls often"* and nothing more — **both original sightings came from
+PR traffic rather than `main`**, out of weeks of runs, so seventy settles is a thin sample against a
+defect with that base rate.
+
+**This card reopens on one line of CI output.** The instrument is on `main`, so every branch carries
+it, and a single `DRAWER STALL` line prints width, `data-drawer`, `aria-pressed`, `visibilityState`
+and rAF liveness — enough to answer the question this card could never answer while quiet: starved
+and would finish, or genuinely stuck. Reopen it then rather than filing something new; the five dead
+hypotheses and the one live one (`backgroundThrottling` unset on the chrome window, `window.ts:66`)
+are all still here and still cost someone a day to re-derive.
