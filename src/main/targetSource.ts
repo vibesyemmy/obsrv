@@ -299,7 +299,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * withheld, and only for the mirror's own load.
    */
   private mirroring = false
-  private readonly starts: { at: number; url: string; byDocument: boolean }[] = []
+  private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean }[] = []
   /**
    * Every main-frame commit this pane saw, and whether it said anything about
    * it.
@@ -492,6 +492,23 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
           at: Date.now(),
           url: details.url,
           byDocument: (details as { initiator?: unknown }).initiator !== undefined,
+          // Whether the bus was mirroring the other pane when this navigation
+          // STARTED. Recorded and not yet read: `startedByDocument` matches by
+          // url alone, so when a page's own `location.replace` and a mirrored
+          // load go to one address together, the later start wins and the
+          // note about a real redirect is dropped
+          // (`bug-redirect-note-missing-not-late`, traced on run 35640624703 —
+          // the document's start is in the log with `byDocument: true`, five
+          // milliseconds before the mirror's).
+          //
+          // **This commit records it and changes nothing**, on purpose. The
+          // card it fixes exists because a different flag's window was raced —
+          // `loadMirrored`'s promise resolving 4 ms before a commit landed
+          // (`bug-arrivals`) — so whether a mirrored load's START reliably
+          // falls inside `mirroring` is a question to measure rather than
+          // reason about. `arrivals.spec.ts`'s guard probe prints every start,
+          // so CI answers it.
+          mirrored: this.mirroring,
         })
         if (this.starts.length > NAV_START_TRACE_MAX) this.starts.splice(0, this.starts.length - NAV_START_TRACE_MAX)
       }
