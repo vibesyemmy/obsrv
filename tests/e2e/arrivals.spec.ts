@@ -54,6 +54,64 @@ const movedNote = async (): Promise<string | undefined> => {
   return ((r.notes as string[] | undefined) ?? []).find(n => n.includes('navigated after it loaded'))
 }
 
+/**
+ * What the arrivals guard was looking at when it decided, printed on failure.
+ *
+ * `bug-redirect-note-missing-not-late`. Both tests below turn on one field:
+ * `ipc.ts`'s guard drops a commit when `url === arrivals.url && !byDocument`,
+ * and `byDocument` is `startedByDocument(url)` — a reverse-find over `starts`
+ * for an entry whose url matches, each entry's flag being
+ * `details.initiator !== undefined` from `did-start-navigation`.
+ *
+ * `:89` has failed with the note MISSING and `:71` with it PRESENT, which are
+ * the same field wrong in opposite directions. Three people read this path and
+ * a run still surprised all of them, so this prints the inputs rather than
+ * inviting a fourth reading. **No product change**: `commitTrace()` is public
+ * and documented for exactly this question, and `starts` is private only to
+ * TypeScript — at runtime it is a field on the same object the specs already
+ * reach through `__obsrv.target`.
+ */
+async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detail: boolean): Promise<void> {
+  const seen = await app.evaluate(() => {
+    const t = (globalThis as unknown as { __obsrv?: { target?: unknown } }).__obsrv?.target as
+      | { commitTrace?: () => unknown[]; starts?: { at: number; url: string; byDocument: boolean }[]; webContents?: { getURL(): string } }
+      | undefined
+    if (t === undefined) return { reachable: false as const }
+    const starts = Array.isArray(t.starts) ? t.starts : []
+    const url = t.webContents?.getURL?.() ?? '(no webContents)'
+    // What `startedByDocument(url)` would answer right now, computed the same
+    // way it computes it — the last start recorded FOR THIS URL.
+    const matched = [...starts].reverse().find(x => x.url === url)
+    return {
+      reachable: true as const,
+      url,
+      matched: matched ?? null,
+      startsForThisUrl: starts.filter(x => x.url === url).length,
+      starts: starts.slice(-8),
+      commits: (t.commitTrace?.() ?? []).slice(-8),
+    }
+  })
+  // **This runs on every pass, not only on failure**, and that is the point.
+  // An instrument that only executes on the failure path is a control nobody
+  // has watched succeed — this repository has spent two days on exactly that
+  // mistake in other forms. Running it green every time proves the probe still
+  // reaches `__obsrv.target` and that the field names survived the build, and
+  // it leaves a **baseline** beside the eventual failure: the same fields, on
+  // the run where the guard got it right.
+  //
+  // Compact on the expected path so 600 green runs stay readable; the whole
+  // block on the surprising one, because the useful comparison is between
+  // fields — a `matched` with `byDocument:false` and `startsForThisUrl` above
+  // 1 is the reverse-find picking the wrong navigation, and that reads only
+  // with both numbers in front of you.
+  const line = `ARRIVALS GUARD (bug-redirect-note-missing-not-late) ${label}`
+  if (!detail || !seen.reachable) {
+    console.log(`${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, startsForThisUrl: seen.startsForThisUrl } : seen)}`)
+    return
+  }
+  console.log(`${line}: ${JSON.stringify(seen, null, 2)}`)
+}
+
 test.beforeAll(async () => {
   app = await launchApp([], { OBSRV_AGENT_CONTROL: '1' })
   await rendererWindow(app)
@@ -83,6 +141,7 @@ test('the target mirroring the native pane is not the page navigating', async ()
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
   const note = await movedNote()
+  await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 })
 
@@ -104,6 +163,7 @@ test('a page that really does redirect after loading still says so', async () =>
   // value that is never produced, and a poll here only turns a fast, honest
   // failure into a slow one that reads like a timeout.
   const note = await movedNote()
+  await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined)
   expect(note, 'the page asked for redirected itself to another page; that is the note doing its job').toBeDefined()
   expect(note).toContain('hairline.html')
 })
