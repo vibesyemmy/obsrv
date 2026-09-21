@@ -274,7 +274,29 @@ not that that run produced it.
   headless MCP call relays the CLI's own sentence, so an `mcp:` surface does not prove the MCP copy
   ran.
 
-**One group is no longer ambiguous.** `src/mcp/server.ts:1543`, `:1849` and `:2538` are the identical
+**All three ambiguous groups are now resolved, and the last two needed no new run.** Each turned out
+to be an artefact of the attribution method — *"the longest string literal the sentence contains"* —
+rather than two places that could each have fired:
+
+- **`measureBudget.ts:186` ↔ `:187` is one producer, not two.** At `87c835a`, `:186` is the
+  `const causes = … ? … : …` ternary and `:187` is the `return` template that interpolates it. Both
+  lines carry a long literal from the same sentence, so the attribution matched twice and called it
+  ambiguous. There is one `return`, so there was never a question of which fired. **Checked at
+  `87c835a` directly**, not inferred from today's source, because the line numbers in this file are
+  that commit's.
+- **`mcp/walk.ts:113` ↔ `cli/walk.ts:105` both fired, and are separated by surface.** The two are
+  distinct modules with disjoint callers: `src/mcp/server.ts:21` imports `./walk` (the MCP surface),
+  `src/cli/main.ts:35` imports `./walk` (the CLI surface), and `src/mcp` does **not** import
+  `../cli/walk` — it imports `../cli/args`, `../cli/lint` and `../cli/audit`, which is why this
+  needed checking rather than assuming. `cli/walk.ts` mentions `mcp/walk.ts` only in comments. So a
+  `cli`-tagged occurrence came from `cli/walk.ts` and an `mcp`-tagged one from `mcp/walk.ts`, and the
+  row records **both** surfaces. The answer is "both", not "which".
+
+**Neither needed the probe branch's log**, which is as well: `probe/c5-note-log` was never merged and
+run `35166342003`'s artefacts are long expired. A question that can only be answered by re-running a
+deleted instrument is a question that ages badly, and both of these could be answered from the tree.
+
+**One group was resolved earlier, and by the log.** `src/mcp/server.ts:1543`, `:1849` and `:2538` are the identical
 "`preset` is headless-only and was ignored in live mode" in `liveAudit`, `liveLint` and `liveInspect`.
 The run's log tags each MCP entry with the tool that answered, and only `mcp:obsrv_audit` and
 `mcp:obsrv_lint` carried it — so `liveInspect`'s copy had never run. `#258` pins it
@@ -441,51 +463,27 @@ has is a run of the note log that saw it, which is what this column counts.
 
 **After #256, #258, #263, #264, #270, #273, #274, #282, #283, #292, #293, #308, #338, #348, #358, #360
 and #389: ZERO unfired producers, eight written or reworded after the run, two ambiguous groups, and
-nine named reasons.**
+nine named reasons.** *(Superseded 2026-09-21: the eight are closed — five observed, two named
+reasons, one already fired — and all three ambiguous groups are resolved. See "What is left".)*
 
 **The unfired column is closed and the card is not.** `#389` pinned the last one — `capture.ts`'s
 `uncovered` sentence, which was produced on every uncovered capture and asserted by its opening and
 one middle clause, leaving the region and the closing unheld. That is the same shape as the walk four:
 produced every pass, with the words that matter checked by nobody.
 
-**What remains is three.** Of the eight written or reworded after the run, one (`walk.ts:129`) was
-already fired, and four are **observed** under the one-bar standard above — a CI e2e run produces the
-sentence and a spec asserts it, cited on their rows: `walkCoverage.ts:165`, `cli/main.ts:542`, and
-both branches of `historyMoveNote` (`measureBudget.ts:154` and `:155`). That leaves
-`walkCoverage.ts:200`, `cli/main.ts:278` and `uninstallPlan.ts:100`.
+**Nothing remains in this column.** Of the eight written or reworded after the run, one
+(`walk.ts:129`) was already fired, **five are observed** — `walkCoverage.ts:165`, `cli/main.ts:542`,
+`measureBudget.ts:154`/`:155`, and `walkCoverage.ts:200`, the last closed by `#402`'s
+`scroll-in-closed-root.html` fixture — and **two are named reasons**: `cli/main.ts:278` (the double
+refusal our only lever cannot force) and `uninstallPlan.ts:100` (a branch no runner we have can
+enter). Each is cited on its row.
 
-**Two of those three are named reasons rather than test work, and the reasons are about our
-instruments, not about the sentences.**
-
-- **`cli/main.ts:278`** needs a *double* refusal — the throttle apply refuses and the restoring apply
-  refuses too. The only refusal we can force is the harness lever at `targetSource.ts:785`, gated
-  `if (!off && forced)`, so it refuses a call that *applies* conditions and never one that *lifts*
-  them. After a refused apply, `throttleForCommand` restores `had`, which is `NO_THROTTLE` (a target
-  starts there, `targetSource.ts:241`, and each CLI command builds its own at `cli/main.ts:351`,
-  `:989`, `:1082`, `:1201`). The restore is therefore always a lift, and lifts cannot be forced to
-  refuse. Measured on real Electron: a throttled `audit` under the lever prints one refusal, and
-  `report` prints three independent single refusals, never the combined form. **This says our lever
-  cannot reach the branch, not that the branch is dead** — a genuine Chromium refusal on a lift, such
-  as `detach()` throwing, still produces it in production.
-- **`uninstallPlan.ts:100`** is reached only when `platform !== 'darwin'`, and every runner that
-  executes the app or the CLI is `macos-14`. See `board/c5.md`'s decision of 2026-09-20 for what
-  would reopen it.
-
-**How the last two were found, because the method matters more than the count.** They are asserted in
-`mcp-live.spec.ts:802` and `:824`, which do not contain the sentence at all — they **call
-`historyMoveNote` to build the expectation** and assert the live MCP reply contains the result. That
-is the better test (the spec's own comment: *"the sentence as the function writes it, so a rewording
-cannot blind this"*), and it is invisible to any search for the words. Searching this file's rows by
-sentence text will therefore under-report what is observed. **Search for imports of the producing
-module as well as for its text** — `tests/e2e` imports `src/shared/measureBudget`, which is the whole
-signal.
-
-The count has now moved twice, both times because a search was weaker than the thing it searched for.
-When this was raised, two rows were guessed already-produced (`:165` and `:200`) on the grounds that
-CI drives their fixtures; only `:165` was. Then two rows were reported outstanding on a text search
-that could not see a computed assertion; both were already observed. The standard did not move —
-`observed` has meant one thing throughout. What moved was how carefully anyone had looked. The two ambiguous groups are the other
-open thing. Neither is an unfired producer, and neither is nothing.
+**How the last two were found, because the method matters more than the count.** `measureBudget:154`
+and `:155` are asserted in `mcp-live.spec.ts:802` and `:824`, which do not contain the sentence at all
+— they **call `historyMoveNote` to build the expectation** and assert the live MCP reply contains the
+result. That is the better test (*"the sentence as the function writes it, so a rewording cannot blind
+this"*), and it is invisible to any search for the words. **Search for imports of the producing module
+as well as for its text.**
 
 **What the last two folds changed about this column, beyond its count.** Of the six producers `#358`
 and `#360` closed, **one had never been produced** and five ran on every green build while nothing
