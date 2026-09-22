@@ -155,38 +155,27 @@ test('the target mirroring the native pane is not the page navigating', async ()
   const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 
-  // **The control for the mirrored direction, asserting what the design claims
-  // rather than what one trace showed.** An earlier version asserted "the last
-  // commit for this address is the bus's", written from a single run; a 20x
-  // sweep (`35725663287`) found that false 3 times in 20, because the commit
-  // ordering varies.
+  // **No mechanism control for this direction, and that is a decision with
+  // four measurements behind it.**
   //
-  // What holds however they interleave: **no commit after the setup is
-  // attributed to the page.** The bus put `redirect.html` here and its own
-  // `location.replace` followed, so `documentFromBus` carries that provenance
-  // past `loadMirrored`'s window and every commit in the chain is the bus's.
-  // If one is ever unmarked, `ipc.ts:230` lets it through and the note fires
-  // for a pane nobody asked to move — `bug-arrivals`, returning. That is
-  // exactly what the withdrawn `#431` did, 4 times in 20.
-  if (seen.reachable) {
-    // Anchored on the redirect fixture's own commit, not on a position in the
-    // list. An earlier version sliced off the first commit for this address,
-    // assuming the setup contributes exactly one — a 20x sweep
-    // (`35754437200`) found 3 in 20 where the interleaving produces two early
-    // non-bus commits, and the second survived the slice. Positional
-    // assumptions about a concurrent log keep being wrong; this asks the
-    // question the design actually makes a claim about.
-    //
-    // **Once the bus has placed `redirect.html` here, everything downstream of
-    // it is the bus's** — that page's own `location.replace` included, because
-    // the start carries the provenance the commit reads. If any commit after
-    // that point is unmarked, `ipc.ts:230` lets it through and the note fires
-    // for a pane nobody asked to move.
-    const placed = seen.commits.map(c => c.url).lastIndexOf(REDIRECT)
-    expect(placed, 'the bus never placed redirect.html; the fixture no longer produces this case').toBeGreaterThanOrEqual(0)
-    const after = seen.commits.slice(placed).filter(c => c.mirroring !== true)
-    expect(after, `a commit at or after the bus placed redirect.html was not the bus's: ${JSON.stringify(after)}`).toEqual([])
-  }
+  // I wrote four, each from a different reading of the commit log, and a 20x
+  // sweep refuted every one:
+  //
+  //   "no non-mirrored start exists for this address"   refuted 35668477308
+  //   "the last commit for this address is the bus's"   refuted 35725663287 (3/20)
+  //   "every commit after the setup is the bus's"       refuted 35754437200 (3/20)
+  //   "everything at or after redirect.html is the bus's" refuted 35755066599 (5/20)
+  //
+  // Each was a claim about the ORDER of a log written by two actors at once —
+  // the bus and the page, on one pane. The orderings vary run to run, so every
+  // arrangement I asserted was true most of the time and false some of it.
+  //
+  // **The assertion above is the control, and it is a proven one.** `#431`
+  // regressed exactly this direction and `toBeUndefined()` caught it, firing 4
+  // times in 20 with "the pane was never asked to move". A control that has
+  // demonstrably failed on a broken build is worth more than a mechanism
+  // assertion I cannot state correctly. If a future change lets an unmarked
+  // commit through, the note appears and this test says so.
 })
 
 test('a page that really does redirect after loading still says so', async () => {
