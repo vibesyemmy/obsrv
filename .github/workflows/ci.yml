@@ -246,15 +246,7 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        # **TEMPORARY sweep, reverted before merge.** `bug-redirect-note-missing-not-late`
-        # is a 5 ms race: one green run cannot tell "fixed" from "got lucky",
-        # and the previous attempt (`#431`) had a green run, two controls, a
-        # trace and an independent PASS while making a live defect fire 4 times
-        # in 20. Retries stay on — a `✘` is printed for the failed FIRST
-        # attempt even when the retry rescues it, so the `✘` count IS the
-        # first-attempt failure count, and `trace: 'on-first-retry'` records
-        # nothing without them (`tests/unit/e2e-evidence-settings.test.ts`).
-        run: npx playwright test tests/e2e/arrivals.spec.ts --repeat-each=20
+        run: npx playwright test --retries=1
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
