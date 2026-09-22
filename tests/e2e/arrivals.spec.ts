@@ -126,7 +126,21 @@ async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detai
   const line = `ARRIVALS GUARD (bug-redirect-note-missing-not-late) ${label}`
   if (!detail || !seen.reachable) {
     console.log(
-      `${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, matchedIgnoringMirrored: seen.matchedIgnoringMirrored, startsForThisUrl: seen.startsForThisUrl } : seen)}`,
+      `${line}: ${JSON.stringify(
+        seen.reachable
+          ? {
+              url: seen.url,
+              matched: seen.matched,
+              matchedIgnoringMirrored: seen.matchedIgnoringMirrored,
+              startsForThisUrl: seen.startsForThisUrl,
+              // The commits, on the PASSING path as well. `starts` says what
+              // was recorded by the end of the test; this says what the guard
+              // was handed when it decided, and for the mirrored direction
+              // those differ — which is why `:71` has no mechanism control yet.
+              commits: seen.commits,
+            }
+          : seen,
+      )}`,
     )
     return seen
   }
@@ -166,17 +180,21 @@ test('the target mirroring the native pane is not the page navigating', async ()
   const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 
-  // **The control for the mirrored direction** (`bug-redirect-note-missing-not-late`).
-  // Asserting only "no note" would pass on the broken code, because the note's
-  // absence here does not depend on the fix. What does: every start recorded
-  // for this address was the bus's, so a reverse-find that SKIPS mirrored
-  // entries must find nothing at all. Remove the `!s.mirrored` from
-  // `startedByDocument` and this fails, because the find then returns the
-  // mirror's start.
-  if (seen.reachable) {
-    expect(seen.matched, `a non-mirrored start exists for a page nobody asked to move: ${JSON.stringify(seen.matched)}`).toBeNull()
-    expect(seen.matchedIgnoringMirrored?.mirrored, 'the fixture no longer produces a mirrored start, so this control proves nothing').toBe(true)
-  }
+  // **No mechanism control here yet, deliberately.** The first attempt asserted
+  // that every start for this address was the bus's — and run `35668477308`
+  // refuted it: the target is made to load `redirect.html` by the bus, and
+  // that page's `location.replace` then runs IN THE TARGET, recorded outside
+  // `loadMirrored`'s window as a genuine document-started navigation:
+  //
+  //   …008275  byDocument: true,  mirrored: false   <- the target's own redirect
+  //   …008281  byDocument: false, mirrored: true    <- the bus, 6 ms later
+  //
+  // The note is still correctly absent, so the behaviour holds — but the
+  // reason is not the one that assertion encoded, and writing a replacement
+  // from a mechanism this run just showed I had wrong would be guessing.
+  // `commits` below is printed on every run now so the NEXT run says what the
+  // guard actually saw at the moment it decided, rather than what `starts`
+  // looks like once the test is over. The control comes from that.
 })
 
 test('a page that really does redirect after loading still says so', async () => {
