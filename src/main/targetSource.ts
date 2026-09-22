@@ -524,22 +524,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
           at: Date.now(),
           url: details.url,
           byDocument: (details as { initiator?: unknown }).initiator !== undefined,
-          // Whether the bus was mirroring the other pane when this navigation
-          // STARTED. Recorded and not yet read: `startedByDocument` matches by
-          // url alone, so when a page's own `location.replace` and a mirrored
-          // load go to one address together, the later start wins and the
-          // note about a real redirect is dropped
-          // (`bug-redirect-note-missing-not-late`, traced on run 35640624703 —
-          // the document's start is in the log with `byDocument: true`, five
-          // milliseconds before the mirror's).
+          // Whether the bus was mirroring when this navigation STARTED, and
+          // whether the document it started from was itself the bus's — read
+          // back by `startFor` at commit time.
           //
-          // **This commit records it and changes nothing**, on purpose. The
-          // card it fixes exists because a different flag's window was raced —
-          // `loadMirrored`'s promise resolving 4 ms before a commit landed
-          // (`bug-arrivals`) — so whether a mirrored load's START reliably
-          // falls inside `mirroring` is a question to measure rather than
-          // reason about. `arrivals.spec.ts`'s guard probe prints every start,
-          // so CI answers it.
+          // Both are recorded at START because a commit-time read is a
+          // different question: the bus and the page act on one pane at once,
+          // so a mirror landing between a redirect starting and committing
+          // moves the answer under it. Measured — a pane-level flag read at
+          // commit marked a page's own `location.replace` as the bus's 17
+          // times in 20 (run `35753742810`). A start cannot be retro-set by
+          // anything that lands after it.
           mirrored: this.mirroring,
           // **The pane's provenance as it stood WHEN THIS NAVIGATION STARTED**,
           // which is the fix a 20x sweep forced (`35753742810`).
@@ -909,6 +904,32 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * See `mirroring`.
    */
   /**
+   * The start this commit answers: the latest for the url that was **not** the
+   * bus's own load, with the provenance it carried when it began.
+   *
+   * **`byDocument`.** Electron 43 puts `initiator` on a navigation a page began
+   * itself, and it is the only field that says so — there is no
+   * `isRendererInitiated` (measured across both arms of `bug-arrivals`). A page
+   * reloading itself, or redirecting, is news; a load main asked for is not.
+   *
+   * **Why mirrored starts are skipped.** This matched by url alone, so when a
+   * page's own `location.replace` and the bus's mirrored load went to one
+   * address together, the LATEST start won — and the mirror's is later.
+   * Measured on run `35640624703`: the document's start sat in the trace with
+   * `byDocument: true`, five milliseconds before the mirror's.
+   * `bug-arrivals`'s LIMIT 2 named this before it was ever seen.
+   *
+   * **And why that alone is not the fix.** Shipping the skip by itself made
+   * things worse: a 20x sweep (`35725663287`) found it let a bus-placed page's
+   * own redirect through the guard, and the note fired for a pane nobody asked
+   * to move, 4 times in 20. `fromBusDocument` on the start is the other half —
+   * it says the navigation began inside a document the bus put here, which a
+   * commit-time read of `documentFromBus` could not, because a concurrent
+   * mirror moves that field between a redirect starting and committing (17 in
+   * 20, run `35753742810`). Neither half works without the other, and both are
+   * measured on `bug-redirect-note-missing-not-late`.
+   */
+  /**
    * Whether the DOCUMENT started the navigation this commit answers.
    *
    * Electron 43 puts `initiator` on a navigation a page began itself, and it is
@@ -916,28 +937,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * across both arms of `bug-arrivals`). A page reloading itself, or
    * redirecting, is news; a load main asked for is not.
    */
-  /** The start this commit answers: the latest for the url that was not the bus's own load. */
   private startFor(url: string): { byDocument: boolean; fromBusDocument: boolean } | undefined {
     return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)
   }
 
-  private startedByDocument(url: string): boolean {
-    // **Mirrored starts are skipped.** This matched by url alone, so when a
-    // page's own `location.replace` and the bus's mirrored load went to one
-    // address together, the LATEST start won — and the mirror's is later.
-    // Measured on run `35640624703`: the document's start sat in the trace
-    // with `byDocument: true`, five milliseconds before the mirror's.
-    // `bug-arrivals`'s LIMIT 2 named this before it was ever seen.
-    //
-    // **This alone is not the fix, and shipping it alone made things worse.**
-    // A 20x sweep (`35725663287`) found that correcting the attribution let a
-    // bus-placed page's own redirect through the guard — the note then fired
-    // for a pane nobody asked to move, 4 times in 20. `documentFromBus` above
-    // is the other half: it says the redirect came from a document the bus
-    // put here, so the commit is still the bus's. Neither half works without
-    // the other.
-    return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)?.byDocument === true
-  }
 
   async loadMirrored(input: string): Promise<string> {
     this.mirroring = true
