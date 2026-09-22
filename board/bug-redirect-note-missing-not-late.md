@@ -290,3 +290,50 @@ makes a live defect fire four times in twenty.** The sweep was in the acceptance
 cannot be settled by a single sample, and it earned its place on its first use. A control written
 from **one** trace is a model with extra steps — mine was wrong 3 times in 20, and I had described it
 as "written from measurement, not a model".
+
+
+## MEASURED 2026-09-22 — a baseline at last, and two corrections it forces
+
+Six sweeps into this card nobody had run one on **unmodified `main`**. Every "before" number quoted
+in the sections above came from a branch that already carried the skip-mirrored change, so a
+treatment was being compared against another treatment and called a control.
+
+`arrivals.spec.ts` × 20 on each, first-attempt failures (a `✘` counts even when the retry rescues it):
+
+| build | `:89` note missing | `:71` note present |
+| --- | --- | --- |
+| **`main`** (run `35756415745`) | **3 / 20** | **0 / 20** |
+| skip mirrored starts alone (`#431`) | 1 / 20 | **4 / 20** |
+| provenance as a pane-level flag | 17 / 20 | 0 / 20 |
+| **provenance on the navigation** (`#434`) | **0 / 20, then 2 / 20** | **0 / 20** |
+
+**Correction 1: `:71` was never broken on `main`.** It is 0/20 there. The 4/20 was `#431`'s own
+regression, described on this card as the baseline because no baseline existed.
+
+**Correction 2: the fix does improve the real symptom.** `:89` goes from 3/20 to 2 failures across 40
+— roughly 15% to 5%. That was doubted in the section above, on the strength of a comparison that had
+no control in it.
+
+### What still fails, and why the card stays open
+
+**2 in 40 is not zero.** The residual is the mode named before any sweep ran: the bus's mirror landing
+*after* the page's own redirect, suppressed at `ipc.ts:230`, where no attribution logic executes at
+all. **A user can still lose the note.** Nothing in `#434` touches that path, and nothing should
+without its own measurement.
+
+### And a note on the tests, because four of them were mine and wrong
+
+Four mechanism controls were written for the mirrored direction and a sweep refuted every one:
+
+```
+"no non-mirrored start exists for this address"       refuted 35668477308
+"the last commit for this address is the bus's"       refuted 35725663287  3/20
+"every commit after the setup is the bus's"           refuted 35754437200  3/20
+"everything at or after redirect.html is the bus's"   refuted 35755066599  5/20
+```
+
+Each asserted an **order** in a log written by two actors at once. The orderings vary run to run, so
+every one was true most of the time. **The behaviour assertion is the control here**, and it is the
+only one with a red build behind it: `#431` regressed this direction and `toBeUndefined()` caught it
+4 times in 20. A control that has failed on a broken build outranks a mechanism claim nobody can
+state correctly.
