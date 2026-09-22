@@ -249,9 +249,16 @@ jobs:
         # **TEMPORARY, for the sweep `bug-redirect-note-missing-not-late` asks
         # for. REVERTED BEFORE MERGE — do not let this reach `main`.**
         #
-        # `--repeat-each=20 --retries=0` on the one spec: the card wants
-        # `arrivals.spec.ts:89` passing on FIRST ATTEMPT across a sweep, and
-        # `--retries=1` would hide exactly the failures being counted. The
+        # `--repeat-each=20`, retries LEFT ALONE. The first version passed
+        # `--retries=0`, reasoning that retries would hide the first-attempt
+        # failures being counted. `tests/unit/e2e-evidence-settings.test.ts`
+        # refused it, and was right: `trace: 'on-first-retry'` records nothing
+        # when retries is 0, so that version would have thrown away the
+        # evidence any failure needs. And the premise was wrong anyway —
+        # Playwright prints a `✘` for the failed FIRST attempt even when the
+        # retry rescues it, which is how every flake in `docs/e2e-flakes.md`
+        # was counted this week. So `✘` count IS the first-attempt failure
+        # count, and keeping retries costs nothing and preserves the trace. The
         # bug is a 5 ms race, so one green run distinguishes "fixed" from
         # "got lucky" not at all — `#429` measured `:89` passing for the
         # WRONG reason before the fix existed.
@@ -259,7 +266,7 @@ jobs:
         # Repetitions live inside ONE run on purpose: `ci.yml`'s concurrency
         # is keyed on the ref with `cancel-in-progress`, so pushing twenty
         # times yields one surviving run, not twenty.
-        run: npx playwright test tests/e2e/arrivals.spec.ts --repeat-each=20 --retries=0
+        run: npx playwright test tests/e2e/arrivals.spec.ts --repeat-each=20 --retries=1
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
