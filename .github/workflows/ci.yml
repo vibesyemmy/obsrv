@@ -246,7 +246,11 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
+        # **TEMPORARY baseline sweep — this branch is never merged.**
+        # Every "before" number quoted on `bug-redirect-note-missing-not-late`
+        # came from a branch that already carried half the fix. This measures
+        # unmodified `main`, so the fix has something honest to be compared to.
+        run: npx playwright test tests/e2e/arrivals.spec.ts --repeat-each=20
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
