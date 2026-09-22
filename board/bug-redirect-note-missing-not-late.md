@@ -221,3 +221,72 @@ because a *different* flag's window was raced — `loadMirrored`'s promise resol
 commit landed (`bug-arrivals`). So the first measurement is whether the mirror's
 `did-start-navigation` genuinely fires **inside** that window on a real run. Reasoning about this
 exact window is what produced the original defect; it gets measured.
+
+
+## SWEPT 2026-09-22 — the fix trades one direction for the other, and must not ship
+
+**`#431`'s `startedByDocument` change is withdrawn.** A single green CI run, two mechanism controls,
+a measured trace and an independent PASS all said it was ready. **Twenty repetitions said otherwise.**
+
+`arrivals.spec.ts` × 20, retries kept (so a `✘` is a first-attempt failure), run `35725663287`:
+
+```
+ 4x  :71   REAL BUG    note PRESENT for a pane that only mirrored
+ 3x  :71   MY CONTROL  "the last commit for this address is the bus's" — false
+ 1x  :89   REAL BUG    note MISSING after a real redirect
+       8 of 40 first attempts
+```
+
+### The fix causes the `:71` failures
+
+The probe printed the guard's inputs on every repetition, so no further run was needed. The four
+failing attempts carry a commit the passing ones do not:
+
+```
+hairline   mirroring: false    <- the setup navigate
+redirect   mirroring: true     <- the bus
+hairline   mirroring: true     <- the bus
+hairline   mirroring: FALSE    <- a fourth commit, and not the bus's
+matched: byDocument = true
+```
+
+That fourth commit is **the target's own `location.replace`** — the mirrored `redirect.html` running
+inside the target and redirecting itself — **committing after `loadMirrored`'s window has closed.** It
+is therefore not marked mirrored, `ipc.ts:230` does not suppress it, it reaches the address guard, and
+**with the fix** `startedByDocument` answers `true`, so the note fires for a pane nobody asked to move.
+
+**Before the fix that commit was saved by the bug.** The reverse-find matched the mirror's start,
+`byDocument` read false, and the guard dropped it. Removing the wrong match removed the thing
+accidentally holding the other direction — which is what `bug-arrivals` recorded as this family's
+signature failure, and what this card's own acceptance demanded two controls for.
+
+### `:89`'s remaining failure is a different guard
+
+Its last hairline commit came back `mirroring: true`, so `ipc.ts:230` returned early and nothing
+reached the attribution logic at all. **No change to `byDocument` can affect it.**
+
+### What this means for the fix
+
+`byDocument` cannot serve both directions, because the same signal that says *"the document
+redirected"* also says *"the document redirected **because we mirrored a page that itself
+redirects**"*. `mirrored`-on-the-start does not separate them: it covers the mirroring window, and the
+commit that matters lands after the window closes.
+
+**What a real fix has to distinguish** is a document-started navigation the *page* chose from one the
+*bus* caused by mirroring a redirecting page. Nothing currently recorded says which. That is a
+bigger change than one predicate, and it needs its own design before any code.
+
+### What stands
+
+- The diagnosis in the section above is unaffected: the reverse-find **does** match the mirror, and
+  that **is** a defect. It is just not the only one on this path.
+- `#429`'s `mirrored` field is merged, changes no behaviour, and is what made all of this visible.
+- The instrument stays. Every future sighting arrives with the guard's inputs attached.
+
+### The method note, because it is the transferable part
+
+**One green run, two controls, a trace and a reviewer's PASS were all consistent with a change that
+makes a live defect fire four times in twenty.** The sweep was in the acceptance because a 5 ms race
+cannot be settled by a single sample, and it earned its place on its first use. A control written
+from **one** trace is a model with extra steps — mine was wrong 3 times in 20, and I had described it
+as "written from measurement, not a model".
