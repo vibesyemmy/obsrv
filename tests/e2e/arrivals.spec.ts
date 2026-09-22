@@ -180,7 +180,8 @@ test('the target mirroring the native pane is not the page navigating', async ()
   const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 
-  // **No mechanism control here yet, deliberately.** The first attempt asserted
+  // **The control for the mirrored direction, written from run `35670642112`'s
+  // commit trace rather than from a model of it.** The first attempt asserted
   // that every start for this address was the bus's — and run `35668477308`
   // refuted it: the target is made to load `redirect.html` by the bus, and
   // that page's `location.replace` then runs IN THE TARGET, recorded outside
@@ -192,9 +193,35 @@ test('the target mirroring the native pane is not the page navigating', async ()
   // The note is still correctly absent, so the behaviour holds — but the
   // reason is not the one that assertion encoded, and writing a replacement
   // from a mechanism this run just showed I had wrong would be guessing.
-  // `commits` below is printed on every run now so the NEXT run says what the
-  // guard actually saw at the moment it decided, rather than what `starts`
-  // looks like once the test is over. The control comes from that.
+  // Printing the commits on every run answered it. What the guard was handed
+  // here, at the moment it decided:
+  //
+  //   hairline   mirroring: false   <- the agent's own navigate, the setup
+  //   redirect   mirroring: true    <- the bus
+  //   hairline   mirroring: true    <- the bus
+  //
+  // **Every commit after the setup is marked `mirroring`, so `ipc.ts:230`'s
+  // `if (inPage || mirrored) return` suppresses them before the address guard
+  // at `:245` is ever reached.** The note's absence here does not depend on
+  // `byDocument` at all — which is why `startedByDocument`'s fix could not
+  // change this direction, and why the assertion that ASSUMED it could was
+  // wrong rather than unlucky.
+  //
+  // Note the asymmetry the trace also shows: the target's own `location.replace`
+  // start was recorded OUTSIDE the mirroring window (`mirrored: false`) while
+  // its commit landed INSIDE it (`mirroring: true`). Starts and commits do not
+  // agree about that flag, and anything reasoning from one about the other is
+  // guessing.
+  //
+  // So this asserts what actually holds the direction: the last commit for
+  // this address is the bus's. If a change ever lets an unmirrored commit for
+  // it through, this fails and the note starts appearing for a pane nobody
+  // asked to move — the original `bug-arrivals` defect, returning.
+  if (seen.reachable) {
+    const here = seen.commits.filter((c): c is { url: string; mirroring?: boolean } => typeof (c as { url?: unknown }).url === 'string' && (c as { url: string }).url === seen.url)
+    expect(here.length, `no commit recorded for ${seen.url}; the fixture no longer produces the case this asserts`).toBeGreaterThan(0)
+    expect(here[here.length - 1]?.mirroring, `the last commit for this address was not the bus's: ${JSON.stringify(here[here.length - 1])}`).toBe(true)
+  }
 })
 
 test('a page that really does redirect after loading still says so', async () => {
