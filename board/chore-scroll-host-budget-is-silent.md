@@ -1,8 +1,7 @@
 ---
 title: "When the scroll-host search runs out of budget it says nothing, and every surface inherits the answer"
-column: doing
+column: done
 owner: "Kenya"
-waiting: ""
 kind: chore
 criterion: B2
 order: 88
