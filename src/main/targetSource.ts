@@ -299,6 +299,29 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * withheld, and only for the mirror's own load.
    */
   private mirroring = false
+  /**
+   * Whether the document currently in this pane was put here by the sync bus.
+   *
+   * **Not the same question as `mirroring`, and that difference is this whole
+   * bug** (`bug-redirect-note-missing-not-late`). `mirroring` is true only
+   * while `loadMirrored`'s promise is in flight — the comment on the
+   * `did-navigate` handler below already records that a client-side redirect
+   * "landed inside that window on a slow machine and outside it on a fast
+   * one". A document, by contrast, outlives the load that placed it.
+   *
+   * So: mirrored load commits -> this document came from the bus. The document
+   * then redirects itself -> the redirect INHERITS the flag, because a chain
+   * that began with the bus is still the bus's doing however late it lands.
+   * Any other commit — an agent navigate, a URL-bar load — clears it, because
+   * someone asked for that page on purpose.
+   *
+   * Measured need: `arrivals.spec.ts:71` drives only the NATIVE pane, the bus
+   * mirrors `redirect.html` in, and that page's own `location.replace` then
+   * commits **after** the window closed — indistinguishable, on the window
+   * alone, from a page the user's own navigation redirected. A 20x sweep found
+   * it 4 times in 20.
+   */
+  private documentFromBus = false
   private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean }[] = []
   /**
    * Every main-frame commit this pane saw, and whether it said anything about
@@ -447,7 +470,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
         this.record({ at: Date.now(), url, kind: 'did-navigate', said: false, why: 'restoring' })
         return
       }
-      this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: this.mirroring })
+      // Carried before the record, so both the trace and the event see the
+      // same answer for this commit.
+      const byDocument = this.startedByDocument(url)
+      const fromBus = this.mirroring || (byDocument && this.documentFromBus)
+      this.documentFromBus = fromBus
+      this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: fromBus })
       // Marked rather than withheld. Withholding it made whether a consumer
       // ever heard about a mirrored commit depend on a race: `mirroring` is
       // only true while `load()` is in flight, so a client-side redirect
@@ -455,7 +483,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // one — `sync.spec`'s redirect test saw one commit locally and none on
       // CI, from the same code (2026-09-14). The fact a consumer needs is
       // *which kind* of commit this was, so say it and let each decide.
-      this.emit('url-changed', url, false, this.mirroring, this.startedByDocument(url))
+      this.emit('url-changed', url, false, fromBus, byDocument)
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame && this.internal) this.record({ at: Date.now(), url, kind: 'in-page', said: false, why: 'internal' })
@@ -872,7 +900,21 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * redirecting, is news; a load main asked for is not.
    */
   private startedByDocument(url: string): boolean {
-    return [...this.starts].reverse().find(s => s.url === url)?.byDocument === true
+    // **Mirrored starts are skipped.** This matched by url alone, so when a
+    // page's own `location.replace` and the bus's mirrored load went to one
+    // address together, the LATEST start won — and the mirror's is later.
+    // Measured on run `35640624703`: the document's start sat in the trace
+    // with `byDocument: true`, five milliseconds before the mirror's.
+    // `bug-arrivals`'s LIMIT 2 named this before it was ever seen.
+    //
+    // **This alone is not the fix, and shipping it alone made things worse.**
+    // A 20x sweep (`35725663287`) found that correcting the attribution let a
+    // bus-placed page's own redirect through the guard — the note then fired
+    // for a pane nobody asked to move, 4 times in 20. `documentFromBus` above
+    // is the other half: it says the redirect came from a document the bus
+    // put here, so the commit is still the bus's. Neither half works without
+    // the other.
+    return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)?.byDocument === true
   }
 
   async loadMirrored(input: string): Promise<string> {
