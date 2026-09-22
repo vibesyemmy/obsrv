@@ -322,7 +322,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * it 4 times in 20.
    */
   private documentFromBus = false
-  private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean }[] = []
+  private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean; fromBusDocument: boolean }[] = []
   /**
    * Every main-frame commit this pane saw, and whether it said anything about
    * it.
@@ -472,8 +472,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       }
       // Carried before the record, so both the trace and the event see the
       // same answer for this commit.
-      const byDocument = this.startedByDocument(url)
-      const fromBus = this.mirroring || (byDocument && this.documentFromBus)
+      const start = this.startFor(url)
+      const byDocument = start?.byDocument === true
+      // `start.fromBusDocument` — what the pane's provenance was when THIS
+      // navigation began — not `this.documentFromBus`, which may have moved
+      // since under a concurrent mirror.
+      const fromBus = this.mirroring || (byDocument && start?.fromBusDocument === true)
       this.documentFromBus = fromBus
       this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: fromBus })
       // Marked rather than withheld. Withholding it made whether a consumer
@@ -537,6 +541,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
           // reason about. `arrivals.spec.ts`'s guard probe prints every start,
           // so CI answers it.
           mirrored: this.mirroring,
+          // **The pane's provenance as it stood WHEN THIS NAVIGATION STARTED**,
+          // which is the fix a 20x sweep forced (`35753742810`).
+          //
+          // Reading `documentFromBus` at COMMIT time asks "what happened on
+          // this pane most recently"; the question is "where did THIS
+          // navigation come from". The bus and the page act on one pane
+          // concurrently, so a mirror landing between a page's redirect
+          // starting and committing retro-set the answer — the page's own
+          // `location.replace` out of an agent-loaded document was marked as
+          // the bus's, 17 times in 20.
+          //
+          // A start cannot be retro-set by anything that lands after it.
+          fromBusDocument: this.documentFromBus,
         })
         if (this.starts.length > NAV_START_TRACE_MAX) this.starts.splice(0, this.starts.length - NAV_START_TRACE_MAX)
       }
@@ -899,6 +916,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * across both arms of `bug-arrivals`). A page reloading itself, or
    * redirecting, is news; a load main asked for is not.
    */
+  /** The start this commit answers: the latest for the url that was not the bus's own load. */
+  private startFor(url: string): { byDocument: boolean; fromBusDocument: boolean } | undefined {
+    return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)
+  }
+
   private startedByDocument(url: string): boolean {
     // **Mirrored starts are skipped.** This matched by url alone, so when a
     // page's own `location.replace` and the bus's mirrored load went to one
