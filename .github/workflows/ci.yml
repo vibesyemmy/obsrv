@@ -246,7 +246,20 @@ jobs:
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
+        # **TEMPORARY, for the sweep `bug-redirect-note-missing-not-late` asks
+        # for. REVERTED BEFORE MERGE — do not let this reach `main`.**
+        #
+        # `--repeat-each=20 --retries=0` on the one spec: the card wants
+        # `arrivals.spec.ts:89` passing on FIRST ATTEMPT across a sweep, and
+        # `--retries=1` would hide exactly the failures being counted. The
+        # bug is a 5 ms race, so one green run distinguishes "fixed" from
+        # "got lucky" not at all — `#429` measured `:89` passing for the
+        # WRONG reason before the fix existed.
+        #
+        # Repetitions live inside ONE run on purpose: `ci.yml`'s concurrency
+        # is keyed on the ref with `cancel-in-progress`, so pushing twenty
+        # times yields one surviving run, not twenty.
+        run: npx playwright test tests/e2e/arrivals.spec.ts --repeat-each=20 --retries=0
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
