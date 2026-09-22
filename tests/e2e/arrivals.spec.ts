@@ -169,10 +169,23 @@ test('the target mirroring the native pane is not the page navigating', async ()
   // for a pane nobody asked to move — `bug-arrivals`, returning. That is
   // exactly what the withdrawn `#431` did, 4 times in 20.
   if (seen.reachable) {
-    const here = seen.commits.filter(c => c.url === seen.url)
-    expect(here.length, `no commit for ${seen.url}; the fixture no longer produces this case`).toBeGreaterThan(0)
-    const notTheBus = here.slice(1).filter(c => c.mirroring !== true)
-    expect(notTheBus, `a commit after the setup was not attributed to the bus: ${JSON.stringify(notTheBus)}`).toEqual([])
+    // Anchored on the redirect fixture's own commit, not on a position in the
+    // list. An earlier version sliced off the first commit for this address,
+    // assuming the setup contributes exactly one — a 20x sweep
+    // (`35754437200`) found 3 in 20 where the interleaving produces two early
+    // non-bus commits, and the second survived the slice. Positional
+    // assumptions about a concurrent log keep being wrong; this asks the
+    // question the design actually makes a claim about.
+    //
+    // **Once the bus has placed `redirect.html` here, everything downstream of
+    // it is the bus's** — that page's own `location.replace` included, because
+    // the start carries the provenance the commit reads. If any commit after
+    // that point is unmarked, `ipc.ts:230` lets it through and the note fires
+    // for a pane nobody asked to move.
+    const placed = seen.commits.map(c => c.url).lastIndexOf(REDIRECT)
+    expect(placed, 'the bus never placed redirect.html; the fixture no longer produces this case').toBeGreaterThanOrEqual(0)
+    const after = seen.commits.slice(placed).filter(c => c.mirroring !== true)
+    expect(after, `a commit at or after the bus placed redirect.html was not the bus's: ${JSON.stringify(after)}`).toEqual([])
   }
 })
 
