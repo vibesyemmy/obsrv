@@ -297,14 +297,61 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * navigating (run 16, instrumented: `mirror? from=native` immediately
    * before it). Status and intended URL are kept; only `url-changed` is
    * withheld, and only for the mirror's own load.
+   *
+   * **The address the bus asked for, not a boolean.** It was a flag until run
+   * `35759060900`, where a page's own `location.replace` landed inside
+   * `loadMirrored`'s 39 ms and was stamped the bus's. A window says *when*; the
+   * question is *which navigation*. `undefined` when no mirrored load is in
+   * flight.
    */
-  private mirroring = false
+  private mirrorRequested: string | undefined
+  /**
+   * Whether THIS commit is the mirrored load, rather than merely concurrent
+   * with one (`bug-redirect-note-missing-not-late`).
+   *
+   * The window alone stamped a page's own `location.replace` as the bus's when
+   * it landed inside `loadMirrored`'s 39 ms — measured on run `35759060900`,
+   * where the attribution was otherwise correct (`byDocument: true`,
+   * `fromBusDocument: false`) and the note went missing anyway, because
+   * `ipc.ts`'s guard returns before attribution is consulted.
+   *
+   * Two ways a commit belongs to the bus's load, and the second is not
+   * optional:
+   *
+   * - **it reached the address the bus asked for.** The ordinary case.
+   * - **it reached a different address with no document initiator.** A
+   *   server-side redirect of the bus's own load: the bus asked for A and
+   *   Chromium committed B, no page involved.
+   *
+   *   **Measured, by `mirror-302.spec.ts`, which fails without this arm.**
+   *   Remove it and the target reports the commit unmarked, and the reply says
+   *   *"the page navigated after it loaded, to http://127.0.0.1:PORT/to"* about
+   *   a pane nobody asked to move — the shape `#431` shipped.
+   *
+   *   **It took two attempts, and the first one lied.** The same control written
+   *   inside `arrivals.spec.ts` PASSED on the sabotaged build: that file's app is
+   *   shared with two tests that drive several commits, and its own header says
+   *   they perturb whoever runs next. A control needing a clean arrivals record
+   *   needs its own app. I had already written the arm off as unmeasurable on
+   *   that evidence — a test detecting nothing reads exactly like a case that
+   *   cannot happen.
+   *
+   * A page's own redirect inside the window is neither: it has an initiator and
+   * a different address, so it falls through to `fromBusDocument`, the term that
+   * decides whether the chain began in a document the bus placed. **Keeping
+   * those two questions in separate fields is the point** — all four earlier
+   * attempts on this card made one field answer both.
+   */
+  private isMirrorCommit(url: string, byDocument: boolean): boolean {
+    if (this.mirrorRequested === undefined) return false
+    return url === this.mirrorRequested || !byDocument
+  }
   /**
    * Whether the document currently in this pane was put here by the sync bus.
    *
-   * **Not the same question as `mirroring`, and that difference is this whole
-   * bug** (`bug-redirect-note-missing-not-late`). `mirroring` is true only
-   * while `loadMirrored`'s promise is in flight — the comment on the
+   * **Not the same question as `mirrorRequested`, and that difference is this
+   * whole bug** (`bug-redirect-note-missing-not-late`). A mirrored load is in
+   * flight only while `loadMirrored`'s promise is — the comment on the
    * `did-navigate` handler below already records that a client-side redirect
    * "landed inside that window on a slow machine and outside it on a fast
    * one". A document, by contrast, outlives the load that placed it.
@@ -477,12 +524,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // `start.fromBusDocument` — what the pane's provenance was when THIS
       // navigation began — not `this.documentFromBus`, which may have moved
       // since under a concurrent mirror.
-      const fromBus = this.mirroring || (byDocument && start?.fromBusDocument === true)
+      const fromBus = this.isMirrorCommit(url, byDocument) || (byDocument && start?.fromBusDocument === true)
       this.documentFromBus = fromBus
       this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: fromBus })
       // Marked rather than withheld. Withholding it made whether a consumer
-      // ever heard about a mirrored commit depend on a race: `mirroring` is
-      // only true while `load()` is in flight, so a client-side redirect
+      // ever heard about a mirrored commit depend on a race: a mirrored load
+      // is in flight only while `load()` is, so a client-side redirect
       // landed inside that window on a slow machine and outside it on a fast
       // one — `sync.spec`'s redirect test saw one commit locally and none on
       // CI, from the same code (2026-09-14). The fact a consumer needs is
@@ -494,8 +541,8 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       if (isMainFrame && !this.internal) {
         this.intendedUrl = url
         this.record({ at: Date.now(), url, kind: 'in-page', said: true })
-        // Never the mirroring flag: an in-page commit was always reported and
-        // always mirrored back, `mirroring` or not, and marking it would stop
+        // Never the mirror's own claim: an in-page commit was always reported
+        // and always mirrored back, mid-mirrored-load or not, and marking it would stop
         // the bus mirroring it (`onTargetNav` drops what is marked). Three
         // quick navigations back and forth stopped mirroring when this was
         // wired to the flag — the loop test caught it.
@@ -524,9 +571,9 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
           at: Date.now(),
           url: details.url,
           byDocument: (details as { initiator?: unknown }).initiator !== undefined,
-          // Whether the bus was mirroring when this navigation STARTED, and
-          // whether the document it started from was itself the bus's — read
-          // back by `startFor` at commit time.
+          // Whether this start IS the bus's own mirrored load, and whether the
+          // document it started from was itself the bus's — read back by
+          // `startFor` at commit time.
           //
           // Both are recorded at START because a commit-time read is a
           // different question: the bus and the page act on one pane at once,
@@ -535,7 +582,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
           // commit marked a page's own `location.replace` as the bus's 17
           // times in 20 (run `35753742810`). A start cannot be retro-set by
           // anything that lands after it.
-          mirrored: this.mirroring,
+          // The MIRROR's own start, not merely one concurrent with it: the
+          // reason `startFor` skips these is that the mirror's start shadowed
+          // the page's at the same address. A start to some OTHER address
+          // during the window is the page's own and must stay findable.
+          mirrored: this.mirrorRequested === details.url,
           // **The pane's provenance as it stood WHEN THIS NAVIGATION STARTED**,
           // which is the fix a 20x sweep forced (`35753742810`).
           //
@@ -901,7 +952,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** Loads URL-bar input; returns the normalised URL that was requested. */
   /**
    * `load`, for the sync bus mirroring the other pane's commit into this one.
-   * See `mirroring`.
+   * See `mirrorRequested` and `isMirrorCommit`.
    */
   /**
    * The start this commit answers: the latest for the url that was **not** the
@@ -943,12 +994,14 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
 
 
   async loadMirrored(input: string): Promise<string> {
-    this.mirroring = true
+    // Normalised the way `load` normalises it, because the committed url is
+    // compared against this one and `load` is what hands Chromium the address.
+    this.mirrorRequested = normalizeUrl(input)
     try {
       return await this.load(input)
     } finally {
-      // As `restoring`: a flag left standing would swallow real navigations.
-      this.mirroring = false
+      // As `restoring`: a claim left standing would swallow real navigations.
+      this.mirrorRequested = undefined
     }
   }
 
