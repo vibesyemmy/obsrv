@@ -337,3 +337,72 @@ every one was true most of the time. **The behaviour assertion is the control he
 only one with a red build behind it: `#431` regressed this direction and `toBeUndefined()` caught it
 4 times in 20. A control that has failed on a broken build outranks a mechanism claim nobody can
 state correctly.
+
+## `#434` is in as `4e210fc`, 2026-09-22 — and the residual now has a mechanism, not a shrug
+
+`#434`'s ordinary suite, run `35759060900` on `41cd572`: **619 passed, one `✘`** —
+`arrivals.spec.ts:181` (this card's `:89`), retry-rescued. Idris byte-counted the same log and passed
+it. **The `:140` direction did not fire at all**, so the trade `#433` recorded and refused to ship is
+gone. One first-attempt failure in an ordinary suite is consistent with the 2-in-40 the sweep
+measured. An improvement, not a cure — which is why this card stays in `doing`.
+
+**The probe answered what six sweeps could not, on the run that failed.** The attribution was
+*correct*:
+
+```
+matched {"at":…413917,"url":…hairline.html,"byDocument":true,"mirrored":false,"fromBusDocument":false}
+```
+
+`startFor` reached the document's own start; `byDocument` `true`, `fromBusDocument` `false`. **Every
+predicate this card has argued about was right on the failing attempt.** The commit log says why that
+did not help:
+
+```
+…413905  redirect.html   mirroring: false     ← the navigate the caller asked for
+…413944  hairline.html   mirroring: TRUE      ← the page's OWN redirect, stamped as the bus's
+```
+
+The same two commits on a passing attempt:
+
+```
+…417180  redirect.html   mirroring: false
+…417219  hairline.html   mirroring: false     ← attributed correctly, note fires
+```
+
+### The mechanism, stated exactly
+
+`this.mirroring` is a bare boolean raised for the life of `loadMirrored`'s promise. It means *"the bus
+is loading something right now"*, and `did-navigate` applies it to **whatever commits during that
+window** without asking whether that commit is the navigation the bus requested.
+
+On the failing attempt the bus was still inside `loadMirrored(redirect.html)` when the page ran its
+own `location.replace('hairline.html')`. That commit is the page's, to an address the bus never asked
+for, and it was stamped `mirroring: true` — so `ipc.ts:230`'s `if (inPage || mirrored) return` dropped
+it before any attribution ran. **A 39 ms window is the entire remaining defect.** `#434` is real and
+orthogonal: it corrects which start a commit answers, and this commit never reaches the code that
+asks.
+
+This supersedes the earlier reading in *"`:89`'s remaining failure is a different guard"*, which was
+right that `ipc.ts:230` returns early and wrong to leave it there — the early return is a consequence,
+and the bare window is the cause.
+
+### The design this points at
+
+`mirroring` must stop being a time window and become a claim about a **specific navigation**.
+`loadMirrored(url)` knows the address it asked for; the commit carries the address it reached. A
+commit is the bus's only if it is *the one the bus requested*:
+
+- bus asked `redirect.html`, commit is `redirect.html` → the bus's, suppress
+- bus asked `redirect.html`, commit is `hairline.html` → **not what the bus asked for** → the page
+  redirected itself, and that is the note
+
+It also reads correctly for `:140`, where the bus mirrors *both* hops: it asks for `redirect.html` and
+then for `hairline.html`, so the hairline commit matches a request and stays suppressed. That is the
+direction all four earlier attempts broke, which is the reason to write the design down before the
+code.
+
+**Candidate, not a conclusion.** A redirect chain can reach an address the bus also asked for on a
+different hop, and two mirrored loads can overlap, so url-equality alone may not identify a
+navigation — Chromium's own navigation id may be needed instead. This is one reading of two traces
+from one run. By this card's own method note it earns nothing until a sweep says so: `--repeat-each=20`
+on **both** directions, `main` measured first.
