@@ -204,8 +204,25 @@ function declaredIn(script: string): Set<string> {
   // them as calls is what the first run of this test did. They are declarations
   // and belong here.
   for (const m of script.matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{/gm)) names.add(m[1]!)
-  // `const f = (a) => …` is covered by the const rule; arrow params are not
-  // called, so they do not need collecting.
+  // **Parameters, because one of them is called.** This said "arrow params are
+  // not called, so they do not need collecting" until
+  // `chore-shadow-roots-stuck-chrome-and-frames` passed the shadow traversal
+  // INTO `installStuckChrome` — a parameter the body calls, resolved at the
+  // script's own call site. That is the bundler-proof way to reach a helper from
+  // a serialised function, so it will happen again, and the assumption above was
+  // measured false the first time it did.
+  for (const m of script.matchAll(/\bfunction\s+[A-Za-z_$][\w$]*\s*\(([^)]*)\)/g)) {
+    for (const part of m[1]!.split(',')) {
+      const name = part.trim().replace(/=.*$/, '').replace(/^\.\.\./, '').trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name)
+    }
+  }
+  for (const m of script.matchAll(/\(([^()]*)\)\s*=>/g)) {
+    for (const part of m[1]!.split(',')) {
+      const name = part.trim().replace(/=.*$/, '').replace(/^\.\.\./, '').trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name)
+    }
+  }
   return names
 }
 

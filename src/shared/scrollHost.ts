@@ -219,7 +219,14 @@ export function framesInViewport(): { count: number; viewportCoverage: number } 
   const vh = window.innerHeight
   let count = 0
   let area = 0
-  for (const frame of Array.from(document.querySelectorAll('iframe'))) {
+  // `shadowElements`, not `querySelectorAll`: an iframe inside a web component
+  // is invisible to the latter, so a consent wall mounted in one was never
+  // counted and the empty-page and walk sentences never named it
+  // (`chore-shadow-roots-stuck-chrome-and-frames`). Measured: a full-viewport
+  // iframe in an open root gave `count: 0, viewportCoverage: 0`, the same
+  // iframe in the light DOM gave `1` and `1`.
+  const frames = shadowElements(document.body ?? document.documentElement).filter(el => el.tagName === 'IFRAME')
+  for (const frame of frames) {
     const r = frame.getBoundingClientRect()
     const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0))
     const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0))
