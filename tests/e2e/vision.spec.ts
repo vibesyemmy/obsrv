@@ -68,7 +68,39 @@ test('it actually changes the render, and turning it off restores it', async () 
     return [r, g, bl]
   }
 
+  // **Wait for a frame to have been sent AND drawn before the baseline sample.**
+  //
+  // `bug-vision-47-normal-not-red`. Twice this read `[255,255,255]` — white,
+  // which is what an unpainted surface looks like, not a washed-out red — and
+  // passed on retry. `capturePage` reads the window whenever it is asked; the
+  // renderer draws the pane on `requestAnimationFrame`. Nothing tied the sample
+  // to a frame having been painted.
+  //
+  // **Colour-independent on purpose.** Polling until the pixel is red would make
+  // this test unable to fail: the assertion below *is* that red dominates, and a
+  // genuine white Normal render is exactly what the card was filed about.
+  //
+  // **And it waits on a frame having been SENT, not on a new one arriving.** The
+  // simulation is a renderer-side shader, so clicking `.vision-none` redraws what
+  // the pane already holds and need not produce a fresh frame from the target — a
+  // wait on `onFrame` could block for its whole timeout on this static fixture.
+  // `frameSent()` is what main already compares captures against, and it cannot
+  // hang on a page whose frames arrived before the click. The two
+  // `requestAnimationFrame`s then cover the renderer's own draw.
+  const painted = async (): Promise<void> => {
+    await expect
+      .poll(async () => app.evaluate(() => (globalThis as any).__obsrv.tabs.frameSent()), { timeout: 10_000 })
+      .toMatchObject({ ready: true })
+    await expect
+      .poll(async () => app.evaluate(() => (globalThis as any).__obsrv.tabs.frameSent().lastSeq), { timeout: 10_000 })
+      .toBeGreaterThan(0)
+    await page.evaluate(
+      () => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))),
+    )
+  }
+
   await page.click('.vision-none')
+  await painted()
   const normal = await middle()
   // The fixture is solid red, so this is a real red before anything touches it.
   //

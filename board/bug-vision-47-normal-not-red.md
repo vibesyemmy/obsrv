@@ -1,7 +1,9 @@
 ---
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
-column: backlog
+column: review
 kind: bug
+owner: "Henry"
+waiting: "Idris: the gate on the PR"
 criterion: B5
 order: 84
 ---
@@ -79,3 +81,36 @@ to the number. That is the second time in one day I trusted a summary over the d
 the first was a card's `owner:` line against its body. @Idris had endorsed the wrong version before I
 caught it, and noted in turn that she had verified the pixel values without checking the logic built on
 them. **Verifying an input is not verifying a conclusion.**
+
+## THE TIMING CAUSE IS REMOVED 2026-09-23 — and the message stays able to say the other one
+
+The sample now waits for a frame to have been **sent** and **drawn** before it is taken.
+
+**Why not wait for a new frame to arrive.** The simulation is a **renderer-side shader**, so clicking
+`.vision-none` redraws what the pane already holds and need not produce a fresh frame from the target.
+A wait on `onFrame` would block for its whole timeout on this static fixture — **I wrote that version
+first and caught it before running it.** `tabs.frameSent()` is what main already compares captures
+against, cannot hang on a page whose frames arrived before the click, and two `requestAnimationFrame`s
+then cover the renderer's own draw.
+
+**Why not wait for the pixel to be red.** That is the assertion. Polling on it would make this test
+**unable to fail**, and a genuinely white Normal render is the thing the card was filed about.
+
+### Measured, both directions
+
+- **Stable:** 50 runs of the file, 13.8 s total, no timeouts — the added wait costs nothing on a page
+  whose frames are already in.
+- **Still able to fail:** with the fixture swapped to a white page, the test **fails**, at the same
+  assertion, with the same sentence — `middle pixel rgb: [255,255,255]`.
+
+### What this does and does not claim
+
+**It removes one cause, and it cannot tell the two apart.** The sabotage above produces the *identical*
+signature to the flake, because white is white however it got there. So this is not a proof that timing
+was the cause of the two sightings — it is the removal of the only cause the evidence supports, leaving
+the message intact for any other.
+
+**That is the diagnostic value: if `[255,255,255]` recurs after this, timing is no longer available as
+an explanation**, and the card's remaining branch — a render that is genuinely white — is what is left.
+The card stays open until a suite has run without it, rather than being closed on a fix nobody has seen
+prevent anything.
