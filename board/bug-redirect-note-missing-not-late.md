@@ -406,3 +406,53 @@ different hop, and two mirrored loads can overlap, so url-equality alone may not
 navigation — Chromium's own navigation id may be needed instead. This is one reading of two traces
 from one run. By this card's own method note it earns nothing until a sweep says so: `--repeat-each=20`
 on **both** directions, `main` measured first.
+
+### CORRECTION, same day, before anyone builds on it
+
+**The section above gives the right mechanism and the wrong reason for the `:140` half.** I wrote
+that keying `mirroring` to the requested navigation "reads correctly for `:140`, where the bus mirrors
+*both* hops — it asks for `redirect.html` and then for `hairline.html`, so the hairline commit matches
+a request and stays suppressed."
+
+**That is not what suppresses it, and the sentence would send an implementer at the wrong term.** In
+`:140` the target's own copy of `redirect.html` runs its own `location.replace`, and that commit is the
+*page's*, not a hop the bus asked for. Url-keying alone would let it through and the note would fire
+for a pane nobody asked to move — the exact regression `#431` shipped and a 20x sweep caught 4 times
+in 20.
+
+What actually holds that direction is the **other** term already in `did-navigate`:
+
+```ts
+const fromBus = this.mirroring || (byDocument && start?.fromBusDocument === true)
+```
+
+`fromBusDocument` says the navigation began inside a document the bus placed, so a chain the bus
+started stays the bus's however late it lands. The traces in hand show both halves without a new run:
+
+| run, attempt | the document's own start for `hairline.html` |
+| --- | --- |
+| `:181` failing | `byDocument: true, mirrored: false, fromBusDocument: **false**` — caller's navigate placed it, so the note *should* fire |
+| `:140` baseline | `byDocument: true, mirrored: false, fromBusDocument: **true**` — the bus placed it, so silence is right |
+
+### So the change is smaller than the section above implies
+
+Only the **first** term is wrong. `this.mirroring` is a window; it exists to suppress the bus's *own*
+load commit, and it should be a claim about that one navigation:
+
+- `mirrorRequested: string | undefined` in place of the boolean, set to the url `loadMirrored` asked
+  for and cleared in the same `finally`
+- suppress on the window term only when the commit's url **is** that url
+- leave `byDocument && fromBusDocument` untouched — it is already the term that carries a redirect
+  chain, and `#434` is what made it trustworthy
+
+`fromBusDocument` is not redundant with the narrowed window and must not be folded into it: one
+answers *"is this the load the bus asked for"*, the other *"did this navigation begin in a document the
+bus placed"*. The four failed attempts all came from making one field answer both.
+
+**Unchanged by this correction:** the diagnosis, the 39 ms window, and the requirement that none of it
+ships on reasoning. Both directions still need `--repeat-each=20` with `main` measured first.
+
+**Why this is written down rather than quietly fixed.** The card is the thing the next session reads.
+I authored a wrong justification in the same hour as a right diagnosis, which is this repo's own
+recorded pattern — the N+1th defect gets written while fixing the first N — and a correction that
+leaves no trace teaches nobody.
