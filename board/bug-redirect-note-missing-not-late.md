@@ -530,3 +530,37 @@ was the first, and `#438` corrected it. Both were caught by doing what this card
 what I had written about it, which is the argument *for* the CI sweep and not against it. The
 transferable form: **the sentence explaining a line is a claim, and it needs buying at the same rate
 the line does.** See `docs/note-inventory.md`'s method entries and `bug-arrivals`.
+
+### REVERSED, an hour later: the arm is measured, and the refutation was the bug
+
+The section above is wrong where it matters, and the way it went wrong is worth more than the
+conclusion it reached.
+
+`mirror-302.spec.ts` — **its own file, its own app** — serves the 302, drives `loadMirrored`, and
+**fails when the arm is removed**, on the first attempt and on the retry:
+
+```
+the bus asked for this load and a server moved it: {"url":"http://127.0.0.1:PORT/to","mirroring":false}
+notes: ["the page navigated after it loaded, to http://127.0.0.1:PORT/to: …"]
+```
+
+So the case is real, the arm is bought, and the code comment says *measured* rather than
+*conservative* (`0eb7e8c`).
+
+**Why the first attempt said the opposite.** That control lived in `arrivals.spec.ts`, whose app is
+shared with two tests that drive several commits — **its own header says they perturb whoever runs
+next**, and names `sync-mirror-mark.spec` as the pattern for a test that needs a clean record. Mine
+needed a clean arrivals record and did not get one, so it passed on the sabotaged build and detected
+nothing.
+
+**The failure mode to keep.** A test that detects nothing is indistinguishable, from the outside, from
+a case that cannot happen — and I read it the second way and wrote the arm off. This card already
+holds *"a control nobody has watched fail is not a control"*; the corollary is now measured: **a
+control that has been watched pass on a broken build is evidence about the control, never about the
+code.** The file header records both attempts so the next person does not rediscover it by writing the
+same shared-app test.
+
+There is also a plainer lesson. Twice today I ran a probe against the wrong branch's build — once
+measuring `main` while believing I was measuring the fix — and both times the tell was a number that
+was too tidy. `grep -c mirrorRequested` on the file under test costs nothing and would have caught it
+the first time.
