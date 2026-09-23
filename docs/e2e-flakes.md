@@ -1098,3 +1098,34 @@ not fix it.
 separates "never arrived" from "arrived and the answer was lost", which no amount of client-side
 timing can. `bug-drive-instance-clobber`'s history is relevant if a second instance is ever in play,
 though nothing here suggests one was.
+
+## `cli-walk.spec.ts:192`: the grown page was still growing, and a different sentence answered
+
+Seen once, on run [`35838826196`](https://github.com/vibesyemmy/obsrv/actions/runs/35838826196)
+(`#449`, 2026-09-23), rescued on retry in 1.3 s.
+
+```
+Expected pattern: /the page grew as it was walked/
+Received string:  "this page was still moving when it was measured: 40 had been replaced in the
+                   252 ms after the figures were taken — …"
+```
+
+**Two sentences compete for the same run, and they answer different questions.**
+`grows-as-walked.html` is a feed that extends as it is scrolled, so it is *designed* to be moving
+when the measurement lands. `walkCoverageNote` says *"the page grew as it was walked"* only when the
+page ends up **taller than the walk covered**; the motion probe says *"still moving when it was
+measured"* when boxes move in the 250 ms **after** the figures are taken. A page that keeps growing
+can satisfy the second and miss the first, depending on which side of the probe its last growth
+lands.
+
+**What this is not.** It is not the walk losing its way, and on the run where it was seen it was not
+the branch's own change either: `#449` carried `#446`'s new `walkHostNote`, and that sentence is
+emitted only for an **element** scroller. `grows-as-walked.html` declares **no `overflow` at all**,
+so the document scrolls its root, `walkStep` sends no `host`, and `textOutsideHost` never runs.
+The assertion also joins **all** warnings before matching, so an appended sentence cannot displace
+what it looks for. Both checked rather than assumed (Idris verified the fixture independently).
+
+**If it recurs**, read which of the two sentences arrived, not whether the test failed: the motion
+note means the growth was late rather than absent, and the walk's own account of the page is
+unaffected. A fix, if one is ever wanted, is a fixture that stops growing before the probe — not a
+longer wait, which cannot make a still-growing page settle.
