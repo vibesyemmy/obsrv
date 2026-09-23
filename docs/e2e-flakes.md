@@ -1129,3 +1129,29 @@ what it looks for. Both checked rather than assumed (Idris verified the fixture 
 note means the growth was late rather than absent, and the walk's own account of the page is
 unaffected. A fix, if one is ever wanted, is a fixture that stops growing before the probe — not a
 longer wait, which cannot make a still-growing page settle.
+
+## `frame-bus.spec.ts:40`: the wait admitted an unpainted frame
+
+Seen once, on run [`35851213703`](https://github.com/vibesyemmy/obsrv/actions/runs/35851213703)
+(`#454`, 2026-09-23), rescued on retry in 98 ms.
+
+```
+expect(received).toEqual(expected)
+- Expected: [255, 0, 0, 255]     // #0000ff in BGRA — the page's blue
++ Received: [0,   0, 0,   0]     // nothing drawn yet
+```
+
+**The mechanism is in the wait, not the bus.** The test loads a blue page at 200x100 and waits for a
+frame at that size whose **green channel is 0**, a test written to skip the white `about:blank` that
+precedes it. **Green is also 0 in a fully blank frame**, so a frame at the right size whose pixels had
+not been painted satisfied the predicate, `findLast` picked it, and the assertion compared blue
+against nothing.
+
+**Fixed at the cause** rather than recorded and left: the predicate now also requires
+`first4[3] !== 0`, so it waits for a frame with opaque alpha — one that was actually drawn. **This
+cannot hide a product defect.** If the bus ever delivered only blank frames, the wait would time out
+and the test would fail loudly; before the change it could pass on one and fail on the next run.
+
+**If something like it recurs**, the question to ask of any `first4` predicate is which frames it
+*admits* rather than which it excludes: the white-page guard here was written against one wrong frame
+and silently accepted a different one.

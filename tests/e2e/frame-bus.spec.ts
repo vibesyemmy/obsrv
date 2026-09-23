@@ -50,9 +50,19 @@ test('frames reach the renderer with intact BGRA bytes', async () => {
   // Stale-size paints of the previous page can trail a viewport change, so
   // wait for a full frame at the applied size that is not the white
   // about:blank (green channel is 0 in either byte order).
+  //
+  // **And not an unpainted one.** Green is 0 in a fully blank frame too, so
+  // that test alone admitted `[0, 0, 0, 0]` — a frame at the right size whose
+  // pixels had not been drawn yet — and `findLast` picked it. Seen on run
+  // `35851213703` (`#454`), rescued on retry; `docs/e2e-flakes.md` has it.
+  //
+  // Requiring opaque alpha waits for a frame that was actually painted. It
+  // cannot hide a product defect: if the bus only ever delivered blank frames
+  // this would time out and fail loudly rather than pass on one.
   const last = await page.waitForFunction(() =>
     (window as any).__frames.findLast(
-      (f: any) => f.x === 0 && f.y === 0 && f.frameWidth === 200 && f.frameHeight === 100 && f.first4[1] === 0,
+      (f: any) =>
+        f.x === 0 && f.y === 0 && f.frameWidth === 200 && f.frameHeight === 100 && f.first4[1] === 0 && f.first4[3] !== 0,
     ),
   ).then(h => h.jsonValue())
 
