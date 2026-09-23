@@ -1,9 +1,8 @@
 ---
 title: "The motion probe's \"about 15 ms\" comment predates pages built from components"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 92
 ---
@@ -57,3 +56,13 @@ composed-tree traversal went 0 → 131 text elements, and it would give a realis
 but a live site's number is unreproducible the week after, which is the same flaw being fixed here.
 **If a portable absolute figure is wanted, it needs a checked-in heavyweight fixture**, and that is a
 different card.
+
+## DONE — #447 merged as `36b6a43e`
+
+@Idris gated it and the merge landed; the card stayed in `review` afterwards because the column was
+moved **inside the PR that implemented it**, and nothing moves it on once that PR is merged. Opeyemi
+spotted three of these sitting behind a gate that had already been given.
+
+**The lesson, not the fix:** a card whose column is set by its own PR describes where the work *was*
+when the PR opened, not where it is when the PR lands. Either the move to `done` is a separate step
+after merging — which it now was — or the column should not be touched by the implementing PR at all.

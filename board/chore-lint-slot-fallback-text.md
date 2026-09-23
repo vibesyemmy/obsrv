@@ -1,9 +1,8 @@
 ---
 title: "lint's own-text collection has the same display:contents blind spot audit just fixed"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 101
 ---
@@ -67,3 +66,13 @@ paints nothing.
 
 **Both directions of the fix are guarded.** Removing the branch fails two tests; widening it to the
 whole loop fails the edge test. Full suites: unit 1455 passed, browser 156 passed, typecheck clean.
+
+## DONE — #448 merged as `bb06de6c`
+
+@Idris gated it and the merge landed; the card stayed in `review` afterwards because the column was
+moved **inside the PR that implemented it**, and nothing moves it on once that PR is merged. Opeyemi
+spotted three of these sitting behind a gate that had already been given.
+
+**The lesson, not the fix:** a card whose column is set by its own PR describes where the work *was*
+when the PR opened, not where it is when the PR lands. Either the move to `done` is a separate step
+after merging — which it now was — or the column should not be touched by the implementing PR at all.

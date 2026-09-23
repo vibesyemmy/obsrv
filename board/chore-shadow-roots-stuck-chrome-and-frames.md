@@ -1,9 +1,8 @@
 ---
 title: "Two page-side queries still stop at the shadow boundary: stuck chrome, and the iframe count"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 87
 ---
@@ -66,3 +65,13 @@ The written acceptance is end-to-end — *"the tiled capture hides it on bands a
 *"the empty-page sentence names it"*. **This proves the query, not the sentence.** Both behaviours sit
 behind a CLI capture and an e2e run; the queries they are built on are now correct and directly
 tested, and the end-to-end pair is worth its own pass rather than an assertion I have not made.
+
+## DONE — #449 merged as `2187cb54`
+
+@Idris gated it and the merge landed; the card stayed in `review` afterwards because the column was
+moved **inside the PR that implemented it**, and nothing moves it on once that PR is merged. Opeyemi
+spotted three of these sitting behind a gate that had already been given.
+
+**The lesson, not the fix:** a card whose column is set by its own PR describes where the work *was*
+when the PR opened, not where it is when the PR lands. Either the move to `done` is a separate step
+after merging — which it now was — or the column should not be touched by the implementing PR at all.
