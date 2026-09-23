@@ -2,7 +2,7 @@
 title: "A small scroller inside a component can become the page, and no geometric property separates the two"
 column: doing
 owner: "Henry"
-waiting: "Henry: the live walk needs the same two fields in its scroll reply"
+waiting: "Idris: the gate on the PR for the live half"
 kind: bug
 criterion: B2
 order: 89
@@ -152,3 +152,33 @@ same two fields in its `scroll` reply. That is a second increment, and the sente
 **Also not done:** the nine fixtures are dimensioned in the measurement above and live in a
 scratchpad. They enter the tree when a page-level test consumes them; an unused fixture is the dead
 weight this card's own author reverted twice on `bug-redirect-note-missing-not-late`.
+
+## THE LIVE HALF, 2026-09-23 — both surfaces now say what they scrolled
+
+`#446` left this named rather than implied: *"only the headless walk emits this."* The same page
+therefore got the sentence from the CLI and **silence from the app**, which is the shape
+`surface-parity` exists to catch and a worse answer than either surface alone.
+
+**What changed.** `src/preload/sync.ts`'s `scroll` reply carries `host` — the container's box, the
+viewport, and `textOutsideHost` — for an **element** scroller only, exactly as `walkStep` does. An
+ordinary import is safe there because the preload runs as a real module; the bundler-namespacing trap
+belongs to serialised strings.
+
+`src/mcp/walk.ts` keeps the **first** reply that names a container and emits `walkHostNote` last, in
+the same position `src/cli/walk.ts` puts it, so the two surfaces read alike.
+
+**First, not last, and the reason is measurable:** the app counts the text outside the container from
+what is **on screen**, and by the last step the walk has scrolled it out of view. A test asserts the
+first wins; sabotaged to take the last, it fails.
+
+**Main does not trust the payload.** `hostFrom` checks all five fields are finite numbers and discards
+anything else — a reply from the app over HTTP is not a shape to cast. An app older than the field
+sends nothing and gets no sentence, the same rule `blocked` and `pageHeight` already follow.
+
+**No MCP shape change:** the sentence joins the existing `warnings` array, and `scroll` is a control
+command rather than a published tool output, so the register is owed nothing.
+
+Three unit cases over the injected control call, all sabotage-validated: the sentence appears; the
+first container wins; and nothing is said for an absent, incomplete, or wrongly-typed `host`.
+
+Suites: typecheck clean, build clean, unit **1466 passed**, browser **160 passed**.

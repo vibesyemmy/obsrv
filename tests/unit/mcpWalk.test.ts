@@ -114,6 +114,44 @@ describe('walkPage', () => {
     expect(d.commands.at(-1)?.payload['page']).toBe('top')
   })
 
+  it('says what it scrolled when the app named a container the page has content outside of', async () => {
+    // `bug-in-root-feed-becomes-the-page`. The headless walk has said this since
+    // `#446`; without it the live walk gave silence on the same page, so one
+    // surface warned and the other did not.
+    const d = deps([
+      { scrolled: { x: 0, y: 300 }, scroller: 'element', atEnd: false, host: { w: 318, h: 300, vw: 1280, vh: 800, outside: 175 } },
+      { scrolled: { x: 0, y: 600 }, scroller: 'element', atEnd: true, host: { w: 318, h: 300, vw: 1280, vh: 800, outside: 175 } },
+    ])
+    const r = await walkPage(d)
+    expect(r.notes.join(' ')).toContain('the walk scrolled a 318x300 CSS px container rather than the document')
+    expect(r.notes.join(' ')).toContain('9% of the viewport')
+  })
+
+  it('takes the container from the FIRST reply that named one', async () => {
+    // The app measures the text outside the container from what is on screen, so
+    // by the last step the walk has scrolled it out of view. A later reply is a
+    // worse witness, and the note must not quietly describe it.
+    const d = deps([
+      { scrolled: { x: 0, y: 300 }, scroller: 'element', atEnd: false, host: { w: 318, h: 300, vw: 1280, vh: 800, outside: 175 } },
+      { scrolled: { x: 0, y: 600 }, scroller: 'element', atEnd: true, host: { w: 999, h: 999, vw: 1280, vh: 800, outside: 1 } },
+    ])
+    const r = await walkPage(d)
+    expect(r.notes.join(' ')).toContain('318x300')
+    expect(r.notes.join(' ')).not.toContain('999x999')
+  })
+
+  it('says nothing when the app sends no container, or one it cannot trust', async () => {
+    // An app older than the field sends nothing and gets no sentence. And main
+    // never trusts a payload's shape: a host missing a number, or carrying a
+    // string where a number belongs, is discarded rather than printed.
+    for (const host of [undefined, { w: 318, h: 300, vw: 1280, vh: 800 }, { w: '318', h: 300, vw: 1280, vh: 800, outside: 175 }, null, 'nope']) {
+      const answer: Record<string, unknown> = { scrolled: { x: 0, y: 300 }, scroller: 'element', atEnd: true }
+      if (host !== undefined) answer['host'] = host
+      const r = await walkPage(deps([answer]))
+      expect(r.notes.join(' '), `host=${JSON.stringify(host)}`).not.toContain('CSS px container')
+    }
+  })
+
   it('stops at its time budget, says so, and still returns to the top', async () => {
     const d = deps(Array.from({ length: 40 }, (_, i) => step((i + 1) * 768)))
     d.sleep = vi.fn(async () => {

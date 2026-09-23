@@ -1,5 +1,5 @@
 import type { Walked } from '../shared/types'
-import { walkDialogNote, walkNothingNote, type WalkBlocked } from '../shared/walkCoverage'
+import { walkDialogNote, walkHostNote, walkNothingNote, type WalkBlocked, type WalkHost } from '../shared/walkCoverage'
 import { ControlCallError } from './control'
 
 export type { Walked }
@@ -127,6 +127,16 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   let heightAtStart: number | undefined
   let documentLocked = false
   let blocked: WalkBlocked | undefined
+  /**
+   * What this walk scrolled, when it was a container rather than the document,
+   * kept from the FIRST reply that carried it. A later step is a worse witness:
+   * the app measures the text outside that container from what is on screen, and
+   * by the last step the walk has scrolled it out of view.
+   *
+   * Absent from an app older than the field, which then gets no sentence — the
+   * same rule as `blocked` and `pageHeight` above.
+   */
+  let host: WalkHost | undefined
   let panelWalked = false
   let panelWasDialog = false
   let lastY: number | null = 0
@@ -171,6 +181,7 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
       // measurement reports afterwards, it answers whether the page grew —
       // which this sentence used to infer from `documentLocked` and get wrong.
       if (typeof r['pageHeight'] === 'number' && heightAtStart === undefined) heightAtStart = r['pageHeight'] as number
+      if (host === undefined) host = hostFrom(r['host'])
       // The page is locked and the only scroller left is a dialog's panel:
       // the screenfuls below belong to the dialog, not the page. An app older
       // than the field sends nothing, and gets no sentence.
@@ -220,6 +231,11 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
     return partial ? { walked: { screenfuls, atEnd: false, ms: deps.now() - walkedFrom }, notes } : { notes }
   }
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
+  // Last, because it qualifies the screenfuls the sentences above report, and in
+  // the same position as the headless walk puts it (`src/cli/walk.ts`) so the two
+  // surfaces read alike.
+  const said = walkHostNote(host)
+  if (said !== null) notes.push(said)
   await backToTop()
   return {
     walked: { screenfuls, atEnd, ms: deps.now() - walkedFrom },
@@ -228,6 +244,21 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
     ...(blocked === undefined ? {} : { blocked }),
     ...(heightAtStart === undefined ? {} : { pageHeightAtStart: heightAtStart }),
   }
+}
+
+/**
+ * The container a live `scroll` reply names, when it names one.
+ *
+ * Every field checked rather than cast: this is a reply from the app over HTTP,
+ * and main must never trust a payload's shape. An app older than the field sends
+ * nothing and gets no sentence.
+ */
+function hostFrom(raw: unknown): WalkHost | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const h = raw as Record<string, unknown>
+  const nums = ['w', 'h', 'vw', 'vh', 'outside'] as const
+  for (const k of nums) if (typeof h[k] !== 'number' || !Number.isFinite(h[k] as number)) return undefined
+  return { w: h.w as number, h: h.h as number, vw: h.vw as number, vh: h.vh as number, outside: h.outside as number }
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */

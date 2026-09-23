@@ -5,7 +5,7 @@ import type { MAX_SELECT_OPTIONS, SelectOpen, SelectPick } from '../shared/selec
 import type { MAX_PICKER_VALUE, PickerOpen, PickerPick, PickerType } from '../shared/pickerPopup'
 import type { ScrollPos, ScrollReport, ScrollRequest, ScrollerKind } from '../shared/types'
 // One implementation, shared with the headless capture; see shared/scrollHost.ts.
-import { MAX_VISITED, canScroll, findScroller, framesInViewport, inDialog, overflowHidden, rootScrolls } from '../shared/scrollHost'
+import { MAX_VISITED, canScroll, findScroller, framesInViewport, inDialog, overflowHidden, rootScrolls, textOutsideHost } from '../shared/scrollHost'
 // Re-exported: `MAX_VISITED` and `findScroller` are this module's public face
 // for tests/browser/findScroller.test.ts, which predates the move.
 export { MAX_VISITED, findScroller }
@@ -224,6 +224,26 @@ ipcRenderer.on(APPLY_SCROLL, (_e, req: ScrollRequest) => {
       // name, which is `overflowHidden()` alone: same word, two meanings,
       // across two surfaces.
       panel: scroller === 'element' && overflowHidden(),
+      // The container this scroll moved, when it was not the document: its box,
+      // the viewport, and how much visible text the page shows outside it. The
+      // headless walk has sent this since `#446`; the live walk had no way to
+      // say what it scrolled, so the same page got the sentence from the CLI and
+      // silence from the app (`bug-in-root-feed-becomes-the-page`).
+      //
+      // Measured only for an element scroller, as headless does: a
+      // root-scrolling page has no container to name and nothing outside it to
+      // weigh.
+      ...(scroller === 'element' && scrollerEl
+        ? {
+            host: {
+              w: scrollerEl.clientWidth,
+              h: scrollerEl.clientHeight,
+              vw: window.innerWidth,
+              vh: window.innerHeight,
+              outside: textOutsideHost(scrollerEl),
+            },
+          }
+        : {}),
       dialog: scroller === 'element' && overflowHidden() && inDialog(scrollerEl),
       // What is over the page, in the one case where the walk covered none of
       // it: the sentence can then name the cause it measured rather than list
