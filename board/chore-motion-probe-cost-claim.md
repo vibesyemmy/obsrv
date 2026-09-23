@@ -1,9 +1,8 @@
 ---
 title: "The motion probe's \"about 15 ms\" comment predates pages built from components"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 92
 ---
@@ -57,3 +56,9 @@ composed-tree traversal went 0 → 131 text elements, and it would give a realis
 but a live site's number is unreproducible the week after, which is the same flaw being fixed here.
 **If a portable absolute figure is wanted, it needs a checked-in heavyweight fixture**, and that is a
 different card.
+
+## CLOSED 2026-09-23 — merged, board column was never flipped
+
+`#447` merged (`36b6a43e`). Idris PASS'd it (room #1946): run `0992e6e`, byte-counted, matches "comment
+and card only" exactly. This is the follow-up nobody wrote — the code and the gate were both done, only
+the card's own `column`/`waiting` fields still said `review`.

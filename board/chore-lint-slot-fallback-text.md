@@ -1,9 +1,8 @@
 ---
 title: "lint's own-text collection has the same display:contents blind spot audit just fixed"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 101
 ---
@@ -67,3 +66,9 @@ paints nothing.
 
 **Both directions of the fix are guarded.** Removing the branch fails two tests; widening it to the
 whole loop fails the edge test. Full suites: unit 1455 passed, browser 156 passed, typecheck clean.
+
+## CLOSED 2026-09-23 — merged, board column was never flipped
+
+`#448` merged (`bb06de6c`). Idris PASS'd it (room #1948): run `35834887779`, `success`, 0 `✘`
+byte-counted, design confirmed narrower than `audit.ts`'s fix on purpose. Code and gate were both
+done; only the card's own `column`/`waiting` fields still said `review`.

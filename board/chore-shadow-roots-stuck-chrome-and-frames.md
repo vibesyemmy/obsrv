@@ -1,9 +1,8 @@
 ---
 title: "Two page-side queries still stop at the shadow boundary: stuck chrome, and the iframe count"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B2
 order: 87
 ---
@@ -66,3 +65,10 @@ The written acceptance is end-to-end — *"the tiled capture hides it on bands a
 *"the empty-page sentence names it"*. **This proves the query, not the sentence.** Both behaviours sit
 behind a CLI capture and an e2e run; the queries they are built on are now correct and directly
 tested, and the end-to-end pair is worth its own pass rather than an assertion I have not made.
+
+## CLOSED 2026-09-23 — merged, board column was never flipped
+
+`#449` merged (`2187cb54`), after a `CONFLICTING`-PR detour that cost a false "no run" reading along
+the way. Idris PASS'd the real head (room #1958-1959): fresh `pull_request` run `35838826196` on
+`29c7feb`, `success`, one unrelated flake (`cli-walk.spec.ts:192`, retry-rescued). Code and gate were
+both done; only the card's own `column`/`waiting` fields still said `review`.
