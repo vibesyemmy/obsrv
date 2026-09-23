@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: ""
+waiting: "Opeyemi: whether to spend ~3 CI suites on the sweep that qualifies #440"
 kind: bug
 criterion: C5
 order: 90
@@ -456,3 +456,50 @@ ships on reasoning. Both directions still need `--repeat-each=20` with `main` me
 I authored a wrong justification in the same hour as a right diagnosis, which is this repo's own
 recorded pattern — the N+1th defect gets written while fixing the first N — and a correction that
 leaves no trace teaches nobody.
+
+## BUILT 2026-09-22 — `#440`, and a 75-second measurement that priced the sweep
+
+`#440` implements the candidate `#438` narrowed to. `mirrorRequested` holds the address the bus asked
+for; `isMirrorCommit(url, byDocument)` answers whether *this* commit is that load — the requested
+address, **or** a different one with no document initiator. That second arm is a case no test covers:
+a server-side redirect of the bus's own load, where the bus asked for A and Chromium committed B with
+no page involved, which url-equality alone would read as the page navigating. `fromBusDocument` stays
+a separate term, and the start-time `mirrored` flag narrows the same way — the mirror's **own** start
+rather than any start concurrent with it, so a start to another address during the window stays
+findable by `startFor`.
+
+### The local sweep, and why its silence is the finding
+
+| arm | `arrivals.spec.ts --repeat-each=20`, same machine, each rebuilt |
+| --- | --- |
+| `#440` | 40 passed, **0** first-attempt failures |
+| `origin/main` | 40 passed, **0** first-attempt failures |
+
+**`main` is silent too, so the treatment arm says nothing.** `main`'s CI rate on this direction is 3
+in 20; locally it is 0 in 40. The race does not reproduce on this hardware, so a green branch arm fits
+*"the fix works"* and *"there is nothing here to fix locally"* equally — and the baseline says which.
+
+Two things the 75 seconds did buy, and they are not small:
+
+- **no regression** across 40 runs of both directions, which is the cheapest thing a local run can
+  ever be asked for
+- **the answer to whether the CI sweep is worth three suites.** It is, and that is now measured rather
+  than argued. Discovering it from CI would have cost the three suites first.
+
+### The gate, stated so a green suite cannot be mistaken for a pass
+
+The ordinary suite runs each of these tests **once**, against a `main` rate of 3 in 20. A single green
+run on `#440` is the expected outcome whether the fix works or not. **`#440` must not merge on its own
+suite.** What qualifies it is `--repeat-each=20` on both directions, on the branch *and* on `main`,
+with `✘` byte-counted — the shape Dogu used on `#439`, and the shape this card has demanded since its
+acceptance was written.
+
+### Two defects I authored while building it, both caught before the push
+
+- `prettier --write` on `targetSource.ts` reformatted **the whole file**: 617 insertions against a real
+  change of 59. There is no `.prettierrc`, no format script and no prettier step in `ci.yml` — the tree
+  is not prettier-formatted, and running it would have buried the change. Reverted, re-applied the
+  semantic edits from a script.
+- I kept a `mirroring` getter "for the places that legitimately ask whether a load is in flight", then
+  grepped: **nothing reads it.** Removed. That is the dead-code defect Idris found in
+  `startedByDocument`, authored again, by me, in the act of fixing what sat next to it.
