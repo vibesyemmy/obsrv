@@ -128,8 +128,47 @@ const BROWSER_GLOBALS = new Set([
 function codeOnly(script: string): string {
   let out = ''
   let i = 0
+  /**
+   * The last character that decides whether a `/` opens a regex or divides.
+   * After a value — a name, a number, `)`, `]` — it is division; after an
+   * operator or a delimiter it is a regex.
+   */
+  const lastSignificant = (): string => {
+    for (let k = out.length - 1; k >= 0; k--) {
+      const ch = out[k]!
+      if (ch !== ' ' && ch !== '\n' && ch !== '\t' && ch !== '\r') return ch
+    }
+    return ''
+  }
   while (i < script.length) {
     const c = script[i]!
+    // **A regex literal, skipped whole.** Without this, `replace(/["']/g, '')`
+    // in `lint.ts` opens a string at the `"` INSIDE the character class, the
+    // scanner consumes to the next quote, and every literal after it is emitted
+    // as though it were code — `none`, `hidden`, `HR`, `PICTURE`. The checks
+    // below then read string contents as identifiers. Measured on
+    // `LINT_SCRIPT`, which is the only shipped script carrying a quote inside a
+    // regex.
+    if (c === '/' && script[i + 1] !== '/' && script[i + 1] !== '*' && /[(,=:[!&|?{};+\-*%^~<>]|^$/.test(lastSignificant())) {
+      i++
+      let inClass = false
+      while (i < script.length) {
+        const ch = script[i]!
+        if (ch === '\\') {
+          i += 2
+          continue
+        }
+        if (ch === '[') inClass = true
+        else if (ch === ']') inClass = false
+        else if (ch === '/' && !inClass) break
+        else if (ch === '\n') break
+        i++
+      }
+      i++
+      while (i < script.length && /[dgimsuvy]/.test(script[i]!)) i++
+      out += '/re/'
+      continue
+    }
     if (c === '"' || c === "'" || c === '`') {
       const quote = c
       i++
@@ -191,6 +230,48 @@ describe('the scripts that ship into a page', () => {
         `concatenation — add its \`.toString()\` — or it is a browser global this list has not met yet, in which ` +
         `case add it to BROWSER_GLOBALS and say in the commit which script needed it.`,
     ).toEqual([])
+  })
+
+  /**
+   * **The other half of "carries", and it cost 14 CI failures to find**
+   * (run `35830479985`, `#446`). `calledIn` finds `foo(`. A constant is never
+   * called: `textOutsideHost` was added to `SCROLL_HOST_SCRIPT` and closed over
+   * `OUTSIDE_TEXT_CAP`, a module const that `toString()` does not carry and the
+   * concatenation did not re-declare. The script threw `OUTSIDE_TEXT_CAP is not
+   * defined` on every page, the walk answered "cut short before it began", and
+   * **this file passed** — its own docstring says "every name a shipped page
+   * script CALLS", and that was exactly true.
+   *
+   * SCREAMING_CASE only, deliberately. A general free-variable check needs a
+   * parser; every constant these modules close over is written this way
+   * (`MAX_VISITED`, `SCROLL_EPSILON`, `OUTSIDE_TEXT_CAP`), so this covers the
+   * measured class without pretending to cover the rest.
+   */
+  it.each(SCRIPTS)('%s reads no SCREAMING_CASE constant it does not carry', (name, raw) => {
+    const script = codeOnly(raw)
+    const declared = declaredIn(script)
+    const used = new Set<string>()
+    for (const m of script.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) used.add(m[1]!)
+    const missing = [...used].filter(n => !declared.has(n) && !BROWSER_GLOBALS.has(n)).sort()
+    expect(
+      missing,
+      `${name} reads ${missing.join(', ')} and does not declare them. A serialised function carries its body, ` +
+        `never the module around it — add \`const NAME = ${'$'}{NAME}\` to the concatenation.`,
+    ).toEqual([])
+  })
+
+  it('would notice a constant left out of the concatenation', () => {
+    // The control for the check above, in the shape the defect actually had:
+    // the function is present and the constant it reads is not.
+    const withoutCap = codeOnly(SCROLL_HOST_SCRIPT)
+      .split('\n')
+      .filter(line => !line.startsWith('const OUTSIDE_TEXT_CAP'))
+      .join('\n')
+    const declared = declaredIn(withoutCap)
+    const used = new Set<string>()
+    for (const m of withoutCap.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)) used.add(m[1]!)
+    const missing = [...used].filter(n => !declared.has(n) && !BROWSER_GLOBALS.has(n))
+    expect(missing, 'removing OUTSIDE_TEXT_CAP from the concatenation should be caught').toContain('OUTSIDE_TEXT_CAP')
   })
 
   it('would notice a helper dropped from the concatenation', () => {

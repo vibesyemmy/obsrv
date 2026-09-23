@@ -515,6 +515,13 @@ export const SHADOW_TREE_SCRIPT = [
 export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,
+  // Every constant a serialised function closes over has to be re-declared
+  // here: `toString()` carries the body, never the module around it. Omitting
+  // this one threw `OUTSIDE_TEXT_CAP is not defined` inside `textOutsideHost`,
+  // and the walk answered "cut short before it began (Script failed to
+  // execute)" on every page — 14 failures across four specs, run 35830479985.
+  // `pageScriptsAreWhole.test.ts` now fails on it in 7 ms.
+  `const OUTSIDE_TEXT_CAP = ${OUTSIDE_TEXT_CAP}`,
   SHADOW_TREE_SCRIPT,
   rootScrolls.toString(),
   overflowHidden.toString(),
