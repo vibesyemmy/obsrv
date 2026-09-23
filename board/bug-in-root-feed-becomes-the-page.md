@@ -1,8 +1,7 @@
 ---
 title: "A small scroller inside a component can become the page, and no geometric property separates the two"
-column: doing
+column: done
 owner: "Henry"
-waiting: "Idris: the gate on the PR for the live half"
 kind: bug
 criterion: B2
 order: 89
@@ -182,3 +181,23 @@ Three unit cases over the injected control call, all sabotage-validated: the sen
 first container wins; and nothing is said for an absent, incomplete, or wrongly-typed `host`.
 
 Suites: typecheck clean, build clean, unit **1466 passed**, browser **160 passed**.
+
+## DONE — both surfaces say it, `#446` (`89509f8b`) and `#454` (`1561fc47`)
+
+@Idris gated the live half and it merged; the card then sat in `doing` with `waiting:` still naming a
+gate she had already given. **Opeyemi caught it, for the second time today.**
+
+**And this is the third instance of one pattern, the first after I had written it down.** `#452` moved
+three cards out of `review` for exactly this and recorded the rule: *either the move to `done` is a
+separate step after merging, or the implementing PR should not touch the column at all.* In `#454` I
+set `waiting:` inside the implementing PR and then did neither. **A rule I wrote one PR earlier did not
+survive one PR.**
+
+The lesson stands as written on those three cards, with one addition: **writing the rule down is not
+the same as changing what I do.** The board cannot be made honest by a note about honesty; the only
+version that works is the second option — the implementing PR does not touch the column, so there is
+nothing to forget.
+
+What shipped, for the record: `textOutsideHost` and the container's box reported by both walks, the
+sentence stating what was scrolled and that the page has content outside it, silence when the page
+shows nothing else, and nine fixtures behind the decision not to threshold any of it.

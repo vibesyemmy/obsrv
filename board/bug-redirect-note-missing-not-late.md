@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "Henry: expose the arrivals counter to tests, to settle whether the delay=0 repro is this defect or a second one"
+waiting: "Opeyemi: build a forcing route for the CI shape, or park this card"
 kind: bug
 criterion: C5
 order: 90
@@ -668,3 +668,24 @@ declared unmeasurable, the ownership of a card I had handed away, and now a repr
 probe. The instrument that caught the last one existed for ninety minutes and paid for itself twice;
 the standing lesson is not about counters, it is that **a result agreeing with me is the one to
 re-run under isolation.**
+
+## The `waiting:` line was stale, corrected 2026-09-23
+
+It named **me**, for *"expose the arrivals counter to tests, to settle whether the `delay=0` repro is
+this defect or a second one"* — **work that was finished hours earlier** and recorded in `#444`: with
+one fresh app per case the `+0 ms` case has **no `redirect.html` commit at all**, so the probe was
+cancelling the page's load and the missing note there is correct behaviour rather than any defect.
+
+**So this card has not been waiting on me since then.** It waits on a decision, and the line now says
+so:
+
+1. **a forcing route** — hold the bus's mirrored load open behind a test-only seam so the page's
+   redirect always lands inside it, making the CI shape reproducible on demand. That is a fence in
+   `src/` bought by this defect;
+2. **park it** in `backlog` with everything measured written down, and wait for a third sighting.
+
+**Why it cannot proceed without that choice:** no offset tried reproduces the shape the CI failures
+show — a page's own redirect stamped as the bus's. `main` measured 3-in-20 and 1-in-20 across two
+sweeps; the fix's clean 20 is the one-in-eight computed from the pooled rate. There is no instrument
+short of sampling CI, and building one means putting a seam in production code for a defect only CI has
+ever seen.
