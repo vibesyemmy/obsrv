@@ -617,3 +617,54 @@ the correct account of the CI collision; if it moves and no note appears, the de
 own condition. `arrivals` is a `ControlServer` **dependency**, not one of its commands — the server
 lists its command set back at you — so this needs a test-only hook in `src/`, bought by this defect,
 as its own change. **That is what `waiting:` now names, and it is a measurement, not a fix.**
+
+## CORRECTION to the section above: the repro was a cancelled load, and the sweep is NOT retired
+
+**`#442` is wrong where it matters most.** It says a deterministic repro makes ~60 CI repeats
+unnecessary. There is no repro. What `delay=0` produces is **my probe cancelling a navigation**, and
+the missing note there is correct behaviour.
+
+The counter was exposed to tests to settle Idris's question, and it answered a different one within
+two runs. **One fresh app per case** — the earlier table shared an app, so each case inherited the
+previous one's count, which is the `arrivals.spec` mistake made a second time:
+
+| mirror fired | commits | arrivals | note |
+| --- | --- | --- | --- |
+| never | `about:blank`, `hairline`, **`redirect`**, `hairline` | 3 | present |
+| **+0 ms** | `about:blank`, `hairline`, `hairline*` | **1** | MISSING |
+| +5 ms | …, `redirect`, `hairline` | 3 | present |
+| +15 ms | …, `redirect`, `hairline`, `hairline*` | 3 | present |
+
+`*` = recorded as the bus's.
+
+**At +0 ms there is no `redirect.html` commit at all.** Firing `loadMirrored` zero milliseconds after
+`load()` starts cancels that load before it commits. The page never navigated itself, so there is
+nothing to report. **Not a defect — an artifact of the probe.**
+
+So: **the sweep stands as the only instrument for this card**, and `#442`'s claim that it was retired
+is withdrawn. No offset tried (`0`, `5`, `15`, `30`, `60`) reproduced the shape the CI failures show —
+a `redirect.html` commit present and the note missing anyway.
+
+### What was built and then deliberately not shipped
+
+A `testState.arrivals` accessor (four lines in `ipc.ts`, two in `testHooks.ts`) and an invariant spec:
+*the page's own navigation committed ⟺ the note is there and the count moved*. Both were reverted.
+
+- the spec is **not a control**: sabotaged back to the pre-`#440` bare window it still passed **20/20**,
+  because at `+0 ms` the load is cancelled and the invariant's other branch holds. An assertion watched
+  passing on a broken build is evidence about the assertion.
+- with no reader, the accessor is a test-only surface in `src/` bought by an audit rather than a
+  defect, which this repo refuses on purpose.
+
+**Re-adding it is four lines** when a real investigation needs it: `testState.arrivals = () => ({
+...arrivals(tab()) })` beside the `arrivals` closure in `registerIpc`, the matching field on
+`testState` and on `TestHandle`, published by `testHooks.ts` under `OBSRV_TEST=1`.
+
+### The pattern, stated once
+
+Five corrections on this card in one day, and every one has the same shape: **I stopped at the first
+result that matched what I expected.** The supersede reading, the `:140` justification, the arm
+declared unmeasurable, the ownership of a card I had handed away, and now a repro that was my own
+probe. The instrument that caught the last one existed for ninety minutes and paid for itself twice;
+the standing lesson is not about counters, it is that **a result agreeing with me is the one to
+re-run under isolation.**
