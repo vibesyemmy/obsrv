@@ -562,3 +562,81 @@ sentence the fix wrote.
     the raster being the target's own frame — fired in #273 and #292 (now `:1755`, `:1759`, `:1796`);
   - `ipc.ts:1603` and `:1604`, the two bounds, are named reasons now (`:1752` and `:1753`), measured
     over 12 launches and 3 reloads.
+
+## Sentences outside the notes/warnings net, counted 2026-09-23
+
+`chore-sentences-outside-notes-net`. `c5` set ten aside and said nobody had swept for the rest; Kenya's
+first pass re-counted eleven by `grep` and said plainly that grep was the wrong instrument for a final
+number. **Counted here with the TypeScript compiler**, which is the method `c5` itself used.
+
+### The log route: 22 call sites, not ten and not eleven
+
+Every `log.*` call in `src/`, classified by what its first argument is:
+
+| method | own sentence (literal or template) | passthrough (a value built elsewhere) | other |
+| --- | --- | --- | --- |
+| `log.warn` | **7** | 2 (`index.ts:165`, `ipc.ts:555`) | — |
+| `log.error` | **2** (`index.ts:61`, `ipc.ts:2095`) | — | — |
+| `log.info` | **8** | 2 | 1 conditional (`index.ts:82`) |
+
+**Kenya's eleven is confirmed** for `warn` + `error`: 9 own sentences and 2 passthroughs. So the
+discrepancy with `c5`'s ten is real, and the two `log.error` calls are the ones no pass had.
+
+**And the category was scoped by its instrument rather than by its own definition.** The category is *a
+sentence reaching only the log file*, and `log.info` reaches only the log file — **eleven more call
+sites, eight of them own sentences**, which neither earlier pass looked at because both greps asked for
+`warn|error`.
+
+### A third route nobody had counted: the renderer logs through the preload
+
+`window.obsrv.log(...)` in the renderer arrives in the main log through `ipc.ts:448`'s
+`log.info(\`renderer: ${message}\`)` — a **passthrough whose producers are in another process**.
+There are **7** of them, all in `components/TargetCanvas.tsx`, and they are the WebGL context-loss
+sentences (`webgl context lost`, `…not restored in time; replacing the canvas`, `…recovered on a
+replacement canvas`). Counting the sink found one line; the sentences are seven.
+
+### UI-only: 174 sentence-shaped literals, of which 6 are user-facing status
+
+A compiler pass over all 35 files in `src/renderer/src`, taking every string literal, JSX text and
+template's literal parts, then classifying by syntactic context:
+
+| context | count |
+| --- | --- |
+| JSX text and attributes (labels, headings) | 123 |
+| **a state setter — user-facing status or error** | **6** |
+| other call arguments (7 of them `window.obsrv.log`, above) | 22 |
+| everything else | 23 |
+
+The six:
+
+- `App.tsx:416` — `Edge pixels dropped: not a multiple of …`
+- `App.tsx:420` — `Could not read that file`
+- `components/DiagonalHint.tsx:43` — `Not saved: …`
+- `components/DropZone.tsx:41` — `Unsupported file type`
+- `components/EmptyState.tsx:30` — `That address could not be loaded.`
+- `components/SettingsPanel.tsx:211` — `Not saved: …`
+
+**Four of these are the four Kenya's first pass named. Two are new** (`App.tsx:416`,
+`DropZone.tsx:41`), and a second `Not saved:` exists in `DiagonalHint.tsx` that the keyword pass did
+not reach. `SettingsPanel.tsx:451`'s `Couldn't check` is JSX text rather than a status setter, so it
+sits in the 123 with the labels.
+
+### What this count is worth, and the three filters behind it
+
+**The number moved twice while I was looking at it, and both times the earlier filter was silently
+dropping real sentences:**
+
+| filter | literals found | what it was dropping |
+| --- | --- | --- |
+| first | 134 | anything containing `:` — excluded to skip CSS, and it excluded sentences |
+| second | 153 | interpolated templates: `getText` includes `${`…`}`, and the css-shape test rejects braces |
+| third | **174** | — found all four of the card's named items for the first time |
+
+**So this is a floor with a named method, not a closed count.** A literal is judged by its syntactic
+context, which cannot tell a user-facing sentence from a developer string in the 23 "everything else",
+and a sentence assembled from variables has no literal to find at all. `c5`'s own method section warned
+about exactly this shape for the notes/warnings net; it applies here unchanged.
+
+**The transferable part:** each of the three filters looked finished until something known to exist was
+checked against it. The card's four named items are what caught the first two. **A sweep with no known
+answer to check against is a sweep that reports its own blind spots as zero.**
