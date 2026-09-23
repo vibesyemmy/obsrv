@@ -321,9 +321,20 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * - **it reached the address the bus asked for.** The ordinary case.
    * - **it reached a different address with no document initiator.** A
    *   server-side redirect of the bus's own load: the bus asked for A and
-   *   Chromium committed B, no page involved. Url-equality alone would call
-   *   that the page navigating and report a pane nobody asked to move — the
-   *   same shape `#431` shipped, by a route no test covers today.
+   *   Chromium committed B, no page involved.
+   *
+   *   **This arm is conservative, not measured, and the distinction is
+   *   deliberate.** The boolean it replaces suppressed that commit because the
+   *   window covered it; url-equality alone would not, so dropping the arm
+   *   would change behaviour for a case no spec reaches. I tried to buy it
+   *   properly: a spec serving a 302 from `/from` to `/to`, driving
+   *   `loadMirrored` directly, then weakening this line to url-equality — and
+   *   **the weakened build passed**. So the case is not reachable by that
+   *   route, which means the arm is unproven rather than proven, and the test
+   *   was reverted rather than shipped as a control that cannot fail
+   *   (`bug-redirect-note-missing-not-late`; four refuted assertions on this
+   *   card already). It stays because preserving untestable behaviour is the
+   *   safer of two unmeasured options, and it is written down as such.
    *
    * A page's own redirect inside the window is neither: it has an initiator and
    * a different address, so it falls through to `fromBusDocument`, the term that
