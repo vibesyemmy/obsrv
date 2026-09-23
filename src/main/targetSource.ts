@@ -323,18 +323,18 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    *   server-side redirect of the bus's own load: the bus asked for A and
    *   Chromium committed B, no page involved.
    *
-   *   **This arm is conservative, not measured, and the distinction is
-   *   deliberate.** The boolean it replaces suppressed that commit because the
-   *   window covered it; url-equality alone would not, so dropping the arm
-   *   would change behaviour for a case no spec reaches. I tried to buy it
-   *   properly: a spec serving a 302 from `/from` to `/to`, driving
-   *   `loadMirrored` directly, then weakening this line to url-equality — and
-   *   **the weakened build passed**. So the case is not reachable by that
-   *   route, which means the arm is unproven rather than proven, and the test
-   *   was reverted rather than shipped as a control that cannot fail
-   *   (`bug-redirect-note-missing-not-late`; four refuted assertions on this
-   *   card already). It stays because preserving untestable behaviour is the
-   *   safer of two unmeasured options, and it is written down as such.
+   *   **Measured, by `mirror-302.spec.ts`, which fails without this arm.**
+   *   Remove it and the target reports the commit unmarked, and the reply says
+   *   *"the page navigated after it loaded, to http://127.0.0.1:PORT/to"* about
+   *   a pane nobody asked to move — the shape `#431` shipped.
+   *
+   *   **It took two attempts, and the first one lied.** The same control written
+   *   inside `arrivals.spec.ts` PASSED on the sabotaged build: that file's app is
+   *   shared with two tests that drive several commits, and its own header says
+   *   they perturb whoever runs next. A control needing a clean arrivals record
+   *   needs its own app. I had already written the arm off as unmeasurable on
+   *   that evidence — a test detecting nothing reads exactly like a case that
+   *   cannot happen.
    *
    * A page's own redirect inside the window is neither: it has an initiator and
    * a different address, so it falls through to `fromBusDocument`, the term that
