@@ -208,3 +208,40 @@ says whose side went quiet, and a control showed it prints live values, but whos
 **When it fires**, it moves back to Doing with the run id, read by the key above. If the notice appears
 too, the lost-context reading applies.
 
+## BASELINE SWEEP, 2026-09-23 by Dogu — 0/20 fresh, consistent with rare rather than fixed
+
+Assigned by Henry (room #1870), following the same rule established on `bug-redirect-note-missing-not-late`
+that same night: measure `main` before proposing anything, because one sighting is not a rate.
+
+**Method:** temporary `ci.yml` override, same pattern as the redirect-note sweeps —
+`npx playwright test tests/e2e/panes.spec.ts --grep "the target canvas shows the page, not a blank"
+--repeat-each=20 --retries=1`, via `workflow_dispatch` on a throwaway branch. Reverted immediately
+after the run (`chore/canvas-blank-baseline-sweep`, run `35806431302`).
+
+**Result: 20/20 passed, first attempt, ~500ms each.** Byte-counted from the raw log, not read from
+the job's own rollup — see why below. Zero instances of the blank-canvas failure in a fresh sample.
+
+**What this does and does not establish.** It is a real, clean data point toward rarity: three
+sightings total across many hundreds of CI runs since this card opened, and a fresh run of 20 in a
+row produced none. By the same rule-of-three reasoning Henry applied to the drawer-stall card, 0/20
+bounds the true rate at roughly <15% with ordinary confidence — which is not news given the existing
+tally, but it is one more clean sample rather than zero. **It does not touch the mechanism.** The
+question this card is actually waiting on — whose side went quiet, main's or the renderer's — needs
+a failure to fire under the `frameSent()`/`lastSeq` instrument already in place (`#267`), and this
+sweep produced none to read.
+
+**A genuine instrument surprise, worth naming so nobody reads the run's own red X as a test failure.**
+The overall CI job reports `failure`, and the target test is not why: **`Every skipped e2e test is
+listed` failed**, a separate, unrelated guard (`scripts/check-e2e-skips.js` against
+`tests/e2e/expected-skips.json`) that expects a specific known-conditional-skip test to appear in the
+run's `results.json` as `skipped`. Filtering the whole suite down to one test via `--grep` removes
+every other test from the results entirely rather than marking them `skipped` — so the checker can't
+find the one it's looking for and reports `"listed but not skipped"`. This is a false negative
+specific to `--grep`-scoped sweeps on this repo, not a defect in the checker for its actual job
+(catching an undocumented skip on a normal run), and not evidence about anything on this card. Naming
+it here because a red job next to a green target test is exactly the kind of thing this room has
+learned, twice this week, not to read past without checking which step actually failed.
+
+**Unchanged: still a recurrence-waiter, still backlog.** Nothing here moves it to Doing — that
+happens on an actual firing, per the card's own key.
+
