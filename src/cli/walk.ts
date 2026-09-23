@@ -2,7 +2,7 @@ import { Deadline, walkTimeoutNote, withinBudget } from '../shared/measureBudget
 import type { TargetSource } from '../main/targetSource'
 import type { Walked } from '../shared/types'
 import { WALK_STEP_SCRIPT, type WalkStepResult } from '../shared/scrollHost'
-import { walkDialogNote, walkNothingNote, type WalkBlocked } from '../shared/walkCoverage'
+import { walkDialogNote, walkHostNote, walkNothingNote, type WalkBlocked, type WalkHost } from '../shared/walkCoverage'
 
 /**
  * Walking the page before measuring it, headlessly.
@@ -151,6 +151,8 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   // First-against-last is the wrong pair: grows-as-walked.html extends after
   // the walk's last step, so those two agree on a page that plainly grew.
   let heightAtStart: number | undefined
+  /** What the walk scrolled, when it was a container rather than the document. */
+  let host: WalkHost | undefined
   try {
     for (;;) {
       if (deadline.passed()) {
@@ -177,6 +179,11 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
       // page that grew under the walk from one a modal held (walkCoverage).
       documentLocked = r.hidden === true
       if (typeof r.pageHeight === 'number' && heightAtStart === undefined) heightAtStart = r.pageHeight
+      // The container this walk is scrolling, kept from the FIRST step that
+      // reported one. A later step is a worse witness: `textOutsideHost` reads
+      // what is on screen, and by the last step the walk has scrolled the page
+      // out from under that reading.
+      if (r.host !== undefined && host === undefined) host = r.host
       // The page is locked and the only scroller left is a dialog's panel:
       // whatever this walk covers belongs to the dialog, not the page.
       if (r.scroller === 'element' && r.hidden) {
@@ -220,6 +227,11 @@ export async function walkHeadless(target: TargetSource, budgetMs: number = HEAD
   if (panelWalked) notes.push(walkDialogNote(screenfuls, panelWasDialog))
   await backToTop()
   await settleImages(target, deadline)
+  // Last, because it qualifies the screenfuls the sentences above report: a
+  // reader who has just been told how far the walk got needs to know what it
+  // got that far through.
+  const said = walkHostNote(host)
+  if (said !== null) notes.push(said)
   return { walked: { screenfuls, atEnd, ms: Date.now() - walkedFrom }, notes, documentLocked, blocked, pageHeightAtStart: heightAtStart }
 }
 

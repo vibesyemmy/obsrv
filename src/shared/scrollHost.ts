@@ -305,6 +305,55 @@ export interface FindScrollerResult {
   truncated: boolean
 }
 
+/**
+ * How much text outside the chosen container `textOutsideHost` bothers to
+ * count. The note it feeds asks only *whether* the page shows anything else, so
+ * a cap keeps a long article from being read to the end for a yes.
+ */
+const OUTSIDE_TEXT_CAP = 200
+
+/**
+ * Visible text on the page that is NOT inside `host`, in characters, capped.
+ *
+ * **What it is for.** `findScroller` takes the largest visible scroller, and on
+ * a page that hides its own overflow that can be a widget rather than the page
+ * (`bug-in-root-feed-becomes-the-page`). Nine fixtures were measured looking
+ * for a geometric line between the two and there is none: sorted by area the
+ * classes interleave — pages at 19% and 19% of the viewport, widgets at 22% and
+ * 33%, pages at 38, 65 and 79 — and width fails on a full-bleed carousel that
+ * is 97% wide and still a widget. What separated the cases a reader can decide
+ * was never the box; it was whether the document had anything else to show.
+ *
+ * So this measures that, and the walk states it. It does not decide: a compact
+ * app shell with a real header and footer is 19% of the viewport with 167
+ * characters outside it and is the whole page, which is exactly why the number
+ * is reported rather than thresholded.
+ *
+ * Leaves only, so an ancestor's text is not counted through its children, and
+ * `getClientRects()` for visibility. `textContent` rather than `innerText`
+ * because the visibility test already ran and `innerText` would force layout
+ * per element.
+ */
+export function textOutsideHost(host: Element): number {
+  const body = document.body
+  if (!body) return 0
+  let chars = 0
+  let visited = 0
+  // Indexed, not `for...of`: a `NodeList` is not iterable under this module's
+  // target, and this file's other sweeps are indexed for the same reason.
+  const all = body.querySelectorAll('*')
+  for (let i = 0; i < all.length; i++) {
+    const el = all[i]!
+    if (visited++ >= MAX_VISITED || chars >= OUTSIDE_TEXT_CAP) break
+    if (el === host || host.contains(el) || el.contains(host)) continue
+    if (el.children.length > 0) continue
+    const text = (el.textContent ?? '').trim()
+    if (text === '' || el.getClientRects().length === 0) continue
+    chars += text.length
+  }
+  return chars > OUTSIDE_TEXT_CAP ? OUTSIDE_TEXT_CAP : chars
+}
+
 export function findScroller(root: Element | null = document.body): FindScrollerResult {
   if (!root) return { el: null, truncated: false }
   let best: Element | null = null
@@ -466,6 +515,13 @@ export const SHADOW_TREE_SCRIPT = [
 export const SCROLL_HOST_SCRIPT = [
   `const MAX_VISITED = ${MAX_VISITED}`,
   `const SCROLL_EPSILON = ${SCROLL_EPSILON}`,
+  // Every constant a serialised function closes over has to be re-declared
+  // here: `toString()` carries the body, never the module around it. Omitting
+  // this one threw `OUTSIDE_TEXT_CAP is not defined` inside `textOutsideHost`,
+  // and the walk answered "cut short before it began (Script failed to
+  // execute)" on every page — 14 failures across four specs, run 35830479985.
+  // `pageScriptsAreWhole.test.ts` now fails on it in 7 ms.
+  `const OUTSIDE_TEXT_CAP = ${OUTSIDE_TEXT_CAP}`,
   SHADOW_TREE_SCRIPT,
   rootScrolls.toString(),
   overflowHidden.toString(),
@@ -474,6 +530,7 @@ export const SCROLL_HOST_SCRIPT = [
   canScroll.toString(),
   isVisible.toString(),
   findScroller.toString(),
+  textOutsideHost.toString(),
   clipTest.toString(),
   scrollOffset.toString(),
 ].join('\n')
@@ -516,6 +573,16 @@ export interface WalkStepResult {
    * something nobody measured.
    */
   pageHeight?: number
+  /**
+   * The container the walk scrolled, when it was not the document: its box, the
+   * viewport it sat in, and how much visible text the page shows outside it
+   * (`textOutsideHost`). Absent for a root-scrolling page, which has no such
+   * question to answer.
+   *
+   * Measured so the walk can say what it scrolled rather than let the
+   * screenfuls above imply the document (`bug-in-root-feed-becomes-the-page`).
+   */
+  host?: { w: number; h: number; vw: number; vh: number; outside: number }
 }
 
 /**
@@ -553,6 +620,9 @@ export function walkStep(page: 'top' | 'next'): WalkStepResult {
     y,
     atEnd,
     scroller: el ? 'element' : 'root',
+    // Only for an element scroller: a root-scrolling page has no container to
+    // name and nothing outside it to weigh.
+    ...(el ? { host: { w: el.clientWidth, h: el.clientHeight, vw: window.innerWidth, vh: window.innerHeight, outside: textOutsideHost(el) } } : {}),
     hidden,
     dialog: inDialog(el),
     // The document's own height, on every step rather than once. It is the

@@ -52,6 +52,57 @@ export interface WalkEnd {
   blocked?: WalkBlocked
 }
 
+/** The container the walk scrolled, as `walkStep` measured it. */
+export interface WalkHost {
+  w: number
+  h: number
+  vw: number
+  vh: number
+  /** Visible text the page shows outside that container, in characters, capped. */
+  outside: number
+}
+
+/**
+ * What the walk scrolled, when it was not the document and the page had
+ * something else to show (`bug-in-root-feed-becomes-the-page`).
+ *
+ * **Why this reports instead of deciding.** `findScroller` takes the largest
+ * visible scroller, so on a page that hides its own overflow a widget can be
+ * chosen and its screenfuls reported as the page's. Nine fixtures were measured
+ * hunting for the line between a component that HOLDS the page and one that
+ * holds a WIDGET, and there is no geometric one: by area the classes interleave
+ * (pages at 19% and 19% of the viewport, widgets at 22% and 33%, pages at 38, 65
+ * and 79), and width fails on a full-bleed carousel — 97% wide, still a widget.
+ * The two cases a reader separates instantly, a carousel and a compact app
+ * shell, have the same width, near-identical height and real text outside; what
+ * differs is whether that text is the page's subject or chrome describing the
+ * box. No ratio of client rects reaches that.
+ *
+ * So the numbers go to the reader. **A threshold here would be a coin flip** —
+ * two of those nine sit four points apart on opposite sides of the answer.
+ *
+ * Silent when the page shows nothing outside the container, because then there
+ * is no competing candidate to warn about: a small feed on an otherwise empty
+ * page is that page's only content, and walking it is right.
+ */
+export function walkHostNote(host: WalkHost | undefined): string | null {
+  if (host === undefined) return null
+  if (!(host.vw > 0) || !(host.vh > 0) || !(host.w > 0) || !(host.h > 0)) return null
+  if (host.outside <= 0) return null
+  const share = Math.round(((host.w * host.h) / (host.vw * host.vh)) * 100)
+  // **A statement, not a prompt.** The first draft ended "so check it is the one
+  // you meant", and reading its output across the nine fixtures killed that
+  // clause: the sentence fires on a two-pane dashboard whose nav holds three
+  // characters of text, and telling the reader to audit a 79%-of-viewport
+  // scroller on every app shell is an alarm about the commonest shape there is.
+  // Since no gate separates a widget from a page, what is left is to say what
+  // was scrolled and let the reader recognise their own page.
+  return (
+    `the walk scrolled a ${Math.round(host.w)}x${Math.round(host.h)} CSS px container rather than the document — ` +
+    `${share}% of the viewport — and the page shows content outside that container, which the screenfuls above do not cover`
+  )
+}
+
 export function walkCoverageNote(
   walked: WalkedSummary | undefined,
   viewportHeightPx: number,
