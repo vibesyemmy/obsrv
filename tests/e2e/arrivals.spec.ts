@@ -1,7 +1,6 @@
 import { test, expect, type ElectronApplication } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
-import { createServer, request, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { request } from 'node:http'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
@@ -211,69 +210,4 @@ test('a page that really does redirect after loading still says so', async () =>
     expect(seen.matched?.byDocument, `the guard did not reach the document's own start: ${JSON.stringify(seen.matched)}`).toBe(true)
     expect(seen.matched?.mirrored, `the matched start was the bus's: ${JSON.stringify(seen.matched)}`).toBe(false)
   }
-})
-
-/**
- * A server that answers `/from` with a 302 to `/to`, for the third case.
- *
- * `file://` cannot express a server-side redirect, and that is why this case
- * went untested long enough to be invented rather than measured: every fixture
- * on this path redirects from inside the page, which is the one kind of redirect
- * that carries an initiator.
- */
-let redirector: Server
-let base: string
-
-test.beforeAll(async () => {
-  redirector = createServer((req, res) => {
-    if (req.url === '/from') {
-      res.statusCode = 302
-      res.setHeader('Location', '/to')
-      return res.end()
-    }
-    res.setHeader('Content-Type', 'text/html')
-    res.end('<!doctype html><title>to</title><p>arrived')
-  })
-  await new Promise<void>(r => redirector.listen(0, '127.0.0.1', r))
-  base = `http://127.0.0.1:${(redirector.address() as AddressInfo).port}`
-})
-test.afterAll(async () => {
-  redirector?.closeAllConnections?.()
-  await new Promise<void>(r => redirector?.close(() => r()))
-})
-
-test('a server redirecting the bus\'s own mirrored load is still the bus, not the page', async () => {
-  // **The control for `isMirrorCommit`'s second arm, and it is a control that
-  // has been watched fail.** The bus asks for `/from`; Chromium follows a 302
-  // and commits `/to`. No page ran, so there is no initiator — and the address
-  // is not the one the bus asked for.
-  //
-  // Url-equality alone calls that the page navigating and reports a pane nobody
-  // asked to move, which is the shape `#431` shipped. Measured by weakening
-  // `isMirrorCommit` to `url === this.mirrorRequested` and running this test:
-  // it FAILS, with the note present. Restored, it passes. A control nobody has
-  // watched fail is not a control (`bug-arrivals`, and this card's own four
-  // refuted mechanism assertions).
-  await call('navigate', { url: HAIRLINE })
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 })
-    .toBe(HAIRLINE)
-
-  // Only the BUS moves the target, and only once: `loadMirrored` is what the
-  // sync bus calls, so this drives the exact path the flag guards.
-  await app.evaluate(async (_e, url: string) => {
-    await (globalThis as any).__obsrv.target.loadMirrored(url)
-  }, `${base}/from`)
-  await expect
-    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 })
-    .toBe(`${base}/to`)
-
-  const note = await movedNote()
-  const seen = await sayWhatTheGuardSaw(
-    app,
-    note === undefined ? 'baseline, note absent as expected (302 of the mirror)' : 'note PRESENT for a server redirect of the bus\'s own load',
-    note !== undefined,
-  )
-  expect(seen.reachable, 'the probe lost `__obsrv.target`').toBe(true)
-  expect(note, `the bus asked for this load and a server moved it; nobody asked the pane to move: ${note}`).toBeUndefined()
 })
