@@ -4,6 +4,7 @@ import { inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
 import { STUCK_CHROME_SCRIPT } from '../../src/shared/stuckChrome'
 import {
   SHADOW_TREE_SCRIPT,
+  framesInViewport,
   shadowContains,
   shadowElementFromPoint,
   shadowElements,
@@ -339,5 +340,67 @@ describe('the audit, over a component', () => {
     const filled = auditPage(2000, 3000).text.map(t => t.text)
     expect(filled).not.toContain('Buy now')
     expect(filled).toContain('Real item')
+  })
+})
+
+/**
+ * `chore-shadow-roots-stuck-chrome-and-frames`. `feat-measure-open-shadow-roots`
+ * crossed the boundary for the four things its card named and nothing else. Two
+ * page-side queries still used `document.querySelectorAll` and so stopped at a
+ * shadow root: the stuck-chrome candidates and the iframe count.
+ *
+ * **Each measured before it was fixed, with its light-DOM twin as the control** —
+ * the card asked for exactly that, since neither had been seen on a page.
+ */
+describe('the two queries that used to stop at a shadow boundary', () => {
+  const fixedBar = (into: Element, inRoot: boolean): void => {
+    const css = 'position:fixed;top:0;left:0;right:0;height:56px;background:#222'
+    if (inRoot) {
+      component(into, `<div id="bar" style="${css}">App header</div>`)
+      return
+    }
+    const bar = document.createElement('div')
+    bar.id = 'bar'
+    bar.style.cssText = css
+    into.append(bar)
+  }
+
+  const stuckBars = (): { element: string }[] => {
+    // The shipped string, evaluated as the app evaluates it, so the test covers
+    // the concatenation and not just the module.
+    new Function(STUCK_CHROME_SCRIPT)()
+    const api = (window as unknown as { __obsrvChrome: { mark(): void; settle(): { element: string }[] } }).__obsrvChrome
+    api.mark()
+    return api.settle()
+  }
+
+  it('a fixed bar in the light DOM is a stuck-chrome candidate — the control', () => {
+    const page = mount('')
+    fixedBar(page, false)
+    expect(stuckBars().map(b => b.element)).toContain('div#bar')
+  })
+
+  it('a fixed bar inside an open root is one too', () => {
+    // Before the fix this was empty: a component app header is the common case,
+    // and a tiled capture repeated it on every band.
+    const page = mount('')
+    fixedBar(page, true)
+    expect(stuckBars().map(b => b.element)).toContain('div#bar')
+  })
+
+  it('an iframe in the light DOM is counted — the control', () => {
+    const page = mount('')
+    const frame = document.createElement('iframe')
+    frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0'
+    page.append(frame)
+    expect(framesInViewport().count).toBe(1)
+  })
+
+  it('an iframe inside an open root is counted too', () => {
+    // Before the fix this was 0, so a consent wall mounted inside a component
+    // was never named by the empty-page or walk sentences.
+    const page = mount('')
+    component(page, '<iframe style="position:fixed;inset:0;width:100vw;height:100vh;border:0"></iframe>')
+    expect(framesInViewport().count).toBe(1)
   })
 })

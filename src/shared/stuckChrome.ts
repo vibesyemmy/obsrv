@@ -1,4 +1,5 @@
 /// <reference lib="dom" />
+import { SHADOW_TREE_SCRIPT, shadowElements } from './scrollHost'
 // The DOM lib is pulled in for this file alone, as in `audit.ts`: the walk is
 // written here so the CLI can ship it as source; nothing in this file runs
 // outside the target page except the string.
@@ -113,7 +114,12 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
   const candidates = (): Map<Element, DOMRect> => {
     const found = new Map<Element, DOMRect>()
     let scanned = 0
-    for (const el of Array.from(document.querySelectorAll('*'))) {
+    // `shadowElements`, not `querySelectorAll`: a `position: fixed` bar inside
+    // a web component is invisible to the latter, so a component app header was
+    // never a candidate and a tiled capture repeated it on every band
+    // (`chore-shadow-roots-stuck-chrome-and-frames`). Measured: the same fixed
+    // header gave one bar in the light DOM and none inside an open root.
+    for (const el of shadowElements(document.body ?? document.documentElement)) {
       if (scanned++ >= maxScanned) break
       const position = getComputedStyle(el).position
       if (position !== 'fixed' && position !== 'sticky') continue
@@ -223,6 +229,10 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
  * `hide` and `restore`.
  */
 export const STUCK_CHROME_SCRIPT = [
+  // `candidates()` crosses open roots, so the traversal ships with it. A
+  // serialised function carries its body and nothing around it — the walk
+  // learned that the expensive way on run `35830479985`.
+  SHADOW_TREE_SCRIPT,
   `const STUCK_EPSILON = ${STUCK_EPSILON}`,
   installStuckChrome.toString(),
   // `__obsrvScrollHost` is what the full-page capture already left on the
