@@ -1,13 +1,18 @@
 ---
-title: "A small scroller inside a component can become the page: area is the only guard"
-column: backlog
+title: "A small scroller inside a component can become the page, and no geometric property separates the two"
+column: doing
+owner: "Henry"
+waiting: "Henry: the live walk needs the same two fields in its scroll reply"
 kind: bug
 criterion: B2
 order: 89
 ---
 
 FILED BY HENRY 2026-09-17, out of Wren's adversarial read of `#293` (R3). Reasoned from the code,
-not yet measured on a page.
+not yet measured on a page. **Measured on 2026-09-23, and the title changed with it:** it read
+*"area is the only guard"*, and nine fixtures say area is not a guard at all — sorted by it, pages and
+widgets interleave. The measurement is below, the fix built from it is below that, and what the title
+now claims is the finding rather than the suspicion.
 
 `findScroller` takes the **largest-by-client-area** visible scroller. On a document that hides its own
 overflow, that is the page's scroller by definition — which is the app-shell case it was written for.
