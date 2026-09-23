@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { shadowElements } from '../../src/shared/scrollHost'
 import { installStuckChrome, STUCK_BAR_MAX_HEIGHT, STUCK_BAR_MIN_WIDTH, STUCK_CHROME_SCRIPT, STUCK_MAX_SCANNED, type StuckChrome } from '../../src/shared/stuckChrome'
 
 /**
@@ -34,7 +35,7 @@ beforeEach(() => {
     <div id="body-copy"></div>
   `
   document.body.append(page)
-  chrome = installStuckChrome(STUCK_BAR_MIN_WIDTH, STUCK_BAR_MAX_HEIGHT, STUCK_MAX_SCANNED, null)
+  chrome = installStuckChrome(STUCK_BAR_MIN_WIDTH, STUCK_BAR_MAX_HEIGHT, STUCK_MAX_SCANNED, null, shadowElements)
 })
 
 afterEach(() => {
@@ -195,7 +196,7 @@ describe('a shell that scrolls an element', () => {
     `
     document.body.append(shell)
     scroller = document.getElementById('scroller')!
-    chrome = installStuckChrome(STUCK_BAR_MIN_WIDTH, STUCK_BAR_MAX_HEIGHT, STUCK_MAX_SCANNED, scroller)
+    chrome = installStuckChrome(STUCK_BAR_MIN_WIDTH, STUCK_BAR_MAX_HEIGHT, STUCK_MAX_SCANNED, scroller, shadowElements)
   })
   afterEach(() => {
     chrome.restore()

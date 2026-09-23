@@ -87,7 +87,35 @@ export interface StuckChrome {
  * laid out exactly as it would have been. `display: none` would reflow the
  * page mid-capture and the bands would no longer stitch.
  */
-export function installStuckChrome(minWidth: number, maxHeight: number, maxScanned: number, host: Element | null): StuckChrome {
+/**
+ * `elementsIn` is the shadow-crossing traversal, **passed in rather than called
+ * by name**, and the reason is a bundler.
+ *
+ * `candidates()` has to cross open roots: a `position: fixed` bar inside a web
+ * component was never a candidate, so a tiled capture repeated a component app
+ * header on every band (`chore-shadow-roots-stuck-chrome-and-frames`). The
+ * traversal itself already exists as `shadowElements`.
+ *
+ * **Two ways of reaching it both fail in the bundle, measured.** Importing it
+ * makes esbuild rewrite the call inside this serialised body as
+ * `.shadowElements(` — the `#293` shape, caught by
+ * `pageScriptsAreSelfContained.test.ts` on run `35836141042`. Declaring it
+ * ambiently instead collides with the real name, so the bundler renames *that*
+ * to `shadowElements2` while this body still calls the bare name: install
+ * succeeds and `mark()` throws `shadowElements is not defined` in the page.
+ *
+ * A parameter has neither problem. The name is resolved **where the script names
+ * it** — at the call site in `STUCK_CHROME_SCRIPT`, after `SHADOW_TREE_SCRIPT`
+ * has put it on the page — and this body holds no free identifier for a bundler
+ * to touch.
+ */
+export function installStuckChrome(
+  minWidth: number,
+  maxHeight: number,
+  maxScanned: number,
+  host: Element | null,
+  elementsIn: (root: Element | null) => Element[],
+): StuckChrome {
   const label = (el: Element): string => {
     const id = el.id ? `#${el.id}` : ''
     const cls = (el.getAttribute('class') ?? '').split(/\s+/).find(c => c.length > 0)
@@ -119,7 +147,7 @@ export function installStuckChrome(minWidth: number, maxHeight: number, maxScann
     // never a candidate and a tiled capture repeated it on every band
     // (`chore-shadow-roots-stuck-chrome-and-frames`). Measured: the same fixed
     // header gave one bar in the light DOM and none inside an open root.
-    for (const el of shadowElements(document.body ?? document.documentElement)) {
+    for (const el of elementsIn(document.body ?? document.documentElement)) {
       if (scanned++ >= maxScanned) break
       const position = getComputedStyle(el).position
       if (position !== 'fixed' && position !== 'sticky') continue
@@ -238,6 +266,7 @@ export const STUCK_CHROME_SCRIPT = [
   // `__obsrvScrollHost` is what the full-page capture already left on the
   // page: the element it scrolls, or null when the window is. One script
   // serves both band loops because that one value is the whole difference.
-  `window.__obsrvChrome = installStuckChrome(${STUCK_BAR_MIN_WIDTH}, ${STUCK_BAR_MAX_HEIGHT}, ${STUCK_MAX_SCANNED}, window.__obsrvScrollHost || null)`,
+  // `shadowElements` here is the page's, declared by `SHADOW_TREE_SCRIPT` above.
+  `window.__obsrvChrome = installStuckChrome(${STUCK_BAR_MIN_WIDTH}, ${STUCK_BAR_MAX_HEIGHT}, ${STUCK_MAX_SCANNED}, window.__obsrvScrollHost || null, shadowElements)`,
   '0',
 ].join('\n')
