@@ -259,39 +259,72 @@ export async function lintPage(edgeBelowPx: number, maxText: number, maxEdges: n
   let imagesOver = 0
   let spacers = 0
 
+  /**
+   * The element's own text nodes, as a finding. Extracted so the
+   * `display: contents` path below can reach it without reaching anything else
+   * in the loop (`chore-lint-slot-fallback-text`).
+   */
+  const addOwnText = (el: Element, cs: CSSStyleDeclaration, r: DOMRect, rect: LintRect): void => {
+    let own = ''
+    for (const child of Array.from(el.childNodes)) if (child.nodeType === 3) own += child.textContent ?? ''
+    if (own.trim().length === 0) return
+    const fontSizePx = parseFloat(cs.fontSize)
+    if (!(fontSizePx > 0)) return
+    if (text.length >= maxText) {
+      textOver++
+      return
+    }
+    const bg = backgroundOf(el, cs, r)
+    text.push({
+      element: label(el),
+      text: snippet(own),
+      rect,
+      fontSizePx,
+      fontWeight: parseInt(cs.fontWeight, 10) || 400,
+      fontFamily: cs.fontFamily.split(',')[0]?.replace(/["']/g, '').trim() ?? '',
+      color: parseColor(cs.color) ?? [0, 0, 0, 1],
+      opacity: effectiveOpacity(el),
+      background: bg.background,
+      backgroundNote: bg.note,
+    })
+  }
+
+  /**
+   * Where an element's own text is drawn when the element generates no box of
+   * its own. A `<slot>` is `display: contents` by default, so
+   * `getBoundingClientRect()` on one is always zero however many glyphs its
+   * fallback content puts on screen. A `Range` over its contents reports where
+   * they actually are — the same measurement `audit.ts`'s `ownRect` makes, and
+   * this card exists because lint's loop never got it.
+   */
+  const contentsTextRect = (el: Element): DOMRect => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    return range.getBoundingClientRect()
+  }
+
   // Open shadow roots included (`shadowElements`), as the audit walks them.
   for (const el of shadowElements(document.body ?? document.documentElement)) {
     if (SKIP.has(el.tagName)) continue
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
-    if (!shown(cs, r, el)) continue
+    if (!shown(cs, r, el)) {
+      // **Text only, and deliberately not the rest of the loop.**
+      // `display: contents` generates no box, so nothing of this element is
+      // painted — no border, no outline, no shadow, no background. Handing the
+      // edge rules a `Range` rect would have them report a 2 px border that
+      // Chromium never draws, and the image and spacer rules key off a box this
+      // element does not have. Its own text nodes, though, are real glyphs at a
+      // real position: measured over a `Range`, and passed nowhere else.
+      if (cs.display === 'contents' && cs.visibility !== 'hidden' && cs.opacity !== '0') {
+        const tr = contentsTextRect(el)
+        if (tr.width > 0 && tr.height > 0) addOwnText(el, cs, tr, pageRect(tr, el))
+      }
+      continue
+    }
     const rect = pageRect(r, el)
 
-    // Text of the element's own.
-    let own = ''
-    for (const child of Array.from(el.childNodes)) if (child.nodeType === 3) own += child.textContent ?? ''
-    if (own.trim().length > 0) {
-      const fontSizePx = parseFloat(cs.fontSize)
-      if (fontSizePx > 0) {
-        if (text.length >= maxText) {
-          textOver++
-        } else {
-          const bg = backgroundOf(el, cs, r)
-          text.push({
-            element: label(el),
-            text: snippet(own),
-            rect,
-            fontSizePx,
-            fontWeight: parseInt(cs.fontWeight, 10) || 400,
-            fontFamily: cs.fontFamily.split(',')[0]?.replace(/["']/g, '').trim() ?? '',
-            color: parseColor(cs.color) ?? [0, 0, 0, 1],
-            opacity: effectiveOpacity(el),
-            background: bg.background,
-            backgroundNote: bg.note,
-          })
-        }
-      }
-    }
+    addOwnText(el, cs, r, rect)
 
     // Edges thinner than the threshold: painted borders, an outline, a
     // box-shadow used as a hairline (no blur, every length under a pixel),
