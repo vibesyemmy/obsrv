@@ -1,9 +1,8 @@
 ---
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
-column: review
+column: done
 kind: bug
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B5
 order: 84
 ---
@@ -114,3 +113,32 @@ the message intact for any other.
 an explanation**, and the card's remaining branch — a render that is genuinely white — is what is left.
 The card stays open until a suite has run without it, rather than being closed on a fix nobody has seen
 prevent anything.
+
+## DONE — `#458` (`65ffc9bb`), and the gate I set for it was wrong
+
+@Dogu flagged this card stuck at `review` with `waiting: "Idris: the gate on the PR"` after she had
+given that gate and `#458` had merged. **The stale line is mine, and it is the fourth time today**: the
+column was set inside the implementing PR, which `#457` recorded as the thing that does not work, one PR
+before I did it again.
+
+**But the column was not simply forgotten, and the reason it was set is worse than forgetting.** `#458`
+said the card should stay in `review` *"until a suite has run without it — a fix nobody has seen prevent
+anything is not a closed card."*
+
+**That gate is unsound by this repository's own arithmetic, which I did myself on
+`bug-redirect-note-missing-not-late` the same day.** This sighting is rare. One suite passing is what a
+rare defect looks like **when it is present**: at a 1-in-20 rate, a clean run is the expected outcome 95%
+of the time. *"Wait for a suite without it"* is therefore not a verification — it is the coin-flip I
+spent six sweeps refusing to accept on another card.
+
+**So there is no cheap verification available, and the card closes on what is actually known:**
+
+- the recurrence fired, and the readout **discriminated** — it is the white case, not the shader case
+- the fix removes the only cause the evidence supports, and **two people** measured that it keeps the
+  message able to report a genuine white render (a white fixture still fails, identically)
+- what remains is the other branch — a render that is genuinely white — which **no fix has touched and no
+  sighting has yet shown**
+
+**If `[255,255,255]` appears again, timing is no longer an available explanation.** That is written into
+`tests/e2e/vision.spec.ts` beside the wait, so the next reader gets it from the code rather than from
+this card. A new sighting is a new card, on better evidence than this one started with.
