@@ -1,9 +1,8 @@
 ---
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
-column: review
+column: backlog
 kind: bug
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: B5
 order: 84
 ---
@@ -114,3 +113,15 @@ the message intact for any other.
 an explanation**, and the card's remaining branch — a render that is genuinely white — is what is left.
 The card stays open until a suite has run without it, rather than being closed on a fix nobody has seen
 prevent anything.
+
+## GATE GIVEN, BOARD NEVER MOVED 2026-09-23
+
+`#458` merged (`9827eb0`). Idris PASS'd it in-room: run `35874763546`, 0 `✘`, confirming the
+stalled-runner reading on attempt 1's unrelated `update.spec.ts:133` failure — **PASS on `#458`, at
+`9827eb0`**. Same shape as tonight's other board-hygiene gaps: code and gate were both done, only the
+card's own `column`/`waiting` fields still said `review`.
+
+Per this card's own rule two sections up, that gate does not close it — the fix removes a cause, it
+does not prove one. Back to `backlog`, a recurrence-waiter again: still nothing to do until a suite
+either runs clean long enough to matter, or `[255,255,255]` fires once more with timing no longer
+available as the explanation.
