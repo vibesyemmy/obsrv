@@ -1155,3 +1155,38 @@ and the test would fail loudly; before the change it could pass on one and fail 
 **If something like it recurs**, the question to ask of any `first4` predicate is which frames it
 *admits* rather than which it excludes: the white-page guard here was written against one wrong frame
 and silently accepted a different one.
+
+## `tab-switch-preset.spec.ts:89`: the failure landed before the spec's own instrumentation
+
+Seen once, on run [`35875864196`](https://github.com/vibesyemmy/obsrv/actions/runs/35875864196)
+(`#459`, 2026-09-23), rescued on retry.
+
+```
+Error: expect(received).toBe(expected)
+Expected: true     Received: false
+   91 |   expect((await call('setPreset', { id: LAPTOP.id })).body.applied).toBe(true)
+```
+
+**It failed on the test's FIRST `setPreset`** — a setup step, before any tab is opened or switched, and
+before the behaviour the test exists to check. The card this test guards,
+`bug-preset-after-tab-switch-lands-on-the-other-tab`, is **done**: the defect was reproduced with the
+gap forced open and fixed. **A flake here does not mean that bug is back**; it means the test's own
+setup did not hold.
+
+**Two readings the log cannot separate.** `applied: false` is either *the app had not finished bringing
+the viewport up, so nothing applied*, or *the viewport was already at `laptop-768`, so there was nothing
+to change*. Both produce the same byte.
+
+### The gap worth fixing before the next sighting
+
+**The spec prints `[tab-switch] …` lines, and every one of them is downstream of this assertion.** The
+run's log carries instrumented output from the *passing* attempt and **nothing at all** from the failing
+one: a failure at line 91 produces no `[tab-switch]` line, because the first one is printed at line 102.
+
+**So the earliest failure is the least instrumented**, which is the same shape as
+`bug-vision-47-normal-not-red`'s first sighting throwing away the blue channel — the fact that decides
+between the readings existed only inside an assertion that had already stopped the test.
+
+**If it recurs**, the thing to add is not a longer wait: print the viewport and the resolved preset
+*before* the first `setPreset`, so `applied: false` can be read as "already there" or "not up yet". That
+is a two-line change to the spec and it is worth making the next time anyone is in the file.
