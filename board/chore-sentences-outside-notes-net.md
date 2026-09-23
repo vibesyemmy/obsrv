@@ -1,9 +1,8 @@
 ---
 title: "The stderr/log-only category c5 set aside was undercounted, and UI-only was never counted at all"
-column: review
+column: done
 kind: chore
 owner: "Henry"
-waiting: "Idris: the gate on the PR"
 criterion: C5
 order: 110
 ---
@@ -105,3 +104,24 @@ grep.
 means forcing a failed file read, an unsupported drop, a settings save rejection, a WebGL context loss
 and a second-instance launch. That is a fixture programme, not a counting job, and it belongs to whoever
 takes it with that scope in front of them.
+
+## DONE — `#459` merged as `279c83a1`
+
+**Fifth time today I have left a card in `review` after its PR merged**, and the fourth time someone
+else had to notice. The column was set inside the implementing PR again — the exact thing `#457`
+recorded as not working, and `#461` repeated the lesson about, and here it is a third time in the same
+session.
+
+**So the rule stops being advice and becomes a habit I do not get to choose per-PR: an implementing PR
+does not touch `column:` or `waiting:`.** The move happens after the merge, from the board's own state,
+or it does not happen at all. Writing the rule down three times did not work; the only version that can
+work is one where the implementing PR has nothing to forget.
+
+**What was actually delivered** is in `docs/note-inventory.md`: the log route counted at 22 call sites
+by compiler rather than grep, `log.info` found to be in the category and never counted, a third route
+through `window.obsrv.log` with seven producers, and 6 user-facing status sentences out of 174
+sentence-shaped literals — with the count's own three filter iterations recorded, because each earlier
+one was silently dropping real sentences.
+
+**One acceptance bullet stays open and is named on the card**: an outcome per sentence, which needs a
+fixture programme rather than a counting pass.
