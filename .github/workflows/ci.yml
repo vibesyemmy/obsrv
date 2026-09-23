@@ -241,12 +241,15 @@ jobs:
         if: ${{ needs.scope.outputs.board_only != 'true' }}
         run: npm run test:browser
 
-      # --retries=1 absorbs the known-flaky mobile input-forwarding test on
-      # loaded runners; a persistent failure still fails the job.
+      # TEMPORARY: bug-canvas-blank-without-notice baseline sweep. Reverts once
+      # the run lands. Same pattern as tonight's arrivals.spec.ts sweeps —
+      # --repeat-each on one spec, first-attempt failures are the rate,
+      # --retries=1 kept because e2e-evidence-settings.test.ts refuses 0 (trace
+      # on-first-retry records nothing without a retry to be first of).
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
+        run: npx playwright test tests/e2e/panes.spec.ts --grep "the target canvas shows the page, not a blank" --repeat-each=20 --retries=1
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
