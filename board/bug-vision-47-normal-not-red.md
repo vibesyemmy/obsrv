@@ -6,7 +6,9 @@ criterion: B5
 order: 84
 ---
 
-**Waiting on a recurrence:** `vision.spec` *"it actually changes the render, and turning it off restores it"* failing with `middle pixel rgb: [r,g,b]`. Nothing can be done until it fires.
+**IT FIRED, 2026-09-23** — run `35853805499`, on `#455`, rescued on retry. The channel readout this card
+added is what answered it; the diagnosis is at the foot of this card. Still open, because the mechanism
+behind the white render is named there rather than proven.
 
 FILED BY HENRY 2026-09-17, closing `bug-flakes-gate-the-gate`. It is that card's one remaining watch,
 given a home of its own under the sweep's rule.
@@ -30,3 +32,50 @@ failure message. The uploaded artefacts had no screenshot. On first-failure read
 
 **Also check before reading it as this test's own failure:** whether another test failed first in the
 same run. Every sighting so far had one.
+
+## THE RECURRENCE, 2026-09-23 — it is the white case, which is the half this card could not tell apart
+
+Run `35853805499` (`#455`), `vision.spec.ts:47`, rescued on retry:
+
+```
+Error: middle pixel rgb: [255,255,255]
+expect(received).toBeGreaterThan(expected)   Expected: > 295   Received: 255
+```
+
+**The instrumentation this card added did its job.** The two candidates have two signatures, written
+beside the assertion in `tests/e2e/vision.spec.ts`:
+
+| reading | means |
+| --- | --- |
+| `[255,255,255]` | a **washed-out / white** render |
+| `[255,255,0]` | the deficiency shader **still applied** while the button already read Normal — the confirm-ahead-of-paint class |
+
+**It is the first.** So the shader-still-applied branch is **ruled out** for this sighting, and that was
+the open question the readout was added to settle.
+
+**And the first sighting is no longer ambiguous.** Run `34977896287` reported `expected > 295, received
+255` — red and green both 255, **blue discarded**. Blue is now known to be 255 in this shape, so both
+sightings read as white, and the older message simply could not say which half it was.
+
+### The mechanism, named and NOT proven
+
+White is what an **unpainted** surface looks like. `middle()` samples through
+`win.webContents.capturePage`, and early or stale captures on this app are a known family — the
+`drawNow` handshake exists because an occluded window's capture came back stale. On the **same run**,
+`frame-bus.spec.ts:40` failed for exactly that reason: its wait admitted an all-zero frame, and `#455`
+fixed it by requiring opaque alpha.
+
+**That is a cause shape, not a proof for this test.** Nothing here shows the capture preceded the
+paint; it shows the pixels were white, and white is consistent with it. The next step is to make the
+sample wait for a painted frame — `#455`'s predicate is the pattern to copy — and see whether the
+sighting stops.
+
+### A correction, recorded because the wrong version was posted first
+
+I reported this as *refuting both* of the card's hypotheses, reasoning that a washed-out red would keep
+red above green. **The taxonomy beside the assertion says otherwise, and I wrote it**: all three
+channels at 255 *is* the washed-out case. I read the card's one-line summary instead of the source next
+to the number. That is the second time in one day I trusted a summary over the detail it summarised —
+the first was a card's `owner:` line against its body. @Idris had endorsed the wrong version before I
+caught it, and noted in turn that she had verified the pixel values without checking the logic built on
+them. **Verifying an input is not verifying a conclusion.**
