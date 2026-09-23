@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { auditPage } from '../../src/shared/audit'
+import { lintPage } from '../../src/shared/lint'
 import { inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
 import { STUCK_CHROME_SCRIPT } from '../../src/shared/stuckChrome'
 import {
@@ -340,6 +341,55 @@ describe('the audit, over a component', () => {
     const filled = auditPage(2000, 3000).text.map(t => t.text)
     expect(filled).not.toContain('Buy now')
     expect(filled).toContain('Real item')
+  })
+})
+
+/**
+ * `chore-lint-slot-fallback-text`. `audit.ts` measures a `<slot>`'s fallback text
+ * over a `Range`, because a `<slot>` is `display: contents` and
+ * `getBoundingClientRect()` on one is always zero. `lint.ts` has the same
+ * own-text loop and no such handling — **and the card required this measured
+ * against a fixture rather than read out of the source.**
+ */
+describe('lint and a slot\'s fallback text', () => {
+  it('the audit measures it — the control this is the twin of', async () => {
+    const page = mount('')
+    component(page, '<div style="font-size:16px"><slot>Buy now</slot></div>')
+    expect(auditPage(2000, 3000).text.map(t => t.text)).toContain('Buy now')
+  })
+
+  it('lint measures it too, over a `Range`, since a zero rect is not an absent glyph', async () => {
+    const page = mount('')
+    component(page, '<div style="font-size:16px"><slot>Buy now</slot></div>')
+    const report = await lintPage(2, 2000, 2000, 2000)
+    expect(report.text.map(t => t.text).join(' ')).toContain('Buy now')
+    // And at a real position, which is the whole point of the `Range`: a zero
+    // rect would have put the finding at the page's origin with no size, where
+    // a report's pin would point at the wrong thing.
+    const found = report.text.find(t => t.text.includes('Buy now'))
+    expect(found?.rect.width).toBeGreaterThan(0)
+    expect(found?.rect.height).toBeGreaterThan(0)
+  })
+
+  it('a slot that paints nothing still reports no edge, because `display: contents` draws no border', async () => {
+    // The guard on the fix. `display: contents` generates no box, so a border
+    // declared on a `<slot>` is never painted — handing the edge rules the
+    // `Range` rect would invent a finding for a hairline Chromium does not draw.
+    const page = mount('')
+    component(page, '<div style="font-size:16px"><slot style="border:1px solid red">Buy now</slot></div>')
+    const report = await lintPage(4, 2000, 2000, 2000)
+    expect(report.text.map(t => t.text).join(' ')).toContain('Buy now')
+    expect(report.edges.filter(e => e.kind.startsWith('border'))).toHaveLength(0)
+  })
+
+  it('lint measures the same words when they sit in an element with a box', async () => {
+    // The control for the control: nothing about shadow roots or lint's loop is
+    // broken in general, so a plain `<span>` in the same root is found. Without
+    // this, "lint found no Buy now" is satisfied by a lint that finds nothing.
+    const page = mount('')
+    component(page, '<div style="font-size:16px"><span>Buy now</span></div>')
+    const report = await lintPage(2, 2000, 2000, 2000)
+    expect(report.text.map(t => t.text).join(' ')).toContain('Buy now')
   })
 })
 
