@@ -52,8 +52,29 @@ export const MOTION_FLOOR_PX = 1
  *
  * Back to back is not enough: the same page answered 28 moved on one run and
  * 0 on another, because what creeps had not yet crept a whole pixel. At 250 ms
- * it is solid, and the second pass itself costs 15 ms on a 901-element page —
- * the wait is the whole price, against a walk that already takes seconds.
+ * it is solid, **and the wait is the whole price**: the second pass costs single
+ * -digit milliseconds against a 250 ms sleep, on a walk that already takes
+ * seconds.
+ *
+ * **What that second pass costs, re-measured 2026-09-23** because the original
+ * figure — "15 ms on a 901-element page" — predates the traversal entering open
+ * shadow roots, and named neither the page nor the app version, so nobody could
+ * check it (`chore-motion-probe-cost-claim`). Seven runs each, median of the
+ * sorted set, headless Chromium at 1280x800, 908 elements on both pages:
+ *
+ * | page                                        | median  | min-max     |
+ * |---------------------------------------------|---------|-------------|
+ * | 900 rows in the light DOM                    | 3.2 ms  | 2.7-3.9 ms  |
+ * | the same rows, each behind its own open root | 4.7 ms  | 4.0-7.5 ms  |
+ *
+ * **Entering composed trees costs about half as much again at the same element
+ * count — not the order of magnitude the card was filed to check for.**
+ *
+ * **What these numbers are not.** Both fixtures are synthetic: no images, no
+ * real stylesheet, almost no layout. A page with either will cost more, and the
+ * old 15 ms may well have been honest for whatever page produced it. They bound
+ * the *shape* of the cost, not its value on a site — which is why the sentence
+ * above claims the ratio to the wait rather than a number to quote back.
  *
  * The 4 s row is the honest limit of this: a page also moves in jumps this
  * window cannot see (a carousel that steps, a section that loads late). The

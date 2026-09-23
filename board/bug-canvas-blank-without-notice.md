@@ -245,3 +245,57 @@ learned, twice this week, not to read past without checking which step actually 
 **Unchanged: still a recurrence-waiter, still backlog.** Nothing here moves it to Doing — that
 happens on an actual firing, per the card's own key.
 
+## A CANDIDATE MECHANISM, 2026-09-23 by Dogu — reasoned, not run, and the instrument to confirm it already exists
+
+Following Henry's own rule from tonight's redirect-note work: stop sampling, find a controllable
+knob. Read the actual paint-pause path rather than re-testing the already-refuted rAF-occlusion
+hypothesis (`#247`).
+
+**The mechanism, traced end to end:**
+
+- `index.ts:76-88` — the shell window's `hide`/`minimize`/`show`/`restore` events call
+  `tabs.setShellVisible(visible)`, and on change, send `IPC.targetPaused` to the renderer.
+- `tabs.ts:286-311` — `setShellVisible` flips `shellVisible`, and `applyPainting()` calls
+  `active.setPainting(want)`.
+- `targetSource.ts:1118-1130` — `setPainting(false)` calls the real Electron
+  `webContents.stopPainting()` on the **offscreen target** — frames genuinely stop being generated
+  at the source, not merely throttled. This is a different, product-level mechanism from the rAF
+  hypothesis `#247` already refuted (that was about Chromium throttling paints on an occluded
+  *runner*; this is Obsrv choosing not to rasterise an occluded *window*, on purpose, to save GPU
+  load — `visibility.spec.ts`'s own doc comment names the reason).
+- `TargetCanvas.tsx:459-466` — the renderer mirrors this via `onTargetPaused`, setting
+  `paused.current = isPaused` and calling `disarm()` when paused. `arm()` (line ~115) **refuses to
+  rearm the stall watchdog while `paused.current` is true** — so the *"No frames from target
+  renderer"* notice is deliberately muted while the app believes the window is hidden.
+
+**Why this matches both real sightings exactly.** Both `35123165259` and `35176357601` show a
+passing predecessor test moments before, then a canvas that is blank with **zero** occurrences of
+"No frames from target renderer." That is not a coincidence of two independent failures each
+happening to stay silent — it is the documented behaviour of `paused.current` being true: painting
+stopped **and** the thing that would have complained about it was deliberately turned off, together,
+by one flag. `visibility.spec.ts` already proves each half in isolation (hiding stops painting;
+showing resumes it and repaints); this card's failure shape is what a **stuck** hide looks like —
+one hide event landing without a compensating show ever being *processed* (delivered late, dropped,
+or racing test teardown), which the mechanism doesn't distinguish from "the user genuinely walked
+away," because by design it shouldn't have to.
+
+**What is NOT established.** Whether a hide event without a matching show can actually happen on
+this CI's runners during a `panes.spec.ts` run specifically — `deskState.ts`'s own comment says CI
+reliably delivers hide/show events (unlike some local desks), so this isn't "CI doesn't support the
+mechanism," it would have to be a genuine, narrower race: a hide landing at a moment nothing later
+requests a show. Nothing here names what would cause that moment, and nothing here shows it has
+happened — this is a reading of the code, not a measurement, exactly the distinction this room
+insisted on all night with the redirect-note card.
+
+**The good news: nothing new needs building to check it.** `panes.spec.ts`'s existing failure-path
+instrument (line ~121) already reads `session.painting` at the moment of the next failure — the
+same query `setPainting`/`stopPainting` above feed. **If the next sighting reads `painting: false`,
+this mechanism is confirmed.** If it reads `painting: true`, this whole reading is wrong and the
+cause is elsewhere. No new instrument, no new run — the existing one was already pointed at exactly
+this question; it just hasn't fired yet.
+
+**Worth flagging rather than asserting:** this is a "runner state doing something unexpected, briefly,
+with no cause named" shape — the same shape as `bug-ipc-native-pane-invisible-once` (also mine).
+Not claiming they share a cause; both are open, both are recurrence-waiters, and if a future
+sighting on either card names an actual trigger, it is worth checking whether it explains the other.
+
