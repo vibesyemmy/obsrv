@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: whether to spend ~3 CI suites on the sweep that qualifies #440"
+waiting: "Henry: expose the arrivals counter to tests, to settle whether the delay=0 repro is this defect or a second one"
 kind: bug
 criterion: C5
 order: 90
@@ -564,3 +564,56 @@ There is also a plainer lesson. Twice today I ran a probe against the wrong bran
 measuring `main` while believing I was measuring the fix — and both times the tell was a number that
 was too tidy. `grep -c mirrorRequested` on the file under test costs nothing and would have caught it
 the first time.
+
+## `#440` is in as `785498e5` — and the sweep it was waiting for is retired
+
+Merged on Opeyemi's pick of options 1 and 2, **as titled and not as this card's fix**. Suite
+`35808181483`: **620 passed, 1 `✘`** — `throttle-live.spec.ts:48`, a `beforeAll` app-launch timeout,
+retried green in 20 ms, from a documented flake family (×11 in `bug-ci-main-red-37pct`).
+`arrivals.spec.ts` did not fire at all; `mirror-302.spec.ts` passed on CI in 838 ms.
+
+**A neighbouring spec's app launch timed out on the run where I added a spec that launches an app.**
+That is the shape of *my change did this*, so it was checked rather than dismissed: `playwright.config.ts`
+sets `workers: 1`, so specs run sequentially and mine cannot contend with `throttle-live`. Ruled out by
+the config. Runtime moved 21.3m → 27.1m, which one sequential 838 ms test cannot account for; the run
+also queued 11 minutes.
+
+### The sweep is obsolete, and that is option 1's real result
+
+Driving the collision directly — `target.load(redirect.html)`, then the bus's `loadMirrored(hairline)`
+at a chosen offset — **reproduces a missing note on demand, locally, in 8 seconds**:
+
+| mirror fired | hairline commits | note |
+| --- | --- | --- |
+| never (control) | 2 | present |
+| **+0 ms** | 4 | **MISSING** |
+| +5 / +15 / +30 / +60 ms | 3 | present |
+
+**~60 CI repeats were the plan for bounding a 10% race. A defect that fires on demand needs none of
+them** — a candidate either stops `delay=0` or it does not. That spend is off the table and it cost no
+runner time to retire.
+
+### And the supersede hypothesis is refuted
+
+I proposed that the bus's mirror *cancels* the page's own navigation, so no commit exists to carry the
+note. **Wrong: at `delay=0` there are four hairline commits, the page's own among them at
+`mirroring: false`.** Nothing is cancelled. My reading of `35759060900` as a supersede was an artifact
+of looking at a six-entry window.
+
+### What is NOT established, in Idris's framing, which is the one to scope from
+
+| | culprit commit | what failed |
+| --- | --- | --- |
+| `35759060900`, `35807960696` | stamped `mirroring: TRUE` | attribution said the **wrong** thing |
+| the `delay=0` repro | page's own commit at `mirroring: false` | attribution said the **right** thing and the note still went missing |
+
+**Two different shapes, and I reported the second as a reproduction of the first because it produced
+the symptom I was hunting.** Symptom match is not defect match — the same error as reading a control's
+green as a fact about the product, made twice in one day.
+
+The discriminator is the **arrivals counter, sampled after each commit**: if it never moves at
+`delay=0`, something drops a commit whose address plainly differs and Idris's `#1896` replay remains
+the correct account of the CI collision; if it moves and no note appears, the defect is in the note's
+own condition. `arrivals` is a `ControlServer` **dependency**, not one of its commands — the server
+lists its command set back at you — so this needs a test-only hook in `src/`, bought by this defect,
+as its own change. **That is what `waiting:` now names, and it is a measurement, not a fix.**
