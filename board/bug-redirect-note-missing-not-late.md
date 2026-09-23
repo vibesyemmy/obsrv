@@ -503,3 +503,30 @@ acceptance was written.
 - I kept a `mirroring` getter "for the places that legitimately ask whether a load is in flight", then
   grepped: **nothing reads it.** Removed. That is the dead-code defect Idris found in
   `startedByDocument`, authored again, by me, in the act of fixing what sat next to it.
+
+### The third defect, found by trying to close the test gap Idris named
+
+Idris read `#440` and flagged **no test changes**. `isMirrorCommit`'s second arm — a commit to a
+different address with no document initiator is still the bus's — had none, and the PR body claimed
+url-equality alone would misread that case.
+
+`file://` cannot express a server-side redirect, which is **why the case went untested**: every
+fixture on this path redirects from inside the page, the one kind of redirect that carries an
+initiator. So the spec grew a 302 from `/from` to `/to` and drove `loadMirrored` directly.
+
+**Then the line was weakened to url-equality only, and the sabotaged build passed 3/3.**
+
+- **The test is reverted.** It passes on `main`, on the fix and on the sabotage. A test that cannot
+  fail is not a control, and this card already carries four refuted mechanism assertions.
+- **The arm stays, relabelled `conservative, not measured`** (`91a4924`). The boolean it replaces did
+  suppress that commit via the window, so dropping the arm changes behaviour no spec covers — the safer
+  of two unmeasured options, and now written as such in the code and in `#440`'s body.
+
+So `#440` is **one measured fix plus one labelled conservative arm**, not two claims that both looked
+measured.
+
+**That is twice in one day a comment of mine outran its evidence** — the `:140` justification in `#437`
+was the first, and `#438` corrected it. Both were caught by doing what this card demands rather than
+what I had written about it, which is the argument *for* the CI sweep and not against it. The
+transferable form: **the sentence explaining a line is a claim, and it needs buying at the same rate
+the line does.** See `docs/note-inventory.md`'s method entries and `bug-arrivals`.
