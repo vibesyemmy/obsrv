@@ -1,7 +1,9 @@
 ---
 title: "The stderr/log-only category c5 set aside was undercounted, and UI-only was never counted at all"
-column: backlog
+column: review
 kind: chore
+owner: "Henry"
+waiting: "Idris: the gate on the PR"
 criterion: C5
 order: 110
 ---
@@ -60,3 +62,46 @@ undercount/overcount shape `c5`'s own method section warned about for the notes/
   `docs/note-inventory.md`);
 - `docs/note-inventory.md` gets a section for this category with the same rigor as the rest of the
   doc, rather than the two-line mention it has now.
+
+## COUNTED 2026-09-23 by Henry — with the compiler, and the number moved twice on the way
+
+`docs/note-inventory.md` has the section this card asked for. The headline numbers:
+
+- **the log route is 22 call sites**, not ten and not eleven. Kenya's eleven is **confirmed** for
+  `warn`+`error` (9 own sentences, 2 passthroughs), so the gap with `c5`'s ten is real and the two
+  `log.error` calls are what no pass had;
+- **`log.info` was never looked at** — eleven more sites, eight of them own sentences. The category is
+  *a sentence reaching only the log file*, and `log.info` is exactly that. **The category had been scoped
+  by its instrument rather than by its definition**: both earlier passes grepped `warn|error`;
+- **a third route nobody had counted** — `window.obsrv.log(...)` in the renderer reaches the log through
+  `ipc.ts:448`'s passthrough. **Seven** producers, all the WebGL context-loss sentences in
+  `TargetCanvas.tsx`. Counting the sink found one line; the sentences are seven;
+- **UI-only: 174 sentence-shaped literals across 35 renderer files, of which 6 are user-facing status**
+  set through a state setter. Four are the four this card named; **two are new**, and a second
+  `Not saved:` exists in `DiagonalHint.tsx` that the keyword pass could not reach.
+
+### Why the count is a floor, and the part worth keeping
+
+**It moved twice while I was looking at it, and each earlier filter was silently dropping real
+sentences** — 134, then 153, then 174. The first excluded anything containing a colon, to skip CSS. The
+second used a template's source text, so `${`…`}` tripped a brace test and **every interpolated template
+vanished** — including `SettingsPanel.tsx:211`, which is one of the four items this card names.
+
+**The card's four named items are what caught both.** Without a known answer to check against, each
+filter looked finished. **A sweep with no known answer to check against reports its own blind spots as
+zero** — which is the same failure, in a different instrument, that this card was filed to correct in a
+grep.
+
+### Acceptance, against what was asked
+
+| asked | done |
+| --- | --- |
+| the eleven reconciled against ten by sink-tracing, not grep | **yes** — compiler pass, 22 sites classified by argument kind; the two `log.error` calls named as their own row |
+| a real UI-only sweep, not a keyword grep | **yes** — all literals in all 35 renderer files, classified by syntactic context |
+| each surviving sentence gets one of `c5`'s three outcomes | **no** — not attempted here |
+| `docs/note-inventory.md` gets a section with the rest of the doc's rigor | **yes** |
+
+**The third bullet is open and I am not claiming it.** Observing 6 UI sentences and 24 log sentences fire
+means forcing a failed file read, an unsupported drop, a settings save rejection, a WebGL context loss
+and a second-instance launch. That is a fixture programme, not a counting job, and it belongs to whoever
+takes it with that scope in front of them.
