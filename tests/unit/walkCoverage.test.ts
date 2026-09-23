@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { walkCoverageNote, walkDialogNote, walkNothingNote } from '../../src/shared/walkCoverage'
+import { walkCoverageNote, walkDialogNote, walkHostNote, walkNothingNote } from '../../src/shared/walkCoverage'
 
 describe('walkCoverageNote', () => {
   it('is silent when the walk covered the page', () => {
@@ -304,5 +304,51 @@ describe('the cause is measured, not inferred', () => {
     // took is worse than one that admits it does not know.
     const note = walkCoverageNote(walked, 768, 8000, { documentLocked: true })
     expect(note).toContain('a modal or a locked scroll held the page, or it grew after the walk')
+  })
+})
+
+describe('walkHostNote', () => {
+  const viewport = { vw: 1280, vh: 800 }
+  it('is silent when the document itself was scrolled', () => {
+    // `walkStep` sends no host for a root-scrolling page: there is no container
+    // to name.
+    expect(walkHostNote(undefined)).toBeNull()
+  })
+  it('is silent when the page shows nothing outside the container', () => {
+    // A small feed on an otherwise empty page IS that page's content, and
+    // walking it is right. Measured: 320x300, nothing else visible.
+    expect(walkHostNote({ w: 320, h: 300, ...viewport, outside: 0 })).toBeNull()
+    // The same for a container that fills the viewport.
+    expect(walkHostNote({ w: 832, h: 800, ...viewport, outside: 0 })).toBeNull()
+  })
+  it('is silent on a box or viewport it cannot do arithmetic with', () => {
+    expect(walkHostNote({ w: 0, h: 300, ...viewport, outside: 50 })).toBeNull()
+    expect(walkHostNote({ w: 320, h: 0, ...viewport, outside: 50 })).toBeNull()
+    expect(walkHostNote({ w: 320, h: 300, vw: 0, vh: 800, outside: 50 })).toBeNull()
+    expect(walkHostNote({ w: 320, h: 300, vw: 1280, vh: 0, outside: 50 })).toBeNull()
+  })
+  it('names the container and its share of the viewport, for the defect this exists for', () => {
+    // `bug-in-root-feed-becomes-the-page`, first fixture: a 318x300 feed behind
+    // an open shadow root, chosen as the page while the document's real content
+    // sits visible beside it.
+    expect(walkHostNote({ w: 318, h: 300, ...viewport, outside: 175 })).toBe(
+      'the walk scrolled a 318x300 CSS px container rather than the document — 9% of the viewport — ' +
+        'and the page shows content outside that container, which the screenfuls above do not cover',
+    )
+  })
+  it('says the same of a container that is plainly the page, because no gate separates them', () => {
+    // A two-pane dashboard: 79% of the viewport, three characters of nav text
+    // outside it. The sentence is true here too — the nav was not walked — and
+    // it is a statement rather than a prompt for exactly this case. Nine
+    // fixtures were measured looking for a gate that would fall silent here and
+    // still fire above; there is none.
+    expect(walkHostNote({ w: 1015, h: 800, ...viewport, outside: 3 })).toBe(
+      'the walk scrolled a 1015x800 CSS px container rather than the document — 79% of the viewport — ' +
+        'and the page shows content outside that container, which the screenfuls above do not cover',
+    )
+  })
+  it('rounds the box and the share rather than printing sub-pixels', () => {
+    expect(walkHostNote({ w: 317.6, h: 299.4, ...viewport, outside: 10 })).toContain('318x299 CSS px')
+    expect(walkHostNote({ w: 640, h: 400, ...viewport, outside: 10 })).toContain('25% of the viewport')
   })
 })
