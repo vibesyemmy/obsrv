@@ -132,10 +132,43 @@ is the case where "it signed" was true and wrong: on a machine holding both a
 Developer ID identity and a local one, `CSC_IDENTITY_AUTO_DISCOVERY` has two
 candidates and no way to know which was meant.
 
-**The rules are written twice** — here as a script, and as inline steps in
-`ci.yml`. That is a drift risk and it is deliberate for now: replacing a working
-release gate in the same change that introduces its replacement would give a
-failure two possible causes. The workflow calling this script is the follow-up.
+**The rules are written once, and the release runs the same copy you do.** They
+were briefly written twice — here as a script, and as inline `codesign`/`spctl`/
+`stapler` steps in `ci.yml` — and the drift that was called a risk arrived
+immediately. Chaining the script into `dist:signed` made `ci.yml`'s `Build DMGs`
+step run it, but that step's `env:` block did not carry `SIGNING_IDENTITY`, and
+the script refuses when it is unset. The first signed release would have built,
+notarised, and then failed at the last command of the build, with the workflow's
+own copy of the check sitting in the step after the one that failed.
+
+So the shell copy is gone and the tested one stayed. **It was never redundancy.**
+Redundancy is two different mechanisms checking the same fact from different
+angles; this was two hand-copies of the same shell rules with nothing asserting
+that the copies agreed, which is why one of them could be wrong while the other
+looked like cover. The single surviving implementation is also the more verified
+one — eleven sabotage-tested unit cases against zero automated coverage on the
+inline bash — so removing the text removed maintenance surface rather than rigour.
+Do not restore the second copy in the name of belt-and-braces.
+
+What guards it now:
+
+- `ci.yml` sets `SIGNING_IDENTITY` on the **release job**, not on a step. The
+  defect was a step that needed the variable and did not have it, and per-step
+  scoping leaves that available to every step added later. Job level makes the
+  omission impossible rather than detectable — and costs nothing, because the
+  value is the `codesign` authority line, which every published DMG prints to
+  anyone who runs `codesign -dv` on it. `CSC_LINK`, `CSC_KEY_PASSWORD` and the
+  App Store Connect key are confidential and stay scoped to the one step that
+  needs them.
+- A step **before** the build fails with an `::error::` when `HAS_SIGNING` is
+  true and `SIGNING_IDENTITY` is empty. The script would refuse anyway, but it
+  refuses after a ~20-minute notarised build; this costs seconds.
+- `tests/unit/distSignedChainsVerifier.test.ts` asserts that `dist:signed` still
+  chains the script, that the script exists, and that it runs **after**
+  electron-builder — verifying first would assert against whatever the previous
+  build left in `dist/`. With no second copy in the workflow, one deleted line in
+  `package.json` would otherwise remove every identity assertion from the release
+  and leave a green log.
 
 Certificates expire after five years, API keys do not expire but can be revoked.
 When the certificate is replaced, `CSC_LINK` and `CSC_KEY_PASSWORD` are the only
