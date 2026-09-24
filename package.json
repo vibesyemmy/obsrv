@@ -20,7 +20,7 @@
     "test:e2e": "node scripts/suite.js e2e npm run test:e2e:run",
     "test:e2e:cli": "OBSRV_E2E_CLI=1 node scripts/suite.js e2e npm run test:e2e:run",
     "dist": "npm run build && electron-builder --mac --publish never --config.mac.identity=null",
-    "dist:signed": "npm run build && electron-builder --mac --publish never --config.mac.notarize=true",
+    "dist:signed": "npm run build && electron-builder --mac --publish never --config.mac.notarize=true && node scripts/verifySigningIdentity.js",
     "build:mcp": "tsc -p tsconfig.mcp.json",
     "prepublishOnly": "npm run build",
     "prepack": "node scripts/electron-dep.js to-prod",
