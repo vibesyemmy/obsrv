@@ -475,6 +475,19 @@ jobs:
     # directly is always false, and would silently ship unsigned builds.
     env:
       HAS_SIGNING: ${{ secrets.CSC_LINK != '' && secrets.APPLE_API_KEY_ID != '' }}
+      # Job-level, not per-step, and deliberately unlike the other signing
+      # secrets. The defect this file just carried was a step that needed this
+      # variable and did not have it; per-step scoping leaves that available to
+      # every step added later, and the guard that would catch it needs a YAML
+      # parser this repo does not depend on. Job level makes the omission
+      # impossible instead of detectable.
+      #
+      # It costs nothing, because this value is not confidential: it is the
+      # `codesign` authority line, which every published DMG prints to anyone
+      # who runs `codesign -dv` on it. `CSC_LINK`, `CSC_KEY_PASSWORD` and the
+      # App Store Connect key are real secrets and stay scoped to the one step
+      # that needs them.
+      SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@v7
 
@@ -509,8 +522,6 @@ jobs:
       # code change. HAS_SIGNING true with it unset fails rather than skips.
       - name: A signed build must name the identity it will be checked against
         if: env.HAS_SIGNING == 'true'
-        env:
-          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
         run: |
           if [ -z "$SIGNING_IDENTITY" ]; then
             echo "::error::HAS_SIGNING is true but the SIGNING_IDENTITY secret is not set — nothing to assert the build's identity against. Add it (see docs/signing.md) before this release can ship signed."
@@ -534,13 +545,6 @@ jobs:
           # Auto-discovery would otherwise pick up whatever identity happens to
           # be on the runner; with no secret set we mean *unsigned*, explicitly.
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_SIGNING }}
-          # Read by `scripts/verifySigningIdentity.js`, which `dist:signed`
-          # chains after electron-builder, so the build asserts its own
-          # signature before CI does anything else with it. Absent here that
-          # assertion refuses — correctly, an unnamed target and no check being
-          # the same gap — and the signed release then fails at the last command
-          # of the build. Which is what it did between `#466` and this fix.
-          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
         run: |
           if [ "$HAS_SIGNING" = "true" ]; then
             npm run dist:signed

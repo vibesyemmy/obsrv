@@ -143,8 +143,14 @@ own copy of the check sitting in the step after the one that failed.
 
 So the shell copy is gone and the tested one stayed. What guards it now:
 
-- `ci.yml` passes `SIGNING_IDENTITY` to the step that builds, because that step
-  is where the assertion runs.
+- `ci.yml` sets `SIGNING_IDENTITY` on the **release job**, not on a step. The
+  defect was a step that needed the variable and did not have it, and per-step
+  scoping leaves that available to every step added later. Job level makes the
+  omission impossible rather than detectable — and costs nothing, because the
+  value is the `codesign` authority line, which every published DMG prints to
+  anyone who runs `codesign -dv` on it. `CSC_LINK`, `CSC_KEY_PASSWORD` and the
+  App Store Connect key are confidential and stay scoped to the one step that
+  needs them.
 - A step **before** the build fails with an `::error::` when `HAS_SIGNING` is
   true and `SIGNING_IDENTITY` is empty. The script would refuse anyway, but it
   refuses after a ~20-minute notarised build; this costs seconds.
