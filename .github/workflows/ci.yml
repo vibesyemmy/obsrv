@@ -498,6 +498,26 @@ jobs:
           chmod 600 "$RUNNER_TEMP/private_keys/AuthKey.p8"
           echo "path=$RUNNER_TEMP/private_keys/AuthKey.p8" >> "$GITHUB_OUTPUT"
 
+      # Fails in seconds instead of after a ~20-minute notarised build. The
+      # build's own assertion refuses an unset SIGNING_IDENTITY as well, and
+      # refusing is right, but it refuses at the END of the build — the same
+      # missing secret then costs a full notarisation round trip to discover.
+      # Both fail; only this one fails cheap.
+      #
+      # The identity string is not this workflow's decision: SIGNING_IDENTITY is
+      # a secret, and choosing its value is a configuration act rather than a
+      # code change. HAS_SIGNING true with it unset fails rather than skips.
+      - name: A signed build must name the identity it will be checked against
+        if: env.HAS_SIGNING == 'true'
+        env:
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "::error::HAS_SIGNING is true but the SIGNING_IDENTITY secret is not set — nothing to assert the build's identity against. Add it (see docs/signing.md) before this release can ship signed."
+            exit 1
+          fi
+          echo "SIGNING_IDENTITY is set; the build will assert every artefact against it."
+
       # Signed and notarised when the secrets exist, unsigned otherwise, so a
       # fork (and this repo before the certificate landed) still gets a working
       # DMG rather than a failed release. `CSC_LINK` is the base64 of a
@@ -514,6 +534,13 @@ jobs:
           # Auto-discovery would otherwise pick up whatever identity happens to
           # be on the runner; with no secret set we mean *unsigned*, explicitly.
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_SIGNING }}
+          # Read by `scripts/verifySigningIdentity.js`, which `dist:signed`
+          # chains after electron-builder, so the build asserts its own
+          # signature before CI does anything else with it. Absent here that
+          # assertion refuses — correctly, an unnamed target and no check being
+          # the same gap — and the signed release then fails at the last command
+          # of the build. Which is what it did between `#466` and this fix.
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
         run: |
           if [ "$HAS_SIGNING" = "true" ]; then
             npm run dist:signed
@@ -522,68 +549,22 @@ jobs:
             npm run dist
           fi
 
-      # electron-builder reported success once while signed with an unrelated
-      # local identity (docs/signing.md) — `codesign`/`spctl` both accept that
-      # happily, so "signed" is exactly the answer that was true then and
-      # wrong. This asserts what the identity must EQUAL and fails the release
-      # rather than publish a DMG signed as the wrong entity with a green log.
+      # The signature is asserted by the build itself: `dist:signed` ends in
+      # `node scripts/verifySigningIdentity.js`, which walks `dist/`, requires
+      # every .app's authority line to contain $SIGNING_IDENTITY, requires
+      # Gatekeeper to answer `source=Notarized Developer ID`, requires every
+      # DMG to be stapled, and fails when it found nothing to check at all.
       #
-      # The identity string itself (which entity users see in Gatekeeper) is
-      # not this workflow's decision, so it is not written here: SIGNING_IDENTITY
-      # is a secret, and choosing its value is a configuration act rather than
-      # a code change. HAS_SIGNING true with no SIGNING_IDENTITY set fails
-      # rather than skips — an unnamed target and no check are the same silent
-      # gap this step exists to close.
-      - name: Verify the signing identity, not just that something is signed
-        if: env.HAS_SIGNING == 'true'
-        env:
-          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
-        run: |
-          set -euo pipefail
-          if [ -z "$SIGNING_IDENTITY" ]; then
-            echo "::error::HAS_SIGNING is true but the SIGNING_IDENTITY secret is not set — nothing to assert the build's identity against. Add it (see docs/signing.md) before this release can ship signed."
-            exit 1
-          fi
-
-          # electron-builder stages one .app per built arch under dist/ before
-          # packing each into its DMG. Walked rather than named: the exact
-          # per-arch folder is electron-builder's own convention, not this
-          # repo's, and the check must survive it changing.
-          apps_checked=0
-          while IFS= read -r -d '' app; do
-            apps_checked=$((apps_checked + 1))
-            authority=$(codesign -dv --verbose=4 "$app" 2>&1)
-            echo "$authority"
-            if ! grep -qF "$SIGNING_IDENTITY" <<<"$authority"; then
-              echo "::error::$app is not signed as '$SIGNING_IDENTITY'"
-              exit 1
-            fi
-            verdict=$(spctl -a -vvv -t install "$app" 2>&1)
-            echo "$verdict"
-            if ! grep -q "source=Notarized Developer ID" <<<"$verdict"; then
-              echo "::error::$app did not pass Gatekeeper as a notarized Developer ID build"
-              exit 1
-            fi
-          done < <(find dist -maxdepth 3 -name '*.app' -print0)
-          if [ "$apps_checked" -eq 0 ]; then
-            echo "::error::HAS_SIGNING is true but no .app bundle was found under dist/ to verify"
-            exit 1
-          fi
-
-          dmgs_checked=0
-          while IFS= read -r -d '' dmg; do
-            dmgs_checked=$((dmgs_checked + 1))
-            # A signature that verifies but is not stapled still shows the
-            # damaged-app dialog on a machine that has never been online.
-            xcrun stapler validate "$dmg"
-          done < <(find dist -maxdepth 1 -name '*.dmg' -print0)
-          if [ "$dmgs_checked" -eq 0 ]; then
-            echo "::error::HAS_SIGNING is true but no .dmg was found under dist/ to validate"
-            exit 1
-          fi
-
-          echo "Verified $apps_checked app bundle(s) and $dmgs_checked DMG(s) as $SIGNING_IDENTITY, notarized, and stapled."
-
+      # This workflow used to repeat all four rules in shell. Two copies of a
+      # release gate is one copy that can drift, so the shell copy is gone and
+      # the tested one stayed. `tests/unit/distSignedChainsVerifier.test.ts`
+      # keeps the chaining honest: deleting that one line in `package.json`
+      # would now silently remove the entire assertion.
+      #
+      # Why it must equal a NAMED identity rather than merely be signed:
+      # electron-builder reported success once while signed with an unrelated
+      # local identity (docs/signing.md), and `codesign`/`spctl` both accept
+      # that happily — so "signed" was the answer that was true then and wrong.
       # The app's update check reads this release's tag, so the tag is the
       # version users are offered. Blockmaps are useless to the check-only
       # client and are attached because electron-updater wants them if
