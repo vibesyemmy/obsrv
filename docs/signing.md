@@ -119,6 +119,24 @@ one. `HAS_SIGNING` true with `SIGNING_IDENTITY` unset fails the release rather
 than skipping the check, so a signed release can't ship without that decision
 having been made.
 
+**A local `npm run dist:signed` asserts the same thing.** It runs
+`scripts/verifySigningIdentity.js` after electron-builder and fails the build
+unless every `.app` it produced names `SIGNING_IDENTITY`, Gatekeeper reports a
+notarized Developer ID build, and every `.dmg` is stapled — the same four rules
+the release job applies, and a build that produced nothing fails rather than
+passing with zero bundles checked.
+
+**Set `SIGNING_IDENTITY` in your shell to use it**, the same exact authority line
+the secret carries. Without it the script refuses rather than skipping, because §3
+is the case where "it signed" was true and wrong: on a machine holding both a
+Developer ID identity and a local one, `CSC_IDENTITY_AUTO_DISCOVERY` has two
+candidates and no way to know which was meant.
+
+**The rules are written twice** — here as a script, and as inline steps in
+`ci.yml`. That is a drift risk and it is deliberate for now: replacing a working
+release gate in the same change that introduces its replacement would give a
+failure two possible causes. The workflow calling this script is the follow-up.
+
 Certificates expire after five years, API keys do not expire but can be revoked.
 When the certificate is replaced, `CSC_LINK` and `CSC_KEY_PASSWORD` are the only
 secrets that need updating.
