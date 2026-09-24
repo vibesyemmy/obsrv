@@ -141,7 +141,16 @@ the script refuses when it is unset. The first signed release would have built,
 notarised, and then failed at the last command of the build, with the workflow's
 own copy of the check sitting in the step after the one that failed.
 
-So the shell copy is gone and the tested one stayed. What guards it now:
+So the shell copy is gone and the tested one stayed. **It was never redundancy.**
+Redundancy is two different mechanisms checking the same fact from different
+angles; this was two hand-copies of the same shell rules with nothing asserting
+that the copies agreed, which is why one of them could be wrong while the other
+looked like cover. The single surviving implementation is also the more verified
+one — eleven sabotage-tested unit cases against zero automated coverage on the
+inline bash — so removing the text removed maintenance surface rather than rigour.
+Do not restore the second copy in the name of belt-and-braces.
+
+What guards it now:
 
 - `ci.yml` sets `SIGNING_IDENTITY` on the **release job**, not on a step. The
   defect was a step that needed the variable and did not have it, and per-step
