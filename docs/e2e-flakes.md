@@ -1239,11 +1239,14 @@ it directly — check whether tracing is configured to retain on every attempt o
 Short of that, checking whether the loading strip's own transition can outlive a fast `fill`-then-
 `press` sequence is the next cheapest thing to look at.
 
-**One thing worth weighing on the next sighting, not settled here.** `screenshot: 'only-on-failure'`
-is configured, so a screenshot should exist for the failing attempt specifically — and the artifact's
-own layout says it does not by absence rather than by omission: the failing attempt's own directory
-is present in the zip, holding only `error-context.md`, not simply missing because Playwright
-discarded a superseded attempt's output (Henry, Idris — #2354/#2355). A page too unresponsive to
-screenshot is weak evidence for "the app was generally unresponsive" over "that specific input
-changed state" — a merely covered or re-rendered input would still be a perfectly screenshottable
-page. Weak, not settled: it does not distinguish the two readings above, only leans one of them.
+**One thing worth checking on the next sighting, deliberately not answered here.** `screenshot:
+'only-on-failure'` is configured, and the failing attempt's own directory in this run's artifact is
+present but holds only `error-context.md` — no PNG. That absence was first read as evidence toward
+"the app was generally unresponsive" (a wedged page failing to screenshot itself), but the read does
+not hold: nothing in this repo's own artifacts has been shown to confirm `screenshot: 'only-on-failure'`
+produces a file under this harness at all, and `playwright.config.ts` already documents Electron
+silently ignoring a comparable trace setting (`screenshots: true, snapshots: true` capturing neither).
+An empty directory is exactly what an always-empty setting and a wedged page would both look like — so
+the right question for the next sighting is not "was the app unresponsive" but **"does this harness
+ever write a failure screenshot at all"**, checked against a run where something failed twice for real
+(Henry, #2360). Unanswered here on purpose, since answering it wrongly is worse than leaving it open.
