@@ -1214,13 +1214,24 @@ test's very first action, well before the canvas is ever measured or that diagno
 it as a dated sighting on that card would credit a mechanism (`frameSent`/`painting`) that was never
 queried.
 
-**Two readings the log cannot separate**, the same shape as `tab-switch-preset.spec.ts:89` above:
-`fill` succeeded (the locator resolved with the right value already set), so the input existed and was
-interactable a moment earlier — either something about that specific input changed state between `fill`
-and `press` (covered, re-rendered, refocused elsewhere), or the app (or the CI runner) was generally
-unresponsive for the whole 30 s budget and any interaction would have timed out the same way. Nothing
-in this run's log distinguishes the two.
+**Playwright's own semantics narrow it further than "the app was slow".** `fill` succeeded — the
+locator resolved with the right value already set, so the element existed and was interactable a
+moment earlier. `press` waits for *actionability*, and a selector failure fails fast; thirty full
+seconds means the element was found and stayed **un-actionable** — covered, disabled, or unfocusable
+— rather than the runner being generally starved (Henry, #2343).
 
-**If it recurs**, the thing worth capturing is whether *anything* was happening in the app at the moment
-of the timeout — a `status` read taken from a second connection, or the renderer's own frame counter,
-rather than assuming the input itself is what misbehaved.
+**A specific, testable candidate, unverified: the loading strip that lives inside the URL field
+itself** (`feat/url-loading-strip` put a CSS-transition element in that exact box). An overlay
+sitting on top of the input for the whole budget is exactly what makes `press` wait forever rather
+than fail immediately.
+
+**What the artifact available for this run can and cannot say.** `playwright-flaky` on this run
+holds a trace, but only for the **retry** (the passing attempt, 339 ms) plus the failing attempt's
+plain-text `error-context.md` — no screenshot or DOM snapshot from the failure itself. So the
+loading-strip hypothesis is the leading one, not a confirmed one: nothing in what was captured shows
+the input's actual covered/disabled state at second thirty.
+
+**If it recurs**, a trace with screenshots on the *first* attempt (not just the retry) would settle
+it directly — check whether tracing is configured to retain on every attempt or only the last one.
+Short of that, checking whether the loading strip's own transition can outlive a fast `fill`-then-
+`press` sequence is the next cheapest thing to look at.
