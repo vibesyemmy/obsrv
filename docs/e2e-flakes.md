@@ -1210,11 +1210,12 @@ own test — which made the failure look like a sighting of that card at first g
 The card's recurrence signature is a specific assertion (`the canvas stayed blank: N white of M pixels`)
 inside a `try`/`catch` that reads `frameSent()` and `session.painting` on failure, well into the body of
 the test. This failure is at the test's **very first action** — `page.fill` then
-`page.press('.url-form input', 'Enter')`, line 93 in the file this run actually failed against (now
-line 99: this entry's own comment, added to the spec alongside it, pushed the line down six) — well
-before the canvas is ever measured or that diagnostic block runs. Filing
-it as a dated sighting on that card would credit a mechanism (`frameSent`/`painting`) that was never
-queried.
+`page.press('.url-form input', 'Enter')`, before the test has navigated anywhere, let alone measured the
+canvas or run that diagnostic block. (No line number given on purpose: the first version of this entry
+named one, and the comment added to the spec pointing back at this entry pushed that exact line down six
+— the identical class of error this entry exists to warn against, caught by Idris before it shipped.)
+Filing it as a dated sighting on that card would credit a mechanism (`frameSent`/`painting`) that was
+never queried.
 
 **Playwright's own semantics narrow it further than "the app was slow".** `fill` succeeded — the
 locator resolved with the right value already set, so the element existed and was interactable a
@@ -1237,3 +1238,12 @@ the input's actual covered/disabled state at second thirty.
 it directly — check whether tracing is configured to retain on every attempt or only the last one.
 Short of that, checking whether the loading strip's own transition can outlive a fast `fill`-then-
 `press` sequence is the next cheapest thing to look at.
+
+**One thing worth weighing on the next sighting, not settled here.** `screenshot: 'only-on-failure'`
+is configured, so a screenshot should exist for the failing attempt specifically — and the artifact's
+own layout says it does not by absence rather than by omission: the failing attempt's own directory
+is present in the zip, holding only `error-context.md`, not simply missing because Playwright
+discarded a superseded attempt's output (Henry, Idris — #2354/#2355). A page too unresponsive to
+screenshot is weak evidence for "the app was generally unresponsive" over "that specific input
+changed state" — a merely covered or re-rendered input would still be a perfectly screenshottable
+page. Weak, not settled: it does not distinguish the two readings above, only leans one of them.
