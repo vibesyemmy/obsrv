@@ -93,6 +93,20 @@ describe('validateFlow', () => {
     expect(result.rejections.map(r => r.index)).toEqual([1, 2, 3])
   })
 
+  it('validates a step whose passthrough data includes a "reason" field — the discriminator must not key off it', () => {
+    const result = validateFlow([{ action: 'navigate', target: 'https://x.test', reason: 'verify the cart persists' }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps).toEqual([{ action: 'navigate', target: 'https://x.test', reason: 'verify the cart persists' }])
+  })
+
+  it('validates a step whose passthrough data includes an "index" field', () => {
+    const result = validateFlow([{ action: 'navigate', index: 7 }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps).toEqual([{ action: 'navigate', index: 7 }])
+  })
+
   it('carries arbitrary extra fields on a step through unvalidated', () => {
     const result = validateFlow([{ action: 'navigate', url: 'https://example.com', timeoutMs: 5000, note: 'first step' }])
     expect(result.ok).toBe(true)

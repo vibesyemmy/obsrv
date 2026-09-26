@@ -37,25 +37,37 @@ export type ValidateFlowResult = { ok: true; flow: Flow } | { ok: false; rejecti
 
 const typeOf = (v: unknown): string => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)
 
-function validateStep(step: unknown, index: number): FlowStepRejection | FlowStep {
+/**
+ * Tagged on `ok` rather than distinguished by which fields are present: a
+ * step's passthrough fields are unvalidated and a QA-flow step's most likely
+ * extra key is itself named `reason` (annotating why the step exists), which
+ * would make `'reason' in result` misclassify a valid step as a rejection.
+ * `ok`/`step`/`rejection` are this function's own keys, never the user's.
+ */
+type StepValidation = { ok: true; step: FlowStep } | { ok: false; rejection: FlowStepRejection }
+
+function validateStep(step: unknown, index: number): StepValidation {
   if (typeof step !== 'object' || step === null || Array.isArray(step)) {
-    return { index, reason: `step ${index} must be an object, got ${typeOf(step)}` }
+    return { ok: false, rejection: { index, reason: `step ${index} must be an object, got ${typeOf(step)}` } }
   }
   const record = step as Record<string, unknown>
   if (!('action' in record)) {
-    return { index, reason: `step ${index} is missing "action"` }
+    return { ok: false, rejection: { index, reason: `step ${index} is missing "action"` } }
   }
   const { action } = record
   if (typeof action !== 'string') {
-    return { index, reason: `step ${index}'s "action" must be a string, got ${typeOf(action)}` }
+    return { ok: false, rejection: { index, reason: `step ${index}'s "action" must be a string, got ${typeOf(action)}` } }
   }
   if (!isControlCommand(action)) {
-    return { index, reason: `step ${index}'s "action" (${action}) is not a known control command; valid: ${CONTROL_COMMANDS.join(', ')}` }
+    return {
+      ok: false,
+      rejection: { index, reason: `step ${index}'s "action" (${action}) is not a known control command; valid: ${CONTROL_COMMANDS.join(', ')}` },
+    }
   }
   if ('target' in record && record.target !== undefined && typeof record.target !== 'string') {
-    return { index, reason: `step ${index}'s "target" must be a string, got ${typeOf(record.target)}` }
+    return { ok: false, rejection: { index, reason: `step ${index}'s "target" must be a string, got ${typeOf(record.target)}` } }
   }
-  return { ...record, action } as FlowStep
+  return { ok: true, step: { ...record, action } as FlowStep }
 }
 
 /** Parses and validates a JSON step list off the wire, off disk, or off an
@@ -69,8 +81,8 @@ export function validateFlow(input: unknown): ValidateFlowResult {
   const rejections: FlowStepRejection[] = []
   input.forEach((raw, index) => {
     const result = validateStep(raw, index)
-    if ('reason' in result) rejections.push(result)
-    else steps.push(result)
+    if (result.ok) steps.push(result.step)
+    else rejections.push(result.rejection)
   })
   if (rejections.length > 0) return { ok: false, rejections }
   return { ok: true, flow: { steps } }
