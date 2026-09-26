@@ -60,7 +60,38 @@ describe('runFlow', () => {
     expect(result.steps[0]).toMatchObject({ status: 'ran' })
     expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed', error: 'obsrv control click: no such element' })
     expect(result.steps[2]).toEqual({ index: 2, action: 'reload', status: 'not-reached' })
-    expect(calls).toEqual(['navigate', 'captureRaster', 'click']) // reload's captureRaster and the step itself never ran
+    // The failed step still gets its settle probe (below); only the
+    // not-reached step after it is skipped entirely.
+    expect(calls).toEqual(['navigate', 'captureRaster', 'click', 'captureRaster'])
+  })
+
+  it('reads the settle probe on a FAILED step too — the screen at the moment it failed distinguishes a timing problem from a settled-page defect', async () => {
+    const result = await runFlow(flow([{ action: 'click', target: '.missing' }]), {
+      call: async command => {
+        if (command === 'click') throw new Error('no such element')
+        return { data: 'y', width: 1, height: 1, settled: false, unsettledReason: 'animating' }
+      },
+    })
+    expect(result.steps[0]).toMatchObject({
+      status: 'failed',
+      error: 'no such element',
+      settled: false,
+      unsettledReason: 'animating',
+      data: 'y',
+    })
+  })
+
+  it('a not-reached step never gets a settle probe at all — nothing about it ran', async () => {
+    const calls: string[] = []
+    const result = await runFlow(flow([{ action: 'click' }, { action: 'reload' }]), {
+      call: async command => {
+        calls.push(command)
+        if (command === 'click') throw new Error('x')
+        return { settled: true }
+      },
+    })
+    expect(result.steps[1]).toEqual({ index: 1, action: 'reload', status: 'not-reached' })
+    expect(calls).toEqual(['click', 'captureRaster']) // reload's own captureRaster never happens
   })
 
   it("a settle check that itself fails does not fail the step — it just can't say", async () => {

@@ -39,8 +39,11 @@ export interface FlowStepResult {
   error?: string
   /** Whether the page had stopped moving by the time this step's settle
    *  check ran — the same fields `obsrv_capture` already emits, threaded
-   *  through per step rather than only at the end. Absent when the step did
-   *  not run, or its settle check itself could not be answered. */
+   *  through per step rather than only at the end. Read on a failed step
+   *  too: whether the page was still animating when the action failed
+   *  distinguishes a timing problem from a settled-page defect. Absent when
+   *  the step never ran at all (`not-reached`), or the settle check itself
+   *  could not be answered. */
   settled?: boolean
   unsettledReason?: string
   /** The settle check's own capture, base64 PNG — `captureRaster` produces
@@ -88,19 +91,22 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       error = e instanceof Error ? e.message : String(e)
     }
 
+    // Run whether the step's own action succeeded or not: the screen at the
+    // moment a step failed is the most useful artefact in a QA report, and
+    // whether the page was still animating when it failed is a different
+    // bug from the same click failing on a settled page. The probe is its
+    // own try/catch, so a capture that cannot run on a broken app just
+    // says nothing rather than turning the step's own failure into two.
     let settled: boolean | undefined
     let unsettledReason: string | undefined
     let data: string | undefined
-    if (error === undefined) {
-      try {
-        const capture = await deps.call('captureRaster', {})
-        settled = typeof capture['settled'] === 'boolean' ? capture['settled'] : undefined
-        unsettledReason = typeof capture['unsettledReason'] === 'string' ? capture['unsettledReason'] : undefined
-        data = typeof capture['data'] === 'string' ? capture['data'] : undefined
-      } catch {
-        // The step's own action succeeded; a settle check that itself fails
-        // just can't say — it does not make the step a failure.
-      }
+    try {
+      const capture = await deps.call('captureRaster', {})
+      settled = typeof capture['settled'] === 'boolean' ? capture['settled'] : undefined
+      unsettledReason = typeof capture['unsettledReason'] === 'string' ? capture['unsettledReason'] : undefined
+      data = typeof capture['data'] === 'string' ? capture['data'] : undefined
+    } catch {
+      // Can't say — does not change the step's own ran/failed status.
     }
 
     steps.push({
