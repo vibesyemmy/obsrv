@@ -36,12 +36,13 @@ sequence over **one held session** — no new IPC, no new protocol.
 `#472` merged (`9fe0ed3`). `src/mcp/flowRunner.ts` (`runFlow`/`startFlow`) + `src/mcp/flowLock.ts`.
 Idris PASS'd it at `33b8672` after two real review passes:
 
-- **First push (`e01546c`) had three defects**, all found by Henry reading and running the code,
-  each independently confirmed by Idris's own sabotage: steps after a failure were silently
-  absent rather than marked `not-reached` (the report's front page can't state coverage from data
-  that isn't there); `releaseFlowLock` bare-unlinked instead of checking the pid was still its
-  own; and a `finally`-release test that never actually exercised a throw, closed with a case that
-  does.
+- **First push (`e01546c`) had three defects, found by two different methods.** Henry reading and
+  running the code found two: steps after a failure were silently absent rather than marked
+  `not-reached` (the report's front page can't state coverage from data that isn't there); and
+  `releaseFlowLock` bare-unlinked instead of checking the pid was still its own. Idris, sabotaging
+  the test suite itself before reading Henry's review, found a third and distinct one: the
+  `finally`-release test never actually exercised a throw, since a step's own rejection is caught
+  inside `runFlow` and never reaches it — closed with a case that does.
 - **Second pass, non-blocking:** the settle probe (`captureRaster`, already producing `data` and
   `settled`) now runs on a failed step too, not only a succeeded one — the screen and the reason
   at the moment of failure distinguishes a timing problem from a settled-page defect, confirmed by
