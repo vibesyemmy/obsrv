@@ -1,0 +1,146 @@
+import { describe, expect, it } from 'vitest'
+import type { Flow } from '../../src/shared/flow'
+import { flowRefusalMessage, runFlow, startFlow, type FlowLockDeps, type FlowRunnerDeps } from '../../src/mcp/flowRunner'
+
+function flow(steps: Flow['steps']): Flow {
+  return { steps }
+}
+
+describe('runFlow', () => {
+  it('issues every step over the same held call, in order', async () => {
+    const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
+    const deps: Pick<FlowRunnerDeps, 'call'> = {
+      call: async (command, payload = {}) => {
+        calls.push({ command, payload })
+        if (command === 'captureRaster') return { data: 'x', width: 1, height: 1, settled: true }
+        return { ok: true }
+      },
+    }
+    const f = flow([
+      { action: 'navigate', url: 'https://x.test' },
+      { action: 'click', target: '.checkout' },
+    ])
+    const result = await runFlow(f, deps)
+    expect(result.steps).toHaveLength(2)
+    expect(result.steps[0]).toMatchObject({ index: 0, action: 'navigate', ok: true, settled: true })
+    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', target: '.checkout', ok: true, settled: true })
+    // Each step's own action, then one settle check, over the same `call` —
+    // never re-resolved, never skipped.
+    expect(calls.map(c => c.command)).toEqual(['navigate', 'captureRaster', 'click', 'captureRaster'])
+    expect(calls[0]!.payload).toEqual({ url: 'https://x.test' })
+    expect(calls[2]!.payload).toEqual({ target: '.checkout' })
+  })
+
+  it("records settled: false and unsettledReason when a step's settle check says so", async () => {
+    const deps: Pick<FlowRunnerDeps, 'call'> = {
+      call: async command =>
+        command === 'captureRaster' ? { data: 'x', width: 1, height: 1, settled: false, unsettledReason: 'animating' } : { ok: true },
+    }
+    const result = await runFlow(flow([{ action: 'reload' }]), deps)
+    expect(result.steps[0]).toMatchObject({ ok: true, settled: false, unsettledReason: 'animating' })
+  })
+
+  it('stops at a step whose own action call rejects, and says why — later steps never ran', async () => {
+    const calls: string[] = []
+    const deps: Pick<FlowRunnerDeps, 'call'> = {
+      call: async command => {
+        calls.push(command)
+        if (command === 'click') throw new Error('obsrv control click: no such element')
+        return { ok: true, settled: true }
+      },
+    }
+    const result = await runFlow(
+      flow([{ action: 'navigate', url: 'https://x.test' }, { action: 'click', target: '.missing' }, { action: 'reload' }]),
+      deps,
+    )
+    expect(result.steps).toHaveLength(2)
+    expect(result.steps[0]).toMatchObject({ ok: true })
+    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', ok: false, error: 'obsrv control click: no such element' })
+    expect(calls).toEqual(['navigate', 'captureRaster', 'click']) // reload's captureRaster and the whole third step never ran
+  })
+
+  it("a settle check that itself fails does not fail the step — it just can't say", async () => {
+    const deps: Pick<FlowRunnerDeps, 'call'> = {
+      call: async command => {
+        if (command === 'captureRaster') throw new Error('timed out')
+        return { ok: true }
+      },
+    }
+    const result = await runFlow(flow([{ action: 'reload' }]), deps)
+    expect(result.steps[0]).toMatchObject({ ok: true })
+    expect(result.steps[0]!.settled).toBeUndefined()
+  })
+
+  it('runs an empty flow to an empty result', async () => {
+    const result = await runFlow(flow([]), { call: async () => ({}) })
+    expect(result.steps).toEqual([])
+  })
+})
+
+function lockDeps(opts: { file?: string | null; alivePids?: Set<number> } = {}): FlowLockDeps {
+  const state = { file: opts.file ?? null }
+  const alive = opts.alivePids ?? new Set<number>()
+  return {
+    read: async () => state.file,
+    createExclusive: async contents => {
+      if (state.file !== null) throw new Error('EEXIST')
+      state.file = contents
+    },
+    remove: async () => {
+      state.file = null
+    },
+    isAlive: pid => alive.has(pid),
+    now: () => 1_700_000_010_000,
+  }
+}
+
+describe('startFlow', () => {
+  it('runs the flow when the lock is free, and releases it afterward', async () => {
+    const lock = lockDeps()
+    const calls: string[] = []
+    const result = await startFlow(flow([{ action: 'reload' }]), {
+      call: async command => {
+        calls.push(command)
+        return command === 'captureRaster' ? { settled: true } : { ok: true }
+      },
+      lock,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.result.steps).toHaveLength(1)
+    expect(await lock.read()).toBeNull() // released
+  })
+
+  it('refuses loudly when a live flow already holds the lock, naming who and for how long', async () => {
+    const lock = lockDeps({
+      file: JSON.stringify({ pid: 4242, startedAt: '2026-09-26T09:00:00.000Z' }),
+      alivePids: new Set([4242]),
+    })
+    const result = await startFlow(flow([{ action: 'reload' }]), {
+      call: async () => ({ ok: true }),
+      lock,
+      now: () => Date.parse('2026-09-26T09:00:40.000Z'),
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected refusal')
+    expect(result.refused.heldBy).toEqual({ pid: 4242, startedAt: '2026-09-26T09:00:00.000Z' })
+    expect(result.refused.ageMs).toBe(40_000)
+    expect(flowRefusalMessage(result.refused)).toBe(
+      'a flow started 40s ago by pid 4242 holds this app; refused rather than queued, since a queued action would land at an unpredictable step boundary inside that flow.',
+    )
+  })
+
+  it('releases the lock even when a step fails partway through', async () => {
+    const lock = lockDeps()
+    const result = await startFlow(flow([{ action: 'click', target: '.missing' }]), {
+      call: async () => {
+        throw new Error('no such element')
+      },
+      lock,
+    })
+    expect(result.ok).toBe(true) // startFlow succeeded at running the flow; the step itself records the failure
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.result.steps[0]).toMatchObject({ ok: false })
+    expect(await lock.read()).toBeNull() // still released, not left behind by the failure
+  })
+})
