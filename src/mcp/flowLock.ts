@@ -77,7 +77,17 @@ export async function acquireFlowLock(deps: FlowLockDeps): Promise<AcquireFlowLo
   }
 }
 
-export async function releaseFlowLock(deps: Pick<FlowLockDeps, 'remove'>): Promise<void> {
+/** Removes the lock only if it is still ours. `remove()` alone would delete
+ *  whatever `flow-lock.json` currently holds — if it was ever replaced while
+ *  this flow ran (a manual clear then another acquire, or a reused pid), a
+ *  bare unlink would delete someone else's live lock and let a third caller
+ *  walk in. A pid comparison against the file's own current contents is
+ *  cheap and closes it. */
+export async function releaseFlowLock(deps: Pick<FlowLockDeps, 'read' | 'remove'>): Promise<void> {
+  const raw = await deps.read()
+  if (raw === null) return
+  const holder = parseFlowLock(raw)
+  if (holder !== null && holder.pid !== process.pid) return // no longer ours -- leave it alone
   await deps.remove()
 }
 

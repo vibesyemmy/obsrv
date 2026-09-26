@@ -86,8 +86,27 @@ describe('acquireFlowLock', () => {
 })
 
 describe('releaseFlowLock', () => {
-  it('removes the lock', async () => {
-    const d = deps({ file: JSON.stringify({ pid: process.pid, startedAt: 'x' }) })
+  it('removes the lock when it is still ours', async () => {
+    const d = deps({ file: JSON.stringify({ pid: process.pid, startedAt: '2026-09-26T09:00:00.000Z' }) })
+    await releaseFlowLock(d)
+    expect(d.file).toBeNull()
+  })
+
+  it('is a no-op when the lock is already gone', async () => {
+    const d = deps()
+    await releaseFlowLock(d)
+    expect(d.file).toBeNull()
+  })
+
+  it('does NOT delete a lock now held by a different pid — a bare unlink would delete someone else’s live lock', async () => {
+    const d = deps({ file: JSON.stringify({ pid: 9999, startedAt: '2026-09-26T09:10:00.000Z' }) })
+    await releaseFlowLock(d)
+    expect(d.file).not.toBeNull() // left alone
+    expect(JSON.parse(d.file!).pid).toBe(9999)
+  })
+
+  it('removes an unparseable lock file — nothing could identify it as a live holder either', async () => {
+    const d = deps({ file: 'not json' })
     await releaseFlowLock(d)
     expect(d.file).toBeNull()
   })

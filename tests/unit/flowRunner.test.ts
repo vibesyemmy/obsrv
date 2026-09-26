@@ -22,8 +22,8 @@ describe('runFlow', () => {
     ])
     const result = await runFlow(f, deps)
     expect(result.steps).toHaveLength(2)
-    expect(result.steps[0]).toMatchObject({ index: 0, action: 'navigate', ok: true, settled: true })
-    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', target: '.checkout', ok: true, settled: true })
+    expect(result.steps[0]).toMatchObject({ index: 0, action: 'navigate', status: 'ran', settled: true, data: 'x' })
+    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', target: '.checkout', status: 'ran', settled: true, data: 'x' })
     // Each step's own action, then one settle check, over the same `call` —
     // never re-resolved, never skipped.
     expect(calls.map(c => c.command)).toEqual(['navigate', 'captureRaster', 'click', 'captureRaster'])
@@ -37,10 +37,10 @@ describe('runFlow', () => {
         command === 'captureRaster' ? { data: 'x', width: 1, height: 1, settled: false, unsettledReason: 'animating' } : { ok: true },
     }
     const result = await runFlow(flow([{ action: 'reload' }]), deps)
-    expect(result.steps[0]).toMatchObject({ ok: true, settled: false, unsettledReason: 'animating' })
+    expect(result.steps[0]).toMatchObject({ status: 'ran', settled: false, unsettledReason: 'animating' })
   })
 
-  it('stops at a step whose own action call rejects, and says why — later steps never ran', async () => {
+  it('stops running at a step whose own action call rejects, but still records every step — later ones as not-reached', async () => {
     const calls: string[] = []
     const deps: Pick<FlowRunnerDeps, 'call'> = {
       call: async command => {
@@ -53,10 +53,14 @@ describe('runFlow', () => {
       flow([{ action: 'navigate', url: 'https://x.test' }, { action: 'click', target: '.missing' }, { action: 'reload' }]),
       deps,
     )
-    expect(result.steps).toHaveLength(2)
-    expect(result.steps[0]).toMatchObject({ ok: true })
-    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', ok: false, error: 'obsrv control click: no such element' })
-    expect(calls).toEqual(['navigate', 'captureRaster', 'click']) // reload's captureRaster and the whole third step never ran
+    // Every input step gets a result — absence must never be how "not
+    // attempted" is expressed, since it is indistinguishable from "not in
+    // the flow" and the report's front page has to state coverage from data.
+    expect(result.steps).toHaveLength(3)
+    expect(result.steps[0]).toMatchObject({ status: 'ran' })
+    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed', error: 'obsrv control click: no such element' })
+    expect(result.steps[2]).toEqual({ index: 2, action: 'reload', status: 'not-reached' })
+    expect(calls).toEqual(['navigate', 'captureRaster', 'click']) // reload's captureRaster and the step itself never ran
   })
 
   it("a settle check that itself fails does not fail the step — it just can't say", async () => {
@@ -67,8 +71,9 @@ describe('runFlow', () => {
       },
     }
     const result = await runFlow(flow([{ action: 'reload' }]), deps)
-    expect(result.steps[0]).toMatchObject({ ok: true })
+    expect(result.steps[0]).toMatchObject({ status: 'ran' })
     expect(result.steps[0]!.settled).toBeUndefined()
+    expect(result.steps[0]!.data).toBeUndefined()
   })
 
   it('runs an empty flow to an empty result', async () => {
@@ -140,7 +145,33 @@ describe('startFlow', () => {
     })
     expect(result.ok).toBe(true) // startFlow succeeded at running the flow; the step itself records the failure
     if (!result.ok) throw new Error('expected ok')
-    expect(result.result.steps[0]).toMatchObject({ ok: false })
+    expect(result.result.steps[0]).toMatchObject({ status: 'failed' })
     expect(await lock.read()).toBeNull() // still released, not left behind by the failure
+  })
+
+  it('does not release a lock that is no longer its own — release verifies the pid, not just "the file is gone now"', async () => {
+    const lock = lockDeps()
+    // A hostile/unusual deps: after runFlow completes, something else has
+    // taken the lock file over (simulating it being cleared and re-acquired
+    // by a different process while this flow ran).
+    let handed = false
+    const wrapped: FlowLockDeps = {
+      ...lock,
+      read: async () => {
+        if (!handed) return lock.read()
+        return JSON.stringify({ pid: 55555, startedAt: '2026-09-26T09:20:00.000Z' })
+      },
+    }
+    const result = await startFlow(flow([{ action: 'reload' }]), {
+      call: async command => {
+        handed = true // by the time the runner finishes, someone else "owns" the file
+        return command === 'captureRaster' ? { settled: true } : { ok: true }
+      },
+      lock: wrapped,
+    })
+    expect(result.ok).toBe(true)
+    const raw = await wrapped.read()
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw!).pid).toBe(55555) // left alone, not deleted out from under its new owner
   })
 })

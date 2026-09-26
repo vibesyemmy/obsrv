@@ -16,21 +16,38 @@ import { acquireFlowLock, defaultFlowLockDeps, releaseFlowLock, type AcquireFlow
 
 export type { FlowLockDeps, FlowLockHolder }
 
+/**
+ * `ran`: the step's own action call succeeded (its settle check may still
+ * have failed — that only means `settled`/`unsettledReason` are absent).
+ * `failed`: the step's own action call rejected.
+ * `not-reached`: a step never ran because an earlier one failed — its own
+ * distinct state, not merely absent, so a reader can never mistake "not
+ * attempted" for "not in the flow". The report's front page is specified to
+ * lead with what was not covered; it cannot state that from data that does
+ * not contain it.
+ */
+export type FlowStepStatus = 'ran' | 'failed' | 'not-reached'
+
 export interface FlowStepResult {
   index: number
   action: FlowStep['action']
   target?: string
-  ok: boolean
-  /** The step's own control-server reply, when its call succeeded. */
+  status: FlowStepStatus
+  /** The step's own control-server reply, when it ran. */
   reply?: Record<string, unknown>
   /** The step's own call's rejection message, when it failed. */
   error?: string
   /** Whether the page had stopped moving by the time this step's settle
    *  check ran — the same fields `obsrv_capture` already emits, threaded
-   *  through per step rather than only at the end. Absent when the settle
-   *  check itself could not be answered (a failed step, or a failed check). */
+   *  through per step rather than only at the end. Absent when the step did
+   *  not run, or its settle check itself could not be answered. */
   settled?: boolean
   unsettledReason?: string
+  /** The settle check's own capture, base64 PNG — `captureRaster` produces
+   *  one to answer `settled` whether or not anything asked for it, so this
+   *  reuses it rather than paying for (and re-perturbing timing with) a
+   *  second capture when a per-step image is wanted later. */
+  data?: string
 }
 
 export interface FlowRunResult {
@@ -43,15 +60,24 @@ export interface FlowRunnerDeps {
 }
 
 /** Runs every step of a validated flow in sequence over the one `call`
- *  given — nothing here re-resolves the app per step. Stops at the first
- *  step whose own action call rejects: later steps assume the flow reached
- *  a particular point, and running them against an unknown app state would
- *  report on a flow that never actually happened. */
+ *  given — nothing here re-resolves the app per step. Stops running at the
+ *  first step whose own action call rejects: later steps assume the flow
+ *  reached a particular point, and running them against an unknown app
+ *  state would report on a flow that never actually happened. Every step
+ *  still gets a result — the ones after a failure are recorded as
+ *  `not-reached` rather than left out. */
 export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRunResult> {
   const steps: FlowStepResult[] = []
+  let stopped = false
   for (let index = 0; index < flow.steps.length; index++) {
     const step = flow.steps[index]!
     const { action, target, ...rest } = step
+
+    if (stopped) {
+      steps.push({ index, action, ...(target !== undefined ? { target } : {}), status: 'not-reached' })
+      continue
+    }
+
     const payload = target !== undefined ? { target, ...rest } : rest
 
     let reply: Record<string, unknown> | undefined
@@ -64,11 +90,13 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
 
     let settled: boolean | undefined
     let unsettledReason: string | undefined
+    let data: string | undefined
     if (error === undefined) {
       try {
         const capture = await deps.call('captureRaster', {})
         settled = typeof capture['settled'] === 'boolean' ? capture['settled'] : undefined
         unsettledReason = typeof capture['unsettledReason'] === 'string' ? capture['unsettledReason'] : undefined
+        data = typeof capture['data'] === 'string' ? capture['data'] : undefined
       } catch {
         // The step's own action succeeded; a settle check that itself fails
         // just can't say — it does not make the step a failure.
@@ -79,14 +107,15 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       index,
       action,
       ...(target !== undefined ? { target } : {}),
-      ok: error === undefined,
+      status: error === undefined ? 'ran' : 'failed',
       ...(reply !== undefined ? { reply } : {}),
       ...(error !== undefined ? { error } : {}),
       ...(settled !== undefined ? { settled } : {}),
       ...(unsettledReason !== undefined ? { unsettledReason } : {}),
+      ...(data !== undefined ? { data } : {}),
     })
 
-    if (error !== undefined) break
+    if (error !== undefined) stopped = true
   }
   return { steps }
 }
