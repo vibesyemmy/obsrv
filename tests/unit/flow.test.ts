@@ -113,4 +113,13 @@ describe('validateFlow', () => {
     if (!result.ok) throw new Error('expected ok')
     expect(result.flow.steps[0]).toEqual({ action: 'navigate', url: 'https://example.com', timeoutMs: 5000, note: 'first step' })
   })
+
+  it("validates a step carrying the discriminator's own keys — ok, step, rejection — as ordinary passthrough data", () => {
+    // Guards the fix's actual invariant (nothing user-supplied can reach the
+    // wrapper), not just the two historical symptoms that broke the old one.
+    const result = validateFlow([{ action: 'navigate', ok: false, step: 'x', rejection: 'x' }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps[0]).toEqual({ action: 'navigate', ok: false, step: 'x', rejection: 'x' })
+  })
 })
