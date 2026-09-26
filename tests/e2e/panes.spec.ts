@@ -89,6 +89,15 @@ test('the target canvas shows the page, not a blank', async () => {
   // readings were taken from that: a "4/4 alone" local count on
   // `bug-flakes-gate-the-gate`, and the retry of run 35176357601 read as a
   // second sighting. Neither was about the canvas (Henry, 2026-09-17).
+  //
+  // A third instance, 2026-09-26: the `page.press` below timed out on
+  // actionability, misread in-room as a canvas-blank sighting by three
+  // people in turn before the trace was actually opened. See
+  // `docs/e2e-flakes.md`'s panes.spec.ts entry — this comment records that
+  // the misreading happens; that doc records the mechanism. (No line
+  // number, here or in the doc, on purpose: this comment's first version
+  // named one and pushed it wrong the moment these lines were added above
+  // it — the exact class of error the entry itself is about.)
   await page.fill('.url-form input', FIXTURE)
   await page.press('.url-form input', 'Enter')
   await expect.poll(paneUrls).toEqual({ native: FIXTURE, target: FIXTURE })

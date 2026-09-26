@@ -15,6 +15,7 @@ contention. This records what was investigated so it is not investigated again.
 | `history.spec.ts:148` — the list falling left of the native pane at a wide split | Layout read before the split settled |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
+| `panes.spec.ts`, `.url-form input` — `page.press` times out | The app's own responsiveness, before any test instrumentation runs |
 | `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | The desk: Electron's macOS hide/show are occlusion transitions |
 
 Each one passes when its file is run alone, and on a plain re-run.
@@ -1190,3 +1191,67 @@ between the readings existed only inside an assertion that had already stopped t
 **If it recurs**, the thing to add is not a longer wait: print the viewport and the resolved preset
 *before* the first `setPreset`, so `applied: false` can be read as "already there" or "not up yet". That
 is a two-line change to the spec and it is worth making the next time anyone is in the file.
+
+## `panes.spec.ts`, the `page.press` timeout, named because it shares a test with a card it is not evidence for
+
+Seen once, on run [`36232431630`](https://github.com/vibesyemmy/obsrv/actions/runs/36232431630)
+(`#472`, 2026-09-26), rescued on retry in 339 ms.
+
+```
+TimeoutError: page.press: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.url-form input')
+    - locator resolved to <input ... value="file:///…/tests/fixtures/hairline.html"/>
+  - elementHandle.press("Enter")
+```
+
+The failing test is *"the target canvas shows the page, not a blank"* — `bug-canvas-blank-without-notice`'s
+own test — which made the failure look like a sighting of that card at first glance. **It is not one.**
+The card's recurrence signature is a specific assertion (`the canvas stayed blank: N white of M pixels`)
+inside a `try`/`catch` that reads `frameSent()` and `session.painting` on failure, well into the body of
+the test. This failure is at the test's **very first action** — `page.fill` then
+`page.press('.url-form input', 'Enter')`, before the test has navigated anywhere, let alone measured the
+canvas or run that diagnostic block. (No line number given on purpose: the first version of this entry
+named one, and the comment added to the spec pointing back at this entry pushed that exact line down six
+— the identical class of error this entry exists to warn against, caught by Idris before it shipped.)
+Filing it as a dated sighting on that card would credit a mechanism (`frameSent`/`painting`) that was
+never queried.
+
+**Playwright's own semantics narrow it further than "the app was slow".** `fill` succeeded — the
+locator resolved with the right value already set, so the element existed and was interactable a
+moment earlier. `press` waits for *actionability*, and a selector failure fails fast; thirty full
+seconds means the element was found and stayed **un-actionable** — covered, disabled, or unfocusable
+— rather than the runner being generally starved (Henry, #2343).
+
+**A specific, testable candidate, unverified: the loading strip that lives inside the URL field
+itself** (`feat/url-loading-strip` put a CSS-transition element in that exact box). An overlay
+sitting on top of the input for the whole budget is exactly what makes `press` wait forever rather
+than fail immediately.
+
+**What the artifact available for this run can and cannot say.** `playwright-flaky` on this run
+holds a trace, but only for the **retry** (the passing attempt, 339 ms) plus the failing attempt's
+plain-text `error-context.md` — no screenshot or DOM snapshot from the failure itself. So the
+loading-strip hypothesis is the leading one, not a confirmed one: nothing in what was captured shows
+the input's actual covered/disabled state at second thirty.
+
+**If it recurs**, a trace with screenshots on the *first* attempt (not just the retry) would settle
+it directly — check whether tracing is configured to retain on every attempt or only the last one.
+Short of that, checking whether the loading strip's own transition can outlive a fast `fill`-then-
+`press` sequence is the next cheapest thing to look at.
+
+**The missing screenshot is the anomaly worth chasing, and it took a matched comparison to say so
+safely.** `screenshot: 'only-on-failure'` is configured, and the failing attempt's own directory in
+this run's artifact is present but holds only `error-context.md` — no PNG. That was first read as
+evidence toward "the app was generally unresponsive," then retracted for resting on an unverified
+step: nothing had shown the setting producing a file under this harness at all, and
+`playwright.config.ts` already documents Electron silently ignoring a comparable trace setting.
+
+**The retraction held until a matched case was actually measured, not argued.** Run
+[`35807960696`](https://github.com/vibesyemmy/obsrv/actions/runs/35807960696)'s `playwright-flaky`
+artifact — a flake, same harness, same config era — has exactly the shape ours is missing:
+`error-context.md` **and three PNGs** (`test-failed-1/2/3.png`) in the plain (non-retry) directory,
+confirmed independently by downloading the artifact directly rather than taking the file listing on
+trust (Henry, #2364). **So the setting does fire for a flake's failed attempt in this harness — it
+just did not fire for ours.** A page too wedged to be screenshotted is a different animal from an
+input that merely changed state, and that gap between the matched case and this one is the thing
+worth chasing on the next sighting, not an open question about whether the mechanism works at all.
