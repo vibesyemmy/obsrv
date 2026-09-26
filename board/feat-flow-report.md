@@ -1,6 +1,8 @@
 ---
 title: "The flow report is per-step and honest about coverage, not one page pretending to be eight"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: feat
 order: 113
 ---
