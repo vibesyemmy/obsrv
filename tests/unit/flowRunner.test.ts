@@ -149,6 +149,18 @@ describe('startFlow', () => {
     expect(await lock.read()).toBeNull() // still released, not left behind by the failure
   })
 
+  it('releases the lock even when runFlow itself throws — the case the finally exists for', async () => {
+    // A step's own action rejecting is caught inside runFlow and never
+    // reaches startFlow's try/finally at all (the test above exercises
+    // that path, not this one). This is the genuinely unexpected throw —
+    // malformed input past validateFlow's own guard — that the `finally`
+    // is actually there to survive.
+    const lock = lockDeps()
+    const brokenFlow = { steps: null } as unknown as Flow
+    await expect(startFlow(brokenFlow, { call: async () => ({ ok: true }), lock })).rejects.toThrow()
+    expect(await lock.read()).toBeNull() // released despite the throw, not left held
+  })
+
   it('does not release a lock that is no longer its own — release verifies the pid, not just "the file is gone now"', async () => {
     const lock = lockDeps()
     // A hostile/unusual deps: after runFlow completes, something else has
