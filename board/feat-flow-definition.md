@@ -1,6 +1,8 @@
 ---
 title: "A flow is a validated list of steps — the shared vocabulary CLI, MCP and main agree on"
-column: backlog
+column: doing
+owner: "Dogu"
+waiting: ""
 kind: feat
 order: 111
 ---
