@@ -1239,14 +1239,19 @@ it directly — check whether tracing is configured to retain on every attempt o
 Short of that, checking whether the loading strip's own transition can outlive a fast `fill`-then-
 `press` sequence is the next cheapest thing to look at.
 
-**One thing worth checking on the next sighting, deliberately not answered here.** `screenshot:
-'only-on-failure'` is configured, and the failing attempt's own directory in this run's artifact is
-present but holds only `error-context.md` — no PNG. That absence was first read as evidence toward
-"the app was generally unresponsive" (a wedged page failing to screenshot itself), but the read does
-not hold: nothing in this repo's own artifacts has been shown to confirm `screenshot: 'only-on-failure'`
-produces a file under this harness at all, and `playwright.config.ts` already documents Electron
-silently ignoring a comparable trace setting (`screenshots: true, snapshots: true` capturing neither).
-An empty directory is exactly what an always-empty setting and a wedged page would both look like — so
-the right question for the next sighting is not "was the app unresponsive" but **"does this harness
-ever write a failure screenshot at all"**, checked against a run where something failed twice for real
-(Henry, #2360). Unanswered here on purpose, since answering it wrongly is worse than leaving it open.
+**The missing screenshot is the anomaly worth chasing, and it took a matched comparison to say so
+safely.** `screenshot: 'only-on-failure'` is configured, and the failing attempt's own directory in
+this run's artifact is present but holds only `error-context.md` — no PNG. That was first read as
+evidence toward "the app was generally unresponsive," then retracted for resting on an unverified
+step: nothing had shown the setting producing a file under this harness at all, and
+`playwright.config.ts` already documents Electron silently ignoring a comparable trace setting.
+
+**The retraction held until a matched case was actually measured, not argued.** Run
+[`35807960696`](https://github.com/vibesyemmy/obsrv/actions/runs/35807960696)'s `playwright-flaky`
+artifact — a flake, same harness, same config era — has exactly the shape ours is missing:
+`error-context.md` **and three PNGs** (`test-failed-1/2/3.png`) in the plain (non-retry) directory,
+confirmed independently by downloading the artifact directly rather than taking the file listing on
+trust (Henry, #2364). **So the setting does fire for a flake's failed attempt in this harness — it
+just did not fire for ours.** A page too wedged to be screenshotted is a different animal from an
+input that merely changed state, and that gap between the matched case and this one is the thing
+worth chasing on the next sighting, not an open question about whether the mechanism works at all.
