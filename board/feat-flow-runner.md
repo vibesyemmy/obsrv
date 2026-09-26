@@ -1,8 +1,7 @@
 ---
 title: "A step-runner drives a flow over one held session, not N independent drive calls"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: feat
 order: 112
 ---
@@ -31,3 +30,26 @@ sequence over **one held session** — no new IPC, no new protocol.
   else's flow, which is silent corruption with extra steps;
 - **every step records `settled` and, when false, `unsettledReason`** — the fields
   `obsrv_capture` already emits, threaded through per step rather than only at the end.
+
+## SHIPPED 2026-09-26
+
+`#472` merged (`9fe0ed3`). `src/mcp/flowRunner.ts` (`runFlow`/`startFlow`) + `src/mcp/flowLock.ts`.
+Idris PASS'd it at `33b8672` after two real review passes:
+
+- **First push (`e01546c`) had three defects**, all found by Henry reading and running the code,
+  each independently confirmed by Idris's own sabotage: steps after a failure were silently
+  absent rather than marked `not-reached` (the report's front page can't state coverage from data
+  that isn't there); `releaseFlowLock` bare-unlinked instead of checking the pid was still its
+  own; and a `finally`-release test that never actually exercised a throw, closed with a case that
+  does.
+- **Second pass, non-blocking:** the settle probe (`captureRaster`, already producing `data` and
+  `settled`) now runs on a failed step too, not only a succeeded one — the screen and the reason
+  at the moment of failure distinguishes a timing problem from a settled-page defect, confirmed by
+  Henry's own runtime harness and Idris's sabotage, 3-for-3.
+
+CI (`36232431630`) genuinely green: 1 `✘` byte-counted, `panes.spec.ts:85` — read in full before
+merging and confirmed unrelated to this feature (`page.press` timeout typing the URL bar, not
+this card's canvas-blank recurrence; retry-rescued).
+
+No MCP tool wiring — same scope boundary as `feat-flow-definition`. `feat-flow-report` can now
+build against the runner's real output shape rather than a hand-written example.
