@@ -15,6 +15,7 @@ contention. This records what was investigated so it is not investigated again.
 | `history.spec.ts:148` — the list falling left of the native pane at a wide split | Layout read before the split settled |
 | A drop or mode switch not taking effect in order | Renderer ↔ main IPC ordering |
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
+| `panes.spec.ts:93` — `page.press` times out on `.url-form input` | The app's own responsiveness, before any test instrumentation runs |
 | `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | The desk: Electron's macOS hide/show are occlusion transitions |
 
 Each one passes when its file is run alone, and on a plain re-run.
@@ -1190,3 +1191,36 @@ between the readings existed only inside an assertion that had already stopped t
 **If it recurs**, the thing to add is not a longer wait: print the viewport and the resolved preset
 *before* the first `setPreset`, so `applied: false` can be read as "already there" or "not up yet". That
 is a two-line change to the spec and it is worth making the next time anyone is in the file.
+
+## `panes.spec.ts:93`: a `page.press` timeout, named because it shares a test with a card it is not evidence for
+
+Seen once, on run [`36232431630`](https://github.com/vibesyemmy/obsrv/actions/runs/36232431630)
+(`#472`, 2026-09-26), rescued on retry in 339 ms.
+
+```
+TimeoutError: page.press: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.url-form input')
+    - locator resolved to <input ... value="file:///…/tests/fixtures/hairline.html"/>
+  - elementHandle.press("Enter")
+```
+
+The failing test is *"the target canvas shows the page, not a blank"* — `bug-canvas-blank-without-notice`'s
+own test — which made the failure look like a sighting of that card at first glance. **It is not one.**
+The card's recurrence signature is a specific assertion (`the canvas stayed blank: N white of M pixels`)
+inside a `try`/`catch` that reads `frameSent()` and `session.painting` on failure, at lines 110–173 of the
+spec. This failure is at **line 93** — `page.fill` then `page.press('.url-form input', 'Enter')`, the
+test's very first action, well before the canvas is ever measured or that diagnostic block runs. Filing
+it as a dated sighting on that card would credit a mechanism (`frameSent`/`painting`) that was never
+queried.
+
+**Two readings the log cannot separate**, the same shape as `tab-switch-preset.spec.ts:89` above:
+`fill` succeeded (the locator resolved with the right value already set), so the input existed and was
+interactable a moment earlier — either something about that specific input changed state between `fill`
+and `press` (covered, re-rendered, refocused elsewhere), or the app (or the CI runner) was generally
+unresponsive for the whole 30 s budget and any interaction would have timed out the same way. Nothing
+in this run's log distinguishes the two.
+
+**If it recurs**, the thing worth capturing is whether *anything* was happening in the app at the moment
+of the timeout — a `status` read taken from a second connection, or the renderer's own frame counter,
+rather than assuming the input itself is what misbehaved.
