@@ -20,7 +20,16 @@ inherently live. Reversing that decision is out of scope here.
 - **the front page leads with what was not covered, before the findings.** A QA engineer's
   costliest mistake is trusting a clean report that never reached step 4;
 - each step shows step / expected / actual / evidence — scannable in ten seconds, with the
-  resolved action, network call and DOM state one click down for reproduction;
+  resolved action, network call and DOM state one click down for reproduction. *Split
+  2026-09-29 into two halves with different costs, named before either was built (Henry): DOM
+  state reuses the existing `inspect` readout (element, box, text) at one extra control call per
+  targeted step — cheap. A per-step network record needs a `webContents.debugger` session held
+  for the flow's duration, and this repo's own code already warns that such a session changes
+  timing (`src/main/targetSource.ts:188`) — the exact thing a flow's `settled`/`unsettledReason`
+  exists to measure honestly. So: DOM state ships first on its own; network ships only once a
+  measured before/after comparison shows what it costs the very timing it would be reporting on,
+  and if the cost is real, the report says so, the way `--full-page` already warns when it
+  changed the layout;*
 - **Obsrv's own passive findings (visual/accessibility) are visually separated from the QA
   engineer's stated expected observations**, and the stated expectation is shown beside its
   evidence with Obsrv judging nothing — the same "report, don't decide" line the audit and lint
