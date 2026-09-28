@@ -694,10 +694,12 @@ ever seen.
 
 While reviewing unrelated QA-flow PRs the same night, Henry noticed `arrivals.spec.ts:181` (the
 current line for this card's test — renumbered since `:89` above) failing on **four runs across
-three PRs** — `#477` once, `#483` once, and `#478` twice (its first run failed both attempts, so it
-was re-run, and the re-run failed first-attempt too) — none of them touching redirect code, and
-pulled the candidate count (`startsForThisUrl`, the reverse-find's pool of same-URL navigation
-starts) from every saved log:
+three PRs, two of those runs on `#478`'s identical tree** (confirmed from each log's checked-out
+head against GitHub, not from labelling) — **`#477` once, `#483` once, and `#478` twice on one
+unchanged tree, where it failed three of its four attempts** (run one's first try and its retry,
+then run two's first try again) — none of them touching redirect code, and pulled the candidate
+count (`startsForThisUrl`, the reverse-find's pool of same-URL navigation starts) from every saved
+log:
 
 | starts for the URL | outcome across 4 sightings |
 | --- | --- |
