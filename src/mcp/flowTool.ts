@@ -96,6 +96,10 @@ export function flowReportSteps(flow: Flow, result: FlowRunResult): FlowReportSt
       ...(s.reply !== undefined ? { reply: s.reply } : {}),
       ...(s.data !== undefined ? { data: s.data } : {}),
       ...(expect !== undefined ? { expect } : {}),
+      // Passed straight through, shape for shape. The runner already decided
+      // each state and wrote the sentence explaining it; re-deriving either
+      // here would give the report a second opinion on a reading it never took.
+      ...(s.observations !== undefined ? { observations: s.observations } : {}),
     }
   })
 }

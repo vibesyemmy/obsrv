@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportStep } from '../../src/cli/reportHtml'
+import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportObservation, type FlowReportStep } from '../../src/cli/reportHtml'
 
 /**
  * Written against `board/feat-flow-report.md`'s acceptance list, one test per
@@ -35,11 +35,20 @@ const askedHalfOf = (html: string, n: number): string => {
   return sec.slice(from)
 }
 
+/** One step's section and **only** that step's. This bounded at `<footer`
+ *  before, so step 1's "section" ran to the end of the document and included
+ *  every later step: a claim about step 1 could be satisfied by step 3's
+ *  markup, in a helper whose whole job is to stop exactly that. Found while
+ *  adding the observation tests below, which compare a `present` step against
+ *  an `absent` one and would have been mutually satisfiable. Now it stops at
+ *  the next step's own id. */
 const sectionOf = (html: string, n: number): string => {
   const from = html.indexOf(`id="step-${n}"`)
-  const to = html.indexOf('<footer')
   expect(from).toBeGreaterThan(-1)
-  expect(to).toBeGreaterThan(from)
+  const next = html.indexOf('id="step-', from + 1)
+  const footer = html.indexOf('<footer')
+  expect(footer).toBeGreaterThan(from)
+  const to = next > -1 && next < footer ? next : footer
   return html.slice(from, to)
 }
 
@@ -179,6 +188,86 @@ describe('flowReportHtml', () => {
     const { url: _drop, ...noUrl } = data([step()])
     const html = flowReportHtml(noUrl)
     expect(html).toContain('<title>Obsrv flow report</title>')
+  })
+
+
+  /**
+   * The stated-observation clause. These key off `askedHalfOf`, never the whole
+   * document: the footer's own prose mentions stated expectations, and the
+   * summary table names every step, so an unscoped `toContain` here would be
+   * answered by text nowhere near the badge it claims to check.
+   */
+  const obs = (over: Partial<FlowReportObservation> = {}): FlowReportObservation => ({
+    expected: 'Order confirmed',
+    state: 'unknown',
+    looked: 'no reader was configured for this run, so nothing was read',
+    ...over,
+  })
+
+  it('shows a found text as a reading, with where it looked and what it read', () => {
+    const html = flowReportHtml(
+      data([step({ observations: [obs({ state: 'present', looked: 'read the whole document', saw: ['Order confirmed #4471'] })] })]),
+    )
+    const asked = askedHalfOf(html, 1)
+    expect(asked).toContain('<span class="state saw">text found</span>')
+    expect(asked).toContain('Order confirmed')
+    expect(asked).toContain('read the whole document')
+    expect(asked).toContain('Order confirmed #4471')
+  })
+
+  it('prints where it looked even when the text was found, so the trusted row is the evidenced one', () => {
+    const html = flowReportHtml(data([step({ observations: [obs({ state: 'present', looked: 'read the whole document' })] })]))
+    expect(askedHalfOf(html, 1)).toContain('read the whole document')
+  })
+
+  it('does not render a missing text as a failure, because a QA engineer can state text that should be gone', () => {
+    const html = flowReportHtml(data([step({ status: 'ran', settled: true, observations: [obs({ state: 'absent', looked: 'read the whole document' })] })]))
+    const sec = sectionOf(html, 1)
+    expect(sec).toContain('<span class="state missing">text not found</span>')
+    // The step ran. Nothing in its own section may claim otherwise — this is
+    // the assertion that a red `absent` badge would break, and it is scoped to
+    // the section because the footer's legend carries `state failed` markup.
+    expect(sec).not.toContain('class="state failed"')
+    expect(sec).toContain('<span class="state ran">ran</span>')
+  })
+
+  it('says a stated text was not read, and why, when no reader was configured', () => {
+    const html = flowReportHtml(data([step({ observations: [obs()] })]))
+    const asked = askedHalfOf(html, 1)
+    expect(asked).toContain('<span class="state unknown">not read</span>')
+    expect(asked).toContain('no reader was configured for this run, so nothing was read')
+  })
+
+  it('never implies a text was absent on a step the flow never reached', () => {
+    const html = flowReportHtml(data([step({ status: 'failed', error: 'no such element' }), step({ status: 'not-reached', observations: [obs({ state: 'not-reached', looked: 'the flow stopped before this step' })] })]))
+    const asked = askedHalfOf(html, 2)
+    expect(asked).toContain('<span class="state skipped">never looked</span>')
+    expect(asked).not.toContain('text not found')
+  })
+
+  it('states the no-verdict rule differently for a reading than for a bare sentence, in one document', () => {
+    const html = flowReportHtml(
+      data([
+        step({ observations: [obs({ state: 'present', looked: 'read the whole document' })] }),
+        step({ expect: 'the basket empties' }),
+      ]),
+    )
+    // Step 1 has a reading: the line must not be a flat "does not judge this",
+    // which beside `text found` reads as a shrug next to a measurement.
+    const withReading = askedHalfOf(html, 1)
+    expect(withReading).toContain('not whether finding it means the step was correct')
+    expect(withReading).not.toContain('Obsrv does not judge this.')
+    // Step 2 has only a sentence nobody measured: the original line is right.
+    const bare = askedHalfOf(html, 2)
+    expect(bare).toContain('Obsrv does not judge this.')
+    expect(bare).not.toContain('not whether finding it means the step was correct')
+  })
+
+  it('names the passive findings it does not collect per step, rather than letting the heading imply it does', () => {
+    const html = flowReportHtml(data([step()]))
+    const footer = html.slice(html.indexOf('<footer'))
+    expect(footer).toContain('not</b> collected per step yet')
+    expect(footer).toContain('obsrv audit')
   })
 
   it('embeds the step screenshot it was given', () => {

@@ -191,6 +191,18 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .state.failed { color: #fff; background: var(--bad); border-color: var(--bad); }
 .state.unknown { color: var(--warn-ink); background: var(--warn); border-color: var(--warn-ink); }
 .state.skipped { color: var(--muted); border-color: var(--line); border-style: dashed; }
+/* A reading is not a verdict. \`saw\` and \`missing\` are deliberately NOT the
+   green/red of \`ran\`/\`failed\`: colouring an absent string red would be Obsrv
+   pronouncing a step failed, which is the one thing this half must never do —
+   a QA engineer can state text that is *meant* to be gone. Distinct from each
+   other, level in weight. */
+.state.saw { color: var(--ink); border-color: var(--ink); }
+.state.missing { color: var(--ink); border-color: var(--ink); border-style: dotted; }
+.obs { margin: 8px 0 0; padding: 0; list-style: none; }
+.obs li { margin: 0 0 8px; padding-left: 10px; border-left: 2px solid var(--line); }
+.obs q { font-style: normal; }
+.obs .looked { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.obs .saw { margin: 2px 0 0; font-size: 13px; }
 .gap { border-left-color: var(--bad); }
 .step { margin: 28px 0; padding-top: 16px; border-top: 1px solid var(--line); }
 .step h3 { margin: 0 0 10px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
@@ -406,6 +418,39 @@ export interface FlowReportStep {
   /** What the QA engineer said they expected to see at this step, carried on
    *  the step itself. Obsrv does not evaluate it — see `askedHalf`. */
   expect?: string
+  /** One record per text the step stated, in the order stated. Absent — not
+   *  empty — for a step that stated none, so a flow without observations
+   *  renders exactly the document it always did. */
+  observations?: FlowReportObservation[]
+}
+
+/** What Obsrv can say about one stated text, structurally rather than by
+ *  importing the runner's `ObservationRecord`: this file is the CLI's renderer
+ *  and takes no dependency on `src/mcp/`, the same reason `walkCoverage` keeps
+ *  its own step shape. The fields match the runner's one for one.
+ *
+ *  **`unknown` is the common case today and is not a defect.** No reader is
+ *  configured on the `obsrv_flow` path yet (`feat-flow-observations`), so every
+ *  stated text comes back `unknown` carrying the sentence *"no reader was
+ *  configured for this run, so nothing was read"*. Printing that is the honest
+ *  thing: it tells a QA engineer their expectation was recorded and **not**
+ *  checked, which is precisely what a silent omission would hide. When the
+ *  reader lands, `present` and `absent` start appearing here with no further
+ *  change to this file. */
+export interface FlowReportObservation {
+  /** The text as the QA engineer wrote it. Rendered verbatim, never normalised
+   *  — a trailing space they cared about is theirs to see. */
+  expected: string
+  state: 'present' | 'absent' | 'unknown' | 'not-reached'
+  /** Where Obsrv looked, or why it did not. Always printed: it is what keeps
+   *  `absent` ("read the page, the text was not there") distinguishable from
+   *  the several different `unknown`s, which otherwise collapse into one
+   *  shrug. */
+  looked: string
+  /** The matching text, when the reader has it. An `absent` carries none —
+   *  nothing measured what stood there instead, and inventing it would be a
+   *  claim nobody took a reading for. */
+  saw?: string[]
 }
 
 export interface FlowReportData {
@@ -446,18 +491,66 @@ function measuredHalf(s: FlowReportStep): string {
   return `<div class="half"><h4>What Obsrv measured</h4>${bits.join('')}</div>`
 }
 
+/** A reading's badge. Separate from `flowStepState` on purpose: a step's state
+ *  and a stated text's state are different questions, and one must never be
+ *  read off the other. A step can run cleanly with its stated text absent, and
+ *  a failed step's texts are `unknown` rather than absent. */
+export function observationState(o: FlowReportObservation): { cls: string; label: string } {
+  if (o.state === 'present') return { cls: 'saw', label: 'text found' }
+  if (o.state === 'absent') return { cls: 'missing', label: 'text not found' }
+  if (o.state === 'not-reached') return { cls: 'skipped', label: 'never looked' }
+  return { cls: 'unknown', label: 'not read' }
+}
+
+/** The stated texts, each with what Obsrv can and cannot say about it.
+ *
+ *  Every record prints its `looked` sentence, including a `present` one. The
+ *  first version printed it only for the states that were not `present`, on
+ *  the reasoning that a found string needs no explanation — which quietly made
+ *  the page's most trustworthy row its least evidenced one. Where Obsrv looked
+ *  is what makes a reading checkable. */
+function observationList(records: FlowReportObservation[]): string {
+  const items = records
+    .map(o => {
+      const st = observationState(o)
+      const saw =
+        o.saw !== undefined && o.saw.length > 0
+          ? `<p class="saw">It read: ${o.saw.map(t => `<q>${escapeHtml(t)}</q>`).join(', ')}</p>`
+          : ''
+      return (
+        `<li><q>${escapeHtml(o.expected)}</q> <span class="state ${st.cls}">${st.label}</span>` +
+        `<p class="looked">${escapeHtml(o.looked)}</p>${saw}</li>`
+      )
+    })
+    .join('')
+  return `<ul class="obs">${items}</ul>`
+}
+
 function askedHalf(s: FlowReportStep): string {
-  if (s.expect === undefined) {
-    return `<div class="half asked"><h4>What you asked to see</h4><p class="muted">Nothing was stated for this step.</p></div>`
+  const head = `<div class="half asked"><h4>What you asked to see</h4>`
+  const stated = s.expect !== undefined ? `<p>${escapeHtml(s.expect)}</p>` : ''
+  if (s.observations !== undefined && s.observations.length > 0) {
+    // Report, don't decide, and the line has to be exact now that some rows
+    // carry a real reading. "Obsrv does not judge this" full stop was true when
+    // every row was a bare sentence; with `text found` on the page it would
+    // read as a shrug next to a measurement. So: it says what it read, and it
+    // does not say whether that means the step was right — a QA engineer can
+    // state text that is *meant* to have gone away, and only they know which.
+    return (
+      head +
+      stated +
+      observationList(s.observations) +
+      `<p class="muted">Obsrv reports whether it found each text, not whether finding it means the step was correct.</p></div>`
+    )
   }
-  // Report, don't decide: Obsrv has no way to know whether this sentence is
-  // true and does not guess. It shows what was asked and what was captured,
-  // side by side, and the reader judges. A tool that answered "pass" here
-  // would be answering a question nobody measured.
-  return (
-    `<div class="half asked"><h4>What you asked to see</h4><p>${escapeHtml(s.expect)}</p>` +
-    `<p class="muted">Obsrv does not judge this. The screen and the reply are below, as it found them.</p></div>`
-  )
+  if (s.expect === undefined) {
+    return head + `<p class="muted">Nothing was stated for this step.</p></div>`
+  }
+  // A stated sentence with no record behind it: nothing captured it as
+  // checkable, so Obsrv shows what was asked and what it captured, side by
+  // side, and the reader judges. A tool that answered "pass" here would be
+  // answering a question nobody measured.
+  return head + stated + `<p class="muted">Obsrv does not judge this. The screen and the reply are below, as it found them.</p></div>`
 }
 
 function flowStepSection(s: FlowReportStep, n: number): string {
@@ -516,7 +609,17 @@ export function flowReportHtml(data: FlowReportData): string {
     data.steps.map((s, i) => flowStepSection(s, i + 1)).join('\n') +
     `\n<footer>Every step is listed, including the ones the flow never reached. A step marked <span class="state unknown">unknown</span> ` +
     `was measured while the page was still painting, or could not be checked — its evidence is not a clean result. ` +
-    `Obsrv reports what it observed and does not judge a stated expectation. Generated by obsrv ${escapeHtml(data.version)}.</footer>\n` +
+    `Obsrv reports what it observed and does not judge a stated expectation. ` +
+    // Named rather than silent. "What Obsrv measured" is a heading a reader can
+    // reasonably take to include the audit and lint findings the rest of Obsrv
+    // produces, and per step it does not: the runner records no per-step
+    // passive findings, so there is nothing to separate the stated texts from
+    // yet. Leaving the heading to imply otherwise is the failure this document
+    // exists to avoid.
+    `Obsrv's own passive findings — contrast, tap sizes, text size, the audit and lint rules — are <b>not</b> collected per step yet, ` +
+    `so "what Obsrv measured" here means the page's settle state and this step's own reply, not a visual review of each screen. ` +
+    `Run <code>obsrv audit</code> or <code>obsrv lint</code> for those. ` +
+    `Generated by obsrv ${escapeHtml(data.version)}.</footer>\n` +
     `</main>\n</body>\n</html>\n`
   )
 }
