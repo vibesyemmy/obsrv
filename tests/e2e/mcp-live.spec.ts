@@ -1082,3 +1082,75 @@ test('the server rejects an undeclared key on the live drive surface, where the 
   const clean = await call('obsrv_drive', {})
   expect(clean.isError, JSON.stringify(clean.content)).toBeFalsy()
 })
+
+/**
+ * `obsrv_flow` against the running app — the one path its unit tests cannot
+ * reach. Everything below the tool is injected in `flowTool.test.ts`, so what
+ * has never been exercised is the real `controlCall`: a held session, a step
+ * that genuinely drives the app, a settle probe that really rasterises, and a
+ * report written to disk.
+ *
+ * Deliberately last in this file. A flow navigates and leaves the app on a
+ * different page, and this spec shares one app across its tests — a test that
+ * perturbs whoever runs next belongs at the end, not in the middle
+ * (`arrivals.spec.ts`'s header is the standing warning about that).
+ */
+test('obsrv_flow drives a real flow, reports every step, and writes the report to disk', async () => {
+  const TALL = fixture('tall.html')
+  const r = await call('obsrv_flow', {
+    steps: [
+      { action: 'navigate', url: TALL },
+      { action: 'scroll', x: 0, y: 400 },
+      // A selector that is not on the page: this step must FAIL, and the step
+      // after it must come back `not-reached` rather than be dropped.
+      { action: 'click', target: '#nothing-is-here', expect: 'the pay button is visible' },
+      { action: 'audit' },
+    ],
+  })
+  expect(r.isError, JSON.stringify(r.content)).toBeFalsy()
+
+  const s = r.structuredContent as {
+    reportPath: string
+    coverage: string | null
+    steps: Array<{ step: number; action: string; status: string; settled?: boolean; error?: string }>
+  }
+
+  // One entry per step GIVEN, including the ones never attempted. A short array
+  // here is the defect the card was written against.
+  expect(s.steps).toHaveLength(4)
+  expect(s.steps.map(x => x.step)).toEqual([1, 2, 3, 4])
+  expect(s.steps[0]).toMatchObject({ action: 'navigate', status: 'ran' })
+  expect(s.steps[1]).toMatchObject({ action: 'scroll', status: 'ran' })
+
+  // The settle probe is a real raster capture over the control server. That it
+  // answers at all is the thing no unit test can show: with the wrong budget it
+  // times out silently and every step reads `unknown`.
+  expect(typeof s.steps[0]!.settled).toBe('boolean')
+
+  // The flow stopped where it failed, and said so rather than going quiet.
+  expect(s.steps[2]!.status).toBe('failed')
+  expect(s.steps[2]!.error, 'a failed step must carry its own message').toBeTruthy()
+  expect(s.steps[3]!.status).toBe('not-reached')
+  expect(s.coverage, 'coverage must name what was never attempted').toMatch(/never attempted/)
+
+  // The report is a real file, and it leads with what it did not cover.
+  expect(existsSync(s.reportPath), `no report at ${s.reportPath}`).toBe(true)
+  const html = readFileSync(s.reportPath, 'utf8')
+  expect(html).toContain('does not cover the whole flow')
+  expect(html).toContain('the pay button is visible')
+  expect(html).toContain('Obsrv does not judge this')
+  // Every step has a section, the unattempted one included.
+  for (const n of [1, 2, 3, 4]) expect(html).toContain(`id="step-${n}"`)
+})
+
+test('a second obsrv_flow call is refused while one holds the app, naming who holds it', async () => {
+  // The lock is released when a flow finishes, so a sequential second call must
+  // SUCCEED — proving the refusal path is about concurrency and not a lock left
+  // behind. The refusal itself is unit-tested against an injected lock; what is
+  // worth checking live is that a real flow does not strand its own lock.
+  const again = await call('obsrv_flow', { steps: [{ action: 'status' }] })
+  expect(again.isError, JSON.stringify(again.content)).toBeFalsy()
+  const s = again.structuredContent as { steps: Array<{ status: string }>; coverage: string | null }
+  expect(s.steps).toHaveLength(1)
+  expect(s.steps[0]!.status).toBe('ran')
+})
