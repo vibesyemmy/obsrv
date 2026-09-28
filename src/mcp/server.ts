@@ -2764,6 +2764,16 @@ server.registerTool(
         )
         .describe('One entry per step given, including the ones never attempted.'),
     },
+    // Not a read: a flow clicks, navigates and changes presets on the visible
+    // app, exactly as `obsrv_drive` does, so `readOnlyHint` is false for the
+    // same reason.
+    //
+    // `idempotentHint` is false where `obsrv_drive` says true, and the
+    // difference is real rather than caution: repeating ONE click is usually
+    // harmless, and repeating a nine-step flow is a second checkout. An agent
+    // deciding whether to retry after a timeout should not be told this is
+    // safe to run twice.
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   },
   async (input: { steps: Record<string, unknown>[] }): Promise<CallToolResult> => {
     // Live only, so the plan is asked for live and a headless answer is a
