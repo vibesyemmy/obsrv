@@ -46,8 +46,17 @@ Keep the `.p8` outside the repo. `~/private_keys/` is the conventional home.
 export APPLE_API_KEY=~/private_keys/AuthKey_XXXXXXXXXX.p8
 export APPLE_API_KEY_ID=XXXXXXXXXX
 export APPLE_API_ISSUER=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+export SIGNING_IDENTITY="Developer ID Application: <entity> (<team id>)"
 npm run dist:signed
 ```
+
+**The fourth line is not optional, and this section was wrong without it.**
+`dist:signed` ends in `scripts/verifySigningIdentity.js`, which **refuses when
+`SIGNING_IDENTITY` is unset** rather than skipping — an unnamed target and no
+check are the same silent gap. So the build now fails at its last command if you
+follow the three-export version, after paying for the whole notarisation. Copy
+the value from step 1's `security find-identity -v -p codesigning` output,
+character for character: the check is a substring match against it.
 
 Notarisation is a round trip to Apple's service — usually 2–15 minutes, and the
 build blocks on it. electron-builder staples the ticket to the DMG when it
