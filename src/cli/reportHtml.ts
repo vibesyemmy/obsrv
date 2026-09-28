@@ -409,7 +409,13 @@ export interface FlowReportStep {
 }
 
 export interface FlowReportData {
-  url: string
+  /** The address the flow drove to, when it drove to one. **Absent when the
+   *  flow never navigates** — which is the ordinary case for a QA engineer
+   *  picking up a page the app already had open, not an edge. The first version
+   *  of this took a required string and `flowSubject` handed it the sentence
+   *  "the page the app already had open", which the header then rendered into
+   *  `<a href="...">`: a broken link whose href was a sentence. */
+  url?: string
   generatedAt: string
   version: string
   steps: FlowReportStep[]
@@ -469,7 +475,13 @@ function flowStepSection(s: FlowReportStep, n: number): string {
 }
 
 export function flowReportHtml(data: FlowReportData): string {
-  const url = escapeHtml(data.url)
+  // A link only when there is an address to link to. Without one the report says
+  // what it drove in words, because an anchor whose href is a sentence is a
+  // broken link dressed as a subject.
+  const subject =
+    data.url !== undefined && data.url.trim().length > 0
+      ? `<a href="${escapeHtml(data.url)}">${escapeHtml(data.url)}</a>`
+      : `<span class="muted">the page the app already had open — this flow never navigated</span>`
   const gap = flowCoverageNote(data.steps)
   // The front page leads with what was not covered. A QA engineer's costliest
   // mistake is trusting a clean report that never reached step 4, so the
@@ -497,8 +509,8 @@ export function flowReportHtml(data: FlowReportData): string {
     .join('')
   return (
     `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n` +
-    `<title>Obsrv flow report — ${url}</title>\n<style>${CSS}</style>\n</head>\n<body>\n<main>\n` +
-    `<h1>Obsrv flow report</h1>\n<p class="facts"><a href="${url}">${url}</a><br>${escapeHtml(data.generatedAt)} · obsrv ${escapeHtml(data.version)}</p>\n` +
+    `<title>Obsrv flow report${data.url !== undefined && data.url.trim().length > 0 ? ` — ${escapeHtml(data.url)}` : ''}</title>\n<style>${CSS}</style>\n</head>\n<body>\n<main>\n` +
+    `<h1>Obsrv flow report</h1>\n<p class="facts">${subject}<br>${escapeHtml(data.generatedAt)} · obsrv ${escapeHtml(data.version)}</p>\n` +
     coverage +
     `\n<h2>The steps</h2>\n<table><thead><tr><th class="n">#</th><th>Action</th><th>Target</th><th>State</th></tr></thead><tbody>${rows}</tbody></table>\n` +
     data.steps.map((s, i) => flowStepSection(s, i + 1)).join('\n') +
