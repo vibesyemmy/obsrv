@@ -62,7 +62,7 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: seven tools with schemas, honestly annotated', async () => {
+test('initialize + tools/list: nine tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
@@ -70,6 +70,7 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
     'obsrv_audit',
     'obsrv_diff',
     'obsrv_drive',
+    'obsrv_flow',
     'obsrv_inspect',
     'obsrv_lint',
     'obsrv_presets',

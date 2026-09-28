@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { runFlowTool } from './flowTool'
 import { startFlow } from './flowRunner'
+import { budgetKindFor } from './flowBudget'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
@@ -2690,6 +2691,25 @@ server.registerTool(
   },
 )
 
+
+/** A flow step's budget: the kind comes from `flowBudget.ts`, the numbers from
+ *  the constants the dedicated tools already use, so a flow and a direct call
+ *  allow the same command the same time. */
+function flowBudgetMs(command: string): number {
+  switch (budgetKindFor(command)) {
+    case 'status':
+      return LIVE_STATUS_TIMEOUT_MS
+    case 'navigate':
+      return DEFAULT_TIMEOUT_MS + 10_000
+    case 'measure':
+      return LIVE_AUDIT_TIMEOUT_MS
+    case 'capture':
+      return LIVE_CAPTURE_TIMEOUT_MS
+    case 'apply':
+      return LIVE_APPLY_TIMEOUT_MS
+  }
+}
+
 server.registerTool(
   'obsrv_flow',
   {
@@ -2754,7 +2774,14 @@ server.registerTool(
     let out
     try {
       out = await runFlowTool(input.steps, {
-        start: flow => startFlow(flow, { call: (command, payload) => controlCall(info, command, payload, LIVE_APPLY_TIMEOUT_MS) }),
+        start: flow =>
+          startFlow(flow, {
+            // One held session, but NOT one budget: the settle probe is a
+            // raster capture, which the dedicated path allows 30 s. Binding
+            // everything to the apply budget made every step time out its
+            // probe and render `unknown` — see `flowBudget.ts`.
+            call: (command, payload) => controlCall(info, command, payload, flowBudgetMs(command)),
+          }),
         writeReport: async html => {
           const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
           const path = join(dir, 'flow.html')
