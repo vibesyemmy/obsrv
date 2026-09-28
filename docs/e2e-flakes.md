@@ -17,6 +17,7 @@ contention. This records what was investigated so it is not investigated again.
 | `"afterAll" hook timeout of 30000ms exceeded` in `app.close()` | Electron's exit after `app.quit()` |
 | `panes.spec.ts`, `.url-form input` — `page.press` times out | The app's own responsiveness, before any test instrumentation runs |
 | `visibility.spec` and `log.spec`: `win.hide()` logs nothing, painting never pauses | The desk: Electron's macOS hide/show are occlusion transitions |
+| `cli.spec.ts:212` — a leaked `obsrv-cli-*` temp dir after SIGTERM | **Not test noise: a real dir was left behind. Whose is the open question** |
 
 Each one passes when its file is run alone, and on a plain re-run.
 
@@ -1191,6 +1192,48 @@ between the readings existed only inside an assertion that had already stopped t
 **If it recurs**, the thing to add is not a longer wait: print the viewport and the resolved preset
 *before* the first `setPreset`, so `applied: false` can be read as "already there" or "not up yet". That
 is a two-line change to the spec and it is worth making the next time anyone is in the file.
+
+## `cli.spec.ts:212`: a leaked temp dir after SIGTERM, and why this one is not noise
+
+Seen once, on run [`36463050844`](https://github.com/vibesyemmy/obsrv/actions/runs/36463050844)
+attempt 2 (`#477`, 2026-09-28), rescued on retry. **It is listed here because it is the one entry in
+this file that is not a timing artefact:**
+
+```
+Error: expect(received).toEqual(expected)
+- Expected  - Array []
++ Received  + Array [ "obsrv-cli-5iX7Fu" ]
+```
+
+The test snapshots every `obsrv-cli-*` directory under `tmpdir()` **before** spawning, SIGTERMs the
+launcher mid-render, and asserts nothing new survives. A name appearing in that diff means **a temp
+directory was genuinely left behind.** The assertion did its job; something did not clean up.
+
+**The reading that would make it noise is ruled out.** With parallel workers, a sibling test's live
+directory could show up in the diff and the assertion would be over-broad — but
+`playwright.config.ts` sets `fullyParallel: false` and `workers: 1`. There is no sibling. And the
+`before` snapshot excludes anything that already existed, so it is not an older run's rubbish either.
+
+**Two readings remain, and this run cannot separate them:**
+
+- **The test's own child leaked.** SIGTERM arrived before the CLI's temp-dir cleanup ran, so the
+  signal won a race against teardown. That is a real intermittent product defect, and the retry
+  passing means the race sometimes goes the other way.
+- **A previous test's child leaked, and this test was blamed.** Tests run sequentially, but a prior
+  child process need not have finished exiting when `before` is snapshotted — a directory it creates
+  or abandons a moment later appears new to this test.
+
+Either way **a directory was leaked**; what is unknown is by whom. The distinction matters because
+the first is a bug in cleanup-on-signal and the second is a bug in attribution.
+
+**If it recurs**, the thing worth capturing is the leaked directory's **creation time and contents**
+against the spawn time of this test's child — that separates the two readings in one reading, where
+the pass/fail alone never will. Note that a leaked directory now disappears on its own overnight for
+an unrelated reason (something sweeps `/private/tmp`), so it cannot be inspected the next morning.
+
+**Not investigated further here, deliberately:** `tests/e2e/cli.spec.ts` is not a file this session
+may edit without Opeyemi's say-so, so this entry is a record rather than a fix, and nothing about the
+spec or the CLI's teardown was changed.
 
 ## `panes.spec.ts`, the `page.press` timeout, named because it shares a test with a card it is not evidence for
 
