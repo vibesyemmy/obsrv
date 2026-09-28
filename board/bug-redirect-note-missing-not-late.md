@@ -692,10 +692,12 @@ ever seen.
 
 ## A candidate mechanism, dated 2026-09-28 — still waiting on the same choice above
 
-While reviewing five unrelated QA-flow PRs the same night, Henry noticed `arrivals.spec.ts:181`
-(the current line for this card's test — renumbered since `:89` above) failing across four of them,
-none touching redirect code, and pulled the candidate count (`startsForThisUrl`, the reverse-find's
-pool of same-URL navigation starts) from every saved log:
+While reviewing unrelated QA-flow PRs the same night, Henry noticed `arrivals.spec.ts:181` (the
+current line for this card's test — renumbered since `:89` above) failing on **four runs across
+three PRs** — `#477` once, `#483` once, and `#478` twice (its first run failed both attempts, so it
+was re-run, and the re-run failed first-attempt too) — none of them touching redirect code, and
+pulled the candidate count (`startsForThisUrl`, the reverse-find's pool of same-URL navigation
+starts) from every saved log:
 
 | starts for the URL | outcome across 4 sightings |
 | --- | --- |
