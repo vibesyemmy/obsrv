@@ -349,3 +349,69 @@ export function walkDialogNote(screenfuls: number, dialog = true): string {
     `content the page loads as it scrolls, and anything below the first screen, was not brought into view before measuring`
   )
 }
+
+/** One step's outcome, as much of it as coverage depends on. Structural
+ *  rather than imported from `src/mcp/flowRunner.ts`: `shared/` is what
+ *  `mcp/` and `cli/` both build on, and it does not depend on either. */
+export interface FlowStepOutcome {
+  status: 'ran' | 'failed' | 'not-reached'
+  /** Whether the page had stopped moving when this step's evidence was
+   *  measured. `false` means it had not; absent means the check could not
+   *  answer. Both make the step's evidence untrustworthy, for different
+   *  reasons, and the sentence names which. */
+  settled?: boolean
+}
+
+/**
+ * What a flow did not cover, as one sentence, or `null` when it covered
+ * everything it was given and every step's evidence was measured on a
+ * settled page.
+ *
+ * The same job `walkCoverageNote` does for one page's screenfuls, for a
+ * flow's steps — and for the same reason. A report that lists findings for
+ * three steps of nine, with nothing said about the other six, is read as a
+ * report on the flow. `not-reached` is not a quiet pass; neither is a step
+ * whose screen was photographed mid-animation.
+ *
+ * States counts and stops. It does not tell the reader to go and check
+ * something: what stopped the flow is on the failed step, in its own error,
+ * and this sentence's job is to say that the steps after it are unexamined
+ * rather than clean.
+ */
+export function flowCoverageNote(steps: FlowStepOutcome[]): string | null {
+  if (steps.length === 0) return null
+  // Position in the array IS the step number: the runner emits one outcome per
+  // input step, in order, including the ones it never attempted.
+  const failedAt = steps.findIndex(s => s.status === 'failed')
+  const notReached = steps.filter(s => s.status === 'not-reached').length
+  const attempted = steps.filter(s => s.status !== 'not-reached')
+  // A step measured on a moving page and a step whose settle check could not
+  // answer are both "do not trust this step's evidence" — counted together
+  // because the consequence is one, named apart because the causes differ.
+  const moving = attempted.filter(s => s.settled === false).length
+  const unmeasured = attempted.filter(s => s.settled === undefined).length
+  if (notReached === 0 && moving === 0 && unmeasured === 0) return null
+
+  const parts: string[] = []
+  if (notReached > 0) {
+    const them = notReached === 1 ? 'it' : 'them'
+    const because = failedAt >= 0 ? `step ${failedAt + 1} failed` : 'the flow stopped early'
+    parts.push(
+      `${notReached} of ${steps.length} steps ${notReached === 1 ? 'was' : 'were'} never attempted, because ${because} — ` +
+        `their absence from the findings below is not evidence that ${them === 'it' ? 'it was' : 'they were'} clean`,
+    )
+  }
+  if (moving > 0) {
+    parts.push(
+      `${moving} step${moving === 1 ? '' : 's'} ${moving === 1 ? 'was' : 'were'} measured while the page was still painting, ` +
+        `so ${moving === 1 ? 'its' : 'their'} evidence may be a frame behind what the step actually produced`,
+    )
+  }
+  if (unmeasured > 0) {
+    parts.push(
+      `${unmeasured} step${unmeasured === 1 ? '' : 's'} could not be checked for whether the page had settled, ` +
+        `so whether ${unmeasured === 1 ? 'its' : 'their'} evidence is current is unknown rather than fine`,
+    )
+  }
+  return parts.join('; ')
+}
