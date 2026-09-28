@@ -857,6 +857,57 @@ run"* with a fix nobody had time for, and it sat here until the recurrence made
 it worth doing. The alternative — investigating from scratch on the second
 sighting — is what this file exists to avoid.
 
+**Six sightings on 2026-09-28, and the candidate above now has numbers.** The
+test is at `:181` today; this entry's heading keeps the line it was filed
+under.
+
+Counted across every CI log saved that night. `arrivals.spec.ts:181` failed its
+first attempt on four runs (`#477`, `#478` twice, `#483`). `sync.spec.ts:139`
+failed twice (`#483`, `#485`) and **those two are not the same failure**:
+`#483`'s is `electronApplication.evaluate: Target page, context or browser has
+been closed`, a teardown, unrelated to this entry; `#485`'s is
+`the target emitted no url-changed`, `Received: 0`, which is this one seen from
+the other side.
+
+**One of the four was not a flake. `#478`'s first run failed both attempts** —
+first try and retry #1, same assertion. It passed on a re-run, which is why it
+merged, but a both-attempts failure says this can be deterministic within a run.
+Every other sighting was rescued by the retry, and that is the whole reason the
+word "flake" has stuck to it.
+
+**What the guard's own account discriminates, and what it does not.** The block
+prints `startsForThisUrl` — how many navigation starts `startedByDocument`'s
+reverse-find had to choose between for `hairline.html`:
+
+| run | first attempt | `startsForThisUrl` | retry | `startsForThisUrl` |
+| --- | --- | --- | --- | --- |
+| `#477` | note MISSING | **6** | note present | 2 |
+| `#478` first run | note MISSING | **6** | **note MISSING** | 3 |
+| `#478` re-run | note MISSING | **6** | note present | 3 |
+| `#483` | note MISSING | **6** | note present | 3 |
+
+Six candidates, four failures out of four. Two or three candidates, three passes
+out of four. The one exception is `#478`'s retry, which failed at three.
+
+**And the field that looks like the answer is not one.** `matched.fromBusDocument`
+is `false` in every failing block — and also in every *passing* "note present"
+block. On its own it discriminates nothing. The signal is the **count** of
+same-URL starts the reverse-find is choosing among, which is exactly the
+mechanism this entry already named: with six candidates it lands on a start whose
+`byDocument` is false and the commit is dropped at `ipc.ts:245`; with two or
+three it lands on the right one.
+
+**So the forcing route this entry lacked is cheap:** drive enough same-URL
+navigations before the redirect to reach six starts, then redirect. If that
+reproduces on demand, the candidate above stops being a candidate. Nobody needs
+to invent a fixture for it.
+
+**Read as evidence, not as a fix.** This is six logs counted, not a run —
+promotion from *unproven* to *supported, with a way to force it*. The
+recommendation of the entry above still holds: do not paper over it with a longer
+wait. Idris independently confirmed the `#478` row, both blocks and both numbers,
+from the raw log.
+
 ## `sync-trace.spec.ts:77`: the loop fixture's 30 s budget, not a crash
 
 `the loop fixture records trip, and the trace says so rather than only the
