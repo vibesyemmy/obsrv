@@ -1195,9 +1195,11 @@ is a two-line change to the spec and it is worth making the next time anyone is 
 
 ## `cli.spec.ts:212`: a leaked temp dir after SIGTERM, and why this one is not noise
 
-Seen once, on run [`36463050844`](https://github.com/vibesyemmy/obsrv/actions/runs/36463050844)
-attempt 2 (`#477`, 2026-09-28), rescued on retry. **It is listed here because it is the one entry in
-this file that is not a timing artefact:**
+Seen **twice** on 2026-09-28, both rescued on retry: run
+[`36463050844`](https://github.com/vibesyemmy/obsrv/actions/runs/36463050844) attempt 2 (`#477`), and
+then [`36470833485`](https://github.com/vibesyemmy/obsrv/actions/runs/36470833485) — **the run of the
+PR that added this entry.** Twice in roughly six suite runs that evening. **It is listed here because
+it is the one entry in this file that is not a timing artefact:**
 
 ```
 Error: expect(received).toEqual(expected)
@@ -1225,6 +1227,12 @@ directory could show up in the diff and the assertion would be over-broad — bu
 
 Either way **a directory was leaked**; what is unknown is by whom. The distinction matters because
 the first is a bug in cleanup-on-signal and the second is a bug in attribution.
+
+**The second sighting tilts it, without settling it.** Both runs leaked **exactly one** directory, with
+different random suffixes — `obsrv-cli-5iX7Fu` then `obsrv-cli-GdfJSz`. A previous child leaking late
+would depend on how two exits happened to overlap, and would not be expected to produce a count of
+exactly one on both occasions; one child leaking its own directory would. That is a tendency, not
+proof, and the creation-time measurement below is still what would answer it.
 
 **If it recurs**, the thing worth capturing is the leaked directory's **creation time and contents**
 against the spawn time of this test's child — that separates the two readings in one reading, where
