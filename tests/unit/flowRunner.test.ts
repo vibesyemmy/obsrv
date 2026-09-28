@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Flow } from '../../src/shared/flow'
-import { flowRefusalMessage, runFlow, startFlow, type FlowLockDeps, type FlowRunnerDeps } from '../../src/mcp/flowRunner'
+import { flowRefusalMessage, runFlow, startFlow, type FlowLockDeps, type FlowRunnerDeps, type ObservationReading } from '../../src/mcp/flowRunner'
 
 function flow(steps: Flow['steps']): Flow {
   return { steps }
@@ -216,5 +216,188 @@ describe('startFlow', () => {
     const raw = await wrapped.read()
     expect(raw).not.toBeNull()
     expect(JSON.parse(raw!).pid).toBe(55555) // left alone, not deleted out from under its new owner
+  })
+})
+
+describe('runFlow: recording what a step was expected to show', () => {
+  const settledCall: FlowRunnerDeps['call'] = async command => (command === 'captureRaster' ? { data: 'x', settled: true } : { ok: true })
+  const reading = (over: Partial<ObservationReading> = {}): ObservationReading => ({ found: false, complete: true, looked: 'looked here', ...over })
+
+  it("does not send observations to the step's own control command — they are the runner's, not the command's", async () => {
+    const payloads: Array<Record<string, unknown>> = []
+    await runFlow(flow([{ action: 'click', target: '.pay', observations: ['Order confirmed'] }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'click') payloads.push(payload)
+        return command === 'captureRaster' ? { settled: true } : { ok: true }
+      },
+      observe: async () => [reading({ found: true })],
+    })
+    expect(payloads).toEqual([{ target: '.pay' }])
+  })
+
+  it('reads a settled step once, for all its observations in order — present with what was seen, absent when the read was complete', async () => {
+    const asked: string[][] = []
+    const result = await runFlow(flow([{ action: 'click', target: '.pay', observations: ['Order confirmed', 'Refund issued'] }]), {
+      call: settledCall,
+      observe: async texts => {
+        asked.push(texts)
+        return [reading({ found: true, looked: 'the own text of 40 rendered elements', saw: ['Order confirmed #1234'] }), reading({ looked: 'the own text of 40 rendered elements' })]
+      },
+    })
+    expect(asked).toEqual([['Order confirmed', 'Refund issued']])
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'present', looked: 'the own text of 40 rendered elements', saw: ['Order confirmed #1234'] },
+      { expected: 'Refund issued', state: 'absent', looked: 'the own text of 40 rendered elements' },
+    ])
+  })
+
+  it('a string not found on an incomplete read is unknown, never absent — and the reader’s own account of the limit is kept', async () => {
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), {
+      call: settledCall,
+      observe: async () => [reading({ complete: false, looked: 'first 40 characters of each element; 12 were longer' })],
+    })
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'unknown', looked: 'first 40 characters of each element; 12 were longer' },
+    ])
+  })
+
+  it('a found string is present even on an incomplete read — a match is a match, only a miss depends on completeness', async () => {
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order'] }]), {
+      call: settledCall,
+      observe: async () => [reading({ found: true, complete: false })],
+    })
+    expect(result.steps[0]!.observations![0]).toMatchObject({ state: 'present' })
+  })
+
+  it('a read that throws is unknown with the reason, never absent', async () => {
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), {
+      call: settledCall,
+      observe: async () => {
+        throw new Error('the page did not answer')
+      },
+    })
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'unknown', looked: 'the read failed (the page did not answer), so nothing can be said either way' },
+    ])
+  })
+
+  it('a reader that answers fewer readings than it was asked leaves the rest unknown rather than mislabelled', async () => {
+    const result = await runFlow(flow([{ action: 'reload', observations: ['a', 'b'] }]), {
+      call: settledCall,
+      observe: async () => [reading({ found: true })],
+    })
+    expect(result.steps[0]!.observations![0]).toMatchObject({ expected: 'a', state: 'present' })
+    expect(result.steps[0]!.observations![1]).toMatchObject({ expected: 'b', state: 'unknown', looked: expect.stringMatching(/did not answer/) })
+  })
+
+  it('an unsettled step is unknown, and is not read at all — an unfinished frame cannot honestly say something is missing', async () => {
+    let read = 0
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), {
+      call: async command => (command === 'captureRaster' ? { settled: false, unsettledReason: 'animating' } : { ok: true }),
+      observe: async () => {
+        read++
+        return [reading({ found: true })]
+      },
+    })
+    expect(read).toBe(0)
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'unknown', looked: 'the page had not settled (animating) when this step finished, so nothing was read' },
+    ])
+  })
+
+  it("a step whose settle state could not be read is unknown too — settled is only vouched for when it was seen", async () => {
+    let read = 0
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), {
+      call: async command => {
+        if (command === 'captureRaster') throw new Error('timed out')
+        return { ok: true }
+      },
+      observe: async () => {
+        read++
+        return [reading()]
+      },
+    })
+    expect(read).toBe(0)
+    expect(result.steps[0]!.observations![0]).toMatchObject({ state: 'unknown', looked: expect.stringMatching(/settle state could not be read/) })
+  })
+
+  it("a failed step's observations are unknown and unread — what it was meant to show was not examined", async () => {
+    let read = 0
+    const result = await runFlow(flow([{ action: 'click', target: '.pay', observations: ['Order confirmed'] }]), {
+      call: async command => {
+        if (command === 'click') throw new Error('no such element')
+        return { settled: true }
+      },
+      observe: async () => {
+        read++
+        return [reading({ found: true })]
+      },
+    })
+    expect(read).toBe(0)
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'unknown', looked: 'the step failed, so what it was meant to show was not examined' },
+    ])
+  })
+
+  it('a step never reached keeps what was expected as not-reached — never an implied absent', async () => {
+    let read = 0
+    const result = await runFlow(flow([{ action: 'click' }, { action: 'reload', observations: ['Order confirmed', 'Receipt sent'] }]), {
+      call: async command => {
+        if (command === 'click') throw new Error('x')
+        return { settled: true }
+      },
+      observe: async () => {
+        read++
+        return []
+      },
+    })
+    expect(read).toBe(0)
+    expect(result.steps[1]).toEqual({
+      index: 1,
+      action: 'reload',
+      status: 'not-reached',
+      observations: [
+        { expected: 'Order confirmed', state: 'not-reached', looked: 'the step was not reached, so nothing was read' },
+        { expected: 'Receipt sent', state: 'not-reached', looked: 'the step was not reached, so nothing was read' },
+      ],
+    })
+  })
+
+  it('with no reader configured the observations are unknown — the runner does not guess a page it never read', async () => {
+    const result = await runFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), { call: settledCall })
+    expect(result.steps[0]!.observations).toEqual([
+      { expected: 'Order confirmed', state: 'unknown', looked: 'no reader was configured for this run, so nothing was read' },
+    ])
+  })
+
+  it('a step without observations carries no observations key at all, and no read happens for it', async () => {
+    let read = 0
+    const result = await runFlow(flow([{ action: 'reload' }, { action: 'reload', observations: [] }]), {
+      call: settledCall,
+      observe: async () => {
+        read++
+        return []
+      },
+    })
+    expect(read).toBe(0)
+    expect('observations' in result.steps[0]!).toBe(false)
+    expect('observations' in result.steps[1]!).toBe(false)
+  })
+
+  it('startFlow hands the reader through to the run', async () => {
+    const lock: FlowLockDeps = {
+      read: async () => null,
+      createExclusive: async () => {},
+      remove: async () => {},
+      isAlive: () => false,
+      now: () => 0,
+    }
+    const result = await startFlow(flow([{ action: 'reload', observations: ['Order confirmed'] }]), {
+      call: settledCall,
+      lock,
+      observe: async () => [reading({ found: true })],
+    })
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.result.steps[0]!.observations![0]).toMatchObject({ state: 'present' })
   })
 })
