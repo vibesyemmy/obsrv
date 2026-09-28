@@ -14,6 +14,27 @@ const step = (over: Partial<FlowReportStep> = {}): FlowReportStep => ({ action: 
  *  markup against the whole document passes even when the step's badge is
  *  wrong — the first version of the unknown-badge test below did exactly that,
  *  and survived a sabotage that folded unknown into ran. */
+/** The summary table's body, so a row-count assertion cannot be satisfied by
+ *  the per-step sections further down. Idris removed the not-reached rows from
+ *  this table and all 25 tests stayed green, because `toContain('not reached')`
+ *  was answered by the step badges alone. */
+const tableBody = (html: string): string => {
+  const from = html.indexOf('<tbody>')
+  const to = html.indexOf('</tbody>', from)
+  expect(from).toBeGreaterThan(-1)
+  expect(to).toBeGreaterThan(from)
+  return html.slice(from, to)
+}
+
+/** One step's "what you asked to see" block, so the no-verdict rule is checked
+ *  where a verdict would actually appear rather than against the whole page. */
+const askedHalfOf = (html: string, n: number): string => {
+  const sec = sectionOf(html, n)
+  const from = sec.indexOf('What you asked to see')
+  expect(from, 'the step has no asked-to-see block').toBeGreaterThan(-1)
+  return sec.slice(from)
+}
+
 const sectionOf = (html: string, n: number): string => {
   const from = html.indexOf(`id="step-${n}"`)
   const to = html.indexOf('<footer')
@@ -107,6 +128,33 @@ describe('flowReportHtml', () => {
     expect(html).not.toContain('<img src=x')
     expect(html).not.toContain('<script>bad()')
     expect(html).toContain('&lt;img src=x')
+  })
+
+
+  it('gives the summary table one row per step, including the ones never attempted', () => {
+    // Idris's sabotage: filtering not-reached rows out of the table left every
+    // test green, because nothing counted the rows.
+    const steps = [step(), { action: 'click', status: 'failed' as const }, { action: 'audit', status: 'not-reached' as const }, { action: 'lint', status: 'not-reached' as const }]
+    const body = tableBody(flowReportHtml(data(steps)))
+    expect(body.match(/<tr>/g) ?? []).toHaveLength(steps.length)
+    for (const n of [1, 2, 3, 4]) expect(body).toContain(`<td class="n">${n}</td>`)
+  })
+
+  it('carries no verdict vocabulary at all in the asked-to-see block', () => {
+    // Idris's sabotage: "Result: pass" beside an expectation passed every test,
+    // because the guard forbade three phrasings rather than the whole idea.
+    // This forbids the vocabulary, in the one block where a verdict would sit.
+    const asked = askedHalfOf(flowReportHtml(data([step({ expect: 'the order number is visible' })])), 1)
+    expect(asked).toContain('Obsrv does not judge this')
+    expect(asked).not.toMatch(/\b(pass|passed|passes|fail|failed|fails|met|unmet|satisfied|correct|incorrect|verdict|assert\w*)\b/i)
+  })
+
+  it('says an empty flow was empty, rather than giving it the all-clear', () => {
+    // The card's thesis inverted: zero steps driven must not read as a page
+    // that came back clean.
+    const html = flowReportHtml(data([]))
+    expect(html).toContain('This flow had no steps')
+    expect(html).not.toContain('Every step was attempted')
   })
 
   it('embeds the step screenshot it was given', () => {

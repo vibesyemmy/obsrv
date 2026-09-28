@@ -479,9 +479,16 @@ export function flowReportHtml(data: FlowReportData): string {
   const coverage =
     data.refused !== undefined
       ? `<p class="note gap"><b>The flow did not run.</b> ${escapeHtml(data.refused)}</p>`
-      : gap !== null
-        ? `<p class="note gap"><b>This report does not cover the whole flow.</b> ${escapeHtml(gap)}.</p>`
-        : `<p class="note">Every step was attempted, and every step's evidence was measured on a page that had stopped painting.</p>`
+      : data.steps.length === 0
+        ? // A flow with no steps is not a clean flow. `flowCoverageNote` says
+          // nothing for an empty list — correctly, since there is no coverage to
+          // describe — and the all-clear below would then read as a pass for a
+          // run that drove nothing at all. That is this card's own thesis
+          // inverted, and it is what the sentence exists to prevent.
+          `<p class="note gap"><b>This flow had no steps.</b> Nothing was driven and nothing was measured, so there is nothing below — an empty result here is the flow being empty, not the page being clean.</p>`
+        : gap !== null
+          ? `<p class="note gap"><b>This report does not cover the whole flow.</b> ${escapeHtml(gap)}.</p>`
+          : `<p class="note">Every step was attempted, and every step's evidence was measured on a page that had stopped painting.</p>`
   const rows = data.steps
     .map((s, i) => {
       const st = flowStepState(s)
