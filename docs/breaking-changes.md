@@ -24,6 +24,30 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### A ninth tool appears: `obsrv_flow`
+
+`obsrv_flow` drives a sequence of steps through the live app over one held
+session and returns a per-step report (`feat-flow-report`). **No existing
+tool's shape moves** — the snapshot diff is a single new key, and every one of
+the other eight is byte-identical, so nothing a caller already holds breaks.
+
+It is named here anyway, because the register's job is that the published
+surface never changes silently, and a client that enumerates `tools/list` sees
+one more entry than it did.
+
+**What a caller does:** nothing, unless it wants the new tool. A client that
+hard-codes the list of eight keeps working.
+
+**Two things about its reply worth knowing before using it**, because both are
+deliberate and both look like bugs if you expect otherwise:
+- a step that was never attempted comes back as `status: 'not-reached'` rather
+  than being omitted — **absence of a finding for it is not a pass**, and the
+  `coverage` sentence says so;
+- a step whose evidence was measured while the page was still painting comes
+  back with `settled: false`. It is neither clean nor failed, and the report
+  renders it as a third state.
+
+
 ### The measurement enters open shadow roots, and three sentences about not entering them retire
 
 `querySelectorAll`, a tree walk, `parentElement` and `document.elementFromPoint`

@@ -12,6 +12,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { rejectUndeclaredKeysUnderTest } from './strictOutput'
+import { runFlowTool } from './flowTool'
+import { startFlow } from './flowRunner'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
@@ -2685,6 +2687,94 @@ server.registerTool(
       content: [{ type: 'text', text: JSON.stringify(catalog, null, 2) }],
       structuredContent: { ...catalog },
     }
+  },
+)
+
+server.registerTool(
+  'obsrv_flow',
+  {
+    title: 'Drive a user flow step by step and report what each step found',
+    description:
+      `Drive a sequence of steps through the live Obsrv app over ONE held session and return a per-step report. ` +
+      `Live only: a flow is a sequence against a running app, and there is no headless equivalent of "what happened ` +
+      `at step 3".\n\n` +
+      `Each step is \`{ action, target?, ... }\` where \`action\` is a control command (\`navigate\`, \`click\`, ` +
+      `\`scroll\`, \`audit\`, \`lint\`, \`inspect\`, \`setPreset\` and the rest) and anything else on the step is ` +
+      `passed through to it. Add \`expect\` to a step to state, in your own words, what you expected to see there: ` +
+      `it is carried into the report beside the evidence, and **Obsrv does not judge it** — it reports what it ` +
+      `observed and leaves the verdict to you.\n\n` +
+      `The flow STOPS at the first step whose action fails, because every later step assumed the flow reached a ` +
+      `point it did not. Those later steps come back as \`not-reached\` rather than being dropped: a step nobody ` +
+      `attempted is not a step that passed. Every step also carries whether the page had stopped painting when its ` +
+      `evidence was taken — a step measured mid-paint is \`unknown\`, not clean.\n\n` +
+      `One flow at a time: a second call while a flow holds the app is refused, naming the pid that holds it and ` +
+      `for how long, rather than queued into the middle of someone else's sequence.`,
+    inputSchema: {
+      steps: z
+        .array(z.record(z.string(), z.unknown()))
+        .describe(
+          'The flow, in order. Each entry needs `action` (a control command); `target` and any other keys are ' +
+            "passed through to it. `expect` is yours: a sentence about what you expected at that step, reported " +
+            'beside the evidence and never judged.',
+        ),
+    },
+    outputSchema: {
+      reportPath: z.string().describe('The HTML report, written to a per-call temp dir.'),
+      coverage: z
+        .string()
+        .nullable()
+        .describe(
+          'What the report does not cover — steps never attempted, and steps whose evidence was measured while the ' +
+            'page was still painting. Null when every step was attempted and every one settled.',
+        ),
+      steps: z
+        .array(
+          z.object({
+            step: z.number().describe('1-based position in the flow as given.'),
+            action: z.string(),
+            target: z.string().optional().describe('Absent when the step named none.'),
+            status: z.enum(['ran', 'failed', 'not-reached']).describe('`not-reached` means an earlier step failed first, NOT that this step was clean.'),
+            settled: z
+              .boolean()
+              .optional()
+              .describe('Whether the page had stopped painting when this step was measured. Absent for a step never attempted, or when the check could not answer.'),
+            unsettledReason: z.string().optional().describe('Why it had not settled, when it had not.'),
+            error: z.string().optional().describe("The failing step's own message."),
+          }),
+        )
+        .describe('One entry per step given, including the ones never attempted.'),
+    },
+  },
+  async (input: { steps: Record<string, unknown>[] }): Promise<CallToolResult> => {
+    // Live only, so the plan is asked for live and a headless answer is a
+    // refusal rather than a fallback.
+    const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
+    if (resolved.path !== 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    const info = resolved.app.info
+    let out
+    try {
+      out = await runFlowTool(input.steps, {
+        start: flow => startFlow(flow, { call: (command, payload) => controlCall(info, command, payload, LIVE_APPLY_TIMEOUT_MS) }),
+        writeReport: async html => {
+          const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
+          const path = join(dir, 'flow.html')
+          await writeFile(path, html, 'utf8')
+          return path
+        },
+        now: () => new Date().toISOString(),
+        version: VERSION,
+      })
+    } catch (e) {
+      return toolError(liveFailure(e))
+    }
+    if (!out.ok) return toolError(out.error)
+    const structuredContent = { reportPath: out.reportPath, coverage: out.coverage, steps: out.steps }
+    const ran = out.steps.filter(s => s.status === 'ran').length
+    const lines = [
+      `${ran} of ${out.steps.length} steps ran. Report: ${out.reportPath}`,
+      out.coverage !== null ? `Not covered: ${out.coverage}.` : 'Every step was attempted, and every one settled.',
+    ]
+    return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent }
   },
 )
 
