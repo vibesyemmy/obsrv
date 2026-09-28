@@ -157,6 +157,30 @@ describe('flowReportHtml', () => {
     expect(html).not.toContain('Every step was attempted')
   })
 
+
+  it('renders a link when the flow navigated somewhere', () => {
+    const html = flowReportHtml({ ...data([step()]), url: 'https://shop.test/cart' })
+    expect(html).toContain('<a href="https://shop.test/cart">https://shop.test/cart</a>')
+  })
+
+  it('renders NO anchor at all when the flow never navigated', () => {
+    // The defect: `flowSubject` used to return the sentence "the page the app
+    // already had open", which the header rendered into `<a href="...">` — a
+    // broken link whose href was prose. Driving a page the app already had open
+    // is the ordinary case, so this is not an edge.
+    const { url: _drop, ...noUrl } = data([step()])
+    const html = flowReportHtml(noUrl)
+    const head = html.slice(0, html.indexOf('<h2>'))
+    expect(head).not.toContain('<a href=')
+    expect(head).toContain('this flow never navigated')
+  })
+
+  it('keeps the address out of the document title when there is none', () => {
+    const { url: _drop, ...noUrl } = data([step()])
+    const html = flowReportHtml(noUrl)
+    expect(html).toContain('<title>Obsrv flow report</title>')
+  })
+
   it('embeds the step screenshot it was given', () => {
     const html = flowReportHtml(data([step({ data: 'QUJD' })]))
     expect(html).toContain('src="data:image/png;base64,QUJD"')

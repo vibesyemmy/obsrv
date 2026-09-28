@@ -57,13 +57,26 @@ function expectationOf(step: FlowStep): string | undefined {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw : undefined
 }
 
-/** The address the report names. A flow need not contain a navigation at all —
- *  it can drive whatever the app already had open — and in that case the
- *  report says so rather than inventing a URL. */
-export function flowSubject(flow: Flow): string {
+/** The address the report names, or `undefined` when the flow never navigates.
+ *
+ *  It returned a **sentence** before — "the page the app already had open" —
+ *  which the header rendered into `<a href="...">`, making a broken link whose
+ *  href was prose. Absence is the honest answer, and the renderer decides how
+ *  to say it. A flow that drives a page the app already had open is the normal
+ *  case for a QA engineer resuming work, not an edge.
+ *
+ *  Reads `url` as well as `target` because the control server's `navigate`
+ *  takes `url`, while `target` is the field every other action uses and so the
+ *  one a first flow reaches for. */
+export function flowSubject(flow: Flow): string | undefined {
   const nav = flow.steps.find(s => s.action === 'navigate')
-  const target = nav !== undefined ? (nav as Record<string, unknown>)['target'] ?? (nav as Record<string, unknown>)['url'] : undefined
-  return typeof target === 'string' && target.trim().length > 0 ? target : 'the page the app already had open'
+  if (nav === undefined) return undefined
+  const raw = (nav as Record<string, unknown>)
+  for (const key of ['url', 'target']) {
+    const v = raw[key]
+    if (typeof v === 'string' && v.trim().length > 0) return v
+  }
+  return undefined
 }
 
 /** Zips the declared steps onto the outcomes so the report can show what was
@@ -106,7 +119,12 @@ export async function runFlowTool(steps: unknown, deps: FlowToolDeps): Promise<F
 
   const reportSteps = flowReportSteps(flow, started.result)
   const reportPath = await deps.writeReport(
-    flowReportHtml({ url: flowSubject(flow), generatedAt: deps.now(), version: deps.version, steps: reportSteps }),
+    flowReportHtml({
+      ...(flowSubject(flow) !== undefined ? { url: flowSubject(flow) } : {}),
+      generatedAt: deps.now(),
+      version: deps.version,
+      steps: reportSteps,
+    }),
   )
   return {
     ok: true,

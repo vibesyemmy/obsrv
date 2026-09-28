@@ -124,7 +124,20 @@ describe('flowSubject', () => {
     expect(flowSubject({ steps: [{ action: 'click' }, { action: 'navigate', target: 'https://shop.test' }] })).toBe('https://shop.test')
   })
 
-  it('says the app already had a page open when the flow never navigates', () => {
-    expect(flowSubject({ steps: [{ action: 'click', target: '.pay' }] })).toBe('the page the app already had open')
+  it('answers undefined when the flow never navigates, rather than a sentence', () => {
+    // A sentence here became an <a href> in the report. Absence is the honest
+    // answer and lets the renderer decide how to say it.
+    expect(flowSubject({ steps: [{ action: 'click', target: '.pay' }] })).toBeUndefined()
+  })
+
+  it("reads a navigate's `url` as well as its `target`", () => {
+    // The control server's navigate takes `url`; `target` is the field every
+    // other action uses, so a first flow reaches for that. Both name the page.
+    expect(flowSubject({ steps: [{ action: 'navigate', url: 'https://a.test' }] })).toBe('https://a.test')
+    expect(flowSubject({ steps: [{ action: 'navigate', target: 'https://b.test' }] })).toBe('https://b.test')
+  })
+
+  it('answers undefined for a navigate that names no page at all', () => {
+    expect(flowSubject({ steps: [{ action: 'navigate' }] })).toBeUndefined()
   })
 })
