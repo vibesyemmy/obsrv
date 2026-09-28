@@ -3,8 +3,8 @@
 Not read by `build-board.js` or `board:check` — this directory is deliberately outside their
 reach (flat, non-recursive `readdirSync` on `board/`), so nothing here can drift against a card
 the way a stored parent status could. This file names the cards it split into, one-way. Cards
-stay silent about this epic, so there is no pair of references that can disagree. If this file
-goes stale, it reads as an unmaintained plan — never as the board itself being wrong.
+cite this file by path and never by item number, so there is no pair of references that can
+disagree. If this file goes stale, it reads as an unmaintained plan — never as the board itself being wrong.
 
 ## The ask
 
@@ -74,7 +74,18 @@ checked mechanically.
    live. Verifiable without an app.
 2. `feat-flow-runner` — the step-runner, one held session, existing control commands.
 3. `feat-flow-report` — the per-step section, coverage ledger, the `obsrv_flow` sibling tool.
-4. `feat-flow-language` — plain language resolved into steps. Last, on purpose, on top of an
+4. `feat-flow-observations` — a step states what it expects to see, and the runner records what it
+   saw: present or absent, never pass or fail. Added after the fact; see the note below.
+5. `feat-flow-language` — plain language resolved into steps. Last, on purpose, on top of an
    already-verified foundation.
 
 Each is separately gateable. Ownership lives on the cards, not here.
+
+**Amended 2026-09-28 — a fifth card.** The report card promised that a stated expectation would be
+reported as present or absent, but the gate on `feat-flow-report` (seq #2395) confirmed what its
+author had already named (seq #2388, #2394): nothing in the definition or the runner captures an
+expectation as something checkable, or observes it, so the report had no signal to render. Rather
+than fake one — Obsrv pronouncing on something nobody measured — the capture became its own card,
+ahead of the language card, which now depends on it. The cards used to cite this file with an item
+count ("item 3 of 4") that the insertion made wrong; they now cite it by path only, so the next
+insertion cannot do the same.
