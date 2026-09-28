@@ -11,10 +11,11 @@ import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { OBSERVE_MAX_MATCHES, OBSERVE_MAX_UNRENDERED, OBSERVE_SCRIPT, type ObserveReport } from '../shared/observe'
 import { layoutScale } from '../shared/layoutScale'
 import { withinBudget, type AskOutcome } from '../shared/measureBudget'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
-import { parseAuditReport, parseInspectReport, parseLintReport } from '../shared/ipcPayloads'
+import { parseAuditReport, parseInspectReport, parseLintReport, parseObserveReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
 import { log } from './log'
 
@@ -1278,6 +1279,28 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     if (this.win.isDestroyed() || !this.firstNavDone) return null
     try {
       return this.checked(parseAuditReport(await this.ask(`${AUDIT_SCRIPT}(${AUDIT_MAX_TARGETS}, ${AUDIT_MAX_TEXT})`, budgetMs)))
+    } catch {
+      this.lastAsk = 'failed'
+      return null
+    }
+  }
+
+  /**
+   * The exact-text reader (`board/feat-flow-observations.md`, second PR): for
+   * each stated text, how many rendered elements contain it, the first
+   * matches with their rect, and matches that exist in the DOM but are not
+   * rendered. `JSON.stringify` on `texts` is what makes an arbitrary QA
+   * string safe to splice into the script's own source — the same reason
+   * `parseObserveRequest` already bounds their count and length before this
+   * is ever called, so a pathological request cannot make the spliced
+   * source itself unreasonably large. Same isolated world and the same
+   * untrusted-payload parsing as `auditPage`.
+   */
+  async observePage(texts: string[], budgetMs?: number): Promise<ObserveReport | null> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return null
+    try {
+      const script = `${OBSERVE_SCRIPT}(${JSON.stringify(texts)}, ${OBSERVE_MAX_MATCHES}, ${OBSERVE_MAX_UNRENDERED})`
+      return this.checked(parseObserveReport(await this.ask(script, budgetMs)))
     } catch {
       this.lastAsk = 'failed'
       return null

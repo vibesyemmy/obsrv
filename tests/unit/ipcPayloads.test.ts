@@ -17,7 +17,7 @@ import {
   parseSettings,
   parseTabId,
   parseOrientation,
-  parseUiState, parseInspectRequest, parseAuditRequest, parseLintRequest } from '../../src/shared/ipcPayloads'
+  parseUiState, parseInspectRequest, parseAuditRequest, parseLintRequest, parseObserveRequest, parseObserveReport } from '../../src/shared/ipcPayloads'
 import { MAX_SCROLL_SELECTOR } from '../../src/shared/types'
 
 describe('parseRect', () => {
@@ -803,5 +803,71 @@ describe('parseInspectReport and the layout viewport width', () => {
     expect(parseInspectReport(report)?.viewportWidth).toBeUndefined()
     expect(parseInspectReport({ ...report, viewportWidth: -1 })?.viewportWidth).toBeUndefined()
     expect(parseInspectReport({ ...report, viewportWidth: 'wide' })?.viewportWidth).toBeUndefined()
+  })
+})
+
+describe('parseObserveRequest', () => {
+  it('accepts a well-formed list of texts', () => {
+    expect(parseObserveRequest({ texts: ['Order confirmed', 'Total: $12'] })).toEqual({ texts: ['Order confirmed', 'Total: $12'] })
+  })
+  it.each([
+    ['not an object', 'nope'],
+    ['texts missing', {}],
+    ['texts not an array', { texts: 'Order confirmed' }],
+    ['an empty list', { texts: [] }],
+    ['past the count cap', { texts: Array.from({ length: 51 }, (_, i) => `text ${i}`) }],
+    ['a non-string entry', { texts: ['fine', 7] }],
+    ['an entry past the length cap', { texts: ['x'.repeat(301)] }],
+    ['a blank entry', { texts: ['fine', '   '] }],
+  ])('rejects %s', (_name, raw) => {
+    expect(typeof parseObserveRequest(raw)).toBe('string')
+  })
+})
+
+describe('parseObserveReport', () => {
+  const good = {
+    viewport: { width: 1280, height: 800 },
+    findings: [
+      {
+        text: 'Order confirmed',
+        renderedCount: 1,
+        matches: [{ element: 'p#own', rect: { x: 16, y: 40, width: 120, height: 20 } }],
+        unrenderedCount: 0,
+        unrendered: [],
+      },
+      { text: 'Ghost text', renderedCount: 0, matches: [], unrenderedCount: 1, unrendered: [{ element: 'p#ghost', rect: { x: 0, y: 0, width: 0, height: 0 } }] },
+    ],
+    truncated: { matches: 0, unrendered: 0 },
+  }
+  it('copies a good report, findings included in order', () => {
+    const r = parseObserveReport(good)!
+    expect(r).toEqual(good)
+    expect(r.findings).not.toBe(good.findings)
+  })
+  it('carries the frames block the same way parseAuditReport does, and omits it when absent', () => {
+    expect(parseObserveReport({ ...good, frames: { count: 2, viewportCoverage: 0.4 } })!.frames).toEqual({ count: 2, viewportCoverage: 0.4 })
+    expect(parseObserveReport(good)!.frames).toBeUndefined()
+  })
+  it.each([
+    ['not an object', 'nope'],
+    ['a missing viewport', { ...good, viewport: undefined }],
+    ['a missing truncated block', { ...good, truncated: undefined }],
+    ['a non-integer truncation count', { ...good, truncated: { matches: 1.5, unrendered: 0 } }],
+    ['findings not an array', { ...good, findings: 'nope' }],
+    ['findings past the text-count cap', { ...good, findings: Array.from({ length: 51 }, () => good.findings[0]) }],
+  ])('rejects %s', (_name, raw) => {
+    expect(parseObserveReport(raw)).toBeNull()
+  })
+  it(
+    'fails the whole report on one bad finding, rather than dropping just that entry — ' +
+      'a silently missing finding would read as a QA-stated observation that never happened',
+    () => {
+      const badFinding = { ...good.findings[0], renderedCount: -1 }
+      expect(parseObserveReport({ ...good, findings: [good.findings[0], badFinding] })).toBeNull()
+    },
+  )
+  it('rejects a finding whose match list is longer than the reader is capped at — the page reporting more than it was asked to is not salvageable', () => {
+    const tooMany = { ...good.findings[0], matches: Array.from({ length: 21 }, () => good.findings[0]!.matches[0]) }
+    expect(parseObserveReport({ ...good, findings: [tooMany] })).toBeNull()
   })
 })
