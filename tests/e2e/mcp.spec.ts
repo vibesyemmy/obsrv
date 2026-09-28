@@ -62,7 +62,7 @@ test.afterAll(async () => {
 const call = (name: string, args: Record<string, unknown>): Promise<CallToolResult> =>
   client.callTool({ name, arguments: args }, undefined, { timeout: CALL_TIMEOUT_MS }) as Promise<CallToolResult>
 
-test('initialize + tools/list: seven tools with schemas, honestly annotated', async () => {
+test('initialize + tools/list: nine tools with schemas, honestly annotated', async () => {
   expect(client.getServerVersion()).toMatchObject({ name: 'obsrv-mcp-server' })
 
   const { tools } = await client.listTools()
@@ -70,6 +70,7 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
     'obsrv_audit',
     'obsrv_diff',
     'obsrv_drive',
+    'obsrv_flow',
     'obsrv_inspect',
     'obsrv_lint',
     'obsrv_presets',
@@ -78,8 +79,12 @@ test('initialize + tools/list: seven tools with schemas, honestly annotated', as
   ])
   for (const tool of tools) {
     expect(tool.description).toBeTruthy()
-    // obsrv_drive mutates visible app state and says so; the rest are reads.
-    expect(tool.annotations?.readOnlyHint).toBe(tool.name !== 'obsrv_drive')
+    // obsrv_drive and obsrv_flow mutate visible app state and say so; the rest
+    // are reads. The list is named rather than negated against one tool: the
+    // single-exception version silently required a new driving tool to claim it
+    // was a read (`obsrv_flow`, 2026-09-28).
+    const drives = ['obsrv_drive', 'obsrv_flow']
+    expect(tool.annotations?.readOnlyHint).toBe(!drives.includes(tool.name))
     expect(tool.inputSchema).toMatchObject({ type: 'object' })
     expect(tool.outputSchema).toMatchObject({ type: 'object' })
   }

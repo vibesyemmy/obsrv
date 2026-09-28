@@ -446,5 +446,18 @@
     "throttles[].network.latencyMs",
     "throttles[].network.uploadBps",
     "throttles[].summary"
+  ],
+  "obsrv_flow": [
+    "coverage",
+    "reportPath",
+    "steps",
+    "steps[].action",
+    "steps[].error",
+    "steps[].settled",
+    "steps[].status",
+    "steps[].status = [failed|not-reached|ran]",
+    "steps[].step",
+    "steps[].target",
+    "steps[].unsettledReason"
   ]
 }
