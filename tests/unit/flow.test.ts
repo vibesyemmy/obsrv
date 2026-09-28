@@ -123,3 +123,49 @@ describe('validateFlow', () => {
     expect(result.flow.steps[0]).toEqual({ action: 'navigate', ok: false, step: 'x', rejection: 'x' })
   })
 })
+
+describe('validateFlow: a step may state what it expects to see', () => {
+  it('accepts observations as a list of non-blank strings, carried through verbatim', () => {
+    const result = validateFlow([{ action: 'click', target: '.pay', observations: ['Order confirmed', ' Total: $12 '] }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps[0]!.observations).toEqual(['Order confirmed', ' Total: $12 '])
+  })
+
+  it('accepts an empty observations list, and a step with none', () => {
+    expect(validateFlow([{ action: 'reload', observations: [] }]).ok).toBe(true)
+    expect(validateFlow([{ action: 'reload' }]).ok).toBe(true)
+  })
+
+  it('rejects observations that is not an array, naming what it got', () => {
+    for (const bad of ['Order confirmed', 7, {}, null, true]) {
+      const result = validateFlow([{ action: 'reload', observations: bad }])
+      expect(result.ok).toBe(false)
+      if (result.ok) throw new Error('expected rejection')
+      expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/"observations" must be an array of strings, got/) }])
+    }
+  })
+
+  it('rejects an entry that is not a string, naming its position inside the list', () => {
+    const result = validateFlow([{ action: 'reload', observations: ['fine', 42, 'also fine'] }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/observations\[1\] must be a string, got number/) }])
+  })
+
+  it('rejects a blank entry — an empty string is "present" on every page, which says nothing', () => {
+    for (const blank of ['', '   ', '\n\t']) {
+      const result = validateFlow([{ action: 'reload', observations: ['ok', blank] }])
+      expect(result.ok).toBe(false)
+      if (result.ok) throw new Error('expected rejection')
+      expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/observations\[1\] is blank/) }])
+    }
+  })
+
+  it('names the step, so a bad list in step 2 is not reported against step 0', () => {
+    const result = validateFlow([{ action: 'reload' }, { action: 'reload' }, { action: 'reload', observations: [3] }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections.map(r => r.index)).toEqual([2])
+  })
+})

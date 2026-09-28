@@ -17,6 +17,14 @@ export interface FlowStep {
    *  what it names depends on `action` and is the runner's concern, not this
    *  module's. */
   target?: string
+  /**
+   * What the QA engineer expects to see once the step has run: literal text,
+   * stated as the engineer would say it. Not part of the action's own payload —
+   * the runner strips it before the step's control command is issued — and
+   * never a verdict: the runner records what it saw for each (present, absent,
+   * unknown, not-reached), and a reader decides whether that is what was wanted.
+   */
+  observations?: string[]
   /** Whatever else the action needs, passed through unvalidated: this module
    *  agrees on the step's shape, not on each command's own payload. */
   [key: string]: unknown
@@ -66,6 +74,24 @@ function validateStep(step: unknown, index: number): StepValidation {
   }
   if ('target' in record && record.target !== undefined && typeof record.target !== 'string') {
     return { ok: false, rejection: { index, reason: `step ${index}'s "target" must be a string, got ${typeOf(record.target)}` } }
+  }
+  if ('observations' in record && record.observations !== undefined) {
+    const { observations } = record
+    if (!Array.isArray(observations)) {
+      return { ok: false, rejection: { index, reason: `step ${index}'s "observations" must be an array of strings, got ${typeOf(observations)}` } }
+    }
+    for (let i = 0; i < observations.length; i++) {
+      const entry: unknown = observations[i]
+      if (typeof entry !== 'string') {
+        return { ok: false, rejection: { index, reason: `step ${index}'s observations[${i}] must be a string, got ${typeOf(entry)}` } }
+      }
+      if (entry.trim().length === 0) {
+        return {
+          ok: false,
+          rejection: { index, reason: `step ${index}'s observations[${i}] is blank; an empty string is present on every page, so it would say nothing` },
+        }
+      }
+    }
   }
   return { ok: true, step: { ...record, action } as FlowStep }
 }

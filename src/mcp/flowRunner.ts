@@ -28,6 +28,48 @@ export type { FlowLockDeps, FlowLockHolder }
  */
 export type FlowStepStatus = 'ran' | 'failed' | 'not-reached'
 
+/**
+ * What a stated observation came to. Never pass or fail: an `absent` is
+ * something for the QA engineer to read, not a verdict Obsrv pronounces.
+ *
+ * `present` and `absent` are the only two that claim to know, and `absent`
+ * claims it only when the read was complete. `unknown` is everything the
+ * runner could not honestly say — the step failed, the page had not
+ * settled, the read failed or was cut short — and it is never collapsed
+ * into `absent`, because a frame that had not finished painting cannot say
+ * something is missing. `not-reached` is a step that never ran, never an
+ * implied `absent`.
+ */
+export type ObservationState = 'present' | 'absent' | 'unknown' | 'not-reached'
+
+export interface ObservationRecord {
+  /** The text the QA engineer stated, verbatim. */
+  expected: string
+  state: ObservationState
+  /** Where it looked and, for anything but a plain `present`, what it could
+   *  not see or why it did not look. A sentence rather than a code, because
+   *  the report prints it: "absent" must stay distinguishable from "looked
+   *  somewhere the thing could not be". */
+  looked: string
+  /** What Obsrv saw where it matched, when the reader has it: the matching
+   *  text. An `absent` carries none — nothing measures what was there
+   *  instead, and inventing it would be a claim nobody took a reading for. */
+  saw?: string[]
+}
+
+/** What one read of the page says about one stated text. The reader is
+ *  injected because how a page is read is a separate decision from how a
+ *  run records it; the runner decides the state from these three facts. */
+export interface ObservationReading {
+  found: boolean
+  /** True when everything the reader is able to read was read. False when it
+   *  was cut (a cap, a truncated snippet): a string not found on an incomplete
+   *  read is unknown, never absent. */
+  complete: boolean
+  looked: string
+  saw?: string[]
+}
+
 export interface FlowStepResult {
   index: number
   action: FlowStep['action']
@@ -51,6 +93,10 @@ export interface FlowStepResult {
    *  reuses it rather than paying for (and re-perturbing timing with) a
    *  second capture when a per-step image is wanted later. */
   data?: string
+  /** One record per observation the step stated, in the order stated. Absent
+   *  (not empty) for a step that stated none, so a flow without observations
+   *  produces exactly the result it always did. */
+  observations?: ObservationRecord[]
 }
 
 export interface FlowRunResult {
@@ -60,6 +106,48 @@ export interface FlowRunResult {
 export interface FlowRunnerDeps {
   /** One control-protocol command against the held session. */
   call: (command: string, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>
+  /** Reads the page for the given stated texts, answering one reading per text
+   *  in the same order. Called once per step, after the step has settled and
+   *  never before. Without one, every observation is `unknown`. */
+  observe?: (texts: string[]) => Promise<ObservationReading[]>
+}
+
+const NOT_REACHED = 'the step was not reached, so nothing was read'
+
+/** The state and account for every stated text on a step that did run. Reads
+ *  only a step that ran and settled: a failed step's screen is kept elsewhere
+ *  but what it was meant to show was not examined, and an unsettled or
+ *  unverified frame cannot honestly say something is missing. */
+async function recordObservations(
+  texts: string[],
+  step: { failed: boolean; settled: boolean | undefined; unsettledReason: string | undefined },
+  observe: FlowRunnerDeps['observe'],
+): Promise<ObservationRecord[]> {
+  const unknown = (looked: string): ObservationRecord[] => texts.map(expected => ({ expected, state: 'unknown', looked }))
+  if (step.failed) return unknown('the step failed, so what it was meant to show was not examined')
+  if (step.settled === false) {
+    return unknown(`the page had not settled (${step.unsettledReason ?? 'no reason given'}) when this step finished, so nothing was read`)
+  }
+  if (step.settled === undefined) {
+    return unknown("the step's settle state could not be read, so nothing was read: a missing result would not be honest")
+  }
+  if (observe === undefined) return unknown('no reader was configured for this run, so nothing was read')
+  let readings: ObservationReading[]
+  try {
+    readings = await observe(texts)
+  } catch (e) {
+    return unknown(`the read failed (${e instanceof Error ? e.message : String(e)}), so nothing can be said either way`)
+  }
+  return texts.map((expected, i): ObservationRecord => {
+    const r = readings[i]
+    if (r === undefined) return { expected, state: 'unknown', looked: 'the reader did not answer for this text, so nothing can be said either way' }
+    return {
+      expected,
+      state: r.found ? 'present' : r.complete ? 'absent' : 'unknown',
+      looked: r.looked,
+      ...(r.saw !== undefined ? { saw: r.saw } : {}),
+    }
+  })
 }
 
 /** Runs every step of a validated flow in sequence over the one `call`
@@ -74,10 +162,17 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
   let stopped = false
   for (let index = 0; index < flow.steps.length; index++) {
     const step = flow.steps[index]!
-    const { action, target, ...rest } = step
+    const { action, target, observations, ...rest } = step
+    const stated = observations !== undefined && observations.length > 0 ? observations : undefined
 
     if (stopped) {
-      steps.push({ index, action, ...(target !== undefined ? { target } : {}), status: 'not-reached' })
+      steps.push({
+        index,
+        action,
+        ...(target !== undefined ? { target } : {}),
+        status: 'not-reached',
+        ...(stated !== undefined ? { observations: stated.map(expected => ({ expected, state: 'not-reached' as const, looked: NOT_REACHED })) } : {}),
+      })
       continue
     }
 
@@ -109,6 +204,9 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       // Can't say — does not change the step's own ran/failed status.
     }
 
+    const recorded =
+      stated === undefined ? undefined : await recordObservations(stated, { failed: error !== undefined, settled, unsettledReason }, deps.observe)
+
     steps.push({
       index,
       action,
@@ -119,6 +217,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       ...(settled !== undefined ? { settled } : {}),
       ...(unsettledReason !== undefined ? { unsettledReason } : {}),
       ...(data !== undefined ? { data } : {}),
+      ...(recorded !== undefined ? { observations: recorded } : {}),
     })
 
     if (error !== undefined) stopped = true
@@ -152,7 +251,7 @@ export async function startFlow(flow: Flow, deps: StartFlowDeps): Promise<StartF
     return { ok: false, refused: { heldBy: acquired.heldBy, ageMs: now - Date.parse(acquired.heldBy.startedAt) } }
   }
   try {
-    const result = await runFlow(flow, { call: deps.call })
+    const result = await runFlow(flow, { call: deps.call, ...(deps.observe !== undefined ? { observe: deps.observe } : {}) })
     return { ok: true, result }
   } finally {
     await releaseFlowLock(lock)
