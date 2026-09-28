@@ -1,6 +1,8 @@
 ---
 title: "Resolve a plain-language flow description into steps — last, on a verified foundation"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: feat
 order: 115
 ---
@@ -8,6 +10,14 @@ order: 115
 FILED BY WREN 2026-09-26, from the whole-team brainstorm on the QA-flow-report feature
 (`board/epics/qa-flow-reports.md`). Drafted by Henry to the point of being mechanical to write.
 Depends on `feat-flow-report` and `feat-flow-observations`.
+
+**Claimed 2026-09-29** on Opeyemi's direct instruction in the room, via a subagent Henry is
+running end to end (it opens a PR and stops; Idris gates it, Henry merges — same accountability as
+anything else on his queue). **Scoped to a first slice that neither open dependency blocks:** the
+resolver in isolation — a plain-language sentence in, a validated step list out, pure, with no
+report surface and no MCP wiring. The card's full acceptance (the report showing what each
+sentence resolved into) still needs `feat-flow-report` and `feat-flow-observations` to actually
+exist before it can be built or verified, so that half waits; the resolver itself does not.
 
 **The role this plays.** The interpretation layer: a QA engineer writes "log in, add an item,
 checkout" instead of a coordinate-based recording — a recording captures clicks, not intent, and
