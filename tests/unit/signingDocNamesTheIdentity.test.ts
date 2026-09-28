@@ -33,8 +33,15 @@ function localBuildBlock(): string {
 }
 
 describe('the local signed build the doc describes', () => {
-  it('exports every variable the build itself refuses to run without', () => {
-    expect(localBuildBlock()).toContain(IDENTITY_VAR)
+  it('exports every variable the build itself refuses to run without, as a LIVE line', () => {
+    const block = localBuildBlock()
+    // Not `toContain`: Idris commented the export out rather than deleting it —
+    // `# export SIGNING_IDENTITY=...` — and all three tests stayed green, because
+    // a substring match cannot tell a dead comment from a live command. That is
+    // the likelier real-world state too: someone parks the line "for later" and
+    // gets a passing suite with a build that still fails at its last step.
+    expect(block).toMatch(new RegExp(`^\\s*export\\s+${IDENTITY_VAR}=`, 'm'))
+    expect(block).not.toMatch(new RegExp(`^\\s*#.*\\b${IDENTITY_VAR}\\b`, 'm'))
   })
 
   it('runs the script whose requirement that is', () => {
