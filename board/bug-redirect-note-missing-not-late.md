@@ -689,3 +689,42 @@ show — a page's own redirect stamped as the bus's. `main` measured 3-in-20 and
 sweeps; the fix's clean 20 is the one-in-eight computed from the pooled rate. There is no instrument
 short of sampling CI, and building one means putting a seam in production code for a defect only CI has
 ever seen.
+
+## A candidate mechanism, dated 2026-09-28 — still waiting on the same choice above
+
+While reviewing unrelated QA-flow PRs the same night, Henry noticed `arrivals.spec.ts:181` (the
+current line for this card's test — renumbered since `:89` above) failing on **four runs across
+three PRs, two of those runs on `#478`'s identical tree** (confirmed from each log's checked-out
+head against GitHub, not from labelling) — **`#477` once, `#483` once, and `#478` twice on one
+unchanged tree, where it failed three of its four attempts** (run one's first try and its retry,
+then run two's first try again) — none of them touching redirect code, and pulled the candidate
+count (`startsForThisUrl`, the reverse-find's pool of same-URL navigation starts) from every saved
+log:
+
+| starts for the URL | outcome across 4 sightings |
+| --- | --- |
+| 6 | fails, 4 of 4 |
+| 2–3 | passes, 3 of 4 (the one exception: `#478`'s retry, failed at 3) |
+
+Read together with `ipc.ts`'s reverse-find (documented above, in `docs/e2e-flakes.md`'s
+`arrivals.spec.ts:89` entry, which this table was added to in `#486`): with six candidate starts for
+the same URL, the reverse-find lands on one with no redirect provenance and the note is never
+produced — not late, genuinely never made. `fromBusDocument` alone does **not** discriminate
+(checked: the passing blocks carry `false` too); the count is the signal.
+
+**This promotes the mechanism from *unproven* to *supported, with a stated way to force it* — not to
+proven, and not to a forcing route that exists yet.** It is a reading of six logs, one exception
+unexplained, not a run. The two options above are unchanged; what this adds is a concrete, checkable
+prediction either option can now be tested against: **splice extra same-URL navigations in before the
+redirect to reach six starts, and see if it fails on demand.**
+
+**Whoever runs that test: it must be a CI run with both arms baselined in the same run — the spliced
+spec and the unmodified one — not a local repeat.** This card already measured why, above, in
+*"The local sweep, and why its silence is the finding"* (`#440`, 2026-09-22): 20x local repeats of
+both the fix and `main` came back 0-in-40 on each arm, same machine, against `main`'s actual CI rate
+of 3-in-20 on that direction. Same reasoning applies unchanged to a spliced-vs-unmodified pair: a
+local-only result here cannot distinguish "six starts doesn't force it" from "this machine never
+reproduces the race either way" — the exact shape that already burned this card once (the
+`expect.poll` fix that a reading suggested and a CI run refuted). A green local splice would look
+like a refutation and would not be one. Don't re-run the local sweep to check this — it's the
+paragraph directly above.
