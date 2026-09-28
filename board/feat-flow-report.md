@@ -24,12 +24,15 @@ inherently live. Reversing that decision is out of scope here.
   2026-09-29 into two halves with different costs, named before either was built (Henry): DOM
   state reuses the existing `inspect` readout (element, box, text) at one extra control call per
   targeted step — cheap. A per-step network record needs a `webContents.debugger` session held
-  for the flow's duration, and this repo's own code already warns that such a session changes
-  timing (`src/main/targetSource.ts:188`) — the exact thing a flow's `settled`/`unsettledReason`
-  exists to measure honestly. So: DOM state ships first on its own; network ships only once a
-  measured before/after comparison shows what it costs the very timing it would be reporting on,
-  and if the cost is real, the report says so, the way `--full-page` already warns when it
-  changed the layout;*
+  for the flow's duration, and `src/main/targetSource.ts:188` already says, of exactly that kind
+  of session, that "detaching it wipes Electron's own emulation with it" — a flow runs under a
+  preset, and device emulation **is** the preset, so an attach-then-detach for a network record
+  risks dropping the flow's preset mid-run. (An earlier version of this note said the file warns
+  about *timing*; it doesn't — that was Henry's own inference, corrected once he re-read the line
+  he'd cited, and the emulation risk is the sharper, documented one.) So: DOM state ships first on
+  its own; network ships only once a measured before/after shows whether the preset survives
+  attach-then-detach — a yes/no, not a millisecond count — and if it does not, the report has to
+  say the network record cost it, the way `--full-page` already warns when it changed the layout;*
 - **Obsrv's own passive findings (visual/accessibility) are visually separated from the QA
   engineer's stated expected observations**, and the stated expectation is shown beside its
   evidence with Obsrv judging nothing — the same "report, don't decide" line the audit and lint
