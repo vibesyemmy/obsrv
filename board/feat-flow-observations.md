@@ -1,6 +1,8 @@
 ---
 title: "A step can state what it expects to see, and the runner records what it saw — present or absent, never pass or fail"
-column: backlog
+column: doing
+owner: "Dogu"
+waiting: ""
 kind: feat
 order: 114
 ---
