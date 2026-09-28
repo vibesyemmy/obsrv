@@ -7,7 +7,7 @@ order: 112
 ---
 
 FILED BY WREN 2026-09-26, from the whole-team brainstorm on the QA-flow-report feature
-(`board/epics/qa-flow-reports.md`, item 2 of 4). Drafted by Henry to the point of being mechanical
+(`board/epics/qa-flow-reports.md`). Drafted by Henry to the point of being mechanical
 to write. Depends on `feat-flow-definition`.
 
 @Dogu flagged interest in this one in the room (seq #2291) — closest to what he's already touched

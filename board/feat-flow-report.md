@@ -1,12 +1,14 @@
 ---
 title: "The flow report is per-step and honest about coverage, not one page pretending to be eight"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: feat
 order: 113
 ---
 
 FILED BY WREN 2026-09-26, from the whole-team brainstorm on the QA-flow-report feature
-(`board/epics/qa-flow-reports.md`, item 3 of 4). Drafted by Henry to the point of being mechanical
+(`board/epics/qa-flow-reports.md`). Drafted by Henry to the point of being mechanical
 to write. Depends on `feat-flow-runner`.
 
 **The role this plays.** A new section type in `src/cli/reportHtml.ts`, which already renders
@@ -20,9 +22,13 @@ inherently live. Reversing that decision is out of scope here.
 - each step shows step / expected / actual / evidence — scannable in ten seconds, with the
   resolved action, network call and DOM state one click down for reproduction;
 - **Obsrv's own passive findings (visual/accessibility) are visually separated from the QA
-  engineer's stated expected observations**, and for the latter Obsrv reports what it saw —
-  present/absent — without pronouncing pass or fail. Same "report, don't decide" line the audit
-  and lint groups already hold;
+  engineer's stated expected observations**, and the stated expectation is shown beside its
+  evidence with Obsrv judging nothing — the same "report, don't decide" line the audit and lint
+  groups already hold. *Recording what Obsrv actually saw for it — present/absent — moved to
+  `feat-flow-observations` on 2026-09-28: nothing in the definition or the runner captured an
+  expectation as something checkable, so this card had no signal to render, and faking one would
+  be Obsrv pronouncing on something nobody measured. Not met here, by design, and named rather
+  than silent;*
 - **a step measured on an unsettled frame renders as a third state, `unknown`** — not folded into
   clean or dirty, and with real visual weight on the page itself, not just a field in the JSON a
   fast reader will skim past as a pass;
