@@ -1143,7 +1143,7 @@ test('obsrv_flow drives a real flow, reports every step, and writes the report t
   for (const n of [1, 2, 3, 4]) expect(html).toContain(`id="step-${n}"`)
 })
 
-test('a second obsrv_flow call is refused while one holds the app, naming who holds it', async () => {
+test('a flow releases its lock when it finishes, so a sequential second call succeeds', async () => {
   // The lock is released when a flow finishes, so a sequential second call must
   // SUCCEED — proving the refusal path is about concurrency and not a lock left
   // behind. The refusal itself is unit-tested against an injected lock; what is
