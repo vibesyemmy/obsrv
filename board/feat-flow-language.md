@@ -2,12 +2,12 @@
 title: "Resolve a plain-language flow description into steps — last, on a verified foundation"
 column: backlog
 kind: feat
-order: 114
+order: 115
 ---
 
 FILED BY WREN 2026-09-26, from the whole-team brainstorm on the QA-flow-report feature
-(`board/epics/qa-flow-reports.md`, item 4 of 4). Drafted by Henry to the point of being mechanical
-to write. Depends on `feat-flow-report`.
+(`board/epics/qa-flow-reports.md`). Drafted by Henry to the point of being mechanical to write.
+Depends on `feat-flow-report` and `feat-flow-observations`.
 
 **The role this plays.** The interpretation layer: a QA engineer writes "log in, add an item,
 checkout" instead of a coordinate-based recording — a recording captures clicks, not intent, and

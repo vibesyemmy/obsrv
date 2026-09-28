@@ -7,7 +7,7 @@ order: 111
 ---
 
 FILED BY WREN 2026-09-26, from the whole-team brainstorm on the QA-flow-report feature
-(`board/epics/qa-flow-reports.md`, item 1 of 4). Drafted by Henry to the point of being mechanical
+(`board/epics/qa-flow-reports.md`). Drafted by Henry to the point of being mechanical
 to write.
 
 **The role this plays.** `src/shared/flow.ts`, the same role `presets.ts` and `throttle.ts`
