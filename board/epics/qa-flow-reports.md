@@ -91,3 +91,15 @@ than fake one — Obsrv pronouncing on something nobody measured — the capture
 ahead of the language card, which now depends on it. The cards used to cite this file with an item
 count ("item 3 of 4") that the insertion made wrong; they now cite it by path only, so the next
 insertion cannot do the same.
+
+**Done 2026-09-29.** Cards 1 through 5 are `done` — a QA engineer can hand `obsrv_flow` a
+hand-written step list or a plain-language description, drive it over one held session against a
+live app, and get a per-step report naming what ran, what settled, what was expected, what Obsrv
+actually read, and a resolved-sentence line distinguishing "Obsrv misunderstood this" from "this is
+actually broken". Card 6, `feat-flow-selector-click`, stays in `backlog`, unowned, added after the
+resolver (card 5) shipped and found it: a described flow cannot click a named element yet, because
+`click` takes coordinates and only `inspect` takes a selector. It was never one of this epic's own
+acceptance clauses — the epic's ask is met without it — but it is the thing standing between today's
+feature and the sentence it was pitched on, "log in, add an item, checkout", and naming that gap
+here is why "the epic is done" and "the feature does everything its own pitch implied" are not
+quite the same claim.

@@ -1,8 +1,7 @@
 ---
 title: "The flow report is per-step and honest about coverage, not one page pretending to be eight"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: feat
 order: 113
 ---
@@ -50,3 +49,34 @@ inherently live. Reversing that decision is out of scope here.
 4096px capture cap once per step — the existing limit on report pins. Ships with this named on
 the card and, if it lands as a real limitation, in the report itself. Per-region capture is a
 future card if it ever actually blocks someone, not built speculatively ahead of that.
+
+## DONE 2026-09-29
+
+`#493`: the DOM-state half of clause two (address, size, density, `loading` only when true) —
+cheap, a round-trip from memory rather than a measurement, shipped first on its own. `#504`: the
+measurement clause two's network half was gated on — does an attach-then-detach take a flow's
+preset with it? No. Reproduced independently on a second machine after its own detector turned out
+to be a coincidence of the test's original fixture, caught and fixed before merge. `#505`: the
+network record itself, built on Opeyemi's explicit "build it" (room, 2026-09-29) once the
+measurement cleared it.
+
+**`#505`'s own review is worth citing in full, because the record it produced needed a second
+round to be trustworthy.** Idris attacked the one inferred fact Henry asked her to attack — that a
+network session's `stopped` reason was asserted as "a throttle being lifted" rather than observed
+— and found the assertion was not just imprecise but reachable-today wrong: an ordinary `setPreset`
+to a different density mid-flow recreates the window, detaches the old debugger for an unrelated
+reason, and because the recording flag was never reset, silently killed recording for the rest of
+that tab's life, not just that step. Henry's first fix corrected the flag but also cleared the
+`stopped` marker on restart — which erased the exact evidence a reader would need to know a swap
+had happened, caught by a new e2e test that failed on it before anyone else read the diff. Fixed a
+second time: the reason is now keyed on CDP's real detach cause, the record persists until read
+rather than being cleared on recovery, and one of Henry's own existing unit tests was inverted
+because its old assertion encoded the bug's own premise (a dead session stays dead) rather than the
+corrected behaviour.
+
+**The epic's five cards are now all done.** `feat-flow-selector-click` remains in `backlog` —
+unowned, not a clause of any card here, but the thing that makes the feature's own pitch example
+("log in, add an item, checkout") actually click. Naming that distinction is why this card says
+"done" rather than "the feature is finished": `obsrv_flow` meets everything this epic asked of it,
+and one further card exists because a QA engineer reading "plain-language flow" would expect more
+than the epic's own acceptance strictly promised.
