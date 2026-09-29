@@ -2,6 +2,7 @@
 title: "Once in a while, target-source's dirty-rect test finds no frame to read"
 column: backlog
 kind: bug
+release: later
 criterion: B5
 order: 83
 ---
@@ -30,3 +31,7 @@ else, per Kenya's read, so this is not the toolbar defect `#239` fixed.
 record with **no frames at all** points at frame delivery, the territory of `bug-target-canvas-no-frames`
 and `bug-canvas-blank-without-notice`. A record **with full frames and no partial** points at dirty-rect
 emission.
+
+## RELEASE CLASS 2026-09-29 — `later`
+
+A dirty-rect test finding no frame, waiting on a recurrence, with the message a recurrence will print already named.

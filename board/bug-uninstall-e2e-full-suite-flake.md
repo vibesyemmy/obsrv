@@ -2,6 +2,7 @@
 title: "uninstallRemoveEndToEnd.test.ts: 3 of its 4 tests fail in the full unit suite, pass alone"
 column: backlog
 kind: bug
+release: later
 criterion: 
 order: 117
 ---
@@ -38,3 +39,7 @@ can pass CI on a lucky retry while still being real. It is exactly the failure c
 evidence.
 
 **Not blocking `#496`** — unrelated file, unrelated diff, reproduces pre-existing on main.
+
+## RELEASE CLASS 2026-09-29 — `later`
+
+Test-only: three of four tests fail in the full unit suite and pass alone, reproduced on `main` before the PR that tripped it. A suite-ordering fault, no product answer.

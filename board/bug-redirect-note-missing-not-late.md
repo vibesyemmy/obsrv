@@ -4,6 +4,7 @@ column: doing
 owner: "Henry"
 waiting: "Opeyemi: build a forcing route for the CI shape, or park this card"
 kind: bug
+release: blocks
 criterion: C5
 order: 90
 ---
@@ -728,3 +729,7 @@ reproduces the race either way" — the exact shape that already burned this car
 `expect.poll` fix that a reading suggested and a CI run refuted). A green local splice would look
 like a refutation and would not be one. Don't re-run the local sweep to check this — it's the
 paragraph directly above.
+
+## RELEASE CLASS 2026-09-29 — `blocks`
+
+**Class 1.** A page redirects itself and no note is produced, so the silence fits "it did not redirect" and "we did not see it" equally — the gate's definition verbatim. The timing reading is already falsified on the card: the sized poll sat 10 s and still got `undefined`. A downgrade would have to name the warning that makes it detectable, and **there is no such warning — that is the defect.**

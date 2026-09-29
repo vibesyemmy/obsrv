@@ -2,6 +2,7 @@
 title: "`controls.spec:85`: `locator.blur` times out on a resolved input, and two tests then read the stale value"
 column: backlog
 kind: bug
+release: later
 order: 50
 ---
 
@@ -328,3 +329,6 @@ log says when the renderer stopped answering and for how long, which is the evid
 **When it fires**, it moves back to Doing with that run id, and the timestamped window is the first thing
 to read.
 
+## RELEASE CLASS 2026-09-29 — `later`
+
+`locator.blur` timing out is a harness fault, and the card's own instrumentation exists to tell a quiet renderer from an un-run probe. Waiting on a recurrence, no product answer implicated.

@@ -2,6 +2,7 @@
 title: "The target canvas can stay blank in CI: once with the app's no-frames notice, twice without it"
 column: backlog
 kind: bug
+release: disclose
 order: 72
 ---
 
@@ -299,3 +300,6 @@ with no cause named" shape — the same shape as `bug-ipc-native-pane-invisible-
 Not claiming they share a cause; both are open, both are recurrence-waiters, and if a future
 sighting on either card names an actual trigger, it is worth checking whether it explains the other.
 
+## RELEASE CLASS 2026-09-29 — `disclose`
+
+A blank target with **no** notice is a silence fitting two facts — nothing painted, or nothing noticed — which is the gate's own class-1 tell. It is `disclose` rather than `blocks` only because the gate exempts cards waiting on a recurrence, and this one's `waiting:` names the message a recurrence will print. **Flagged for arbitration**: a class-1-shaped symptom parked as a recurrence-waiter is the one place those two rules disagree.

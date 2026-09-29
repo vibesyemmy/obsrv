@@ -3,6 +3,7 @@ title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed tha
 column: backlog
 owner: "Dogu"
 kind: bug
+release: blocks
 order: 60
 ---
 
@@ -373,3 +374,7 @@ finding than before), but the card's own open question — why does one pane's I
 unanswered, and marking this Done would assert a fix that doesn't exist. `doing` is for work in
 flight; nothing is in flight on this until it fires again. Moving there rather than leaving it, so
 the column reads honestly.
+
+## RELEASE CLASS 2026-09-29 — `blocks`
+
+**Class 2** — a regression in a supported path. Three sightings on `main`, each failing **both** tries, and the card records it is no longer waiting: it recurred while sitting as a recurrence-waiter. A native pane invisible when it should be visible is the supported path failing, not a flake.
