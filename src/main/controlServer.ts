@@ -697,7 +697,7 @@ export class ControlServer {
         // `apply(...)` followed immediately by `{ ok: true }` — fire and answer,
         // with no wait and no `applied` field. So a caller who asked for `normal`
         // got `ok: true` whether or not the deficiency shader had gone, and
-        // `bug-vision-47-normal-not-red`'s `[255,255,0]` case is exactly that: the
+        // `bug-vision-47-shader-after-normal` is exactly that case: the
         // control reads Normal while the render is still filtered, and **nothing
         // in the reply said so.** A silence that fits "it applied" and "it did
         // not" equally is class 1 by `docs/release-gate.md`, and the only tell
@@ -746,7 +746,7 @@ export class ControlServer {
      * effect that runs when React commits. It does **not** mean the pane
      * painted it — the canvas draws on its own rAF loop out of a ref. So a
      * caller told `applied: true` can be holding a picture in the previous mode,
-     * which is `bug-vision-47-normal-not-red`'s `[255,255,0]` case.
+     * which is `bug-vision-47-shader-after-normal`.
      *
      * With this set, the pane is asked to draw and the answer waits for the
      * acknowledgement. **A missing ack is not `applied: false`** — the mode did

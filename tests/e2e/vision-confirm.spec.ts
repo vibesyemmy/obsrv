@@ -8,7 +8,7 @@ import { launchApp, rendererWindow } from './launch'
 /**
  * `setVision` answers whether it applied, like every other apply on this surface.
  *
- * **The defect this is bought by (`bug-vision-47-normal-not-red`, class 1).**
+ * **The defect this is bought by (`bug-vision-47-shader-after-normal`, class 1).**
  * `setVision` was `apply(...)` followed immediately by `{ ok: true }` — fire and
  * answer, with no wait and **no `applied` field at all**. So a caller who asked
  * for `normal` got `ok: true` whether or not the deficiency shader had gone, and
