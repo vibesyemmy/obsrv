@@ -773,3 +773,41 @@ time with a start recorded 9–12 ms **after** the boundary.
 **The class does not move.** Still class 1, still `blocks`: a page redirects itself and no note is
 produced, and nothing in the reply distinguishes that from a page that did not redirect. Two refuted
 mechanisms make the cause less understood than this card claimed, not more detectable.
+
+## EIGHTH SIGHTING 2026-09-29 — the drop is ruled out for its own attempt, and the next instrument is in
+
+Run `36596468138` (`#516`'s suite), `arrivals.spec.ts:181`, note missing, retry-rescued,
+`startsForThisUrl: 6` — the correlation's eighth. **And the matched start was the redirect's own**: the
+`redirect.html` start at `1790698691443`, then this one 10 ms later at the address the replace went to,
+`byDocument: true`, `mirrored: false`. At `byDocument: true` this card's named drop
+(`if (url === arrivals(s).url && !byDocument) return`) **cannot fire**, so the commit was counted and
+the silence is downstream of it — the second sighting in a row saying so, this time with the chosen
+start visibly right rather than merely carrying a surprising flag.
+
+**Where it can still come from, as a candidate only.** `ipc.ts:274` is the only other gate on the
+sentence: `if (seen.count > asked.atCount && seen.url)`. `atCount` is snapshotted at `ipc.ts:321`,
+**after** `await Promise.all([native.load, target.load])`. A client-side redirect commits inside the
+load it belongs to, so whether its arrival is counted before or after that snapshot is a race; if
+before, `atCount` already includes it and the note is never made, with every field this card prints
+looking correct. The `settle` hook below it arms only when the count did *not* move — the opposite case.
+
+This card has named two mechanisms and had both refuted by routes built to force them. A third reading
+that fits one trace is worth what those were worth at this stage, so **no fix is proposed on it.**
+
+**What went in instead, and it needs no product seam.** If the arrival preceded the snapshot then
+`landedAt` was already `hairline.html`, so `landedElsewhereNote` should have fired — a *different*
+sentence about the same journey. Nobody has ever looked, because `movedNote()` returned only the match
+for *"navigated after it loaded"* and discarded the rest of the reply. `tests/e2e/arrivals.spec.ts` now
+reads every note, prints them on pass as well as failure, and names them in the failure message.
+
+| the next failing reply carries | what it means for this card |
+| --- | --- |
+| no notes at all | the class-1 silence stands, and the `atCount` race is the live candidate — which needs the two counts exposed to go further, and that is a product seam to be bought then, not now |
+| a `landedElsewhere` note | the product did say something, the test has been looking for the wrong sentence, and **this card's class is not what it says** |
+
+Watched green locally before shipping, which is this card's own rule for an instrument: `:71` baseline
+prints `notes: []`, `:89` baseline prints exactly one sentence — the navigated-after-load one, and no
+`landedElsewhere`. The arms differ, so the next sighting answers rather than accumulates.
+
+**Class unchanged at class 1 / `blocks` until that answer arrives.** A downgrade needs the warning that
+makes the wrong answer detectable, and "there might be a different note" is not a measurement.
