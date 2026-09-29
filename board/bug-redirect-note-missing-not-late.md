@@ -816,3 +816,31 @@ prints `notes: []`, `:89` baseline prints exactly one sentence — the navigated
 
 **Class unchanged at class 1 / `blocks` until that answer arrives.** A downgrade needs the warning that
 makes the wrong answer detectable, and "there might be a different note" is not a measurement.
+
+## PARKED FOR 0.63.0 BY OPEYEMI, 2026-09-29 — the class does not change
+
+**His words, quoted rather than paraphrased**, because this is an arbitration and the record should
+carry what was actually said. Asked to choose between *park* (ship with the two class 1s open, recorded
+as his decision) and *hunt* (hold the release), having been shown the release-notes paragraph a user
+would read, he answered: **"ok lets get on it."** I read that as park. If that reading is wrong, this
+section is the thing to correct — the cut can be undone, and a downgrade written into the class cannot.
+
+**`release:` stays `blocks` and the class stays 1.** Nothing about the defect changed. What changed is
+that the release goes out with it named, in the release notes, in the user's words rather than the
+board's. This is deliberately not a downgrade: a later reader must not be able to mistake "it shipped"
+for "it was resolved".
+
+**What ships.** A page that redirects itself back to the address the pane already holds can produce no
+note, so a caller reading the reply cannot tell *"it did not redirect"* from *"we could not see it"*.
+The guarded test fails about 3 runs in 20 in CI; 0 in 40 locally.
+
+**Why no fix went in instead.** Two mechanisms have been named on this card and both were refuted by
+routes built to force them — `redirect-forcing-route.spec.ts` and `redirect-mirrored-pool.spec.ts`. The
+third reading (`ipc.ts:274`'s `seen.count > asked.atCount`, with `atCount` snapshotted after the load
+resolves) is a candidate and is written as one. Shipping a fix built on a candidate is what this card
+has already paid for twice.
+
+**What improved, and it is the thing to watch.** `arrivals.spec.ts` now reads **every** note in the
+reply and prints them. The next sighting answers a question eight sightings could not: empty notes mean
+the class-1 silence stands; a `landedElsewhere` note means the product did say something and the test
+was looking for the wrong sentence — which would change this card's class rather than its status.

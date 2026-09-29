@@ -176,3 +176,23 @@ both would be answered by fixing either"*):
 effect that runs on commit rather than on paint, then a home for the white case that does not exist.
 Recorded here because the pattern is the finding: each pass found a reason to stop, and the reason got
 narrower each time rather than better.
+
+## PARKED FOR 0.63.0 BY OPEYEMI, 2026-09-29 — the class does not change
+
+Same arbitration as `bug-redirect-note-missing-not-late`, and the same care about what the record says.
+Asked to choose between park and hunt, having read the release-notes paragraph, Opeyemi answered: **"ok
+lets get on it."** Read as park.
+
+**Ships open. `blocks` retained, class 1 retained, recorded as his decision and explicitly NOT as a
+downgrade.** That distinction matters more here than anywhere else on the board: three downgrades have
+been attempted on this card and all three were refused, the third of them mine, on a claim Idris checked
+and found false. Shipping must not become a fourth attempt by implication.
+
+**What ships.** A `Normal` vision render can come back washed out — white where red belongs — with
+nothing on the surface the render is read from saying so. Two sightings, both `[255,255,255]`. The
+timing cause was removed in `#458`, so it is no longer available as an explanation for a recurrence;
+the remaining branch is a genuinely white render.
+
+**What is fixed and is not this card:** the other half, `[255,255,0]`, where the control read Normal
+while the shader was still applied. `setVision` now confirms against a painted frame and warns when the
+pane never acknowledged a draw — `bug-vision-47-shader-after-normal`, done.
