@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: build a forcing route for the CI shape, or park this card"
+waiting: "Opeyemi: two forcing routes are built and both refute the named mechanism — keep hunting, or park this card"
 kind: bug
 release: blocks
 criterion: C5
@@ -733,3 +733,43 @@ paragraph directly above.
 ## RELEASE CLASS 2026-09-29 — `blocks`
 
 **Class 1.** A page redirects itself and no note is produced, so the silence fits "it did not redirect" and "we did not see it" equally — the gate's definition verbatim. The timing reading is already falsified on the card: the sized poll sat 10 s and still got `undefined`. A downgrade would have to name the warning that makes it detectable, and **there is no such warning — that is the defect.**
+
+## BOTH FORCING ROUTES ARE BUILT, AND BOTH REFUTE THE MECHANISM THIS CARD NAMED, 2026-09-29
+
+The ask on the `waiting:` line above was a forcing route. Two exist now, and neither reproduces the
+failure.
+
+**Route one — `tests/e2e/redirect-forcing-route.spec.ts`** forces six same-url starts before the
+redirect and asserts the property that must hold either way: the start a commit is answered with
+belongs to **that** navigation, by a boundary timestamp the test owns rather than by a url match,
+which would restate `startFor`'s own predicate. In CI run `36578277923` the forced arm **passed**
+while the natural `arrivals.spec.ts:181` **failed** in the same run — and the failing arm's matched
+start carried **`byDocument: true`**, which is the one value at which `ipc.ts:245`'s
+`if (url === arrivals(s).url && !byDocument) return` **cannot fire**. So the drop this card has named
+since it was filed is not what silenced the note on that attempt.
+
+**Route two — `tests/e2e/redirect-mirrored-pool.spec.ts`**, built for the question route one left:
+the failing pool held **two mirrored starts among its six** and the forced pool held none, and
+`startFor` skips mirrored starts, so two pools both counted as six were never the same pool. Route
+two forces the composition through the bus (driving `native.load(redirect.html)`, whose mirrored hop
+lands on the address under test). It builds a pool **deeper and more mirrored than the failing one** —
+9–12 starts, 6–7 of them the bus's — and the find still answers correctly in all 11 local runs, every
+time with a start recorded 9–12 ms **after** the boundary.
+
+**What is now established, and what is not.**
+
+- Pool depth and the presence of mirrored starts are **not sufficient** to make `startFor` answer with
+  a stale start. Two independent routes aimed at the named mechanism both pass.
+- The **correlation survives** — seven sightings, every failure at six candidates, every pass at two
+  or three. It was always a correlation, and it is now a correlation with its stated explanation
+  refuted.
+- **No replacement mechanism is offered.** This card has burned two fixes on the shape of reasoning
+  that would offer one, and the earlier local-sweep warning on this card applies to route two's local
+  nulls exactly as written: 0-in-11 here cannot distinguish "the condition does not force it" from
+  "this machine never reproduces it either way". Route two's value is that it now runs in CI on every
+  PR and prints its pool on pass as well as failure, so the next CI sighting of
+  `arrivals.spec.ts:181` comes with a forced pool beside it from the same runner.
+
+**The class does not move.** Still class 1, still `blocks`: a page redirects itself and no note is
+produced, and nothing in the reply distinguishes that from a page that did not redirect. Two refuted
+mechanisms make the cause less understood than this card claimed, not more detectable.
