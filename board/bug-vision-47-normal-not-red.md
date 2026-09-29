@@ -2,7 +2,7 @@
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
 column: backlog
 kind: bug
-release: blocks
+release: disclose
 owner: "Henry"
 criterion: B5
 order: 84
@@ -149,3 +149,31 @@ own example: nobody running a vision simulation ever sees it.
 So there is no valid downgrade until the product says something on the surface the
 render is read from. Same shape as `bug-redirect-note-missing-not-late`, and it
 makes the published class-1 count **two**.
+
+## RELEASE CLASS 2026-09-29 (second revision) — `blocks` -> `disclose`, because the warning now exists
+
+`#510` built the tell the gate asks a downgrade to name.
+
+`setVision` was `apply(...)` then `reply(200, { ok: true })` — fire and answer, no
+wait, **no `applied` field at all** — while every other apply on that surface goes
+through `applyAndConfirm`. So a caller who asked for `none` was told `ok` whether
+the deficiency shader had gone or not, which is this card's `[255,255,0]` case
+exactly: the control reads Normal and the picture is still filtered. That silence
+is what made it class 1.
+
+It now confirms against the app's own status and answers **`applied: false`** when
+the mode did not take — *"on the surface the answer is read from"*, which is the
+gate's wording for what a disclosure has to be. Guarded by
+`tests/e2e/vision-confirm.spec.ts`, which fails 2 of 2 when the fire-and-forget is
+restored, and both of whose tests ran green in CI on `35ed26a`.
+
+**What is still open, and why this is `disclose` rather than `done`:** the
+underlying race is not fixed. A render can still come back washed out or filtered
+when it should not — the difference is that a caller is now **told**, instead of
+receiving `ok` and a wrong picture. The mechanism behind the white render remains
+named rather than proven, which is why the card stays open.
+
+**Scope, verified rather than assumed** (Idris, from `server.ts`): `obsrv_drive`
+was never blind here, because it re-reads `status` after issuing the command. The
+silence was on the control surface — direct callers and `obsrv_flow`'s per-step
+replies.
