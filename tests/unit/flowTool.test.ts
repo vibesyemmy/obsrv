@@ -27,9 +27,87 @@ const deps = (over: Partial<FlowToolDeps> & { result?: FlowRunResult; refused?: 
   return d as FlowToolDeps & { html: string[] }
 }
 
+describe('runFlowTool: a flow given in words', () => {
+  /**
+   * The resolver's surface. `flowLanguage.ts` shipped in `#491` with nothing
+   * importing it — real and unreachable — and this is the join that makes it
+   * reachable. The resolver itself is tested on its own; these check the wiring
+   * and the refusals, which is where a half-resolved flow would leak through.
+   */
+  it('resolves a description into steps and runs them', async () => {
+    const d = deps({
+      result: {
+        steps: [
+          { index: 0, action: 'navigate', status: 'ran', settled: true },
+          { index: 1, action: 'audit', status: 'ran', settled: true },
+        ],
+      },
+    })
+    const out = await runFlowTool({ description: 'go to https://shop.test, then audit' }, d)
+    expect(out.ok).toBe(true)
+    if (!out.ok) return
+    expect(out.steps.map(x => x.action)).toEqual(['navigate', 'audit'])
+  })
+
+  it("shows in the report what it read each clause as, so a misunderstanding is not mistaken for a broken step", async () => {
+    const d = deps({ result: { steps: [{ index: 0, action: 'navigate', status: 'ran', settled: true }] } })
+    await runFlowTool({ description: 'go to https://shop.test' }, d)
+    const html = d.html[0]!
+    expect(html).toContain('From your description')
+    expect(html).toContain('go to https://shop.test')
+    // The words the rule matched, not a paraphrase written beside the pattern.
+    expect(html).toContain('Obsrv read it as')
+  })
+
+  it('refuses a description whose clause it cannot resolve, naming that clause, and runs nothing', async () => {
+    let started = false
+    const d = deps({
+      start: async () => {
+        started = true
+        return { ok: true, result: { steps: [] } }
+      },
+    })
+    const out = await runFlowTool({ description: 'click the checkout button' }, d)
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.error).toContain('click the checkout button')
+    // A partial flow is worse than none: the caller would believe theirs ran.
+    expect(started).toBe(false)
+    expect(d.html).toEqual([])
+  })
+
+  it('refuses both forms at once rather than picking one', async () => {
+    const out = await runFlowTool({ steps: [{ action: 'reload' }], description: 'reload' }, deps())
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.error).toContain('not both')
+  })
+
+  it('refuses neither form, naming both', async () => {
+    const out = await runFlowTool({}, deps())
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.error).toContain('`steps`')
+    expect(out.error).toContain('`description`')
+  })
+
+  it('refuses a description that is not a string, rather than resolving its stringification', async () => {
+    const out = await runFlowTool({ description: 42 }, deps())
+    expect(out.ok).toBe(false)
+    if (out.ok) return
+    expect(out.error).toContain('must be a string')
+  })
+
+  it('leaves a hand-written step list unannotated — there is no clause it came from', async () => {
+    const d = deps()
+    await runFlowTool({ steps: [{ action: 'reload' }] }, d)
+    expect(d.html[0]!).not.toContain('From your description')
+  })
+})
+
 describe('runFlowTool', () => {
   it('refuses a step list that does not validate, naming every bad step rather than the first', async () => {
-    const out = await runFlowTool([{ action: 'teleport' }, { nope: 1 }], deps())
+    const out = await runFlowTool({ steps: [{ action: 'teleport' }, { nope: 1 }] }, deps())
     expect(out.ok).toBe(false)
     if (out.ok) return
     expect(out.error).toContain('did not validate')
@@ -39,13 +117,13 @@ describe('runFlowTool', () => {
 
   it('writes no report when the steps do not validate', async () => {
     const d = deps()
-    await runFlowTool([{ action: 'teleport' }], d)
+    await runFlowTool({ steps: [{ action: 'teleport' }] }, d)
     expect(d.html).toHaveLength(0)
   })
 
   it('reports a refusal as nothing having run, naming who holds the app', async () => {
     const d = deps({ refused: true })
-    const out = await runFlowTool([{ action: 'navigate', target: 'https://x.test' }], d)
+    const out = await runFlowTool({ steps: [{ action: 'navigate', target: 'https://x.test' }] }, d)
     expect(out.ok).toBe(false)
     if (out.ok) return
     expect(out.error).toContain('pid 4242')
@@ -55,7 +133,7 @@ describe('runFlowTool', () => {
   })
 
   it('returns the report path and a per-step summary', async () => {
-    const out = await runFlowTool([{ action: 'navigate', target: 'https://x.test' }], deps())
+    const out = await runFlowTool({ steps: [{ action: 'navigate', target: 'https://x.test' }] }, deps())
     expect(out.ok).toBe(true)
     if (!out.ok) return
     expect(out.reportPath).toBe('/tmp/obsrv-mcp-x/flow.html')
@@ -64,7 +142,7 @@ describe('runFlowTool', () => {
 
   it('carries the coverage sentence into the structured reply, not just the HTML', async () => {
     const out = await runFlowTool(
-      [{ action: 'navigate', target: 'https://x.test' }, { action: 'click', target: '.pay' }, { action: 'audit' }],
+      { steps: [{ action: 'navigate', target: 'https://x.test' }, { action: 'click', target: '.pay' }, { action: 'audit' }] },
       deps({
         result: {
           steps: [
@@ -82,7 +160,7 @@ describe('runFlowTool', () => {
   })
 
   it('leaves coverage null when every step was attempted and settled', async () => {
-    const out = await runFlowTool([{ action: 'navigate', target: 'https://x.test' }], deps())
+    const out = await runFlowTool({ steps: [{ action: 'navigate', target: 'https://x.test' }] }, deps())
     expect(out.ok).toBe(true)
     if (!out.ok) return
     expect(out.coverage).toBeNull()

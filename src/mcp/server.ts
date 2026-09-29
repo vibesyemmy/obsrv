@@ -2732,10 +2732,23 @@ server.registerTool(
     inputSchema: {
       steps: z
         .array(z.record(z.string(), z.unknown()))
+        .optional()
         .describe(
           'The flow, in order. Each entry needs `action` (a control command); `target` and any other keys are ' +
             "passed through to it. `expect` is yours: a sentence about what you expected at that step, reported " +
-            'beside the evidence and never judged.',
+            'beside the evidence and never judged. Give this OR `description`, not both.',
+        ),
+      description: z
+        .string()
+        .optional()
+        .describe(
+          'The flow in your own words, as clauses separated by commas, semicolons, newlines, ` and ` or ` then ` — ' +
+            '"go to https://shop.test, scroll to the bottom, then audit". Obsrv resolves each clause into one step ' +
+            'and the report shows what it read each clause as, so a misunderstanding is visible rather than looking ' +
+            'like a broken step. A clause it cannot resolve refuses the whole flow, naming that clause: it will not ' +
+            'run a partial flow and let you believe it ran yours. Interaction by description (clicking a named ' +
+            'button) is NOT resolvable yet — `click` takes coordinates, so those steps still need `steps`. Give this ' +
+            'OR `steps`, not both.',
         ),
     },
     outputSchema: {
@@ -2775,7 +2788,7 @@ server.registerTool(
     // safe to run twice.
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   },
-  async (input: { steps: Record<string, unknown>[] }): Promise<CallToolResult> => {
+  async (input: { steps?: Record<string, unknown>[]; description?: string }): Promise<CallToolResult> => {
     // Live only, so the plan is asked for live and a headless answer is a
     // refusal rather than a fallback.
     const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
@@ -2783,7 +2796,7 @@ server.registerTool(
     const info = resolved.app.info
     let out
     try {
-      out = await runFlowTool(input.steps, {
+      out = await runFlowTool({ ...(input.steps !== undefined ? { steps: input.steps } : {}), ...(input.description !== undefined ? { description: input.description } : {}) }, {
         start: flow =>
           startFlow(flow, {
             // One held session, but NOT one budget: the settle probe is a
