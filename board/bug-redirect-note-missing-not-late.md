@@ -777,9 +777,14 @@ mechanisms make the cause less understood than this card claimed, not more detec
 ## EIGHTH SIGHTING 2026-09-29 — the drop is ruled out for its own attempt, and the next instrument is in
 
 Run `36596468138` (`#516`'s suite), `arrivals.spec.ts:181`, note missing, retry-rescued,
-`startsForThisUrl: 6` — the correlation's eighth. **And the matched start was the redirect's own**: the
-`redirect.html` start at `1790698691443`, then this one 10 ms later at the address the replace went to,
-`byDocument: true`, `mirrored: false`. At `byDocument: true` this card's named drop
+`startsForThisUrl: 6` — the correlation's eighth. **And the matched start was the redirect's own.** The
+six hairline starts in order are `690242`, `690758`, `690763`, `691065`, **`691453` (matched)**,
+`691478`; `redirect.html`'s start is at `691421` and its commit lands at `691443`, so the match is the
+next navigation start after the redirect page committed, `byDocument: true`, `mirrored: false`, ahead of
+the later mirrored start at `691478`. (The first version of this section said the `redirect.html`
+**start** was at `691443` — that is the commit's timestamp, stitched onto a start's fields while reading
+the print as text rather than parsing it. Idris parsed the array and caught it; the reading is unchanged
+and stronger stated correctly.) At `byDocument: true` this card's named drop
 (`if (url === arrivals(s).url && !byDocument) return`) **cannot fire**, so the commit was counted and
 the silence is downstream of it — the second sighting in a row saying so, this time with the chosen
 start visibly right rather than merely carrying a surprising flag.

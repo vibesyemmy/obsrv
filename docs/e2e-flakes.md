@@ -1625,9 +1625,20 @@ print:**
 "startsForThisUrl": 6
 ```
 
-Read against the same print's `starts`, that matched entry is **the redirect's own start**: the
-`redirect.html` start is at `1790698691443`, and this is the next one, 10 ms later, at the address the
-replace went to. So on this attempt `startFor` **answered correctly** — and with `byDocument: true`,
+Read against the same print's `starts`, that matched entry is **the redirect's own start**. The six
+hairline starts in order are `690242`, `690758`, `690763`, `691065`, **`691453` (matched)**, `691478`;
+`redirect.html`'s own start is at `691421` and its **commit** lands at `691443`, so the match is the
+very next navigation start recorded after the redirect page committed — 10 ms after that commit, and
+ahead of the later mirrored start at `691478`.
+
+**The numbers in the first version of this section were mislabelled**, and the correction is kept here
+rather than quietly fixed: I wrote *"the `redirect.html` start is at `1790698691443`"*, having stitched
+a start's fields onto a commit's timestamp while reading the block as text. `691443` is the commit;
+`691421` is the start. Idris parsed the array instead of reading the slice and caught it. The reading
+the section rests on is unchanged and is stronger stated properly — the match is the closest start
+after the redirect's commit, not merely one that is not obviously stale.
+
+So on this attempt `startFor` **answered correctly** — and with `byDocument: true`,
 `ipc.ts:245`'s `if (url === arrivals(s).url && !byDocument) return` cannot fire, so the commit was
 counted.
 
