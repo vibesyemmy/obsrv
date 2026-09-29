@@ -95,6 +95,15 @@ export interface ControlDeps {
    */
   launchSettled(): Promise<void>
   /**
+   * Asks the pane to draw and waits, bounded, for its acknowledgement —
+   * resolving with the frame's `seq`, or **null** when it did not answer in
+   * time. The capture paths have used this since agentic pass 4; an apply that
+   * changes what the pane *looks like* needs it for the same reason, because the
+   * renderer reports its state from a React effect that runs on commit and not
+   * on paint.
+   */
+  flushDraw(): Promise<number | null>
+  /**
    * Why the onion skin cannot be drawn on the active tab's viewport as it is
    * once any resize on its way has landed, or null when it can. Main is the
    * one that refuses a reference, so main answers before the renderer is
@@ -697,7 +706,7 @@ export class ControlServer {
         // answer is read from.
         //
         // `applied: false` is that tell, on the reply, where a caller reads it.
-        return this.applyAndConfirm({ visionType, visionSeverity }, st => st.visionType === visionType && st.visionSeverity === visionSeverity)
+        return this.applyAndConfirm({ visionType, visionSeverity }, st => st.visionType === visionType && st.visionSeverity === visionSeverity, true)
       }
 
       case 'focusWindow':
@@ -728,7 +737,25 @@ export class ControlServer {
     return s => !had || (s.url !== '' && s.url !== 'about:blank') || s.loading
   }
 
-  private async applyAndConfirm(patch: AgentApplyPatch, confirmed: (s: StatusReport) => boolean): Promise<Reply> {
+  private async applyAndConfirm(
+    patch: AgentApplyPatch,
+    confirmed: (s: StatusReport) => boolean,
+    /**
+     * For an apply that changes what the pane **looks like**. `applied` above
+     * means the app holds the mode: the renderer reported it, from a React
+     * effect that runs when React commits. It does **not** mean the pane
+     * painted it — the canvas draws on its own rAF loop out of a ref. So a
+     * caller told `applied: true` can be holding a picture in the previous mode,
+     * which is `bug-vision-47-normal-not-red`'s `[255,255,0]` case.
+     *
+     * With this set, the pane is asked to draw and the answer waits for the
+     * acknowledgement. **A missing ack is not `applied: false`** — the mode did
+     * reach the app — so it is a warning rather than a verdict, because "set but
+     * not seen to paint" and "not set" are different facts and a caller acting
+     * on them differs.
+     */
+    paints = false,
+  ): Promise<Reply> {
     this.deps.apply(patch)
     const deadline = Date.now() + APPLY_WAIT_MS
     let applied = confirmed(this.deps.status())
@@ -736,7 +763,13 @@ export class ControlServer {
       await sleep(APPLY_POLL_MS)
       applied = confirmed(this.deps.status())
     }
-    return reply(200, { ok: true, applied, ...this.deps.status() })
+    const warnings: string[] = []
+    if (paints && applied && (await this.deps.flushDraw()) === null) {
+      warnings.push(
+        'the mode is set, but the pane did not acknowledge a draw in time — the picture may still show the previous mode',
+      )
+    }
+    return reply(200, { ok: true, applied, ...this.deps.status(), ...(warnings.length > 0 ? { warnings } : {}) })
   }
 
   /** The request body, or null when it exceeds the cap. */

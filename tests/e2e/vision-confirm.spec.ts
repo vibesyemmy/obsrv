@@ -89,6 +89,39 @@ test('setVision says whether it applied, and names the mode the app actually hol
   })
 })
 
+test('says the picture may still show the previous mode when the pane never acknowledges a draw', async () => {
+  // A second app, with the draw acknowledgement suppressed — the one behaviour
+  // whose absence this warning reports, and one nothing outside the process can
+  // force on a healthy renderer. Same pattern and same justification as
+  // `OBSRV_TEST_THROTTLE_REFUSAL`, cited at the fence.
+  const quiet = await launchApp([], { OBSRV_AGENT_CONTROL: '1', OBSRV_TEST_NO_DRAW_ACK: '1' })
+  try {
+    await rendererWindow(quiet)
+    const userData = await quiet.evaluate(({ app: a }) => a.getPath('userData'))
+    const file = join(userData, CONTROL_FILE_NAME)
+    await expect.poll(() => existsSync(file)).toBe(true)
+    const parsed = parseControlFile(readFileSync(file, 'utf8'))
+    if (!parsed || isDisabledStance(parsed)) throw new Error('the second app named no control port')
+    const saved = info
+    info = parsed
+    try {
+      const r = await call('setVision', { type: 'deutan', severity: 1 })
+      // **`applied` stays true, deliberately.** The mode did reach the app; what
+      // is unknown is whether the pane painted it. Answering `applied: false`
+      // would state the opposite of what happened, and "set but not seen to
+      // paint" and "not set" are different facts a caller acts on differently.
+      expect(r.body).toMatchObject({ ok: true, applied: true, visionType: 'deutan' })
+      const warnings = (r.body['warnings'] ?? []) as string[]
+      expect(warnings.join(' '), 'no warning that the pane never acknowledged a draw').toContain('did not acknowledge a draw')
+      expect(warnings.join(' ')).toContain('may still show the previous mode')
+    } finally {
+      info = saved
+    }
+  } finally {
+    await quiet.close()
+  }
+})
+
 test('a severity a caller omits is reported back as the strong form, not left for them to assume', async () => {
   const r = await call('setVision', { type: 'protan' })
   expect(r.status).toBe(200)
