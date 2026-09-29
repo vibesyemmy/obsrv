@@ -78,6 +78,8 @@ checked mechanically.
    saw: present or absent, never pass or fail. Added after the fact; see the note below.
 5. `feat-flow-language` — plain language resolved into steps. Last, on purpose, on top of an
    already-verified foundation.
+6. `feat-flow-selector-click` — a flow step can click by selector, composed from `inspect`, a
+   scroll-into-view and `click`. Added after the fact; see the note below.
 
 Each is separately gateable. Ownership lives on the cards, not here.
 
