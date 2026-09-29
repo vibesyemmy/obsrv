@@ -1,5 +1,5 @@
 ---
-title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
+title: "Once in a while, the vision test's 'Normal' render comes back white, and timing is no longer available as the explanation"
 column: backlog
 kind: bug
 release: blocks
@@ -149,3 +149,30 @@ own example: nobody running a vision simulation ever sees it.
 So there is no valid downgrade until the product says something on the surface the
 render is read from. Same shape as `bug-redirect-note-missing-not-late`, and it
 makes the published class-1 count **two**.
+
+## SPLIT 2026-09-29 — this card is the white render only, and it stays `blocks`
+
+`#515` tried to move this card to `disclose` on the strength of the `[255,255,0]` half being fixed by
+`#514`. **Idris refused it, and checked before refusing.** I had claimed the washed-out case was
+accounted for elsewhere — "a capture-path mechanism with its own home" — and she read the obvious
+candidate in full: `bug-canvas-blank-without-notice` is `panes.spec`'s general canvas-blank detection,
+with no mention of vision, `Normal` or deficiency anywhere in it. A similar-shaped mechanism in a
+different card is **not an existing entry that counts this manifestation**. The home I named was a home
+I asserted and never located; `#515` is closed unmerged.
+
+Her second point is the one that settles the class. The gate's test is not which card administratively
+owns a mechanism — it is whether a caller can get a wrong answer with nothing in the reply saying so —
+and **this card's own text says `[255,255,255]` "remains an undisclosed silence"** two paragraphs above
+where I wrote the downgrade. Fixing one of two named symptoms retires that symptom, not the card's class.
+
+**So the card is narrowed rather than downgraded**, following this family's own precedent
+(`bug-canvas-blank-without-notice` / `bug-target-canvas-no-frames`, split because *"a card that covers
+both would be answered by fixing either"*):
+
+- `[255,255,0]`, the shader still applied while the control reads Normal → **`bug-vision-47-shader-after-normal`, done.** `setVision` now confirms against a painted frame and warns when the pane never acknowledged a draw.
+- `[255,255,255]`, the white render → **this card, `blocks`, unchanged.** Class 1: a washed-out Normal render is a wrong artifact, and nothing on the surface the render is read from says so. The `RELEASE CLASS` section above stands as written for this half; what changes is that it no longer has to carry the other one.
+
+**Third pass at this card, third invalid tell.** A CI-log print, then an `applied` derived from a React
+effect that runs on commit rather than on paint, then a home for the white case that does not exist.
+Recorded here because the pattern is the finding: each pass found a reason to stop, and the reason got
+narrower each time rather than better.

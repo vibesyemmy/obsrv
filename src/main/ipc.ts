@@ -1580,7 +1580,7 @@ export function registerIpc(ctx: AppContext): () => void {
       // A product change made for a test, and said so — the same pattern and the
       // same reason as `OBSRV_TEST_THROTTLE_REFUSAL` in `targetSource.ts`. A pane
       // that does not acknowledge a draw is what
-      // `bug-vision-47-normal-not-red`'s warning exists for, and nothing outside
+      // `bug-vision-47-shader-after-normal`'s warning exists for, and nothing outside
       // this process can make a healthy renderer stop answering — so the one
       // behaviour whose absence the warning reports could not otherwise be
       // regression-tested at all.
