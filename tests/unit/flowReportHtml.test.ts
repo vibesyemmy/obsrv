@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportObservation, type FlowReportPageState, type FlowReportStep } from '../../src/cli/reportHtml'
+import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportNetwork, type FlowReportObservation, type FlowReportPageState, type FlowReportStep } from '../../src/cli/reportHtml'
 
 /**
  * Written against `board/feat-flow-report.md`'s acceptance list, one test per
@@ -317,6 +317,65 @@ describe('flowReportHtml', () => {
   it('offers no where-it-ran block at all for a step with no page, rather than an empty one', () => {
     const sec = sectionOf(flowReportHtml(data([step()])), 1)
     expect(sec).not.toContain('Where this step ran')
+  })
+
+  /** The network block's three states. The third — no record taken — is the one
+   *  that must not borrow the second's words, so each test names which it is. */
+  const netOf = (html: string, n: number): string => {
+    const sec = sectionOf(html, n)
+    const from = sec.indexOf('What this step asked the network for')
+    expect(from, 'the step has no network block').toBeGreaterThan(-1)
+    return sec.slice(from)
+  }
+
+  const net = (over: Partial<FlowReportNetwork> = {}): FlowReportNetwork => ({ records: [], dropped: 0, ...over })
+
+  it('lists the requests a step made, with the status and the method', () => {
+    const html = flowReportHtml(
+      data([step({ network: net({ records: [{ method: 'POST', url: 'https://shop.test/pay', status: 201, type: 'XHR' }] }) })]),
+    )
+    const block = netOf(html, 1)
+    expect(block).toContain('POST')
+    expect(block).toContain('201')
+    expect(block).toContain('XHR')
+    expect(block).toContain('https://shop.test/pay')
+  })
+
+  it('says a request was in flight rather than leaving the status blank', () => {
+    const html = flowReportHtml(data([step({ network: net({ records: [{ method: 'GET', url: 'https://shop.test/slow' }] }) })]))
+    expect(netOf(html, 1)).toContain('in flight')
+  })
+
+  it('says a step asked for nothing, when it asked for nothing', () => {
+    expect(netOf(flowReportHtml(data([step({ network: net() })])), 1)).toContain('asked for nothing over the network')
+  })
+
+  it('distinguishes no record taken from a step that made no requests', () => {
+    // No `network` at all: the record could not be taken.
+    const absent = netOf(flowReportHtml(data([step()])), 1)
+    expect(absent).toContain('No record was taken')
+    expect(absent).not.toContain('asked for nothing over the network')
+    // And the reverse: an empty batch must not claim nothing was recorded.
+    const empty = netOf(flowReportHtml(data([step({ network: net() })])), 1)
+    expect(empty).toContain('asked for nothing over the network')
+    expect(empty).not.toContain('No record was taken')
+  })
+
+  it('warns that a stopped recording is not a complete list, and does not also claim the step was quiet', () => {
+    const html = flowReportHtml(data([step({ network: net({ stopped: 'the debugger session was detached' }) })]))
+    const block = netOf(html, 1)
+    expect(block).toContain('Recording had stopped')
+    expect(block).toContain('the debugger session was detached')
+    // The empty-list sentence would contradict it: nothing was recorded, so
+    // "asked for nothing" is a claim nobody measured.
+    expect(block).not.toContain('asked for nothing over the network')
+  })
+
+  it('names how many requests the cap left out', () => {
+    const html = flowReportHtml(
+      data([step({ network: net({ records: [{ method: 'GET', url: 'https://shop.test/a' }], dropped: 4 }) })]),
+    )
+    expect(netOf(html, 1)).toContain('4 more requests')
   })
 
   it('embeds the step screenshot it was given', () => {

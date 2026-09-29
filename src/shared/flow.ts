@@ -30,7 +30,18 @@ import { CONTROL_COMMANDS, isControlCommand, type ControlCommand } from './contr
  * future automatic command earns a place in this set only by that same
  * test, not by being one more thing the runner happens to call.
  */
-const NOT_FLOW_ACTIONS: ReadonlySet<ControlCommand> = new Set(['observeText'])
+/**
+ * Commands whose **input the runner owns**, so a flow cannot state them.
+ *
+ * Not "commands the runner happens to call": `status` and `captureRaster` are
+ * issued automatically too and remain perfectly good hand-written steps — asking
+ * for an extra reading or an extra capture is meaningful and harmless. These two
+ * are different in kind. `observeText`'s payload is the expectation texts, which
+ * come from the step's own declaration; `networkRecord` returns the batch since
+ * the last automatic call, so a step that asked for it by hand would steal the
+ * next step's requests and leave that step looking quiet.
+ */
+const NOT_FLOW_ACTIONS: ReadonlySet<ControlCommand> = new Set(['observeText', 'networkRecord'])
 
 export interface FlowStep {
   action: ControlCommand

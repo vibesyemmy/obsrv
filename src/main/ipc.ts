@@ -1807,6 +1807,11 @@ export function registerIpc(ctx: AppContext): () => void {
       }
     },
     viewport: () => tab().target.getViewport(),
+    networkRecord: () => {
+      const t = tab().target
+      const started = t.startNetworkRecord()
+      return { started, batch: t.takeNetworkRecord() }
+    },
     targetView: async () => {
       const s = tab()
       const t = s.target
