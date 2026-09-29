@@ -3,7 +3,7 @@ title: "Three times on main now, `ipc.spec:31` waited 30 s for a url-changed tha
 column: backlog
 owner: "Dogu"
 kind: bug
-release: blocks
+release: later
 order: 60
 ---
 
@@ -375,6 +375,32 @@ unanswered, and marking this Done would assert a fix that doesn't exist. `doing`
 flight; nothing is in flight on this until it fires again. Moving there rather than leaving it, so
 the column reads honestly.
 
-## RELEASE CLASS 2026-09-29 — `blocks`
+## RELEASE CLASS 2026-09-29 — `later`, corrected from `blocks` the same day
 
-**Class 2** — a regression in a supported path. Three sightings on `main`, each failing **both** tries, and the card records it is no longer waiting: it recurred while sitting as a recurrence-waiter. A native pane invisible when it should be visible is the supported path failing, not a flake.
+**I first marked this `blocks` (class 2) and I had not read my own card to the
+bottom.** The paragraph I classified from is the `ASSIGNED` one: *"No longer
+waiting: it recurred… three times now."* Written **2026-09-17**. Three sections
+further down is `SWEPT 2026-09-17 by Rook: 60 suite attempts since, no second
+sighting`, with a detector validated against run `35145262453` first, so its
+silence means something.
+
+**Measured again 2026-09-29 before correcting this**, on the 34 CI suite logs from
+tonight's twenty-five merges: `ipc.spec.ts:31` is seen **passing** in all of them,
+so a cross would have been visible, and there are **zero** crosses on `:31`,
+`:134` or `:173`. Detector validated the same way Rook's was — a check whose
+silence could not mean anything is not a check.
+
+So: three sightings inside about 24 hours on 2026-09-16/17, and **none in roughly
+94 attempts since**, across twelve days. The card's own lead says the tell points
+at the runner rather than the product — *"a wedged display session on the runner
+taking a surface with it"*, and *"the retries failed in fresh workers, so no state
+was inherited, and a later attempt on the same head was green."*
+
+By the gate's own exemptions that is a recurrence-waiter, not a live regression in
+a supported path, and an invisible pane is visible to whoever is looking — it is
+not the class-1 silence shape. `later`.
+
+**The mistake is the one this repo keeps naming: I classified from a headline
+paragraph and the contradicting evidence was in the same file.** It also means the
+published class-1 count is unchanged at two, and the blockers @Opeyemi asked me to
+fix are two rather than three.
