@@ -169,3 +169,17 @@ describe('validateFlow: a step may state what it expects to see', () => {
     expect(result.rejections.map(r => r.index)).toEqual([2])
   })
 })
+
+describe('validateFlow: observeText is the runner\'s own call, not a step a flow states directly', () => {
+  it('rejects a hand-written observeText step, naming why', () => {
+    const result = validateFlow([{ action: 'observeText', texts: ['Order confirmed'] }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/observeText.*runner issues it automatically/) }])
+  })
+
+  it('still accepts status and captureRaster by hand — the runner also calls both automatically, but a QA engineer asking for one explicitly is meaningful and harmless to repeat', () => {
+    expect(validateFlow([{ action: 'status' }]).ok).toBe(true)
+    expect(validateFlow([{ action: 'captureRaster' }]).ok).toBe(true)
+  })
+})
