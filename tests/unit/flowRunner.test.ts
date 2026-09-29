@@ -6,6 +6,9 @@ function flow(steps: Flow['steps']): Flow {
   return { steps }
 }
 
+/** A box wholly inside the 390x844 viewport the stubs report, centre (140, 220). */
+const ONSCREEN = { x: 100, y: 200, width: 80, height: 40 }
+
 describe('runFlow', () => {
   it('issues every step over the same held call, in order', async () => {
     const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
@@ -13,6 +16,12 @@ describe('runFlow', () => {
       call: async (command, payload = {}) => {
         calls.push({ command, payload })
         if (command === 'captureRaster') return { data: 'x', width: 1, height: 1, settled: true }
+        if (command === 'status') return { cssWidth: 390, cssHeight: 844 }
+        // A click by selector is resolved through `inspect` now
+        // (`feat-flow-selector-click`), so a stub that answers every command with
+        // `{ ok: true }` would make the step refuse for want of a match. On
+        // screen and wholly inside the viewport: the plain case.
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
         return { ok: true }
       },
     }
@@ -25,12 +34,16 @@ describe('runFlow', () => {
     expect(result.steps[0]).toMatchObject({ index: 0, action: 'navigate', status: 'ran', settled: true, data: 'x' })
     expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', target: '.checkout', status: 'ran', settled: true, data: 'x' })
     // Each step's own action, then one settle check, then one `status` read for
-    // where it ran — over the same `call`, never re-resolved, never skipped.
+    // where it ran — over the same `call`, never re-resolved, never skipped. The
+    // click step's own action is now three calls: locate, size the viewport,
+    // press.
     expect(calls.map(c => c.command)).toEqual([
       'navigate',
       'captureRaster',
       'status',
       'networkRecord',
+      'inspect',
+      'status',
       'click',
       'captureRaster',
       'status',
@@ -38,12 +51,16 @@ describe('runFlow', () => {
     ])
     // Found by command, not by index. These were `calls[0]` and `calls[2]`, and
     // adding one call per step silently moved the second one onto the settle
-    // probe — where `toEqual({ target: '.checkout' })` would have failed loudly,
-    // but the next such addition might land on a call whose payload happens to
-    // match. The step's own action is what these two claims are about.
+    // probe — where `toEqual(...)` would have failed loudly, but the next such
+    // addition might land on a call whose payload happens to match. The step's
+    // own action is what these two claims are about.
     const issued = (command: string) => calls.filter(c => c.command === command).map(c => c.payload)
     expect(issued('navigate')).toEqual([{ url: 'https://x.test' }])
-    expect(issued('click')).toEqual([{ target: '.checkout' }])
+    // **The payload the control server has always taken**, not the step's own
+    // shape: `{ target }` went out on the wire before this and 400'd one layer
+    // down. The point is the centre of the box `inspect` reported.
+    expect(issued('click')).toEqual([{ x: 140, y: 220 }])
+    expect(issued('inspect')).toEqual([{ selector: '.checkout' }])
   })
 
   it("records settled: false and unsettledReason when a step's settle check says so", async () => {
@@ -60,7 +77,12 @@ describe('runFlow', () => {
     const deps: Pick<FlowRunnerDeps, 'call'> = {
       call: async command => {
         calls.push(command)
-        if (command === 'click') throw new Error('obsrv control click: no such element')
+        // The stub answers `inspect` with no match, which is how a click by
+        // selector fails now: the runner refuses before it presses anything,
+        // rather than the server rejecting a payload it never should have been
+        // sent (`feat-flow-selector-click`). The step still fails, which is what
+        // this test is about.
+        if (command === 'inspect') return { ok: true, found: false }
         return { ok: true, settled: true }
       },
     }
@@ -73,23 +95,27 @@ describe('runFlow', () => {
     // the flow" and the report's front page has to state coverage from data.
     expect(result.steps).toHaveLength(3)
     expect(result.steps[0]).toMatchObject({ status: 'ran' })
-    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed', error: 'obsrv control click: no such element' })
+    expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed' })
+    expect(result.steps[1]!.error).toContain('no element matches ".missing"')
     expect(result.steps[2]).toEqual({ index: 2, action: 'reload', status: 'not-reached' })
     // The failed step still gets its settle probe, its `status` read and its
-    // network batch (below); only the not-reached step after it is skipped.
-    expect(calls).toEqual(['navigate', 'captureRaster', 'status', 'networkRecord', 'click', 'captureRaster', 'status', 'networkRecord'])
+    // network batch (below); only the not-reached step after it is skipped. No
+    // `click` went out: there was no point to send it to, and sending one anyway
+    // is the behaviour this join replaced.
+    expect(calls).toEqual(['navigate', 'captureRaster', 'status', 'networkRecord', 'inspect', 'captureRaster', 'status', 'networkRecord'])
+    expect(calls).not.toContain('click')
   })
 
   it('reads the settle probe on a FAILED step too — the screen at the moment it failed distinguishes a timing problem from a settled-page defect', async () => {
     const result = await runFlow(flow([{ action: 'click', target: '.missing' }]), {
       call: async command => {
-        if (command === 'click') throw new Error('no such element')
+        if (command === 'inspect') return { ok: true, found: false }
         return { data: 'y', width: 1, height: 1, settled: false, unsettledReason: 'animating' }
       },
     })
     expect(result.steps[0]).toMatchObject({
       status: 'failed',
-      error: 'no such element',
+      error: expect.stringContaining('no element matches ".missing"'),
       settled: false,
       unsettledReason: 'animating',
       data: 'y',
@@ -304,7 +330,15 @@ describe('startFlow', () => {
 })
 
 describe('runFlow: recording what a step was expected to show', () => {
-  const settledCall: FlowRunnerDeps['call'] = async command => (command === 'captureRaster' ? { data: 'x', settled: true } : { ok: true })
+  const settledCall: FlowRunnerDeps['call'] = async command => {
+    if (command === 'captureRaster') return { data: 'x', settled: true }
+    // A click by selector goes through `inspect` and `status` now; without these
+    // every step in this block would refuse for want of a match and these tests
+    // would be about the refusal instead of about observations.
+    if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+    if (command === 'status') return { cssWidth: 390, cssHeight: 844 }
+    return { ok: true }
+  }
   const reading = (over: Partial<ObservationReading> = {}): ObservationReading => ({ found: false, complete: true, looked: 'looked here', ...over })
 
   it("does not send observations to the step's own control command — they are the runner's, not the command's", async () => {
@@ -312,11 +346,16 @@ describe('runFlow: recording what a step was expected to show', () => {
     await runFlow(flow([{ action: 'click', target: '.pay', observations: ['Order confirmed'] }]), {
       call: async (command, payload = {}) => {
         if (command === 'click') payloads.push(payload)
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+        if (command === 'status') return { cssWidth: 390, cssHeight: 844 }
         return command === 'captureRaster' ? { settled: true } : { ok: true }
       },
       observe: async () => [reading({ found: true })],
     })
-    expect(payloads).toEqual([{ target: '.pay' }])
+    // The payload is the resolved point and nothing else: the selector became a
+    // coordinate, and the observations — which are the runner's own business —
+    // did not travel with it.
+    expect(payloads).toEqual([{ x: 140, y: 220 }])
   })
 
   it('reads a settled step once, for all its observations in order — present with what was seen, absent when the read was complete', async () => {
@@ -483,5 +522,197 @@ describe('runFlow: recording what a step was expected to show', () => {
     })
     if (!result.ok) throw new Error('expected ok')
     expect(result.result.steps[0]!.observations![0]).toMatchObject({ state: 'present' })
+  })
+})
+
+/**
+ * Clicking a step's target by selector — the join `feat-flow-selector-click` is
+ * about, at the level that sequences the calls.
+ *
+ * `flowClick.test.ts` covers the arithmetic and the refusal sentences. What is
+ * here is the ORDER and the payloads: that an off-screen element is scrolled to
+ * before it is pressed rather than refused, that nothing is pressed when there is
+ * no honest point, and that what was measured is recorded either way.
+ */
+describe('runFlow: a click step that names a selector', () => {
+  const VIEWPORT = { cssWidth: 390, cssHeight: 844 }
+  /** Below the fold: page y 1200 on an 844-high viewport. */
+  const BELOW = { x: 0, y: 1200, width: 200, height: 48 }
+
+  it('scrolls an element below the fold into view and presses it, instead of refusing it', async () => {
+    const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
+    let scrolled = false
+    const result = await runFlow(flow([{ action: 'click', target: '.footer-cta' }]), {
+      call: async (command, payload = {}) => {
+        calls.push({ command, payload })
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'scroll') {
+          scrolled = true
+          return { ok: true, scrolled: { x: 0, y: 919 } }
+        }
+        if (command === 'inspect') {
+          // Before the scroll the element is at page y 1200, off-screen; after
+          // it, the same element reads at viewport y 281 — a third down, which is
+          // where `scrollToShow` aimed.
+          return scrolled
+            ? { ok: true, found: true, readout: { rect: { ...BELOW, y: 281 }, pageRect: BELOW } }
+            : { ok: true, found: true, readout: { rect: BELOW, pageRect: BELOW } }
+        }
+        return { ok: true }
+      },
+    })
+    const commands = calls.map(c => c.command)
+    // Locate, size the viewport, scroll, **look again**, press. The second look
+    // is the load-bearing one: a scroll can land somewhere other than where it
+    // was aimed, and the click is computed from where the element ended up.
+    expect(commands.slice(0, 5)).toEqual(['inspect', 'status', 'scroll', 'inspect', 'click'])
+    expect(result.steps[0]).toMatchObject({ status: 'ran' })
+    const payload = (command: string) => calls.filter(c => c.command === command).map(c => c.payload)
+    expect(payload('scroll')).toEqual([{ x: 0, y: Math.round(1200 - 844 / 3) }])
+    expect(payload('click')).toEqual([{ x: 100, y: 305 }])
+    // And the record says a scroll was needed, which an element pressed where it
+    // stood would not carry.
+    expect(result.steps[0]!.resolved).toMatchObject({ selector: '.footer-cta', scrolledTo: { x: 0, y: 919 }, point: { x: 100, y: 305 } })
+  })
+
+  it('does not scroll an element that is already on screen, and records that it did not', async () => {
+    const calls: string[] = []
+    const result = await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async command => {
+        calls.push(command)
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+        return { ok: true }
+      },
+    })
+    expect(calls).not.toContain('scroll')
+    // Absence of the key is the fact: it says the element was pressed where it
+    // stood, which a reader of the report needs to distinguish from a scroll of
+    // zero.
+    expect(result.steps[0]!.resolved!.scrolledTo).toBeUndefined()
+    expect(result.steps[0]!.resolved!.point).toEqual({ x: 140, y: 220 })
+  })
+
+  it('refuses a zero-size element by name, presses nothing, and keeps the box it measured', async () => {
+    const calls: string[] = []
+    const result = await runFlow(flow([{ action: 'click', target: '#none' }]), {
+      call: async command => {
+        calls.push(command)
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') {
+          return {
+            ok: true,
+            found: true,
+            readout: { rect: { x: 0, y: 0, width: 0, height: 0 }, pageRect: { x: 0, y: 0, width: 0, height: 0 } },
+            // The shape the live reply has: the rule lives in a note, not a field.
+            notes: ['this element is not drawn: display: none on it or on an ancestor.'],
+          }
+        }
+        return { ok: true }
+      },
+    })
+    expect(calls).not.toContain('click')
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('no area')
+    expect(result.steps[0]!.error).toContain('display: none')
+    // The measurement that produced the refusal is kept, because it is the fact
+    // that explains it — a reader should not have to re-run the flow to see the
+    // box was 0x0.
+    expect(result.steps[0]!.resolved!.rect).toEqual({ x: 0, y: 0, width: 0, height: 0 })
+  })
+
+  it("reads a not-drawn note out of the READOUT, which is where a hit puts it", async () => {
+    // **The placement is measured, not assumed** (live probe, 2026-09-29): on a
+    // miss `inspect` answers `{found: false, readout: null, notes: [...]}` with
+    // the notes at the top level, and on a hit the readout carries its own in
+    // `readout.notes` while the top level is absent. Reading only the top level
+    // is the defect the live run caught — a `display: none` button refused with a
+    // bare `0x0` and named no rule at all. This test uses the hit shape
+    // exclusively, so a regression to one place fails here.
+    const result = await runFlow(flow([{ action: 'click', target: '#none' }]), {
+      call: async command => {
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') {
+          return {
+            ok: true,
+            found: true,
+            readout: {
+              rect: { x: 0, y: 0, width: 0, height: 0 },
+              pageRect: { x: 0, y: 0, width: 0, height: 0 },
+              notes: ['this element is not drawn: visibility: hidden in its computed style.'],
+            },
+          }
+        }
+        return { ok: true }
+      },
+    })
+    expect(result.steps[0]!.error).toContain('visibility: hidden')
+  })
+
+  it('refuses when a scroll could not bring the element into view, naming the offset it tried', async () => {
+    const result = await runFlow(flow([{ action: 'click', target: '.in-an-inner-scroller' }]), {
+      call: async command => {
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        // The page never moves — an app shell whose scroll belongs to an inner
+        // element does exactly this, and `scroll`'s own reply says so with
+        // `scrolled: null`. The element stays off-screen on the second look.
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: BELOW, pageRect: BELOW } }
+        if (command === 'scroll') return { ok: true, scrolled: null, warnings: ['scroll offset could not be confirmed'] }
+        return { ok: true }
+      },
+    })
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('still outside the 390x844 viewport after scrolling to 0,919')
+    expect(result.steps[0]!.resolved).toMatchObject({ scrolledTo: { x: 0, y: 919 } })
+    // Deliberately NOT a click at a clamped coordinate: there is no point inside
+    // the element on screen, and pressing the nearest one would press whatever
+    // else is there and report it as this element.
+    expect(result.steps[0]!.resolved!.point).toBeUndefined()
+  })
+
+  it('refuses when the app reports no viewport, rather than assuming one from a preset', async () => {
+    const result = await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async command => {
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return { url: 'https://x.test' }
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+        return { ok: true }
+      },
+    })
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('did not report a viewport size')
+  })
+
+  it('carries a button through to the resolved click, since the step may name one', async () => {
+    const payloads: Array<Record<string, unknown>> = []
+    await runFlow(flow([{ action: 'click', target: '.buy', button: 'right' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'click') payloads.push(payload)
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+        return { ok: true }
+      },
+    })
+    expect(payloads).toEqual([{ button: 'right', x: 140, y: 220 }])
+  })
+
+  it('leaves a click that already names coordinates exactly as it was', async () => {
+    const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
+    await runFlow(flow([{ action: 'click', x: 10, y: 20 }]), {
+      call: async (command, payload = {}) => {
+        calls.push({ command, payload })
+        return command === 'captureRaster' ? { settled: true } : { ok: true }
+      },
+    })
+    // No `inspect`: there is nothing to resolve, and adding a round-trip to a
+    // step that was already complete would change timing for every existing flow.
+    expect(calls.map(c => c.command)).toEqual(['click', 'captureRaster', 'status', 'networkRecord'])
+    expect(calls[0]!.payload).toEqual({ x: 10, y: 20 })
   })
 })

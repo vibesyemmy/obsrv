@@ -228,8 +228,14 @@ recording captures clicks and not intent. A clause it cannot resolve **refuses
 the whole flow** rather than running the part it understood: one bad clause in
 ten refuses all ten, which is deliberate, since a flow that ran nine of your
 steps and reported success is worse than one that ran none and said why.
-Clicking an element by name is not resolvable yet — `click` takes coordinates —
-so those flows still need `steps`.
+Clicking an element by *name* is not resolvable — a sentence names an intent, not
+an element, and nothing resolving it can see your page — so an interaction stated
+in words still needs `steps`. A **step** can click by selector:
+`{"action": "click", "target": ".checkout-button"}`. Obsrv inspects that element,
+scrolls it into view if it is below the fold, and presses the centre of the part
+on screen; the report says which element, whether it had to scroll, and where it
+pressed. A selector matching nothing, an element with no area, and an element that
+could not be brought into view are three different refusals, each saying which.
 
 Add `expect` to a step to say what you expected to see there, and Obsrv reads
 the rendered page for that text once the step has settled: the report says

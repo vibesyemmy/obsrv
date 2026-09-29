@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>selector-click-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font: 16px system-ui, sans-serif; }
+      /* A fixed header, because it is the thing that makes the scroll placement
+         load-bearing: an element scrolled flush to y = 0 lands UNDER this, and
+         the click reaches the header instead of the element. It logs its own
+         hits, so that failure is visible rather than silent. */
+      #bar { position: fixed; top: 0; left: 0; right: 0; height: 120px; background: #123; color: #fff; }
+      .spacer { height: 2000px; background: linear-gradient(#fff, #ccc); }
+      button { display: block; width: 240px; height: 56px; font-size: 18px; }
+      #top-cta { margin: 160px 0 0 20px; }
+      #below-cta { margin: 0 0 0 20px; }
+      #hidden-cta { display: none; }
+      #flat { height: 0; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="bar" onclick="log('bar')">a fixed header, 120px tall</div>
+    <button id="top-cta" onclick="log('top')">top</button>
+    <div class="spacer"></div>
+    <button id="below-cta" onclick="log('below')">below the fold</button>
+    <button id="hidden-cta" onclick="log('hidden')">display: none</button>
+    <div id="flat" onclick="log('flat')">zero height</div>
+    <div class="spacer"></div>
+    <script>
+      // The click log lives in the title so a test can read it with one
+      // `executeJavaScript`, the same way `button.html` does.
+      window.clicks = []
+      function log(what) {
+        window.clicks.push(what)
+        document.title = 'clicked: ' + window.clicks.join(',')
+      }
+    </script>
+  </body>
+</html>

@@ -13,6 +13,16 @@
 
 import type { NetworkRecord, NetworkState } from '../shared/networkRecord'
 import type { Flow, FlowStep } from '../shared/flow'
+import {
+  isWhollyVisible,
+  noMatchRefusal,
+  notBroughtIntoViewRefusal,
+  scrollToShow,
+  visibleCentre,
+  zeroSizeRefusal,
+  type Box,
+  type Viewport,
+} from '../shared/flowClick'
 import { acquireFlowLock, defaultFlowLockDeps, releaseFlowLock, type AcquireFlowLockResult, type FlowLockDeps, type FlowLockHolder } from './flowLock'
 
 export type { FlowLockDeps, FlowLockHolder }
@@ -106,6 +116,30 @@ export interface FlowStepResult {
    *  empty — when it could not, so "no requests" and "no record" stay
    *  distinguishable at the type level and not only in prose. */
   network?: NetworkState
+  /** How a selector became a point, for a `click` step that named one. Present
+   *  on the refusals too, carrying what was measured before the refusal — the
+   *  box a zero-size element reported is the fact that explains it. */
+  resolved?: FlowStepResolution
+}
+
+/**
+ * A selector resolved to a point, recorded so a reader can check the join rather
+ * than trust it.
+ *
+ * `rect` is the element's box **as first found**, before any scroll, because that
+ * is the measurement the decision was made on; `scrolledTo` is present only when
+ * the element had to be brought into view, and its absence is itself a fact — an
+ * element already on screen was pressed where it stood.
+ */
+export interface FlowStepResolution {
+  selector: string
+  /** In CSS px of the target viewport, which is the space `click` takes. */
+  point?: { x: number; y: number }
+  rect?: Box
+  /** The page-space box, kept because it is what the scroll was computed from. */
+  pageRect?: Box
+  scrolledTo?: { x: number; y: number }
+  viewport?: Viewport
 }
 
 /**
@@ -154,6 +188,112 @@ async function readNetwork(deps: FlowRunnerDeps): Promise<NetworkState | undefin
   const dropped = typeof r['dropped'] === 'number' && Number.isFinite(r['dropped']) ? r['dropped'] : 0
   const stopped = typeof r['stopped'] === 'string' && r['stopped'].length > 0 ? r['stopped'] : undefined
   return { records, dropped, ...(stopped !== undefined ? { stopped } : {}) }
+}
+
+/** The box and the viewport from one `inspect` reply, or nothing when the reply
+ *  did not carry them well-typed. Kept separate from the decisions so a
+ *  malformed reply refuses in one place. */
+function boxOf(v: unknown): Box | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const r = v as Record<string, unknown>
+  const x = num(r['x'])
+  const y = num(r['y'])
+  const width = num(r['width'])
+  const height = num(r['height'])
+  if (x === undefined || y === undefined || width === undefined || height === undefined) return undefined
+  return { x, y, width, height }
+}
+
+/**
+ * A selector, pressed: `inspect` for the box, a `scroll` when it is off-screen,
+ * and the visible centre as the point — the three-step join
+ * `feat-flow-selector-click` is about.
+ *
+ * **Why the runner and not the resolver.** The resolver turns a sentence into
+ * steps and by design issues no calls, so it cannot inspect a page it is not
+ * connected to; sequencing three round-trips is exactly what this layer is for.
+ * That split is the card's first acceptance line.
+ *
+ * **Why it re-inspects after scrolling** rather than subtracting the scroll from
+ * the first box: a scroll can land somewhere other than where it was aimed (a
+ * page at its end, an inner scroller, a layout that reflows as it moves), and the
+ * reply's own `scrolled` says where the *page* went, not where the *element* now
+ * is. The second reading is the one the click is computed from, so a scroll that
+ * did not achieve the placement refuses instead of pressing a guess.
+ */
+async function pointForSelector(
+  deps: FlowRunnerDeps,
+  selector: string,
+): Promise<{ point: { x: number; y: number }; resolved: FlowStepResolution } | { refusal: string; resolved: FlowStepResolution }> {
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string') : [])
+  const look = async (): Promise<{ rect: Box; pageRect: Box; notes: string[] } | { refusal: string }> => {
+    const r = await deps.call('inspect', { selector })
+    // **`inspect` puts its notes in two different places, measured rather than
+    // assumed.** On a miss they are top-level (`{found: false, readout: null,
+    // notes: [...]}` — that is where the "not a valid CSS selector" sentence
+    // arrives); on a hit the readout carries its own (`readout.notes`, where
+    // "this element is not drawn" arrives) and the top level is usually absent.
+    // Reading only the top level is the bug the live run caught: a
+    // `display: none` button refused with a bare `0x0` and named no rule. Both
+    // are read, so neither sentence is lost.
+    const top = strings(r['notes'])
+    if (r['found'] !== true) return { refusal: noMatchRefusal(selector, top) }
+    const readout = (typeof r['readout'] === 'object' && r['readout'] !== null ? r['readout'] : {}) as Record<string, unknown>
+    const rect = boxOf(readout['rect'])
+    const pageRect = boxOf(readout['pageRect']) ?? rect
+    if (rect === undefined || pageRect === undefined) {
+      return { refusal: `inspect found ${JSON.stringify(selector)} but returned no usable box for it, so no point can be computed` }
+    }
+    // The notes are carried, not a field: `inspect` reports "not drawn" as a
+    // sentence (`inspectReadout.ts:148`) and has no `hidden` key at all.
+    return { rect, pageRect, notes: [...top, ...strings(readout['notes'])] }
+  }
+
+  const first = await look()
+  if ('refusal' in first) return { refusal: first.refusal, resolved: { selector } }
+  const { rect, pageRect, notes } = first
+
+  // Before anything about position: an element with no area has no point inside
+  // it at any scroll offset, and `display: none` is the commonest way to get one.
+  if (rect.width <= 0 || rect.height <= 0) {
+    return { refusal: zeroSizeRefusal(selector, rect, notes), resolved: { selector, rect, pageRect } }
+  }
+
+  // The viewport `click` will bounds-check against, read from the app rather
+  // than assumed from a preset: `status.cssWidth/cssHeight` is the surface's own
+  // size, already rotated (`control.ts:169`), and `parseClick` checks the same
+  // surface's `getViewport()`.
+  const page = await readPageState(deps)
+  const viewport: Viewport | undefined =
+    page?.cssWidth !== undefined && page.cssHeight !== undefined && page.cssWidth > 0 && page.cssHeight > 0
+      ? { width: page.cssWidth, height: page.cssHeight }
+      : undefined
+  if (viewport === undefined) {
+    return {
+      refusal: `the app did not report a viewport size, so ${JSON.stringify(selector)} cannot be checked against the area a click must land in`,
+      resolved: { selector, rect, pageRect },
+    }
+  }
+
+  if (isWhollyVisible(rect, viewport)) {
+    const point = visibleCentre(rect, viewport)
+    if (point === null) {
+      return { refusal: notBroughtIntoViewRefusal(selector, rect, viewport, { x: 0, y: 0 }), resolved: { selector, rect, pageRect, viewport } }
+    }
+    return { point, resolved: { selector, rect, pageRect, viewport, point } }
+  }
+
+  // Off-screen: scroll, then measure again.
+  const scrolledTo = scrollToShow(rect, pageRect, viewport)
+  await deps.call('scroll', { x: scrolledTo.x, y: scrolledTo.y })
+  const second = await look()
+  if ('refusal' in second) return { refusal: second.refusal, resolved: { selector, rect, pageRect, viewport, scrolledTo } }
+  const point = visibleCentre(second.rect, viewport)
+  const base: FlowStepResolution = { selector, rect: second.rect, pageRect: second.pageRect, viewport, scrolledTo }
+  if (point === null) {
+    return { refusal: notBroughtIntoViewRefusal(selector, second.rect, viewport, scrolledTo), resolved: base }
+  }
+  return { point, resolved: { ...base, point } }
 }
 
 async function readPageState(deps: FlowRunnerDeps): Promise<FlowStepPage | undefined> {
@@ -257,14 +397,38 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       continue
     }
 
-    const payload = target !== undefined ? { target, ...rest } : rest
-
     let reply: Record<string, unknown> | undefined
     let error: string | undefined
-    try {
-      reply = await deps.call(action, payload)
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e)
+    let resolved: FlowStepResolution | undefined
+
+    // **A `click` that names a target is the one step whose payload this layer
+    // builds rather than forwards.** Every other action's `target` is a handle
+    // the command itself understands (a tab id, a scroll container); `click`
+    // takes coordinates and nothing else, so the selector is resolved to a point
+    // here — locate, scroll into view, press — and the control server still
+    // receives exactly the payload it has always taken.
+    if (action === 'click' && target !== undefined) {
+      try {
+        const got = await pointForSelector(deps, target)
+        resolved = got.resolved
+        if ('refusal' in got) {
+          // A refusal is the step failing, not the runner throwing: the reason is
+          // the useful artefact, and it stops the flow the same way any failed
+          // step does.
+          error = got.refusal
+        } else {
+          reply = await deps.call('click', { ...rest, x: got.point.x, y: got.point.y })
+        }
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e)
+      }
+    } else {
+      const payload = target !== undefined ? { target, ...rest } : rest
+      try {
+        reply = await deps.call(action, payload)
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e)
+      }
     }
 
     // Run whether the step's own action succeeded or not: the screen at the
@@ -319,6 +483,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       ...(recorded !== undefined ? { observations: recorded } : {}),
       ...(page !== undefined ? { page } : {}),
       ...(network !== undefined ? { network } : {}),
+      ...(resolved !== undefined ? { resolved } : {}),
     })
 
     if (error !== undefined) stopped = true
