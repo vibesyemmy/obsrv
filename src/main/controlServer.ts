@@ -1,5 +1,15 @@
 import { randomBytes } from 'node:crypto'
-import { parseAuditRequest, parseInspectRequest, parseLintRequest, type AuditRequest, type InspectRequest, type LintRequest } from '../shared/ipcPayloads'
+import {
+  parseAuditRequest,
+  parseInspectRequest,
+  parseLintRequest,
+  parseObserveRequest,
+  type AuditRequest,
+  type InspectRequest,
+  type LintRequest,
+  type ObserveRequest,
+} from '../shared/ipcPayloads'
+import type { ObserveReport } from '../shared/observe'
 import type { InspectReadout } from '../shared/inspectReadout'
 import type { AuditResult } from '../cli/audit'
 import type { LintGroupSummary, LintResult } from '../cli/lint'
@@ -170,6 +180,14 @@ export interface ControlDeps {
    * `obsrv lint` judges a headless load. Null when the page did not answer.
    */
   lint(req: LintRequest): Promise<LiveLint | null>
+  /**
+   * The exact-text reader on the page in front, for a flow step's stated
+   * observations (`board/feat-flow-observations.md`): per stated text, how
+   * many rendered elements contain it, the first matches, and matches that
+   * exist but are not rendered. Null when the page did not answer;
+   * `askOutcome` says which, same as `audit`/`lint`.
+   */
+  observeText(req: ObserveRequest): Promise<LiveObserve | null>
   /** The strip as the user sees it, and the cap. */
   tabs(): { tabs: ControlTab[]; maxTabs: number }
   /** Opens a tab and brings it to the front; null at the cap. */
@@ -200,6 +218,14 @@ export interface LiveLint extends Omit<LintResult, 'groups'> {
   deviceScaleFactor: number
   textScale: number
   pageHeight: number
+}
+
+/** What a live observe answers: `observePage`'s own report, plus which page
+ *  it was read on — the same "before anything about the contents" note
+ *  `LiveAudit`/`LiveLint` carry, added beside the report rather than folded
+ *  into `ObserveReport` itself, which stays exactly what `observePage` returns. */
+export interface LiveObserve extends ObserveReport {
+  warnings?: string[]
 }
 
 /** When this process came up: stamped into the discovery file with the pid. */
@@ -516,6 +542,14 @@ export class ControlServer {
         if (typeof req === 'string') return reply(400, { error: req })
         const result = await this.deps.lint(req)
         if (!result) return reply(409, { error: unansweredMeasureMessage('lint', this.deps.askOutcome?.() ?? 'answered') })
+        return reply(200, { ok: true, ...result })
+      }
+
+      case 'observeText': {
+        const req = parseObserveRequest(payload)
+        if (typeof req === 'string') return reply(400, { error: req })
+        const result = await this.deps.observeText(req)
+        if (!result) return reply(409, { error: unansweredMeasureMessage('observeText', this.deps.askOutcome?.() ?? 'answered') })
         return reply(200, { ok: true, ...result })
       }
 

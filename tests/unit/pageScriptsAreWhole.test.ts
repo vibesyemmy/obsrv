@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AUDIT_SCRIPT } from '../../src/shared/audit'
 import { INSPECT_SCRIPT } from '../../src/shared/inspect'
 import { LINT_SCRIPT } from '../../src/shared/lint'
+import { OBSERVE_SCRIPT } from '../../src/shared/observe'
 import { SCROLL_HOST_SCRIPT, SHADOW_TREE_SCRIPT, WALK_STEP_SCRIPT } from '../../src/shared/scrollHost'
 import { STUCK_CHROME_SCRIPT } from '../../src/shared/stuckChrome'
 
@@ -37,6 +38,7 @@ const SCRIPTS: ReadonlyArray<readonly [string, string]> = [
   ['AUDIT_SCRIPT', AUDIT_SCRIPT],
   ['LINT_SCRIPT', LINT_SCRIPT],
   ['INSPECT_SCRIPT', INSPECT_SCRIPT],
+  ['OBSERVE_SCRIPT', OBSERVE_SCRIPT],
 ]
 
 /** Words that are followed by `(` and are not calls. */

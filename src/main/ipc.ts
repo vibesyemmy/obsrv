@@ -2004,6 +2004,35 @@ export function registerIpc(ctx: AppContext): () => void {
         groups: slimGroups(result.groups),
       }
     },
+    observeText: async req => {
+      const t = tab().target
+      const vp = t.getViewport()
+      // Which page this was read on, before anything about what it found —
+      // same convention `audit`/`inspect`/`lint` already follow.
+      const st = t.httpStatus()
+      const pre = whichPage(tab(), st)
+      // No empty-document grace and no motion recheck here, unlike
+      // `audit`/`lint`: the only caller today (`flowRunner.ts#recordObservations`)
+      // asks this exclusively after a step's own settle check has already
+      // passed, so a page still finding its feet never reaches this call in
+      // the first place. A future direct caller that skips that gate would
+      // be asking a live-but-unsettled page, which is its own bug to fix
+      // there rather than a case to guess at and pay for here.
+      // Deliberately no fallback report here, unlike `audit`/`lint`: those
+      // feed a page a human reads with the timeout stated alongside a
+      // best-effort answer, but this feeds `flowRunner.ts`'s present/absent
+      // decision directly, and an empty-but-labelled report is still an
+      // empty report to code that only checks `renderedCount`. Null here
+      // becomes the control server's 409 either way (`askOutcome` says why),
+      // and the flow runner's own `observe` rejects on anything but a 200 —
+      // which is what turns every stated text `unknown` rather than `absent`
+      // (`recordObservations`'s catch branch). Answered-but-refused-by-the-
+      // checks and never-answered-at-all both take this same path; the
+      // distinction is exactly `askOutcome`'s job, not this dep's to redo.
+      const report = await t.observePage(req.texts, LIVE_MEASURE_BUDGET_MS)
+      if (!report) return null
+      return { ...report, ...(pre.length === 0 ? {} : { warnings: pre }) }
+    },
     // An agent scroll drives both panes over the same `applyScroll` channel
     // the pane-sync mirror uses — each pane's sync preload applies it and
     // suppresses its own echo, so the two arrive together with no loop.

@@ -88,7 +88,7 @@ export type AskOutcome = 'answered' | 'timeout' | 'failed' | 'unparsed'
  * the reader a guess to check: a page that answered in full and had its
  * report refused reads nothing like one that navigated away.
  */
-export function unansweredMeasureMessage(what: 'audit' | 'lint', outcome: AskOutcome): string {
+export function unansweredMeasureMessage(what: 'audit' | 'lint' | 'observeText', outcome: AskOutcome): string {
   switch (outcome) {
     case 'unparsed':
       return (

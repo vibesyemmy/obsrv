@@ -318,6 +318,12 @@ export const CONTROL_COMMANDS = [
   'audit',
   // v0.30 — the lint on the page in front, as `obsrv lint` judges a headless load.
   'lint',
+  // feat-flow-observations (second PR) — the exact-text reader a flow step's
+  // stated observations are checked against; not a QA engineer's own step
+  // action (the runner issues it automatically after a step settles), but
+  // still gated through this same list like every other command the
+  // protocol will dispatch at all (`ControlServer#route`).
+  'observeText',
   // v0.25 — throttling on the live target.
   'setThrottle',
   // live-first: tabs as an agent surface.

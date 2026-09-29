@@ -9,6 +9,7 @@ import type { SelectOpen, SelectResult } from './selectPopup'
 import { isPickerType, MAX_PICKER_VALUE, type PickerEvent, type PickerOpen, type PickerRequest } from './pickerPopup'
 import { parseTextScale } from './textScale'
 import type { AuditRect, AuditReport, AuditTarget, AuditText } from './audit'
+import { OBSERVE_MAX_MATCHES, OBSERVE_MAX_TEXTS, OBSERVE_MAX_TEXT_LENGTH, OBSERVE_MAX_UNRENDERED, type ObserveFinding, type ObserveMatch, type ObserveReport } from './observe'
 import type { LintEdge, LintEdgeKind, LintImage, LintRect, LintReport, LintText, LintObjectFit } from './lint'
 import type { InspectReport, RGBA } from './inspect'
 import { isVisionType } from './vision'
@@ -289,6 +290,96 @@ export function parseRect(raw: unknown): Rect | null {
   const r = { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) }
   for (const v of [r.x, r.y, r.width, r.height]) if (v < 0 || v > MAX_RECT) return null
   return r
+}
+
+/** What a flow step's stated observations (`src/shared/flow.ts`) turn into
+ *  once the runner asks the page to look: the texts to search for. */
+export type ObserveRequest = { texts: string[] }
+
+export function parseObserveRequest(raw: unknown): ObserveRequest | string {
+  if (!isRecord(raw) || !Array.isArray(raw.texts)) {
+    return `observe payload must be { texts: string[] } (1 to ${OBSERVE_MAX_TEXTS} non-blank strings, each at most ${OBSERVE_MAX_TEXT_LENGTH} characters)`
+  }
+  if (raw.texts.length === 0 || raw.texts.length > OBSERVE_MAX_TEXTS) {
+    return `texts must hold 1 to ${OBSERVE_MAX_TEXTS} strings`
+  }
+  const texts: string[] = []
+  for (const t of raw.texts) {
+    if (typeof t !== 'string' || t.length > OBSERVE_MAX_TEXT_LENGTH) {
+      return `every text must be a string of at most ${OBSERVE_MAX_TEXT_LENGTH} characters`
+    }
+    if (t.trim().length === 0) {
+      return 'every text must be non-blank; an empty string is present on every page, so it would say nothing'
+    }
+    texts.push(t)
+  }
+  return { texts }
+}
+
+const parseObserveMatch = (v: unknown): ObserveMatch | null => {
+  if (!isRecord(v)) return null
+  const element = boundedString(v.element)
+  const rect = parseRect(v.rect)
+  if (element === null || rect === null) return null
+  return { element, rect }
+}
+
+/** A finding's own match list, bounded at `cap` — a page reporting more than
+ *  it was asked to cap at is not a salvageable entry, so the whole report is
+ *  refused rather than silently truncated a second time. */
+const parseObserveMatchList = (v: unknown, cap: number): ObserveMatch[] | null => {
+  if (!Array.isArray(v) || v.length > cap) return null
+  const out: ObserveMatch[] = []
+  for (const m of v) {
+    const parsed = parseObserveMatch(m)
+    if (parsed === null) return null
+    out.push(parsed)
+  }
+  return out
+}
+
+const nonNegInt = (v: unknown): number | null => (isFiniteNumber(v) && v >= 0 && Number.isInteger(v) ? v : null)
+
+/**
+ * The exact-text reader's report from the target page (`observePage`,
+ * `TargetSource.observePage`). Untrusted like the audit/inspect reports,
+ * but unlike `parseAuditReport`'s `targets`/`text` — an unbounded list of
+ * whatever happens to be on the page, where dropping one bad entry and
+ * keeping the rest is the more useful answer — `findings` holds exactly one
+ * entry per text the caller stated, a small, known-size list. Silently
+ * dropping one of those would make a QA engineer's own stated observation
+ * disappear from the report with nothing to say it went missing, which is
+ * precisely the false completeness this feature exists to refuse; a
+ * malformed finding here fails the whole report instead, so the runner's
+ * `observe` call rejects and every stated text reads `unknown` for the step
+ * (`flowRunner.ts#recordObservations`'s own catch), never a silent absence.
+ */
+export function parseObserveReport(raw: unknown): ObserveReport | null {
+  if (!isRecord(raw) || !isRecord(raw.viewport) || !isRecord(raw.truncated)) return null
+  if (!isFiniteNumber(raw.viewport.width) || !isFiniteNumber(raw.viewport.height)) return null
+  const truncatedMatches = nonNegInt(raw.truncated.matches)
+  const truncatedUnrendered = nonNegInt(raw.truncated.unrendered)
+  if (truncatedMatches === null || truncatedUnrendered === null) return null
+  if (!Array.isArray(raw.findings) || raw.findings.length > OBSERVE_MAX_TEXTS) return null
+
+  const findings: ObserveFinding[] = []
+  for (const f of raw.findings) {
+    if (!isRecord(f)) return null
+    const text = typeof f.text === 'string' ? f.text : null
+    const renderedCount = nonNegInt(f.renderedCount)
+    const unrenderedCount = nonNegInt(f.unrenderedCount)
+    const matches = parseObserveMatchList(f.matches, OBSERVE_MAX_MATCHES)
+    const unrendered = parseObserveMatchList(f.unrendered, OBSERVE_MAX_UNRENDERED)
+    if (text === null || renderedCount === null || unrenderedCount === null || matches === null || unrendered === null) return null
+    findings.push({ text, renderedCount, matches, unrenderedCount, unrendered })
+  }
+
+  return {
+    viewport: { width: raw.viewport.width, height: raw.viewport.height },
+    findings,
+    truncated: { matches: truncatedMatches, unrendered: truncatedUnrendered },
+    ...frameCoverage(raw.frames),
+  }
 }
 
 /** Most entries a lint report may carry per list; the page's own caps are lower. */

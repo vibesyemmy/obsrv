@@ -148,7 +148,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the thirty commands', () => {
+  it('knows exactly the thirty-one commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'activateTab',
       'audit',
@@ -164,6 +164,7 @@ describe('command validation', () => {
       'inspect',
       'lint',
       'navigate',
+      'observeText',
       'openTab',
       'panTo',
       'reload',

@@ -11,6 +11,27 @@
 
 import { CONTROL_COMMANDS, isControlCommand, type ControlCommand } from './control'
 
+/**
+ * Control commands the runner issues automatically that a flow may still
+ * name by hand, and the one it may not — and why the line falls where it
+ * does, not at "every automatic command", which is the tidier rule that
+ * would be wrong.
+ *
+ * The runner calls `captureRaster` and `status` on its own, but a
+ * hand-written `{action: 'captureRaster'}` or `{action: 'status'}` step is
+ * still a meaningful thing for a QA engineer to ask for — an explicit
+ * reading or capture, with getting one twice costing nothing. `observeText`
+ * is different in kind: its payload is the expectation texts, and those
+ * come from the step's OWN `observations` field (`recordObservations`,
+ * `src/mcp/flowRunner.ts`), not from anything a hand-written step supplies.
+ * A step naming it directly would be asking Obsrv to read texts nobody
+ * stated — not a redundant call, a call with nothing to act on. So the
+ * exclusion is keyed to "a command whose input the runner owns", and a
+ * future automatic command earns a place in this set only by that same
+ * test, not by being one more thing the runner happens to call.
+ */
+const NOT_FLOW_ACTIONS: ReadonlySet<ControlCommand> = new Set(['observeText'])
+
 export interface FlowStep {
   action: ControlCommand
   /** Optional handle for the step's target — a selector, a tab id, and so on;
@@ -70,6 +91,15 @@ function validateStep(step: unknown, index: number): StepValidation {
     return {
       ok: false,
       rejection: { index, reason: `step ${index}'s "action" (${action}) is not a known control command; valid: ${CONTROL_COMMANDS.join(', ')}` },
+    }
+  }
+  if (NOT_FLOW_ACTIONS.has(action)) {
+    return {
+      ok: false,
+      rejection: {
+        index,
+        reason: `step ${index}'s "action" (${action}) is not something a flow states directly — the runner issues it automatically after a step settles`,
+      },
     }
   }
   if ('target' in record && record.target !== undefined && typeof record.target !== 'string') {
