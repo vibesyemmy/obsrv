@@ -203,6 +203,9 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .obs q { font-style: normal; }
 .obs .looked { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
 .obs .saw { margin: 2px 0 0; font-size: 13px; }
+.where { margin: 6px 0 0; }
+.where td { padding: 2px 10px 2px 0; border: 0; vertical-align: top; }
+.where td:first-child { color: var(--muted); white-space: nowrap; }
 .gap { border-left-color: var(--bad); }
 .step { margin: 28px 0; padding-top: 16px; border-top: 1px solid var(--line); }
 .step h3 { margin: 0 0 10px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
@@ -422,6 +425,26 @@ export interface FlowReportStep {
    *  empty — for a step that stated none, so a flow without observations
    *  renders exactly the document it always did. */
   observations?: FlowReportObservation[]
+  /** Where the step ran. Absent when `status` could not be read, and on a step
+   *  that never ran. */
+  page?: FlowReportPageState
+}
+
+/** The page's address, size and density as a step left it — what somebody needs
+ *  to get back to where the step ran.
+ *
+ *  **Not a DOM tree**, and `pageStateBlock` says so in the document rather than
+ *  leaving "for reproduction" to imply it. A serialised DOM per step would be
+ *  megabytes and would bury the step summary this report keeps scannable; a QA
+ *  engineer reproducing a step reopens the page at the size it was driven at.
+ *  Every field is optional: the runner copies only what `status` answered with
+ *  the right type, so a missing field means "not reported", never a default. */
+export interface FlowReportPageState {
+  url?: string
+  cssWidth?: number
+  cssHeight?: number
+  deviceScaleFactor?: number
+  loading?: boolean
 }
 
 /** What Obsrv can say about one stated text, structurally rather than by
@@ -553,6 +576,37 @@ function askedHalf(s: FlowReportStep): string {
   return head + stated + `<p class="muted">Obsrv does not judge this. The screen and the reply are below, as it found them.</p></div>`
 }
 
+/** "Where this step ran", one click down.
+ *
+ *  It names what it is — *address, size and density* — because the clause this
+ *  satisfies says "for reproduction", and a reader who took that to mean a DOM
+ *  snapshot would find four facts and assume the rest was omitted rather than
+ *  never collected. Absent fields are left out rather than shown as unknown: the
+ *  runner copies only what `status` answered, so a gap is "not reported" and a
+ *  row saying "density: unknown" would invent a measurement that was not taken. */
+function pageStateBlock(p: FlowReportPageState | undefined): string {
+  if (p === undefined) return ''
+  const rows: string[] = []
+  if (p.url !== undefined) rows.push(`<tr><td>Address</td><td><code>${escapeHtml(p.url)}</code></td></tr>`)
+  if (p.cssWidth !== undefined && p.cssHeight !== undefined) {
+    rows.push(`<tr><td>Size</td><td>${p.cssWidth} × ${p.cssHeight} CSS px</td></tr>`)
+  }
+  if (p.deviceScaleFactor !== undefined) rows.push(`<tr><td>Density</td><td>${p.deviceScaleFactor}×</td></tr>`)
+  // Only worth a row when it is true. "Loading: no" on every settled step is
+  // noise; a step that finished while the page was still loading is the case a
+  // reproducer needs told, and `settled` in the half above is a different fact
+  // — a page can stop painting with a fetch still in flight.
+  if (p.loading === true) {
+    rows.push(`<tr><td>Loading</td><td><b>the page was still loading when this step finished</b></td></tr>`)
+  }
+  if (rows.length === 0) return ''
+  return (
+    `<details><summary>Where this step ran — address, size and density</summary>` +
+    `<table class="where">${rows.join('')}</table>` +
+    `<p class="muted">The page as this step left it, for reopening it. Not a snapshot of the document's contents.</p></details>`
+  )
+}
+
 function flowStepSection(s: FlowReportStep, n: number): string {
   const st = flowStepState(s)
   const where = s.target !== undefined ? ` <code>${escapeHtml(s.target)}</code>` : ''
@@ -561,9 +615,10 @@ function flowStepSection(s: FlowReportStep, n: number): string {
     s.reply !== undefined
       ? `<details><summary>The step's own reply, for reproduction</summary><pre>${escapeHtml(JSON.stringify(s.reply, null, 2))}</pre></details>`
       : ''
+  const ranAt = pageStateBlock(s.page)
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
-    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${reply}</div>`
+    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${ranAt}${reply}</div>`
   )
 }
 

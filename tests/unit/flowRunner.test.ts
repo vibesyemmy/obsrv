@@ -24,11 +24,24 @@ describe('runFlow', () => {
     expect(result.steps).toHaveLength(2)
     expect(result.steps[0]).toMatchObject({ index: 0, action: 'navigate', status: 'ran', settled: true, data: 'x' })
     expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', target: '.checkout', status: 'ran', settled: true, data: 'x' })
-    // Each step's own action, then one settle check, over the same `call` —
-    // never re-resolved, never skipped.
-    expect(calls.map(c => c.command)).toEqual(['navigate', 'captureRaster', 'click', 'captureRaster'])
-    expect(calls[0]!.payload).toEqual({ url: 'https://x.test' })
-    expect(calls[2]!.payload).toEqual({ target: '.checkout' })
+    // Each step's own action, then one settle check, then one `status` read for
+    // where it ran — over the same `call`, never re-resolved, never skipped.
+    expect(calls.map(c => c.command)).toEqual([
+      'navigate',
+      'captureRaster',
+      'status',
+      'click',
+      'captureRaster',
+      'status',
+    ])
+    // Found by command, not by index. These were `calls[0]` and `calls[2]`, and
+    // adding one call per step silently moved the second one onto the settle
+    // probe — where `toEqual({ target: '.checkout' })` would have failed loudly,
+    // but the next such addition might land on a call whose payload happens to
+    // match. The step's own action is what these two claims are about.
+    const issued = (command: string) => calls.filter(c => c.command === command).map(c => c.payload)
+    expect(issued('navigate')).toEqual([{ url: 'https://x.test' }])
+    expect(issued('click')).toEqual([{ target: '.checkout' }])
   })
 
   it("records settled: false and unsettledReason when a step's settle check says so", async () => {
@@ -60,9 +73,9 @@ describe('runFlow', () => {
     expect(result.steps[0]).toMatchObject({ status: 'ran' })
     expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed', error: 'obsrv control click: no such element' })
     expect(result.steps[2]).toEqual({ index: 2, action: 'reload', status: 'not-reached' })
-    // The failed step still gets its settle probe (below); only the
-    // not-reached step after it is skipped entirely.
-    expect(calls).toEqual(['navigate', 'captureRaster', 'click', 'captureRaster'])
+    // The failed step still gets its settle probe and its `status` read
+    // (below); only the not-reached step after it is skipped entirely.
+    expect(calls).toEqual(['navigate', 'captureRaster', 'status', 'click', 'captureRaster', 'status'])
   })
 
   it('reads the settle probe on a FAILED step too — the screen at the moment it failed distinguishes a timing problem from a settled-page defect', async () => {
@@ -81,6 +94,71 @@ describe('runFlow', () => {
     })
   })
 
+  /**
+   * Where the step ran. `status` answers from the app's own memory, so this is
+   * a round-trip and not a measurement — the reason it is here per step and a
+   * network record is not.
+   */
+  it("records the page's address, size and density as the step left it", async () => {
+    const result = await runFlow(flow([{ action: 'click' }]), {
+      call: async command =>
+        command === 'status'
+          ? { ok: true, url: 'https://shop.test/cart', cssWidth: 390, cssHeight: 844, deviceScaleFactor: 3, loading: false }
+          : { settled: true },
+    })
+    expect(result.steps[0]!.page).toEqual({
+      url: 'https://shop.test/cart',
+      cssWidth: 390,
+      cssHeight: 844,
+      deviceScaleFactor: 3,
+      loading: false,
+    })
+  })
+
+  it('keeps a failed step\'s page too — the page a click failed on is the page someone has to reopen', async () => {
+    const result = await runFlow(flow([{ action: 'click' }]), {
+      call: async command => {
+        if (command === 'click') throw new Error('no such element')
+        if (command === 'status') return { url: 'https://shop.test/cart', cssWidth: 390, cssHeight: 844 }
+        return { settled: true }
+      },
+    })
+    expect(result.steps[0]).toMatchObject({ status: 'failed', page: { url: 'https://shop.test/cart' } })
+  })
+
+  it('a status that throws leaves the page absent and does not turn one failure into two', async () => {
+    const result = await runFlow(flow([{ action: 'click' }]), {
+      call: async command => {
+        if (command === 'status') throw new Error('control gone')
+        return { settled: true }
+      },
+    })
+    expect(result.steps[0]!.page).toBeUndefined()
+    // The step itself ran. A probe that cannot answer says nothing; it does not
+    // fail the step, exactly as the settle probe above does not.
+    expect(result.steps[0]!.status).toBe('ran')
+  })
+
+  it('carries no page key at all when status answers nothing usable, rather than an empty block', async () => {
+    const result = await runFlow(flow([{ action: 'click' }]), {
+      // Every field the wrong type, plus the empty string this used to keep:
+      // a `url: ''` would render as a page at about:blank, which is a claim.
+      call: async command => (command === 'status' ? { ok: true, url: '', cssWidth: 'wide', deviceScaleFactor: null } : { settled: true }),
+    })
+    expect(result.steps[0]!.page).toBeUndefined()
+  })
+
+  it('a step the flow never reached has no page, because there is no "where" for something that did not run', async () => {
+    const result = await runFlow(flow([{ action: 'click' }, { action: 'reload' }]), {
+      call: async command => {
+        if (command === 'click') throw new Error('x')
+        if (command === 'status') return { url: 'https://shop.test/cart' }
+        return { settled: true }
+      },
+    })
+    expect(result.steps[1]).toEqual({ index: 1, action: 'reload', status: 'not-reached' })
+  })
+
   it('a not-reached step never gets a settle probe at all — nothing about it ran', async () => {
     const calls: string[] = []
     const result = await runFlow(flow([{ action: 'click' }, { action: 'reload' }]), {
@@ -91,7 +169,10 @@ describe('runFlow', () => {
       },
     })
     expect(result.steps[1]).toEqual({ index: 1, action: 'reload', status: 'not-reached' })
-    expect(calls).toEqual(['click', 'captureRaster']) // reload's own captureRaster never happens
+    // The click's own probe and status read happen; reload contributes nothing
+    // at all — not its action, not a settle probe, not a `status`.
+    expect(calls).toEqual(['click', 'captureRaster', 'status'])
+    expect(calls.filter(c => c === 'reload')).toEqual([])
   })
 
   it("a settle check that itself fails does not fail the step — it just can't say", async () => {
