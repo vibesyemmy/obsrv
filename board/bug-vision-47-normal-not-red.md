@@ -196,3 +196,9 @@ the remaining branch is a genuinely white render.
 **What is fixed and is not this card:** the other half, `[255,255,0]`, where the control read Normal
 while the shader was still applied. `setVision` now confirms against a painted frame and warns when the
 pane never acknowledged a draw — `bug-vision-47-shader-after-normal`, done.
+
+**Where the instruction arrived, recorded because Idris could not check it and said so.** Opeyemi's
+words came in **Henry's own session, not in the Obsrv Engineering room** — so what the room has is a
+relay, and a reviewer reading only the room cannot authenticate the quote. She flagged exactly that
+before endorsing the reading, which is the right order. The transcript of that session is the primary
+source; this line exists so nobody later mistakes the room's copy for the original.

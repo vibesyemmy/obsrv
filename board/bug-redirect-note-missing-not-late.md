@@ -844,3 +844,9 @@ has already paid for twice.
 reply and prints them. The next sighting answers a question eight sightings could not: empty notes mean
 the class-1 silence stands; a `landedElsewhere` note means the product did say something and the test
 was looking for the wrong sentence — which would change this card's class rather than its status.
+
+**Where the instruction arrived, recorded because Idris could not check it and said so.** Opeyemi's
+words came in **Henry's own session, not in the Obsrv Engineering room** — so what the room has is a
+relay, and a reviewer reading only the room cannot authenticate the quote. She flagged exactly that
+before endorsing the reading, which is the right order. The transcript of that session is the primary
+source; this line exists so nobody later mistakes the room's copy for the original.
