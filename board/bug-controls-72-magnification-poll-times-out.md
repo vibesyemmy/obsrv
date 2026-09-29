@@ -2,6 +2,7 @@
 title: "`controls.spec:72`: the backing width never halved, once, and the retry passed in 225 ms"
 column: backlog
 kind: bug
+release: later
 order: 93
 ---
 
@@ -35,3 +36,7 @@ the new diagonal or never re-rendered at it inside 10 s — not a rounding or a 
 `:85` depending on the value this test leaves behind. This is a third failure, in this test's own
 poll, and folding it into either would put two failure texts on one card and make the sweep's grep
 ambiguous.
+
+## RELEASE CLASS 2026-09-29 — `later`
+
+A test-side measurement that did not settle once, retry green in 225 ms. No product answer is wrong; waiting on a recurrence. Not worth a line in the notes.

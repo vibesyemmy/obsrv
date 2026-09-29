@@ -2,6 +2,7 @@
 title: "Once in a while, a frame is delivered after entering an image-mode tab closed the gate"
 column: backlog
 kind: bug
+release: later
 criterion: B5
 order: 82
 ---
@@ -29,3 +30,7 @@ as the activation. So a failure names which frame, and a seq above the line is a
 `lastSeq()` at activation is a leak for the entered tab, which is a product defect in the gate. A seq
 **at or below** it is a frame for the tab being left, which was already in flight, and that one is a
 harness question.
+
+## RELEASE CLASS 2026-09-29 — `later`
+
+One frame delivered after the gate closed, once, waiting on a recurrence. No wrong answer reaches a caller.

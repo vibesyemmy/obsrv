@@ -2,6 +2,7 @@
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
 column: backlog
 kind: bug
+release: blocks
 owner: "Henry"
 criterion: B5
 order: 84
@@ -125,3 +126,26 @@ Per this card's own rule two sections up, that gate does not close it — the fi
 does not prove one. Back to `backlog`, a recurrence-waiter again: still nothing to do until a suite
 either runs clean long enough to matter, or `[255,255,255]` fires once more with timing no longer
 available as the explanation.
+
+## RELEASE CLASS 2026-09-29 — `blocks`
+
+**Class 1, and the downgrade I first wrote does not survive the gate's own text.**
+
+A "Normal" render that is washed out, or still carries the deficiency shader while
+the control reads Normal, is a wrong artifact with nothing in any reply saying so
+— and the `[255,255,0]` case is the card's own words: *"the UI says one thing"*
+while the picture says another.
+
+I first marked this `disclose`, on the grounds that the channel readout this card
+added is a tell a reader can check. **Idris read where that readout lives.** It is
+*"the assertion now prints all three channels … (`tests/e2e/vision.spec.ts`)"* — a
+**test's own print, in a CI log.** The gate names exactly this as one of the
+escape hatch's two holes: *"An artifact is not a reply … A warning in the reply
+satisfies the letter of this rule and reaches nobody holding the picture. The
+disclosure has to arrive on the surface the answer is read from."* A CI assertion
+print is further from a caller than the PNG-versus-JSON case the gate uses as its
+own example: nobody running a vision simulation ever sees it.
+
+So there is no valid downgrade until the product says something on the surface the
+render is read from. Same shape as `bug-redirect-note-missing-not-late`, and it
+makes the published class-1 count **two**.
