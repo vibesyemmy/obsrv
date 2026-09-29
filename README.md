@@ -229,9 +229,20 @@ the whole flow** rather than running the part it understood: one bad clause in
 ten refuses all ten, which is deliberate, since a flow that ran nine of your
 steps and reported success is worse than one that ran none and said why.
 Clicking an element by name is not resolvable yet — `click` takes coordinates —
-so those flows still need `steps`. Add `expect` to a step to say what you
-expected to see there: it is printed beside the evidence, and **Obsrv does not
-judge it**.
+so those flows still need `steps`.
+
+Add `expect` to a step to say what you expected to see there, and Obsrv reads
+the rendered page for that text once the step has settled: the report says
+**text found**, **text not found**, or **not read** with the reason it could not
+say. It reports the reading and **not a verdict** — whether finding your text
+means the step was right is yours, since text you expected to be *gone* is a
+perfectly ordinary thing to state. Two limits worth knowing before your first
+run rather than after it: the reader never enters an **iframe**, so on a page
+with one in the first viewport — a cookie banner, an embedded video, a chat
+widget — a text it cannot find comes back **not read** rather than *not found*,
+naming how many frames and how much of the viewport they cover; and closed
+shadow roots are unreachable from any page script, so they are never included,
+which every such sentence says.
 
 The MCP tools launch the app when it is not running; if it is open with agent
 control off, the app asks — Allow for this session, or Not now. Once it is
