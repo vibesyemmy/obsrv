@@ -114,7 +114,7 @@ measures the page as it first shows.
 
 If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 `obsrv_audit`, `obsrv_lint`, `obsrv_inspect`, `obsrv_report`, `obsrv_drive`,
-`obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
+`obsrv_presets`, `obsrv_flow`), prefer them over shelling out — same pipeline, and the PNG
 comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
@@ -165,6 +165,28 @@ image gets no contrast verdict either, and 1×1 spacer files are counted under
 the chosen screen**: a 24 CSS px control is 6.6 mm on a 24" 1080p and 4.5 mm
 on a 6.5" phone, so run it on a phone preset before declaring a mobile layout
 usable, and quote the millimetres, not the pixels.
+
+`obsrv_flow` drives a sequence of steps through the live app over **one held
+session** and writes a per-step report. Give it `steps` (control commands) or
+`description` — the flow in words, one clause per step: *"go to
+https://shop.test, scroll to the bottom, then audit"*. Each step reports what it
+did, whether the page had stopped painting when its evidence was taken, and the
+page's address, size and density for reopening it; the report leads with what it
+does **not** cover, because a flow that stopped at step 2 must not read as a
+clean run of five. A clause it cannot resolve refuses the whole flow rather than
+running part of it, and clicking an element by *name* is not resolvable — a
+sentence names an intent, not an element — so an interaction stated in words needs
+`steps`. A step clicks by selector: `{"action":"click","target":".checkout-button"}`,
+which Obsrv inspects, scrolls into view if it is below the fold, and presses at the
+centre of the part on screen. No match, no area, and could-not-be-scrolled-to are
+three separate refusals. `expect` on a step
+states what you expected there, and Obsrv reads the rendered page for that text
+once the step settles: **text found**, **text not found**, or **not read** with the
+reason. A reading, not a verdict — whether finding it means the step was right is
+yours, since text expected to be *gone* is an ordinary thing to state. The reader
+never enters an iframe, so on a page with one in the first viewport a miss is
+**not read** rather than *not found*, and the sentence names how many frames and
+how much of the viewport they cover.
 
 `obsrv_report` does snap, audit, lint and diff for a whole matrix of screens
 and writes one self-contained HTML page: per screen the render, the audit and
