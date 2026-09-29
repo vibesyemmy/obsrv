@@ -1394,3 +1394,37 @@ trust (Henry, #2364). **So the setting does fire for a flake's failed attempt in
 just did not fire for ours.** A page too wedged to be screenshotted is a different animal from an
 input that merely changed state, and that gap between the matched case and this one is the thing
 worth chasing on the next sighting, not an open question about whether the mechanism works at all.
+
+## `image-mode.spec.ts:70`: a zero pixel where a dropped 2x export should read red, named rather than attached
+
+Seen once, `#493`'s run (`36501957420`), retry-rescued in 629 ms. `a dropped 2x export is shown at
+its 1x size` reads the canvas's centre pixel and expects it above 150 (red); it got 0:
+
+```
+Error: expect(received).toBeGreaterThan(expected)
+  Expected: > 150
+  Received:   0
+  > 118 |   expect(px[0]).toBeGreaterThan(150)
+```
+
+`#493` touches `src/cli/reportHtml.ts`, `src/mcp/flowRunner.ts` and `src/mcp/flowTool.ts` — a
+different subsystem entirely, confirmed by two people independently (Henry, Idris). Not this PR's
+doing.
+
+**Deliberately not filed against `bug-canvas-blank-without-notice`, on this same night's own
+lesson.** `panes.spec.ts:85`'s `page.press` timeout was filed against that card by three people on
+the strength of its title before any of them reached a canvas assertion at all — this sighting at
+least *is* a pixel read, which is more than that one ever was, but a centre pixel reading zero
+still fits two different causes with opposite consequences:
+
+- a genuine blank canvas — the card's own subject;
+- **a capture taken before the image painted** — a timing race, a different bug.
+
+One log cannot separate them. The retry passing in 629 ms leans toward the race (the app painted
+correctly moments later, on the same runner) without settling it — a canvas that stays genuinely
+blank would not be expected to self-heal on a bare retry, but one run is a candidate, not a
+measurement. **The discriminator is whether the canvas was ever painted**, readable from
+`playwright-flaky.zip`'s trace for this run. Whoever picks this up should read the trace before
+writing either cause down, the same way the matched-comparison entry above did for a missing
+screenshot rather than arguing from what seemed likely.
+
