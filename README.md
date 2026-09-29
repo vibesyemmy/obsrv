@@ -211,8 +211,27 @@ raster density — the PNG comes back as an inline image up to 1.5 MiB; `inlined
 `obsrv_diff` (the 1x-vs-2x metrics as structured output), `obsrv_audit` and
 `obsrv_inspect` (millimetres and contrast on a chosen screen), `obsrv_lint`
 (the elements a 1x screen and a cheap panel break, named), `obsrv_report`
-(a whole matrix of screens as one HTML page) and `obsrv_presets` (every
-preset and panel profile, no render).
+(a whole matrix of screens as one HTML page), `obsrv_presets` (every
+preset and panel profile, no render) and `obsrv_flow` (drive a sequence of
+steps through the live app over one held session and get a per-step report:
+what each step did, whether the page had stopped painting when its evidence was
+taken, the page it ran on, and — said plainly rather than left to inference —
+which steps were never reached because an earlier one failed).
+
+`obsrv_flow` takes the flow either as `steps`, a list of control commands, or as
+`description`, the same flow in your own words: *"go to https://shop.test,
+scroll to the bottom, then audit"*, split on commas, semicolons, newlines,
+` and ` or ` then `. The report shows what Obsrv read each clause as, so
+"Obsrv misunderstood step 2" stays distinguishable from "step 2 is broken" —
+which is the point of describing a flow rather than recording one, because a
+recording captures clicks and not intent. A clause it cannot resolve **refuses
+the whole flow** rather than running the part it understood: one bad clause in
+ten refuses all ten, which is deliberate, since a flow that ran nine of your
+steps and reported success is worse than one that ran none and said why.
+Clicking an element by name is not resolvable yet — `click` takes coordinates —
+so those flows still need `steps`. Add `expect` to a step to say what you
+expected to see there: it is printed beside the evidence, and **Obsrv does not
+judge it**.
 
 The MCP tools launch the app when it is not running; if it is open with agent
 control off, the app asks — Allow for this session, or Not now. Once it is

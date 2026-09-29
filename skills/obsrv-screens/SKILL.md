@@ -114,7 +114,7 @@ measures the page as it first shows.
 
 If the obsrv MCP tools are connected (`obsrv_snap`, `obsrv_diff`,
 `obsrv_audit`, `obsrv_lint`, `obsrv_inspect`, `obsrv_report`, `obsrv_drive`,
-`obsrv_presets`), prefer them over shelling out — same pipeline, and the PNG
+`obsrv_presets`, `obsrv_flow`), prefer them over shelling out — same pipeline, and the PNG
 comes back inline (`inlined: true`; past 1.5 MiB it stays on disk, `inlined: false` with a warning naming the path). `obsrv_presets { group: 'phones' }` lists just the phones
 (`laptops`, `desktops` likewise); with a group it answers with the presets
 alone.
@@ -165,6 +165,18 @@ image gets no contrast verdict either, and 1×1 spacer files are counted under
 the chosen screen**: a 24 CSS px control is 6.6 mm on a 24" 1080p and 4.5 mm
 on a 6.5" phone, so run it on a phone preset before declaring a mobile layout
 usable, and quote the millimetres, not the pixels.
+
+`obsrv_flow` drives a sequence of steps through the live app over **one held
+session** and writes a per-step report. Give it `steps` (control commands) or
+`description` — the flow in words, one clause per step: *"go to
+https://shop.test, scroll to the bottom, then audit"*. Each step reports what it
+did, whether the page had stopped painting when its evidence was taken, and the
+page's address, size and density for reopening it; the report leads with what it
+does **not** cover, because a flow that stopped at step 2 must not read as a
+clean run of five. A clause it cannot resolve refuses the whole flow rather than
+running part of it, and clicking an element by name is not resolvable yet
+(`click` takes coordinates), so those flows need `steps`. `expect` on a step
+states what you expected there: reported beside the evidence, never judged.
 
 `obsrv_report` does snap, audit, lint and diff for a whole matrix of screens
 and writes one self-contained HTML page: per screen the render, the audit and
