@@ -1,5 +1,5 @@
 import { BrowserWindow, type WebContents } from 'electron'
-import { applyNetworkEvent, emptyNetworkState, takeNetworkState, type NetworkState } from '../shared/networkRecord'
+import { applyNetworkEvent, detachedReason, emptyNetworkState, takeNetworkState, type NetworkState } from '../shared/networkRecord'
 import { NO_THROTTLE, type ThrottleProfile } from '../shared/throttle'
 import { cursorCss, DEFAULT_CURSOR } from '../shared/cursor'
 import { EventEmitter } from 'node:events'
@@ -399,6 +399,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    *  listened for, on a target nobody is recording. */
   private network: NetworkState = emptyNetworkState()
   private recording = false
+  /** The `webContents` the record listeners are installed on, so a re-attach
+   *  after a detach does not stack a second pair and double-count every request.
+   *  A `recreate()` swaps in a new window, and its debugger needs its own. */
+  private recordListenersOn: WebContents | null = null
   /**
    * What the owner asked for, not what the current window happens to be doing.
    * See `setPainting` — `recreate()` swaps in a fresh webContents that starts
@@ -897,18 +901,35 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   startNetworkRecord(): string | null {
     if (this.disposed || this.win.isDestroyed()) return 'the target is gone'
     if (this.recording) return null
-    const dbg = this.win.webContents.debugger
+    const wc = this.win.webContents
+    const dbg = wc.debugger
     try {
       if (!dbg.isAttached()) dbg.attach('1.3')
-      dbg.on('message', (_e, method, params) => {
-        if (this.recording) applyNetworkEvent(this.network, method, params)
-      })
-      dbg.on('detach', (_e, reason) => {
-        if (!this.recording) return
-        this.network.stopped = `the debugger session was detached (${reason || 'no reason given'}) — a throttle being lifted does this`
-      })
+      // Once per `webContents`. Re-attaching on the same window after a detach
+      // must not add a second pair of listeners — every request would then be
+      // counted twice, which is worse than not recording, because it looks fine.
+      if (this.recordListenersOn !== wc) {
+        dbg.on('message', (_e, method, params) => {
+          if (this.recording) applyNetworkEvent(this.network, method, params)
+        })
+        dbg.on('detach', (_e, reason) => {
+          if (!this.recording) return
+          // **Reset, so the next step re-attaches.** Without this the flag stayed
+          // true for the life of the tab and every later `startNetworkRecord()`
+          // no-opped, so recording was silently dead rather than recovering —
+          // Idris found it on `#505`.
+          this.recording = false
+          this.network.stopped = detachedReason(reason)
+        })
+        this.recordListenersOn = wc
+      }
       void dbg.sendCommand('Network.enable')
       this.recording = true
+      // **The stop is NOT cleared here.** It was, and that wiped the record of
+      // the detach before anyone could read it: the control command starts then
+      // takes in one call, so clearing on start meant the batch spanning the
+      // detach came back looking ordinary. The stop lives on the state until the
+      // take that reports it, and `takeNetworkState` does not carry it further.
       return null
     } catch (e) {
       return `network recording not started: ${e instanceof Error ? e.message : String(e)}`

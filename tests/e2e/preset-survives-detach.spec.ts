@@ -181,3 +181,45 @@ test('a preset survives a throttle being applied and lifted — the debugger det
   expect(throttled, 'attaching the debugger changed the target geometry').toEqual(before)
   expect(after, 'detaching the debugger wiped the preset — targetSource.ts:188 warned of exactly this').toEqual(before)
 })
+
+
+/**
+ * **The defect Idris found on `#505`, as an e2e** — because the fix lives in
+ * `TargetSource`, which no unit test can reach, and "untested wiring" was the
+ * honest but unsatisfying answer to her second point.
+ *
+ * `recreate()` destroys and replaces the target window whenever a preset changes
+ * density or phone-ness. That is an **ordinary flow step**, not an edge: a flow
+ * whose second step is `setPreset` to a phone crosses it. Chromium reports the
+ * resulting debugger detach as `target closed`, and the first version of the
+ * recorder (a) said the cause was "a throttle being lifted" — confidently naming
+ * the wrong one — and (b) never reset its `recording` flag, so every later
+ * `startNetworkRecord()` no-opped and recording stayed dead for the rest of the
+ * tab's life instead of resuming on the new window.
+ */
+test('network recording survives a preset that replaces the window, and says why the batch spanning it is incomplete', async () => {
+  // A laptop preset first: recording starts on this window.
+  expect((await call('setPreset', { id: 'laptop-768' })).body.applied).toBe(true)
+  const first = (await call('networkRecord')).body
+  expect(first['ok'], 'the first record call did not start recording').toBe(true)
+  expect(first['stopped'], 'nothing has detached yet, so nothing should claim recording stopped').toBeUndefined()
+
+  // The swap: a phone preset differs in density and phone-ness, so `recreate()`
+  // destroys the window the recorder was listening to.
+  expect((await call('setPreset', { id: PHONE.id })).body.applied).toBe(true)
+  const acrossTheSwap = String((await call('networkRecord')).body['stopped'] ?? '')
+
+  // (a) The batch spanning the swap says it is incomplete, and names the right
+  // cause — a replaced window, not a throttle nobody touched.
+  expect(acrossTheSwap, 'the batch spanning a window swap did not say recording had stopped').toContain('the target window was replaced')
+  expect(acrossTheSwap, 'it named a throttle for a detach no throttle caused').not.toContain('throttle')
+
+  // (b) Recording is live again on the new window: the next batch is clean, and a
+  // navigation after the swap is actually recorded.
+  expect((await call('networkRecord')).body['stopped'], 'recording did not restart, so every later step would be silently unrecorded').toBeUndefined()
+
+  expect((await call('navigate', { url: NO_META })).status).toBe(200)
+  const records = ((await call('networkRecord')).body['records'] ?? []) as Array<{ url?: string }>
+  expect(records.length, 'a navigation after the window swap was not recorded, so recording never came back').toBeGreaterThan(0)
+  expect(records.some(r => (r.url ?? '').includes('button.html'))).toBe(true)
+})

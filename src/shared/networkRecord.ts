@@ -111,11 +111,36 @@ export function applyNetworkEvent(state: NetworkState, method: string, params: u
  *  step that was running when its response arrived. */
 export function takeNetworkState(state: NetworkState): { batch: NetworkState; next: NetworkState } {
   const batch: NetworkState = { records: state.records, dropped: state.dropped, ...(state.stopped !== undefined ? { stopped: state.stopped } : {}) }
-  const next = emptyNetworkState()
-  // A stop persists: once the session is gone every later step is equally
-  // unrecorded, and clearing it would make the next step read as a quiet one.
-  if (state.stopped !== undefined) next.stopped = state.stopped
-  return { batch, next }
+  // **A stop belongs to exactly the batch it happened in, and is not carried
+  // forward.** It was, on the reasoning that a dead session stays dead — which
+  // was true only while `startNetworkRecord` could not recover. It can: a detach
+  // resets the flag and the next call re-attaches on the new window, so carrying
+  // the stop would make genuinely recorded steps claim they were not. The step
+  // that spanned the detach still says so, because the stop is on the state this
+  // call is taking.
+  return { batch, next: emptyNetworkState() }
+}
+
+/**
+ * Why recording stopped, keyed on the reason CDP actually gave.
+ *
+ * The first version said *"a throttle being lifted does this"* unconditionally,
+ * because that was the only detach in the app when it was written. It is not:
+ * `recreate()` destroys and replaces the target window whenever a preset changes
+ * density or phone-ness, which is an **ordinary flow step**, and Chromium reports
+ * that detach as `target closed`. So the sentence confidently named the wrong
+ * cause on the commonest trigger. Idris found it by grepping for the triggers
+ * rather than accepting "true today".
+ *
+ * Named causes where the reason is one we recognise, and the raw reason otherwise
+ * — never a guess dressed as a fact.
+ */
+export function detachedReason(reason: string): string {
+  const raw = reason.trim().length > 0 ? reason.trim() : 'no reason given'
+  if (raw === 'target closed') {
+    return `the target window was replaced (${raw}) — a preset that changes density or phone-ness does this, and recording restarts on the next step`
+  }
+  return `the debugger session was detached (${raw})`
 }
 
 /** A sentence for the report. Null when there is nothing to say beyond the rows

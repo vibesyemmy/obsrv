@@ -3,6 +3,7 @@ import {
   applyNetworkEvent,
   emptyNetworkState,
   MAX_NETWORK_RECORDS,
+  detachedReason,
   networkNote,
   takeNetworkState,
   type NetworkState,
@@ -85,13 +86,40 @@ describe('the per-step network record', () => {
     expect(note).not.toContain('past the first')
   })
 
-  it('carries a stop forward to later steps, which are equally unrecorded', () => {
+  /**
+   * The detach sentence, keyed on the reason rather than asserting a cause.
+   * Idris found the original: it said "a throttle being lifted does this"
+   * unconditionally, and the commonest trigger is a preset change replacing the
+   * window, which Chromium reports as `target closed`.
+   */
+  it('names a replaced window as a replaced window, not as a lifted throttle', () => {
+    const s = detachedReason('target closed')
+    expect(s).toContain('the target window was replaced')
+    expect(s).toContain('recording restarts on the next step')
+    expect(s).not.toContain('throttle')
+  })
+
+  it('quotes an unrecognised reason instead of guessing a cause for it', () => {
+    const s = detachedReason('something new')
+    expect(s).toContain('something new')
+    expect(s).not.toContain('throttle')
+    expect(s).not.toContain('window was replaced')
+  })
+
+  it('says so when the reason is empty, rather than rendering an empty bracket', () => {
+    expect(detachedReason('  ')).toContain('no reason given')
+  })
+
+  it('reports a stop on the batch it happened in and does not carry it further', () => {
     const s = emptyNetworkState()
     s.stopped = 'detached'
     const { batch, next } = takeNetworkState(s)
     expect(batch.stopped).toBe('detached')
-    // Clearing it would make the next step read as quiet when it is unrecorded.
-    expect(next.stopped).toBe('detached')
+    // It used to carry forward, on the reasoning that a dead session stays dead.
+    // It does not: a detach resets the recorder's flag and the next call
+    // re-attaches, so carrying the stop would make genuinely recorded steps claim
+    // they were unrecorded — the same false-silence shape from the other side.
+    expect(next.stopped).toBeUndefined()
     expect(next.records).toEqual([])
   })
 
