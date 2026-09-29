@@ -1714,11 +1714,34 @@ not clickable inside 30 s. This repo already knows that control is time-sensitiv
 bounded at 5 s elsewhere (`snap-tiled-hygiene`) — so a renderer that had not painted the toggle yet
 fits, and a 30 s wait that ends in a retry passing in 13 ms fits it well.
 
-**The discriminator, for whoever picks this up:** whether the toggle was **absent** or **present and
-not clickable**. Playwright's call log distinguishes them (`waiting for locator` with no element versus
-waiting for it to be enabled/stable), and the run artifacts' `error-context.md` carries the page
-snapshot at the moment of the timeout. Read that before deciding this is slowness rather than a control
-that never rendered.
+**Half the discriminator is already answered by the log this entry was written from**, which Idris found
+by reading further down it than I had. The call log does not stop at *"waiting for locator"*:
+
+```
+- waiting for locator('.toggle-panel')
+  - locator resolved to <button type="button" aria-pressed="false" aria-label="Side panel" class="icon-button toggle-panel" …>
+- attempting click action
+  - waiting for element to be visible, enabled and stable
+```
+
+So for this sighting the toggle was **present** — a real button, with its own aria state — and the wait
+that ran out was Playwright's pre-click check. **"It never rendered" is ruled out**, and what remains is
+which of the three that check waits on: not visible, not enabled, or not stable. Those are three
+different bugs — a pane still hidden, a control deliberately disabled, and a control still moving — and
+the log stops before naming which, because it never got past the wait.
+
+**So the question for whoever picks this up is narrower than the one this entry first wrote down:** read
+the page snapshot in the run artifacts' `error-context.md` for the toggle's computed visibility and
+`disabled` state at the moment of the timeout, and check whether anything animates the toolbar at
+startup. Also worth knowing: the click comes from a **shared helper** (`helpers/select.ts:97`), so
+whatever this is, it is not `throttle-live`'s own code and other specs using that helper are exposed to
+it equally.
+
+**And the lesson about the first version of this paragraph is the entry's real value.** I wrote a
+discriminator naming two possibilities while holding a log that had already eliminated one of them. The
+log went four lines further than I read. That is the same shape as the `(0ms)` misreading two paragraphs
+up, and the same shape as `movedNote()` discarding the rest of a reply: **read to the end of the block
+you already have before writing down what someone should go and find out.**
 
 ## `target-source.spec.ts:234` — a click forwarded into the wrong document, once, 2026-09-29
 
