@@ -1688,3 +1688,83 @@ print. Watched green locally first, which is the only way this file trusts an in
 baseline carries `notes: []`, `:89` baseline carries exactly one sentence — the
 navigated-after-load one, **and no `landedElsewhere`**. The two arms therefore differ, which is what
 makes the next sighting answer the question instead of adding to the count.
+
+## `throttle-live.spec.ts:48` — a `beforeAll` timeout waiting for `.toggle-panel`, twice in one night, 2026-09-29
+
+**Named, not filed**, and named as **one** failure seen twice rather than two sightings, because the
+two logs carry the same hook and the same deadline:
+
+| run | branch | what the log says |
+| --- | --- | --- |
+| `36585126404` | `fix/vision-confirm-paints` | `"beforeAll" hook timeout of 30000ms exceeded` at `throttle-live.spec.ts:28` |
+| `36608642138` | `feat/flow-selector-click` | the same, **plus the cause**: `TimeoutError: locator.click: Timeout 30000ms exceeded. Call log: - waiting for locator('.toggle-panel')` |
+
+Both retry-rescued (13 ms on the second), so both runs concluded green.
+
+**The `(0ms)` on the test line is not a signature, and reading it as one is the trap here.** It was
+first relayed as *"the same `(0ms)` environmental flake"*, which is how Playwright prints a test that
+**never ran** because its hook failed — the duration belongs to the test, and the failure belongs to
+`beforeAll`. Two different `beforeAll` failures would print the identical `(0ms)`. What actually makes
+these the same is the hook, the file line and the deadline, and only the second log carries the locator
+that was being waited on.
+
+**So the mechanism candidate is the panel toggle, not the throttle.** Nothing in either failure has
+reached a throttle assertion: the hook opens the drawer before any test runs, and `.toggle-panel` was
+not clickable inside 30 s. This repo already knows that control is time-sensitive — the drawer poll is
+bounded at 5 s elsewhere (`snap-tiled-hygiene`) — so a renderer that had not painted the toggle yet
+fits, and a 30 s wait that ends in a retry passing in 13 ms fits it well.
+
+**Half the discriminator is already answered by the log this entry was written from**, which Idris found
+by reading further down it than I had. The call log does not stop at *"waiting for locator"*:
+
+```
+- waiting for locator('.toggle-panel')
+  - locator resolved to <button type="button" aria-pressed="false" aria-label="Side panel" class="icon-button toggle-panel" …>
+- attempting click action
+  - waiting for element to be visible, enabled and stable
+```
+
+So for this sighting the toggle was **present** — a real button, with its own aria state — and the wait
+that ran out was Playwright's pre-click check. **"It never rendered" is ruled out**, and what remains is
+which of the three that check waits on: not visible, not enabled, or not stable. Those are three
+different bugs — a pane still hidden, a control deliberately disabled, and a control still moving — and
+the log stops before naming which, because it never got past the wait.
+
+**So the question for whoever picks this up is narrower than the one this entry first wrote down:** read
+the page snapshot in the run artifacts' `error-context.md` for the toggle's computed visibility and
+`disabled` state at the moment of the timeout, and check whether anything animates the toolbar at
+startup. Also worth knowing: the click comes from a **shared helper** (`helpers/select.ts:97`), so
+whatever this is, it is not `throttle-live`'s own code and other specs using that helper are exposed to
+it equally.
+
+**And the lesson about the first version of this paragraph is the entry's real value.** I wrote a
+discriminator naming two possibilities while holding a log that had already eliminated one of them. The
+log went four lines further than I read. That is the same shape as the `(0ms)` misreading two paragraphs
+up, and the same shape as `movedNote()` discarding the rest of a reply: **read to the end of the block
+you already have before writing down what someone should go and find out.**
+
+## `target-source.spec.ts:234` — a click forwarded into the wrong document, once, 2026-09-29
+
+**Named, not filed.** One sighting, run `36608642138` (`feat/flow-selector-click`), retry-rescued in
+90 ms. *"forwards clicks into the offscreen page"* asserts the fixture's title becomes `clicked`:
+
+```
+Expected: "clicked"
+Received: "hairline-fixture"
+```
+
+**The click was forwarded correctly — into the wrong page.** `button.html`'s click handler sets the
+title to `clicked`; the title read `hairline-fixture`, which is a different fixture this same spec file
+loads in other tests. So nothing here is evidence about click forwarding, and a reader who stopped at
+the test's name would file it against exactly the wrong subsystem.
+
+**Kept because of how nearly it was dismissed for the wrong reason.** It was first set aside as
+*"unrelated: this PR doesn't touch `targetSource.ts`"* — which is true, and is an argument from the
+file list rather than from the failure. A test named *"forwards clicks"* failing on a PR that changes
+how a flow produces clicks deserves the log read, and reading it gives a better answer than the file
+list did: the document was wrong, and `#519`'s diff mentions `hairline` zero times (checked
+independently by Idris).
+
+**The discriminator:** whether the preceding test's `navigate` had committed when this one clicked.
+Inherited page state within a spec file is the default explanation for a wrong-document failure in this
+repo — `panes.spec.ts:83` is the recorded case — and the run's trace carries the commit order.
