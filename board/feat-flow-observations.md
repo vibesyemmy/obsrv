@@ -1,8 +1,7 @@
 ---
 title: "A step can state what it expects to see, and the runner records what it saw — present or absent, never pass or fail"
-column: doing
+column: done
 owner: "Dogu"
-waiting: ""
 kind: feat
 order: 114
 ---
@@ -73,3 +72,32 @@ selector, which stays out — a different card, if anyone needs it.
 
 **Not this card:** any pass/fail; resolving plain language into observations (that is
 `feat-flow-language`, which depends on this one); a new report surface.
+
+## DONE 2026-09-29
+
+`#481` (Dogu, first PR): the field, its validation, and the per-observation record against an
+injected reader. `#482` (Dogu, second PR): the exact reader — `observeText` plus
+`observeViaControl`, answering `present`/`absent`/`unknown` for real, and naming *why* whenever it
+can't — iframes in the viewport at the page's top are never searched, and the sentence says how
+many and how much of the viewport they cover rather than just "incomplete". `#500` (Henry): the
+reader wired into `obsrv_flow`'s dependencies, extracted into `flowRunnerDeps` specifically so "a
+reader is supplied" became a checkable claim rather than an assumption about a closure no test
+could reach — it had quietly been false before this PR. Together: `obsrv_flow` now answers "the
+text you expected is there" or "it is not", not just `unknown`.
+
+**Both things the card asked the owner to check and name, resolved:** the new control command
+does widen `CONTROL_COMMANDS`, which `validateFlow` reuses — Idris caught that a hand-written
+`{action: 'observeText', ...}` would validate as a normal flow step, contradicting the runner's
+own comment that it isn't one. Fixed with `NOT_FLOW_ACTIONS`, a narrow exclusion inside
+`src/shared/flow.ts` only (`CONTROL_COMMANDS` itself keeps the entry, since the runner still needs
+it there for its automatic post-step call). State expectations stayed out of scope, as planned —
+still a different card if anyone needs one.
+
+**Known, stated limitation, not a silent gap:** a page with an iframe in the first viewport — a
+cookie banner, an embedded video, a chat widget — can never honestly return `absent` for text that
+might be inside it; the reader answers `unknown` instead, and every such sentence names how many
+iframes and how much of the viewport they cover, rather than just saying "incomplete". On many
+commercial pages that is the ordinary case, not an edge. Henry flagged (2026-09-29) that the
+standing expectation still needs a line in the repo's own README so a user learns it before their
+first run rather than from an unexpected `unknown` — outstanding, not yet written, tracked in the
+room rather than this card since it belongs to `obsrv_flow`'s description as a whole.
