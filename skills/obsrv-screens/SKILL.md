@@ -176,7 +176,13 @@ does **not** cover, because a flow that stopped at step 2 must not read as a
 clean run of five. A clause it cannot resolve refuses the whole flow rather than
 running part of it, and clicking an element by name is not resolvable yet
 (`click` takes coordinates), so those flows need `steps`. `expect` on a step
-states what you expected there: reported beside the evidence, never judged.
+states what you expected there, and Obsrv reads the rendered page for that text
+once the step settles: **text found**, **text not found**, or **not read** with the
+reason. A reading, not a verdict — whether finding it means the step was right is
+yours, since text expected to be *gone* is an ordinary thing to state. The reader
+never enters an iframe, so on a page with one in the first viewport a miss is
+**not read** rather than *not found*, and the sentence names how many frames and
+how much of the viewport they cover.
 
 `obsrv_report` does snap, audit, lint and diff for a whole matrix of screens
 and writes one self-contained HTML page: per screen the render, the audit and
