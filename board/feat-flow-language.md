@@ -1,8 +1,7 @@
 ---
 title: "Resolve a plain-language flow description into steps — last, on a verified foundation"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: feat
 order: 115
 ---
@@ -34,3 +33,22 @@ validates.
 **Deliberately last.** This is the only piece in the epic whose output cannot be checked
 mechanically — everything before it is a verifiable shape. It sits on top of that shape rather
 than under it, so its ambiguity stays visible instead of load-bearing.
+
+## DONE 2026-09-29
+
+`#496` renders the acceptance clause exactly: under each resolved step's heading, before any
+`<details>`, *"From your description: '\<clause\>'. Obsrv read it as **\<keyedOn\>**."* —
+`keyedOn` comes from the regex match itself (`groups['key'] ?? match[0]`), not written beside the
+pattern, so a rule firing on the wrong words is visible rather than assumed correct. Henry read
+the card's one clause against what had shipped and presented the case rather than declaring it
+(seq #2620); Idris independently re-verified both the clause and the rendering against `main`
+before agreeing (seq #2621), having already sabotage-tested the same two functions during `#496`'s
+gate.
+
+**What `done` here does not mean, stated because the two facts read differently side by side.** A
+described flow still cannot click a named element — `click` takes coordinates, only `inspect`
+takes a selector — which is exactly the thing a reader of "plain-language flow" would expect to
+work. That gap is `feat-flow-selector-click`, filed separately and still `backlog`, because it is
+a runner capability this card's own resolver correctly refuses to fake, not a clause of this card
+left undone. `done` + `backlog` together are accurate and, read apart, slightly flattering — this
+paragraph is here so nobody reads the column alone as the promise.
