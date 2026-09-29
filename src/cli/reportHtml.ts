@@ -437,6 +437,9 @@ export interface FlowReportStep {
    *  the renderer says out loud, because an absent record and a quiet step are
    *  opposite facts and both would otherwise be an empty section. */
   network?: FlowReportNetwork
+  /** How a selector became a point, for a click step that named one. Absent for
+   *  a click given as coordinates, and for every other action. */
+  clickedAt?: FlowReportClick
   /** The sentence this step was resolved from, when the flow was given as a
    *  description rather than as a step list. Absent for a hand-written step. */
   clause?: string
@@ -604,6 +607,53 @@ function askedHalf(s: FlowReportStep): string {
   return head + stated + `<p class="muted">Obsrv does not judge this. The screen and the reply are below, as it found them.</p></div>`
 }
 
+/**
+ * A selector resolved to a point.
+ *
+ * In the report because a click by selector is **three** decisions a reader may
+ * want to check — which element, whether it had to be scrolled to, and which
+ * point inside it — and a step that says only `ran` hides all three. The
+ * commonest real failure is a click that landed on a sticky header instead of the
+ * element, and the only way to see that from a report is to see where it went.
+ */
+export interface FlowReportClick {
+  selector: string
+  point?: { x: number; y: number }
+  rect?: { x: number; y: number; width: number; height: number }
+  scrolledTo?: { x: number; y: number }
+  viewport?: { width: number; height: number }
+}
+
+/** "Which element, and where in it", one click down.
+ *
+ *  The absence of `scrolledTo` is stated rather than skipped: "it was already on
+ *  screen" and "we scrolled to it" are different reproductions, and a reader who
+ *  saw neither line would not know which happened. A step with no point renders
+ *  what was measured and says nothing was pressed — the reason is the step's own
+ *  error, already on the page, and repeating it here would give the document two
+ *  voices on one failure. */
+function clickBlock(c: FlowReportClick | undefined): string {
+  if (c === undefined) return ''
+  const box =
+    c.rect !== undefined
+      ? `<li>its box: ${c.rect.width}&times;${c.rect.height} at ${c.rect.x}, ${c.rect.y}${
+          c.viewport !== undefined ? ` in a ${c.viewport.width}&times;${c.viewport.height} viewport` : ''
+        }</li>`
+      : ''
+  const where =
+    c.point !== undefined
+      ? `<li>pressed at ${c.point.x}, ${c.point.y} — the centre of the part on screen</li>`
+      : `<li>nothing was pressed: no point inside it was on screen</li>`
+  const scrolled =
+    c.scrolledTo !== undefined
+      ? `<li>scrolled into view first, to page offset ${c.scrolledTo.x}, ${c.scrolledTo.y}</li>`
+      : `<li>already on screen, so the page was not moved</li>`
+  return (
+    `<details class="ran-at"><summary>Which element, and where in it</summary>` +
+    `<ul><li>selector: <code>${escapeHtml(c.selector)}</code></li>${box}${scrolled}${where}</ul></details>`
+  )
+}
+
 /** "Where this step ran", one click down.
  *
  *  It names what it is — *address, size and density* — because the clause this
@@ -711,7 +761,7 @@ function flowStepSection(s: FlowReportStep, n: number): string {
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
     resolvedFrom(s) +
-    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${ranAt}${networkBlock(s.network)}${reply}</div>`
+    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${clickBlock(s.clickedAt)}${ranAt}${networkBlock(s.network)}${reply}</div>`
   )
 }
 

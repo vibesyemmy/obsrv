@@ -174,8 +174,12 @@ did, whether the page had stopped painting when its evidence was taken, and the
 page's address, size and density for reopening it; the report leads with what it
 does **not** cover, because a flow that stopped at step 2 must not read as a
 clean run of five. A clause it cannot resolve refuses the whole flow rather than
-running part of it, and clicking an element by name is not resolvable yet
-(`click` takes coordinates), so those flows need `steps`. `expect` on a step
+running part of it, and clicking an element by *name* is not resolvable — a
+sentence names an intent, not an element — so an interaction stated in words needs
+`steps`. A step clicks by selector: `{"action":"click","target":".checkout-button"}`,
+which Obsrv inspects, scrolls into view if it is below the fold, and presses at the
+centre of the part on screen. No match, no area, and could-not-be-scrolled-to are
+three separate refusals. `expect` on a step
 states what you expected there, and Obsrv reads the rendered page for that text
 once the step settles: **text found**, **text not found**, or **not read** with the
 reason. A reading, not a verdict — whether finding it means the step was right is

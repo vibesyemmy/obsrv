@@ -2720,7 +2720,11 @@ server.registerTool(
       `at step 3".\n\n` +
       `Each step is \`{ action, target?, ... }\` where \`action\` is a control command (\`navigate\`, \`click\`, ` +
       `\`scroll\`, \`audit\`, \`lint\`, \`inspect\`, \`setPreset\` and the rest) and anything else on the step is ` +
-      `passed through to it. Add \`expect\` to a step to state, in your own words, what you expected to see there: ` +
+      `passed through to it. **A \`click\` step's \`target\` may be a CSS selector**: Obsrv inspects that element, ` +
+      `scrolls it into view when it is outside the viewport, and presses the centre of the part on screen — so you ` +
+      `do not need to know coordinates. It refuses with a reason naming which of three it was: nothing matched, the ` +
+      `element has no area (a \`display: none\` element reads this way), or it could not be brought into view. ` +
+      `Add \`expect\` to a step to state, in your own words, what you expected to see there: ` +
       `it is carried into the report beside the evidence, and **Obsrv does not judge it** — it reports what it ` +
       `observed and leaves the verdict to you.\n\n` +
       `The flow STOPS at the first step whose action fails, because every later step assumed the flow reached a ` +
@@ -2735,8 +2739,10 @@ server.registerTool(
         .optional()
         .describe(
           'The flow, in order. Each entry needs `action` (a control command); `target` and any other keys are ' +
-            "passed through to it. `expect` is yours: a sentence about what you expected at that step, reported " +
-            'beside the evidence and never judged. Give this OR `description`, not both.',
+            'passed through to it — except a `click`, whose `target` may be a CSS selector that Obsrv resolves to a ' +
+            'point by inspecting the element and scrolling it into view first. `expect` is yours: a sentence about ' +
+            'what you expected at that step, reported beside the evidence and never judged. Give this OR ' +
+            '`description`, not both.',
         ),
       description: z
         .string()
@@ -2747,8 +2753,9 @@ server.registerTool(
             'and the report shows what it read each clause as, so a misunderstanding is visible rather than looking ' +
             'like a broken step. A clause it cannot resolve refuses the whole flow, naming that clause: it will not ' +
             'run a partial flow and let you believe it ran yours. Interaction by description (clicking a named ' +
-            'button) is NOT resolvable yet — `click` takes coordinates, so those steps still need `steps`. Give this ' +
-            'OR `steps`, not both.',
+            'button) is NOT resolvable: a sentence names an intent, not an element, and nothing here can see your ' +
+            'page to choose one. A `steps` entry can click by selector — `{action: "click", target: ".checkout"}` — ' +
+            'so give those steps a selector. Give this OR `steps`, not both.',
         ),
     },
     outputSchema: {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportNetwork, type FlowReportObservation, type FlowReportPageState, type FlowReportStep } from '../../src/cli/reportHtml'
+import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportClick, type FlowReportNetwork, type FlowReportObservation, type FlowReportPageState, type FlowReportStep } from '../../src/cli/reportHtml'
 
 /**
  * Written against `board/feat-flow-report.md`'s acceptance list, one test per
@@ -381,5 +381,55 @@ describe('flowReportHtml', () => {
   it('embeds the step screenshot it was given', () => {
     const html = flowReportHtml(data([step({ data: 'QUJD' })]))
     expect(html).toContain('src="data:image/png;base64,QUJD"')
+  })
+})
+
+/**
+ * The click-by-selector block — three facts a step that says only `ran` hides.
+ *
+ * The one it exists for is the middle line: *already on screen* and *scrolled
+ * into view first* are different reproductions, and a reader who saw neither
+ * would not know which happened. So the absence of a scroll is stated, not
+ * skipped — the same rule the network block follows for "no requests" versus "no
+ * record".
+ */
+describe('a click resolved from a selector, in the report', () => {
+  const clickStep = (clickedAt: FlowReportClick): FlowReportStep => ({
+    action: 'click',
+    target: '#below-cta',
+    status: 'ran',
+    clickedAt,
+  })
+
+  it('names the selector, the box, the scroll and the point', () => {
+    const html = flowReportHtml(
+      data([clickStep({ selector: '#below-cta', rect: { x: 20, y: 281, width: 240, height: 56 }, viewport: { width: 390, height: 844 }, scrolledTo: { x: 0, y: 919 }, point: { x: 140, y: 309 } })]),
+    )
+    expect(html).toContain('#below-cta')
+    expect(html).toContain('240&times;56 at 20, 281')
+    expect(html).toContain('390&times;844 viewport')
+    expect(html).toContain('scrolled into view first, to page offset 0, 919')
+    expect(html).toContain('pressed at 140, 309')
+  })
+
+  it('says the page was not moved when the element was already on screen', () => {
+    const html = flowReportHtml(data([clickStep({ selector: '.buy', rect: { x: 0, y: 10, width: 80, height: 40 }, point: { x: 40, y: 30 } })]))
+    expect(html).toContain('already on screen, so the page was not moved')
+    expect(html).not.toContain('scrolled into view first')
+  })
+
+  it('says nothing was pressed when no point was on screen, without restating the error', () => {
+    const html = flowReportHtml(
+      data([{ action: 'click', target: '.x', status: 'failed', error: 'still outside the 390x844 viewport', clickedAt: { selector: '.x', rect: { x: 0, y: 900, width: 10, height: 10 }, scrolledTo: { x: 0, y: 12 } } }]),
+    )
+    expect(html).toContain('nothing was pressed')
+    // The reason lives on the step, once. Two voices on one failure is the shape
+    // this document keeps avoiding.
+    expect(html.match(/still outside the 390x844 viewport/g)).toHaveLength(1)
+  })
+
+  it('renders nothing at all for a step that resolved no selector', () => {
+    const html = flowReportHtml(data([{ action: 'reload', status: 'ran' }]))
+    expect(html).not.toContain('Which element, and where in it')
   })
 })

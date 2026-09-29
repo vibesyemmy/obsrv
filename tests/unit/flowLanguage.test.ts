@@ -165,7 +165,7 @@ describe('resolveFlowText', () => {
   })
 
   describe('refusals', () => {
-    it('refuses an interaction stated by description, naming click coordinates, one rejection per clause', () => {
+    it('refuses an interaction stated by description, naming what to supply instead, one rejection per clause', () => {
       const { rejections } = refused('log in, add an item, checkout')
       expect(rejections.map(r => ({ index: r.index, clause: r.clause }))).toEqual([
         { index: 0, clause: 'log in' },
@@ -175,15 +175,24 @@ describe('resolveFlowText', () => {
       // Each reason names the mechanism, not just the verdict — asserted on
       // every rejection, since one matching reason would leave the other two
       // free to say nothing.
+      //
+      // **What the mechanism is changed with `feat-flow-selector-click`.** These
+      // used to assert the reason named `{x, y}` CSS-viewport coordinates, which
+      // was the true blocker until the runner learned to resolve a selector
+      // itself. Asserting it now would pin the product to a sentence that sends
+      // a reader to fix something already fixed, so what is asserted instead is
+      // the pair a caller acts on: that the clause named no element, and what to
+      // pass instead.
       for (const rejection of rejections) {
-        expect(rejection.reason, rejection.clause).toMatch(/CSS-viewport coordinates/)
-        expect(rejection.reason, rejection.clause).toMatch(/\{x, y\}/)
+        expect(rejection.reason, rejection.clause).toMatch(/does not name an element/)
+        expect(rejection.reason, rejection.clause).toMatch(/target: "\.checkout-button"/)
+        expect(rejection.reason, rejection.clause).not.toMatch(/CSS-viewport coordinates/)
       }
     })
 
     it('refuses a click or type clause for the same reason', () => {
       for (const text of ['click the checkout button', 'type my email', 'press submit', 'select the large size']) {
-        expect(refused(text).rejections[0]!.reason, text).toMatch(/CSS-viewport coordinates/)
+        expect(refused(text).rejections[0]!.reason, text).toMatch(/does not name an element/)
       }
     })
 

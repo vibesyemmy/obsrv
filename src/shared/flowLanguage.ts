@@ -168,19 +168,32 @@ const RULES: Rule[] = [
   },
   {
     /**
-     * The named refusal this slice exists to be honest about. Every verb here
-     * is an interaction stated by intent, and the live vocabulary has no way to
-     * express one: `parseClick` requires `{x, y}` in CSS-viewport pixels, which
-     * only the rendered page can supply. `validateFlow` would happily accept
-     * `{action: 'click', target: '.checkout'}` — its own test uses that shape —
-     * but the control server answers it 400, so emitting it would move the
-     * failure from here, where it names the cause, to mid-flow, where it looks
-     * like the page.
+     * The named refusal this slice exists to be honest about — and **the reason
+     * it gives changed when `feat-flow-selector-click` landed.**
+     *
+     * It used to say the wire could not carry the step: `parseClick` requires
+     * `{x, y}` in CSS-viewport pixels, so `{action: 'click', target: '.checkout'}`
+     * would have 400'd one layer down. That is no longer true. The runner
+     * resolves a selector itself (`flowRunner.ts`'s `pointForSelector`:
+     * `inspect`, scroll it into view, press its visible centre), so a flow step
+     * *can* click by selector.
+     *
+     * What remains true is the part about a **description**: every verb here
+     * states an intent — *log in*, *check out* — and an intent does not name an
+     * element. Guessing one would be this layer inventing a selector for a page
+     * it is not connected to and cannot see. So the refusal stands, and it now
+     * says what to supply instead of asserting a limit the runner no longer has.
+     * Leaving the old sentence in place would be worse than no sentence: it would
+     * send a reader to fix a coordinate problem that is already fixed.
      */
     pattern: /\b(?<key>clicks?|taps?|presses|press|types?|fills?|enters?|selects?|log ?in|logs ?in|sign ?in|signs ?in|sign ?up|log ?out|add to (?:the )?cart|adds? an item|check ?out|submits?|submit|searches for|search for|chooses?|choose)\b/i,
     resolve: ({ key }) => ({
       ok: false,
-      reason: `"${key}" states an interaction, and obsrv's control vocabulary cannot express one from a description: click takes CSS-viewport coordinates ({x, y}), which only the rendered page can supply. Drive the interaction with obsrv_drive and give this flow the steps around it`,
+      reason:
+        `"${key}" states an interaction but does not name an element, and nothing here can see the page to choose one. ` +
+        `A flow step can click by CSS selector — {action: "click", target: ".checkout-button"} — which the runner resolves ` +
+        `by inspecting that element and scrolling it into view before pressing its centre. So give the step a selector, ` +
+        `or drive the interaction with obsrv_drive and give this flow the steps around it`,
     }),
   },
 ]
