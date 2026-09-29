@@ -549,6 +549,43 @@ process dying. Not reproduced locally (25 hammer rounds, 48 spec runs, no
 exit); no crash report from CI. On the ledger, with the exit signal and
 crash reports the first things to look at if it returns.
 
+Mode three, and it is the live one — **`sync.spec.ts:139` twice on 2026-09-28/29
+with one signature: a native load that fails in 0 ms.** Same assertion as mode
+one (`seen.length >= 1` against zero, *"the target emitted no url-changed"*),
+retry-rescued both times, on `#485` and `#489` — neither of which touches
+redirect code. What separates the attempts is printed by the spec's own
+instrumentation:
+
+```
+FAILED:  step-2 native load: failed in 0ms;  native commits after it: 1; target url-changed: 0
+PASSED:  step-2 native load: ok in 27ms;     native commits after it: 2; target url-changed: 2
+```
+
+`#485`'s run carried the reason in its `nativeLoads` record:
+`outcome: "failed", error: "ERR_FAILED (-2) loading '.../redirect.html'",
+tookMs: 0`. **`ERR_FAILED (-2)` with a zero duration is an aborted
+navigation, not a slow one** — Chromium's answer for a load that was
+superseded before it began. In `#485`'s mirror record the abort sits 14 ms
+after the target had already moved to `hairline.html` on branch `issued`: the
+page's own redirect had fired, so the echoed load of `redirect.html` had
+nothing left to load.
+
+**This is a third mode, not mode one returning.** Mode one was the loop
+breaker dropping a mirror it should have kept, and it was reproduced on demand
+and fixed. This is the opposite end: the mirror issues a load the page has
+already made obsolete, and the abort produces **no** `url-changed` for the
+spec to see. Nothing here says the app is wrong to abort it; what is missing
+is any arrival for the second commit the test is waiting on.
+
+**Related, and deliberately not merged with it.** The `arrivals.spec.ts:89`
+entry's own candidate — a reverse-find over **six** same-URL starts — would be
+produced by the same underlying event, a redirect landing inside the mirror's
+echo window. They may be one bug seen from two sides. **Two log readings do not
+establish that**, and the discriminator is cheap: whoever runs the forcing
+test should watch for **both** signatures. If the `arrivals` route reproduces
+and the 0 ms abort never appears, they are two bugs and this entry keeps its
+own.
+
 ## `sync.spec`: the scroll read that hung, once
 
 Seen once, on the 0.29.0 cycle's first `main` run for 0.28.0 (2026-09-05,
