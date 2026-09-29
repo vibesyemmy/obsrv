@@ -958,6 +958,51 @@ recommendation of the entry above still holds: do not paper over it with a longe
 wait. Idris independently confirmed the `#478` row, both blocks and both numbers,
 from the raw log.
 
+## `select.spec.ts:69` — the presets menu measured taller than the window, once, 2026-09-29
+
+**Named, not filed.** One sighting, on `#504`'s run (`36535881587`), retry-rescued.
+`the menu stays inside the window, however long it is` asserts the menu's box fits
+the renderer window on all four sides. The bottom edge failed:
+
+```
+Error: expect(received).toBeLessThanOrEqual(expected)
+  Expected: <= 572
+  Received:    919.59375
+  > 76 |     expect(box.y + box.height).toBeLessThanOrEqual(win.h)
+```
+
+So the menu's bottom sat **348 px below** a window measured at 572 px high, and
+`win.h` comes from `page.evaluate(() => window.innerHeight)` in the same helper,
+two lines above the assertion.
+
+**Two readings, opposite in consequence, and one log cannot separate them.**
+
+1. **The clamp genuinely failed.** The test's name is the product's promise —
+   *however long it is* — so a presets list taller than the window is supposed to
+   be repositioned or scrolled, and was not. That is a real defect, and the
+   dimensions fit it: **919 px is about the height of the full unclamped preset
+   list.** Derived rather than asserted, by Idris while reviewing this entry:
+   `.select-option` (`styles.css:448`) is ~5 px padding top and bottom plus text,
+   `.select-group-label` similar, and there are 32 presets across a few groups —
+   so ~24 px per option × 32, plus group headers and menu padding, lands in
+   **870–920 px**. The arithmetic is here so the next reader can check the claim
+   instead of redoing it, which is the only reason this file exists.
+2. **Nothing was wrong with the menu; the window was mid-change.** `win.h` and the
+   menu box are read in separate round trips, so a window still settling gives a
+   height that never coexisted with that menu. The retry passing in the same run
+   leans this way.
+
+**The discriminator, for whoever picks it up:** log both numbers **and the
+menu's own item count** at the moment of failure. A 919 px menu over a 572 px
+window is the clamp failing; a 919 px menu over a window that is 919-or-more a
+frame later is the measurement racing. Neither is guessable from the numbers we
+have, which is why this entry does not choose.
+
+**Not folded into `select.spec.ts:101`** — that entry is the overlay menu polling
+to zero rows and timing out, a different failure at a different line. Sharing a
+filename is not evidence, which is the `panes.spec.ts:85` lesson with a file in
+place of a title.
+
 ## `sync-trace.spec.ts:77`: the loop fixture's 30 s budget, not a crash
 
 `the loop fixture records trip, and the trace says so rather than only the
