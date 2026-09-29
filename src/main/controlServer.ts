@@ -680,13 +680,24 @@ export class ControlServer {
       case 'setVision': {
         const err = visionApplyError(payload.type, payload.severity)
         if (err) return reply(400, { error: err })
-        this.deps.apply({
-          visionType: payload.type as VisionType,
-          // Omitted means "the strong form", which is what a caller naming a
-          // type and nothing else is asking to see.
-          visionSeverity: typeof payload.severity === 'number' ? payload.severity : 1,
-        })
-        return reply(200, { ok: true })
+        const visionType = payload.type as VisionType
+        // Omitted means "the strong form", which is what a caller naming a
+        // type and nothing else is asking to see.
+        const visionSeverity = typeof payload.severity === 'number' ? payload.severity : 1
+        // **Confirmed, like every other apply on this surface.** This used to be
+        // `apply(...)` followed immediately by `{ ok: true }` — fire and answer,
+        // with no wait and no `applied` field. So a caller who asked for `normal`
+        // got `ok: true` whether or not the deficiency shader had gone, and
+        // `bug-vision-47-normal-not-red`'s `[255,255,0]` case is exactly that: the
+        // control reads Normal while the render is still filtered, and **nothing
+        // in the reply said so.** A silence that fits "it applied" and "it did
+        // not" equally is class 1 by `docs/release-gate.md`, and the only tell
+        // this bug had lived in a test's print in a CI log — which the gate names
+        // as not a disclosure at all, because it never reaches the surface the
+        // answer is read from.
+        //
+        // `applied: false` is that tell, on the reply, where a caller reads it.
+        return this.applyAndConfirm({ visionType, visionSeverity }, st => st.visionType === visionType && st.visionSeverity === visionSeverity)
       }
 
       case 'focusWindow':
