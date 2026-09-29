@@ -2,7 +2,7 @@
 title: "Once in a while, the vision test's 'Normal' render is not red: washed out, or the shader still applied"
 column: backlog
 kind: bug
-release: blocks
+release: disclose
 owner: "Henry"
 criterion: B5
 order: 84
@@ -149,3 +149,43 @@ own example: nobody running a vision simulation ever sees it.
 So there is no valid downgrade until the product says something on the surface the
 render is read from. Same shape as `bug-redirect-note-missing-not-late`, and it
 makes the published class-1 count **two**.
+
+## RELEASE CLASS, third pass 2026-09-29 — `blocks` -> `disclose`, on a narrower claim than the second pass tried
+
+**The second pass was wrong and Idris took it apart.** It downgraded on `#510`'s
+`applied` field, and `applied` came from `applyAndConfirm` polling the state the
+**renderer** reports from a `useEffect` keyed on `visionType`
+(`App.tsx:291-294`). An effect runs when React commits; it does not wait for the
+browser to paint, and it does not wait for the canvas's own rAF draw loop, which
+reads `vision` out of `draw.current`. So `applied: true` meant *the app holds the
+mode* and never *the pane drew it* — and this card's `[255,255,0]` case is the
+picture lagging the control. **A warning derived from the racing half cannot be the
+warning that makes the race detectable.**
+
+**`#514` fixed that rather than arguing with it.** `setVision`'s confirm now waits
+on `flushRendererDraw` — `IPC.drawNow` / `IPC.drewNow` / `DRAW_FLUSH_MS`, built in
+agentic pass 4 and until now wired only to the two capture paths. And a **missing**
+acknowledgement is a warning, not `applied: false`: the mode did reach the app, so
+*"set but not seen to paint"* and *"not set"* stay distinguishable, which is the
+same two-facts rule one layer along.
+
+**What the downgrade now rests on, stated at its real width:**
+
+- **Covered — `[255,255,0]`, the shader still applied while the control reads
+  Normal.** A caller gets `applied: true` only after the pane acknowledges a draw,
+  and otherwise gets *"the mode is set, but the pane did not acknowledge a draw in
+  time — the picture may still show the previous mode"*, on the reply, which is the
+  surface the answer is read from.
+- **NOT covered — `[255,255,255]`, the washed-out render.** A frame acknowledgement
+  says a draw happened, not that it drew the right pixels, and this card puts that
+  case downstream in capture/compositing. **It remains an undisclosed silence**, and
+  the only reason this card is not still `blocks` on it is that the case is a
+  different mechanism with its own home in the capture path rather than the apply
+  path. If that reading is wrong, this card goes back to `blocks`.
+
+Guarded by `tests/e2e/vision-confirm.spec.ts`, whose sabotages fail 1 for the paint
+wait removed and 1 for a missing ack reported as `applied: false` — so the tests
+hold the **choice** as well as the behaviour. All three ran green in CI on
+`92026ab`'s run.
+
+**Still open, not `done`:** the underlying race is not fixed. A caller is now told.
