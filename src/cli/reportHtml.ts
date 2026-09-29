@@ -206,6 +206,8 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .where { margin: 6px 0 0; }
 .where td { padding: 2px 10px 2px 0; border: 0; vertical-align: top; }
 .where td:first-child { color: var(--muted); white-space: nowrap; }
+.resolved { margin: 0 0 10px; padding: 6px 10px; border-left: 3px solid var(--line); background: var(--panel); font-size: 14px; }
+.resolved q { font-style: normal; }
 .gap { border-left-color: var(--bad); }
 .step { margin: 28px 0; padding-top: 16px; border-top: 1px solid var(--line); }
 .step h3 { margin: 0 0 10px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
@@ -428,6 +430,13 @@ export interface FlowReportStep {
   /** Where the step ran. Absent when `status` could not be read, and on a step
    *  that never ran. */
   page?: FlowReportPageState
+  /** The sentence this step was resolved from, when the flow was given as a
+   *  description rather than as a step list. Absent for a hand-written step. */
+  clause?: string
+  /** The words the resolver actually matched on — taken from the match, never
+   *  written out beside the pattern, so the trace cannot claim a phrase the rule
+   *  did not match. */
+  keyedOn?: string
 }
 
 /** The page's address, size and density as a step left it — what somebody needs
@@ -607,6 +616,27 @@ function pageStateBlock(p: FlowReportPageState | undefined): string {
   )
 }
 
+/** What Obsrv understood a sentence to mean, directly under the step's heading
+ *  and not one click down.
+ *
+ *  This is the line that separates *"Obsrv misunderstood step 2"* from *"step 2
+ *  is broken"*, which is the whole reason a plain-language flow is safer than a
+ *  click recording. Burying it in a `<details>` would leave a QA engineer
+ *  reading a failed step with no way to tell which of those two happened
+ *  without expanding something.
+ *
+ *  `keyedOn` is shown beside the clause rather than instead of it: the clause is
+ *  what they wrote, and `keyedOn` is the part the rule actually matched, so a
+ *  rule that fired on the wrong two words is visible. */
+function resolvedFrom(s: FlowReportStep): string {
+  if (s.clause === undefined) return ''
+  const keyed =
+    s.keyedOn !== undefined
+      ? ` Obsrv read it as <b>${escapeHtml(s.keyedOn)}</b>.`
+      : ''
+  return `<p class="resolved">From your description: <q>${escapeHtml(s.clause)}</q>.${keyed}</p>`
+}
+
 function flowStepSection(s: FlowReportStep, n: number): string {
   const st = flowStepState(s)
   const where = s.target !== undefined ? ` <code>${escapeHtml(s.target)}</code>` : ''
@@ -618,6 +648,7 @@ function flowStepSection(s: FlowReportStep, n: number): string {
   const ranAt = pageStateBlock(s.page)
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
+    resolvedFrom(s) +
     `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${ranAt}${reply}</div>`
   )
 }

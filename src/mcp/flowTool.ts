@@ -11,6 +11,7 @@
  */
 
 import { validateFlow, type Flow, type FlowStep } from '../shared/flow'
+import { resolveFlowText, type ClauseResolution } from '../shared/flowLanguage'
 import { flowRefusalMessage, type FlowRunResult, type StartFlowResult } from './flowRunner'
 import { flowReportHtml, type FlowReportStep } from '../cli/reportHtml'
 import { flowCoverageNote } from '../shared/walkCoverage'
@@ -82,9 +83,12 @@ export function flowSubject(flow: Flow): string | undefined {
 /** Zips the declared steps onto the outcomes so the report can show what was
  *  asked beside what happened. The runner emits one outcome per declared step,
  *  in order, including the ones it never attempted — so index is the join. */
-export function flowReportSteps(flow: Flow, result: FlowRunResult): FlowReportStep[] {
+export function flowReportSteps(flow: Flow, result: FlowRunResult, resolutions?: ClauseResolution[]): FlowReportStep[] {
   return result.steps.map((s, i) => {
     const declared = flow.steps[i]
+    // One clause became one step, in order, which is what makes this index join
+    // true — see `flowLanguage`'s own note on it.
+    const from = resolutions?.[i]
     const expect = declared !== undefined ? expectationOf(declared) : undefined
     return {
       action: s.action,
@@ -101,19 +105,68 @@ export function flowReportSteps(flow: Flow, result: FlowRunResult): FlowReportSt
       // here would give the report a second opinion on a reading it never took.
       ...(s.observations !== undefined ? { observations: s.observations } : {}),
       ...(s.page !== undefined ? { page: s.page } : {}),
+      // What Obsrv understood this step to be, when a sentence produced it.
+      // Prominent in the report rather than one click down: it is what separates
+      // "Obsrv misunderstood step 2" from "step 2 is broken".
+      ...(from !== undefined ? { clause: from.clause, keyedOn: from.keyedOn } : {}),
     }
   })
 }
 
-export async function runFlowTool(steps: unknown, deps: FlowToolDeps): Promise<FlowToolOutcome> {
-  const parsed = validateFlow(steps)
+/** A flow given as a step list, or as a sentence to resolve into one. Exactly
+ *  one: a caller who sends both has two intentions and Obsrv should not pick. */
+export interface FlowToolInput {
+  steps?: unknown
+  description?: unknown
+}
+
+/**
+ * Turns whichever form was given into a validated flow, plus — for a resolved
+ * description — what each clause became.
+ *
+ * `resolveFlowText` returns `validateFlow`'s own output, so "the steps a
+ * description produces are steps the runner accepts" holds by construction and
+ * not by two functions agreeing.
+ */
+function flowFrom(input: FlowToolInput): { ok: true; flow: Flow; resolutions?: ClauseResolution[] } | { ok: false; error: string } {
+  const hasSteps = input.steps !== undefined
+  const hasText = input.description !== undefined
+  if (hasSteps && hasText) {
+    // Refuse rather than prefer one. A caller who sent both either changed
+    // their mind or built the payload wrongly, and running the half Obsrv
+    // happens to check first would hide that.
+    return { ok: false, error: 'the flow was not run: give either `steps` or `description`, not both — they are two different flows and Obsrv will not choose between them' }
+  }
+  if (!hasSteps && !hasText) {
+    return { ok: false, error: 'the flow was not run: it needs either `steps` (a list of actions) or `description` (what to do, in your own words)' }
+  }
+  if (hasText) {
+    if (typeof input.description !== 'string') {
+      return { ok: false, error: 'the flow was not run: `description` must be a string — what you want driven, in your own words' }
+    }
+    const resolved = resolveFlowText(input.description)
+    if (!resolved.ok) {
+      // Each rejection names its own clause, so the caller sees which words
+      // Obsrv could not turn into a step rather than a count of failures.
+      const lines = resolved.rejections.map(r => `  - ${r.clause === '' ? '(the whole description)' : `"${r.clause}"`}: ${r.reason}`).join('\n')
+      return { ok: false, error: `the flow was not run, because these could not be resolved into steps:\n${lines}` }
+    }
+    return { ok: true, flow: resolved.flow, resolutions: resolved.resolutions }
+  }
+  const parsed = validateFlow(input.steps)
   if (!parsed.ok) {
     // Every rejection, not the first: a caller fixing a step list wants all of
     // its problems at once, which is why `validateFlow` collects them.
     const lines = parsed.rejections.map(r => `  - ${r.reason}`).join('\n')
     return { ok: false, error: `the flow was not run, because its steps did not validate:\n${lines}` }
   }
-  const flow = parsed.flow
+  return { ok: true, flow: parsed.flow }
+}
+
+export async function runFlowTool(input: FlowToolInput, deps: FlowToolDeps): Promise<FlowToolOutcome> {
+  const made = flowFrom(input)
+  if (!made.ok) return { ok: false, error: made.error }
+  const { flow, resolutions } = made
 
   const started = await deps.start(flow)
   if (!started.ok) {
@@ -122,7 +175,7 @@ export async function runFlowTool(steps: unknown, deps: FlowToolDeps): Promise<F
     return { ok: false, error: flowRefusalMessage(started.refused) }
   }
 
-  const reportSteps = flowReportSteps(flow, started.result)
+  const reportSteps = flowReportSteps(flow, started.result, resolutions)
   const reportPath = await deps.writeReport(
     flowReportHtml({
       ...(flowSubject(flow) !== undefined ? { url: flowSubject(flow) } : {}),
