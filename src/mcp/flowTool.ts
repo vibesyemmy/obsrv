@@ -12,7 +12,8 @@
 
 import { validateFlow, type Flow, type FlowStep } from '../shared/flow'
 import { resolveFlowText, type ClauseResolution } from '../shared/flowLanguage'
-import { flowRefusalMessage, type FlowRunResult, type StartFlowResult } from './flowRunner'
+import { flowRefusalMessage, type FlowRunResult, type FlowRunnerDeps, type StartFlowResult } from './flowRunner'
+import { observeViaControl } from './flowObserve'
 import { flowReportHtml, type FlowReportStep } from '../cli/reportHtml'
 import { flowCoverageNote } from '../shared/walkCoverage'
 
@@ -161,6 +162,23 @@ function flowFrom(input: FlowToolInput): { ok: true; flow: Flow; resolutions?: C
     return { ok: false, error: `the flow was not run, because its steps did not validate:\n${lines}` }
   }
   return { ok: true, flow: parsed.flow }
+}
+
+/**
+ * The runner's dependencies, built from one control call.
+ *
+ * **Extracted so that "a reader is supplied" is testable.** It was not, and the
+ * consequence shipped: `FlowRunnerDeps.observe` is optional, `#482` landed the
+ * reader, and for a while **nothing passed it** — so every stated expectation in
+ * every flow report read `unknown — no reader was configured for this run`. The
+ * feature's central sentence was unreachable and no test could notice, because
+ * the wiring lived inside a closure in `server.ts` that no unit test can reach.
+ *
+ * `flowRunnerDeps.test.ts` now asserts the reader is here and that it issues
+ * `observeText`. That guard is bought by that defect.
+ */
+export function flowRunnerDeps(call: FlowRunnerDeps['call']): FlowRunnerDeps {
+  return { call, observe: observeViaControl(call) }
 }
 
 export async function runFlowTool(input: FlowToolInput, deps: FlowToolDeps): Promise<FlowToolOutcome> {

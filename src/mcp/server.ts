@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
 import { rejectUndeclaredKeysUnderTest } from './strictOutput'
-import { runFlowTool } from './flowTool'
+import { flowRunnerDeps, runFlowTool } from './flowTool'
 import { startFlow } from './flowRunner'
 import { budgetKindFor } from './flowBudget'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
@@ -2798,13 +2798,18 @@ server.registerTool(
     try {
       out = await runFlowTool({ ...(input.steps !== undefined ? { steps: input.steps } : {}), ...(input.description !== undefined ? { description: input.description } : {}) }, {
         start: flow =>
-          startFlow(flow, {
+          startFlow(
+            flow,
             // One held session, but NOT one budget: the settle probe is a
             // raster capture, which the dedicated path allows 30 s. Binding
             // everything to the apply budget made every step time out its
             // probe and render `unknown` — see `flowBudget.ts`.
-            call: (command, payload) => controlCall(info, command, payload, flowBudgetMs(command)),
-          }),
+            //
+            // Built by `flowRunnerDeps` rather than inline so that "the reader
+            // is supplied" is a testable claim: it was inline, the reader was
+            // optional, and for a while nothing passed it.
+            flowRunnerDeps((command, payload) => controlCall(info, command, payload, flowBudgetMs(command))),
+          ),
         writeReport: async html => {
           const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
           const path = join(dir, 'flow.html')
