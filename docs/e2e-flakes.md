@@ -922,9 +922,22 @@ reverse-find had to choose between for `hairline.html`:
 | `#478` first run | note MISSING | **6** | **note MISSING** | 3 |
 | `#478` re-run | note MISSING | **6** | note present | 3 |
 | `#483` | note MISSING | **6** | note present | 3 |
+| `#496` | note MISSING | **6** | note present | 2 |
 
-Six candidates, four failures out of four. Two or three candidates, three passes
-out of four. The one exception is `#478`'s retry, which failed at three.
+Six candidates, **five** failures out of five. **Two or three candidates, four
+passes out of five** — `#496`'s retry read 2, the same as `#477`'s. The one
+exception is `#478`'s retry, which failed at three.
+
+**The fifth row is the one that makes this more than curve-fitting, and it was
+free.** The four rows above it are the sightings the prediction was *built from*.
+`#496`'s is a sighting from **2026-09-29**, after the prediction was written down
+here, on a branch that touches no redirect code, in a run nobody chose for this —
+it was a retry-rescued cross on an unrelated feature PR, and the guard's own block
+in that run reads `startsForThisUrl = 6`, `matched.fromBusDocument = false`. **A
+prediction that holds on data it was not fitted to is worth more than one that
+explains the data it came from**, so whoever runs the forcing test starts from
+five for five rather than four for four. It is still not proven: nobody has forced
+six starts on purpose, which remains the whole point of the route below.
 
 **And the field that looks like the answer is not one.** `matched.fromBusDocument`
 is `false` in every failing block — and also in every *passing* "note present"
