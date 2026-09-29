@@ -1577,6 +1577,17 @@ export function registerIpc(ctx: AppContext): () => void {
         resolve(null)
         return
       }
+      // A product change made for a test, and said so — the same pattern and the
+      // same reason as `OBSRV_TEST_THROTTLE_REFUSAL` in `targetSource.ts`. A pane
+      // that does not acknowledge a draw is what
+      // `bug-vision-47-normal-not-red`'s warning exists for, and nothing outside
+      // this process can make a healthy renderer stop answering — so the one
+      // behaviour whose absence the warning reports could not otherwise be
+      // regression-tested at all.
+      if (process.env.OBSRV_TEST === '1' && process.env.OBSRV_TEST_NO_DRAW_ACK === '1') {
+        resolve(null)
+        return
+      }
       const timer = setTimeout(() => done(null), DRAW_FLUSH_MS)
       function done(seq: number | null): void {
         clearTimeout(timer)
@@ -1597,6 +1608,7 @@ export function registerIpc(ctx: AppContext): () => void {
 
   const control = new ControlServer(join(app.getPath('userData'), CONTROL_FILE_NAME), {
     launchSettled,
+    flushDraw: flushRendererDraw,
     throttleRefusal: async id => {
       const t = tab().target
       const before = t.getThrottle()
