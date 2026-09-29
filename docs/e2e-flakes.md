@@ -952,8 +952,51 @@ navigations before the redirect to reach six starts, then redirect. If that
 reproduces on demand, the candidate above stops being a candidate. Nobody needs
 to invent a fixture for it.
 
+## THE ROUTE WAS BUILT AND IT REFUTED THE MECHANISM ABOVE, 2026-09-29
+
+`tests/e2e/redirect-forcing-route.spec.ts` forces the condition and asserts the
+one property that must hold either way: the start a redirect's commit is answered
+with belongs to **that** redirect, by a boundary timestamp the test owns rather
+than by a url match, which would restate `startFor`'s own predicate.
+
+**In one CI run (`36578277923`), both arms:**
+
+| arm | starts for the url | matched start | result |
+| --- | --- | --- | --- |
+| forced, all agent-initiated loads | 6 before, 7 after | `+55 ms` after the boundary, `byDocument: true` | **passed** |
+| natural, `arrivals.spec.ts:181` | 6 — **2 mirrored, 4 not** | `mirrored: false`, **`byDocument: true`**, `fromBusDocument: false` | **failed** |
+
+**The failing arm's matched start has `byDocument: true`.** The sentence above says
+six candidates make the find land on a start whose `byDocument` is **false**, and
+that `ipc.ts:245` then drops the commit. That line is
+`if (url === arrivals(s).url && !byDocument) return` — **with `byDocument` true it
+does not fire.** So whatever silenced the note on that attempt, it is not the drop
+this entry has named since it was filed.
+
+**What survives and what does not, kept apart on purpose:**
+
+- **The correlation survives** — now **seven** sightings, every failure at
+  `startsForThisUrl = 6`, every pass at 2 or 3. It is still the strongest signal
+  here, and it is a correlation, which is all it ever was.
+- **The explanation does not.** And the forcing route was built to force *that*
+  explanation, which is the likeliest reason forcing it produced a pass: the right
+  instrument aimed at the wrong story.
+
+**No replacement mechanism is offered here, deliberately.** The obvious next
+reading is that `fromBusDocument: false` is what silences it — and this card has
+already burned two fixes on exactly that shape of reasoning, with the source's own
+comments recording that neither half works without the other. A contradiction is
+not a mechanism.
+
+**The next question, which is concrete and testable.** The failing pool held **two
+mirrored starts among its six**; the forced pool was entirely agent-initiated
+loads, so nearly none. `startFor` skips mirrored starts, so two pools both counted
+as "6" are not the same pool. The route to build next forces six **including**
+mirrored ones.
+
 **Read as evidence, not as a fix.** This is six logs counted, not a run —
-promotion from *unproven* to *supported, with a way to force it*. The
+promotion from *unproven* to *supported, with a way to force it*. **That promotion
+was withdrawn on 2026-09-29 by the route itself; see the section below.** The
 recommendation of the entry above still holds: do not paper over it with a longer
 wait. Idris independently confirmed the `#478` row, both blocks and both numbers,
 from the raw log.
