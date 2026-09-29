@@ -1529,3 +1529,86 @@ measurement. **The discriminator is whether the canvas was ever painted**, reada
 writing either cause down, the same way the matched-comparison entry above did for a missing
 screenshot rather than arguing from what seemed likely.
 
+
+## THE SECOND ROUTE WAS BUILT, AND IT DOES NOT REPRODUCE EITHER, 2026-09-29
+
+`tests/e2e/redirect-mirrored-pool.spec.ts` is the route the section above asked
+for: the pool's **composition**, not merely its count. The first route forced six
+same-url starts and passed; the failing arm also had six, but **two of them were
+the bus's own**, and `startFor` skips mirrored starts (`targetSource.ts:1064`), so
+the two pools were never the same pool.
+
+**How the composition is forced.** Mirrored starts at the redirect's landing
+address come from the bus mirroring the NATIVE pane's redirect hop into the
+target, so this drives `native.load(redirect.html)` directly — the same lever
+`arrivals.spec.ts:139` uses for the other direction — with a `navigate` between
+passes to contribute the non-mirrored half.
+
+**It forces a pool strictly deeper and strictly more mirrored than the failing
+one, and the find still answers correctly.** Local sweep, 11 runs (1 + 10 with
+`--repeat-each`), 0 crosses:
+
+| | starts for the landing url | of which the bus's | matched start |
+| --- | --- | --- | --- |
+| the natural failure (run `36578277923`) | 6 | 2 | an earlier visit — note missing |
+| this route, 11 local runs | **9–12** | **6–7** | `byDocument: true`, `fromBusDocument: false`, **9–12 ms *after* the boundary**, every run |
+
+**What that settles and what it does not.** It settles that pool depth and the
+presence of mirrored starts are **not sufficient** to make `startFor` answer with
+a stale start: on this machine a pool twice as deep and three times as mirrored as
+the failing one is attributed correctly every time. It settles nothing about CI,
+where this entry's own numbers are 3 in 20 against 0 in 40 locally — **a local
+null here is the same weak evidence it was for the natural test**, and is written
+down as a measurement of the route, not a verdict on the card.
+
+**What to read when this runs in CI.** The route prints the pool before the
+redirect and the matched start after it, on pass as well as failure, so a CI run
+gives the comparison this entry has never had: the failing shape's pool and a
+forced pool's, side by side, from the same runner. If the route passes in CI while
+`arrivals.spec.ts:181` fails in the same run, that is a second refutation from the
+other end — the condition is forced harder than the failure needs and still does
+not produce it — and the search moves off `startFor` entirely.
+
+**The card stays class 1 and stays open.** Two routes have now been built for one
+named mechanism and both passed; the correlation (seven sightings, every failure
+at six candidates) is unexplained, and a missing note is still a wrong answer the
+caller cannot detect.
+
+## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
+
+**Named, not filed**, and named together because the two logs are the same log
+with the spec name changed:
+
+| spec | run | branch | retry |
+| --- | --- | --- | --- |
+| `mirror-302.spec.ts:99` — *a server redirecting the bus own mirrored load is still the bus* | `36556822266` | `docs/select-menu-overflow` | passed in 326 ms |
+| `native-pane.spec.ts:62` — *back returns to the previous document* | `36577980330` | `fix/vision-confirm-tell` | passed in 199 ms |
+
+Both:
+
+```
+Test timeout of 30000ms exceeded.
+Error: electronApplication.evaluate: Target page, context or browser has been closed
+```
+
+**Read the second line, not the first.** A 30 s timeout is what the runner says
+when anything hangs; the news is that the `evaluate` failed because **the app was
+already gone**. Neither spec is about app lifetime, both are one `evaluate` away
+from their assertion, and both were rescued by a bare retry in under 330 ms — so
+the hang is not the product's navigation behaviour being slow, it is an Electron
+process that went away under a test that was still talking to it.
+
+**Why they are one entry and not two.** Filing them separately would invite two
+people to read one runner-level fault as two navigation bugs, which is the mistake
+`panes.spec.ts:85` cost this file. They are also on **different PRs touching
+different subsystems** (a docs-only branch and the vision-confirm fix), neither of
+which can plausibly kill an Electron process in a mirror or history test — which
+is itself evidence that the cause is neither PR.
+
+**The discriminator, for whoever picks this up:** whether the process **exited**
+or was **closed by the harness**. `launchApp`'s teardown and Playwright's own
+timeout both close the app, so "has been closed" is produced by a crash *and* by
+the timeout that follows a hang elsewhere in the same test. The logs in the run
+artifacts carry the Electron stdout up to the last line before the close; a crash
+leaves a signal or a stack there, a harness close does not. Read that before
+writing either cause down.
