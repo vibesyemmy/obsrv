@@ -30,9 +30,11 @@ describe('runFlow', () => {
       'navigate',
       'captureRaster',
       'status',
+      'networkRecord',
       'click',
       'captureRaster',
       'status',
+      'networkRecord',
     ])
     // Found by command, not by index. These were `calls[0]` and `calls[2]`, and
     // adding one call per step silently moved the second one onto the settle
@@ -73,9 +75,9 @@ describe('runFlow', () => {
     expect(result.steps[0]).toMatchObject({ status: 'ran' })
     expect(result.steps[1]).toMatchObject({ index: 1, action: 'click', status: 'failed', error: 'obsrv control click: no such element' })
     expect(result.steps[2]).toEqual({ index: 2, action: 'reload', status: 'not-reached' })
-    // The failed step still gets its settle probe and its `status` read
-    // (below); only the not-reached step after it is skipped entirely.
-    expect(calls).toEqual(['navigate', 'captureRaster', 'status', 'click', 'captureRaster', 'status'])
+    // The failed step still gets its settle probe, its `status` read and its
+    // network batch (below); only the not-reached step after it is skipped.
+    expect(calls).toEqual(['navigate', 'captureRaster', 'status', 'networkRecord', 'click', 'captureRaster', 'status', 'networkRecord'])
   })
 
   it('reads the settle probe on a FAILED step too — the screen at the moment it failed distinguishes a timing problem from a settled-page defect', async () => {
@@ -169,9 +171,10 @@ describe('runFlow', () => {
       },
     })
     expect(result.steps[1]).toEqual({ index: 1, action: 'reload', status: 'not-reached' })
-    // The click's own probe and status read happen; reload contributes nothing
-    // at all — not its action, not a settle probe, not a `status`.
-    expect(calls).toEqual(['click', 'captureRaster', 'status'])
+    // The click's own probe, status read and network batch happen; reload
+    // contributes nothing at all — not its action, not a probe, not a `status`,
+    // not a `networkRecord`.
+    expect(calls).toEqual(['click', 'captureRaster', 'status', 'networkRecord'])
     expect(calls.filter(c => c === 'reload')).toEqual([])
   })
 

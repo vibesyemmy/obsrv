@@ -9,6 +9,7 @@ import {
   type LintRequest,
   type ObserveRequest,
 } from '../shared/ipcPayloads'
+import type { NetworkState } from '../shared/networkRecord'
 import type { ObserveReport } from '../shared/observe'
 import type { InspectReadout } from '../shared/inspectReadout'
 import type { AuditResult } from '../cli/audit'
@@ -131,6 +132,13 @@ export interface ControlDeps {
   captureRaster(): Promise<{ data: string; width: number; height: number; settled: boolean; unsettledReason?: string; warnings: string[] }>
   /** The target's current CSS viewport, for `click` bounds validation. */
   viewport(): { width: number; height: number }
+  /**
+   * The requests the target made since this was last asked, starting the
+   * recording on the first ask. One dep rather than a start/take pair: the
+   * runner's only use is "give me this step's batch", and a separate start would
+   * be a second thing to keep in step with the flow's lifetime.
+   */
+  networkRecord(): { started: string | null; batch: NetworkState }
   /** The target's scroll, text scale, density and pane size: what a page-space rect is mapped through. */
   targetView(): Promise<TargetView>
   /**
@@ -473,6 +481,20 @@ export class ControlServer {
         if (err) return reply(400, { error: err })
         const textScale = payload.textScale as number
         return this.applyAndConfirm({ textScale }, s => s.textScale === textScale)
+      }
+
+      case 'networkRecord': {
+        const { started, batch } = this.deps.networkRecord()
+        // A recorder that could not start answers 200 with a warning rather than
+        // an error: the flow itself is fine, one artefact is missing, and failing
+        // the step would turn a lost record into a failed flow.
+        return reply(200, {
+          ok: true,
+          records: batch.records,
+          dropped: batch.dropped,
+          ...(batch.stopped !== undefined ? { stopped: batch.stopped } : {}),
+          ...(started !== null ? { warnings: [started] } : {}),
+        })
       }
 
       case 'setThrottle': {

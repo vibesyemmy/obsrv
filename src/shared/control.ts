@@ -324,6 +324,9 @@ export const CONTROL_COMMANDS = [
   // still gated through this same list like every other command the
   // protocol will dispatch at all (`ControlServer#route`).
   'observeText',
+  // v0.63 — feat-flow-report clause two: the requests a flow step made, for
+  // reproduction. Issued by the runner after each step, never stated in a flow.
+  'networkRecord',
   // v0.25 — throttling on the live target.
   'setThrottle',
   // live-first: tabs as an agent surface.

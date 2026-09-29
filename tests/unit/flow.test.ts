@@ -170,13 +170,29 @@ describe('validateFlow: a step may state what it expects to see', () => {
   })
 })
 
-describe('validateFlow: observeText is the runner\'s own call, not a step a flow states directly', () => {
-  it('rejects a hand-written observeText step, naming why', () => {
-    const result = validateFlow([{ action: 'observeText', texts: ['Order confirmed'] }])
-    expect(result.ok).toBe(false)
-    if (result.ok) throw new Error('expected rejection')
-    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/observeText.*runner issues it automatically/) }])
-  })
+describe("validateFlow: the commands whose input the runner owns are not steps a flow states directly", () => {
+  /**
+   * **Table-driven on purpose, after a sabotage came back green.** Removing
+   * `networkRecord` from the exclusion broke nothing: the code had the entry and
+   * only `observeText` had a test, so the invariant was one command wide while
+   * the set was two. A new entry now arrives with its coverage rather than
+   * needing someone to remember a second edit.
+   */
+  const OWNED_BY_THE_RUNNER: Array<[action: string, extra: Record<string, unknown>]> = [
+    ['observeText', { texts: ['Order confirmed'] }],
+    ['networkRecord', {}],
+  ]
+
+  for (const [action, extra] of OWNED_BY_THE_RUNNER) {
+    it(`rejects a hand-written ${action} step, naming why`, () => {
+      const result = validateFlow([{ action, ...extra }])
+      expect(result.ok).toBe(false)
+      if (result.ok) throw new Error('expected rejection')
+      expect(result.rejections).toEqual([
+        { index: 0, reason: expect.stringMatching(new RegExp(`${action}.*runner issues it automatically`)) },
+      ])
+    })
+  }
 
   it('still accepts status and captureRaster by hand — the runner also calls both automatically, but a QA engineer asking for one explicitly is meaningful and harmless to repeat', () => {
     expect(validateFlow([{ action: 'status' }]).ok).toBe(true)

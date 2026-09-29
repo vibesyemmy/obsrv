@@ -1,4 +1,5 @@
 import { BrowserWindow, type WebContents } from 'electron'
+import { applyNetworkEvent, emptyNetworkState, takeNetworkState, type NetworkState } from '../shared/networkRecord'
 import { NO_THROTTLE, type ThrottleProfile } from '../shared/throttle'
 import { cursorCss, DEFAULT_CURSOR } from '../shared/cursor'
 import { EventEmitter } from 'node:events'
@@ -392,6 +393,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** The HTTP status of the last main-frame document that committed, and the address it was for. */
   private lastStatus: { code: number; text: string; url: string } = { code: 0, text: '', url: '' }
   private disposed = false
+
+  /** The per-step network record (`feat-flow-report`'s clause two). Empty and
+   *  idle until a flow asks for it: no session is opened, and nothing is
+   *  listened for, on a target nobody is recording. */
+  private network: NetworkState = emptyNetworkState()
+  private recording = false
   /**
    * What the owner asked for, not what the current window happens to be doing.
    * See `setPainting` — `recreate()` swaps in a fresh webContents that starts
@@ -873,6 +880,49 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * silent, and names which rule silenced it. Those are opposite findings and
    * the absence of an event cannot tell them apart.
    */
+  /**
+   * Starts recording requests, or does nothing if already recording.
+   *
+   * **Attaching is the safe half and the detach is not ours to do.** `#504`
+   * measured that a preset survives both, but `applyThrottle` owns when this
+   * session closes (`if (off) dbg.detach()` when a throttle is lifted), so this
+   * never detaches: two owners of one session is how a flow would silently kill
+   * a user's throttle, or the reverse.
+   *
+   * Which means the reverse can happen to us, and it is handled rather than
+   * hoped about: a throttle lifted mid-flow detaches the session under the
+   * recorder, and the `detach` listener records **why** recording stopped. An
+   * empty batch then means "unrecorded", not "quiet", and the report says which.
+   */
+  startNetworkRecord(): string | null {
+    if (this.disposed || this.win.isDestroyed()) return 'the target is gone'
+    if (this.recording) return null
+    const dbg = this.win.webContents.debugger
+    try {
+      if (!dbg.isAttached()) dbg.attach('1.3')
+      dbg.on('message', (_e, method, params) => {
+        if (this.recording) applyNetworkEvent(this.network, method, params)
+      })
+      dbg.on('detach', (_e, reason) => {
+        if (!this.recording) return
+        this.network.stopped = `the debugger session was detached (${reason || 'no reason given'}) — a throttle being lifted does this`
+      })
+      void dbg.sendCommand('Network.enable')
+      this.recording = true
+      return null
+    } catch (e) {
+      return `network recording not started: ${e instanceof Error ? e.message : String(e)}`
+    }
+  }
+
+  /** This step's requests, and a clean slate for the next. A stop carries
+   *  forward — see `takeNetworkState`. */
+  takeNetworkRecord(): NetworkState {
+    const { batch, next } = takeNetworkState(this.network)
+    this.network = next
+    return batch
+  }
+
   commitTrace(): readonly CommitRecord[] {
     return this.commits
   }

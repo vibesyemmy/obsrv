@@ -106,6 +106,7 @@ export function flowReportSteps(flow: Flow, result: FlowRunResult, resolutions?:
       // here would give the report a second opinion on a reading it never took.
       ...(s.observations !== undefined ? { observations: s.observations } : {}),
       ...(s.page !== undefined ? { page: s.page } : {}),
+      ...(s.network !== undefined ? { network: s.network } : {}),
       // What Obsrv understood this step to be, when a sentence produced it.
       // Prominent in the report rather than one click down: it is what separates
       // "Obsrv misunderstood step 2" from "step 2 is broken".

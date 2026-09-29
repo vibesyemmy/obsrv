@@ -11,6 +11,7 @@
  * `ControlInfo`, and every step in the flow goes through that same function.
  */
 
+import type { NetworkRecord, NetworkState } from '../shared/networkRecord'
 import type { Flow, FlowStep } from '../shared/flow'
 import { acquireFlowLock, defaultFlowLockDeps, releaseFlowLock, type AcquireFlowLockResult, type FlowLockDeps, type FlowLockHolder } from './flowLock'
 
@@ -101,6 +102,10 @@ export interface FlowStepResult {
    *  it. Absent when `status` could not be read, and absent entirely on a step
    *  that never ran. */
   page?: FlowStepPage
+  /** The requests this step made, when a record could be taken. Absent — not
+   *  empty — when it could not, so "no requests" and "no record" stay
+   *  distinguishable at the type level and not only in prose. */
+  network?: NetworkState
 }
 
 /**
@@ -134,6 +139,23 @@ const num = (v: unknown): number | undefined => (typeof v === 'number' && Number
 /** Reads `status` and keeps only what came back well-typed. Its own try/catch:
  *  a status that cannot be read must not turn a step's own result into two
  *  failures, exactly as the settle probe above does not. */
+/** The step's network batch. Absent when the control call failed or answered a
+ *  shape the checks refuse — never an empty batch standing in for a missing one,
+ *  which would read as a quiet step. */
+async function readNetwork(deps: FlowRunnerDeps): Promise<NetworkState | undefined> {
+  let r: Record<string, unknown>
+  try {
+    r = await deps.call('networkRecord', {})
+  } catch {
+    return undefined
+  }
+  if (!Array.isArray(r['records'])) return undefined
+  const records = r['records'].filter((x): x is NetworkRecord => typeof x === 'object' && x !== null && typeof (x as NetworkRecord).url === 'string')
+  const dropped = typeof r['dropped'] === 'number' && Number.isFinite(r['dropped']) ? r['dropped'] : 0
+  const stopped = typeof r['stopped'] === 'string' && r['stopped'].length > 0 ? r['stopped'] : undefined
+  return { records, dropped, ...(stopped !== undefined ? { stopped } : {}) }
+}
+
 async function readPageState(deps: FlowRunnerDeps): Promise<FlowStepPage | undefined> {
   let s: Record<string, unknown>
   try {
@@ -275,6 +297,12 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
     // a click failed on is the page someone has to reopen.
     const page = await readPageState(deps)
 
+    // What this step asked the network for. Same shape of probe as `status`:
+    // its own try/catch, because a record that cannot be taken must not turn a
+    // step's own result into two failures. The first call starts the recording,
+    // so step 1's batch is the requests its own action made and no earlier ones.
+    const network = await readNetwork(deps)
+
     const recorded =
       stated === undefined ? undefined : await recordObservations(stated, { failed: error !== undefined, settled, unsettledReason }, deps.observe)
 
@@ -290,6 +318,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       ...(data !== undefined ? { data } : {}),
       ...(recorded !== undefined ? { observations: recorded } : {}),
       ...(page !== undefined ? { page } : {}),
+      ...(network !== undefined ? { network } : {}),
     })
 
     if (error !== undefined) stopped = true

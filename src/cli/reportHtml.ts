@@ -208,6 +208,9 @@ code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .where td:first-child { color: var(--muted); white-space: nowrap; }
 .resolved { margin: 0 0 10px; padding: 6px 10px; border-left: 3px solid var(--line); background: var(--panel); font-size: 14px; }
 .resolved q { font-style: normal; }
+.net { margin: 6px 0 0; font-size: 13px; }
+.net td, .net th { padding: 2px 10px 2px 0; text-align: left; }
+.net code { word-break: break-all; }
 .gap { border-left-color: var(--bad); }
 .step { margin: 28px 0; padding-top: 16px; border-top: 1px solid var(--line); }
 .step h3 { margin: 0 0 10px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); }
@@ -430,6 +433,10 @@ export interface FlowReportStep {
   /** Where the step ran. Absent when `status` could not be read, and on a step
    *  that never ran. */
   page?: FlowReportPageState
+  /** The requests this step made. Absent when no record could be taken — which
+   *  the renderer says out loud, because an absent record and a quiet step are
+   *  opposite facts and both would otherwise be an empty section. */
+  network?: FlowReportNetwork
   /** The sentence this step was resolved from, when the flow was given as a
    *  description rather than as a step list. Absent for a hand-written step. */
   clause?: string
@@ -521,6 +528,18 @@ function measuredHalf(s: FlowReportStep): string {
     else bits.push(`<p><b>Whether the page had settled could not be checked</b>, so whether the evidence below is current is unknown rather than fine.</p>`)
   }
   return `<div class="half"><h4>What Obsrv measured</h4>${bits.join('')}</div>`
+}
+
+/** The step's requests, structurally rather than by importing the runner's
+ *  `NetworkState`: this file is the CLI renderer and takes no dependency on
+ *  `src/mcp/` or on main. Fields match one for one. */
+export interface FlowReportNetwork {
+  records: Array<{ method: string; url: string; status?: number; type?: string }>
+  dropped: number
+  /** Why recording stopped, when it did. Its presence is what separates an empty
+   *  list meaning *"this step asked for nothing"* from one meaning *"nobody was
+   *  listening"*. */
+  stopped?: string
 }
 
 /** A reading's badge. Separate from `flowStepState` on purpose: a step's state
@@ -637,6 +656,49 @@ function resolvedFrom(s: FlowReportStep): string {
   return `<p class="resolved">From your description: <q>${escapeHtml(s.clause)}</q>.${keyed}</p>`
 }
 
+/** "What this step asked the network for", one click down.
+ *
+ *  **Three states, not two**, and the third is the reason this function is longer
+ *  than a `map`: a step with requests, a step with none, and a step whose record
+ *  was never taken. The first two are ordinary; the third must not borrow the
+ *  second's words. `stopped` is printed above the rows rather than below them,
+ *  because a reader who sees the rows first has already formed the belief that
+ *  the list is complete. */
+function networkBlock(nw: FlowReportNetwork | undefined): string {
+  if (nw === undefined) {
+    return (
+      `<details><summary>What this step asked the network for</summary>` +
+      `<p class="muted">No record was taken for this step, so this is not "no requests" — it is nothing to say either way.</p></details>`
+    )
+  }
+  const note =
+    nw.stopped !== undefined
+      ? `<p class="bad">Recording had stopped, so this is not every request: ${escapeHtml(nw.stopped)}</p>`
+      : nw.dropped > 0
+        ? `<p class="muted">${nw.dropped} more request${nw.dropped === 1 ? '' : 's'} past the first listed are not shown.</p>`
+        : ''
+  if (nw.records.length === 0) {
+    const none =
+      nw.stopped !== undefined
+        ? '' // The sentence above already says why there is nothing here.
+        : `<p class="muted">This step asked for nothing over the network.</p>`
+    return `<details><summary>What this step asked the network for</summary>${note}${none}</details>`
+  }
+  const rows = nw.records
+    .map(r => {
+      // A request with no status was still in flight when the step ended. Said in
+      // words rather than left blank: a blank cell reads as a missing field.
+      const status = r.status === undefined ? '<span class="muted">in flight</span>' : String(r.status)
+      const type = r.type !== undefined ? `<td class="muted">${escapeHtml(r.type)}</td>` : '<td></td>'
+      return `<tr><td>${escapeHtml(r.method)}</td><td>${status}</td>${type}<td><code>${escapeHtml(r.url)}</code></td></tr>`
+    })
+    .join('')
+  return (
+    `<details><summary>What this step asked the network for (${nw.records.length})</summary>${note}` +
+    `<table class="net"><thead><tr><th>Method</th><th>Status</th><th>Type</th><th>URL</th></tr></thead><tbody>${rows}</tbody></table></details>`
+  )
+}
+
 function flowStepSection(s: FlowReportStep, n: number): string {
   const st = flowStepState(s)
   const where = s.target !== undefined ? ` <code>${escapeHtml(s.target)}</code>` : ''
@@ -649,7 +711,7 @@ function flowStepSection(s: FlowReportStep, n: number): string {
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
     resolvedFrom(s) +
-    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${ranAt}${reply}</div>`
+    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${ranAt}${networkBlock(s.network)}${reply}</div>`
   )
 }
 

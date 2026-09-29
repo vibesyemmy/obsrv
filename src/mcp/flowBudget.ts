@@ -27,6 +27,8 @@ export type BudgetKind = 'status' | 'apply' | 'navigate' | 'measure' | 'capture'
 const KINDS: Partial<Record<ControlCommand, BudgetKind>> = {
   // Answers from memory; the dedicated path allows 2 s.
   status: 'status',
+  // Hands back an already-buffered batch; nothing is measured or awaited.
+  networkRecord: 'status',
   // A real page load. The dedicated tools allow the navigation budget plus
   // slack, not the apply budget.
   navigate: 'navigate',
