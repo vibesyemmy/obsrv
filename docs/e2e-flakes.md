@@ -1612,3 +1612,79 @@ the timeout that follows a hang elsewhere in the same test. The logs in the run
 artifacts carry the Electron stdout up to the last line before the close; a crash
 leaves a signal or a stack there, a harness close does not. Read that before
 writing either cause down.
+
+## THE EIGHTH SIGHTING RULES OUT THE DROP FOR ITS OWN ATTEMPT TOO, AND NAMES WHERE TO LOOK NEXT, 2026-09-29
+
+Run `36596468138` (`#516`'s own suite), `arrivals.spec.ts:181`, note MISSING, retry-rescued.
+`startsForThisUrl: 6` again — the correlation's eighth sighting. **What is new is the rest of the
+print:**
+
+```
+"matched": { "at": 1790698691453, "url": ".../hairline.html",
+             "byDocument": true, "mirrored": false, "fromBusDocument": false },
+"startsForThisUrl": 6
+```
+
+Read against the same print's `starts`, that matched entry is **the redirect's own start**. The six
+hairline starts in order are `690242`, `690758`, `690763`, `691065`, **`691453` (matched)**, `691478`;
+`redirect.html`'s own start is at `691421` and its **commit** lands at `691443`, so the match is the
+very next navigation start recorded after the redirect page committed — 10 ms after that commit, and
+ahead of the later mirrored start at `691478`.
+
+**The numbers in the first version of this section were mislabelled**, and the correction is kept here
+rather than quietly fixed: I wrote *"the `redirect.html` start is at `1790698691443`"*, having stitched
+a start's fields onto a commit's timestamp while reading the block as text. `691443` is the commit;
+`691421` is the start. Idris parsed the array instead of reading the slice and caught it. The reading
+the section rests on is unchanged and is stronger stated properly — the match is the closest start
+after the redirect's commit, not merely one that is not obviously stale.
+
+So on this attempt `startFor` **answered correctly** — and with `byDocument: true`,
+`ipc.ts:245`'s `if (url === arrivals(s).url && !byDocument) return` cannot fire, so the commit was
+counted.
+
+**The note was still missing. That places the silence downstream of the guard this entry has named
+since it was filed**, for the second sighting in a row, and this time with the chosen start visibly
+correct rather than merely carrying a surprising flag.
+
+### Where the silence can still come from
+
+`ipc.ts:274`, the only other gate on this sentence:
+
+```ts
+const seen = arrivals(s)
+if (seen.count > asked.atCount && seen.url) pre.push(navigatedAfterLoadNote(asked.asked, seen.url))
+```
+
+`atCount` is snapshotted at `ipc.ts:321`, **after** `await Promise.all([s.native.load(wanted),
+s.target.load(wanted)])`. A client-side redirect commits during the load it is part of, so whether the
+`hairline.html` arrival is counted **before or after** that snapshot is a race between `load` resolving
+and the replace committing. If it lands first, `atCount` already includes it, `seen.count >
+asked.atCount` is false, and the note is never made — **with every field this entry has been printing
+looking exactly right.** The `settle` hook two lines below only arms when the count did *not* move,
+which is the opposite case.
+
+**Stated as a candidate, and deliberately not as a mechanism.** This card has had two mechanisms and
+both were refuted by routes built to force them; a third reading that fits one trace is worth exactly
+as much as the last two did at this stage. No fix is proposed on it.
+
+### The discriminator, and it needs no product seam
+
+If the arrival really did precede the snapshot, then `landedAt` — recorded in the same object, from the
+same `load` — was already `hairline.html`, so **`landedElsewhereNote` should have fired instead**: a
+different sentence about the same journey, saying the caller asked for `redirect.html` and the load
+landed on `hairline.html`.
+
+**Nobody has ever looked.** `movedNote()` called `inspect` and returned only the match for *"navigated
+after it loaded"*, discarding every other note in the reply. So eight sightings cannot distinguish:
+
+| the reply carried | means |
+| --- | --- |
+| **no notes at all** | the class-1 silence this card is filed on — and the `atCount` race is then the live candidate, needing the two counts exposed to go further |
+| **a `landedElsewhere` note** | the product *did* say something; the test has been looking for the wrong sentence, and the class is not what this card says it is |
+
+`tests/e2e/arrivals.spec.ts` now reads **all** the notes, prints them in the guard block on pass as
+well as failure, and names them in the failure message so the next reader does not have to find the
+print. Watched green locally first, which is the only way this file trusts an instrument: `:71`
+baseline carries `notes: []`, `:89` baseline carries exactly one sentence — the
+navigated-after-load one, **and no `landedElsewhere`**. The two arms therefore differ, which is what
+makes the next sighting answer the question instead of adding to the count.

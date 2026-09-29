@@ -48,11 +48,31 @@ const call = (command: string, payload?: Record<string, unknown>): Promise<Recor
     req.end(JSON.stringify(body))
   })
 
-/** The note under test, from any measurement reply. */
-const movedNote = async (): Promise<string | undefined> => {
+/**
+ * **Every** note a measurement reply carried, and the one under test out of them.
+ *
+ * `movedNote` used to call `inspect` and return only the match for *"navigated
+ * after it loaded"*, discarding the rest — and that filter is why eight sightings
+ * of this flake have never been able to say whether the product **said nothing**
+ * or **said something else**. Those are opposite findings: the first is the class-1
+ * silence this card is filed on, the second is a note the caller does get with a
+ * test looking for the wrong sentence.
+ *
+ * The eighth sighting (run `36596468138`) is what forced this. Its matched start
+ * was the redirect's own, `byDocument: true` — the one value at which
+ * `ipc.ts:245`'s drop **cannot** fire — so the commit was counted and the silence
+ * is downstream of the guard this card has always named. The remaining gate is
+ * `whichPage`'s `seen.count > asked.atCount`, and directly beside it sits
+ * `landedElsewhereNote`, a **different sentence about the same journey**. If the
+ * reply carried that one instead, nobody has been looking at it.
+ *
+ * So both come back now, and both are printed.
+ */
+const notesNow = async (): Promise<string[]> => {
   const r = await call('inspect', { selector: 'body' })
-  return ((r.notes as string[] | undefined) ?? []).find(n => n.includes('navigated after it loaded'))
+  return (r.notes as string[] | undefined) ?? []
 }
+const movedIn = (notes: string[]): string | undefined => notes.find(n => n.includes('navigated after it loaded'))
 
 /** One start as `TargetSource` records it. */
 type Start = { at: number; url: string; byDocument: boolean; mirrored: boolean }
@@ -80,7 +100,7 @@ type GuardSeen =
  * TypeScript — at runtime it is a field on the same object the specs already
  * reach through `__obsrv.target`.
  */
-async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detail: boolean): Promise<GuardSeen> {
+async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detail: boolean, notes: string[]): Promise<GuardSeen> {
   const seen = await app.evaluate(() => {
     const t = (globalThis as unknown as { __obsrv?: { target?: unknown } }).__obsrv?.target as
       | { commitTrace?: () => unknown[]; starts?: Start[]; webContents?: { getURL(): string } }
@@ -116,10 +136,10 @@ async function sayWhatTheGuardSaw(app: ElectronApplication, label: string, detai
   // with both numbers in front of you.
   const line = `ARRIVALS GUARD (bug-redirect-note-missing-not-late) ${label}`
   if (!detail || !seen.reachable) {
-    console.log(`${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, startsForThisUrl: seen.startsForThisUrl, commits: seen.commits } : seen)}`)
+    console.log(`${line}: ${JSON.stringify(seen.reachable ? { url: seen.url, matched: seen.matched, startsForThisUrl: seen.startsForThisUrl, notes, commits: seen.commits } : { ...seen, notes })}`)
     return seen
   }
-  console.log(`${line}: ${JSON.stringify(seen, null, 2)}`)
+  console.log(`${line}: ${JSON.stringify({ ...seen, notes }, null, 2)}`)
   return seen
 }
 
@@ -151,8 +171,9 @@ test('the target mirroring the native pane is not the page navigating', async ()
   // mirrors both hops in.
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.native.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
-  const note = await movedNote()
-  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined)
+  const notes = await notesNow()
+  const note = movedIn(notes)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined, notes)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 
   // **No mechanism control for this direction, and that is a decision with
@@ -189,15 +210,25 @@ test('a page that really does redirect after loading still says so', async () =>
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
   // **Deliberately NOT polled.** A poll was tried here and removed: on run
-  // `35525940597` it sat on `movedNote()` for the full 10 s and still got
+  // `35525940597` it sat on the note read for the full 10 s and still got
   // `undefined`, then passed on retry in 684 ms. The note is not arriving
   // late, it is not arriving at all on the failing attempt — see
   // `docs/e2e-flakes.md`'s entry for this test. A longer wait cannot fix a
   // value that is never produced, and a poll here only turns a fast, honest
   // failure into a slow one that reads like a timeout.
-  const note = await movedNote()
-  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined)
-  expect(note, 'the page asked for redirected itself to another page; that is the note doing its job').toBeDefined()
+  const notes = await notesNow()
+  const note = movedIn(notes)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined, notes)
+  // **The message says what the reply DID carry**, because "no note" and "a
+  // different note" are the two readings eight sightings could not separate, and
+  // the second one is not a silence at all. Whoever reads the next failure should
+  // not have to find the guard print to learn which it was.
+  expect(
+    note,
+    notes.length === 0
+      ? 'the page asked for redirected itself to another page and the reply carried NO notes at all; that is the note doing its job'
+      : `the note is missing, but the reply carried ${notes.length} other note(s) — read these before calling it a silence: ${JSON.stringify(notes)}`,
+  ).toBeDefined()
   expect(note).toContain('hairline.html')
 
   // **The control for the redirect direction.** `#429` measured this test
