@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportObservation, type FlowReportStep } from '../../src/cli/reportHtml'
+import { flowReportHtml, flowStepState, type FlowReportData, type FlowReportObservation, type FlowReportPageState, type FlowReportStep } from '../../src/cli/reportHtml'
 
 /**
  * Written against `board/feat-flow-report.md`'s acceptance list, one test per
@@ -268,6 +268,55 @@ describe('flowReportHtml', () => {
     const footer = html.slice(html.indexOf('<footer'))
     expect(footer).toContain('not</b> collected per step yet')
     expect(footer).toContain('obsrv audit')
+  })
+
+  /** "Where this step ran" — scoped to the step's own section throughout, and to
+   *  the `<details>` block where the claim actually lives. */
+  const whereOf = (html: string, n: number): string => {
+    const sec = sectionOf(html, n)
+    const from = sec.indexOf('Where this step ran')
+    expect(from, 'the step has no where-it-ran block').toBeGreaterThan(-1)
+    return sec.slice(from)
+  }
+
+  const page = (over: Partial<FlowReportPageState> = {}): FlowReportPageState => ({
+    url: 'https://shop.test/cart',
+    cssWidth: 390,
+    cssHeight: 844,
+    deviceScaleFactor: 3,
+    ...over,
+  })
+
+  it('offers the page a step ran on one click down: address, size and density', () => {
+    const where = whereOf(flowReportHtml(data([step({ page: page() })])), 1)
+    expect(where).toContain('https://shop.test/cart')
+    expect(where).toContain('390 × 844 CSS px')
+    expect(where).toContain('3×')
+  })
+
+  it('says the block is not a snapshot of the document, so four facts do not read as a truncated DOM', () => {
+    expect(whereOf(flowReportHtml(data([step({ page: page() })])), 1)).toContain("Not a snapshot of the document's contents")
+  })
+
+  it('leaves out what status never reported rather than showing it as unknown', () => {
+    const where = whereOf(flowReportHtml(data([step({ page: { url: 'https://shop.test/cart' } })])), 1)
+    expect(where).toContain('https://shop.test/cart')
+    // No invented rows: a density nobody read must not appear at all.
+    expect(where).not.toContain('Density')
+    expect(where).not.toContain('Size')
+    expect(where).not.toContain('unknown')
+  })
+
+  it('mentions loading only when the page was still loading, not on every settled step', () => {
+    const quiet = whereOf(flowReportHtml(data([step({ page: page({ loading: false }) })])), 1)
+    expect(quiet).not.toContain('Loading')
+    const busy = whereOf(flowReportHtml(data([step({ page: page({ loading: true }) })])), 1)
+    expect(busy).toContain('still loading when this step finished')
+  })
+
+  it('offers no where-it-ran block at all for a step with no page, rather than an empty one', () => {
+    const sec = sectionOf(flowReportHtml(data([step()])), 1)
+    expect(sec).not.toContain('Where this step ran')
   })
 
   it('embeds the step screenshot it was given', () => {

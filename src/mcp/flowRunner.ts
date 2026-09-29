@@ -97,6 +97,65 @@ export interface FlowStepResult {
    *  (not empty) for a step that stated none, so a flow without observations
    *  produces exactly the result it always did. */
   observations?: ObservationRecord[]
+  /** Where this step ran: the page's address, size and density as the step left
+   *  it. Absent when `status` could not be read, and absent entirely on a step
+   *  that never ran. */
+  page?: FlowStepPage
+}
+
+/**
+ * The document's state as a step left it — what a QA engineer needs to get back
+ * to where the step ran.
+ *
+ * **Not a DOM tree, and the report must not imply it is one.** A serialised DOM
+ * per step is megabytes, unreadable, and would bury the step summary that
+ * `feat-flow-report`'s clause keeps deliberately scannable. Reproduction means
+ * reopening the page at the size and density it was driven at, and that is what
+ * these four fields are.
+ *
+ * Every field is optional because every one is copied only when `status`
+ * answered with the right type. A `status` that comes back without a `url` gives
+ * a record with no `url` rather than an empty string that reads like a page at
+ * `about:blank`.
+ */
+export interface FlowStepPage {
+  url?: string
+  cssWidth?: number
+  cssHeight?: number
+  deviceScaleFactor?: number
+  /** True when the page was still loading as the step finished. Worth keeping
+   *  separate from `settled`: a page can have stopped painting while a fetch it
+   *  started is still in flight, and a reproducer wants to know that. */
+  loading?: boolean
+}
+
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+
+/** Reads `status` and keeps only what came back well-typed. Its own try/catch:
+ *  a status that cannot be read must not turn a step's own result into two
+ *  failures, exactly as the settle probe above does not. */
+async function readPageState(deps: FlowRunnerDeps): Promise<FlowStepPage | undefined> {
+  let s: Record<string, unknown>
+  try {
+    s = await deps.call('status', {})
+  } catch {
+    return undefined
+  }
+  const url = typeof s['url'] === 'string' && s['url'].length > 0 ? s['url'] : undefined
+  const cssWidth = num(s['cssWidth'])
+  const cssHeight = num(s['cssHeight'])
+  const deviceScaleFactor = num(s['deviceScaleFactor'])
+  const loading = typeof s['loading'] === 'boolean' ? s['loading'] : undefined
+  const page: FlowStepPage = {
+    ...(url !== undefined ? { url } : {}),
+    ...(cssWidth !== undefined ? { cssWidth } : {}),
+    ...(cssHeight !== undefined ? { cssHeight } : {}),
+    ...(deviceScaleFactor !== undefined ? { deviceScaleFactor } : {}),
+    ...(loading !== undefined ? { loading } : {}),
+  }
+  // Nothing usable came back. An empty object would render as a "where this ran"
+  // block with no facts in it, which is worse than not offering the block.
+  return Object.keys(page).length === 0 ? undefined : page
 }
 
 export interface FlowRunResult {
@@ -204,6 +263,18 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       // Can't say — does not change the step's own ran/failed status.
     }
 
+    // Where the step ran, for reproduction. `status` answers from the app's own
+    // memory rather than measuring the page — the 2 s budget, not the 20 s one
+    // — so this costs a round-trip and perturbs nothing. That is the whole
+    // difference between this and a per-step network record, which needs a
+    // debugger session and is gated on measuring what it costs.
+    //
+    // Taken **after** the settle probe, deliberately: the address a step ended
+    // at is the one worth reproducing, and a step that navigates is exactly the
+    // case where before and after differ. Read on a failed step too — the page
+    // a click failed on is the page someone has to reopen.
+    const page = await readPageState(deps)
+
     const recorded =
       stated === undefined ? undefined : await recordObservations(stated, { failed: error !== undefined, settled, unsettledReason }, deps.observe)
 
@@ -218,6 +289,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       ...(unsettledReason !== undefined ? { unsettledReason } : {}),
       ...(data !== undefined ? { data } : {}),
       ...(recorded !== undefined ? { observations: recorded } : {}),
+      ...(page !== undefined ? { page } : {}),
     })
 
     if (error !== undefined) stopped = true

@@ -100,6 +100,7 @@ export function flowReportSteps(flow: Flow, result: FlowRunResult): FlowReportSt
       // each state and wrote the sentence explaining it; re-deriving either
       // here would give the report a second opinion on a reading it never took.
       ...(s.observations !== undefined ? { observations: s.observations } : {}),
+      ...(s.page !== undefined ? { page: s.page } : {}),
     }
   })
 }
