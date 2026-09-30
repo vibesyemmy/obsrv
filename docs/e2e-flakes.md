@@ -1768,3 +1768,39 @@ independently by Idris).
 **The discriminator:** whether the preceding test's `navigate` had committed when this one clicked.
 Inherited page state within a spec file is the default explanation for a wrong-document failure in this
 repo — `panes.spec.ts:83` is the recorded case — and the run's trace carries the commit order.
+
+## `sync-mirror-mark.spec.ts:41`: it also fails **alone**, and its error text is teardown, not cause
+
+**Seen 2026-09-30 on main**, run `36716844854`, head `dd3911f` (the `#535` merge — a build-script message
+and a board card, which cannot touch sync). **418074 bytes, exactly one `✘`, 0 `error TS`.** The suite's
+conclusion was `success`, because the retry passed.
+
+    ✘  522  sync-mirror-mark.spec.ts:41  a mirrored commit is reported and marked, not withheld (30.0s)
+    ✓  523  sync-mirror-mark.spec.ts:41  … (retry #1) (1.1s)
+
+**30.0 s then 1.1 s** — the first attempt spent the whole timeout, the retry finished in about a second.
+
+**Why the error lines do not name a cause, which is the trap this file exists to prevent.** The failure
+detail reads:
+
+    Test timeout of 30000ms exceeded.
+    Error: electronApplication.evaluate: Target page, context or browser has been closed
+
+and earlier in the log:
+
+    [launch] app.close() has taken 10002 ms; killing pid 38732
+
+**Read the clock before believing either.** The app started `13:07:48.792`; 30 s later the test timed out;
+`app.close()` then hung its own 10 s and was killed at `13:08:29.86`. So **the closed-target error and the
+hung close are both consequences of the timeout**, produced by teardown after the fact. **What the test was
+waiting on for 30 s is not in this log.** Anything that names `evaluate` or `app.close()` as the cause is
+reading the aftermath.
+
+**What it refines on `bug-ci-main-red-37pct`.** That card records `sync-mirror-mark:41` failing inside the
+two multi-spec runs (`735f60f`, `b89ec67`) and calls it a shared environmental signature with
+`devtools:116`. **Tonight it failed on its own** — one cross in the entire suite, `devtools` green. So the
+cluster is not the only shape: this test flakes solo, which makes it its own problem rather than only a
+passenger of a bad runner.
+
+**Still true, and still the interesting part:** this is the file created to *fix* sync coupling by giving
+the test its own app. It has its own app here — the log shows a fresh pid — and it still hung.
