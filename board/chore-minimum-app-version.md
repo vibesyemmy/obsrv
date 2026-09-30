@@ -56,3 +56,36 @@ missing count to zero reds it. So the older app still reads its own walk's words
 group was three. It is five. The decision is unchanged in shape — set a minimum supported app
 version, then re-read all five — and it is Opeyemi's, not engineering's.
 
+## DECIDED BY OPEYEMI 2026-09-30 — the floor is **0.58.0**, and below it the tools refuse
+
+Asked which of three shapes he wanted — refuse the call naming the version, warn once and proceed, or
+keep today's per-site degradation — he answered: **"set the floor at 0.58.0 and refuse below it."**
+
+**Why 0.58.0 was the number recommended**, so the reasoning is on the card rather than in a room: it is
+the version that shipped the `blocked` field (`82884e1`), and it retires **three of the five** sentences
+outright — the two that need an app older than 0.34.0 and 0.41.0 cannot be reached at all once 0.58.0 is
+the minimum, and the `blocked` sentence's own condition is *"the app sends no `blocked` field"*, which is
+precisely what a sub-0.58.0 app is.
+
+**Two survive and are correct to keep:** `walkCoverage.ts:184` and `:210` describe an app **between**
+0.58.0 and the walk that enters open shadow roots, which is inside the supported range. They are not
+compatibility debt; they are what a supported older app is owed.
+
+**And the count had already grown again before the decision.** 0.63.1 added `editable` / `inputType` /
+`disabled` / `readOnly` as optional fields *"absent from an app older than the field"*, and a `type`
+step against such an app refuses. That is a sixth sentence of the same family, filed the same night —
+the card's stated trigger was a fourth.
+
+### What "refuse" has to mean, for whoever builds it
+
+- **The refusal names both versions** — the app's and the minimum — so the reader knows it is an upgrade
+  rather than a broken selector, argument or page. A sentence that says only "unsupported" sends them
+  hunting.
+- **It refuses rather than falling back to headless.** Headless is a different measurement, and silently
+  taking it is the substitution this whole card exists to stop; `obsrv_snap` degrading quietly would
+  hide exactly the skew the floor is there to surface.
+- **The check costs no extra round trip where a `status` is already read**, which is most of the live
+  entries.
+- **The three retired sentences come out in the same change**, with the register entry naming the floor
+  as the reason — otherwise the code keeps the words for a case the tools no longer accept.
+
