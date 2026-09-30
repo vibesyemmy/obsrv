@@ -138,10 +138,28 @@ function parseCard(id, text) {
   // from waiting from finished-and-in-CI.
   if (col === 'doing') {
     if (card.waiting === undefined) {
-      throw new Error(`board/${id}.md: a Doing card needs a waiting: line — "" if it is moving, or "who: what" it waits on`)
+      // **A line to copy, not a shape to interpret.** This message already said
+      // `"who: what"` and two sessions still wrote a sentence that failed the
+      // check below on the same night (2026-09-30, three trips between them): a
+      // shape description reads as guidance about meaning, and the mandatory
+      // colon is invisible in it. An example cannot be misread the same way.
+      throw new Error(
+        `board/${id}.md: a Doing card needs a waiting: line. Copy one of these:\n` +
+          `    waiting: ""                              # it is moving\n` +
+          `    waiting: "Idris: review before merge"    # it waits on someone\n` +
+          `    waiting: "ci: the suite on #123"         # it waits on a run\n` +
+          `    waiting: "event: a recurrence nobody can force"`,
+      )
     }
     if (card.waiting !== '' && !/^[^:]{1,40}: \S/.test(card.waiting)) {
-      throw new Error(`board/${id}.md: waiting: names who or what first, as "who: what" — got ${JSON.stringify(card.waiting)}`)
+      // Shows the correct form beside the rejected one, because the fault is
+      // almost always a missing prefix on an otherwise sensible sentence — the
+      // author said *what* and left out *who*.
+      throw new Error(
+        `board/${id}.md: waiting: must name who or what it waits on first, before a colon.\n` +
+          `    got:      ${JSON.stringify(card.waiting)}\n` +
+          `    wanted:   "Idris: ${String(card.waiting).replace(/^"|"$/g, '')}"   (or "ci: …", "event: …", or "" if it is moving)`,
+      )
     }
   } else if (col === 'review') {
     // Optional on Review (chore-waiting-field-refinements): a finished card
