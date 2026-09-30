@@ -53,3 +53,73 @@ have to be answered before anything is built:
 - the report shows what was typed **or** deliberately does not, and the card says which and why;
 - one real run against a live form, in the same spirit as `feat-flow-selector-click`'s live clause —
   the shape of the failure it must prove against is a controlled input that ignores `insertText`.
+
+## A PROPOSAL FOR THE FOUR DECISIONS, 2026-09-30 — so the answer is a choice rather than an open question
+
+Written the same night the card was filed, because the card's own value is blocked on decisions nobody
+can take at 3am, and a decision is cheaper to make from stated options than from a blank page. **Nothing
+here is built.** Each item names what I would do and what it costs if the other choice is right.
+
+### 1. Where the text goes → **a selector, resolved exactly as `click` resolves one**
+
+`{action: 'type', target: '#email', text: 'a@b.test'}`. Reuse `pointForSelector` whole: locate, scroll
+into view, and **check what is drawn at the chosen point** before pressing — then focus by pressing, and
+type. That inherits the wrapped-inline fix and the five refusals rather than growing a second, subtly
+different resolution, which is how `bug-orientation-name` happened one surface over.
+
+*If the other choice is right* — typing into whatever already has focus — it is a smaller feature that
+cannot express "put this in the email field", which is what a flow needs.
+
+### 2. Types or sets → **real key events, and say so**
+
+Electron's `sendInputEvent` is already how this app forwards clicks and cursor moves
+(`targetSource.ts:1406`), so keystrokes are the existing seam rather than a new one. **`keyDown` /
+`char` / `keyUp` per character fires what a page listens for**: a React controlled input, an
+autocomplete that opens on `keydown`, a validator that runs on `input`. CDP's `Input.insertText` puts
+the string in at once and fires **no** `keydown` — faster, and invisible to exactly the widgets a QA
+flow is usually there to exercise.
+
+**The cost is honest and should be stated in the reply, not hidden**: a 40-character string is 120
+events. Where that matters, an `insertText: true` opt-out can exist later — added when someone measures
+a page it is too slow for, not on speculation.
+
+### 3. Secrets → **mask by default where the page says it is a secret, opt in everywhere else**
+
+A flow's steps and their evidence are written into a report, and a report is a file someone shares. So:
+
+- **`input[type="password"]` is masked automatically** — the readout already tells the runner the
+  element's type, so this needs no new input from the caller and cannot be forgotten;
+- **`secret: true` on the step** masks anything else (a one-time code field, an API key box);
+- masked means the report says **`typed 12 characters (not recorded)`** — the length is what a
+  reproducer needs and the string is what it must not keep;
+- the unmasked default stays for ordinary text, because *"what did it type"* is the first question a QA
+  engineer asks of a failed step.
+
+**The thing to avoid is a flag nobody sets.** Defaulting to masked everywhere would make every report
+useless and train people to turn it off; defaulting to unmasked everywhere puts passwords in files.
+Keying the automatic case on what the page declares is the only version that is right when nobody
+thought about it.
+
+### 4. What a refusal says → **the click family, plus three**
+
+`not editable` (the element takes no text), `disabled`, `readonly`. Each names which, as the click's
+five do. Deliberately **not** silent success: a `type` that reports `ran` having entered nothing is the
+same class-1 shape as a click that presses the page behind the element
+([[bug-selector-click-presses-the-gap]]).
+
+### And one question the card did not ask, which came out of writing this
+
+**Does `type` replace the field's contents or append to them?** A field with a value is the common case
+on a re-run, and "typed the right thing into a field that already held something else" is a silent
+wrong answer. Proposal: **replace by default** (select-all then type, which is what a person does), with
+`append: true` for the case that wants it — and the report states which happened, because the two
+produce different pages and a reader cannot tell from the text alone.
+
+### What this proposal is worth
+
+It is a design, not a measurement: **none of it has been run.** The one claim with evidence behind it is
+that `sendInputEvent` is the seam this app already uses for input, which is a code reading of
+`targetSource.ts:1406` and `overlay.ts:104-105`. The `insertText`-fires-no-`keydown` difference is
+documented behaviour I have not measured in this app, and whoever builds this should measure it against
+a real controlled input before trusting my sentence about it.
+
