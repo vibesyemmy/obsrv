@@ -2090,9 +2090,18 @@ export function registerIpc(ctx: AppContext): () => void {
         // means to a person doing it by hand — not a value clear, which no
         // real interaction produces and which a page's own `onChange` may
         // not even see as a change.
-        const meta = process.platform === 'darwin' ? 'meta' : 'control'
-        send(parseInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: [meta] }))
-        send(parseInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: [meta] }))
+        //
+        // Not a synthetic Cmd/Ctrl+A: measured live
+        // (`tests/e2e/flow-type-text.spec.ts`) that `sendInputEvent` delivers
+        // the keydown to the page (`metaKey`/`ctrlKey` read true) but the
+        // browser's native "select all" edit command never runs — that
+        // command resolves through the OS's own key-equivalent dispatch,
+        // which direct-to-renderer input injection bypasses. A field already
+        // holding text ended up with the new text appended, not replacing
+        // it. `selectAllAt` sets the same selection state in the page's DOM
+        // instead, which the real keydown/char events below then type over
+        // exactly as they would a mouse-drag selection.
+        await target.selectAllAt(t.x, t.y)
       }
       let charsTyped = 0
       for (const ch of t.text) {

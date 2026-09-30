@@ -12,6 +12,7 @@ import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
 import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { SELECT_ALL_SCRIPT } from '../shared/selectAll'
 import { OBSERVE_MAX_MATCHES, OBSERVE_MAX_UNRENDERED, OBSERVE_SCRIPT, type ObserveReport } from '../shared/observe'
 import { layoutScale } from '../shared/layoutScale'
 import { withinBudget, type AskOutcome } from '../shared/measureBudget'
@@ -1292,6 +1293,27 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // A navigation mid-call, or a page that threw: nothing to report.
       this.lastAsk = 'failed'
       return null
+    }
+  }
+
+  /**
+   * Selects the whole text field or contenteditable host at a viewport
+   * point, in the page's own DOM. See `shared/selectAll.ts` for why this
+   * cannot be a synthetic keyboard shortcut. Same isolated world, and the
+   * same surface-px-to-page-px conversion, as `inspectAt`. False when the
+   * point resolved to nothing selectable, or the page did not answer — the
+   * caller types at the current cursor position either way.
+   */
+  async selectAllAt(x: number, y: number, budgetMs?: number): Promise<boolean> {
+    if (this.win.isDestroyed() || !this.firstNavDone) return false
+    try {
+      const k = this.textScale * (await this.layoutScaleNow(budgetMs))
+      if (this.lastAsk === 'timeout') return false
+      const raw = await this.ask(`${SELECT_ALL_SCRIPT}(${Number(x) / k}, ${Number(y) / k})`, budgetMs)
+      return raw === true
+    } catch {
+      this.lastAsk = 'failed'
+      return false
     }
   }
 
