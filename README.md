@@ -234,8 +234,12 @@ in words still needs `steps`. A **step** can click by selector:
 `{"action": "click", "target": ".checkout-button"}`. Obsrv inspects that element,
 scrolls it into view if it is below the fold, and presses the centre of the part
 on screen; the report says which element, whether it had to scroll, and where it
-pressed. A selector matching nothing, an element with no area, and an element that
-could not be brought into view are three different refusals, each saying which.
+pressed. Obsrv then checks what is actually drawn at the point it chose, because an
+element's box can contain points it does not paint — a link whose text wraps has a
+box spanning both lines *and the gap between them*, and that gap belongs to the
+block around it. A selector matching nothing, an element with no area, one that
+could not be brought into view, one whose box holds no point that resolves to it,
+and a check that could not run are five different refusals, each saying which.
 
 Add `expect` to a step to say what you expected to see there, and Obsrv reads
 the rendered page for that text once the step has settled: the report says

@@ -2721,9 +2721,11 @@ server.registerTool(
       `Each step is \`{ action, target?, ... }\` where \`action\` is a control command (\`navigate\`, \`click\`, ` +
       `\`scroll\`, \`audit\`, \`lint\`, \`inspect\`, \`setPreset\` and the rest) and anything else on the step is ` +
       `passed through to it. **A \`click\` step's \`target\` may be a CSS selector**: Obsrv inspects that element, ` +
-      `scrolls it into view when it is outside the viewport, and presses the centre of the part on screen — so you ` +
-      `do not need to know coordinates. It refuses with a reason naming which of three it was: nothing matched, the ` +
-      `element has no area (a \`display: none\` element reads this way), or it could not be brought into view. ` +
+      `scrolls it into view when it is outside the viewport, and presses a point it has **checked is drawn by that ` +
+      `element** — an element's box can contain points it does not paint, as a link whose text wraps does. So you do ` +
+      `not need to know coordinates. It refuses with a reason naming which it was: nothing matched, the element has ` +
+      `no area (a \`display: none\` element reads this way), it could not be brought into view, no point inside its ` +
+      `box resolves to it, or the check itself could not run. ` +
       `Add \`expect\` to a step to state, in your own words, what you expected to see there: ` +
       `it is carried into the report beside the evidence, and **Obsrv does not judge it** — it reports what it ` +
       `observed and leaves the verdict to you.\n\n` +

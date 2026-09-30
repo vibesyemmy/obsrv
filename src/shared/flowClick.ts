@@ -107,6 +107,52 @@ export function visibleCentre(rect: Box, viewport: Viewport): { x: number; y: nu
 }
 
 /**
+ * The points worth trying inside an element's box, best first.
+ *
+ * **Why more than one, measured rather than reasoned** (`bug-selector-click-presses-the-gap`,
+ * 2026-09-30). The border box of a **wrapped inline** element — a link whose text runs to two lines —
+ * is the union of its line boxes **plus the leading between them**, and that gap paints as the parent
+ * block, not as the link. Measured on `books.toscrape.com` at 360 px: line 1 ends at 531.2, line 2
+ * starts at 534.2, the union box runs 514.2–551.2, and its centre, 532.7, sits strictly inside the
+ * 3 px gap where `elementFromPoint` answers `<h3>`. So the centre — the one point the first version
+ * tried — is exactly the point such an element does not paint.
+ *
+ * The first candidate is still the centre, because for a block element it is the best point and the
+ * commonest case. The rest walk the box's quarters, which for a two-line link land inside line 1 and
+ * line 2, and for a short final line reach leftward rather than assuming the text fills the width.
+ *
+ * Ordered, deduplicated, and each one inside the visible part of the box — a candidate outside the
+ * viewport is a coordinate `click` refuses, which is the other half of this file's job.
+ */
+export function candidatePoints(rect: Box, viewport: Viewport): Array<{ x: number; y: number }> {
+  const left = Math.max(0, rect.x)
+  const top = Math.max(0, rect.y)
+  const right = Math.min(viewport.width, rect.x + rect.width)
+  const bottom = Math.min(viewport.height, rect.y + rect.height)
+  if (right <= left || bottom <= top) return []
+  const w = right - left
+  const h = bottom - top
+  const at = (fx: number, fy: number): { x: number; y: number } => ({
+    x: Math.min(Math.floor(left + w * fx), viewport.width - 1),
+    y: Math.min(Math.floor(top + h * fy), viewport.height - 1),
+  })
+  const points = [
+    at(0.5, 0.5), // the centre: right for a block, and the case that already worked
+    at(0.5, 0.25), // inside the first line of a two-line inline
+    at(0.5, 0.75), // inside the last line
+    at(0.25, 0.25), // a first line that starts left of centre
+    at(0.25, 0.75), // a short final line, which centre-x can overshoot entirely
+  ]
+  const seen = new Set<string>()
+  return points.filter(p => {
+    const key = `${p.x},${p.y}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * Why a selector could not be clicked, in the caller's words.
  *
  * **Each case names which of the two it was**, because "click failed" is the
@@ -148,5 +194,35 @@ export function notBroughtIntoViewRefusal(selector: string, rect: Box, viewport:
     `${JSON.stringify(selector)} is still outside the ${viewport.width}x${viewport.height} viewport after scrolling to ` +
     `${scrolledTo.x},${scrolledTo.y}: its box reads ${rect.width}x${rect.height} at ${rect.x},${rect.y}. ` +
     `A page whose scroll is owned by an inner element, or a fixed element placed off-screen, does this`
+  )
+}
+
+/**
+ * No point inside the box resolves to the element itself.
+ *
+ * **A refusal rather than a warning, deliberately.** The failing case reported `ran` with nothing to
+ * distinguish it from a press that landed, and a flow then described a journey it never made. A
+ * warning would reach the report and not the caller's reply, which `docs/release-gate.md` names as no
+ * disclosure at all. So the step fails, and the sentence says what was tried.
+ */
+export function noPointHitsRefusal(selector: string, rect: Box, tried: number, saw: string[]): string {
+  const what = saw.length > 0 ? ` — the ${tried} points tried resolved to ${[...new Set(saw)].join(', ')} instead` : ''
+  return (
+    `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but no point inside it ` +
+    `resolves to that element${what}. An inline element whose text wraps does this: its box spans every line ` +
+    `plus the gap between them, and the gap belongs to the block around it`
+  )
+}
+
+/** The hit check could not run, so no point is verified.
+ *
+ *  Named separately from "no point hits" because they are different facts: one says the element cannot
+ *  be pressed, the other says we could not tell. The first version of the check collapsed them by
+ *  swallowing the failure and pressing the box centre — the exact point the defect is about. */
+export function probeUnavailableRefusal(selector: string, why: string): string {
+  return (
+    `${JSON.stringify(selector)} was located, but Obsrv could not check what is drawn at the point it chose ` +
+    `(${why}), so the press was not attempted: an unverified point is how a click lands on the page behind ` +
+    `the element and still reports success`
   )
 }
