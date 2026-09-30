@@ -42,7 +42,7 @@ Applications, then clear the quarantine flag once (the build is not yet
 notarised, so macOS falsely reports it as "damaged"):
 
 ```bash
-xattr -cr /Applications/Obsrv.app
+xattr -dr com.apple.quarantine /Applications/Obsrv.app
 ```
 
 Open it and set your monitor's diagonal in Settings — that one number is what
@@ -405,7 +405,7 @@ drag Obsrv.app to Applications, then clear the quarantine flag once (the build i
 yet notarised, so macOS falsely reports it as "damaged"):
 
 ```bash
-xattr -cr /Applications/Obsrv.app
+xattr -dr com.apple.quarantine /Applications/Obsrv.app
 ```
 
 Obsrv checks GitHub for a newer release once a day and, when there is one, shows
