@@ -57,20 +57,34 @@ recurrence-waiters). Before bisecting, three of us independently measured `--pro
 | Dogu | 5 | 5/5 clean, same counts |
 | Idris | 4 | 4/4 clean, `uninstallRemoveEndToEnd.test.ts` 4/4 green every run |
 
-**12/12 clean, tonight, on this machine.** Henry also reported one failure from earlier the same
-night, on the same tree, but did not capture which file — "unconfirmed to even be this test."
+**Dogu later added 6 more, forcing pool/thread configuration to mimic CI's small, fixed-core
+`macos-14` runner** (`threads` at max/minThreads=2, `forks` at maxForks=2, 3 clean each) — **18 clean
+runs total, every configuration anyone tried.**
+
+**Henry's own correction, given before this section was written rather than after: discount his one
+earlier failure entirely, in both directions.** He saw one file fail minutes after a rebuild, in the
+tree he was still editing, and reported "one file failed" without reading which — the visible line was
+an `ensureElectron` lock test, not this card's file. Two reasons it counts as neither a confirmation
+nor a refutation: it may never have been `uninstallRemoveEndToEnd.test.ts` at all, and a run racing a
+just-finished build is a different failure shape than a suite-ordering fault. **The honest tally is 18
+clean runs and no attributable counterexample** — not 18-for-19 with an asterisk that flatters the
+original claim.
 
 **What this does and does not say.** The original measurement (`e08b845`/`51debb6`, "these 3 fail,
 identically, on both commits") was real when taken — this is new information beside it, not a
-retraction. The two most likely readings: this machine's higher core count schedules vitest's worker
+retraction. The obvious first explanation — this machine's higher core count schedules vitest's worker
 threads differently than CI's `macos-14` runner (`ci.yml:165`; no `poolOptions` override in
-`vitest.config.ts`), so the racing neighbor tonight's runs happened not to hit; or the rate was always
-lower than "identically" suggested and three-plus-one clean local samples is not yet enough to say it's
+`vitest.config.ts`) — was tried directly rather than left as a guess, and forcing `threads`/`forks`
+down to 2 workers **also** came back clean. So it is not simply "a wider local thread pool happens to
+avoid the race": either CI's actual scheduling differs in some way the `maxThreads`/`maxForks` knobs
+don't capture (worker *count* forced down, but not necessarily the same file-to-worker assignment CI's
+runner would produce), or the true rate was always lower than "identically" implied and 18 clean
+samples — across three people, unforced and both forced pool shapes — is not yet enough to say it's
 gone. **Not concluding either.** Bisecting "which neighbor leaks HOME" against a symptom nobody here
 can currently reproduce is the shape [[silence-that-fits-two-facts]] warns about — a control (or a
 bisection) that can't fail is not evidence.
 
-**Next, before any fix:** try forcing CI's likely thread count locally (e.g.
-`--pool-options.threads.maxThreads=2`, unmeasured) to see whether that alone reproduces it; if not,
-this reverts from "actionable now" back to a genuine recurrence-waiter, rarer on this hardware than
-the original wording implied.
+**Reverted to a genuine recurrence-waiter for tonight** — every configuration anyone could force
+locally came back clean, so there is nothing left to bisect without an actual failing run to read.
+Next real step is the same as every other recurrence-waiter on this board: capture the failing file
+and the exact pool/worker state on the next CI sighting, rather than more local sampling.
