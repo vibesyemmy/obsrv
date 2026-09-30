@@ -157,6 +157,7 @@ h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { font-size: 18px; margin: 40px 0 4px; padding-top: 24px; border-top: 1px solid var(--line); }
 h3 { font-size: 14px; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .muted { color: var(--muted); }
+.typed .masked { color: var(--muted); font-style: italic; }
 .facts { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 .facts b { color: var(--ink); font-weight: 600; }
 figure { margin: 0; }
@@ -447,6 +448,18 @@ export interface FlowReportStep {
    *  written out beside the pattern, so the trace cannot claim a phrase the rule
    *  did not match. */
   keyedOn?: string
+  /** For a `type` step that actually dispatched keystrokes. Absent on a
+   *  refused or not-reached step. */
+  typed?: FlowReportTyped
+}
+
+/** What a `type` step's report carries. The masking decision travels with
+ *  it, made once by the runner against the fact it had in hand — this file
+ *  only renders what arrived, never re-derives whether to show `value`. */
+export interface FlowReportTyped {
+  length: number
+  maskedBecause?: 'password field' | 'secret: true'
+  value?: string
 }
 
 /** The page's address, size and density as a step left it — what somebody needs
@@ -654,6 +667,34 @@ function clickBlock(c: FlowReportClick | undefined): string {
   )
 }
 
+/**
+ * What a `type` step shows. `length` is always printed — a reproducer needs
+ * to know how much was typed whether or not it can see what. `value`'s
+ * absence, not a placeholder in its place, is what "not recorded" means:
+ * this function renders exactly the two shapes the runner can send, and
+ * invents nothing in between.
+ *
+ * `hasScreenshot` exists because the mask covers this text alone. Henry's
+ * review of `#530` found the gap: a step's own screenshot is a raster of the
+ * page as it stood, and for `secret: true` on a field the page does not
+ * itself mark as a password — a one-time code, an API key — the value is
+ * rendered there in plain sight regardless of what this paragraph says. A
+ * reader seeing "not recorded" directly under an image of the value would
+ * reasonably conclude the report holds no trace of it, so the masked
+ * sentence says otherwise rather than leaving that read uncorrected.
+ * Redacting the pixels themselves would need to know where the field sat at
+ * capture time, which is a larger feature this is not.
+ */
+function typedBlock(t: FlowReportTyped | undefined, hasScreenshot: boolean): string {
+  if (t === undefined) return ''
+  const chars = `${t.length} character${t.length === 1 ? '' : 's'}`
+  if (t.maskedBecause !== undefined) {
+    const screenshotNote = hasScreenshot ? ' The screenshot above is of the page as it was — this mask does not redact it.' : ''
+    return `<p class="typed">Typed ${chars} <span class="masked">(not recorded — ${escapeHtml(t.maskedBecause)})</span>.${screenshotNote}</p>`
+  }
+  return `<p class="typed">Typed ${chars}: <q>${escapeHtml(t.value ?? '')}</q></p>`
+}
+
 /** "Where this step ran", one click down.
  *
  *  It names what it is — *address, size and density* — because the clause this
@@ -761,7 +802,7 @@ function flowStepSection(s: FlowReportStep, n: number): string {
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
     resolvedFrom(s) +
-    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${clickBlock(s.clickedAt)}${ranAt}${networkBlock(s.network)}${reply}</div>`
+    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${clickBlock(s.clickedAt)}${typedBlock(s.typed, s.data !== undefined)}${ranAt}${networkBlock(s.network)}${reply}</div>`
   )
 }
 

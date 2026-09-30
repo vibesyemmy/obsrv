@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>type-text-fixture</title>
+    <style>
+      html, body { margin: 0; background: #fff; font: 16px system-ui, sans-serif; }
+      input { display: block; width: 240px; height: 40px; font-size: 18px; margin: 20px; }
+      #a-password { margin: 20px; }
+      #a-disabled { margin: 20px; }
+      #a-readonly { margin: 20px; }
+      #not-editable { display: block; width: 240px; height: 40px; margin: 20px; background: #eee; }
+    </style>
+  </head>
+  <body>
+    <input id="plain-text" type="text" />
+    <input id="a-password" type="password" />
+    <input id="a-disabled" type="text" disabled />
+    <input id="a-readonly" type="text" readonly value="already here" />
+    <div id="not-editable">not an input</div>
+    <input id="controlled" type="text" />
+    <script>
+      /**
+       * The discriminator `feat-flow-type-text`'s own acceptance clause asks
+       * for: real key events fire `keydown` before `input`, where CDP's
+       * `Input.insertText` fires no `keydown` at all. Logged per-field, in
+       * order, so a build that silently fell back to `insertText` reads as a
+       * missing first entry rather than as a silent pass.
+       */
+      window.events = []
+      function wire(el, id) {
+        let sawKeydown = false
+        el.addEventListener('keydown', e => {
+          window.events.push(`${id}:keydown:${e.key}`)
+          sawKeydown = true
+        })
+        el.addEventListener('beforeinput', () => window.events.push(`${id}:beforeinput`))
+        el.addEventListener('input', e => {
+          window.events.push(`${id}:input:${e.target.value}`)
+          if (id === 'controlled') {
+            // The React shape without React: a controlled component only
+            // adopts a change that arrived through its own onChange, which in
+            // a real page fires from the `input` event a real keydown
+            // produced. A value set by `Input.insertText` reaches `input`
+            // with no preceding `keydown` on this field, so it is discarded
+            // here exactly as an unwired controlled input would discard it.
+            if (sawKeydown) {
+              window.controlledValue = e.target.value
+            } else {
+              e.target.value = window.controlledValue || ''
+            }
+          }
+          sawKeydown = false
+        })
+      }
+      window.controlledValue = ''
+      wire(document.getElementById('plain-text'), 'plain')
+      wire(document.getElementById('a-password'), 'password')
+      wire(document.getElementById('controlled'), 'controlled')
+    </script>
+  </body>
+</html>

@@ -20,6 +20,10 @@ const grey: InspectReport = {
   backgroundNote: 'computed',
   opacity: 1,
   hidden: null,
+  editable: false,
+  inputType: null,
+  disabled: false,
+  readOnly: false,
 }
 
 const screenOf = (id: string, textScale = 1): InspectScreen => {

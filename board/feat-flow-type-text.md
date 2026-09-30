@@ -1,6 +1,8 @@
 ---
 title: "a flow can enter text, so a user flow can reach the pages behind a form"
-column: backlog
+column: doing
+owner: Dogu
+waiting: "Idris: byte-count and gate #530 before merge"
 kind: feat
 order: 118
 ---
@@ -123,3 +125,77 @@ that `sendInputEvent` is the seam this app already uses for input, which is a co
 documented behaviour I have not measured in this app, and whoever builds this should measure it against
 a real controlled input before trusting my sentence about it.
 
+## CLAIMED AND BUILT, 2026-09-30 — Dogu, #530
+
+Built to this proposal as merged (`#529`/`e014d43`): `pointForSelector` reused whole, real
+`keyDown`/`char`/`keyUp` via the existing `sendInputEvent` seam, mask keyed on page-declared
+`type="password"` with no `reveal` override plus `secret: true` for the rest, replace-by-default with
+`append: true`, the four refusal shapes (unresolved, non-editable, disabled, readOnly). Sabotage-tested
+the masking invariant at both layers it lives in (`flowRunner`'s decision, `reportHtml`'s rendering) —
+each caught by exactly the test written for it. Typecheck, build, full suite (1987/1988, 1 pre-existing
+skip) all clean.
+
+**Not yet done — the card's own acceptance clause**: a live run against a real controlled input,
+proving the `keyDown`/`char`/`keyUp` sequence actually produces a keystroke a React `onChange` sees,
+rather than the `insertText`-shaped failure the whole design is built to avoid. Everything above is
+unit/browser-level against a mocked `deps.call`. This was also Henry's own flagged unproven claim — it
+stays open until measured, tracked in `#530`, not silently counted as done.
+
+## LIVE-VERIFIED, 2026-09-30 — measured offscreen rather than on the dev lane
+
+Henry's note: the claim is about Electron's input dispatch, which every e2e already drives offscreen —
+no dev lane, no desk, and he was asleep. `tests/e2e/flow-type-text.spec.ts` (fixture logs its own
+`keydown`/`beforeinput`/`input` per field, a `#controlled` field that discards any change not preceded
+by its own `keydown` — the React shape without React) confirms the transport claim: real
+`keyDown`/`char`/`keyUp` reach the page, in order, before the value changes. `insertText` was never
+substituted.
+
+**First run was not clean, and the thing it found was real, not the test.** Replace-by-default's
+select-all was a synthetic Cmd/Ctrl+A `keyDown`/`keyUp` pair. It reached the page (`e.metaKey` read
+true) but the browser's native "select all" edit command never ran — that command resolves through the
+OS's own key-equivalent dispatch, which `sendInputEvent`'s direct-to-renderer injection bypasses. A
+field already holding text, retyped without `append`, ended up with the new text **appended**, not
+replacing it — the silent-wrong-page shape this whole feature exists to rule out, one layer up from
+where the design first looked for it. Fixed in `src/shared/selectAll.ts` +
+`TargetSource.selectAllAt`: sets the DOM's own selection directly (`.select()` / a `Range`), which the
+real per-character keys then type over exactly as a mouse-drag selection. 8/8 on the spec after the fix,
+7/7 on `flow-selector-click.spec.ts` (no regression), full suite clean.
+
+Card's acceptance is now fully met. Nothing left open on `#530`.
+
+## REVIEW FOUND A SECOND GAP, 2026-09-30 — Henry, confirmed by Idris, fixed
+
+The masking rule covers the report's *text* alone. `flowRunner.ts` captures a step's own screenshot
+unconditionally, and `reportHtml.ts` renders it directly above the typed block — so `secret: true` on a
+field the page does not itself mark as a password (a one-time code, an API key: exactly the case the
+flag exists for) left the value in that image in plain sight, under a line saying "not recorded". A
+password field dodged this only by accident (the browser draws dots).
+
+Not fixed by redacting pixels — that needs the field's on-screen position at capture time, a bigger
+feature than this card asked for. Fixed by saying so: a masked step whose screenshot was captured now
+states that the mask does not cover it. Sabotage-verified (`b92727c`); full suite clean.
+
+## CI CAUGHT ITS OWN GAP, 2026-09-30 — `readoutShape` schema, fixed by Idris's diagnosis + Henry's second find
+
+`chore-strict-output-under-test` failed `#530`'s first real CI run (8 distinct tests, 16 `✘` counted):
+`server.ts`'s declared `obsrv_inspect` output schema was never updated for the four new readout fields,
+so every live inspect that found an element replied with an undeclared key. Idris found and reproduced
+the root cause locally; Henry then found the second half — `docs/public-shape.json` still listed 58 keys,
+none of the four new ones, since a key that never reaches the schema never reaches the snapshot either.
+Fixed at `c656b5f`: `readoutShape` declares all four (optional, "absent from an app older than the
+field", following `colorPainted`'s precedent), a `docs/breaking-changes.md` entry added, snapshot
+regenerated and diffed (exactly the four keys, nothing else moved). Full `mcp.spec.ts` (40/40) and full
+suite clean.
+
+## REFUSAL WORDING WAS WRONG FOR THE COMMON CASE, 2026-09-30 — Henry, fixed
+
+Henry pushed past "it fails safe" to ask whether the refusal *says* the true thing. It didn't: an app
+older than this feature has no `editable` key in its readout at all, and `flowRunner.ts:345` collapsed
+that absence into the same `false` a real non-input element gets — so a genuine text input, on an app
+too old to say, refused with "resolved to a non-input element that does not accept typed text". False,
+not vague: the element is an input. Not a safety gap (the refusal already happens before the masking
+decision either way), but the common case right now — every app until it's updated — deserved the true
+cause, not a misdirection to check the selector.
+
+Fixed at `96d5860`: `editable` keeps three states (`undefined`/`true`/`false`) instead of two; a refusal
+on an absent key now names the app's age, not the element's kind. Sabotage-verified. Full suite clean.

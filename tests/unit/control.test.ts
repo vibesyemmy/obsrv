@@ -10,11 +10,13 @@ import {
   isControlCommand,
   isDeclinedStance,
   isDisabledStance,
+  MAX_TYPE_TEXT_LENGTH,
   parseClick,
   parseControlFile,
   parseControlStatus,
   parseOpenTab,
   parseTabId,
+  parseType,
   orientationApplyError,
   panesApplyError,
   textScaleApplyError,
@@ -148,7 +150,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the thirty-two commands', () => {
+  it('knows exactly the thirty-three commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'activateTab',
       'audit',
@@ -182,6 +184,7 @@ describe('command validation', () => {
       'setVision',
       'status',
       'tabs',
+      'type',
     ])
     expect(isControlCommand('status')).toBe(true)
     expect(isControlCommand('click')).toBe(true)
@@ -256,6 +259,39 @@ describe('parseClick', () => {
   })
   it('rejects an unknown button', () => {
     expect(parseClick({ x: 1, y: 1, button: 'back' }, vp)).toMatch(/left, middle or right/)
+  })
+})
+
+describe('parseType', () => {
+  const vp = { width: 1366, height: 768 }
+  it('accepts an in-viewport point and text, defaulting append to false', () => {
+    expect(parseType({ x: 100, y: 50, text: 'hello' }, vp)).toEqual({ x: 100, y: 50, text: 'hello', append: false })
+  })
+  it('accepts an explicit append: true', () => {
+    expect(parseType({ x: 100, y: 50, text: 'hi', append: true }, vp)).toEqual({ x: 100, y: 50, text: 'hi', append: true })
+  })
+  it('treats anything but a literal true as append: false, not an error', () => {
+    expect(parseType({ x: 1, y: 1, text: 'x', append: 'yes' }, vp)).toMatchObject({ append: false })
+    expect(parseType({ x: 1, y: 1, text: 'x', append: 1 }, vp)).toMatchObject({ append: false })
+  })
+  it('rejects a point outside the current CSS viewport, naming it', () => {
+    expect(parseType({ x: 1367, y: 10, text: 'x' }, vp)).toMatch(/outside the current CSS viewport 1366x768/)
+  })
+  it.each([
+    ['not an object', 'type'],
+    ['missing text', { x: 1, y: 1 }],
+    ['empty text', { x: 1, y: 1, text: '' }],
+    ['a non-string text', { x: 1, y: 1, text: 5 }],
+    ['missing y', { x: 1 }],
+    ['NaN coordinate', { x: NaN, y: 1, text: 'x' }],
+  ])('rejects %s with the shape message', (_name, raw) => {
+    expect(parseType(raw, vp)).toMatch(/must be \{ x, y, text, append\? \}/)
+  })
+  it(`rejects text over ${MAX_TYPE_TEXT_LENGTH} characters, naming the bound`, () => {
+    expect(parseType({ x: 1, y: 1, text: 'x'.repeat(MAX_TYPE_TEXT_LENGTH + 1) }, vp)).toMatch(
+      new RegExp(`at most ${MAX_TYPE_TEXT_LENGTH} characters`),
+    )
+    expect(parseType({ x: 1, y: 1, text: 'x'.repeat(MAX_TYPE_TEXT_LENGTH) }, vp)).not.toEqual(expect.any(String))
   })
 })
 

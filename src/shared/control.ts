@@ -231,6 +231,16 @@ export interface AgentClick {
   button: 'left' | 'middle' | 'right'
 }
 
+/** A point to type into (`click`'s own resolution, run once by the caller —
+ *  `type` never resolves a selector itself), the text, and whether it
+ *  replaces the field's contents or appends to them. */
+export interface AgentType {
+  x: number
+  y: number
+  text: string
+  append: boolean
+}
+
 /**
  * What the renderer-applied commands forward over `IPC.agentApply`. Every
  * field is optional; the renderer applies exactly the ones present with its
@@ -304,6 +314,7 @@ export const CONTROL_COMMANDS = [
   'scroll',
   'panTo',
   'click',
+  'type',
   'highlight',
   'back',
   'forward',
@@ -537,6 +548,23 @@ export function parseClick(raw: unknown, viewport: { width: number; height: numb
     return 'click button must be left, middle or right'
   }
   return { x, y, button }
+}
+
+/** Longest text one `type` step will send in a single call — a form field, not a document. */
+export const MAX_TYPE_TEXT_LENGTH = 2000
+
+export function parseType(raw: unknown, viewport: { width: number; height: number }): AgentType | string {
+  const shape = 'type payload must be { x, y, text, append? } with finite CSS-pixel coordinates and a non-empty text'
+  if (!isRecord(raw)) return shape
+  const { x, y, text } = raw
+  if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) return shape
+  if (x < 0 || y < 0 || x >= viewport.width || y >= viewport.height) {
+    return `type point (${x}, ${y}) is outside the current CSS viewport ${viewport.width}x${viewport.height}`
+  }
+  if (typeof text !== 'string' || text.length === 0) return shape
+  if (text.length > MAX_TYPE_TEXT_LENGTH) return `type text must be at most ${MAX_TYPE_TEXT_LENGTH} characters`
+  const append = raw.append === true
+  return { x, y, text, append }
 }
 
 /**

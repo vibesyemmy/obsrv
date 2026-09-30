@@ -26,6 +26,10 @@ const dim: InspectReport = {
   backgroundNote: 'computed',
   opacity: 0.5,
   hidden: null,
+  editable: false,
+  inputType: null,
+  disabled: false,
+  readOnly: false,
 }
 
 const preset = findPreset('laptop-768')

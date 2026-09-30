@@ -26,6 +26,7 @@ import {
   parseHighlight,
   parseOpenTab,
   parseTabId,
+  parseType,
   pixelExactApplyError,
   presetApplyError,
   profileApplyError,
@@ -39,6 +40,7 @@ import {
   viewModeApplyError,
   type AgentApplyPatch,
   type AgentClick,
+  type AgentType,
   type ControlStatus,
   type ControlTab,
   pageRectToPane,
@@ -158,6 +160,18 @@ export interface ControlDeps {
   scroll(req: ScrollRequest): Promise<ScrollReport | null>
   /** A validated click, delivered through the same `sendInput` path the canvas uses. */
   click(c: AgentClick): void
+  /**
+   * A validated type: focuses the point by pressing it, then dispatches real
+   * `keyDown`/`char`/`keyUp` per character through the same `sendInput` path
+   * `click` uses — never `insertText`, which fires no `keydown` and is
+   * invisible to exactly the widgets a QA flow exists to exercise. Awaited,
+   * unlike `click`: a step must not report `ran` until every character has
+   * actually been dispatched, or the flow could move on before a controlled
+   * input's own `onChange` has even fired. Resolves with how many characters
+   * were sent — never the text itself, so a caller that forgets to redact a
+   * password step at its own layer still cannot leak it through this one.
+   */
+  type(t: AgentType): Promise<{ charsTyped: number }>
   /** The toolbar's history/reload actions, byte-for-byte (native-only history; reload reloads both). */
   back(): void
   forward(): void
@@ -638,6 +652,15 @@ export class ControlServer {
         // mirrors between the panes exactly like a user click would.
         this.deps.click(click)
         return reply(200, { ok: true })
+      }
+
+      case 'type': {
+        const typed = parseType(payload, this.deps.viewport())
+        if (typeof typed === 'string') return reply(400, { error: typed })
+        const result = await this.deps.type(typed)
+        // `charsTyped` only — see the dep's own doc comment for why the text
+        // itself never appears in this reply, masked or not.
+        return reply(200, { ok: true, ...result })
       }
 
       case 'highlight': {

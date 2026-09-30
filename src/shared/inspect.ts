@@ -65,6 +65,34 @@ export interface InspectReport {
    * Optional so a report from before the field reads as scale 1.
    */
   viewportWidth?: number
+  /**
+   * Whether this element accepts typed text at all: an `<input>` whose own
+   * type takes text, a `<textarea>`, or `[contenteditable]` (including the
+   * inherited form — a child of a contenteditable ancestor is itself
+   * editable). Kept separate from `inputType`/`disabled`/`readOnly` because a
+   * `type` step's first question is "can this take text at all", and an
+   * `<input type="checkbox">` answers that question before its own
+   * disabled/readOnly state is even relevant.
+   */
+  editable: boolean
+  /**
+   * An `<input>`'s own `type` attribute, lower-cased, defaulting to `"text"`
+   * per the HTML spec when the attribute is absent — never inferred from
+   * anything else. Null for every other element, `textarea` included: a
+   * textarea has no `type` to read, and `null` says so rather than a guess
+   * standing in for "not applicable". This is the one fact `type` (the flow
+   * step, unbuilt as of this field) uses to decide whether a value must be
+   * masked in the report: `"password"` and nothing else, checked here so the
+   * decision is a fact the page stated, not a rule reimplemented at the
+   * point of masking.
+   */
+  inputType: string | null
+  /** The standard DOM property, which already accounts for a disabled
+   *  `<fieldset>` ancestor — not reimplemented, read straight from the page. */
+  disabled: boolean
+  /** `<input readonly>` / `<textarea readonly>`; always false for anything
+   *  else, since `readOnly` is not a property those elements have. */
+  readOnly: boolean
 }
 
 /**
@@ -237,6 +265,23 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   }
 
   const family = cs.fontFamily.split(',')[0]?.replace(/["']/g, '').trim() ?? ''
+
+  // Text-accepting element types the HTML spec gives a `type` at all — every
+  // other `<input>` type (checkbox, radio, range, color, file, ...) takes no
+  // typed text regardless of its disabled/readOnly state, so it is not
+  // "editable" here even though the DOM lets code set `.value` on it.
+  const TEXT_INPUT_TYPES = new Set([
+    'text', 'password', 'email', 'search', 'tel', 'url', 'number', 'date', 'datetime-local', 'month', 'time', 'week',
+  ])
+  const formField = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el : null
+  const inputType = el instanceof HTMLInputElement ? el.getAttribute('type')?.toLowerCase() || 'text' : null
+  const editable =
+    (el instanceof HTMLInputElement && TEXT_INPUT_TYPES.has(inputType ?? 'text')) ||
+    el instanceof HTMLTextAreaElement ||
+    el.closest('[contenteditable]:not([contenteditable="false"])') !== null
+  const disabled = formField !== null && formField.disabled
+  const readOnly = formField !== null && formField.readOnly
+
   return {
     tag: el.tagName.toLowerCase(),
     id: el.id,
@@ -252,6 +297,10 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     opacity,
     hidden,
     viewportWidth: innerWidth,
+    editable,
+    inputType,
+    disabled,
+    readOnly,
   }
 }
 

@@ -57,6 +57,25 @@ export interface FlowStep {
    * unknown, not-reached), and a reader decides whether that is what was wanted.
    */
   observations?: string[]
+  /** `type`'s own text, stated on the step itself rather than in the target,
+   *  for the same reason `observations` is: the runner needs to see it
+   *  before the control command is issued (to resolve the selector and check
+   *  the element takes text), and a report keyed on the resolved element's
+   *  own `inputType` — not this field — decides whether the value is masked
+   *  (`flowRunner.ts`'s `recordTyped`). Required, and only meaningful, when
+   *  `action` is `"type"`. */
+  text?: string
+  /** `type` only: masks this step's value in the report even when the
+   *  resolved element does not declare `type="password"` — a one-time code
+   *  or an API-key field the page does not mark as a password. Has no effect
+   *  in the other direction: a genuine password field is never unmasked by
+   *  omitting this, which is the whole point of keying the automatic case on
+   *  the page rather than on a flag nobody remembered to set. */
+  secret?: boolean
+  /** `type` only: appends to the field's existing contents instead of the
+   *  default (select-all, then type — what replacing a value means to a
+   *  person doing it by hand). */
+  append?: boolean
   /** Whatever else the action needs, passed through unvalidated: this module
    *  agrees on the step's shape, not on each command's own payload. */
   [key: string]: unknown
@@ -133,6 +152,29 @@ function validateStep(step: unknown, index: number): StepValidation {
         }
       }
     }
+  }
+  if (action === 'type') {
+    if (typeof record.text !== 'string' || record.text.length === 0) {
+      return { ok: false, rejection: { index, reason: `step ${index}'s action is "type", so it must state a non-empty "text"; got ${typeOf(record.text)}` } }
+    }
+    if (typeof record.target !== 'string' || record.target.length === 0) {
+      return {
+        ok: false,
+        rejection: { index, reason: `step ${index}'s action is "type", so it must name a "target" selector — there is no focused-element or point form` },
+      }
+    }
+  } else if ('text' in record && record.text !== undefined) {
+    // Not an error to carry, only meaningful for one action — but a `text`
+    // beside a different action is very likely a typo'd step (`action:
+    // 'click'` with a leftover `text` from an edit), and saying nothing
+    // would let it through silently unused.
+    return { ok: false, rejection: { index, reason: `step ${index} states "text" but its action is ${JSON.stringify(action)}, not "type" — "text" is only read by a type step` } }
+  }
+  if ('secret' in record && record.secret !== undefined && typeof record.secret !== 'boolean') {
+    return { ok: false, rejection: { index, reason: `step ${index}'s "secret" must be a boolean, got ${typeOf(record.secret)}` } }
+  }
+  if ('append' in record && record.append !== undefined && typeof record.append !== 'boolean') {
+    return { ok: false, rejection: { index, reason: `step ${index}'s "append" must be a boolean, got ${typeOf(record.append)}` } }
   }
   return { ok: true, step: { ...record, action } as FlowStep }
 }
