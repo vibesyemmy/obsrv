@@ -52,7 +52,7 @@ describe('parseArgs: snap', () => {
     const cmd = snap('https://x.test')
     expect(cmd.url).toBe('https://x.test')
     expect(cmd.specs).toEqual([
-      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait', mobile: false, textScale: 1, throttle: null },
+      { presetId: '1080p-24', cssWidth: 1920, cssHeight: 1080, deviceScaleFactor: 1, diagonalInches: 24, orientation: 'portrait', rotateAsked: false, mobile: false, textScale: 1, throttle: null },
     ])
     expect(cmd.profileId).toBe('reference')
     expect(cmd.out).toBe('obsrv-1080p-24.png')
@@ -63,7 +63,7 @@ describe('parseArgs: snap', () => {
   })
   it('resolves a preset, including mobile dsf', () => {
     const cmd = snap('x.test', '--preset', 'iphone-61')
-    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait', mobile: true, textScale: 1, throttle: null })
+    expect(cmd.specs[0]).toEqual({ presetId: 'iphone-61', cssWidth: 393, cssHeight: 852, deviceScaleFactor: 3, diagonalInches: 6.1, orientation: 'portrait', rotateAsked: false, mobile: true, textScale: 1, throttle: null })
     expect(cmd.out).toBe('obsrv-iphone-61.png')
   })
   it('rejects an unknown preset, listing the valid ids', () => {
@@ -72,12 +72,12 @@ describe('parseArgs: snap', () => {
   })
   it('accepts custom --width/--height with optional --dsf and --diagonal', () => {
     const cmd = snap('x.test', '--width', '800', '--height', '600', '--dsf', '2', '--diagonal', '13.3')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait', mobile: false, textScale: 1, throttle: null })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 800, cssHeight: 600, deviceScaleFactor: 2, diagonalInches: 13.3, orientation: 'portrait', rotateAsked: false, mobile: false, textScale: 1, throttle: null })
     expect(cmd.out).toBe('obsrv-custom.png')
   })
   it('custom dims default dsf 1 and no diagonal', () => {
     const cmd = snap('x.test', '--width', '640', '--height', '480')
-    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait', mobile: false, textScale: 1, throttle: null })
+    expect(cmd.specs[0]).toEqual({ presetId: 'custom', cssWidth: 640, cssHeight: 480, deviceScaleFactor: 1, diagonalInches: null, orientation: 'portrait', rotateAsked: false, mobile: false, textScale: 1, throttle: null })
   })
   it('rejects --preset combined with custom dims', () => {
     expect(() => snap('x.test', '--preset', 'laptop-768', '--width', '800', '--height', '600')).toThrow(/mutually exclusive/)
@@ -146,6 +146,9 @@ describe('parseArgs: --orientation', () => {
   it('swaps the CSS axes in landscape, leaving dsf and diagonal alone', () => {
     expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'landscape').specs[0]).toEqual({
       presetId: 'iphone-61',
+      // `--orientation landscape` was given, so the spec records that a rotation
+      // flag was named at all — which is what `snap --json` keys `rotated` on.
+      rotateAsked: true,
       cssWidth: 852,
       cssHeight: 393,
       deviceScaleFactor: 3,
