@@ -314,7 +314,14 @@ async function pointForSelector(
   selector: string,
 ): Promise<{ point: { x: number; y: number }; resolved: FlowStepResolution } | { refusal: string; resolved: FlowStepResolution }> {
   const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string') : [])
-  type Editability = { editable: boolean; inputType: string | null; disabled: boolean; readOnly: boolean }
+  // `editable` alone keeps three states rather than two: `undefined` is not
+  // "computed false" — it is "this app's readout has no such key at all",
+  // which is every app built before this field existed. Collapsing that into
+  // `false` (as `disabled`/`readOnly` still safely do, since a refusal on
+  // `editable` already short-circuits before either is read) would make a
+  // too-old app read as "this element does not take text", which is false —
+  // the element may be exactly the field a real user would type into.
+  type Editability = { editable: boolean | undefined; inputType: string | null; disabled: boolean; readOnly: boolean }
   const look = async (): Promise<({ rect: Box; pageRect: Box; notes: string[] } & Editability) | { refusal: string }> => {
     const r = await deps.call('inspect', { selector })
     // **`inspect` puts its notes in two different places, measured rather than
@@ -342,7 +349,7 @@ async function pointForSelector(
       // `type`'s own facts, carried whether or not this call turns out to be
       // for a click — reading them here costs nothing and keeps them beside
       // the one inspect reply they came from, rather than a second ask.
-      editable: readout['editable'] === true,
+      editable: readout['editable'] === undefined ? undefined : readout['editable'] === true,
       inputType: typeof readout['inputType'] === 'string' ? readout['inputType'] : null,
       disabled: readout['disabled'] === true,
       readOnly: readout['readOnly'] === true,
@@ -557,6 +564,14 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
         resolved = got.resolved
         if ('refusal' in got) {
           error = got.refusal
+        } else if (got.resolved.editable === undefined) {
+          // Not "not editable" — unknown, and named as such: the app answering
+          // has no `editable` key in its readout at all, which is every app
+          // built before this field existed. Refusing is still the right
+          // move (typing blind past that point risks the exact silent
+          // failure this feature exists to rule out), but the true cause is
+          // the app's age, not the element's kind — Henry's review of #530.
+          error = `${JSON.stringify(target)}: this app does not report whether an element accepts typed text, so the step was refused rather than typed blind — it predates the field`
         } else if (got.resolved.editable !== true) {
           error = `${JSON.stringify(target)} resolved to a ${got.resolved.inputType === null ? 'non-input' : `type="${got.resolved.inputType}"`} element that does not accept typed text`
         } else if (got.resolved.disabled === true) {

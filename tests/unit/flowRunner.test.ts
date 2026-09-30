@@ -798,6 +798,29 @@ describe('runFlow: a type step — resolution, refusals, and the masking rule', 
     expect(result.steps[0]!.typed).toBeUndefined()
   })
 
+  it('an app old enough to have no editable key at all refuses by naming the app, not the element', async () => {
+    // No `readoutFor` defaults here — this is the wire shape an app built
+    // before `feat-flow-type-text` actually sends: no `editable`/`inputType`/
+    // `disabled`/`readOnly` keys at all, not any of them present-but-false.
+    const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
+    const result = await runFlow(flow([{ action: 'type', target: '#field', text: 'hello' }]), {
+      call: async (command, payload = {}) => {
+        calls.push({ command, payload })
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') return { ok: true, found: true, readout: { rect: ONSCREEN, pageRect: ONSCREEN } }
+        return { ok: true, charsTyped: 0 }
+      },
+    })
+    expect(calls.map(c => c.command)).not.toContain('type')
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    // Names the true cause (the app's age) rather than a false one (the
+    // element's kind) — the distinction Henry's review of #530 asked for.
+    expect(result.steps[0]!.error).toContain('this app does not report whether an element accepts typed text')
+    expect(result.steps[0]!.error).toContain('predates the field')
+    expect(result.steps[0]!.error).not.toContain('does not accept typed text')
+  })
+
   it('refuses a disabled element without calling type', async () => {
     const { calls, result } = await runType({}, { disabled: true })
     expect(calls.map(c => c.command)).not.toContain('type')
