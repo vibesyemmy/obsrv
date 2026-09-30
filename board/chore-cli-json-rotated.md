@@ -46,8 +46,13 @@ passed**, and the flagless key set unchanged.
   **the flagless key list from the other side**, so an unconditional key would be caught here as well
   as in the guarded file.
 
-**Still waiting on Opeyemi, deliberately.** Wren asked that it hold regardless of the technical case,
+**AUTHORISED BY OPEYEMI 2026-09-30** — asked what he would be agreeing to, told that the procedural
+half was the real question (that the rule protects the file rather than the subject matter, since the
+key is flag-gated and `cli.spec.ts` was run rather than edited), and answered **"Yes, merge it"**. That
+settles the card's *"It isn't authorised"* and the reading of the rule together. The paragraph below is
+kept as written, because what it describes is what he was shown before he answered.
+
+**Was waiting on Opeyemi, deliberately.** Wren asked that it hold regardless of the technical case,
 and the card's own words are *"It isn't authorised."* A peer asking to hold is not something to
 out-argue at 3am on a card that says that. What changed is the price of his yes: the evidence is
 measured and the branch is ready, so approving it is a sentence rather than an evening.
-
