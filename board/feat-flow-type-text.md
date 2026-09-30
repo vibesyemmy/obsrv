@@ -162,3 +162,15 @@ real per-character keys then type over exactly as a mouse-drag selection. 8/8 on
 7/7 on `flow-selector-click.spec.ts` (no regression), full suite clean.
 
 Card's acceptance is now fully met. Nothing left open on `#530`.
+
+## REVIEW FOUND A SECOND GAP, 2026-09-30 — Henry, confirmed by Idris, fixed
+
+The masking rule covers the report's *text* alone. `flowRunner.ts` captures a step's own screenshot
+unconditionally, and `reportHtml.ts` renders it directly above the typed block — so `secret: true` on a
+field the page does not itself mark as a password (a one-time code, an API key: exactly the case the
+flag exists for) left the value in that image in plain sight, under a line saying "not recorded". A
+password field dodged this only by accident (the browser draws dots).
+
+Not fixed by redacting pixels — that needs the field's on-screen position at capture time, a bigger
+feature than this card asked for. Fixed by saying so: a masked step whose screenshot was captured now
+states that the mask does not cover it. Sabotage-verified (`b92727c`); full suite clean.
