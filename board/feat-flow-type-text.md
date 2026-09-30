@@ -2,7 +2,7 @@
 title: "a flow can enter text, so a user flow can reach the pages behind a form"
 column: doing
 owner: Dogu
-waiting: ""
+waiting: "review on #530 before merge"
 kind: feat
 order: 118
 ---
@@ -140,3 +140,25 @@ proving the `keyDown`/`char`/`keyUp` sequence actually produces a keystroke a Re
 rather than the `insertText`-shaped failure the whole design is built to avoid. Everything above is
 unit/browser-level against a mocked `deps.call`. This was also Henry's own flagged unproven claim — it
 stays open until measured, tracked in `#530`, not silently counted as done.
+
+## LIVE-VERIFIED, 2026-09-30 — measured offscreen rather than on the dev lane
+
+Henry's note: the claim is about Electron's input dispatch, which every e2e already drives offscreen —
+no dev lane, no desk, and he was asleep. `tests/e2e/flow-type-text.spec.ts` (fixture logs its own
+`keydown`/`beforeinput`/`input` per field, a `#controlled` field that discards any change not preceded
+by its own `keydown` — the React shape without React) confirms the transport claim: real
+`keyDown`/`char`/`keyUp` reach the page, in order, before the value changes. `insertText` was never
+substituted.
+
+**First run was not clean, and the thing it found was real, not the test.** Replace-by-default's
+select-all was a synthetic Cmd/Ctrl+A `keyDown`/`keyUp` pair. It reached the page (`e.metaKey` read
+true) but the browser's native "select all" edit command never ran — that command resolves through the
+OS's own key-equivalent dispatch, which `sendInputEvent`'s direct-to-renderer injection bypasses. A
+field already holding text, retyped without `append`, ended up with the new text **appended**, not
+replacing it — the silent-wrong-page shape this whole feature exists to rule out, one layer up from
+where the design first looked for it. Fixed in `src/shared/selectAll.ts` +
+`TargetSource.selectAllAt`: sets the DOM's own selection directly (`.select()` / a `Range`), which the
+real per-character keys then type over exactly as a mouse-drag selection. 8/8 on the spec after the fix,
+7/7 on `flow-selector-click.spec.ts` (no regression), full suite clean.
+
+Card's acceptance is now fully met. Nothing left open on `#530`.
