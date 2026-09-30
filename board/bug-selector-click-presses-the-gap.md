@@ -110,3 +110,26 @@ The check answers *what is drawn at this point*, which is what a click hits. It 
 the element's line boxes: a shape whose painted area misses all five candidates would refuse rather than
 find the point that exists. Exposing `getClientRects()` through the inspector would make it exact, and
 that is a follow-up with a measurement behind it rather than a guess — no such shape has been seen.
+
+## TWO LIMITS THE FIX DOES NOT TOUCH, NAMED 2026-09-30
+
+Found answering Opeyemi's *"is there anything we need to fix in the new feature?"*, and recorded here
+because a card that says only what was fixed invites the next reader to assume the rest works.
+
+**A selector cannot reach inside a shadow root or an iframe.** `inspect`'s selector form is
+`document.querySelector`, and `src/shared/inspect.ts:98-99` says so in as many words: *"A selector keeps
+the light DOM's meaning, as `document.querySelector` gives it: it does not pierce a shadow root. A point
+does."* So on a site built from custom elements a selector click refuses with **no element matches** —
+a sentence that reads like a typo rather than a structural limit. **This is a code reading, not a run:**
+nobody has yet driven a page with an open shadow root to see the wording a caller actually gets, and the
+wording is the part that would mislead. Idris confirmed the quote word for word.
+
+**`expect` is read on whatever page the step ended on.** The defect above made this visible: step 3's
+stated text was *found* while the click had not advanced the journey, because "Add to basket" is on the
+category page too. The fix removes that cause; the shape stays — a stated text can be true of the wrong
+page. The report prints the address beside the reading, so it is visible to a reader who looks, and it
+is stated as a caveat nowhere.
+
+Both are smaller than the gap they were found beside: **a flow cannot enter text at all**
+(`feat-flow-type-text`), which is what stands between the resolver's own headline example — *log in, add
+an item, checkout* — and a flow that runs it.
