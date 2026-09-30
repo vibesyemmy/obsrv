@@ -34,3 +34,39 @@ not, they are the runner's.
 
 **Desk rule:** view 2 launches the app and takes the desk by design, so it runs only when Opeyemi chooses
 to run it.
+
+## VIEW 1 RUN ON THE DESK BY OPEYEMI, 2026-09-30 — and the README's command was wrong in the blunt direction
+
+He downloaded `Obsrv-0.63.1-arm64.dmg` **from the GitHub release page in a browser**, which is the step
+`gh release download` cannot stand in for, and installed it.
+
+**What appeared:** the "damaged" dialog, exactly as the README warns. So the quarantine path is real on a
+desk and the runner's silence was the runner's, not the product's — which is what this view existed to
+find out.
+
+**What he had to run to get past it:**
+
+```
+xattr -dr com.apple.quarantine /Applications/Obsrv.app
+```
+
+**What the README told him to run**, in two places (Quickstart and Install):
+
+```
+xattr -cr /Applications/Obsrv.app
+```
+
+**Both work, and the README's is the blunter of the two.** `-c` clears **every** extended attribute on
+the bundle, recursively; `-d com.apple.quarantine` deletes the one attribute that causes the dialog.
+Telling a stranger to strip all metadata from something in `/Applications` when one named attribute is
+the problem is more than the situation asks for, and the narrower command is the one the wild actually
+produced. **Changed to the targeted form in both places.**
+
+**View 1 is closed.** View 2 — an MCP call launching the app from a fresh session, with the consent bar,
+the focus behaviour and the reply recorded — still needs his desk and is still not an agent's task.
+
+**Still open from the original card and not answered here:** whether a desk prints the six
+`Electron Helper … XPC error for connection com.apple.backupd.sandbox.xpc` lines every CLI run showed on
+the runners. Nobody looked while he was installing, and inventing an answer for it would defeat the
+point of the view.
+
