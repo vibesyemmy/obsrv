@@ -186,3 +186,16 @@ Fixed at `c656b5f`: `readoutShape` declares all four (optional, "absent from an 
 field", following `colorPainted`'s precedent), a `docs/breaking-changes.md` entry added, snapshot
 regenerated and diffed (exactly the four keys, nothing else moved). Full `mcp.spec.ts` (40/40) and full
 suite clean.
+
+## REFUSAL WORDING WAS WRONG FOR THE COMMON CASE, 2026-09-30 — Henry, fixed
+
+Henry pushed past "it fails safe" to ask whether the refusal *says* the true thing. It didn't: an app
+older than this feature has no `editable` key in its readout at all, and `flowRunner.ts:345` collapsed
+that absence into the same `false` a real non-input element gets — so a genuine text input, on an app
+too old to say, refused with "resolved to a non-input element that does not accept typed text". False,
+not vague: the element is an input. Not a safety gap (the refusal already happens before the masking
+decision either way), but the common case right now — every app until it's updated — deserved the true
+cause, not a misdirection to check the selector.
+
+Fixed at `96d5860`: `editable` keeps three states (`undefined`/`true`/`false`) instead of two; a refusal
+on an absent key now names the app's age, not the element's kind. Sabotage-verified. Full suite clean.
