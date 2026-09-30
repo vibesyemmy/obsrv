@@ -1,8 +1,7 @@
 ---
 title: "a flow can enter text, so a user flow can reach the pages behind a form"
-column: doing
+column: done
 owner: Dogu
-waiting: "Idris: byte-count and gate #530 before merge"
 kind: feat
 order: 118
 ---
@@ -199,3 +198,10 @@ cause, not a misdirection to check the selector.
 
 Fixed at `96d5860`: `editable` keeps three states (`undefined`/`true`/`false`) instead of two; a refusal
 on an absent key now names the app's age, not the element's kind. Sabotage-verified. Full suite clean.
+
+## MERGED, 2026-09-30 — `#530` at `001312a`, by Opeyemi
+
+Six findings across four contributors (Henry, Idris, Opeyemi's host, and me), every one independently
+verified before merge rather than taken on report: the select-all mechanism, the screenshot-masking gap,
+the `readoutShape` schema regression, the too-old-app refusal wording, plus the two prior board-hygiene
+trips on this same card's `waiting:` field. A flow can type.
