@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  candidatePoints,
   isWhollyVisible,
+  noPointHitsRefusal,
   noMatchRefusal,
   notBroughtIntoViewRefusal,
   SCROLL_PLACEMENT,
@@ -157,5 +159,76 @@ describe('the refusals, which must say which of the three it was', () => {
     expect(new Set(three).size).toBe(3)
     // And none of them is the generic sentence this card exists to replace.
     for (const r of three) expect(r).not.toBe('click failed')
+  })
+})
+
+/**
+ * The candidate points, and the measurement that made them necessary.
+ *
+ * `bug-selector-click-presses-the-gap`: the border box of a **wrapped inline** element is the union of
+ * its line boxes plus the leading between them, and that gap paints as the parent block. On
+ * `books.toscrape.com` at 360 px the anchor's lines were 514.2–531.2 and 534.2–551.2, the union box
+ * 514.2–551.2, and its centre 532.7 — strictly inside the 3 px gap, where `elementFromPoint` answers
+ * `<h3>`. The centre was the only point the first version tried.
+ */
+describe('the points worth trying inside a box', () => {
+  it('offers the centre first, because for a block element it is the right point', () => {
+    expect(candidatePoints({ x: 100, y: 200, width: 80, height: 40 }, PHONE)[0]).toEqual({ x: 140, y: 220 })
+  })
+
+  it('offers points inside the first and last lines of a two-line inline, which the centre misses', () => {
+    // The real geometry, viewport-relative: a 37px-tall union box whose two 17px
+    // lines leave a ~3px gap in the middle.
+    const wrapped = { x: 77.6, y: 266.8, width: 77.3, height: 36.5 }
+    const points = candidatePoints(wrapped, PHONE)
+    const gapTop = 266.8 + 17
+    const gapBottom = 266.8 + 20
+    const inGap = (p: { y: number }): boolean => p.y >= gapTop && p.y <= gapBottom
+    expect(inGap(points[0]!), 'the centre is the point that lands in the gap — that is the defect').toBe(true)
+    // And what the fix adds: points that are NOT in the gap, above and below it.
+    expect(points.some(p => p.y < gapTop), 'no candidate lands in the first line').toBe(true)
+    expect(points.some(p => p.y > gapBottom), 'no candidate lands in the last line').toBe(true)
+  })
+
+  it('reaches leftward as well, for a final line shorter than the box', () => {
+    const points = candidatePoints({ x: 0, y: 0, width: 200, height: 40 }, PHONE)
+    expect(points.some(p => p.x < 100)).toBe(true)
+  })
+
+  it('keeps every candidate inside the viewport, since a click outside it is refused', () => {
+    const straddling = { x: -40, y: 780, width: 300, height: 100 }
+    for (const p of candidatePoints(straddling, PHONE)) {
+      expect(p.x).toBeGreaterThanOrEqual(0)
+      expect(p.y).toBeGreaterThanOrEqual(0)
+      expect(p.x).toBeLessThan(PHONE.width)
+      expect(p.y).toBeLessThan(PHONE.height)
+    }
+  })
+
+  it('returns nothing for a box with no on-screen part, rather than a clamped guess', () => {
+    expect(candidatePoints({ x: 0, y: 900, width: 10, height: 10 }, PHONE)).toEqual([])
+  })
+
+  it('does not repeat a point, so a tiny box costs one probe and not five', () => {
+    const tiny = { x: 10, y: 10, width: 1, height: 1 }
+    const points = candidatePoints(tiny, PHONE)
+    expect(points).toHaveLength(1)
+  })
+})
+
+describe('the refusal for a box whose points all miss', () => {
+  it('names what was tried and what answered instead', () => {
+    const r = noPointHitsRefusal('.product_pod h3 a', { x: 77.6, y: 266.8, width: 77.3, height: 36.5 }, 5, ['h3', 'h3'])
+    expect(r).toContain('.product_pod h3 a')
+    expect(r).toContain('no point inside it')
+    // Deduplicated: five probes hitting the same parent is one fact, not five.
+    expect(r).toContain('resolved to h3 instead')
+    // And it names the shape, because "click failed" is what this whole card is about.
+    expect(r).toContain('text wraps')
+  })
+
+  it('says nothing about what it saw when it saw nothing, rather than an empty list', () => {
+    const r = noPointHitsRefusal('.x', { x: 0, y: 0, width: 10, height: 10 }, 5, [])
+    expect(r).not.toContain('instead')
   })
 })

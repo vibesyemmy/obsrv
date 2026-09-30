@@ -42,8 +42,9 @@ describe('runFlow', () => {
       'captureRaster',
       'status',
       'networkRecord',
-      'inspect',
-      'status',
+      'inspect', // locate the selector
+      'status', // the viewport `click` is bounds-checked against
+      'inspect', // **what is actually drawn at the point** — see `bug-selector-click-presses-the-gap`
       'click',
       'captureRaster',
       'status',
@@ -60,7 +61,10 @@ describe('runFlow', () => {
     // shape: `{ target }` went out on the wire before this and 400'd one layer
     // down. The point is the centre of the box `inspect` reported.
     expect(issued('click')).toEqual([{ x: 140, y: 220 }])
-    expect(issued('inspect')).toEqual([{ selector: '.checkout' }])
+    // Two inspects, and the pair is the point: the first asks *where is this
+    // selector*, the second asks *what is drawn at the point we chose*. Only the
+    // second can catch a box that contains points its element does not paint.
+    expect(issued('inspect')).toEqual([{ selector: '.checkout' }, { x: 140, y: 220 }])
   })
 
   it("records settled: false and unsettledReason when a step's settle check says so", async () => {
@@ -566,7 +570,11 @@ describe('runFlow: a click step that names a selector', () => {
     // Locate, size the viewport, scroll, **look again**, press. The second look
     // is the load-bearing one: a scroll can land somewhere other than where it
     // was aimed, and the click is computed from where the element ended up.
-    expect(commands.slice(0, 5)).toEqual(['inspect', 'status', 'scroll', 'inspect', 'click'])
+    // Locate, size the viewport, scroll, **look again**, verify the point is on the
+    // element, press. The second look is where a scroll that landed short shows
+    // up; the third call asks what is drawn at the chosen point, which is the
+    // check `bug-selector-click-presses-the-gap` bought.
+    expect(commands.slice(0, 6)).toEqual(['inspect', 'status', 'scroll', 'inspect', 'inspect', 'click'])
     expect(result.steps[0]).toMatchObject({ status: 'ran' })
     const payload = (command: string) => calls.filter(c => c.command === command).map(c => c.payload)
     expect(payload('scroll')).toEqual([{ x: 0, y: Math.round(1200 - 844 / 3) }])
@@ -714,5 +722,113 @@ describe('runFlow: a click step that names a selector', () => {
     // step that was already complete would change timing for every existing flow.
     expect(calls.map(c => c.command)).toEqual(['click', 'captureRaster', 'status', 'networkRecord'])
     expect(calls[0]!.payload).toEqual({ x: 10, y: 20 })
+  })
+})
+
+/**
+ * The wrapped-inline case, at the level that sequences the calls.
+ *
+ * `bug-selector-click-presses-the-gap`, found on the first real drive of 0.63.0: a click by selector
+ * pressed the centre of a link's border box, which for a two-line link is the leading between its line
+ * boxes — the parent block's paint. The press landed on an `<h3>`, the step reported `ran`, and the
+ * flow described a journey it never made.
+ *
+ * The stubs here model the page the way the browser answers it: `inspect {selector}` gives the union
+ * box; `inspect {at}` gives whatever is drawn at that point — the `<h3>` in the gap, the `<a>` inside a
+ * line.
+ */
+describe('runFlow: a click whose element does not paint its own box centre', () => {
+  const VIEWPORT = { cssWidth: 390, cssHeight: 844 }
+  /** The measured geometry: two 17px lines with a 3px gap, union 36.5px tall. */
+  const LINK = { x: 77.6, y: 266.8, width: 77.3, height: 36.5 }
+  const GAP = { top: LINK.y + 17, bottom: LINK.y + 20 }
+  const H3 = { x: 60, y: 265.3, width: 112.5, height: 40 }
+
+  const page =
+    (onHit: (p: { x: number; y: number }) => 'a' | 'h3') =>
+    async (command: string, payload: Record<string, unknown> = {}): Promise<Record<string, unknown>> => {
+      if (command === 'captureRaster') return { settled: true }
+      if (command === 'status') return VIEWPORT
+      if (command === 'inspect') {
+        if (payload['x'] !== undefined) {
+          const p = payload as unknown as { x: number; y: number }
+          return onHit(p) === 'a'
+            ? { ok: true, found: true, readout: { rect: LINK, pageRect: LINK, element: 'a' } }
+            : { ok: true, found: true, readout: { rect: H3, pageRect: H3, element: 'h3' } }
+        }
+        return { ok: true, found: true, readout: { rect: LINK, pageRect: LINK, element: 'a' } }
+      }
+      return { ok: true }
+    }
+
+  /** The page as measured: the gap answers `h3`, everything else in the box answers `a`. */
+  const wrapped = (p: { x: number; y: number }): 'a' | 'h3' => (p.y >= GAP.top && p.y <= GAP.bottom ? 'h3' : 'a')
+
+  it('presses a point the element actually paints, not the centre of its box', async () => {
+    const payloads: Array<Record<string, unknown>> = []
+    const result = await runFlow(flow([{ action: 'click', target: '.product_pod h3 a' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'click') payloads.push(payload)
+        return page(wrapped)(command, payload)
+      },
+    })
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    const pressed = payloads[0] as { x: number; y: number }
+    // The centre would be y=285, inside the gap. Whatever it chose, it must not be.
+    expect(pressed.y >= GAP.top && pressed.y <= GAP.bottom, `pressed ${pressed.y}, which is in the inter-line gap`).toBe(false)
+  })
+
+  it('refuses, rather than reporting ran, when no point inside the box resolves to the element', async () => {
+    // A box whose every point answers something else — the failure mode this card
+    // is about, with the recovery removed.
+    const result = await runFlow(flow([{ action: 'click', target: '.product_pod h3 a' }]), {
+      call: async (command, payload = {}) => page(() => 'h3')(command, payload),
+    })
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('no point inside it')
+    expect(result.steps[0]!.error).toContain('h3')
+  })
+
+  it('refuses, and presses nothing, when the check itself cannot run', async () => {
+    const payloads: Array<Record<string, unknown>> = []
+    const result = await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'click') payloads.push(payload)
+        if (command === 'inspect' && payload['x'] !== undefined) throw new Error('inspect is unavailable')
+        return page(wrapped)(command, payload)
+      },
+    })
+    // **The first version pressed anyway**, on the reasoning that the probe is not
+    // the product — and that swallowed a 400 from sending the wrong payload shape,
+    // so the check silently did nothing while appearing to work. "Could not check"
+    // and "checked and fine" must not produce the same press.
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('could not check what is drawn')
+    expect(payloads).toEqual([])
+  })
+
+  it('asks the control command in ITS shape — a flat point, not the MCP tool wrapper', async () => {
+    // The 400 this cost an hour: `parseInspectRequest` takes `{ x, y }` at the top
+    // level; `{ at: { x, y } }` is the shape the MCP tool takes, one layer up.
+    const probes: Array<Record<string, unknown>> = []
+    await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'inspect' && payload['selector'] === undefined) probes.push(payload)
+        return page(() => 'a')(command, payload)
+      },
+    })
+    expect(probes).toHaveLength(1)
+    expect(Object.keys(probes[0]!).sort()).toEqual(['x', 'y'])
+  })
+
+  it('costs exactly one extra call when the centre already hits, which is the common case', async () => {
+    const commands: string[] = []
+    await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async (command, payload = {}) => {
+        commands.push(command)
+        return page(() => 'a')(command, payload)
+      },
+    })
+    expect(commands.filter(c => c === 'inspect')).toHaveLength(2)
   })
 })

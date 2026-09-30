@@ -14,8 +14,11 @@
 import type { NetworkRecord, NetworkState } from '../shared/networkRecord'
 import type { Flow, FlowStep } from '../shared/flow'
 import {
+  candidatePoints,
   isWhollyVisible,
   noMatchRefusal,
+  noPointHitsRefusal,
+  probeUnavailableRefusal,
   notBroughtIntoViewRefusal,
   scrollToShow,
   visibleCentre,
@@ -205,6 +208,61 @@ function boxOf(v: unknown): Box | undefined {
 }
 
 /**
+ * The first candidate point inside the box that **resolves to the element itself**, asked of the app
+ * rather than assumed from the geometry.
+ *
+ * **Bought by `bug-selector-click-presses-the-gap`.** The centre of a wrapped inline element's border
+ * box lands in the leading between its line boxes, which paints as the parent block — so the press
+ * reached an `<h3>`, the step reported `ran`, and the flow described a journey it never made. Geometry
+ * alone cannot tell: a box legitimately contains points its element does not paint.
+ *
+ * The check is a call Obsrv already ships. `inspect { at }` answers *what is drawn at this point*, and
+ * that is exactly the question — it is how the defect was diagnosed, so using it here needs no new
+ * machinery and no new public shape.
+ *
+ * **Identity is the element's own box, not its name.** Two links in a list are both `a` with the same
+ * classes; what separates them is where they are. A point resolving to an element whose box equals the
+ * one we measured is that element (or a descendant filling it), which is what a click needs.
+ */
+async function firstPointThatHits(
+  deps: FlowRunnerDeps,
+  selector: string,
+  rect: Box,
+  viewport: Viewport,
+): Promise<{ point: { x: number; y: number } } | { saw: string[]; tried: number } | { unavailable: string }> {
+  const candidates = candidatePoints(rect, viewport)
+  const saw: string[] = []
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
+  for (const point of candidates) {
+    let r: Record<string, unknown>
+    try {
+      // **`{ x, y }`, flat.** The control command takes the point at the top level
+      // (`parseInspectRequest`); `{ at: { x, y } }` is the MCP tool's shape, one
+      // layer up. Sending the wrong one answers 400, and the first version of this
+      // probe did exactly that — then swallowed the rejection and pressed the
+      // centre anyway, so the check looked like it ran and changed nothing. The
+      // e2e caught it; the silent fallback is why it took a second look to see
+      // that the fix was not working.
+      r = await deps.call('inspect', { x: point.x, y: point.y })
+    } catch (e) {
+      // **No silent fallback.** A probe that cannot answer means the point is
+      // unverified, and pressing an unverified point is the defect this whole
+      // change is about — it would report `ran` having possibly pressed the page
+      // behind the element. The step fails instead, naming what could not be done.
+      return { unavailable: e instanceof Error ? e.message : String(e) }
+    }
+    if (r['found'] !== true) continue
+    const readout = (typeof r['readout'] === 'object' && r['readout'] !== null ? r['readout'] : {}) as Record<string, unknown>
+    const hit = boxOf(readout['rect'])
+    if (hit !== undefined && near(hit.x, rect.x) && near(hit.y, rect.y) && near(hit.width, rect.width) && near(hit.height, rect.height)) {
+      return { point }
+    }
+    if (typeof readout['element'] === 'string') saw.push(readout['element'])
+  }
+  return { saw, tried: candidates.length }
+}
+
+/**
  * A selector, pressed: `inspect` for the box, a `scroll` when it is off-screen,
  * and the visible centre as the point — the three-step join
  * `feat-flow-selector-click` is about.
@@ -276,11 +334,17 @@ async function pointForSelector(
   }
 
   if (isWhollyVisible(rect, viewport)) {
-    const point = visibleCentre(rect, viewport)
-    if (point === null) {
+    if (visibleCentre(rect, viewport) === null) {
       return { refusal: notBroughtIntoViewRefusal(selector, rect, viewport, { x: 0, y: 0 }), resolved: { selector, rect, pageRect, viewport } }
     }
-    return { point, resolved: { selector, rect, pageRect, viewport, point } }
+    const hit = await firstPointThatHits(deps, selector, rect, viewport)
+    if ('unavailable' in hit) {
+      return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: { selector, rect, pageRect, viewport } }
+    }
+    if (!('point' in hit)) {
+      return { refusal: noPointHitsRefusal(selector, rect, hit.tried, hit.saw), resolved: { selector, rect, pageRect, viewport } }
+    }
+    return { point: hit.point, resolved: { selector, rect, pageRect, viewport, point: hit.point } }
   }
 
   // Off-screen: scroll, then measure again.
@@ -288,12 +352,19 @@ async function pointForSelector(
   await deps.call('scroll', { x: scrolledTo.x, y: scrolledTo.y })
   const second = await look()
   if ('refusal' in second) return { refusal: second.refusal, resolved: { selector, rect, pageRect, viewport, scrolledTo } }
-  const point = visibleCentre(second.rect, viewport)
   const base: FlowStepResolution = { selector, rect: second.rect, pageRect: second.pageRect, viewport, scrolledTo }
-  if (point === null) {
+  if (visibleCentre(second.rect, viewport) === null) {
     return { refusal: notBroughtIntoViewRefusal(selector, second.rect, viewport, scrolledTo), resolved: base }
   }
-  return { point, resolved: { ...base, point } }
+  // Same check after the scroll as before it: the element that moved into view is
+  // as likely to be a wrapped inline as one that was already there, and the
+  // failing case in the wild was exactly this path.
+  const hit = await firstPointThatHits(deps, selector, second.rect, viewport)
+  if ('unavailable' in hit) return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: base }
+  if (!('point' in hit)) {
+    return { refusal: noPointHitsRefusal(selector, second.rect, hit.tried, hit.saw), resolved: base }
+  }
+  return { point: hit.point, resolved: { ...base, point: hit.point } }
 }
 
 async function readPageState(deps: FlowRunnerDeps): Promise<FlowStepPage | undefined> {

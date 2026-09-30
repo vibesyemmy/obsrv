@@ -172,3 +172,48 @@ test('two selector clicks in one flow both land, over the same held session', as
   // so — a `ran` pair is satisfied by two clicks that both hit the header.
   await expect.poll(clicksSoFar, { timeout: 5_000 }).toEqual(['top', 'below'])
 })
+
+/**
+ * **The defect the first real drive of 0.63.0 found** (`bug-selector-click-presses-the-gap`), as the
+ * e2e it should have had.
+ *
+ * A link whose text wraps has a border box that is the union of its line boxes **plus the leading
+ * between them**, and that gap paints as the block around it. Pressing the box's centre therefore
+ * reached an `<h3>` on a real page, the step reported `ran`, and the flow described a journey it never
+ * made. The fixture's every other clickable is a **block** element, whose border box is its painted
+ * area — a shape that cannot exhibit this, which is why eighteen green runs said nothing.
+ *
+ * `#wrap-host` logs its own hits, so a press landing in the gap is visible rather than silent — the
+ * same trick as the fixed header two tests up.
+ */
+test('a click by selector presses a point the element paints, not the gap between its lines', async () => {
+  await reset()
+  const result = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link' }] }, { call })
+  expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+
+  // **The premise, asserted rather than assumed.** If the link did not wrap on this
+  // screen there is no gap, and the assertion below would pass on the broken build
+  // too — the shape this whole card is about.
+  //
+  // The floor is measured, not derived: a one-line inline box here is ~16.5 px
+  // (font metrics, not `line-height`), and the wrapped union measures **47.5 px**
+  // — the two line boxes plus the leading between them. My first version used
+  // `2.2 × fontSize × 1.6` on the assumption that the union is two line-heights
+  // tall, and it is not: `line-height` spaces the lines, while the union runs from
+  // the first line box's top to the last one's bottom. 21 px cannot be one line
+  // and is comfortably under two.
+  const box = result.steps[0]!.resolved!.rect!
+  expect(box.height, `the link did not wrap (${box.width}x${box.height}), so this test could not detect the defect`).toBeGreaterThan(21)
+
+  // And the click reached the link, not the paragraph around it.
+  //
+  // **The paragraph logs too, and that is correct** — the event bubbles from the
+  // link to its parent, so a hit reads `['wrapped', 'host']` in that order. My
+  // first assertion demanded `['wrapped']` alone and failed on a working build,
+  // which is the test being wrong about the DOM rather than the product being
+  // wrong. What separates hit from miss is the **first** entry: a press landing in
+  // the inter-line gap reaches only the paragraph and reads `['host']`.
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped')
+  const log = await clicksSoFar()
+  expect(log[0], `the paragraph received the click before the link: ${JSON.stringify(log)}`).toBe('wrapped')
+})

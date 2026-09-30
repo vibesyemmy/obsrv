@@ -17,6 +17,11 @@
       #below-cta { margin: 0 0 0 20px; }
       #hidden-cta { display: none; }
       #flat { height: 0; overflow: hidden; }
+      /* A wrapped inline link, the shape `bug-selector-click-presses-the-gap` is
+         about: narrow enough that the text runs to two lines, with line-height
+         leaving a gap between them. The link's border box spans both lines AND
+         that gap, and the gap paints as the <p> around it. */
+      #wrap-host { width: 150px; margin: 24px 0 0 20px; line-height: 2.2; font-size: 14px; }
     </style>
   </head>
   <body>
@@ -26,6 +31,9 @@
     <button id="below-cta" onclick="log('below')">below the fold</button>
     <button id="hidden-cta" onclick="log('hidden')">display: none</button>
     <div id="flat" onclick="log('flat')">zero height</div>
+    <p id="wrap-host" onclick="log('host')">
+      <a id="wrapped-link" href="#" onclick="log('wrapped'); return false;">A product title long enough to wrap</a>
+    </p>
     <div class="spacer"></div>
     <script>
       // The click log lives in the title so a test can read it with one
