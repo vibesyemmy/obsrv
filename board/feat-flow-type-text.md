@@ -174,3 +174,15 @@ password field dodged this only by accident (the browser draws dots).
 Not fixed by redacting pixels — that needs the field's on-screen position at capture time, a bigger
 feature than this card asked for. Fixed by saying so: a masked step whose screenshot was captured now
 states that the mask does not cover it. Sabotage-verified (`b92727c`); full suite clean.
+
+## CI CAUGHT ITS OWN GAP, 2026-09-30 — `readoutShape` schema, fixed by Idris's diagnosis + Henry's second find
+
+`chore-strict-output-under-test` failed `#530`'s first real CI run (8 distinct tests, 16 `✘` counted):
+`server.ts`'s declared `obsrv_inspect` output schema was never updated for the four new readout fields,
+so every live inspect that found an element replied with an undeclared key. Idris found and reproduced
+the root cause locally; Henry then found the second half — `docs/public-shape.json` still listed 58 keys,
+none of the four new ones, since a key that never reaches the schema never reaches the snapshot either.
+Fixed at `c656b5f`: `readoutShape` declares all four (optional, "absent from an app older than the
+field", following `colorPainted`'s precedent), a `docs/breaking-changes.md` entry added, snapshot
+regenerated and diffed (exactly the four keys, nothing else moved). Full `mcp.spec.ts` (40/40) and full
+suite clean.
