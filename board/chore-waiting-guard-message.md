@@ -48,3 +48,30 @@ Dogu's exact `"review on #530 before merge"`, which the second message now echoe
 It does not stop the trip happening — the field is still discoverable only by failing. A card template or
 a scaffold would, and neither exists; that is a bigger change than the evidence justifies, and this one
 makes the failure cost seconds rather than a round trip.
+
+## MEASURED LIMITATION, 2026-09-30 — a `waiting:` value containing a quote garbles the suggested line
+
+**Reviewed after the merge by Idris and Dogu, independently, each reproducing it rather than taking my
+word for the risk I had flagged.** The wrong-shape message builds its *wanted* line from the rejected
+value, so a value that itself contains a `"` produces unescaped internal quotes:
+
+```
+got:      "say "hi" before merge"
+wanted:   "Idris: say "hi" before merge"
+```
+
+**Display only.** The card's own parsing is unaffected — this is the error message's suggestion, not the
+value it read — so a card that trips it still fails for the right reason and still gets a usable fix,
+just an ugly one. **Not fixed**, because every `waiting:` value in the repo's history is a plain sentence
+and escaping would add a branch to an error path to make a case nobody has hit look tidier.
+
+**The trigger for revisiting:** a real card whose `waiting:` needs a quoted phrase. Then escape it, and
+the test is the garbled line above.
+
+## The placeholder is a real name on purpose
+
+Both reviewers offered `<who>:` instead of `"Idris:"` in the illustrative example and left the call to
+me. **Keeping the name**, because Idris then measured the alternative: `/^[^:]{1,40}: \S/.test("<who>:
+review on #530")` → **`true`**. A literal placeholder pasted from the message **passes the guard**, so
+the card would carry a `waiting:` naming nobody and nothing would object. A wrong name is at least a
+name someone corrects; a placeholder that satisfies the check makes the guard quiet.
