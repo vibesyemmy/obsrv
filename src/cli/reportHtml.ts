@@ -673,12 +673,24 @@ function clickBlock(c: FlowReportClick | undefined): string {
  * absence, not a placeholder in its place, is what "not recorded" means:
  * this function renders exactly the two shapes the runner can send, and
  * invents nothing in between.
+ *
+ * `hasScreenshot` exists because the mask covers this text alone. Henry's
+ * review of `#530` found the gap: a step's own screenshot is a raster of the
+ * page as it stood, and for `secret: true` on a field the page does not
+ * itself mark as a password — a one-time code, an API key — the value is
+ * rendered there in plain sight regardless of what this paragraph says. A
+ * reader seeing "not recorded" directly under an image of the value would
+ * reasonably conclude the report holds no trace of it, so the masked
+ * sentence says otherwise rather than leaving that read uncorrected.
+ * Redacting the pixels themselves would need to know where the field sat at
+ * capture time, which is a larger feature this is not.
  */
-function typedBlock(t: FlowReportTyped | undefined): string {
+function typedBlock(t: FlowReportTyped | undefined, hasScreenshot: boolean): string {
   if (t === undefined) return ''
   const chars = `${t.length} character${t.length === 1 ? '' : 's'}`
   if (t.maskedBecause !== undefined) {
-    return `<p class="typed">Typed ${chars} <span class="masked">(not recorded — ${escapeHtml(t.maskedBecause)})</span>.</p>`
+    const screenshotNote = hasScreenshot ? ' The screenshot above is of the page as it was — this mask does not redact it.' : ''
+    return `<p class="typed">Typed ${chars} <span class="masked">(not recorded — ${escapeHtml(t.maskedBecause)})</span>.${screenshotNote}</p>`
   }
   return `<p class="typed">Typed ${chars}: <q>${escapeHtml(t.value ?? '')}</q></p>`
 }
@@ -790,7 +802,7 @@ function flowStepSection(s: FlowReportStep, n: number): string {
   return (
     `<div class="step" id="step-${n}"><h3>Step ${n} — <code>${escapeHtml(s.action)}</code>${where} <span class="state ${st.cls}">${st.label}</span></h3>` +
     resolvedFrom(s) +
-    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${clickBlock(s.clickedAt)}${typedBlock(s.typed)}${ranAt}${networkBlock(s.network)}${reply}</div>`
+    `<div class="halves">${measuredHalf(s)}${askedHalf(s)}</div>${shot}${clickBlock(s.clickedAt)}${typedBlock(s.typed, s.data !== undefined)}${ranAt}${networkBlock(s.network)}${reply}</div>`
   )
 }
 

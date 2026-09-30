@@ -463,6 +463,24 @@ describe('a type step, in the report — the masking decision is rendered, never
     expect(html).toContain('secret: true')
   })
 
+  it('masked and a screenshot was captured: says the image is not redacted either', () => {
+    const html = flowReportHtml(data([{ ...typeStep({ length: 6, maskedBecause: 'secret: true' }), data: 'ZmFrZQ==' }]))
+    expect(html).toContain('not recorded')
+    expect(html).toContain('screenshot above is of the page as it was')
+  })
+
+  it('masked but no screenshot was captured: says nothing about one', () => {
+    const html = flowReportHtml(data([typeStep({ length: 6, maskedBecause: 'secret: true' })]))
+    expect(html).toContain('not recorded')
+    expect(html).not.toContain('screenshot above')
+  })
+
+  it('unmasked, even with a screenshot: no redaction caveat, because there is nothing to redact', () => {
+    const html = flowReportHtml(data([{ ...typeStep({ length: 5, value: 'hello' }), data: 'ZmFrZQ==' }]))
+    expect(html).toContain('<q>hello</q>')
+    expect(html).not.toContain('screenshot above')
+  })
+
   it('renders nothing at all for a step with no typed field — a refused or non-type step', () => {
     const html = flowReportHtml(data([{ action: 'click', target: '.x', status: 'ran' }]))
     expect(html).not.toContain('class="typed"')
