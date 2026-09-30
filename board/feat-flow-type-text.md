@@ -1,6 +1,7 @@
 ---
 title: "a flow can enter text, so a user flow can reach the pages behind a form"
-column: backlog
+column: doing
+owner: Dogu
 kind: feat
 order: 118
 ---
@@ -123,3 +124,18 @@ that `sendInputEvent` is the seam this app already uses for input, which is a co
 documented behaviour I have not measured in this app, and whoever builds this should measure it against
 a real controlled input before trusting my sentence about it.
 
+## CLAIMED AND BUILT, 2026-09-30 — Dogu, #530
+
+Built to this proposal as merged (`#529`/`e014d43`): `pointForSelector` reused whole, real
+`keyDown`/`char`/`keyUp` via the existing `sendInputEvent` seam, mask keyed on page-declared
+`type="password"` with no `reveal` override plus `secret: true` for the rest, replace-by-default with
+`append: true`, the four refusal shapes (unresolved, non-editable, disabled, readOnly). Sabotage-tested
+the masking invariant at both layers it lives in (`flowRunner`'s decision, `reportHtml`'s rendering) —
+each caught by exactly the test written for it. Typecheck, build, full suite (1987/1988, 1 pre-existing
+skip) all clean.
+
+**Not yet done — the card's own acceptance clause**: a live run against a real controlled input,
+proving the `keyDown`/`char`/`keyUp` sequence actually produces a keystroke a React `onChange` sees,
+rather than the `insertText`-shaped failure the whole design is built to avoid. Everything above is
+unit/browser-level against a mocked `deps.call`. This was also Henry's own flagged unproven claim — it
+stays open until measured, tracked in `#530`, not silently counted as done.
