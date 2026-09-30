@@ -24,6 +24,37 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### The tools refuse an app older than 0.58.0
+
+**Opeyemi's decision, `chore-minimum-app-version`:** *"set the floor at 0.58.0 and refuse below it."*
+The npm package updates ahead of the installed app, so a newer server routinely drives an older one,
+and code paths existed only to speak to apps that predate a field — six of them by the time the
+decision was taken, against a card whose stated trigger was four.
+
+**What breaks:** every live call — `obsrv_snap`, `obsrv_audit`, `obsrv_lint`, `obsrv_inspect`,
+`obsrv_drive`, `obsrv_flow` — answers an error instead of a measurement when the app reports a version
+below **0.58.0**, or reports none at all. The refusal names both versions and points at the releases
+page, because the next action is an upgrade rather than a change to the selector, the argument or the
+page.
+
+**Why it refuses rather than falling back to headless:** headless is a different measurement, and
+taking it silently would hide exactly the skew the floor exists to surface. A caller who wants a
+headless answer asks for one by name.
+
+**An unreadable version counts as too old.** "This app is ancient" and "this app answered something
+unparseable" want the same action, and proceeding because we could not tell is the silence this repo
+keeps removing.
+
+**Two sentences went with it**, both about apps that can no longer arrive: the walk's *"the app
+predates page-wise scrolling (0.41.0)"* — which was a version guess keyed on a 400 from `scroll`, and
+would now name the wrong cause for a scroll an app genuinely refused — and the capture's *"this app is
+older than the capture's settle verdict"*, which shipped in 0.34.0.
+
+**One sentence stayed, and the card says why:** `walkNothingNote`'s fallthrough reads as an old-app
+path but is also reachable from a current app that sends partial `blocked` data, so removing it would
+have deleted a live case. The floor retires two of the five, not three — the number quoted when the
+decision was taken.
+
 ### `obsrv_inspect`'s readout gains `editable`, `inputType`, `disabled` and `readOnly`
 
 `InspectReadout` carries these four from `feat-flow-type-text`: whether the

@@ -38,7 +38,15 @@ export const WALK_DWELL_MS = 350
  * walk stops, `atEnd` stays false, and a note says so.
  */
 export const WALK_BUDGET_MS = 15_000
-export const WALK_OLDER_APP_NOTE = 'the app predates page-wise scrolling (0.41.0); measured without walking.'
+/**
+ * **Removed with the 0.58.0 floor** (`chore-minimum-app-version`), and not because it became unreachable
+ * — because it became **wrong**.
+ *
+ * It read a **400 from `scroll`** as "the app predates page-wise scrolling (0.41.0)", a version claim
+ * keyed on a status code. An app that old cannot be driven at all now, so a 400 here is a scroll the app
+ * genuinely refused, and the sentence would have named the wrong cause with complete confidence. The
+ * general note quotes the error instead, which is the true thing.
+ */
 
 export interface WalkDeps {
   /** One control command against the live app; `controlCall` bound to its info in production. */
@@ -114,7 +122,6 @@ export async function walkPage(deps: WalkDeps): Promise<WalkOutcome> {
   try {
     await scroll('top')
   } catch (e) {
-    if (isOlderApp(e)) return { notes: [WALK_OLDER_APP_NOTE] }
     notes.push(`the walk was cut short before it began (${message(e)}); measured without walking.`)
     return { notes }
   }
@@ -262,10 +269,6 @@ function hostFrom(raw: unknown): WalkHost | undefined {
 }
 
 /** A 400 to `scroll { page }` is an app whose `parseScrollRequest` predates `page` (before 0.41.0). */
-function isOlderApp(e: unknown): boolean {
-  return e instanceof ControlCallError && e.statusCode === 400
-}
-
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
