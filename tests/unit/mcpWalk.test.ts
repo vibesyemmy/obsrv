@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ControlCallError } from '../../src/mcp/control'
-import { WALK_BUDGET_MS, WALK_DWELL_MS, WALK_OLDER_APP_NOTE, walkPage, type WalkDeps } from '../../src/mcp/walk'
+import { WALK_BUDGET_MS, WALK_DWELL_MS, walkPage, type WalkDeps } from '../../src/mcp/walk'
 import { WALK_NOTHING_NOTE } from '../../src/shared/walkCoverage'
 
 /**
@@ -91,10 +91,19 @@ describe('walkPage', () => {
     expect(d.commands.map(c => c.payload['page'])).toEqual(['top', 'next', 'next', 'top'])
   })
 
-  it('an app that predates page-wise scrolling: no walk, the note, nothing else asked of it', async () => {
+  it('a refused first scroll quotes the refusal rather than blaming the app version', async () => {
+    // **This test asserted the opposite until the 0.58.0 floor**
+    // (`chore-minimum-app-version`). A 400 from the first scroll was read as "the
+    // app predates page-wise scrolling (0.41.0)" — a version guess keyed on a
+    // status code. Below the floor such an app cannot be driven at all, so a 400
+    // here is a scroll the app genuinely refused, and naming a version would be
+    // confidently wrong.
     const d = deps([], { top: older() })
     const r = await walkPage(d)
-    expect(r).toEqual({ notes: [WALK_OLDER_APP_NOTE] })
+    expect(r.walked).toBeUndefined()
+    expect(r.notes).toHaveLength(1)
+    expect(r.notes[0]).toContain('cut short before it began')
+    expect(r.notes[0], 'the note still blames a version rather than quoting the refusal').not.toMatch(/0\.41\.0|predates/)
     expect(d.commands).toHaveLength(1)
     expect(d.slept).toEqual([])
   })

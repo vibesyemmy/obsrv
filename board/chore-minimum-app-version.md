@@ -89,3 +89,36 @@ the card's stated trigger was a fourth.
 - **The three retired sentences come out in the same change**, with the register entry naming the floor
   as the reason — otherwise the code keeps the words for a case the tools no longer accept.
 
+## BUILT 2026-09-30 — and the "three of five" I quoted when the decision was taken was wrong
+
+**Two, not three.** I told Opeyemi 0.58.0 *"retires three of the five sentences outright"*, and that
+number was part of why he chose it. Checking each against the code before cutting:
+
+| sentence | verdict |
+| --- | --- |
+| `walk.ts` — *"the app predates page-wise scrolling (0.41.0)"* | **removed**, and not for being unreachable — for being **wrong**. It read a **400 from `scroll`** as a version claim. Below the floor such an app cannot be driven at all, so a 400 there is now a scroll the app genuinely refused, and the sentence would name the wrong cause confidently. The general note quotes the error instead |
+| `server.ts` — *"older than the capture's settle verdict"* | **removed**: the verdict shipped in 0.34.0, so every app the tools accept sends one |
+| `walkCoverage.ts` fallthrough — *"content in an iframe, in a shadow root, or in a container that scrolls by transform…"* | **kept**, and this is the correction. It is not only the no-`blocked` path: the same branch answers a **current** app that sends `blocked` without `frames`, which `parseWalkBlocked` can produce. Removing it would have deleted a live case for a tidy count |
+| `walkCoverage.ts:184` / `:210` | kept, as the decision expected — they describe an app inside the supported range |
+
+**The decision stands on the corrected number.** 0.58.0 is still the right floor: it is where `blocked`
+becomes universally present, which is what makes the surviving sentence about *partial* data rather than
+about an old app.
+
+### What was built
+
+- `src/shared/minimumApp.ts` — `MINIMUM_APP_VERSION` and `unsupportedAppNote`, reusing `isNewer` from the
+  update check rather than comparing version strings a second way.
+- The gate at all six live entries, reading `app.status.version` that `ensureLive` **already carries** —
+  so it costs no round trip, which the decision asked for.
+- A missing or unparseable version is refused, with its own sentence.
+- `docs/breaking-changes.md` names the floor, what breaks, why it refuses rather than degrading, and both
+  removals.
+
+Measured: typecheck exit 0, full unit **1810 passed / 1 skipped, 122 files**.
+
+**One thing the suite cannot cover, stated rather than implied:** no test drives a real sub-0.58.0 app,
+because building one would mean shipping a version we no longer accept. The gate is exercised through
+`unsupportedAppNote`'s own tests and the six call sites' shape; the end-to-end refusal against a genuinely
+old app is unmeasured, and the honest place to notice that is here.
+

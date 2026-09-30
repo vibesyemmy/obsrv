@@ -21,6 +21,7 @@ import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR, type Orientation } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
+import { unsupportedAppNote } from '../shared/minimumApp'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import { devLane, devMode, laneStamp, stampField, withStamp } from './devLane'
 import { settlePage } from './settle'
@@ -1014,6 +1015,21 @@ async function liveCapture(info: LiveApp['info'], what: 'window' | 'pane' | 'ras
  * reloading here would make `obsrv_drive { scroll }` followed by a snap of the
  * same page always capture the top. `navigated: false` says which happened.
  */
+/**
+ * Refuses a live call against an app below the supported floor, or null when it is fine.
+ *
+ * **Costs nothing.** `ensureLive` already carries the app's `status`, so the version is in hand before
+ * any tool asks a question — the constraint the decision set (`chore-minimum-app-version`).
+ *
+ * **Refuses rather than falling back to headless**, which is the decision's other half: headless is a
+ * different measurement, and taking it silently would hide exactly the skew the floor exists to
+ * surface. A caller who wants headless asks for it by name.
+ */
+function tooOldToDrive(app: LiveApp): CallToolResult | null {
+  const note = unsupportedAppNote(app.status.version)
+  return note === null ? null : toolError(note)
+}
+
 async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], launched: boolean): Promise<CallToolResult> {
   const { info } = app
   const warnings = [...notes]
@@ -1096,18 +1112,9 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     return toolError(liveFailure(e))
   }
   warnings.push(...capture.warnings)
-  // An app older than the capture's settle verdict sends none, and the line
-  // below falls back to the navigation flag — which is the question this
-  // field used to answer. That is the right degradation and the wrong
-  // silence: without this sentence the reply answers one of two questions
-  // under a name documented as the other, and nothing distinguishes them.
-  // Reachable in the ordinary way, since the npm package updates ahead of
-  // the installed app.
-  if (capture.settled === undefined) {
-    warnings.push(
-      "this app is older than the capture's settle verdict, so `settled` reports whether the navigation was confirmed rather than whether the page went paint-quiet; update the app for the paint-quiet answer.",
-    )
-  }
+  // **The sentence for an app older than the capture's settle verdict was removed with the 0.58.0 floor**
+  // (`chore-minimum-app-version`): that verdict shipped in 0.34.0, so every app the tools now accept
+  // sends one, and a warning about apps we refuse to drive is words for a case that cannot arrive.
   const { pngPath, width, height } = capture
 
   // The status the PNG is reported with is read after the capture, which
@@ -1249,7 +1256,7 @@ server.registerTool(
     const requestedMode = input.mode ?? 'auto'
     const plan = planSnapPath(input, requestedMode, process.env, process.platform)
     const resolved = await ensureLive(plan)
-    if (resolved.path === 'live') return liveSnap(resolved.app, input, resolved.notes, resolved.launched)
+    if (resolved.path === 'live') return tooOldToDrive(resolved.app) ?? liveSnap(resolved.app, input, resolved.notes, resolved.launched)
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const liveNotes = resolved.notes
     const why = resolved.why
@@ -1658,7 +1665,7 @@ server.registerTool(
       process.platform,
     )
     const resolved = await ensureLive(plan)
-    if (resolved.path === 'live') return liveAudit(resolved.app, input, resolved.notes, resolved.launched)
+    if (resolved.path === 'live') return tooOldToDrive(resolved.app) ?? liveAudit(resolved.app, input, resolved.notes, resolved.launched)
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
@@ -1966,7 +1973,7 @@ server.registerTool(
       process.platform,
     )
     const resolved = await ensureLive(plan)
-    if (resolved.path === 'live') return liveLint(resolved.app, input, resolved.notes, resolved.launched)
+    if (resolved.path === 'live') return tooOldToDrive(resolved.app) ?? liveLint(resolved.app, input, resolved.notes, resolved.launched)
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
@@ -2353,6 +2360,13 @@ server.registerTool(
     }
     const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
     if (resolved.path === 'headless') return toolError(`obsrv_drive needs the live app and it is not available (${resolved.why}): ${resolved.notes.join(' ')}`)
+    // Live-only tools refuse for the floor the same way the measuring ones do:
+    // there is no headless answer to fall back to here, which makes the refusal
+    // the only honest reply rather than one choice among two.
+    {
+      const tooOld = tooOldToDrive(resolved.app)
+      if (tooOld !== null) return tooOld
+    }
     const live = resolved.app
     try {
       // Tab first, before even `focus`: "new" opens a tab (with `url`/`preset`
@@ -2644,7 +2658,7 @@ server.registerTool(
       process.platform,
     )
     const resolved = await ensureLive(plan)
-    if (resolved.path === 'live') return liveInspect(resolved.app, input, resolved.notes, resolved.launched)
+    if (resolved.path === 'live') return tooOldToDrive(resolved.app) ?? liveInspect(resolved.app, input, resolved.notes, resolved.launched)
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
@@ -2820,6 +2834,10 @@ server.registerTool(
     // refusal rather than a fallback.
     const resolved = await ensureLive(planLive('live', [], [], process.env, process.platform))
     if (resolved.path !== 'live') return toolError(liveModeError(resolved.why, resolved.notes))
+    {
+      const tooOld = tooOldToDrive(resolved.app)
+      if (tooOld !== null) return tooOld
+    }
     const info = resolved.app.info
     let out
     try {
