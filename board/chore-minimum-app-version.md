@@ -1,6 +1,7 @@
 ---
 title: "Three sentences exist only for an app older than the tree: one decision, when a minimum version is set"
-column: backlog
+column: done
+owner: "Henry"
 kind: chore
 criterion: C5
 order: 79
@@ -121,4 +122,9 @@ Measured: typecheck exit 0, full unit **1810 passed / 1 skipped, 122 files**.
 because building one would mean shipping a version we no longer accept. The gate is exercised through
 `unsupportedAppNote`'s own tests and the six call sites' shape; the end-to-end refusal against a genuinely
 old app is unmeasured, and the honest place to notice that is here.
+
+## MERGED, 2026-09-30 — `#532` (decision, `f5a0b31`) and `#534` (build, `71b9e2d`)
+
+Board never moved — found and fixed as board hygiene alongside the same gap on `feat-flow-type-text.md`
+and `chore-cli-json-rotated.md`.
 
