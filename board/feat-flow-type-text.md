@@ -2,7 +2,7 @@
 title: "a flow can enter text, so a user flow can reach the pages behind a form"
 column: doing
 owner: Dogu
-waiting: "review on #530 before merge"
+waiting: "Idris: byte-count and gate #530 before merge"
 kind: feat
 order: 118
 ---
