@@ -92,6 +92,14 @@ export interface InspectReadout {
   layoutScale: number
   /** What the reader should know about the figures: the layout scale, when it is not 1. */
   notes: string[]
+  /** Carried straight from the report — see `InspectReport.editable`/`inputType`/
+   *  `disabled`/`readOnly` for what each means and why `inputType` is the one
+   *  fact a `type` step masks its report on. Nothing here is computed; this
+   *  readout is not the place a masking rule gets reimplemented. */
+  editable: boolean
+  inputType: string | null
+  disabled: boolean
+  readOnly: boolean
 }
 
 const round = (v: number, places: number): number => Math.round(v * 10 ** places) / 10 ** places
@@ -206,6 +214,10 @@ export function inspectReadout(
     ppi: ppi === null ? null : Math.round(ppi),
     layoutScale: round(scale, 4),
     notes: [hiddenNote, scaleNote, paintedNote].filter((n): n is string => n !== null),
+    editable: report.editable,
+    inputType: report.inputType,
+    disabled: report.disabled,
+    readOnly: report.readOnly,
   }
 }
 

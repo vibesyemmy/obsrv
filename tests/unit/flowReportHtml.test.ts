@@ -433,3 +433,44 @@ describe('a click resolved from a selector, in the report', () => {
     expect(html).not.toContain('Which element, and where in it')
   })
 })
+
+describe('a type step, in the report — the masking decision is rendered, never remade', () => {
+  const typeStep = (typed: FlowReportStep['typed']): FlowReportStep => ({ action: 'type', target: '#field', status: 'ran', typed })
+
+  it('shows the typed value and its length when nothing calls for masking', () => {
+    const html = flowReportHtml(data([typeStep({ length: 5, value: 'hello' })]))
+    expect(html).toContain('Typed 5 characters')
+    expect(html).toContain('<q>hello</q>')
+    expect(html).not.toContain('not recorded')
+  })
+
+  it('says "1 character", singular, for a one-character value', () => {
+    const html = flowReportHtml(data([typeStep({ length: 1, value: 'x' })]))
+    expect(html).toContain('Typed 1 character:')
+    expect(html).not.toContain('1 characters')
+  })
+
+  it('shows the length but never the value when masked, and names why', () => {
+    const html = flowReportHtml(data([typeStep({ length: 12, maskedBecause: 'password field' })]))
+    expect(html).toContain('Typed 12 characters')
+    expect(html).toContain('not recorded')
+    expect(html).toContain('password field')
+    expect(html).not.toContain('<q>')
+  })
+
+  it('names secret: true as the reason when that is why it was masked', () => {
+    const html = flowReportHtml(data([typeStep({ length: 6, maskedBecause: 'secret: true' })]))
+    expect(html).toContain('secret: true')
+  })
+
+  it('renders nothing at all for a step with no typed field — a refused or non-type step', () => {
+    const html = flowReportHtml(data([{ action: 'click', target: '.x', status: 'ran' }]))
+    expect(html).not.toContain('class="typed"')
+  })
+
+  it('a refused type step has no typed block either — nothing was typed to report', () => {
+    const html = flowReportHtml(data([{ action: 'type', target: '#field', status: 'failed', error: 'is disabled, so it cannot accept typed text' }]))
+    expect(html).not.toContain('class="typed"')
+    expect(html).toContain('is disabled')
+  })
+})

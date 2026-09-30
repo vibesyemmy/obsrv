@@ -119,10 +119,32 @@ export interface FlowStepResult {
    *  empty — when it could not, so "no requests" and "no record" stay
    *  distinguishable at the type level and not only in prose. */
   network?: NetworkState
-  /** How a selector became a point, for a `click` step that named one. Present
-   *  on the refusals too, carrying what was measured before the refusal — the
-   *  box a zero-size element reported is the fact that explains it. */
+  /** How a selector became a point, for a `click` or `type` step that named
+   *  one. Present on the refusals too, carrying what was measured before the
+   *  refusal — the box a zero-size element reported is the fact that
+   *  explains it. */
   resolved?: FlowStepResolution
+  /** For a `type` step that actually dispatched keystrokes. Absent on a
+   *  refused or not-reached step: nothing was typed, so there is nothing to
+   *  report typing. */
+  typed?: FlowStepTyped
+}
+
+/**
+ * What a `type` step's report carries about the text it entered. `length` is
+ * always present — a reproducer needs to know how much was typed whether or
+ * not it can see what. `value` is the verbatim text, present only when
+ * nothing calls for masking it; when masking applies, `value` is omitted
+ * entirely rather than replaced with a placeholder, because a placeholder is
+ * still a string written into a shared report and "not recorded" means
+ * exactly that nothing is.
+ */
+export interface FlowStepTyped {
+  length: number
+  /** Which fact triggered the mask, when one did. Absent exactly when
+   *  `value` is present. */
+  maskedBecause?: 'password field' | 'secret: true'
+  value?: string
 }
 
 /**
@@ -143,6 +165,14 @@ export interface FlowStepResolution {
   pageRect?: Box
   scrolledTo?: { x: number; y: number }
   viewport?: Viewport
+  /** Carried for `type` alone — `click` never reads these. Present whenever
+   *  `inspect` answered at all, even a refusal: a `type` step that refuses
+   *  for being disabled still resolved an element, and the resolution is
+   *  what the refusal explains itself with. */
+  editable?: boolean
+  inputType?: string | null
+  disabled?: boolean
+  readOnly?: boolean
 }
 
 /**
@@ -284,7 +314,8 @@ async function pointForSelector(
   selector: string,
 ): Promise<{ point: { x: number; y: number }; resolved: FlowStepResolution } | { refusal: string; resolved: FlowStepResolution }> {
   const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string') : [])
-  const look = async (): Promise<{ rect: Box; pageRect: Box; notes: string[] } | { refusal: string }> => {
+  type Editability = { editable: boolean; inputType: string | null; disabled: boolean; readOnly: boolean }
+  const look = async (): Promise<({ rect: Box; pageRect: Box; notes: string[] } & Editability) | { refusal: string }> => {
     const r = await deps.call('inspect', { selector })
     // **`inspect` puts its notes in two different places, measured rather than
     // assumed.** On a miss they are top-level (`{found: false, readout: null,
@@ -304,17 +335,29 @@ async function pointForSelector(
     }
     // The notes are carried, not a field: `inspect` reports "not drawn" as a
     // sentence (`inspectReadout.ts:148`) and has no `hidden` key at all.
-    return { rect, pageRect, notes: [...top, ...strings(readout['notes'])] }
+    return {
+      rect,
+      pageRect,
+      notes: [...top, ...strings(readout['notes'])],
+      // `type`'s own facts, carried whether or not this call turns out to be
+      // for a click — reading them here costs nothing and keeps them beside
+      // the one inspect reply they came from, rather than a second ask.
+      editable: readout['editable'] === true,
+      inputType: typeof readout['inputType'] === 'string' ? readout['inputType'] : null,
+      disabled: readout['disabled'] === true,
+      readOnly: readout['readOnly'] === true,
+    }
   }
 
   const first = await look()
   if ('refusal' in first) return { refusal: first.refusal, resolved: { selector } }
-  const { rect, pageRect, notes } = first
+  const { rect, pageRect, notes, editable, inputType, disabled, readOnly } = first
+  const editability: Editability = { editable, inputType, disabled, readOnly }
 
   // Before anything about position: an element with no area has no point inside
   // it at any scroll offset, and `display: none` is the commonest way to get one.
   if (rect.width <= 0 || rect.height <= 0) {
-    return { refusal: zeroSizeRefusal(selector, rect, notes), resolved: { selector, rect, pageRect } }
+    return { refusal: zeroSizeRefusal(selector, rect, notes), resolved: { selector, rect, pageRect, ...editability } }
   }
 
   // The viewport `click` will bounds-check against, read from the app rather
@@ -329,30 +372,39 @@ async function pointForSelector(
   if (viewport === undefined) {
     return {
       refusal: `the app did not report a viewport size, so ${JSON.stringify(selector)} cannot be checked against the area a click must land in`,
-      resolved: { selector, rect, pageRect },
+      resolved: { selector, rect, pageRect, ...editability },
     }
   }
 
   if (isWhollyVisible(rect, viewport)) {
     if (visibleCentre(rect, viewport) === null) {
-      return { refusal: notBroughtIntoViewRefusal(selector, rect, viewport, { x: 0, y: 0 }), resolved: { selector, rect, pageRect, viewport } }
+      return {
+        refusal: notBroughtIntoViewRefusal(selector, rect, viewport, { x: 0, y: 0 }),
+        resolved: { selector, rect, pageRect, viewport, ...editability },
+      }
     }
     const hit = await firstPointThatHits(deps, selector, rect, viewport)
     if ('unavailable' in hit) {
-      return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: { selector, rect, pageRect, viewport } }
+      return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: { selector, rect, pageRect, viewport, ...editability } }
     }
     if (!('point' in hit)) {
-      return { refusal: noPointHitsRefusal(selector, rect, hit.tried, hit.saw), resolved: { selector, rect, pageRect, viewport } }
+      return { refusal: noPointHitsRefusal(selector, rect, hit.tried, hit.saw), resolved: { selector, rect, pageRect, viewport, ...editability } }
     }
-    return { point: hit.point, resolved: { selector, rect, pageRect, viewport, point: hit.point } }
+    return { point: hit.point, resolved: { selector, rect, pageRect, viewport, point: hit.point, ...editability } }
   }
 
   // Off-screen: scroll, then measure again.
   const scrolledTo = scrollToShow(rect, pageRect, viewport)
   await deps.call('scroll', { x: scrolledTo.x, y: scrolledTo.y })
   const second = await look()
-  if ('refusal' in second) return { refusal: second.refusal, resolved: { selector, rect, pageRect, viewport, scrolledTo } }
-  const base: FlowStepResolution = { selector, rect: second.rect, pageRect: second.pageRect, viewport, scrolledTo }
+  if ('refusal' in second) return { refusal: second.refusal, resolved: { selector, rect, pageRect, viewport, scrolledTo, ...editability } }
+  const secondEditability: Editability = {
+    editable: second.editable,
+    inputType: second.inputType,
+    disabled: second.disabled,
+    readOnly: second.readOnly,
+  }
+  const base: FlowStepResolution = { selector, rect: second.rect, pageRect: second.pageRect, viewport, scrolledTo, ...secondEditability }
   if (visibleCentre(second.rect, viewport) === null) {
     return { refusal: notBroughtIntoViewRefusal(selector, second.rect, viewport, scrolledTo), resolved: base }
   }
@@ -454,7 +506,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
   let stopped = false
   for (let index = 0; index < flow.steps.length; index++) {
     const step = flow.steps[index]!
-    const { action, target, observations, ...rest } = step
+    const { action, target, observations, text, secret, append, ...rest } = step
     const stated = observations !== undefined && observations.length > 0 ? observations : undefined
 
     if (stopped) {
@@ -478,6 +530,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
     // takes coordinates and nothing else, so the selector is resolved to a point
     // here — locate, scroll into view, press — and the control server still
     // receives exactly the payload it has always taken.
+    let typed: FlowStepTyped | undefined
     if (action === 'click' && target !== undefined) {
       try {
         const got = await pointForSelector(deps, target)
@@ -489,6 +542,36 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
           error = got.refusal
         } else {
           reply = await deps.call('click', { ...rest, x: got.point.x, y: got.point.y })
+        }
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e)
+      }
+    } else if (action === 'type' && target !== undefined && text !== undefined) {
+      // `type` reuses `click`'s own resolution whole (`pointForSelector`) —
+      // the wrapped-inline fix and the five refusals apply here unchanged —
+      // and adds exactly one more check before pressing: the same `inspect`
+      // reply that found the point already says whether the element can
+      // take text at all.
+      try {
+        const got = await pointForSelector(deps, target)
+        resolved = got.resolved
+        if ('refusal' in got) {
+          error = got.refusal
+        } else if (got.resolved.editable !== true) {
+          error = `${JSON.stringify(target)} resolved to a ${got.resolved.inputType === null ? 'non-input' : `type="${got.resolved.inputType}"`} element that does not accept typed text`
+        } else if (got.resolved.disabled === true) {
+          error = `${JSON.stringify(target)} is disabled, so it cannot accept typed text`
+        } else if (got.resolved.readOnly === true) {
+          error = `${JSON.stringify(target)} is read-only, so it cannot accept typed text`
+        } else {
+          reply = await deps.call('type', { x: got.point.x, y: got.point.y, text, append: append === true })
+          const masked = got.resolved.inputType === 'password' || secret === true
+          typed = {
+            length: text.length,
+            ...(masked
+              ? { maskedBecause: got.resolved.inputType === 'password' ? ('password field' as const) : ('secret: true' as const) }
+              : { value: text }),
+          }
         }
       } catch (e) {
         error = e instanceof Error ? e.message : String(e)
@@ -555,6 +638,7 @@ export async function runFlow(flow: Flow, deps: FlowRunnerDeps): Promise<FlowRun
       ...(page !== undefined ? { page } : {}),
       ...(network !== undefined ? { network } : {}),
       ...(resolved !== undefined ? { resolved } : {}),
+      ...(typed !== undefined ? { typed } : {}),
     })
 
     if (error !== undefined) stopped = true

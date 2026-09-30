@@ -515,9 +515,33 @@ describe('parseInspectReport', () => {
     // it is spelled `null` rather than left absent so that "not hidden" and
     // "this report predates the field" stay distinguishable downstream, which
     // is what `inspectReadout` keys its note on.
-    expect(r).toEqual({ ...good, opacity: 1, hidden: null })
+    expect(r).toEqual({ ...good, opacity: 1, hidden: null, editable: false, inputType: null, disabled: false, readOnly: false })
     expect(r).not.toBe(good)
     expect(r.color).not.toBe(good.color)
+  })
+
+  it('carries editable/inputType/disabled/readOnly when the page reports them, and defaults them safely when it does not', () => {
+    expect(parseInspectReport({ ...good, editable: true, inputType: 'password', disabled: true, readOnly: true })).toMatchObject({
+      editable: true,
+      inputType: 'password',
+      disabled: true,
+      readOnly: true,
+    })
+    // No fields at all (an older app): editable defaults to false — a `type`
+    // step refuses rather than guessing it may proceed — and inputType to
+    // null, never to a default that would look like "not a password field"
+    // on data that was never read.
+    expect(parseInspectReport(good)).toMatchObject({ editable: false, inputType: null, disabled: false, readOnly: false })
+  })
+
+  it('rejects a report whose inputType is present but the wrong shape, rather than silently treating it as "not a password field"', () => {
+    for (const bad of [123, true, [], {}, '', 'x'.repeat(33)]) {
+      expect(parseInspectReport({ ...good, editable: true, inputType: bad })).toBeNull()
+    }
+  })
+
+  it('accepts inputType: null explicitly (a textarea or contenteditable host, not an <input>)', () => {
+    expect(parseInspectReport({ ...good, editable: true, inputType: null })).toMatchObject({ editable: true, inputType: null })
   })
 
   it('carries an opacity the page reports, and defaults an absent one to opaque', () => {

@@ -44,6 +44,17 @@ beforeEach(() => {
     <div id="gone"><p id="gone-text">Never drawn: display none on its parent</p></div>
     <div id="veiled"><p id="veiled-text">Never drawn: visibility hidden on its parent</p></div>
     <img id="pic" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt=""><span id="pic-text">Caption over a photo</span>
+    <input id="plain-text" type="text" />
+    <input id="no-type-attr" />
+    <input id="password-field" type="password" />
+    <input id="email-field" type="email" />
+    <input id="checkbox-field" type="checkbox" />
+    <input id="disabled-field" type="text" disabled />
+    <input id="readonly-field" type="text" readonly />
+    <textarea id="a-textarea"></textarea>
+    <div id="editable-host" contenteditable="true"><p id="editable-child">nested</p></div>
+    <div id="not-editable"><p id="not-editable-child">nested, but the host is not editable</p></div>
+    <p id="plain-paragraph">Not a form field at all</p>
   `
   host.id = 'host'
   document.body.append(host)
@@ -156,5 +167,80 @@ describe('an element that is not drawn', () => {
     expect(report('#grey').hidden).toBeNull()
     const { x, y } = centre('card-text')
     expect(inspectAtPoint(x, y)!.hidden).toBeNull()
+  })
+})
+
+describe('editability, for a type step’s decisions', () => {
+  const report = (sel: string): InspectReport => inspectTarget('selector', sel) as InspectReport
+
+  it('a plain text input is editable, inputType "text", not disabled or readOnly', () => {
+    const r = report('#plain-text')
+    expect(r.editable).toBe(true)
+    expect(r.inputType).toBe('text')
+    expect(r.disabled).toBe(false)
+    expect(r.readOnly).toBe(false)
+  })
+
+  it('an input with no type attribute defaults to "text", per the HTML spec, not to null', () => {
+    const r = report('#no-type-attr')
+    expect(r.editable).toBe(true)
+    expect(r.inputType).toBe('text')
+  })
+
+  it('a password field is editable and its inputType is exactly "password" — the one fact masking keys on', () => {
+    const r = report('#password-field')
+    expect(r.editable).toBe(true)
+    expect(r.inputType).toBe('password')
+  })
+
+  it('other text-accepting input types (email) are editable with their own inputType, not folded into "text"', () => {
+    expect(report('#email-field').inputType).toBe('email')
+  })
+
+  it('a checkbox is not editable — it takes no typed text regardless of disabled/readOnly', () => {
+    const r = report('#checkbox-field')
+    expect(r.editable).toBe(false)
+    expect(r.inputType).toBe('checkbox')
+  })
+
+  it('a disabled input is still editable=true (it CAN take text in principle) with disabled=true — type refuses on disabled, not on editable', () => {
+    const r = report('#disabled-field')
+    expect(r.editable).toBe(true)
+    expect(r.disabled).toBe(true)
+    expect(r.readOnly).toBe(false)
+  })
+
+  it('a readonly input reads readOnly=true, disabled=false', () => {
+    const r = report('#readonly-field')
+    expect(r.readOnly).toBe(true)
+    expect(r.disabled).toBe(false)
+  })
+
+  it('a textarea is editable with inputType null — a textarea has no type attribute to read', () => {
+    const r = report('#a-textarea')
+    expect(r.editable).toBe(true)
+    expect(r.inputType).toBeNull()
+  })
+
+  it('a contenteditable host is editable, inputType null (not an <input>)', () => {
+    const r = report('#editable-host')
+    expect(r.editable).toBe(true)
+    expect(r.inputType).toBeNull()
+  })
+
+  it('a plain element inside a contenteditable ancestor inherits editability — the click a QA flow resolves may land on the child, not the host', () => {
+    expect(report('#editable-child').editable).toBe(true)
+  })
+
+  it('a plain element inside a NON-editable ancestor is not editable', () => {
+    expect(report('#not-editable-child').editable).toBe(false)
+  })
+
+  it('an ordinary paragraph is not editable, inputType null, not disabled or readOnly', () => {
+    const r = report('#plain-paragraph')
+    expect(r.editable).toBe(false)
+    expect(r.inputType).toBeNull()
+    expect(r.disabled).toBe(false)
+    expect(r.readOnly).toBe(false)
   })
 })

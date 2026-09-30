@@ -160,6 +160,21 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
   if (raw.backgroundNote !== 'computed' && raw.backgroundNote !== 'image') return null
   const background = raw.background === null ? null : parseColor(raw.background)
   if (raw.backgroundNote === 'computed' && !background) return null
+  // `inputType` decides whether a `type` step's value is masked in the
+  // report — the one fact in this parser where a permissive default would be
+  // the failure rather than the safety. Absent (an older app that predates
+  // this field) or genuinely null (not an `<input>`) both read as "not a
+  // password field": editable defaults to false in that case too (below), so
+  // nothing types and the question never arises. What must NOT happen is a
+  // present-but-malformed value being silently swallowed into that same
+  // null — a page sending something the wrong shape for this one field is
+  // exactly the "editable but we can't tell if it's a password" case, and
+  // that fails the whole report rather than guessing "safe to show".
+  const inputTypeRaw = raw.inputType
+  if (inputTypeRaw !== undefined && inputTypeRaw !== null && (typeof inputTypeRaw !== 'string' || inputTypeRaw.length === 0 || inputTypeRaw.length > 32)) {
+    return null
+  }
+  const inputType = typeof inputTypeRaw === 'string' ? inputTypeRaw : null
   // A page that reports no opacity is fully opaque. Anything outside 0..1 is a
   // page saying something impossible, and the report is dropped whole rather
   // than clamped — the rule the rest of this parser follows.
@@ -186,6 +201,14 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
     // The layout viewport's width, for the readout's layout scale; a report
     // from before the field, or a nonsense width, reads as a page that fits.
     ...(isFiniteNumber(raw.viewportWidth) && raw.viewportWidth > 0 ? { viewportWidth: raw.viewportWidth } : {}),
+    // Editability, for a `type` step's decisions. Absent (an older app) reads
+    // as "cannot type here" — a stated refusal, never a guess that it is safe
+    // to type or to show. `inputType` was checked and bound above, before
+    // this point could be reached with a malformed one.
+    editable: raw.editable === true,
+    inputType,
+    disabled: raw.disabled === true,
+    readOnly: raw.readOnly === true,
   }
 }
 

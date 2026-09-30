@@ -31,7 +31,7 @@ import { parseDeviceScaleFactor, parseInputEvent, parseInspectPoint, parseLogMes
 import { parseTextScale } from '../shared/textScale'
 import { loadSettings, saveSettings } from '../shared/settings'
 import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
-import type { HostInfo, Orientation, ScrollReport, ScrollRequest, Settings, UpdateState } from '../shared/types'
+import type { HostInfo, InputModifier, Orientation, ScrollReport, ScrollRequest, Settings, TargetInputEvent, UpdateState } from '../shared/types'
 import { BLANK_GRACE_MS, isFlatFrame, SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
 import { isCheckDue, isReleaseUrl } from '../shared/update'
@@ -2068,6 +2068,41 @@ export function registerIpc(ctx: AppContext): () => void {
       } catch {
         // Electron rejected the event; the click is lost, the app is not.
       }
+    },
+    type: async t => {
+      const target = tab().target
+      const send = (ev: TargetInputEvent | null): void => {
+        if (!ev) return
+        try {
+          target.sendInput(ev)
+        } catch {
+          // Electron rejected the event; the same posture as `click`'s own catch.
+        }
+      }
+      // Focus by pressing, exactly as a person would before typing — not a
+      // separate `.focus()` call, which a page can intercept differently
+      // from a real click and would test a different path from the one a
+      // user's own flow takes.
+      send(parseInputEvent({ type: 'mouseDown', x: t.x, y: t.y, button: 'left', clickCount: 1 }))
+      send(parseInputEvent({ type: 'mouseUp', x: t.x, y: t.y, button: 'left', clickCount: 1 }))
+      if (!t.append) {
+        // Select-all then type, which is what replacing a field's contents
+        // means to a person doing it by hand — not a value clear, which no
+        // real interaction produces and which a page's own `onChange` may
+        // not even see as a change.
+        const meta = process.platform === 'darwin' ? 'meta' : 'control'
+        send(parseInputEvent({ type: 'keyDown', keyCode: 'a', modifiers: [meta] }))
+        send(parseInputEvent({ type: 'keyUp', keyCode: 'a', modifiers: [meta] }))
+      }
+      let charsTyped = 0
+      for (const ch of t.text) {
+        const modifiers: InputModifier[] = /[A-Z]/.test(ch) ? ['shift'] : []
+        send(parseInputEvent({ type: 'keyDown', keyCode: ch, modifiers }))
+        send(parseInputEvent({ type: 'char', keyCode: ch, modifiers }))
+        send(parseInputEvent({ type: 'keyUp', keyCode: ch, modifiers }))
+        charsTyped++
+      }
+      return { charsTyped }
     },
     back: () => goBack('agent'),
     forward: () => goForward('agent'),

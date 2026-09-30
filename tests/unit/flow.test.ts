@@ -199,3 +199,54 @@ describe("validateFlow: the commands whose input the runner owns are not steps a
     expect(validateFlow([{ action: 'captureRaster' }]).ok).toBe(true)
   })
 })
+
+describe('validateFlow: a type step must state its text, and text belongs to type alone', () => {
+  it('accepts a type step with text, target, and no other fields', () => {
+    const result = validateFlow([{ action: 'type', target: '#email', text: 'hello@example.com' }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps[0]).toEqual({ action: 'type', target: '#email', text: 'hello@example.com' })
+  })
+
+  it.each([
+    ['missing entirely', {}],
+    ['empty string', { text: '' }],
+    ['not a string', { text: 42 }],
+  ])('rejects a type step whose text is %s', (_name, extra) => {
+    const result = validateFlow([{ action: 'type', target: '#email', ...extra }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/action is "type".*must state a non-empty "text"/) }])
+  })
+
+  it('rejects a type step with no target — there is no focused-element or point form', () => {
+    const result = validateFlow([{ action: 'type', text: 'hello' }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/must name a "target" selector/) }])
+  })
+
+  it('rejects text on any action other than type, naming it as likely-stale rather than silently ignoring it', () => {
+    const result = validateFlow([{ action: 'click', target: '#button', text: 'leftover from an edit' }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(/states "text" but its action is "click", not "type"/) }])
+  })
+
+  it('accepts secret and append as booleans on a type step', () => {
+    const result = validateFlow([{ action: 'type', target: '#otp', text: '123456', secret: true, append: false }])
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.flow.steps[0]).toMatchObject({ secret: true, append: false })
+  })
+
+  it.each([
+    ['secret', { secret: 'yes' }],
+    ['append', { append: 'yes' }],
+  ])('rejects a non-boolean %s', (field, extra) => {
+    const result = validateFlow([{ action: 'type', target: '#x', text: 'x', ...extra }])
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected rejection')
+    expect(result.rejections).toEqual([{ index: 0, reason: expect.stringMatching(new RegExp(`"${field}" must be a boolean`)) }])
+  })
+})

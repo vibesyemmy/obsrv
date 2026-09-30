@@ -725,6 +725,107 @@ describe('runFlow: a click step that names a selector', () => {
   })
 })
 
+describe('runFlow: a type step — resolution, refusals, and the masking rule', () => {
+  const VIEWPORT = { cssWidth: 390, cssHeight: 844 }
+  const readoutFor = (extra: Record<string, unknown>) => ({
+    ok: true,
+    found: true,
+    readout: { rect: ONSCREEN, pageRect: ONSCREEN, editable: true, inputType: null, disabled: false, readOnly: false, ...extra },
+  })
+
+  const runType = async (step: Record<string, unknown>, readout: Record<string, unknown>) => {
+    const calls: Array<{ command: string; payload: Record<string, unknown> }> = []
+    const result = await runFlow(flow([{ action: 'type', target: '#field', text: 'hello', ...step }]), {
+      call: async (command, payload = {}) => {
+        calls.push({ command, payload })
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') return readoutFor(readout)
+        return { ok: true, charsTyped: (payload.text as string | undefined)?.length ?? 0 }
+      },
+    })
+    return { calls, result }
+  }
+
+  it('resolves by the same selector machinery as click, then dispatches type at the resolved point', async () => {
+    const { calls, result } = await runType({}, {})
+    expect(calls.map(c => c.command)).toEqual(['inspect', 'status', 'inspect', 'type', 'captureRaster', 'status', 'networkRecord'])
+    const typeCall = calls.find(c => c.command === 'type')!
+    expect(typeCall.payload).toEqual({ x: 140, y: 220, text: 'hello', append: false })
+    expect(result.steps[0]).toMatchObject({ status: 'ran' })
+  })
+
+  it('passes append: true through to the control command untouched', async () => {
+    const { calls } = await runType({ append: true }, {})
+    expect(calls.find(c => c.command === 'type')!.payload).toMatchObject({ append: true })
+  })
+
+  it('shows the typed value normally when the element is an ordinary text field', async () => {
+    const { result } = await runType({}, { inputType: 'text' })
+    expect(result.steps[0]!.typed).toEqual({ length: 5, value: 'hello' })
+  })
+
+  it('masks automatically on a page-declared password field, and never carries the value', async () => {
+    const { result } = await runType({}, { inputType: 'password' })
+    expect(result.steps[0]!.typed).toEqual({ length: 5, maskedBecause: 'password field' })
+    expect(result.steps[0]!.typed).not.toHaveProperty('value')
+  })
+
+  it('masks on secret: true even when the page does not declare a password field', () => {
+    return runType({ secret: true }, { inputType: 'text' }).then(({ result }) => {
+      expect(result.steps[0]!.typed).toEqual({ length: 5, maskedBecause: 'secret: true' })
+    })
+  })
+
+  it('a password field is masked even if the step also carries secret: false — there is no way to unmask it from the step', async () => {
+    const { result } = await runType({ secret: false }, { inputType: 'password' })
+    expect(result.steps[0]!.typed).toEqual({ length: 5, maskedBecause: 'password field' })
+  })
+
+  it('length is always present and correct, masked or not', async () => {
+    const shown = await runType({}, { inputType: 'text' })
+    const masked = await runType({}, { inputType: 'password' })
+    expect(shown.result.steps[0]!.typed!.length).toBe(5)
+    expect(masked.result.steps[0]!.typed!.length).toBe(5)
+  })
+
+  it('refuses a non-editable element (a checkbox, say) without ever calling type', async () => {
+    const { calls, result } = await runType({}, { editable: false, inputType: 'checkbox' })
+    expect(calls).not.toContain('type')
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('checkbox')
+    expect(result.steps[0]!.error).toContain('does not accept typed text')
+    expect(result.steps[0]!.typed).toBeUndefined()
+  })
+
+  it('refuses a disabled element without calling type', async () => {
+    const { calls, result } = await runType({}, { disabled: true })
+    expect(calls.map(c => c.command)).not.toContain('type')
+    expect(result.steps[0]!.error).toContain('disabled')
+  })
+
+  it('refuses a read-only element without calling type', async () => {
+    const { calls, result } = await runType({}, { readOnly: true })
+    expect(calls.map(c => c.command)).not.toContain('type')
+    expect(result.steps[0]!.error).toContain('read-only')
+  })
+
+  it('an unresolved selector fails the same way click’s does, before any editability check', async () => {
+    const calls: string[] = []
+    const result = await runFlow(flow([{ action: 'type', target: '#gone', text: 'x' }]), {
+      call: async command => {
+        calls.push(command)
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'inspect') return { ok: true, found: false, notes: [] }
+        return { ok: true }
+      },
+    })
+    expect(calls).not.toContain('type')
+    expect(result.steps[0]!.error).toContain('no element matches')
+  })
+})
+
 /**
  * The wrapped-inline case, at the level that sequences the calls.
  *

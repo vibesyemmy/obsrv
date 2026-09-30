@@ -110,6 +110,11 @@ export function flowReportSteps(flow: Flow, result: FlowRunResult, resolutions?:
       // Passed straight through: the runner made these decisions and recorded
       // what it measured, and a second reading here would be a second opinion.
       ...(s.resolved !== undefined ? { clickedAt: s.resolved } : {}),
+      // The masking decision is the runner's, made once, against the fact it
+      // had in hand (the resolved element's own inputType) at the moment it
+      // typed — not remade here from a copy of that fact, which is exactly
+      // the shape of bug this feature exists to avoid one level up.
+      ...(s.typed !== undefined ? { typed: s.typed } : {}),
       // What Obsrv understood this step to be, when a sentence produced it.
       // Prominent in the report rather than one click down: it is what separates
       // "Obsrv misunderstood step 2" from "step 2 is broken".
