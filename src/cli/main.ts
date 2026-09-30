@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { TargetSource } from '../main/targetSource'
-import { maxCssViewport, screenShape } from '../shared/calibration'
+import { rotatedFromOrientation, maxCssViewport, screenShape } from '../shared/calibration'
 import { SCROLL_HOST_SCRIPT } from '../shared/scrollHost'
 import { MOTION_PROBE_MS, auditBoxes, lintBoxes, motionAfter, pageMovedNote } from '../shared/pageMotion'
 import type { StuckBar } from '../shared/stuckChrome'
@@ -839,6 +839,15 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // Same rule for the throttle, keyed on the flag rather than the value:
       // `--throttle none` is a baseline someone asked for by name.
       ...(r.throttle !== null ? { throttle: r.throttle, settledMs: r.settledMs } : {}),
+      // And the same rule for rotation (`chore-cli-json-rotated`). MCP's replies
+      // have carried `rotated` since `rotate` landed; the CLI's JSON swapped the
+      // dims and named the rotation nowhere, so an agent reading the JSON could
+      // not tell a rotated 1080p-24 from a portrait monitor of the same size.
+      //
+      // **Derived by the function MCP derives it with**, not re-derived here: a
+      // second reading of the same word is how two surfaces drift apart, and
+      // this repo has a card about exactly that (`bug-orientation-name`).
+      ...(spec.rotateAsked ? { rotated: rotatedFromOrientation(spec.orientation) } : {}),
       profile: profile.id,
       // False means a best-effort capture of a page that never went
       // paint-quiet (animation); machine consumers can gate on it, and the

@@ -28,6 +28,17 @@ export interface RenderSpec {
    */
   orientation: Orientation
   /**
+   * Whether a rotation flag was given **at all** — `--rotate`, or `--orientation`
+   * with either word.
+   *
+   * Keyed on the flag rather than on the value, for the reason `throttle` is
+   * (see below): `--orientation portrait` is a baseline someone asked for by
+   * name, and **the flagless JSON is a contract**. `snap` reports `rotated` only
+   * when this is true, so a run that named no rotation produces byte-identical
+   * output to every run before this field existed.
+   */
+  rotateAsked: boolean
+  /**
    * Phone fidelity: mobile user agent and viewport semantics, as the app
    * gives its mobile presets. From the preset's group; custom dimensions are
    * a desktop window. Density says nothing about this — a Retina laptop is
@@ -407,6 +418,9 @@ function presetSpec(id: string): RenderSpec {
     cssHeight: preset.height,
     deviceScaleFactor: preset.deviceScaleFactor,
     diagonalInches: preset.diagonalInches,
+    // Not given until `orientSpec` is told otherwise: a spec built straight from
+    // a preset is a run that named no rotation.
+    rotateAsked: false,
     orientation: DEFAULT_ORIENTATION,
     mobile: preset.group === 'mobile',
     textScale: DEFAULT_TEXT_SCALE,
@@ -441,7 +455,7 @@ function resolveTextScale(flags: Map<string, string | true>): number {
  * Returns the literal word too, so a reply can point out where it inverted —
  * only where it actually did.
  */
-function resolveOrientation(flags: Map<string, string | true>): { orientation: Orientation; given: Orientation | undefined; rotate: boolean } {
+function resolveOrientation(flags: Map<string, string | true>): { orientation: Orientation; given: Orientation | undefined; rotate: boolean; asked: boolean } {
   const raw = flags.get('orientation')
   let given: Orientation | undefined
   if (raw !== undefined) {
@@ -451,7 +465,9 @@ function resolveOrientation(flags: Map<string, string | true>): { orientation: O
   const wants = flags.get('rotate') === true ? true : undefined
   const resolved = resolveRotate(given, wants)
   if ('refuse' in resolved) throw new ArgError(`--rotate and --orientation disagree. ${resolved.refuse}`)
-  return { orientation: resolved.rotate ? 'landscape' : DEFAULT_ORIENTATION, given, rotate: resolved.rotate }
+  // `asked` is the flag's presence, not its value: `--orientation portrait` named
+  // a rotation and got none, and a caller who named it is owed the answer.
+  return { orientation: resolved.rotate ? 'landscape' : DEFAULT_ORIENTATION, given, rotate: resolved.rotate, asked: raw !== undefined || wants === true }
 }
 
 /**
@@ -460,11 +476,11 @@ function resolveOrientation(flags: Map<string, string | true>): { orientation: O
  * sideways rather than a different one. Applied here, before the diff bounds
  * are checked, so those check the viewport that will actually be rendered.
  */
-function orientSpec(spec: RenderSpec, orientation: Orientation, given?: Orientation): RenderSpec {
+function orientSpec(spec: RenderSpec, orientation: Orientation, given?: Orientation, asked = false): RenderSpec {
   const turned =
     orientation !== 'landscape'
-      ? { ...spec, orientation }
-      : { ...spec, orientation, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
+      ? { ...spec, orientation, rotateAsked: asked }
+      : { ...spec, orientation, rotateAsked: asked, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
   // Computed per spec rather than per run, because `--matrix` rotates several
   // presets at once and the word inverts on some of them and not others: a
   // single run can legitimately owe a note about `1080p-24` and none about
@@ -513,22 +529,23 @@ function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[
       deviceScaleFactor,
       diagonalInches: diagonal,
       orientation: DEFAULT_ORIENTATION,
+      rotateAsked: false,
       mobile: false,
       textScale: DEFAULT_TEXT_SCALE,
       throttle: null,
     }
-    return { specs: [orientSpec(spec, orientation, rot.given)], matrix: false }
+    return { specs: [orientSpec(spec, orientation, rot.given, rot.asked)], matrix: false }
   }
 
   const matrixRaw = flags.get('matrix')
   if (typeof matrixRaw === 'string') {
     const ids = matrixRaw.split(',').map(s => s.trim()).filter(s => s.length > 0)
     if (ids.length === 0) throw new ArgError('--matrix: expected a comma-separated list of preset ids')
-    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation, rot.given)), matrix: true }
+    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation, rot.given, rot.asked)), matrix: true }
   }
 
   const id = typeof flags.get('preset') === 'string' ? (flags.get('preset') as string) : DEFAULT_PRESET
-  return { specs: [orientSpec(presetSpec(id), orientation, rot.given)], matrix: false }
+  return { specs: [orientSpec(presetSpec(id), orientation, rot.given, rot.asked)], matrix: false }
 }
 
 function resolveProfile(flags: Map<string, string | true>): string {
@@ -601,7 +618,7 @@ export function parseArgs(argv: string[]): CliCommand {
   const orientation = rot.orientation
     const textScale = resolveTextScale(flags)
     const throttle = resolveThrottle(flags)
-    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation, rot.given), textScale, throttle }))
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation, rot.given, rot.asked), textScale, throttle }))
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
     return {
       command,
