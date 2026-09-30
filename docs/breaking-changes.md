@@ -24,6 +24,26 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### `obsrv_inspect`'s readout gains `editable`, `inputType`, `disabled` and `readOnly`
+
+`InspectReadout` carries these four from `feat-flow-type-text`: whether the
+element takes typed text, an `<input>`'s own `type` attribute, and whether it
+is disabled or read-only. They are what a `type` flow step reads before
+pressing, and `inputType` is the one fact its credential masking keys on
+(`type="password"` masks automatically). Declared in `readoutShape`, which is
+`additionalProperties: false` in the published JSON Schema, and all four are
+**optional** — a live readout comes from the app, and an app older than the
+field sends none of them — following `colorPainted`'s precedent above rather
+than repeating the mistake of declaring a new readout field required.
+
+**What breaks:** a client session that listed the tools before this change
+rejects an `obsrv_inspect` reply outright, same as every prior field added
+here. Restart the session after upgrading.
+
+**What to do:** read all four as possibly absent; an app older than this
+change sends none of them, and there is no way to tell "not editable" from
+"too old to say" other than checking the app's own version.
+
 ### A ninth tool appears: `obsrv_flow`
 
 `obsrv_flow` drives a sequence of steps through the live app over one held

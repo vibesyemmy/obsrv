@@ -2090,6 +2090,24 @@ const readoutShape = z
           'meta tag on a 360 px phone. The millimetres are of the element as drawn; rect, pageRect and font.px are in the page\'s own ' +
           'layout px. Absent from an app older than the field.',
       ),
+    editable: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the element takes typed text: a text-like <input>, a <textarea>, or inside a contenteditable host. ' +
+          'What a `type` flow step reads before pressing. Absent from an app older than the field.',
+      ),
+    inputType: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "An <input>'s own `type` attribute (defaulting to \"text\" when absent, per the HTML spec), lowercased; null " +
+          'for anything else. The one fact a `type` step\'s credential masking keys on: `type="password"` masks ' +
+          'automatically and cannot be overridden. Absent from an app older than the field.',
+      ),
+    disabled: z.boolean().optional().describe('The form field is disabled and cannot take typed text. False for anything that is not a form field. Absent from an app older than the field.'),
+    readOnly: z.boolean().optional().describe('The form field is read-only and cannot take typed text. False for anything that is not a form field. Absent from an app older than the field.'),
     notes: z.array(z.string()).optional().describe('What the reader should know about the figures (the layout scale, when it is not 1); also hoisted into the top-level notes.'),
   })
   .nullable()
