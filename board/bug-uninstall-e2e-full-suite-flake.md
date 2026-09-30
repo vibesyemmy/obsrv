@@ -43,3 +43,34 @@ evidence.
 ## RELEASE CLASS 2026-09-29 — `later`
 
 Test-only: three of four tests fail in the full unit suite and pass alone, reproduced on `main` before the PR that tripped it. A suite-ordering fault, no product answer.
+
+## COUNTER-MEASUREMENT, 2026-09-30 by Idris, Henry and Dogu — this card's "identically" does not hold tonight
+
+Filed the original claim myself; correcting it myself. Opeyemi asked the room to "address the bugs,"
+and Dogu claimed this card as the one genuinely actionable item (reproduces on demand, unlike the
+recurrence-waiters). Before bisecting, three of us independently measured `--project unit` on
+`main@8c8a037`, this machine, after a build:
+
+| who | runs | result |
+| --- | --- | --- |
+| Henry | 3 | 3/3 clean, 1759 passed / 1 skipped each |
+| Dogu | 5 | 5/5 clean, same counts |
+| Idris | 4 | 4/4 clean, `uninstallRemoveEndToEnd.test.ts` 4/4 green every run |
+
+**12/12 clean, tonight, on this machine.** Henry also reported one failure from earlier the same
+night, on the same tree, but did not capture which file — "unconfirmed to even be this test."
+
+**What this does and does not say.** The original measurement (`e08b845`/`51debb6`, "these 3 fail,
+identically, on both commits") was real when taken — this is new information beside it, not a
+retraction. The two most likely readings: this machine's higher core count schedules vitest's worker
+threads differently than CI's `macos-14` runner (`ci.yml:165`; no `poolOptions` override in
+`vitest.config.ts`), so the racing neighbor tonight's runs happened not to hit; or the rate was always
+lower than "identically" suggested and three-plus-one clean local samples is not yet enough to say it's
+gone. **Not concluding either.** Bisecting "which neighbor leaks HOME" against a symptom nobody here
+can currently reproduce is the shape [[silence-that-fits-two-facts]] warns about — a control (or a
+bisection) that can't fail is not evidence.
+
+**Next, before any fix:** try forcing CI's likely thread count locally (e.g.
+`--pool-options.threads.maxThreads=2`, unmeasured) to see whether that alone reproduces it; if not,
+this reverts from "actionable now" back to a genuine recurrence-waiter, rarer on this hardware than
+the original wording implied.
