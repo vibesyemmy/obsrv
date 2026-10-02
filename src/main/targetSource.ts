@@ -19,6 +19,7 @@ import { withinBudget, type AskOutcome } from '../shared/measureBudget'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport, parseLintReport, parseObserveReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
+import { mirrorTerms, type MirrorTerms } from '../shared/mirrorTerms'
 import { log } from './log'
 
 /**
@@ -73,6 +74,14 @@ export interface CommitRecord {
   why?: 'internal' | 'restoring'
   /** Marked on the event as the mirror's own commit, rather than the page moving. */
   mirroring?: boolean
+  /**
+   * Which of `mirroring`'s three terms was true, and the address the bus's mirrored load had
+   * asked for when this commit landed (`bug-redirect-note-missing-not-late`). `mirroring` says
+   * a commit was stamped the bus's, never which rule stamped it; every failing sighting so far
+   * is a page's own commit stamped `mirroring: true`. **Recorded beside `mirroring`, never
+   * feeding it** — see `src/shared/mirrorTerms.ts`. Only on a `did-navigate` that said something.
+   */
+  mirrorTerms?: MirrorTerms
 }
 
 export interface AppliedViewport {
@@ -539,7 +548,17 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // since under a concurrent mirror.
       const fromBus = this.isMirrorCommit(url, byDocument) || (byDocument && start?.fromBusDocument === true)
       this.documentFromBus = fromBus
-      this.record({ at: Date.now(), url, kind: 'did-navigate', said: true, mirroring: fromBus })
+      // Evaluated beside `fromBus` from the same inputs and recorded, never fed back into it:
+      // `mirrorRequested` is cleared when `loadMirrored` returns, so it can only be read here,
+      // at the commit (`bug-redirect-note-missing-not-late`).
+      this.record({
+        at: Date.now(),
+        url,
+        kind: 'did-navigate',
+        said: true,
+        mirroring: fromBus,
+        mirrorTerms: mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true),
+      })
       // Marked rather than withheld. Withholding it made whether a consumer
       // ever heard about a mirrored commit depend on a race: a mirrored load
       // is in flight only while `load()` is, so a client-side redirect
