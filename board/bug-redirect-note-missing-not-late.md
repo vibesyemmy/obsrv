@@ -896,8 +896,9 @@ commit was counted and the silence is downstream of it". `:245` is not the first
 field (`targetSource.ts:540`'s `fromBus` is both recorded and emitted). The guard print carries the
 commits; the table below reads them as a set.
 
-Across **150 CI runs, 2026-09-28 → 10-02, 106 attempts carrying the `:89` guard print** (13 missing,
-93 present), parsed as JSON:
+Of **150 CI runs examined, 2026-09-28 → 10-02, 93 carried a `:89` guard print**, and they hold **106
+attempts** (a retry adds one): 13 missing, 93 present. The two 93s are a coincidence — runs in one case,
+attempts in the other. Parsed as JSON:
 
 | | missing (13) | present (93) |
 | --- | --- | --- |
