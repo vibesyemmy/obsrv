@@ -107,6 +107,13 @@ Henry got this wrong twice before it was right. First by sampling only the first
 
 **`sync-mirror-mark.spec.ts:41` fails in both of them**, and that is the file created to fix the sync coupling by splitting a test into its own file. The split moved the problem rather than removing it — so "put it in its own file" is not the remedy for whatever `flake-sync-165` finds.
 
+**AND IT ALSO FAILS ALONE — 2026-09-30, run `36716844854` on `dd3911f`.** One `✘` in the whole suite
+(418074 bytes, 0 `error TS`), `devtools:116` green, retry passed in 1.1 s after the first attempt spent the
+full 30 s. So "shared signature with `devtools:116`" describes the two cluster runs, **not the test** — it
+flakes on its own too, on a head whose only changes were a build-script message and a board card. Its error
+text that night was pure teardown (`app.close()` hung 10 s, then `evaluate: … has been closed`), which
+names no cause; the timeline is in `docs/e2e-flakes.md`.
+
 **Measured 2026-09-14 ~21:50, and it supersedes the single-test framing on `bug-resizing-test-flaky-ci`.** Henry reported "main is red" about one flaky test. It is not one test and it is not occasional.
 
 **Every completed CI run on main since the C5 merge (3f92680), counted:**
