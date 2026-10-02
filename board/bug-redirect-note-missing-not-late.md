@@ -863,7 +863,8 @@ re-derived from retained raw CI logs, not from the room.
 
 ### 1. Route one can fail
 
-`redirect-forcing-route.spec.ts:100` failed once in CI: run `36986610250` (`#540`'s suite, head
+`redirect-forcing-route.spec.ts:100` (its line at `f6007be`; `:109` once `#541` lands, which adds 9 lines above it)
+failed once in CI: run `36986610250` (`#540`'s suite, head
 `afa0c93cd9205bcbcb9039d8d865c0a0eeb3c1cb`), **first attempt**. Its print, then the retry's, in the same run:
 
 ```
