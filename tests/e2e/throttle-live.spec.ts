@@ -37,11 +37,13 @@ const debuggerAttached = (): Promise<boolean> => app.evaluate(() => (globalThis 
  * `Emulation.setCPUThrottlingRate` has run, and a ratio of exactly ~1.0 is what an un-applied rate would give.
  *
  * Two readings, and this separates them: measure the same work **again after a wait**. If the second reading is
- * the expected one, the rate landed LATE and the poll was early (a test race). If it is still ~1.0 (or still ~4x after
- * `none`), the rate was never applied (or never lifted) while the app said it was, which is the product stating a
- * condition it does not hold. `attached` says whether the debugger session exists at all.
+ * the expected one, the rate landed LATE and the poll was early (a test race). If it is still wrong, `debuggerAttached`
+ * says which side of the product is at fault, **and its healthy value differs per arm**: `applyThrottle` detaches the
+ * session once it has lifted a throttle, so after `cpu-6x` the session should exist (`true`) and after `none` it should
+ * not (`false`). `slow` still ~1.0 with no session: the rate was never applied. `back` still ~4x **with** a session: the
+ * lift did not complete. `back` still ~4x with **no** session: the product's throttle cannot be slowing the work.
  */
-async function sayWhy(label: string, plain: number, first: number, expectation: string): Promise<void> {
+async function sayWhy(label: string, plain: number, first: number, expectation: string, healthyAttached: boolean): Promise<void> {
   try {
     const state = await targetThrottle()
     const shown = (await footer()).includes('throttle ')
@@ -50,7 +52,7 @@ async function sayWhy(label: string, plain: number, first: number, expectation: 
     const later = await workMs()
     console.log(
       `[throttle-live] ${label} ${expectation}: plain=${plain.toFixed(1)}ms first=${first.toFixed(1)}ms (ratio ${(first / plain).toFixed(2)}) ` +
-        `state=${state} footerShowsThrottle=${shown} debuggerAttached=${attached} | after 1500ms: ${later.toFixed(1)}ms (ratio ${(later / plain).toFixed(2)})`,
+        `state=${state} footerShowsThrottle=${shown} debuggerAttached=${attached} (${attached === healthyAttached ? 'as expected' : 'UNEXPECTED'}) | after 1500ms: ${later.toFixed(1)}ms (ratio ${(later / plain).toFixed(2)})`,
     )
   } catch (e) {
     console.log(`[throttle-live] ${label}: the diagnostic itself failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -90,7 +92,7 @@ test('the menu applies a CPU rate to the target: the same work takes several tim
   await expect.poll(targetThrottle).toBe('cpu-6x')
   await expect.poll(footer).toContain('throttle cpu-6x')
   const slow = await workMs()
-  if (!(slow / plain > 3)) await sayWhy('cpu-6x applied', plain, slow, 'expected slow/plain > 3')
+  if (!(slow / plain > 3)) await sayWhy('cpu-6x applied', plain, slow, 'expected slow/plain > 3', true)
   // 6× nominal; anything under 3× would mean the rate is not in force.
   expect(slow / plain).toBeGreaterThan(3)
 
@@ -98,7 +100,7 @@ test('the menu applies a CPU rate to the target: the same work takes several tim
   await expect.poll(targetThrottle).toBe('none')
   await expect.poll(footer).not.toContain('throttle ')
   const back = await workMs()
-  if (!(back / plain < 2)) await sayWhy('none restored', plain, back, 'expected back/plain < 2')
+  if (!(back / plain < 2)) await sayWhy('none restored', plain, back, 'expected back/plain < 2', false)
   expect(back / plain).toBeLessThan(2)
 })
 

@@ -1846,6 +1846,11 @@ emitted 4 keys its own output schema does not declare"*, fixed in `c656b5f`) and
 | `cli-walk-limits.spec.ts:262` a page that locks its scroll | `36665868209` | PR `feat/flow-type-text`, 09-30 | `{"screenfuls":5,"atEnd":false,"ms":2483}` |
 | `tabs.spec.ts:177` a scroll in the background tab mirrors within it | `36726476051` | PR `docs/flake-sync-mirror-mark`, 09-30 | Expected 1600, received 0 after a 5000 ms poll (this register's entries are `:755`; a card names `:266`) |
 
+**`visibility.spec.ts:66` and the entry about that file.** The `visibility.spec and log.spec: when Electron delivers no hide
+or show at all` entry above covers the file's four hide-first tests, `:66` among them, and says CI has never shown it.
+**The CI sighting is a different mechanism**: the hide events were delivered (the `painting` poll at `:75` passed) and the
+resume half failed at `:76`. It is listed in the table because no entry names `:66` by line, not because that entry is wrong.
+
 **`text-scale.spec.ts:141` is the "garbage collected" class, through its own fix.** The error at `launch.ts:105` is
 inside `hardenEvaluate`, which the section above says makes the awaited promise "never unreferenced while unsettled". One
 in 168 logs, rescued by the retry. The section's claim is *that this class is fixed*; this is one counter-observation, not a

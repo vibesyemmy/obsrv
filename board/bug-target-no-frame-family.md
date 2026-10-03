@@ -25,8 +25,12 @@ rescued by the retry, within about 14 hours of each other:
 - `bug-canvas-blank-without-notice` (`disclose`): `panes.spec:83`, a blank canvas, **0 sightings in this window**. Its
   candidate mechanism says *"if the next sighting reads `painting: false`"* then the app stopped painting; that read
   exists for `panes:83` only.
-- `visibility.spec:66` and `orientation.spec:114` are named by **no card and no register entry** on `main`
-  (`visibility.spec:79` in `bug-e2e-takes-the-desk` is a different test, "minimising counts as hidden").
+- `orientation.spec:114` is named by **no card and no register entry** on `main`. `visibility.spec:66` is named by none
+  **by line**, but the register's `visibility.spec and log.spec: when Electron delivers no hide or show at all`
+  (`e2e-flakes.md:394`) covers the file's four hide-first tests, which include `:66`, and ends *"CI has never shown
+  it."* **This sighting is not that**: that entry is a desk where `hide` and `show` events never fire; here the hide events
+  were delivered (the `painting` poll at `:75` passed) and the **resume** half failed at `:76`. (Dogu, `#3128`;
+  `visibility.spec:79` in `bug-e2e-takes-the-desk` is a third thing, "minimising counts as hidden".)
 
 ## The gap
 

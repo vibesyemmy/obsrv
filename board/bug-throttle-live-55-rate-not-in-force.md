@@ -78,13 +78,29 @@ and not to assume class 1 either: contention on both arms would give ~1.0x too.
 
 `tests/e2e/throttle-live.spec.ts` now prints, only when one of the two ratio assertions is about to fail, the app's
 state and footer, whether the debugger session exists, and **the same work measured again after 1500 ms**. A passing
-run is exactly what it was. What the next failing line means:
+run is exactly what it was. **Read `debuggerAttached` per arm, because its healthy value differs**: `applyThrottle`
+detaches the session after it lifts a throttle (`if (off) dbg.detach()`), and returns early when it is asked to lift
+one that was never attached. So after `cpu-6x` the session should exist, and after `none` it should not. The printed
+line says which it found and whether that was the expected value.
+
+**The `slow / plain > 3` arm (after `cpu-6x`; healthy `debuggerAttached` is `true`):**
 
 | the re-measure after 1500 ms | `debuggerAttached` | reading |
 | --- | --- | --- |
-| the expected ratio (`> 3`, or `< 2` after `none`) | any | **A**: the rate landed late and the poll was early. Make the poll wait for the application, not the record. `later`. |
-| still ~1.0 (or still ~4x after `none`) | `false` | **B**: the rate was never applied, or was lifted, while the app said otherwise. Class 1 shape. |
+| the expected ratio (`> 3`) | any | **A**: the rate landed late and the poll was early. Make the poll wait for the application, not the record. `later`. |
+| still ~1.0 | `false` | **B**: the rate was never applied, or the session was lost, while the app said otherwise. Class 1 shape. |
 | still ~1.0 | `true` | the command was accepted and had no effect on this measurement. Unexplained; needs the CDP reply, which a test cannot read. |
+
+**The `back / plain < 2` arm (after `none`; healthy `debuggerAttached` is `false`):**
+
+| the re-measure after 1500 ms | `debuggerAttached` | reading |
+| --- | --- | --- |
+| the expected ratio (`< 2`) | any | **A**: the lift landed late and the poll was early. `later`. |
+| still ~4x | `false` (healthy) | **the product's throttle cannot be what is slowing the work**, because the session is gone: contention, or the measurement. Not a product finding. |
+| still ~4x | `true` | the lift did not complete: the product still holds a rate after the app said `none`. **This is the anomaly on this arm.** |
+
+*(Dogu, `#3128`, caught the first version of this table reading `false` as the anomaly on both arms; he measured a
+healthy build printing `state=none debuggerAttached=false` with a failing ratio forced.)*
 
 **Not measured, and said so:** whether the print fires on a failing run (this test failed a first attempt in 4 of 103
 suite runs in the window and was a final red in 1, and a green run can only show the passing path is unchanged), and whether the CDP reply to
