@@ -1,6 +1,8 @@
 ---
 title: "the inspector reports an element's line boxes, so a click by selector picks a real one instead of guessing"
-column: backlog
+column: doing
+owner: Dogu
+waiting: ""
 kind: feat
 order: 119
 ---
