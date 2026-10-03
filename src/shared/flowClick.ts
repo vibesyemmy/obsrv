@@ -290,7 +290,11 @@ export function noPointHitsRefusal(selector: string, rect: Box, tried: number, s
     // The page reported the element's own boxes, so the wrapped-inline explanation below is the wrong
     // one: the centre of each line box was tried before the fixed points, and none of them was the gap.
     const boxes = `${lineBoxes} line box${lineBoxes === 1 ? '' : 'es'}`
-    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside it resolves to that element (the centre of each of its ${boxes} was tried first, then the fixed points inside the box)`
+    const how =
+      lineBoxes === 0
+        ? 'the page reported no line boxes for it, so only the fixed points inside the box were tried'
+        : `the centre of each of its ${boxes} was tried first, then the fixed points inside the box`
+    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside it resolves to that element (${how})`
     return `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but ${where}${what}`
   }
   return (

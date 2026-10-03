@@ -241,11 +241,14 @@ function boxOf(v: unknown): Box | undefined {
  * The element's line boxes from an `inspect` readout, or **undefined** when the app did not report
  * them well-formed.
  *
- * Undefined and `[]` are different facts and stay different all the way to the click. An app older
- * than the field sends no `lineRects`: the element is unmeasured, and the click falls back to the
- * guessed points it always used. `[]` is a measurement — the element has no box anywhere — and
- * collapsing it into the first would press a guess at something the page said is not drawn. One
- * malformed entry makes the whole list unusable for the same reason a malformed `rect` does.
+ * Undefined and `[]` are different facts, though they now differ in **one place only: what a refusal
+ * says.** Both try the fixed points inside the box (`probePoints`: the line boxes first when there are
+ * any, the fixed points always), and every press is checked against the page either way, so neither can
+ * press something the element does not paint. An app older than the field sends no `lineRects`, and its
+ * refusal must not claim line boxes were consulted. `[]` is the page saying the element has none, and
+ * its refusal says so. (An earlier version of this change treated `[]` as "nothing to press" and refused
+ * without trying the fixed points; that dropped buttons that worked, and this comment used to describe
+ * it.) One malformed entry makes the whole list unusable for the same reason a malformed `rect` does.
  */
 function boxesOf(v: unknown): Box[] | undefined {
   if (!Array.isArray(v)) return undefined

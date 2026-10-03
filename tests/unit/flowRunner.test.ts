@@ -1034,6 +1034,25 @@ describe('runFlow: a click aimed at the element’s own line boxes', () => {
     expect(h.presses).toEqual([])
   })
 
+  it('does not claim line boxes were consulted when the app reported none — an app older than the field', async () => {
+    const h = harness({ covered: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    // The original sentence, wrapped-inline explanation and all, and nothing about boxes nobody reported.
+    expect(result.steps[0]!.error).toContain('the gap between them')
+    expect(result.steps[0]!.error).not.toContain('line box')
+    expect(result.steps[0]!.error).not.toContain('tried first')
+  })
+
+  it('says the page reported no line boxes when the list is empty, and still tries the fixed points', async () => {
+    const h = harness({ lineRects: [], covered: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('the page reported no line boxes for it, so only the fixed points inside the box were tried')
+    expect(result.steps[0]!.error).not.toContain('the gap between them')
+    expect(h.probes.length, 'the fixed points were not tried').toBeGreaterThan(1)
+  })
+
   it('keeps the old guess — the union’s centre first — when the app reports no line boxes at all', async () => {
     const h = harness()
     const result = await click(h)

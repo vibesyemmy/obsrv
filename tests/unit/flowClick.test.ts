@@ -327,6 +327,12 @@ describe('the refusal when the page reported the boxes and none of them resolves
     expect(noPointHitsRefusal('a.buy', rect, 0, [], 1)).toContain('none of its 1 line box is on screen')
   })
 
+  it('says the page reported none, rather than "tried 0 line boxes first", when the list was empty', () => {
+    const msg = noPointHitsRefusal('a.buy', rect, 5, ['h3'], 0)
+    expect(msg).toContain('the page reported no line boxes for it, so only the fixed points inside the box were tried')
+    expect(msg).not.toContain('tried first')
+  })
+
   it('keeps the original wording, gap explanation and all, when the app reported no boxes', () => {
     const msg = noPointHitsRefusal('a.buy', rect, 5, ['h3'])
     expect(msg).toContain('the gap between them')
