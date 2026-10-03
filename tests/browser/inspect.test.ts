@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { INSPECT_SCRIPT, inspectAtPoint, inspectTarget, MAX_LINE_RECTS } from '../../src/shared/inspect'
 import type { InspectReport } from '../../src/shared/inspect'
+import { findScroller, rootScrolls } from '../../src/shared/scrollHost'
 
 /**
  * `inspectAtPoint` runs inside the target page, so it is tested against a
@@ -322,5 +323,102 @@ describe('lineRects, the element’s own boxes a click by selector aims at', () 
     // Two empty lists are equal, so say what the shipped form found rather than only that it agrees.
     expect((fromSource('selector', '#wrapped-two') as InspectReport).lineRects).toHaveLength(2)
     expect(MAX_LINE_RECTS).toBe(32)
+  })
+})
+
+/**
+ * `scroll`: where the page is scrolled at the instant the box was measured
+ * (`bug-recorded-scroll-lags-a-page-scroll`).
+ *
+ * `pageRect` was `rect` plus the app's RECORD of the scroll, and the record is fed by reports the preload defers for
+ * up to 120 ms after any scroll the app applies. A page that scrolled itself inside that window was reported at its
+ * old position (400 of 400 back-to-back reads). The scroll is now read by the same synchronous call that measures
+ * the box, so the two cannot disagree. These tests are the sequence that used to fail: scroll, then read at once.
+ */
+describe('scroll, read in the same call as the box', () => {
+  let tall: HTMLDivElement | null = null
+  let shell: HTMLDivElement | null = null
+  afterEach(() => {
+    window.scrollTo(0, 0)
+    tall?.remove()
+    tall = null
+    shell?.remove()
+    shell = null
+    document.documentElement.style.overflow = ''
+    document.body.style.overflow = ''
+  })
+  const mountTall = (): void => {
+    tall = document.createElement('div')
+    tall.style.cssText = 'position:absolute;left:0;top:0;width:200px;height:4000px'
+    tall.innerHTML = '<div id="t" style="position:absolute;left:30px;top:1500px;width:100px;height:40px">target</div>'
+    document.body.append(tall)
+  }
+  const report = (selector: string): InspectReport => inspectTarget('selector', selector) as InspectReport
+
+  it('is the window\'s scroll for an element on a page that scrolls at the root, and rect plus it is the page position', () => {
+    mountTall()
+    window.scrollTo(0, 700)
+    const r = report('#t')
+    expect(r.scroll).toEqual({ x: 0, y: 700 })
+    expect(r.rect.y + r.scroll.y).toBeCloseTo(1500, 1)
+  })
+
+  it('ignores an inner scroller when the root itself scrolls: a page with a scrollable widget is scrolled by its window', () => {
+    mountTall()
+    // A scrollable widget (a code block, a chat panel) on a page the ROOT scrolls. The agent's `scroll` moves the root
+    // here, so the widget's own offset must not be added.
+    const widget = document.createElement('div')
+    widget.id = 'widget'
+    widget.style.cssText = 'position:absolute;left:300px;top:20px;width:150px;height:100px;overflow-y:auto'
+    widget.innerHTML = '<div style="height:600px">widget content</div>'
+    tall!.append(widget)
+    widget.scrollTop = 50
+    window.scrollTo(0, 700)
+    expect(rootScrolls()).toBe(true)
+    expect(report('#t').scroll).toEqual({ x: 0, y: 700 })
+  })
+
+  it('follows a page-level scroll made a moment ago: scroll, then read at once, which is the case a record lagged', () => {
+    mountTall()
+    window.scrollTo(0, 1500)
+    expect(report('#t').scroll.y).toBe(1500)
+    window.scrollTo(0, 0)
+    // No wait, no event loop turn: the old source answered 1500 here for up to 120 ms.
+    expect(report('#t').scroll.y).toBe(0)
+    window.scrollTo(0, 300)
+    expect(report('#t').scroll.y).toBe(300)
+  })
+
+  it('adds the scroll host\'s offset when the page scrolls an inner element (an app shell), for every element, as the record did', () => {
+    shell = document.createElement('div')
+    shell.innerHTML =
+      '<div id="chrome" style="position:fixed;left:0;top:0;width:300px;height:40px;background:#123">fixed chrome</div>' +
+      '<div id="scroller" style="position:fixed;left:0;top:40px;width:300px;height:200px;overflow-y:auto">' +
+      Array.from({ length: 40 }, (_, i) => `<div id="row${i}" style="height:30px">row ${i}</div>`).join('') +
+      '</div>'
+    document.body.append(shell)
+    ;(shell.querySelector('#scroller') as HTMLElement).scrollTop = 300
+    // An app shell: the root has nothing to scroll and an inner element is the host. Asserted, not assumed, so
+    // that a runner whose layout lets the root scroll fails here loudly instead of passing for the wrong reason.
+    expect(rootScrolls()).toBe(false)
+    expect(findScroller().el?.id).toBe('scroller')
+
+    const inside = report('#row12')
+    expect(inside.scroll).toEqual({ x: 0, y: 300 })
+    // Row 12 sits at 12 * 30 = 360 in the host's content; the viewport rect plus the scroll is that.
+    expect(inside.rect.y + inside.scroll.y).toBeCloseTo(40 + 360, 1)
+    // The fixed chrome is outside the host and gets the same offset, as the record it replaces gave it: a page-space
+    // highlight maps every element back through ONE scroll, so the pair round-trips. (An audit finding maps such an
+    // element per element, which is an older inconsistency this does not touch.)
+    expect(report('#chrome').scroll).toEqual({ x: 0, y: 300 })
+  })
+
+  it('is the same through the shipped source, which carries the scroll-host helpers it now calls', () => {
+    mountTall()
+    window.scrollTo(0, 900)
+    // eslint-disable-next-line no-new-func
+    const fromSource = new Function(`return ${INSPECT_SCRIPT}`)() as typeof inspectTarget
+    expect((fromSource('selector', '#t') as InspectReport).scroll).toEqual({ x: 0, y: 900 })
+    expect((fromSource('selector', '#t') as InspectReport).scroll).toEqual(report('#t').scroll)
   })
 })

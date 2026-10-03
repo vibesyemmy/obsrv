@@ -1894,10 +1894,11 @@ export function registerIpc(ctx: AppContext): () => void {
         report,
         { cssWidth: vp.width, cssHeight: vp.height, deviceScaleFactor: t.getDeviceScaleFactor(), diagonalInches, textScale: t.getTextScale() },
         { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, settings.hostNits), ...(vision ? { vision } : {}) },
-        // The page rect is the viewport rect plus the scroll the session
-        // recorded — the same source a page-space highlight is mapped through.
-        tab().targetScroll,
       )
+      // `pageRect` is the viewport rect plus the page's scroll read in the same call as the rect
+      // (`report.scroll`), not the session's record: the record lags a page-level scroll for up to
+      // 120 ms after an agent's own scroll (`bug-recorded-scroll-lags-a-page-scroll`). A page-space
+      // HIGHLIGHT is still mapped through the record (`targetView`); that is not changed here.
       // Beside the readout, not inside it: the readout's own notes are about
       // the figures, these are about which page the figures came from, and
       // the headless surface keeps that same split (cli/main.ts:945-953).
