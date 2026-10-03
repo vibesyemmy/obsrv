@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "Opeyemi: two forcing routes are built and both refute the named mechanism — keep hunting, or park this card"
+waiting: "event: #540 merged (the commit record names which term stamped a commit as the bus's), then the next arrivals :89 failure to read it — no fix until the instrument answers"
 kind: bug
 release: blocks
 criterion: C5
@@ -736,6 +736,9 @@ paragraph directly above.
 
 ## BOTH FORCING ROUTES ARE BUILT, AND BOTH REFUTE THE MECHANISM THIS CARD NAMED, 2026-09-29
 
+> **Overstated — see "CORRECTION 2026-10-02" at the foot of this card.** Route one failed once in CI
+> three days later. The text below is left as written.
+
 The ask on the `waiting:` line above was a forcing route. Two exist now, and neither reproduces the
 failure.
 
@@ -850,3 +853,130 @@ words came in **Henry's own session, not in the Obsrv Engineering room** — so 
 relay, and a reviewer reading only the room cannot authenticate the quote. She flagged exactly that
 before endorsing the reading, which is the right order. The transcript of that session is the primary
 source; this line exists so nobody later mistakes the room's copy for the original.
+
+## CORRECTION 2026-10-02 — "both forcing routes refute the mechanism" was true of pool depth, and overstated what it ruled out
+
+**Nothing above is deleted.** The 2026-09-29 section and the eighth-sighting section stay as written;
+this sits beside them. It decides no conclusion and proposes no fix — the card's rule stands. Added by
+Idris at Wren's suggestion (room `#2966`), unmerged, for Henry to amend; every figure below was
+re-derived from retained raw CI logs, not from the room.
+
+### 1. Route one can fail
+
+`redirect-forcing-route.spec.ts:100` (its line at `f6007be`; `:109` once `#541` lands, which adds 9 lines above it)
+failed once in CI: run `36986610250` (`#540`'s suite, head
+`afa0c93cd9205bcbcb9039d8d865c0a0eeb3c1cb`), **first attempt**. Its print, then the retry's, in the same run:
+
+```
+before=6 after=7 boundary=1790932325300 matched=at=1790932325201 byDocument=false age=99ms   (failed)
+before=6 after=7 boundary=1790932328484 matched=at=1790932328552 byDocument=true  age=-68ms  (retry, fresh app, passed)
+```
+
+The failure message is the test's own: *"the commit was answered with a start from 99 ms before the
+redirect was triggered — an earlier visit to the same address."* That is the end state the card's
+2026-09-28 candidate named — `startFor` answering a redirect commit with an earlier navigation's start, whose
+`byDocument` is false — **reached under the forcing route.** The other 39 prints I could find (38
+earlier runs, plus the retry above) all show `byDocument=true` and a start recorded after the boundary.
+
+**What it does not show.**
+
+- **Not that pool depth is the cause.** Six same-address starts is what the route forces and what 39
+  passes also had. The 2026-09-29 reading that depth and mirrored starts are *not sufficient* stands.
+- **Not what the 7th start was.** The line prints counts, not the new start's flags. `after − before = 1`
+  and the matched start predates the boundary, so by `startFor`'s own predicate (`!s.mirrored`) the one
+  post-boundary hairline start must have been `mirrored: true`, and skipped. **That is a deduction from a
+  count and a predicate, not a measurement.** `#541` prints the flags.
+- **Not the missing note.** This route asserts which start is chosen, not whether a note was produced.
+- **One failure in 40.** A candidate, per this card's own rule for one run.
+
+### 2. The eighth sighting's "so the commit was counted" does not survive the commit log it printed
+
+That section reads `byDocument: true` on the matched start as ruling the `ipc.ts:245` drop out — "so the
+commit was counted and the silence is downstream of it". `:245` is not the first gate. `ipc.ts:231`,
+`if (inPage || mirrored) return`, runs **before** it, and `mirrored` is the commit log's own `mirroring`
+field (`targetSource.ts:540`'s `fromBus` is both recorded and emitted). The guard print carries the
+commits; the table below reads them as a set.
+
+Of **150 CI runs examined, 2026-09-28 → 10-02, 93 carried a `:89` guard print**, and they hold **106
+attempts** (a retry adds one): 13 missing, 93 present. The two 93s are a coincidence — runs in one case,
+attempts in the other. Parsed as JSON:
+
+| | missing (13) | present (93) |
+| --- | --- | --- |
+| a commit **after the caller's own `redirect.html`** with `mirroring: false` | **0 of 13** | **93 of 93** |
+| the matched start | `byDocument: true`, at/after the caller's `redirect.html` start — correct on its face, **13 of 13** | — |
+
+0 counter-examples. Within one attempt type (a retry is a **fresh app**; the failures are almost all
+shared-app first tries, so the two cannot be compared across types): shared-app first tries 12 missing
+against 81 present, fresh-app 1 against 12 — the same separation in each. Every missing attempt's commits
+after `redirect.html` were stamped the bus's, so `:231` returned before any count; the `atCount` candidate
+at `ipc.ts:274` presupposes a *counted* commit, and none of these 13 had one.
+
+**Limits, stated because the separator is easy to over-read.**
+
+- **It is close to a restatement of the gate.** A commit stamped `mirroring: true` is dropped at `:231` by
+  construction, so this says **where** the note is lost, not **why the page's own redirect commit is
+  stamped the bus's.** That is the open question.
+- **Association, not cause.** Five days, one runner type, and these are the attempts whose raw logs were
+  retained.
+- **A candidate for the why, not a finding:** `isMirrorCommit` (`targetSource.ts:348`) is
+  `url === this.mirrorRequested || !byDocument`, and a navigation *start* is stamped
+  `mirrored: this.mirrorRequested === details.url` (`:602`) — the same address-equality assumption at two
+  sites. Route one's single failure (§1) is the start-layer instance of it **only if** the 7th start was
+  in fact mirrored, which is unmeasured. The 13 natural failures had a correct matched start, so they are
+  the commit-layer instance if either. Two sites, not one event.
+
+### 3. What was built to find out, and what waits
+
+- **`#540`** — the commit record carries which of `isMirrorCommit`'s terms stamped it (`mirrorRequested`,
+  `viaMirrorUrl`, `viaNotByDocument`, `viaBusDocument`), recorded beside `fromBus`, deciding nothing. The
+  next failing `:89` print will say which term fired. Dogu's independent count: `PASS` at
+  `afa0c93cd9205bcbcb9039d8d865c0a0eeb3c1cb`. **Not merged; it touches `src/`, which is Henry's call.**
+- **`#541`** — test-only: route one prints every start since the boundary with its `mirrored` /
+  `byDocument` flags, and the last 8 commits, so the next route-one failure answers §1's deduction.
+
+**Where the instruction came from, recorded the way the section above records it.** *"keep hunting,
+instrument first"* reached the room as Wren's relay of Opeyemi, from Wren's own session (`#2952`); the
+room copy is not the original and Idris could not authenticate it. A later room post, *"Let's go with your
+recommendations"* (`#2954`), is ambiguous about which recommendations and was read narrowly — as
+`#540` only. **The class does not move:** still class 1, still `blocks`.
+
+### 4. A second failure mode in the same test, found by the sightings sweep 2026-10-03
+
+`arrivals.spec.ts` `a page that really does redirect after loading still says so` failed its first attempt in
+**14** runs over 09-28 → 10-03 (13 rescued by the retry, 1 failed both: `36504076439`). **13 are the note-MISSING
+print this card is about. The 14th is not**: run `36665868209` (`feat/flow-type-text`, 09-30 03:45Z, the test at
+`:202` on that branch; the run itself was later `cancelled`, but the test ran and its retry passed).
+
+The note was **present** (`"the page navigated after it loaded, to …"`), and the guard's **second** assertion
+failed instead — *"the guard did not reach the document's own start"*. Its print: `matched` =
+`byDocument: false`, `mirrored: false`, **`fromBusDocument: true`**, `startsForThisUrl: 5`; an unmirrored commit
+exists after the caller's `redirect.html` (the last commit, `hairline.html`, `mirroring: false`), which is why the
+note could be made. The retry's print is the usual shape: `byDocument: true`, `startsForThisUrl: 2`.
+
+**What it is, and is not.** It is the start-layer condition the 2026-09-28 candidate named — `startFor` answering with
+a start that is not the document's own, `byDocument: false` — **occurring in a natural run, once**, without the note
+being lost. It is not a missing note, and no other card or register entry records it. Together with §1 the start layer
+now has two occurrences (this one natural, §1's forced) against **13 of 13** at the commit layer in §2's window (**14 of 14** over §5's); whether the two are
+the same assumption at two sites, as §2 puts it as a candidate, is unmeasured. One sighting on a feature branch,
+first attempt only; a candidate, by this card's own rule.
+
+The sweep's table, with every run id behind these counts, is in the room (`#3115` and `#3116`); it is not committed.
+
+### 5. §2's table, extended, and what is and is not checked about the extension
+
+§2's window began at 2026-09-28T18:07Z (where the first saved logs start) and ended 10-02 07:32Z. The sweep in §4 pulled
+every `ci.yml` run since **09-28T00:00Z** and through 10-03 and ran the same classification over it:
+
+| | missing | present |
+| --- | --- | --- |
+| shared-app first try, an unmirrored commit **after** the caller's `redirect.html` | **0 of 13** | **90 of 90** |
+| fresh app (a retry), the same | **0 of 1** | **13 of 13** |
+
+**14 missing, 103 present, 0 counter-examples.** The extension adds one missing attempt, run `36455653071`
+(`feat/flow-tool`, 09-28 17:05Z, before §2's window), and the present attempts of the later runs. Nothing about the
+reading changes. **Both windows have been recounted independently** (Dogu: `#2972` for §2's window, and `#3126` for this
+one, from every run since 09-28T00:00Z, **117 attempts, 14 missing, 103 present, 0 counter-examples**, matching this
+table exactly). That re-measures the table from the same logs and the same association; it does not test the mechanism.
+(His first pass was one present attempt short because one raw log had been saved empty; he found and corrected that
+himself, `#3126`, which is why the §2 figures above are not quoted from `#2972`.)
