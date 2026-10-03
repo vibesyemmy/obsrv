@@ -940,3 +940,41 @@ instrument first"* reached the room as Wren's relay of Opeyemi, from Wren's own 
 room copy is not the original and Idris could not authenticate it. A later room post, *"Let's go with your
 recommendations"* (`#2954`), is ambiguous about which recommendations and was read narrowly — as
 `#540` only. **The class does not move:** still class 1, still `blocks`.
+
+### 4. A second failure mode in the same test, found by the sightings sweep 2026-10-03
+
+`arrivals.spec.ts` `a page that really does redirect after loading still says so` failed its first attempt in
+**14** runs over 09-28 → 10-03 (13 rescued by the retry, 1 failed both: `36504076439`). **13 are the note-MISSING
+print this card is about. The 14th is not**: run `36665868209` (`feat/flow-type-text`, 09-30 03:45Z, the test at
+`:202` on that branch; the run itself was later `cancelled`, but the test ran and its retry passed).
+
+The note was **present** (`"the page navigated after it loaded, to …"`), and the guard's **second** assertion
+failed instead — *"the guard did not reach the document's own start"*. Its print: `matched` =
+`byDocument: false`, `mirrored: false`, **`fromBusDocument: true`**, `startsForThisUrl: 5`; an unmirrored commit
+exists after the caller's `redirect.html` (the last commit, `hairline.html`, `mirroring: false`), which is why the
+note could be made. The retry's print is the usual shape: `byDocument: true`, `startsForThisUrl: 2`.
+
+**What it is, and is not.** It is the start-layer condition the 2026-09-28 candidate named — `startFor` answering with
+a start that is not the document's own, `byDocument: false` — **occurring in a natural run, once**, without the note
+being lost. It is not a missing note, and no other card or register entry records it. Together with §1 the start layer
+now has two occurrences (this one natural, §1's forced) against **13 of 13** at the commit layer; whether the two are
+the same assumption at two sites, as §2 puts it as a candidate, is unmeasured. One sighting on a feature branch,
+first attempt only; a candidate, by this card's own rule.
+
+The sweep's table, with every run id behind these counts, is in the room (`#3115` and `#3116`); it is not committed.
+
+### 5. §2's table, extended, and what is and is not checked about the extension
+
+§2's window began at 2026-09-28T18:07Z (where the first saved logs start) and ended 10-02 07:32Z. The sweep in §4 pulled
+every `ci.yml` run since **09-28T00:00Z** and through 10-03 and ran the same classification over it:
+
+| | missing | present |
+| --- | --- | --- |
+| shared-app first try, an unmirrored commit **after** the caller's `redirect.html` | **0 of 13** | **90 of 90** |
+| fresh app (a retry), the same | **0 of 1** | **13 of 13** |
+
+**14 missing, 103 present, 0 counter-examples.** The extension adds one missing attempt, run `36455653071`
+(`feat/flow-tool`, 09-28 17:05Z, before §2's window), and the present attempts of the later runs. Nothing about the
+reading changes. **Only the §2 window was independently recounted** (Dogu, `#2972`: 0 of 13, 94 of 94 including run
+`36986610250`); this extension is Idris's parse alone, and it is the same parse, so it is no more independent than the
+§2 numbers were before Dogu's recount.
