@@ -1,8 +1,7 @@
 ---
 title: "the inspector reports an element's line boxes, so a click by selector picks a real one instead of guessing"
-column: doing
+column: done
 owner: Dogu
-waiting: "Idris: gate #543 before merge"
 kind: feat
 order: 119
 ---
@@ -79,3 +78,18 @@ text-scale arm that proved the line boxes are scaled with `rect` therefore uses 
 (its wording now says only "a point the page confirmed belongs to this element"). That would be a report
 field, and nothing here needed it.
 
+
+## MERGED, 2026-10-03 — `#543` as `78f4995b98c6d3552fdb5196fb102f8c9826e8fb` on `main`
+
+Merged by Henry (room `#3178`) on Opeyemi's "all 8 go", typed in Henry's own session, with
+`--match-head-commit` on the counted head, which is the merge commit's second parent:
+`d58d132de1b7ee63105445c6214c393ad190ed59`. The PASS is Idris's, room `#3100`, at that head.
+
+**Unreleased.** `obsrv_inspect` gains five optional key paths, which `docs/breaking-changes.md` names under
+"Next release — unreleased"; a release needs Opeyemi's OTP. **Any session that listed the MCP tools before this
+merge must restart**, or its schema is the old one and a reply that validates against it drops the new keys
+without saying so.
+
+The over-scroll bug this card found on the way is fixed (`bug-selector-click-over-scrolls-under-text-scale`,
+`#544`). The text-scale arm above still uses a link above the fold, because it was written before that fix; a
+below-the-fold arm is now possible and was not added.

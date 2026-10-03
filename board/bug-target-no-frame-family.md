@@ -57,3 +57,13 @@ three reported a wrong answer to a caller.
 
 - the three tests print the target's painting state when they fail;
 - the next sighting of any of them is read against that print and this card says whether the three share it.
+
+
+## A fourth member, 2026-10-03 (Idris, room `#3196`)
+
+`rendering.spec.ts:90` ("the target really rasterises at 1x: half the rows of ink, darker glyphs") failed its first
+attempt in the merge suite of `#545` on `main` (run `37158995878`): *"no full 600x400 paint within 10s"*, after 10.1 s,
+and the retry passed in 260 ms. Read from the raw log. The sweep's 168 logs held no `rendering.spec` failure, so it
+is a new name in the same family, not a recount of the three. It waited for a frame, as `orientation:114` does. Same
+position as the others: nothing printed whether the target was painting, so the next sighting says *a frame did not
+arrive* and no more. The first piece of work (the `painting` / `lastSeq` print on failure) should cover it too.
