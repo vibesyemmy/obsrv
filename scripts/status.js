@@ -30,9 +30,15 @@
 //     `gh run list`, `gh api` GET, `sqlite3 -readonly`).
 //   - It never prints a number it did not read. A section it cannot read says
 //     `NOT READ: <why>` and the exit code is 1, so a missing section can never
-//     be mistaken for an empty one. The ledger needs `OBSRV_ROOM_DB`; without
-//     it that section says `NOT CONFIGURED`, which is a different fact from
-//     "no PASS found" and is printed as loudly.
+//     be mistaken for an empty one. The ledger needs `OBSRV_ROOM_DB` AND
+//     `OBSRV_ROOM_ID` (a room's id, or `all`); without them that section says
+//     `NOT CONFIGURED`, which is a different fact from "no PASS found" and is
+//     printed as loudly. **`NOT CONFIGURED` exits 0**, because the caller chose it, so
+//     a script that reads only the exit code cannot tell a run with the ledger from
+//     a run without it: read the text, or check that both variables are set.
+//     The room is required because a PR number is only meaningful in the room that
+//     is about this repository: a PASS for "#12" in another room's talk would become
+//     a row. `all` is there for a database that holds only this room's talk.
 //
 // The PASS ledger parses message TEXT, so it prints the evidence and the
 // message id to re-read, and a PASS in a format it does not know shows as
@@ -280,9 +286,10 @@ function ledgerSection(prs, ledger, source, at) {
 function readRoomMessages(run, env) {
   const db = env.OBSRV_ROOM_DB
   const room = env.OBSRV_ROOM_ID
-  if (room !== undefined && !/^[0-9a-zA-Z-]{4,80}$/.test(room)) throw new Error('OBSRV_ROOM_ID is not a plausible room id')
+  const everyRoom = room === 'all'
+  if (!everyRoom && !/^[0-9a-zA-Z-]{4,80}$/.test(room ?? '')) throw new Error('OBSRV_ROOM_ID is not a plausible room id')
   // GLOB is case-sensitive; LIKE would also fetch every "passed" and "compass".
-  const where = `m.body GLOB '*PASS*'${room ? ` AND m.room_id = '${room}'` : ''}`
+  const where = `m.body GLOB '*PASS*'${everyRoom ? '' : ` AND m.room_id = '${room}'`}`
   const sql = `SELECT m.seq AS seq, p.name AS author, m.created_at AS at, m.body AS body FROM messages m JOIN participants p ON p.id = m.participant_id WHERE ${where} ORDER BY m.seq`
   const out = run('sqlite3', ['-readonly', '-json', db, sql])
   return out.trim() === '' ? [] : JSON.parse(out)
@@ -338,14 +345,19 @@ function buildReport(run, env, now) {
 
   if (!env.OBSRV_ROOM_DB) {
     sections.push({
-      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_DB to the room database file (and OBSRV_ROOM_ID to restrict it to one room). This is NOT "no PASS found".`,
+      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_DB to the room database file, and OBSRV_ROOM_ID to the room's id. This is NOT "no PASS found".`,
+      ok: true,
+    })
+  } else if (!env.OBSRV_ROOM_ID) {
+    sections.push({
+      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_ID to the id of the room that talks about this repository, or to "all" to read every room in the database (a PR number in another room's PASS would become a row). This is NOT "no PASS found".`,
       ok: true,
     })
   } else {
-    attempt('PASS ledger', `sqlite3 -readonly ${env.OBSRV_ROOM_ID ? `(room ${env.OBSRV_ROOM_ID})` : '(all rooms)'}`, at => {
+    attempt('PASS ledger', `sqlite3 -readonly ${env.OBSRV_ROOM_ID === 'all' ? '(all rooms)' : `(room ${env.OBSRV_ROOM_ID})`}`, at => {
       if (prs === null) throw new Error('the open PR list was not read, so there are no heads to compare')
       const heads = new Map(prs.map(p => [p.number, p.headRefOid]))
-      return ledgerSection(prs, passLedger(readRoomMessages(run, env), heads), `room database${env.OBSRV_ROOM_ID ? `, room ${env.OBSRV_ROOM_ID}` : ', all rooms'}`, at)
+      return ledgerSection(prs, passLedger(readRoomMessages(run, env), heads), `room database${env.OBSRV_ROOM_ID === 'all' ? ', all rooms' : `, room ${env.OBSRV_ROOM_ID}`}`, at)
     })
   }
 

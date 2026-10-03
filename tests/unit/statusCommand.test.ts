@@ -18,6 +18,7 @@ import { join } from 'node:path'
  */
 const status = createRequire(__filename)('../../scripts/status.js') as {
   defaultRun: (cmd: string, args: string[]) => string
+  readRoomMessages: (run: (cmd: string, args: string[]) => string, env: Record<string, string | undefined>) => unknown[]
   firstSha: (text: string) => { sha: string; truncated: boolean } | null
   verdictsInMessage: (body: string) => Array<{ pr: number; sha: string | null; truncated: boolean; line: string }>
   compareSha: (named: string | null, head: string) => string
@@ -323,6 +324,7 @@ describe('the sections', () => {
 
 describe('the whole report', () => {
   const MAIN = 'f6007be6b6bb6766da6d78770539059c271ef004'
+  const ROOM = '15f44194-e907-403e-977c-3e1ba1f81a1a'
   const prsJson = JSON.stringify([
     { number: 544, headRefOid: H544, mergeStateStatus: 'CLEAN', mergeable: 'MERGEABLE', headRefName: 'fix/x', isDraft: false },
   ])
@@ -345,7 +347,7 @@ describe('the whole report', () => {
 
   it('prints every section, each with its source and time, and exits clean when all were read', () => {
     const { fn } = stub()
-    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: ROOM }, () => AT)
     expect(r.ok).toBe(true)
     for (const title of ['== main', '== open PRs', '== CI per open head', '== runs in flight', '== PASS ledger']) expect(r.text).toContain(title)
     expect(r.text.match(/as of 14:10Z/g)).toHaveLength(5)
@@ -359,7 +361,7 @@ describe('the whole report', () => {
         throw new Error('gh: HTTP 401: Bad credentials\nmore detail')
       },
     })
-    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: ROOM }, () => AT)
     expect(r.ok).toBe(false)
     expect(r.text).toContain('== open PRs')
     expect(r.text).toContain('NOT READ: gh: HTTP 401: Bad credentials')
@@ -371,7 +373,7 @@ describe('the whole report', () => {
   })
 
   it('refuses a main that is not a 40-character SHA instead of printing whatever came back', () => {
-    const r = status.buildReport(stub({ main: () => '<html>rate limited</html>' }).fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    const r = status.buildReport(stub({ main: () => '<html>rate limited</html>' }).fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: ROOM }, () => AT)
     expect(r.ok).toBe(false)
     expect(r.text).toMatch(/== main[^\n]*\nNOT READ: expected a 40-character SHA/)
   })
@@ -379,12 +381,29 @@ describe('the whole report', () => {
   it('says NOT CONFIGURED, as a different fact from "no PASS found", when the room database is not named', () => {
     const { fn, calls } = stub()
     const r = status.buildReport(fn, {}, () => AT)
-    expect(r.text).toContain('NOT CONFIGURED: set OBSRV_ROOM_DB')
+    expect(r.text).toContain('NOT CONFIGURED: set OBSRV_ROOM_DB to the room database file, and OBSRV_ROOM_ID')
     expect(r.text).toContain('This is NOT "no PASS found"')
     expect(r.text).not.toContain('no PASS verdict found')
     expect(calls.some(c => c.cmd === 'sqlite3')).toBe(false)
     // It is a state the caller chose, not a failure to read.
     expect(r.ok).toBe(true)
+  })
+
+  it('is NOT CONFIGURED without a room too: a PR number in another room\'s PASS must not become a row', () => {
+    const { fn, calls } = stub()
+    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    expect(r.text).toContain('NOT CONFIGURED: set OBSRV_ROOM_ID to the id of the room that talks about this repository')
+    expect(r.text).toContain('This is NOT "no PASS found"')
+    expect(r.text).not.toContain('no PASS verdict found')
+    expect(calls.some(c => c.cmd === 'sqlite3')).toBe(false)
+    expect(r.ok).toBe(true)
+  })
+
+  it('reads every room only when asked to, with OBSRV_ROOM_ID=all', () => {
+    const { fn, calls } = stub()
+    const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: 'all' }, () => AT)
+    expect(r.text).toContain('== PASS ledger  (room database, all rooms, as of 14:10Z)')
+    expect(calls.find(c => c.cmd === 'sqlite3')!.args[3]).not.toContain('room_id')
   })
 
   it('opens the room database read-only, matches PASS case-sensitively, and only for the room asked for', () => {
@@ -407,7 +426,7 @@ describe('the whole report', () => {
 
   it('only ever READS: no command it runs can change anything', () => {
     const { fn, calls } = stub()
-    status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: ROOM }, () => AT)
     expect(calls.length).toBeGreaterThan(0)
     const verbs = calls.map(c => `${c.cmd} ${c.args.slice(0, 2).join(' ')}`)
     for (const v of verbs) expect(v).toMatch(/^(gh api repos\/|gh pr list|gh run list|sqlite3 -readonly)/)
@@ -420,7 +439,7 @@ describe('the whole report', () => {
   })
 
   it('prints no "ready" or "safe" flag anywhere: it is evidence and the verdict has an owner', () => {
-    const r = status.buildReport(stub().fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
+    const r = status.buildReport(stub().fn, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: ROOM }, () => AT)
     expect(r.text).not.toMatch(/\b(ready|safe to|OK to|good to go|approved)\b/i)
   })
 })
@@ -436,5 +455,27 @@ describe('running a command', () => {
 
   it('says a missing program is missing, which is a different fact from it failing', () => {
     expect(() => status.defaultRun('definitely-not-a-program-xyz', [])).toThrow('definitely-not-a-program-xyz is not installed or not on PATH')
+  })
+})
+
+describe('reading the room database', () => {
+  const rows = (cmd: string, args: string[]): string => {
+    seen.push({ cmd, args })
+    return '[]'
+  }
+  const seen: Array<{ cmd: string; args: string[] }> = []
+
+  it('does not default to every room: with no room named, the function itself refuses', () => {
+    // The report checks this first, but the reader must not rely on its caller to keep PR numbers from another
+    // room's talk out of the ledger.
+    expect(() => status.readRoomMessages(rows, { OBSRV_ROOM_DB: '/x.db' })).toThrow('OBSRV_ROOM_ID is not a plausible room id')
+  })
+
+  it('reads every room only for "all", and one room for a room id', () => {
+    seen.length = 0
+    status.readRoomMessages(rows, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: 'all' })
+    status.readRoomMessages(rows, { OBSRV_ROOM_DB: '/x.db', OBSRV_ROOM_ID: '15f44194-e907-403e-977c-3e1ba1f81a1a' })
+    expect(seen[0]!.args[3]).not.toContain('room_id')
+    expect(seen[1]!.args[3]).toContain("m.room_id = '15f44194-e907-403e-977c-3e1ba1f81a1a'")
   })
 })
