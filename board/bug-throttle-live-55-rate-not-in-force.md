@@ -56,6 +56,14 @@ That is why a failing `slow / plain` does not by itself say whether the *product
 - **C. CPU contention on the measurement.** Possible, but the three `slow / plain` reads are **1.02, 0.98 and 1.00**.
   Contention scatters; these sit on 1.0. That is a reason to doubt C, not proof against it.
 
+## Apart from the flaky test: a candidate that holds whichever reading wins
+
+On the live path a refused apply is **only `log.warn`'d**, and the footer keeps showing `throttle cpu-6x`. So the
+surface the user reads can state a rate Chromium refused. The done card decided that was deliberate for a refusal caused
+by another tool, and this card does not reopen that decision; it records that the question exists on its own, apart from
+whether `throttle-live:55` is a race. (Raised by Wren, `#3124`.) It needs a decision, not an instrument: whether a footer
+that states what was *asked for* is still acceptable once a user can be wrong about a measurement taken under it.
+
 ## Class, by the gate's own test
 
 `docs/release-gate.md` class 1 is *"a wrong answer the caller cannot detect"*, and a reply that is confident about
