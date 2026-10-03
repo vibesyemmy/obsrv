@@ -829,6 +829,17 @@ suite's own comments already blame for a different ratio elsewhere ("a low
 `live-capture-notes.spec.ts:329`). Twelve for twelve retry recoveries is the
 evidence for calling this noise; nobody has measured which of the two it is.
 
+**CORRECTION 2026-10-03 (the sightings sweep, below): "twelve for twelve, none ever a final red" no longer holds, and
+this entry covers one of two assertions.** In the 170 `ci.yml` runs since 09-28 this test failed four times, on **two**
+assertions: `back / plain < 2` (4.34 on `main`, `36530455782`; 4.21 on a PR branch, `36705363590`; both rescued; the one
+above) and **`slow / plain > 3`**, which read 1.02 on `feat/flow-tool` (`36463050844`, rescued) and **0.98, then 1.00 on
+the retry, on a `main` push, `36599810778` (the `#516` merge): a red `main`.** The two polls before `:62` read the app's
+record of what was *asked for*, not an applied rate (`targetSource.ts:864-867` assigns `this.throttle` before it awaits
+`applyThrottle()`; `ipc.ts:548-556` says the footer "still states what was asked for"), so a reading of ~1.0 says only
+that the rate was not in force when the work ran, not why. Card: `bug-throttle-live-55-rate-not-in-force`. The test now
+prints the state, the footer, `debuggerAttached` and a re-measure after 1500 ms when either ratio assertion is about to
+fail. The paragraphs above are left as written.
+
 ## `arrivals.spec.ts:89`: the moved note, read once, right after a different signal settles
 
 `a page that really does redirect after loading still says so` polls the
@@ -1804,3 +1815,49 @@ passenger of a bad runner.
 
 **Still true, and still the interesting part:** this is the file created to *fix* sync coupling by giving
 the test its own app. It has its own app here — the log shows a fresh pid — and it still hung.
+
+## Sightings sweep 2026-10-03: what no card or entry covered
+
+Idris, for Wren (`#3110`). **Window:** the 170 `ci.yml` runs created since 2026-09-28T00:00Z through 10-03; raw logs for
+168 (two cancelled runs have empty logs). The suite ran in 103. Parsed from the Playwright list lines, one key per
+file and title so a moved line does not split a test: **70 first-attempt failures, 38 distinct tests; the retry rescued 50
+and both attempts failed 20.** vitest `FAIL` lines in any log: 0; `error TS`: 0. On `main` pushes, 13 of 39 suite runs had a
+first-attempt failure and 2 ended red (`36504076439`, `arrivals`; `36599810778`, `throttle-live`).
+
+**"Covered" means** a mention of the same `file:line` in this register or a card on `main` `f6007be`, re-checked by title
+and in the `base.spec:N` and `base.spec.ts:N` forms. A test named only by title in prose can be missed by that match.
+
+**Not recurrences (10 of the 20 not covered).** Both attempts failed on PR branches that had a real defect, which CI
+caught: `feat/flow-type-text` (`36661734023`, `36663145446`; eight `mcp.spec` and `mcp-live.spec` tests, *"obsrv_inspect
+emitted 4 keys its own output schema does not declare"*, fixed in `c656b5f`) and `feat/flow-tool` (`36451259567`,
+`36455653071`; the tool-count assertion in `mcp.spec:65`).
+
+**Singletons nothing covers.** Each is one first attempt, rescued by the retry:
+
+| test | run | where | first line |
+| --- | --- | --- | --- |
+| `image-tabs.spec.ts:82` two tabs holding two files each show their own | `36486270346` | `main`, 09-28 | `Test timeout of 30000ms exceeded.` |
+| `visibility.spec.ts:66` hiding the window stops rasterising, and showing resumes | `36504076439` | `main`, 09-29 | `paintsOver(700)` read 0, expected > 2, after the `painting` poll passed |
+| `update.spec.ts:85` the state survives a renderer reload | `36519694953` | `main`, 09-29 | `Timeout 10000ms` polling `getUpdate()` for `available` (this register's `update.spec` entry is `:133`) |
+| `sync-trace.spec.ts:63` a pane already on the URL records already-there | `36530455782` | `main`, 09-29 | `Test timeout of 30000ms exceeded.` (this register's entry is `:77`) |
+| `orientation.spec.ts:114` rotating a phone preset swaps the real raster | `36541147424` | `main`, 09-29 | `no 2556x1179 paint within 10s` |
+| `text-scale.spec.ts:141` the painted frame is the page at the scale | `36705154232` | `main`, 09-30 | `electronApplication.evaluate: Resulting promise was garbage collected` at `launch.ts:105` |
+| `throttle-refused.spec.ts:164` a refused throttle is not shown as in force | `36479230614` | PR `test/flow-live-e2e`, 09-28 | `Test timeout of 30000ms exceeded.` |
+| `cli-walk-limits.spec.ts:262` a page that locks its scroll | `36665868209` | PR `feat/flow-type-text`, 09-30 | `{"screenfuls":5,"atEnd":false,"ms":2483}` |
+| `tabs.spec.ts:177` a scroll in the background tab mirrors within it | `36726476051` | PR `docs/flake-sync-mirror-mark`, 09-30 | Expected 1600, received 0 after a 5000 ms poll (this register's entries are `:755`; a card names `:266`) |
+
+**`text-scale.spec.ts:141` is the "garbage collected" class, through its own fix.** The error at `launch.ts:105` is
+inside `hardenEvaluate`, which the section above says makes the awaited promise "never unreferenced while unsettled". One
+in 168 logs, rescued by the retry. The section's claim is *that this class is fixed*; this is one counter-observation, not a
+frequency.
+
+**What was done with them.** `throttle-live:55` (above) got a card and a diagnostic. `target-source:106`, `visibility:66`
+and `orientation:114` all waited for a frame within 14 hours on `main`: `bug-target-no-frame-family`. The second failure mode
+of `arrivals.spec.ts:202` (`36665868209`: the note present, the matched start `byDocument: false`) is on the redirect card.
+The six recurrence-waiter cards with **0 sightings in 103 suite runs** (`canvas-blank`, `controls-72`, `controls-blur`,
+`ipc-native-pane`, `tabs-266-gate-leak`, and the uninstall unit test) are unchanged; zero in five days is a low rate,
+not a fix.
+
+**Limits.** This is one parse of retained logs by one reader. The `arrivals` table behind the redirect card was
+independently recounted over its narrower window (Dogu, `#2972`); this sweep as a whole was not, though Wren checked the
+`throttle-live` run by hand (`#3114`). No row was reproduced.

@@ -24,6 +24,38 @@ const workMs = (): Promise<number> =>
   app.evaluate(({}, code: string) => (globalThis as any).__obsrv.target.webContents.executeJavaScript(code), `(() => { const t = performance.now(); ${WORK}; return performance.now() - t })()`)
 const footer = (): Promise<string> => page.locator('.target-pane .pane-footer').innerText()
 const targetThrottle = (): Promise<string> => app.evaluate(() => (globalThis as any).__obsrv.target.getThrottle().id)
+const debuggerAttached = (): Promise<boolean> => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.debugger.isAttached())
+
+/**
+ * **Printed only when the assertion after it is about to fail**, so a passing run is exactly the run it was.
+ *
+ * `throttle-live.spec.ts:55` has failed on two different assertions in CI (the 2026-10-03 sightings sweep): `slow / plain > 3`
+ * read **0.98 and 1.00 on both attempts** of one run on `main` (`36599810778`), and 1.02 on a PR branch; `back / plain < 2`
+ * read 4.2-4.3 twice. The test polls `getThrottle().id` and the footer before it measures, but both are the app's record
+ * of what was *asked for* — `TargetSource.setThrottle` assigns `this.throttle` before it awaits `applyThrottle()`, and
+ * `ipc.ts` says the footer "still states what was asked for" when Chromium refuses. So neither poll proves
+ * `Emulation.setCPUThrottlingRate` has run, and a ratio of exactly ~1.0 is what an un-applied rate would give.
+ *
+ * Two readings, and this separates them: measure the same work **again after a wait**. If the second reading is
+ * the expected one, the rate landed LATE and the poll was early (a test race). If it is still ~1.0 (or still ~4x after
+ * `none`), the rate was never applied (or never lifted) while the app said it was, which is the product stating a
+ * condition it does not hold. `attached` says whether the debugger session exists at all.
+ */
+async function sayWhy(label: string, plain: number, first: number, expectation: string): Promise<void> {
+  try {
+    const state = await targetThrottle()
+    const shown = (await footer()).includes('throttle ')
+    const attached = await debuggerAttached()
+    await new Promise(r => setTimeout(r, 1500))
+    const later = await workMs()
+    console.log(
+      `[throttle-live] ${label} ${expectation}: plain=${plain.toFixed(1)}ms first=${first.toFixed(1)}ms (ratio ${(first / plain).toFixed(2)}) ` +
+        `state=${state} footerShowsThrottle=${shown} debuggerAttached=${attached} | after 1500ms: ${later.toFixed(1)}ms (ratio ${(later / plain).toFixed(2)})`,
+    )
+  } catch (e) {
+    console.log(`[throttle-live] ${label}: the diagnostic itself failed: ${e instanceof Error ? e.message : String(e)}`)
+  }
+}
 
 test.beforeAll(async () => {
   server = createServer((_req, res) => {
@@ -58,6 +90,7 @@ test('the menu applies a CPU rate to the target: the same work takes several tim
   await expect.poll(targetThrottle).toBe('cpu-6x')
   await expect.poll(footer).toContain('throttle cpu-6x')
   const slow = await workMs()
+  if (!(slow / plain > 3)) await sayWhy('cpu-6x applied', plain, slow, 'expected slow/plain > 3')
   // 6× nominal; anything under 3× would mean the rate is not in force.
   expect(slow / plain).toBeGreaterThan(3)
 
@@ -65,6 +98,7 @@ test('the menu applies a CPU rate to the target: the same work takes several tim
   await expect.poll(targetThrottle).toBe('none')
   await expect.poll(footer).not.toContain('throttle ')
   const back = await workMs()
+  if (!(back / plain < 2)) await sayWhy('none restored', plain, back, 'expected back/plain < 2')
   expect(back / plain).toBeLessThan(2)
 })
 
