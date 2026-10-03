@@ -24,6 +24,32 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### `obsrv_inspect`'s readout gains `lineRects`, and a click by selector aims at it
+
+`InspectReadout` carries `lineRects` from `feat-inspect-line-rects`: the element's own boxes
+(`Element.getClientRects()`), in the space of `rect` — **one for a block, one per line for a wrapped
+inline, and for the inline not the leading between the lines** that `rect` (their union) includes and that
+paints as the block around it. Document order, boxes with no area dropped, at most 32. Declared in
+`readoutShape`, which is `additionalProperties: false`, and **optional**: a live readout comes from the app,
+and an app older than the field sends none, the same posture as `colorPainted` and the editability fields.
+
+**What breaks:** a client session that listed the tools **before** this change rejects an `obsrv_inspect`
+reply that carries it (`-32602`, *structured content does not match the tool's output schema*). Restart the
+session after upgrading. The published shape gains five key paths on `obsrv_inspect` and nothing else moves.
+
+**What to do:** read `lineRects` as possibly absent, and keep two answers apart. **Absent** means the app
+did not report it (older than the field): the element is unmeasured. **`[]`** means the page reported the
+element has no box anywhere, which is a measurement. A reader that collapses them reads an old app as an
+element that is not drawn.
+
+**What else changes, and is a value rather than a shape:** a click by selector (`obsrv_flow`) used to try
+five fixed fractions inside `rect` and keep the first the page said the element paints. With the field it
+presses the centre of the **largest visible line box**, still verified by asking the page what is drawn
+there. For a block that is the same point as before. For a wrapped link the point in `resolved.point`
+moves, and the hit check costs one probe where the guess walked (measured on the offscreen fixture: 1
+against 2 for a two-line link). An app older than the field keeps the five fractions, so a newer server
+driving an older app behaves exactly as it did.
+
 ### The tools refuse an app older than 0.58.0
 
 **Opeyemi's decision, `chore-minimum-app-version`:** *"set the floor at 0.58.0 and refuse below it."*

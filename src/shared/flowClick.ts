@@ -152,6 +152,50 @@ export function candidatePoints(rect: Box, viewport: Viewport): Array<{ x: numbe
   })
 }
 
+/** The most line boxes a click tries. The ceiling the five fixed fractions had, kept so no
+ *  element costs more probes than it did — in practice it costs one. */
+export const MAX_LINE_PROBES = 5
+
+/**
+ * The points worth trying when the page **reports where the element is**
+ * (`feat-inspect-line-rects`), best first: the centre of the visible part of each of its line boxes,
+ * largest visible area first.
+ *
+ * `candidatePoints` exists because a box alone cannot say where its element paints. A line box can:
+ * `Element.getClientRects()` is one box for a block and one per line for a wrapped inline, **without
+ * the leading between the lines** that the union box contains and that paints as the parent. So the
+ * centre of a line box is inside the element by construction, where the centre of the union was not.
+ *
+ * Largest first because the commonest press is the one that cannot miss: the longest line, which a
+ * short final line (one word, a trailing icon) is not. Ties keep document order, so the choice is
+ * stable between two reads of the same page. A line box that is entirely off screen has no point, and
+ * a partly visible one is measured by the part that is — the same reason `visibleCentre` exists.
+ *
+ * Still only a candidate: the caller asks the page what is drawn at it before pressing, because a
+ * sticky header can cover a line box the element really does paint.
+ */
+export function lineBoxPoints(lineRects: Box[], viewport: Viewport): Array<{ x: number; y: number }> {
+  const visible: Array<{ point: { x: number; y: number }; area: number; order: number }> = []
+  lineRects.forEach((q, order) => {
+    const point = visibleCentre(q, viewport)
+    if (point === null) return
+    const w = Math.min(viewport.width, q.x + q.width) - Math.max(0, q.x)
+    const h = Math.min(viewport.height, q.y + q.height) - Math.max(0, q.y)
+    visible.push({ point, area: w * h, order })
+  })
+  visible.sort((a, b) => b.area - a.area || a.order - b.order)
+  const seen = new Set<string>()
+  const points: Array<{ x: number; y: number }> = []
+  for (const { point } of visible) {
+    const key = `${point.x},${point.y}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    points.push(point)
+    if (points.length === MAX_LINE_PROBES) break
+  }
+  return points
+}
+
 /**
  * Why a selector could not be clicked, in the caller's words.
  *
@@ -205,8 +249,15 @@ export function notBroughtIntoViewRefusal(selector: string, rect: Box, viewport:
  * warning would reach the report and not the caller's reply, which `docs/release-gate.md` names as no
  * disclosure at all. So the step fails, and the sentence says what was tried.
  */
-export function noPointHitsRefusal(selector: string, rect: Box, tried: number, saw: string[]): string {
+export function noPointHitsRefusal(selector: string, rect: Box, tried: number, saw: string[], lineBoxes?: number): string {
   const what = saw.length > 0 ? ` — the ${tried} points tried resolved to ${[...new Set(saw)].join(', ')} instead` : ''
+  if (lineBoxes !== undefined) {
+    // The page reported the element's own boxes, so the wrapped-inline explanation below is the wrong
+    // one: no point was guessed, and the gap between lines was never a candidate.
+    const boxes = `${lineBoxes} line box${lineBoxes === 1 ? '' : 'es'}`
+    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside any of its ${boxes} resolves to that element`
+    return `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but ${where}${what}`
+  }
   return (
     `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but no point inside it ` +
     `resolves to that element${what}. An inline element whose text wraps does this: its box spans every line ` +

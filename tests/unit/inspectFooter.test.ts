@@ -30,6 +30,7 @@ const dim: InspectReport = {
   inputType: null,
   disabled: false,
   readOnly: false,
+  lineRects: [{ x: 16, y: 8, width: 300, height: 18 }],
 }
 
 const preset = findPreset('laptop-768')

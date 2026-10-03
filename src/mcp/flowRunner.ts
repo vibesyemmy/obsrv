@@ -15,6 +15,7 @@ import type { NetworkRecord, NetworkState } from '../shared/networkRecord'
 import type { Flow, FlowStep } from '../shared/flow'
 import {
   candidatePoints,
+  lineBoxPoints,
   isWhollyVisible,
   noMatchRefusal,
   noPointHitsRefusal,
@@ -238,6 +239,27 @@ function boxOf(v: unknown): Box | undefined {
 }
 
 /**
+ * The element's line boxes from an `inspect` readout, or **undefined** when the app did not report
+ * them well-formed.
+ *
+ * Undefined and `[]` are different facts and stay different all the way to the click. An app older
+ * than the field sends no `lineRects`: the element is unmeasured, and the click falls back to the
+ * guessed points it always used. `[]` is a measurement — the element has no box anywhere — and
+ * collapsing it into the first would press a guess at something the page said is not drawn. One
+ * malformed entry makes the whole list unusable for the same reason a malformed `rect` does.
+ */
+function boxesOf(v: unknown): Box[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const out: Box[] = []
+  for (const q of v) {
+    const b = boxOf(q)
+    if (b === undefined) return undefined
+    out.push(b)
+  }
+  return out
+}
+
+/**
  * The first candidate point inside the box that **resolves to the element itself**, asked of the app
  * rather than assumed from the geometry.
  *
@@ -259,8 +281,13 @@ async function firstPointThatHits(
   selector: string,
   rect: Box,
   viewport: Viewport,
-): Promise<{ point: { x: number; y: number } } | { saw: string[]; tried: number } | { unavailable: string }> {
-  const candidates = candidatePoints(rect, viewport)
+  lineRects: Box[] | undefined,
+): Promise<{ point: { x: number; y: number } } | { saw: string[]; tried: number; lineBoxes?: number } | { unavailable: string }> {
+  // **Where the element is, when the page says; a guess only when it does not.** `lineRects` is the
+  // element's own boxes (`feat-inspect-line-rects`), so a point in one is inside the element and the
+  // first probe almost always answers. `undefined` is an app older than the field, which keeps the
+  // five fractions — the heuristic this replaces, still the right answer where nothing better is known.
+  const candidates = lineRects === undefined ? candidatePoints(rect, viewport) : lineBoxPoints(lineRects, viewport)
   const saw: string[] = []
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
   for (const point of candidates) {
@@ -289,7 +316,7 @@ async function firstPointThatHits(
     }
     if (typeof readout['element'] === 'string') saw.push(readout['element'])
   }
-  return { saw, tried: candidates.length }
+  return { saw, tried: candidates.length, ...(lineRects !== undefined ? { lineBoxes: lineRects.length } : {}) }
 }
 
 /**
@@ -322,7 +349,7 @@ async function pointForSelector(
   // too-old app read as "this element does not take text", which is false —
   // the element may be exactly the field a real user would type into.
   type Editability = { editable: boolean | undefined; inputType: string | null; disabled: boolean; readOnly: boolean }
-  const look = async (): Promise<({ rect: Box; pageRect: Box; notes: string[] } & Editability) | { refusal: string }> => {
+  const look = async (): Promise<({ rect: Box; pageRect: Box; notes: string[]; lineRects: Box[] | undefined } & Editability) | { refusal: string }> => {
     const r = await deps.call('inspect', { selector })
     // **`inspect` puts its notes in two different places, measured rather than
     // assumed.** On a miss they are top-level (`{found: false, readout: null,
@@ -346,6 +373,7 @@ async function pointForSelector(
       rect,
       pageRect,
       notes: [...top, ...strings(readout['notes'])],
+      lineRects: boxesOf(readout['lineRects']),
       // `type`'s own facts, carried whether or not this call turns out to be
       // for a click — reading them here costs nothing and keeps them beside
       // the one inspect reply they came from, rather than a second ask.
@@ -358,7 +386,7 @@ async function pointForSelector(
 
   const first = await look()
   if ('refusal' in first) return { refusal: first.refusal, resolved: { selector } }
-  const { rect, pageRect, notes, editable, inputType, disabled, readOnly } = first
+  const { rect, pageRect, notes, editable, inputType, disabled, readOnly, lineRects } = first
   const editability: Editability = { editable, inputType, disabled, readOnly }
 
   // Before anything about position: an element with no area has no point inside
@@ -390,12 +418,12 @@ async function pointForSelector(
         resolved: { selector, rect, pageRect, viewport, ...editability },
       }
     }
-    const hit = await firstPointThatHits(deps, selector, rect, viewport)
+    const hit = await firstPointThatHits(deps, selector, rect, viewport, lineRects)
     if ('unavailable' in hit) {
       return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: { selector, rect, pageRect, viewport, ...editability } }
     }
     if (!('point' in hit)) {
-      return { refusal: noPointHitsRefusal(selector, rect, hit.tried, hit.saw), resolved: { selector, rect, pageRect, viewport, ...editability } }
+      return { refusal: noPointHitsRefusal(selector, rect, hit.tried, hit.saw, hit.lineBoxes), resolved: { selector, rect, pageRect, viewport, ...editability } }
     }
     return { point: hit.point, resolved: { selector, rect, pageRect, viewport, point: hit.point, ...editability } }
   }
@@ -418,10 +446,10 @@ async function pointForSelector(
   // Same check after the scroll as before it: the element that moved into view is
   // as likely to be a wrapped inline as one that was already there, and the
   // failing case in the wild was exactly this path.
-  const hit = await firstPointThatHits(deps, selector, second.rect, viewport)
+  const hit = await firstPointThatHits(deps, selector, second.rect, viewport, second.lineRects)
   if ('unavailable' in hit) return { refusal: probeUnavailableRefusal(selector, hit.unavailable), resolved: base }
   if (!('point' in hit)) {
-    return { refusal: noPointHitsRefusal(selector, second.rect, hit.tried, hit.saw), resolved: base }
+    return { refusal: noPointHitsRefusal(selector, second.rect, hit.tried, hit.saw, hit.lineBoxes), resolved: base }
   }
   return { point: hit.point, resolved: { ...base, point: hit.point } }
 }

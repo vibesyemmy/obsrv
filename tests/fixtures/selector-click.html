@@ -22,6 +22,9 @@
          leaving a gap between them. The link's border box spans both lines AND
          that gap, and the gap paints as the <p> around it. */
       #wrap-host { width: 150px; margin: 24px 0 0 20px; line-height: 2.2; font-size: 14px; }
+      /* The same shape at three lines or more (`feat-inspect-line-rects`): narrow enough that the link
+         wraps past two, which is the case five fixed fractions inside the union could not promise to reach. */
+      #wrap-host-3 { width: 90px; margin: 24px 0 0 20px; line-height: 2.2; font-size: 14px; }
     </style>
   </head>
   <body>
@@ -33,6 +36,9 @@
     <div id="flat" onclick="log('flat')">zero height</div>
     <p id="wrap-host" onclick="log('host')">
       <a id="wrapped-link" href="#" onclick="log('wrapped'); return false;">A product title long enough to wrap</a>
+    </p>
+    <p id="wrap-host-3" onclick="log('host3')">
+      <a id="wrapped-link-3" href="#" onclick="log('wrapped3'); return false;">A product title long enough to wrap onto three lines or more</a>
     </p>
     <div class="spacer"></div>
     <script>

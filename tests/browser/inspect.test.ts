@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { INSPECT_SCRIPT, inspectAtPoint, inspectTarget } from '../../src/shared/inspect'
+import { INSPECT_SCRIPT, inspectAtPoint, inspectTarget, MAX_LINE_RECTS } from '../../src/shared/inspect'
 import type { InspectReport } from '../../src/shared/inspect'
 
 /**
@@ -55,6 +55,8 @@ beforeEach(() => {
     <div id="editable-host" contenteditable="true"><p id="editable-child">nested</p></div>
     <div id="not-editable"><p id="not-editable-child">nested, but the host is not editable</p></div>
     <p id="plain-paragraph">Not a form field at all</p>
+    <p id="wrap-two" style="position: absolute; left: 10px; top: 420px; width: 150px; line-height: 2.2; font-size: 14px;"><a id="wrapped-two" href="#">A product title long enough to wrap</a></p>
+    <p id="wrap-three" style="position: absolute; left: 200px; top: 420px; width: 90px; line-height: 2.2; font-size: 14px;"><a id="wrapped-three" href="#">A product title long enough to wrap onto three lines</a></p>
   `
   host.id = 'host'
   document.body.append(host)
@@ -242,5 +244,70 @@ describe('editability, for a type step’s decisions', () => {
     expect(r.inputType).toBeNull()
     expect(r.disabled).toBe(false)
     expect(r.readOnly).toBe(false)
+  })
+})
+
+describe('lineRects, the element’s own boxes a click by selector aims at', () => {
+  const report = (selector: string): InspectReport => inspectTarget('selector', selector) as InspectReport
+  const bottom = (q: { y: number; height: number }): number => q.y + q.height
+
+  it('is the border box itself for a block: one box, equal to rect', () => {
+    const r = report('#card')
+    expect(r.lineRects).toHaveLength(1)
+    expect(r.lineRects[0]).toEqual(r.rect)
+  })
+
+  it('is one box per line for a wrapped inline, and not the leading between them', () => {
+    const r = report('#wrapped-two')
+    expect(r.lineRects).toHaveLength(2)
+    const [first, second] = r.lineRects as [InspectReport['lineRects'][number], InspectReport['lineRects'][number]]
+    // The premise of the whole field: `rect` is the union, so it holds a gap the link does not paint.
+    expect(second.y - bottom(first), 'no leading between the lines, so this fixture proves nothing').toBeGreaterThan(1)
+    expect(r.rect.height).toBeGreaterThan(first.height + second.height)
+    // The union's own centre is exactly the point the link does not paint: it is in no line box.
+    const centreY = r.rect.y + r.rect.height / 2
+    expect(r.lineRects.some(q => centreY >= q.y && centreY < bottom(q))).toBe(false)
+    // Every line box is inside the union, and none is empty.
+    for (const q of r.lineRects) {
+      expect(q.width).toBeGreaterThan(0)
+      expect(q.height).toBeGreaterThan(0)
+      expect(q.y).toBeGreaterThanOrEqual(r.rect.y - 0.01)
+      expect(bottom(q)).toBeLessThanOrEqual(bottom(r.rect) + 0.01)
+    }
+  })
+
+  it('reports a wrap of three or more lines, which the five fixed fractions could not promise to reach', () => {
+    const r = report('#wrapped-three')
+    expect(r.lineRects.length).toBeGreaterThanOrEqual(3)
+    const ys = r.lineRects.map(q => q.y)
+    expect(ys).toEqual([...ys].sort((a, b) => a - b))
+    expect(new Set(ys).size).toBe(ys.length)
+  })
+
+  it('is empty for an element that is not drawn, agreeing with its empty rect', () => {
+    const r = report('#gone-text')
+    expect(r.lineRects).toEqual([])
+    expect(r.rect.width * r.rect.height).toBe(0)
+  })
+
+  it('stops at 32 boxes, keeping the first ones in document order', () => {
+    const many = document.createElement('div')
+    many.id = 'many'
+    many.style.cssText = 'position: absolute; left: 10px; top: 900px; width: 20px; font-size: 10px; line-height: 12px;'
+    many.innerHTML = `<a id="forty-lines" href="#">${Array.from({ length: 60 }, (_, i) => `w${i}`).join(' ')}</a>`
+    host.append(many)
+    const r = report('#forty-lines')
+    expect(r.lineRects).toHaveLength(32)
+    expect(r.lineRects[0]!.y).toBeCloseTo(r.rect.y, 1)
+    const ys = r.lineRects.map(q => q.y)
+    expect(ys).toEqual([...ys].sort((a, b) => a - b))
+  })
+
+  it('is the same through the shipped source, whose bound of 32 is written out rather than imported', () => {
+    // eslint-disable-next-line no-new-func
+    const fromSource = new Function(`return ${INSPECT_SCRIPT}`)() as typeof inspectTarget
+    const direct = report('#wrapped-two')
+    expect((fromSource('selector', '#wrapped-two') as InspectReport).lineRects).toEqual(direct.lineRects)
+    expect(MAX_LINE_RECTS).toBe(32)
   })
 })

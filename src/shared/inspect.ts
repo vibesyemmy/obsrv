@@ -93,7 +93,40 @@ export interface InspectReport {
   /** `<input readonly>` / `<textarea readonly>`; always false for anything
    *  else, since `readOnly` is not a property those elements have. */
   readOnly: boolean
+  /**
+   * Every box `Element.getClientRects()` reports for the element, in the same
+   * space as `rect`: one for a block, **one per line for a wrapped inline** —
+   * and, for the inline, not the leading between the lines, which `rect` (their
+   * union) includes and which paints as the block around it. That difference is
+   * why this exists (`feat-inspect-line-rects`): a click by selector used to
+   * guess five points inside `rect` and ask the page which one the element
+   * paints, because `rect` alone cannot say where the element is.
+   *
+   * Document order, boxes with no area dropped, at most `MAX_LINE_RECTS` (the
+   * rest are not reported — a long wrapped paragraph-link has more lines than
+   * anything pressing it needs). An element with nothing drawn reports none.
+   */
+  lineRects: InspectRect[]
 }
+
+/**
+ * A report's geometry scaled by the text scale: the box and **every line box**,
+ * together. Under a text scale the page's own CSS px are larger by the scale, so
+ * the box comes back multiplied (`TargetSource.inspectAt` and `inspectSelector`
+ * both say so); a line box left in the page's px beside a `rect` in the
+ * scaled ones would put the point a click aims at in a different space from the
+ * box it was measured against, and the press would land somewhere the check
+ * never looked. One function so the two callers cannot drift apart.
+ */
+export function scaleInspectGeometry(report: InspectReport, k: number): InspectReport {
+  if (k === 1) return report
+  const by = (q: InspectRect): InspectRect => ({ x: q.x * k, y: q.y * k, width: q.width * k, height: q.height * k })
+  return { ...report, rect: by(report.rect), lineRects: report.lineRects.map(by) }
+}
+
+/** The most line boxes one report carries. Inlined in the page script, which
+ *  cannot close over this module; `parseInspectReport` holds the same bound. */
+export const MAX_LINE_RECTS = 32
 
 /**
  * The isolated world the script runs in. Not the preload's (Electron's is
@@ -209,6 +242,14 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   }
 
   const r = el.getBoundingClientRect()
+  // The element's own boxes, one per line for a wrapped inline. 32 is
+  // `MAX_LINE_RECTS`, written out because this function is shipped as source and
+  // cannot reach the module around it (`pageScriptsAreWhole.test.ts`).
+  const lineRects: InspectRect[] = []
+  for (const q of Array.from(el.getClientRects())) {
+    if (lineRects.length >= 32) break
+    if (q.width > 0 && q.height > 0) lineRects.push({ x: q.left, y: q.top, width: q.width, height: q.height })
+  }
   // What is painted under the text: the stack at a point inside its box,
   // top to bottom, from the element itself down. The first opaque
   // background in that stack is what someone sees, with the translucent
@@ -301,6 +342,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     inputType,
     disabled,
     readOnly,
+    lineRects,
   }
 }
 

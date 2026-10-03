@@ -100,6 +100,14 @@ export interface InspectReadout {
   inputType: string | null
   disabled: boolean
   readOnly: boolean
+  /**
+   * The element's own boxes, in the space of `rect` and rounded the same way:
+   * one for a block, one per line for a wrapped inline, without the leading
+   * between lines that `rect` (their union) includes. See
+   * `InspectReport.lineRects`. A click by selector reads this to pick a point
+   * the element paints rather than guessing inside `rect`.
+   */
+  lineRects: { x: number; y: number; width: number; height: number }[]
 }
 
 const round = (v: number, places: number): number => Math.round(v * 10 ** places) / 10 ** places
@@ -218,6 +226,7 @@ export function inspectReadout(
     inputType: report.inputType,
     disabled: report.disabled,
     readOnly: report.readOnly,
+    lineRects: report.lineRects.map(q => ({ x: round(q.x, 1), y: round(q.y, 1), width: round(q.width, 1), height: round(q.height, 1) })),
   }
 }
 

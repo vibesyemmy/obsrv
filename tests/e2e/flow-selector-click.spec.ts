@@ -217,3 +217,89 @@ test('a click by selector presses a point the element paints, not the gap betwee
   const log = await clicksSoFar()
   expect(log[0], `the paragraph received the click before the link: ${JSON.stringify(log)}`).toBe('wrapped')
 })
+
+/**
+ * `feat-inspect-line-rects`, measured against a real page rather than a stub.
+ *
+ * The app now reports the element's own boxes (`readout.lineRects`), and the click aims at the largest
+ * visible one. The claim that earns the field is that **the guessing disappears**: a wrapped link used
+ * to cost several probes (the union's centre sits in the leading between its lines, so the first guess
+ * missed and the heuristic walked on), and now costs one. A control arm removes the field from the
+ * reply, which is what an app older than it sends, and shows the walk coming back — so the saving is
+ * the field's, not the fixture's.
+ */
+type Probe = { x: number; y: number }
+
+/** `call`, with every `inspect` at a point (the hit check) recorded, and optionally the line boxes removed from the reply. */
+function instrumented(opts: { olderApp?: boolean } = {}): {
+  call: (command: string, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>
+  probes: Probe[]
+} {
+  const probes: Probe[] = []
+  return {
+    probes,
+    call: async (command, payload) => {
+      if (command === 'inspect' && payload?.['x'] !== undefined) probes.push({ x: payload['x'] as number, y: payload['y'] as number })
+      const reply = await call(command, payload)
+      if (opts.olderApp === true && command === 'inspect' && typeof reply['readout'] === 'object' && reply['readout'] !== null) {
+        delete (reply['readout'] as Record<string, unknown>)['lineRects']
+      }
+      return reply
+    },
+  }
+}
+
+test('the live inspect reply carries the line boxes: one for a block, one per line for a wrapped link', async () => {
+  const block = await call('inspect', { selector: '#top-cta' })
+  const blockRects = (block['readout'] as { lineRects: Array<Record<string, number>>; rect: Record<string, number> }).lineRects
+  expect(blockRects).toHaveLength(1)
+  expect(blockRects[0]).toEqual((block['readout'] as { rect: Record<string, number> }).rect)
+
+  const link = (await call('inspect', { selector: '#wrapped-link' }))['readout'] as { lineRects: Array<{ y: number; height: number }>; rect: { height: number } }
+  expect(link.lineRects.length, 'the link did not wrap on this screen').toBeGreaterThanOrEqual(2)
+  const [a, b] = link.lineRects as [{ y: number; height: number }, { y: number; height: number }]
+  expect(b.y - (a.y + a.height), 'no leading between the lines, so the union has no gap to miss').toBeGreaterThan(1)
+  expect(link.rect.height).toBeGreaterThan(a.height + b.height)
+})
+
+test('a wrapped link costs one hit check, and without the field the old walk comes back', async () => {
+  await reset()
+  const withField = instrumented()
+  const first = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link' }] }, { call: withField.call })
+  expect(first.steps[0], JSON.stringify(first.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  expect(withField.probes, JSON.stringify(withField.probes)).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped')
+  expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrapped')
+
+  await reset()
+  const older = instrumented({ olderApp: true })
+  const second = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link' }] }, { call: older.call })
+  expect(second.steps[0], JSON.stringify(second.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  // The control: the union's centre is in the gap, so the first guess misses and the heuristic walks on.
+  expect(older.probes.length, JSON.stringify(older.probes)).toBeGreaterThan(1)
+  console.log(`[flow-selector-click] wrapped link hit checks: with lineRects=${withField.probes.length}, without (an older app)=${older.probes.length}`)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped')
+  expect((await clicksSoFar())[0]).toBe('wrapped')
+})
+
+test('a link that wraps past two lines lands on the link, with one hit check', async () => {
+  await reset()
+  const probes = instrumented()
+  const result = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link-3' }] }, { call: probes.call })
+  expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  // The premise, asserted rather than assumed: this fixture really wraps past two lines on this screen.
+  const lines = ((await call('inspect', { selector: '#wrapped-link-3' }))['readout'] as { lineRects: unknown[] }).lineRects
+  expect(lines.length, 'the link did not wrap past two lines, so this test could not tell the cases apart').toBeGreaterThanOrEqual(3)
+  expect(probes.probes, JSON.stringify(probes.probes)).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped3')
+  expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrapped3')
+})
+
+test('a block element still costs one hit check, as it did before the field', async () => {
+  await reset()
+  const probes = instrumented()
+  const result = await runFlow({ steps: [{ action: 'click', target: '#top-cta' }] }, { call: probes.call })
+  expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  expect(probes.probes).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toEqual(['top'])
+})
