@@ -1,6 +1,7 @@
 ---
 title: "Two first-run views only a desk can show: a browser-downloaded DMG, and an MCP call launching the app"
 column: backlog
+waiting: "Opeyemi: say when to run view 2; it launches the app and takes your desk (view 1 is done)"
 kind: chore
 criterion: A3
 order: 81
