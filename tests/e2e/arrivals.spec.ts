@@ -77,7 +77,23 @@ const movedIn = (notes: string[]): string | undefined => notes.find(n => n.inclu
 /** One start as `TargetSource` records it. */
 type Start = { at: number; url: string; byDocument: boolean; mirrored: boolean }
 /** A commit as `commitTrace()` records it — `mirroring` is the bus's provenance. */
-type Commit = { at: number; url: string; kind: string; said: boolean; mirroring?: boolean }
+// `mirrorTerms` says which term stamped `mirroring` (`src/shared/mirrorTerms.ts`); it rides the
+// print as-is because the helper serialises `commitTrace()` whole. Typed here only so the shape is
+// written down where the print is read.
+type Commit = {
+  at: number
+  url: string
+  kind: string
+  said: boolean
+  mirroring?: boolean
+  mirrorTerms?: {
+    mirrorRequested: string | null
+    byDocument: boolean
+    viaMirrorUrl: boolean
+    viaNotByDocument: boolean
+    viaBusDocument: boolean
+  }
+}
 /** What the probe reports. `reachable: false` means `__obsrv.target` was gone. */
 type GuardSeen =
   | { reachable: false }
