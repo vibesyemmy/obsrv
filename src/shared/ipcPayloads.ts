@@ -4,7 +4,7 @@ import type { WalkBlocked } from './walkCoverage'
 import type { MenuGroup, MenuOption, MenuRequest, Rect } from './api'
 import { DEFAULT_THROTTLE, isThrottleId } from './throttle'
 import { DEFAULT_ONION_SKIN, isOnionSkin } from './onionSkin'
-import { MAX_SELECTOR_LENGTH } from './inspect'
+import { MAX_LINE_RECTS, MAX_SELECTOR_LENGTH } from './inspect'
 import type { SelectOpen, SelectResult } from './selectPopup'
 import { isPickerType, MAX_PICKER_VALUE, type PickerEvent, type PickerOpen, type PickerRequest } from './pickerPopup'
 import { parseTextScale } from './textScale'
@@ -175,6 +175,20 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
     return null
   }
   const inputType = typeof inputTypeRaw === 'string' ? inputTypeRaw : null
+  // The element's line boxes, which a click by selector aims at. Strict where
+  // `editable` is lenient, and for the opposite reason: an absent `lineRects`
+  // read as `[]` would say "this element has no boxes" — and a click would
+  // refuse it for having nowhere to press — when the truth is "not reported".
+  // This parser runs inside the app, beside the script that sends the field,
+  // so a report without it is not an older one; it is a malformed one, and the
+  // whole report is dropped like a malformed `rect`.
+  if (!Array.isArray(raw.lineRects) || raw.lineRects.length > MAX_LINE_RECTS) return null
+  const lineRects: InspectReport['lineRects'] = []
+  for (const q of raw.lineRects) {
+    if (!isRecord(q) || ![q.x, q.y, q.width, q.height].every(isFiniteNumber)) return null
+    if ((q.width as number) < 0 || (q.height as number) < 0) return null
+    lineRects.push({ x: q.x as number, y: q.y as number, width: q.width as number, height: q.height as number })
+  }
   // A page that reports no opacity is fully opaque. Anything outside 0..1 is a
   // page saying something impossible, and the report is dropped whole rather
   // than clamped — the rule the rest of this parser follows.
@@ -209,6 +223,7 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
     inputType,
     disabled: raw.disabled === true,
     readOnly: raw.readOnly === true,
+    lineRects,
   }
 }
 

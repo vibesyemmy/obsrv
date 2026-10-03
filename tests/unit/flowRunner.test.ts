@@ -956,3 +956,213 @@ describe('runFlow: a click whose element does not paint its own box centre', () 
     expect(commands.filter(c => c === 'inspect')).toHaveLength(2)
   })
 })
+
+/**
+ * `feat-inspect-line-rects`: when the app reports an element's own boxes, the click aims at one of
+ * them instead of guessing five points inside the union and asking the page which the element paints.
+ *
+ * The geometry is the one `bug-selector-click-presses-the-gap` measured: two lines of a wrapped link
+ * with a 3 px gap, so the union's centre (y = 285) is the one point the link does not paint.
+ */
+describe('runFlow: a click aimed at the element’s own line boxes', () => {
+  const VIEWPORT = { cssWidth: 390, cssHeight: 844 }
+  const UNION = { x: 77.6, y: 266.8, width: 77.3, height: 36.5 }
+  const LINE_1 = { x: 77.6, y: 266.8, width: 77.3, height: 17 }
+  const LINE_2 = { x: 77.6, y: 286.8, width: 40, height: 16.5 }
+  const inside = (p: { x: number; y: number }, q: typeof LINE_1): boolean => p.x >= q.x && p.x < q.x + q.width && p.y >= q.y && p.y < q.y + q.height
+
+  type Probe = { x: number; y: number }
+  /** The page: `inspect {selector}` gives the union and, when asked to, its line boxes; `inspect {x,y}` says `a` inside a line box that is not covered, `h3` everywhere else. */
+  const harness = (opts: { lineRects?: unknown; covered?: typeof LINE_1[] } = {}) => {
+    const probes: Probe[] = []
+    const presses: Array<Record<string, unknown>> = []
+    const call = async (command: string, payload: Record<string, unknown> = {}): Promise<Record<string, unknown>> => {
+      if (command === 'captureRaster') return { settled: true }
+      if (command === 'status') return VIEWPORT
+      if (command === 'click') presses.push(payload)
+      if (command === 'inspect') {
+        if (payload['x'] !== undefined) {
+          const p = payload as unknown as Probe
+          probes.push({ x: p.x, y: p.y })
+          const paints = [LINE_1, LINE_2].some(q => inside(p, q)) && !(opts.covered ?? []).some(q => inside(p, q))
+          return paints
+            ? { ok: true, found: true, readout: { rect: UNION, pageRect: UNION, element: 'a' } }
+            : { ok: true, found: true, readout: { rect: { x: 60, y: 265, width: 112.5, height: 40 }, pageRect: UNION, element: 'h3' } }
+        }
+        return {
+          ok: true,
+          found: true,
+          readout: { rect: UNION, pageRect: UNION, element: 'a', ...('lineRects' in opts ? { lineRects: opts.lineRects } : {}) },
+        }
+      }
+      return { ok: true }
+    }
+    return { call, probes, presses }
+  }
+  const click = (h: ReturnType<typeof harness>) => runFlow(flow([{ action: 'click', target: '.buy' }]), { call: h.call })
+
+  it('presses the centre of the largest line box, and one probe is enough', async () => {
+    const h = harness({ lineRects: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // Line 1 is 77.3×17, line 2 is 40×16.5: the longer line wins, at its own centre — not the union's.
+    expect(h.probes).toEqual([{ x: 116, y: 275 }])
+    expect(h.presses).toEqual([expect.objectContaining({ x: 116, y: 275 })])
+  })
+
+  it('takes the next-largest box when the largest is covered, and says nothing was lost on the way', async () => {
+    const h = harness({ lineRects: [LINE_1, LINE_2], covered: [LINE_1] })
+    const result = await click(h)
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(h.probes).toHaveLength(2)
+    expect(inside(h.probes[1]!, LINE_2)).toBe(true)
+    expect(inside(h.presses[0] as unknown as Probe, LINE_2)).toBe(true)
+  })
+
+  it('refuses, naming line boxes, when none of them resolves to the element — and does not blame the gap', async () => {
+    const h = harness({ lineRects: [LINE_1, LINE_2], covered: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('no point inside it resolves to that element')
+    expect(result.steps[0]!.error).toContain('the centre of each of its 2 line boxes was tried first')
+    expect(result.steps[0]!.error).toContain('h3')
+    expect(result.steps[0]!.error).not.toContain('the gap between them')
+    // The two line boxes first, then the fixed points inside the box — every probe asked, none pressed.
+    expect(h.probes.length).toBeGreaterThan(2)
+    expect(inside(h.probes[0]!, LINE_1)).toBe(true)
+    expect(inside(h.probes[1]!, LINE_2)).toBe(true)
+    expect(h.presses).toEqual([])
+  })
+
+  it('does not claim line boxes were consulted when the app reported none — an app older than the field', async () => {
+    const h = harness({ covered: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    // The original sentence, wrapped-inline explanation and all, and nothing about boxes nobody reported.
+    expect(result.steps[0]!.error).toContain('the gap between them')
+    expect(result.steps[0]!.error).not.toContain('line box')
+    expect(result.steps[0]!.error).not.toContain('tried first')
+  })
+
+  it('says the page reported no line boxes when the list is empty, and still tries the fixed points', async () => {
+    const h = harness({ lineRects: [], covered: [LINE_1, LINE_2] })
+    const result = await click(h)
+    expect(result.steps[0]).toMatchObject({ status: 'failed' })
+    expect(result.steps[0]!.error).toContain('the page reported no line boxes for it, so only the fixed points inside the box were tried')
+    expect(result.steps[0]!.error).not.toContain('the gap between them')
+    expect(h.probes.length, 'the fixed points were not tried').toBeGreaterThan(1)
+  })
+
+  it('keeps the old guess — the union’s centre first — when the app reports no line boxes at all', async () => {
+    const h = harness()
+    const result = await click(h)
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // The union's centre is in the gap, so the first probe misses and the heuristic walks on, as before.
+    expect(h.probes[0]).toEqual({ x: 116, y: 285 })
+    expect(h.probes.length).toBeGreaterThan(1)
+  })
+
+  it('treats a malformed list as no list, rather than trusting the boxes that parsed', async () => {
+    const h = harness({ lineRects: [LINE_1, { x: 1, y: 2, width: 3 }] })
+    const result = await click(h)
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(h.probes[0]).toEqual({ x: 116, y: 285 })
+  })
+
+  it('reads the boxes from the inspect that follows the scroll, not the one before it', async () => {
+    // Below the fold the first reading puts the element at y≈2000; the scroll brings it to y≈266.
+    let scrolled = false
+    const probes: Probe[] = []
+    const presses: Array<Record<string, unknown>> = []
+    const far = (dy: number) => ({ ...UNION, y: UNION.y + dy })
+    const result = await runFlow(flow([{ action: 'click', target: '.buy' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'scroll') {
+          scrolled = true
+          return { ok: true }
+        }
+        if (command === 'click') presses.push(payload)
+        if (command === 'inspect') {
+          if (payload['x'] !== undefined) {
+            probes.push({ x: payload['x'] as number, y: payload['y'] as number })
+            return { ok: true, found: true, readout: { rect: UNION, pageRect: far(1700), element: 'a' } }
+          }
+          const dy = scrolled ? 0 : 1700
+          return {
+            ok: true,
+            found: true,
+            readout: { rect: far(dy), pageRect: far(1700), element: 'a', lineRects: [{ ...LINE_1, y: LINE_1.y + dy }, { ...LINE_2, y: LINE_2.y + dy }] },
+          }
+        }
+        return { ok: true }
+      },
+    })
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // The press is on screen, in the longer line of the box as it stands after the scroll.
+    expect(probes).toEqual([{ x: 116, y: 275 }])
+    expect(presses[0]).toMatchObject({ x: 116, y: 275 })
+  })
+})
+
+/**
+ * Found by Idris's gate on `#543`, not by its author: with the element's boxes reported, the click probed
+ * only the centre of each box, and for a block that is **one point**. A `<button><span>Label</span></button>`
+ * has the label painted over its own centre, so that point resolves to the `<span>`, whose box is not the
+ * button's, and the step refused something the five fixed fractions pressed (the second lands on the padding).
+ * Line boxes say where *text* is; they cannot say where an element is pressable when a child sits on top of
+ * it. The fractions stay, after the line boxes, so what worked before can never refuse.
+ */
+describe('runFlow: a button whose centre is covered by its own label', () => {
+  const VIEWPORT = { cssWidth: 390, cssHeight: 844 }
+  const BUTTON = { x: 20, y: 100, width: 142, height: 58 }
+  const LABEL = { x: 60, y: 119, width: 62, height: 20 }
+  const SPAN_RECT = LABEL
+  const inRect = (p: { x: number; y: number }, q: typeof BUTTON): boolean => p.x >= q.x && p.x < q.x + q.width && p.y >= q.y && p.y < q.y + q.height
+
+  const run = async (lineRects: unknown) => {
+    const probes: Array<{ x: number; y: number }> = []
+    const presses: Array<Record<string, unknown>> = []
+    const result = await runFlow(flow([{ action: 'click', target: '#save' }]), {
+      call: async (command, payload = {}) => {
+        if (command === 'captureRaster') return { settled: true }
+        if (command === 'status') return VIEWPORT
+        if (command === 'click') presses.push(payload)
+        if (command === 'inspect') {
+          if (payload['x'] !== undefined) {
+            const p = payload as unknown as { x: number; y: number }
+            probes.push({ x: p['x'], y: p['y'] })
+            // The label is painted over the middle of the button: it answers there, the button answers on its padding.
+            return inRect(p, LABEL)
+              ? { ok: true, found: true, readout: { rect: SPAN_RECT, pageRect: SPAN_RECT, element: 'span' } }
+              : { ok: true, found: true, readout: { rect: BUTTON, pageRect: BUTTON, element: 'button#save' } }
+          }
+          return { ok: true, found: true, readout: { rect: BUTTON, pageRect: BUTTON, element: 'button#save', ...(lineRects !== undefined ? { lineRects } : {}) } }
+        }
+        return { ok: true }
+      },
+    })
+    return { result, probes, presses }
+  }
+
+  it('is pressed with the boxes reported: the centre misses on the label and the padding answers', async () => {
+    const { result, probes, presses } = await run([BUTTON])
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(probes.length).toBeGreaterThan(1)
+    expect(inRect(probes[0]!, LABEL), 'the centre is on the label, which is the point of the case').toBe(true)
+    expect(inRect(presses[0] as unknown as { x: number; y: number }, LABEL), 'pressed the label, not the button').toBe(false)
+  })
+
+  it('is pressed the same way on an app that reports no boxes', async () => {
+    const { result, presses } = await run(undefined)
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(presses).toHaveLength(1)
+  })
+
+  it('presses the same point either way, because the line-box point is also the first fraction', async () => {
+    const withBoxes = await run([BUTTON])
+    const without = await run(undefined)
+    expect(withBoxes.presses[0]).toMatchObject({ x: (without.presses[0] as { x: number }).x, y: (without.presses[0] as { y: number }).y })
+  })
+})

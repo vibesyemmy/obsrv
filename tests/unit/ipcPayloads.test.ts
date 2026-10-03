@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_LINE_RECTS } from '../../src/shared/inspect'
 import {
   MAX_LOG_MESSAGE,
   MAX_RECT,
@@ -506,6 +507,7 @@ describe('parseInspectReport', () => {
     color: [107, 114, 128, 1],
     background: [255, 255, 255, 1],
     backgroundNote: 'computed',
+    lineRects: [{ x: 10, y: 10, width: 300, height: 15 }],
   }
   it('copies a good report field by field', () => {
     const r = parseInspectReport(good)!
@@ -542,6 +544,46 @@ describe('parseInspectReport', () => {
 
   it('accepts inputType: null explicitly (a textarea or contenteditable host, not an <input>)', () => {
     expect(parseInspectReport({ ...good, editable: true, inputType: null })).toMatchObject({ editable: true, inputType: null })
+  })
+
+  describe('lineRects, the element’s own boxes a click by selector aims at', () => {
+    const box = (i: number) => ({ x: i, y: 2 * i, width: 30, height: 12 })
+
+    it('carries every box the page reports, as new objects', () => {
+      const lineRects = [box(1), box(2), box(3)]
+      const r = parseInspectReport({ ...good, lineRects })!
+      expect(r.lineRects).toEqual(lineRects)
+      expect(r.lineRects[0]).not.toBe(lineRects[0])
+    })
+
+    it('keeps an explicit empty list — an element with nothing drawn — as empty, not as missing', () => {
+      expect(parseInspectReport({ ...good, lineRects: [] })!.lineRects).toEqual([])
+    })
+
+    it('accepts exactly the cap and refuses one more', () => {
+      expect(parseInspectReport({ ...good, lineRects: Array.from({ length: MAX_LINE_RECTS }, (_, i) => box(i)) })!.lineRects).toHaveLength(MAX_LINE_RECTS)
+      expect(parseInspectReport({ ...good, lineRects: Array.from({ length: MAX_LINE_RECTS + 1 }, (_, i) => box(i)) })).toBeNull()
+    })
+
+    it('refuses the whole report when the field is absent, because absent must not read as "no boxes"', () => {
+      const { lineRects: _drop, ...without } = good
+      expect(parseInspectReport(without)).toBeNull()
+    })
+
+    it('refuses the whole report on any malformed box, rather than keeping the good ones', () => {
+      const bad: unknown[] = [
+        'x',
+        null,
+        [box(1), 7],
+        [{ x: 1, y: 2, width: 3 }],
+        [{ x: 1, y: 2, width: 3, height: '4' }],
+        [{ x: NaN, y: 2, width: 3, height: 4 }],
+        [{ x: 1, y: Infinity, width: 3, height: 4 }],
+        [{ x: 1, y: 2, width: -3, height: 4 }],
+        [{ x: 1, y: 2, width: 3, height: -4 }],
+      ]
+      for (const lineRects of bad) expect(parseInspectReport({ ...good, lineRects }), JSON.stringify(lineRects)).toBeNull()
+    })
   })
 
   it('carries an opacity the page reports, and defaults an absent one to opaque', () => {
@@ -819,6 +861,7 @@ describe('parseInspectReport and the layout viewport width', () => {
     color: [0, 0, 0, 1],
     background: [239, 239, 239, 1],
     backgroundNote: 'computed',
+    lineRects: [{ x: 16, y: 54, width: 44, height: 44 }],
   }
   it('carries the width the page laid out at — the readout needs it for a page drawn scaled to fit', () => {
     expect(parseInspectReport({ ...report, viewportWidth: 980 })?.viewportWidth).toBe(980)

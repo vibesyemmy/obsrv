@@ -2115,6 +2115,15 @@ const readoutShape = z
       ),
     disabled: z.boolean().optional().describe('The form field is disabled and cannot take typed text. False for anything that is not a form field. Absent from an app older than the field.'),
     readOnly: z.boolean().optional().describe('The form field is read-only and cannot take typed text. False for anything that is not a form field. Absent from an app older than the field.'),
+    lineRects: z
+      .array(z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }))
+      .optional()
+      .describe(
+        "The element's own boxes (`Element.getClientRects()`), in the space of `rect`: one for a block, one per line for a wrapped " +
+          "inline, and for the inline NOT the leading between the lines that `rect` (their union) includes and that paints as the " +
+          'block around it. Document order, boxes with no area dropped, at most 32. An element with nothing drawn has none. ' +
+          'A click by selector aims at the largest visible one. Absent from an app older than the field.',
+      ),
     notes: z.array(z.string()).optional().describe('What the reader should know about the figures (the layout scale, when it is not 1); also hoisted into the top-level notes.'),
   })
   .nullable()

@@ -24,6 +24,7 @@ const grey: InspectReport = {
   inputType: null,
   disabled: false,
   readOnly: false,
+  lineRects: [{ x: 16.4, y: 8, width: 300, height: 18.2 }],
 }
 
 const screenOf = (id: string, textScale = 1): InspectScreen => {
@@ -34,6 +35,27 @@ const panelOf = (id: string): InspectPanel => {
   const profile = findProfile(id)
   return { profileId: profile.id, profileLabel: profile.label, params: profileToParams(profile, DEFAULT_SETTINGS.hostNits) }
 }
+
+describe('inspectReadout: the element’s line boxes', () => {
+  it('carries each box in the space of rect, rounded to a tenth the way rect is, and never as page-space', () => {
+    const r = inspectReadout(
+      { ...grey, lineRects: [{ x: 16.44, y: 8.04, width: 299.96, height: 9.05 }, { x: 16.44, y: 26.31, width: 80.04, height: 9.05 }] },
+      screenOf('laptop-768'),
+      panelOf('reference'),
+      { x: 0, y: 500 },
+    )
+    expect(r.lineRects).toEqual([
+      { x: 16.4, y: 8, width: 300, height: 9.1 },
+      { x: 16.4, y: 26.3, width: 80, height: 9.1 },
+    ])
+    // `pageRect` adds the scroll; the boxes stay with `rect` — the space a click is aimed in.
+    expect(r.pageRect.y).toBe(508)
+  })
+
+  it('reports an element with nothing drawn as no boxes, not as one empty box', () => {
+    expect(inspectReadout({ ...grey, lineRects: [] }, screenOf('laptop-768'), panelOf('reference')).lineRects).toEqual([])
+  })
+})
 
 describe('inspectReadout', () => {
   it('names the element, gives the font in millimetres on the screen, and the contrast twice', () => {

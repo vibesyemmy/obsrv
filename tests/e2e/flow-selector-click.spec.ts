@@ -217,3 +217,162 @@ test('a click by selector presses a point the element paints, not the gap betwee
   const log = await clicksSoFar()
   expect(log[0], `the paragraph received the click before the link: ${JSON.stringify(log)}`).toBe('wrapped')
 })
+
+/**
+ * `feat-inspect-line-rects`, measured against a real page rather than a stub.
+ *
+ * The app now reports the element's own boxes (`readout.lineRects`), and the click aims at the largest
+ * visible one. The claim that earns the field is that **the guessing disappears**: a wrapped link used
+ * to cost several probes (the union's centre sits in the leading between its lines, so the first guess
+ * missed and the heuristic walked on), and now costs one. A control arm removes the field from the
+ * reply, which is what an app older than it sends, and shows the walk coming back — so the saving is
+ * the field's, not the fixture's.
+ */
+type Probe = { x: number; y: number }
+
+/** `call`, with every `inspect` at a point (the hit check) recorded, and optionally the line boxes removed from the reply. */
+function instrumented(opts: { olderApp?: boolean } = {}): {
+  call: (command: string, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>
+  probes: Probe[]
+  answers: string[]
+} {
+  const probes: Probe[] = []
+  const answers: string[] = []
+  return {
+    probes,
+    answers,
+    call: async (command, payload) => {
+      const isProbe = command === 'inspect' && payload?.['x'] !== undefined
+      if (isProbe) probes.push({ x: payload['x'] as number, y: payload['y'] as number })
+      const reply = await call(command, payload)
+      if (isProbe) answers.push(String((reply['readout'] as { element?: unknown } | null)?.['element'] ?? 'nothing'))
+      if (opts.olderApp === true && command === 'inspect' && typeof reply['readout'] === 'object' && reply['readout'] !== null) {
+        delete (reply['readout'] as Record<string, unknown>)['lineRects']
+      }
+      return reply
+    },
+  }
+}
+
+test('the live inspect reply carries the line boxes: one for a block, one per line for a wrapped link', async () => {
+  const block = await call('inspect', { selector: '#top-cta' })
+  const blockRects = (block['readout'] as { lineRects: Array<Record<string, number>>; rect: Record<string, number> }).lineRects
+  expect(blockRects).toHaveLength(1)
+  expect(blockRects[0]).toEqual((block['readout'] as { rect: Record<string, number> }).rect)
+
+  const link = (await call('inspect', { selector: '#wrapped-link' }))['readout'] as { lineRects: Array<{ y: number; height: number }>; rect: { height: number } }
+  expect(link.lineRects.length, 'the link did not wrap on this screen').toBeGreaterThanOrEqual(2)
+  const [a, b] = link.lineRects as [{ y: number; height: number }, { y: number; height: number }]
+  expect(b.y - (a.y + a.height), 'no leading between the lines, so the union has no gap to miss').toBeGreaterThan(1)
+  expect(link.rect.height).toBeGreaterThan(a.height + b.height)
+})
+
+test('a wrapped link costs one hit check, and without the field the old walk comes back', async () => {
+  await reset()
+  const withField = instrumented()
+  const first = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link' }] }, { call: withField.call })
+  expect(first.steps[0], JSON.stringify(first.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  expect(withField.probes, JSON.stringify(withField.probes)).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped')
+  expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrapped')
+
+  await reset()
+  const older = instrumented({ olderApp: true })
+  const second = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link' }] }, { call: older.call })
+  expect(second.steps[0], JSON.stringify(second.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  // The control: the union's centre is in the gap, so the first guess misses and the heuristic walks on.
+  expect(older.probes.length, JSON.stringify(older.probes)).toBeGreaterThan(1)
+  console.log(`[flow-selector-click] wrapped link hit checks: with lineRects=${withField.probes.length}, without (an older app)=${older.probes.length}`)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped')
+  expect((await clicksSoFar())[0]).toBe('wrapped')
+})
+
+test('a link that wraps past two lines lands on the link, with one hit check', async () => {
+  await reset()
+  const probes = instrumented()
+  const result = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link-3' }] }, { call: probes.call })
+  expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  // The premise, asserted rather than assumed: this fixture really wraps past two lines on this screen.
+  const lines = ((await call('inspect', { selector: '#wrapped-link-3' }))['readout'] as { lineRects: unknown[] }).lineRects
+  expect(lines.length, 'the link did not wrap past two lines, so this test could not tell the cases apart').toBeGreaterThanOrEqual(3)
+  expect(probes.probes, JSON.stringify(probes.probes)).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrapped3')
+  expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrapped3')
+})
+
+test('a block element still costs one hit check, as it did before the field', async () => {
+  await reset()
+  const probes = instrumented()
+  const result = await runFlow({ steps: [{ action: 'click', target: '#top-cta' }] }, { call: probes.call })
+  expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+  expect(probes.probes).toHaveLength(1)
+  await expect.poll(clicksSoFar, { timeout: 5_000 }).toEqual(['top'])
+})
+
+/**
+ * **The regression a reviewer found in the first version of this change** (Idris's gate on `#543`): with
+ * the element's boxes reported, the click probed only the centre of each box — one point for a block. A
+ * button with a label over its centre resolves there to the `<span>`, not the button, so the step refused
+ * what the five fixed fractions had always pressed. The fixture's other buttons are plain text, which is
+ * why every earlier run was green. These two have a child on top of their own centre.
+ */
+for (const [id, log] of [
+  ['#span-btn', 'spanbtn'],
+  ['#icon-btn', 'iconbtn'],
+] as const) {
+  test(`${id}, with a child painted over its centre, is pressed with the line boxes reported and without them`, async () => {
+    await reset()
+    const withField = instrumented()
+    const first = await runFlow({ steps: [{ action: 'click', target: id }] }, { call: withField.call })
+    expect(first.steps[0], JSON.stringify(first.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // The premise, read off the page: the first probe — the centre — resolved to the child and missed.
+    expect(withField.answers[0], `the centre answered ${withField.answers[0]}, so this fixture does not cover the case`).not.toBe('button')
+    expect(withField.probes.length).toBeGreaterThan(1)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain(log)
+
+    await reset()
+    const older = instrumented({ olderApp: true })
+    const second = await runFlow({ steps: [{ action: 'click', target: id }] }, { call: older.call })
+    expect(second.steps[0], JSON.stringify(second.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // Parity with an app that reports no boxes: the same press, because the fixed points follow the boxes.
+    expect(first.steps[0]!.resolved!.point).toEqual(second.steps[0]!.resolved!.point)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain(log)
+  })
+}
+
+/**
+ * **The one new coupling in `feat-inspect-line-rects`, measured** (Idris's gate on `#543` asked for it):
+ * under a text scale the page's own CSS px are larger by the scale, so `rect` comes back multiplied
+ * (`TargetSource.inspectAt` / `inspectSelector`). The line boxes are the points a click is aimed at, and
+ * if they stayed in the page's px beside a scaled `rect`, the press would be chosen in one space and
+ * checked against a box in another. `scaleInspectGeometry` scales both; this proves it on a real page by
+ * pressing a wrapped link at scale 1.5 and checking the boxes still sit inside the scaled box. The link is
+ * above the fold on purpose: a below-the-fold selector click over-scrolls under a text scale, on `origin/main`
+ * too (`bug-selector-click-over-scrolls-under-text-scale`), and that is not what this arm measures.
+ */
+test('at a text scale of 1.5, the line boxes stay inside the scaled box and a wrapped link is pressed', async () => {
+  await reset()
+  expect((await call('setTextScale', { textScale: 1.5 }))['applied']).toBe(true)
+  try {
+    const readout = (await call('inspect', { selector: '#wrapped-link-top' }))['readout'] as {
+      rect: { x: number; y: number; width: number; height: number }
+      lineRects: Array<{ x: number; y: number; width: number; height: number }>
+    }
+    expect(readout.lineRects.length, 'the link did not wrap at this scale, so the boxes prove nothing').toBeGreaterThanOrEqual(2)
+    // Same space as `rect`: every box inside it (to rounding), none left behind in unscaled px.
+    for (const q of readout.lineRects) {
+      expect(q.x).toBeGreaterThanOrEqual(readout.rect.x - 0.2)
+      expect(q.y).toBeGreaterThanOrEqual(readout.rect.y - 0.2)
+      expect(q.x + q.width).toBeLessThanOrEqual(readout.rect.x + readout.rect.width + 0.2)
+      expect(q.y + q.height).toBeLessThanOrEqual(readout.rect.y + readout.rect.height + 0.2)
+    }
+    const probes = instrumented()
+    const result = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link-top' }] }, { call: probes.call })
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(probes.probes, JSON.stringify(probes.probes)).toHaveLength(1)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrappedtop')
+    expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrappedtop')
+  } finally {
+    expect((await call('setTextScale', { textScale: 1 }))['applied']).toBe(true)
+  }
+})

@@ -11,7 +11,7 @@ import { clipToExtent, paintedExtent, fitsFrame, isFullFrame } from '../shared/p
 import type { LoadError, TargetInputEvent } from '../shared/types'
 import { AUDIT_MAX_TARGETS, AUDIT_MAX_TEXT, AUDIT_SCRIPT, type AuditReport } from '../shared/audit'
 import { LINT_MAX_EDGES, LINT_MAX_IMAGES, LINT_MAX_TEXT, LINT_SCRIPT, type LintReport } from '../shared/lint'
-import { INSPECT_SCRIPT, INSPECT_WORLD_ID, type InspectReport } from '../shared/inspect'
+import { INSPECT_SCRIPT, INSPECT_WORLD_ID, scaleInspectGeometry, type InspectReport } from '../shared/inspect'
 import { SELECT_ALL_SCRIPT } from '../shared/selectAll'
 import { OBSERVE_MAX_MATCHES, OBSERVE_MAX_UNRENDERED, OBSERVE_SCRIPT, type ObserveReport } from '../shared/observe'
 import { layoutScale } from '../shared/layoutScale'
@@ -1304,10 +1304,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // The box comes back in the page's own px times the text scale, as
       // `inspectSelector` reports it: the readout scales millimetres by the
       // layout scale itself, from the viewport width it carries.
-      const t = this.textScale
-      if (report === null || t === 1) return report
-      const r = report.rect
-      return { ...report, rect: { x: r.x * t, y: r.y * t, width: r.width * t, height: r.height * t } }
+      return report === null ? null : scaleInspectGeometry(report, this.textScale)
     } catch {
       // A navigation mid-call, or a page that threw: nothing to report.
       this.lastAsk = 'failed'
@@ -1371,9 +1368,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       const raw = await this.ask(`${INSPECT_SCRIPT}('selector', ${JSON.stringify(selector)})`, budgetMs)
       if (raw !== null && typeof raw === 'object' && (raw as { invalidSelector?: unknown }).invalidSelector === true) return 'invalid-selector'
       const report = parseInspectReport(raw)
-      if (report === null || k === 1) return report
-      const r = report.rect
-      return { ...report, rect: { x: r.x * k, y: r.y * k, width: r.width * k, height: r.height * k } }
+      return report === null ? null : scaleInspectGeometry(report, k)
     } catch {
       this.lastAsk = 'failed'
       return null

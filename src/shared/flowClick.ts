@@ -152,6 +152,85 @@ export function candidatePoints(rect: Box, viewport: Viewport): Array<{ x: numbe
   })
 }
 
+/** The most line boxes a click tries. The ceiling the five fixed fractions had, kept so no
+ *  element costs more probes than it did — in practice it costs one. */
+export const MAX_LINE_PROBES = 5
+
+/**
+ * The points worth trying when the page **reports where the element is**
+ * (`feat-inspect-line-rects`), best first: the centre of the visible part of each of its line boxes,
+ * largest visible area first.
+ *
+ * `candidatePoints` exists because a box alone cannot say where its element paints. A line box can:
+ * `Element.getClientRects()` is one box for a block and one per line for a wrapped inline, **without
+ * the leading between the lines** that the union box contains and that paints as the parent. So the
+ * centre of a line box is inside the element by construction, where the centre of the union was not.
+ *
+ * Largest first because the commonest press is the one that cannot miss: the longest line, which a
+ * short final line (one word, a trailing icon) is not. Ties keep document order, so the choice is
+ * stable between two reads of the same page. A line box that is entirely off screen has no point, and
+ * a partly visible one is measured by the part that is — the same reason `visibleCentre` exists.
+ *
+ * Still only a candidate: the caller asks the page what is drawn at it before pressing, because a
+ * sticky header can cover a line box the element really does paint.
+ */
+export function lineBoxPoints(lineRects: Box[], viewport: Viewport): Array<{ x: number; y: number }> {
+  const visible: Array<{ point: { x: number; y: number }; area: number; order: number }> = []
+  lineRects.forEach((q, order) => {
+    const point = visibleCentre(q, viewport)
+    if (point === null) return
+    const w = Math.min(viewport.width, q.x + q.width) - Math.max(0, q.x)
+    const h = Math.min(viewport.height, q.y + q.height) - Math.max(0, q.y)
+    visible.push({ point, area: w * h, order })
+  })
+  visible.sort((a, b) => b.area - a.area || a.order - b.order)
+  const seen = new Set<string>()
+  const points: Array<{ x: number; y: number }> = []
+  for (const { point } of visible) {
+    const key = `${point.x},${point.y}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    points.push(point)
+    if (points.length === MAX_LINE_PROBES) break
+  }
+  return points
+}
+
+/**
+ * Every point worth trying for an element, in order: **its line boxes first, then the fixed points
+ * inside its box** — the second list always, never instead.
+ *
+ * **Found by a reviewer, not by the author** (Idris's gate on `#543`): the first version probed the
+ * line boxes *alone*, and for a block that is one point, the centre. A `<button><span>Label</span></button>`
+ * paints its label over that point, so it resolved to the `<span>`, whose box is not the button's, and the
+ * step refused something the five fixed fractions had always pressed — the second lands on the padding.
+ * Line boxes say where an element's *text* is. They cannot say where an element is pressable when one of
+ * its children sits on top of it, and `getClientRects()` has nothing to report about that.
+ *
+ * So the fractions are kept as the fallback, and the old behaviour is a strict subset of the new one:
+ * anything the five points could press, this still presses. What the line boxes buy is order — a wrapped
+ * link's first probe lands, where the union's centre sat in the leading between its lines — not a smaller
+ * set. Deduplicated, so the common case (a block, whose line box centre is also the first fraction) is
+ * still one probe.
+ *
+ * `undefined` means the app reported no boxes (one older than the field): the fractions alone, as before.
+ */
+export function probePoints(
+  rect: Box,
+  lineRects: Box[] | undefined,
+  viewport: Viewport,
+): Array<{ x: number; y: number }> {
+  const fractions = candidatePoints(rect, viewport)
+  if (lineRects === undefined) return fractions
+  const seen = new Set<string>()
+  return [...lineBoxPoints(lineRects, viewport), ...fractions].filter(p => {
+    const key = `${p.x},${p.y}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 /**
  * Why a selector could not be clicked, in the caller's words.
  *
@@ -205,8 +284,19 @@ export function notBroughtIntoViewRefusal(selector: string, rect: Box, viewport:
  * warning would reach the report and not the caller's reply, which `docs/release-gate.md` names as no
  * disclosure at all. So the step fails, and the sentence says what was tried.
  */
-export function noPointHitsRefusal(selector: string, rect: Box, tried: number, saw: string[]): string {
+export function noPointHitsRefusal(selector: string, rect: Box, tried: number, saw: string[], lineBoxes?: number): string {
   const what = saw.length > 0 ? ` — the ${tried} points tried resolved to ${[...new Set(saw)].join(', ')} instead` : ''
+  if (lineBoxes !== undefined) {
+    // The page reported the element's own boxes, so the wrapped-inline explanation below is the wrong
+    // one: the centre of each line box was tried before the fixed points, and none of them was the gap.
+    const boxes = `${lineBoxes} line box${lineBoxes === 1 ? '' : 'es'}`
+    const how =
+      lineBoxes === 0
+        ? 'the page reported no line boxes for it, so only the fixed points inside the box were tried'
+        : `the centre of each of its ${boxes} was tried first, then the fixed points inside the box`
+    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside it resolves to that element (${how})`
+    return `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but ${where}${what}`
+  }
   return (
     `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but no point inside it ` +
     `resolves to that element${what}. An inline element whose text wraps does this: its box spans every line ` +
