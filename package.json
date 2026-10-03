@@ -30,6 +30,7 @@
     "version": "node scripts/sync-plugin-version.js && git add .claude-plugin .mcp.json",
     "board": "node scripts/build-board.js",
     "board:check": "node scripts/build-board.js --check",
+    "board:serve": "node scripts/board-serve.js",
     "test:e2e:run": "npm run build && playwright test",
     "reds:check": "node scripts/knownReds.js --check",
     "schema:sweep": "node scripts/schema-emit-sweep.js"

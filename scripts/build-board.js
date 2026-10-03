@@ -64,9 +64,21 @@ const { join, dirname } = require('node:path')
 const { execFileSync } = require('node:child_process')
 
 const ROOT = join(dirname(__dirname))
-const CARDS = join(ROOT, 'board')
-const OUT = join(ROOT, 'docs', 'board.md')
+const OUT_MD = join(ROOT, 'docs', 'board.md')
 const OUT_HTML = join(ROOT, 'docs', 'board.html')
+// `--cards <dir>`, `--md <path>` and `--json <path>` exist for the live server
+// (`scripts/board-serve.js`), which builds the page from ANOTHER commit's cards
+// — materialised into a temp directory — and must not write over the working
+// tree's own generated copies while doing it. `--json` writes the same data the
+// page embeds, so the server can hand a client new cards without the client
+// re-parsing a page.
+const argAfter = (flag, fallback) => {
+  const at = process.argv.indexOf(flag)
+  return at === -1 ? fallback : (process.argv[at + 1] ?? fallback)
+}
+const CARDS = argAfter('--cards', join(ROOT, 'board'))
+const OUT = argAfter('--md', OUT_MD)
+const jsonOut = argAfter('--json', '')
 const check = process.argv.includes('--check')
 // `--stamp <text>` is for a PUBLISHED copy only, and is deliberately absent
 // from the committed file. A published page is a snapshot: it cannot be
@@ -76,8 +88,7 @@ const check = process.argv.includes('--check')
 // because it and the cards land in the same commit.
 const stampAt = process.argv.indexOf('--stamp')
 const stamp = stampAt === -1 ? '' : (process.argv[stampAt + 1] ?? '')
-const htmlAt = process.argv.indexOf('--html')
-const htmlOut = htmlAt === -1 ? OUT_HTML : (process.argv[htmlAt + 1] ?? OUT_HTML)
+const htmlOut = argAfter('--html', OUT_HTML)
 // The committed file and the Pages build are whole documents: served or opened
 // on their own they need a charset of their own, and this page is full of
 // em-dashes that render as mojibake without one. `--fragment` drops the
@@ -359,7 +370,9 @@ const rendered = out.join('\n').replace(/\n{3,}/g, '\n\n') + '\n'
 // reading 51 cards. Read-only on purpose: moving a card is editing its file,
 // and a page you could drag cards in would put card state in two places that
 // disagree — which is what this board was moved into the repo to stop.
-function renderHtml(stampText) {
+// The page's own data, and what `--json` writes. One producer, so the live
+// server cannot serve a shape the page does not know how to paint.
+function boardData(stampText) {
   const data = COLUMNS.map(col => ({
     ...col,
     cards: cards
@@ -373,11 +386,14 @@ function renderHtml(stampText) {
         waitingSince: waitingSince(c),
       })),
   })).filter(c => c.cards.length > 0)
+  return JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto })
+}
+
+function renderHtml(stampText) {
   // `</script>` inside a card's prose would end the tag early; the escape is
   // invisible to JSON.parse and keeps the page from breaking on a card that
   // happens to quote some HTML.
-  const json = JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto })
-    .replace(/</g, '\\u003c')
+  const json = boardData(stampText).replace(/</g, '\\u003c')
   const head = fragment
     ? ''
     : `<!doctype html>
@@ -456,12 +472,17 @@ ${bodyOpen}<div class="wrap">
   <button class="close" id="dclose">Close</button>
 </dialog>
 <script>
-const DATA = JSON.parse(${JSON.stringify(json)});
 const COLOR = { next: 'var(--next)', doing: 'var(--doing)', review: 'var(--review)', backlog: 'var(--backlog)', done: 'var(--done)' };
+// Painting is a function, not a top-level run, so the same cards can be drawn
+// again from new data without reloading the page — which is what the live
+// server (scripts/board-serve.js) calls when main moves. A reload would lose
+// the reader's scroll and close an open card, and a page that jumps while
+// being read is its own kind of wrong answer.
+function paint(DATA) {
 document.getElementById('sub').textContent =
   DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary;
 const st = document.getElementById('stamp');
-if (DATA.stamp) {
+if (st && DATA.stamp) {
   const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
   st.innerHTML = DATA.auto
     ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
@@ -475,6 +496,7 @@ const ago = ms => {
   return min < 60 ? min + ' min ago' : min < 2880 ? Math.round(min / 60) + ' h ago' : Math.round(min / 1440) + ' d ago';
 };
 const cols = document.getElementById('cols');
+cols.textContent = '';
 for (const col of DATA.columns) {
   const d = document.createElement('div');
   d.className = 'col';
@@ -510,6 +532,10 @@ for (const col of DATA.columns) {
   }
   cols.append(d);
 }
+}
+paint(JSON.parse(${JSON.stringify(json)}));
+// The live server repaints through this; nothing in the committed page uses it.
+window.__boardPaint = paint;
 const dlg = document.getElementById('dlg');
 function open_(c, col) {
   document.getElementById('dtitle').textContent = c.title;
@@ -529,7 +555,12 @@ dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 if (!check) {
   writeFileSync(OUT, rendered)
   writeFileSync(htmlOut, renderHtml(stamp))
-  console.error(`board: ${cards.length} cards → docs/board.md${htmlOut === OUT_HTML ? ' + docs/board.html' : ` + ${htmlOut}`}`)
+  if (jsonOut) writeFileSync(jsonOut, boardData(stamp))
+  // Name the files actually written: with `--md`/`--html` pointed elsewhere, a
+  // line claiming docs/board.md names a file this run never touched.
+  const wrote = [OUT === OUT_MD ? 'docs/board.md' : OUT, htmlOut === OUT_HTML ? 'docs/board.html' : htmlOut]
+  if (jsonOut) wrote.push(jsonOut)
+  console.error(`board: ${cards.length} cards → ${wrote.join(' + ')}`)
   process.exit(0)
 }
 
