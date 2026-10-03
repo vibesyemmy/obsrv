@@ -969,7 +969,8 @@ describe('runFlow: a click on an element below the fold, under a text scale', ()
   const PAGE_HEIGHT = 4357
   const SIZE = { width: 360, height: 56 }
 
-  const run = async (k: number | undefined) => {
+  /** `k` is the scale the page really runs at; `reported` is what `status` says it is (the same, unless a test lies). */
+  const run = async (k: number | undefined, reported: unknown = k) => {
     let scroll = 0
     let recorded = 0 // what the app last landed a scroll at, which `pageRect` adds to `rect`
     const scale = k ?? 1
@@ -979,7 +980,7 @@ describe('runFlow: a click on an element below the fold, under a text scale', ()
     const result = await runFlow(flow([{ action: 'click', target: '#below-cta' }]), {
       call: async (command, payload = {}) => {
         if (command === 'captureRaster') return { settled: true }
-        if (command === 'status') return { ...SURFACE, ...(k !== undefined ? { textScale: k } : {}) }
+        if (command === 'status') return { ...SURFACE, ...(reported !== undefined ? { textScale: reported } : {}) }
         if (command === 'scroll') {
           scrolls.push(payload)
           // Page px, clamped to the document, and the app records where it landed.
@@ -1034,4 +1035,20 @@ describe('runFlow: a click on an element below the fold, under a text scale', ()
     expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
     expect(scrolls[0]!['y']).toBe(Math.round(P - SURFACE.cssHeight / 3))
   })
+
+  // `readStatus` reads a scale only when it is a positive number. An app clamps its scale to a published
+  // range, so none of these is reachable from a real one; the guard is there so a malformed reply cannot
+  // become a division by zero (Infinity) or by a negative (a scroll the wrong way) inside `scrollToShow`,
+  // and a guard nothing exercises is a comment, not a guard (Idris's gate on `#544`, survivor of 7).
+  for (const reported of [0, -1, -1.5, 'wide', null, Number.NaN]) {
+    it(`reads a reported text scale of ${JSON.stringify(reported)} as scale 1 rather than dividing by it`, async () => {
+      const { result, scrolls, presses, finalBox } = await run(1, reported)
+      expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+      expect(scrolls).toHaveLength(1)
+      expect(scrolls[0]!['y']).toBe(Math.round(P - SURFACE.cssHeight / 3))
+      expect(presses).toHaveLength(1)
+      expect(presses[0]!.y).toBeGreaterThanOrEqual(finalBox.y)
+      expect(presses[0]!.y).toBeLessThan(finalBox.y + finalBox.height)
+    })
+  }
 })
