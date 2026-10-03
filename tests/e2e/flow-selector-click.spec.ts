@@ -234,13 +234,18 @@ type Probe = { x: number; y: number }
 function instrumented(opts: { olderApp?: boolean } = {}): {
   call: (command: string, payload?: Record<string, unknown>) => Promise<Record<string, unknown>>
   probes: Probe[]
+  answers: string[]
 } {
   const probes: Probe[] = []
+  const answers: string[] = []
   return {
     probes,
+    answers,
     call: async (command, payload) => {
-      if (command === 'inspect' && payload?.['x'] !== undefined) probes.push({ x: payload['x'] as number, y: payload['y'] as number })
+      const isProbe = command === 'inspect' && payload?.['x'] !== undefined
+      if (isProbe) probes.push({ x: payload['x'] as number, y: payload['y'] as number })
       const reply = await call(command, payload)
+      if (isProbe) answers.push(String((reply['readout'] as { element?: unknown } | null)?.['element'] ?? 'nothing'))
       if (opts.olderApp === true && command === 'inspect' && typeof reply['readout'] === 'object' && reply['readout'] !== null) {
         delete (reply['readout'] as Record<string, unknown>)['lineRects']
       }
@@ -303,3 +308,34 @@ test('a block element still costs one hit check, as it did before the field', as
   expect(probes.probes).toHaveLength(1)
   await expect.poll(clicksSoFar, { timeout: 5_000 }).toEqual(['top'])
 })
+
+/**
+ * **The regression a reviewer found in the first version of this change** (Idris's gate on `#543`): with
+ * the element's boxes reported, the click probed only the centre of each box — one point for a block. A
+ * button with a label over its centre resolves there to the `<span>`, not the button, so the step refused
+ * what the five fixed fractions had always pressed. The fixture's other buttons are plain text, which is
+ * why every earlier run was green. These two have a child on top of their own centre.
+ */
+for (const [id, log] of [
+  ['#span-btn', 'spanbtn'],
+  ['#icon-btn', 'iconbtn'],
+] as const) {
+  test(`${id}, with a child painted over its centre, is pressed with the line boxes reported and without them`, async () => {
+    await reset()
+    const withField = instrumented()
+    const first = await runFlow({ steps: [{ action: 'click', target: id }] }, { call: withField.call })
+    expect(first.steps[0], JSON.stringify(first.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // The premise, read off the page: the first probe — the centre — resolved to the child and missed.
+    expect(withField.answers[0], `the centre answered ${withField.answers[0]}, so this fixture does not cover the case`).not.toBe('button')
+    expect(withField.probes.length).toBeGreaterThan(1)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain(log)
+
+    await reset()
+    const older = instrumented({ olderApp: true })
+    const second = await runFlow({ steps: [{ action: 'click', target: id }] }, { call: older.call })
+    expect(second.steps[0], JSON.stringify(second.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    // Parity with an app that reports no boxes: the same press, because the fixed points follow the boxes.
+    expect(first.steps[0]!.resolved!.point).toEqual(second.steps[0]!.resolved!.point)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain(log)
+  })
+}

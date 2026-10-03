@@ -32,6 +32,10 @@
     <button id="top-cta" onclick="log('top')">top</button>
     <div class="spacer"></div>
     <button id="below-cta" onclick="log('below')">below the fold</button>
+    <!-- A label painted over the button's own centre (found by Idris's gate on #543): the centre resolves to
+         the <span>, whose box is not the button's, so only a point on the padding identifies the button. -->
+    <button id="span-btn" onclick="log('spanbtn')" style="display: block; width: auto; height: auto; padding: 20px 40px; margin: 16px 0 0 20px"><span>Label</span></button>
+    <button id="icon-btn" onclick="log('iconbtn')" style="display: inline-flex; align-items: center; gap: 8px; width: auto; height: auto; padding: 14px 18px; margin: 16px 0 0 20px"><svg width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#123"/></svg><span>Save</span></button>
     <button id="hidden-cta" onclick="log('hidden')">display: none</button>
     <div id="flat" onclick="log('flat')">zero height</div>
     <p id="wrap-host" onclick="log('host')">
