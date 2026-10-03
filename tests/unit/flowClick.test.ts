@@ -82,6 +82,59 @@ describe('the scroll that brings an element into view', () => {
   })
 })
 
+/**
+ * `bug-selector-click-over-scrolls-under-text-scale`. Measured on the app, not derived: under a text scale
+ * the page lays out k times smaller, so `inspect`'s `rect` and the viewport are in **surface px** (k times
+ * the page's CSS px) while `scroll` takes **page px**. At k = 1.5 an element 2216 page px down reads
+ * `rect.y = 3324`; `scrollToShow` aimed at `3324 - 284 = 3040` page px, and the element ended at
+ * `(2216 - 3040) * 1.5 = -1236` — the number the refusal printed on `origin/main`.
+ *
+ * The model below is that measurement: an element at page position P, the page scrolled to S, a text
+ * scale k. Its box reads `(P - S) * k`, a scroll of T page px moves it to `(P - T) * k`.
+ */
+describe('the scroll that brings an element into view, under a text scale', () => {
+  const surface = { width: 393, height: 852 }
+  /** What `inspect` reads for an element at page position P with the page at S under scale k. */
+  const read = (P: number, S: number, k: number) => {
+    const y = (P - S) * k
+    return { rect: { x: 0, y, width: 200, height: 48 }, pageRect: { x: 0, y: y + S, width: 200, height: 48 } }
+  }
+
+  it('lands the element a third down the surface for any scale, from a page at the top or scrolled', () => {
+    for (const k of [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5]) {
+      for (const S of [0, 400]) {
+        for (const P of [2216, 3000]) {
+          const { rect, pageRect } = read(P, S, k)
+          const T = scrollToShow(rect, pageRect, surface, k).y
+          const landedAt = (P - T) * k
+          expect(Math.abs(landedAt - surface.height * SCROLL_PLACEMENT), `k=${k} S=${S} P=${P} landed at ${landedAt}`).toBeLessThanOrEqual(k)
+        }
+      }
+    }
+  })
+
+  it('reproduces the number the refusal printed on origin/main when the scale is ignored', () => {
+    const { rect, pageRect } = read(2216, 0, 1.5)
+    expect(rect.y).toBe(3324)
+    const T = scrollToShow(rect, pageRect, surface).y
+    expect(T).toBe(3040)
+    expect((2216 - T) * 1.5).toBe(-1236)
+  })
+
+  it('is exactly the old answer at scale 1, which every existing flow runs at', () => {
+    const { rect, pageRect } = read(2216, 400, 1)
+    expect(scrollToShow(rect, pageRect, surface, 1)).toEqual(scrollToShow(rect, pageRect, surface))
+    expect(scrollToShow(rect, pageRect, surface).y).toBe(Math.round(pageRect.y - surface.height * SCROLL_PLACEMENT))
+  })
+
+  it('leaves the axis that is already on screen at the scroll it already had, in page px', () => {
+    // Scrolled sideways by 500 page px at k = 2, the element is on screen horizontally: x must stay 500.
+    const rect = { x: 60, y: 3000, width: 100, height: 40 }
+    const pageRect = { x: 60 + 500, y: 3000, width: 100, height: 40 }
+    expect(scrollToShow(rect, pageRect, surface, 2).x).toBe(500)
+  })
+})
+
 describe('the point a click is sent to', () => {
   it('is the centre of an element that is wholly on screen', () => {
     expect(visibleCentre({ x: 100, y: 200, width: 80, height: 40 }, PHONE)).toEqual({ x: 140, y: 220 })

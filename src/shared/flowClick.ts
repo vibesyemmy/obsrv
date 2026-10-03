@@ -68,15 +68,26 @@ export function isWhollyVisible(rect: Box, viewport: Viewport): boolean {
  * a page that is also scrolled sideways should not be dragged back to `x: 0` —
  * that is a second change the caller did not ask for, and on a horizontally
  * paginated layout it changes which section the flow is in.
+ *
+ * **Two units meet here, and the text scale is what tells them apart**
+ * (`bug-selector-click-over-scrolls-under-text-scale`). `rect` and `viewport` are in surface px: under a
+ * text scale `k` the page lays out `k` times smaller and `inspect` multiplies its box by `k`. `scroll`
+ * takes **page** px. The offset `at` is page px already, because `pageRect` is `rect` plus the page's
+ * scroll and the difference cancels the surface part out. So the distance still to travel — how far the
+ * element sits from where it should be, `rect - extent / 3`, in surface px — has to be divided by `k`
+ * before it is added to where the page already is. Ignoring `k` aimed at `3324 - 284 = 3040` page px for an
+ * element 2216 page px down at `k = 1.5`, and the page ended 1236 surface px past it. At `k = 1` the
+ * division changes nothing, which is every flow before this one.
  */
-export function scrollToShow(rect: Box, pageRect: Box, viewport: Viewport): { x: number; y: number } {
+export function scrollToShow(rect: Box, pageRect: Box, viewport: Viewport, textScale = 1): { x: number; y: number } {
   const at = scrollOffsetOf(rect, pageRect)
   const offVertically = rect.y < 0 || rect.y + rect.height > viewport.height
   const offHorizontally = rect.x < 0 || rect.x + rect.width > viewport.width
-  const place = (pagePos: number, extent: number): number => Math.max(0, Math.round(pagePos - extent * SCROLL_PLACEMENT))
+  const place = (rectPos: number, scrollNow: number, extent: number): number =>
+    Math.max(0, Math.round(scrollNow + (rectPos - extent * SCROLL_PLACEMENT) / textScale))
   return {
-    x: offHorizontally ? place(pageRect.x, viewport.width) : at.x,
-    y: offVertically ? place(pageRect.y, viewport.height) : at.y,
+    x: offHorizontally ? place(rect.x, at.x, viewport.width) : at.x,
+    y: offVertically ? place(rect.y, at.y, viewport.height) : at.y,
   }
 }
 

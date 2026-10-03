@@ -371,7 +371,9 @@ async function pointForSelector(
   // than assumed from a preset: `status.cssWidth/cssHeight` is the surface's own
   // size, already rotated (`control.ts:169`), and `parseClick` checks the same
   // surface's `getViewport()`.
-  const page = await readPageState(deps)
+  const status = await readStatus(deps)
+  const page = status?.page
+  const textScale = status?.textScale ?? 1
   const viewport: Viewport | undefined =
     page?.cssWidth !== undefined && page.cssHeight !== undefined && page.cssWidth > 0 && page.cssHeight > 0
       ? { width: page.cssWidth, height: page.cssHeight }
@@ -401,7 +403,7 @@ async function pointForSelector(
   }
 
   // Off-screen: scroll, then measure again.
-  const scrolledTo = scrollToShow(rect, pageRect, viewport)
+  const scrolledTo = scrollToShow(rect, pageRect, viewport, textScale)
   await deps.call('scroll', { x: scrolledTo.x, y: scrolledTo.y })
   const second = await look()
   if ('refusal' in second) return { refusal: second.refusal, resolved: { selector, rect, pageRect, viewport, scrolledTo, ...editability } }
@@ -427,12 +429,24 @@ async function pointForSelector(
 }
 
 async function readPageState(deps: FlowRunnerDeps): Promise<FlowStepPage | undefined> {
+  return (await readStatus(deps))?.page
+}
+
+/** The same `status` reply as `readPageState`, with the one fact the report does not carry: the text
+ *  scale the flow is running under, which a scroll offset needs and a reproduction does not. Absent or
+ *  nonsensical reads as 1 — an app older than the field, and every flow before text scale. */
+async function readStatus(deps: FlowRunnerDeps): Promise<{ page: FlowStepPage | undefined; textScale: number } | undefined> {
   let s: Record<string, unknown>
   try {
     s = await deps.call('status', {})
   } catch {
     return undefined
   }
+  const scale = num(s['textScale'])
+  return { page: pageOf(s), textScale: scale !== undefined && scale > 0 ? scale : 1 }
+}
+
+function pageOf(s: Record<string, unknown>): FlowStepPage | undefined {
   const url = typeof s['url'] === 'string' && s['url'].length > 0 ? s['url'] : undefined
   const cssWidth = num(s['cssWidth'])
   const cssHeight = num(s['cssHeight'])
