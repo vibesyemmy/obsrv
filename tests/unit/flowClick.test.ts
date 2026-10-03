@@ -5,6 +5,7 @@ import {
   lineBoxPoints,
   MAX_LINE_PROBES,
   noPointHitsRefusal,
+  probePoints,
   noMatchRefusal,
   notBroughtIntoViewRefusal,
   SCROLL_PLACEMENT,
@@ -312,7 +313,8 @@ describe('the refusal when the page reported the boxes and none of them resolves
   it('says no point in any line box resolves, and names what was drawn there instead', () => {
     const msg = noPointHitsRefusal('a.buy', rect, 2, ['div.sticky-header'], 3)
     expect(msg).toContain('"a.buy"')
-    expect(msg).toContain('no point inside any of its 3 line boxes resolves to that element')
+    expect(msg).toContain('no point inside it resolves to that element')
+    expect(msg).toContain('the centre of each of its 3 line boxes was tried first, then the fixed points inside the box')
     expect(msg).toContain('the 2 points tried resolved to div.sticky-header instead')
   })
 
@@ -329,5 +331,71 @@ describe('the refusal when the page reported the boxes and none of them resolves
     const msg = noPointHitsRefusal('a.buy', rect, 5, ['h3'])
     expect(msg).toContain('the gap between them')
     expect(msg).toContain('the 5 points tried resolved to h3 instead')
+  })
+})
+
+describe('the points tried for an element: its line boxes first, the fixed points always after', () => {
+  const viewport = { width: 390, height: 844 }
+  const key = (p: { x: number; y: number }): string => `${p.x},${p.y}`
+
+  it('is the fixed points alone when the app reported no boxes — an app older than the field', () => {
+    const rect = { x: 20, y: 100, width: 150, height: 52 }
+    expect(probePoints(rect, undefined, viewport)).toEqual(candidatePoints(rect, viewport))
+  })
+
+  it('puts a wrapped link’s line-box centres before its fixed points, so the first probe lands', () => {
+    const lines = [
+      { x: 20, y: 100, width: 150, height: 16 },
+      { x: 20, y: 136, width: 60, height: 16 },
+    ]
+    const union = { x: 20, y: 100, width: 150, height: 52 }
+    const points = probePoints(union, lines, viewport)
+    expect(points.slice(0, 2)).toEqual(lineBoxPoints(lines, viewport))
+    // The union's centre (y = 126) is in the leading between the lines. It is still offered, but last-ish.
+    expect(points.some(p => p.y === 126)).toBe(true)
+    expect(points.findIndex(p => p.y === 126)).toBeGreaterThan(1)
+  })
+
+  it('is one point for a block, because its box’s centre is also the first fixed point', () => {
+    const block = { x: 20, y: 100, width: 240, height: 56 }
+    expect(probePoints(block, [block], viewport)[0]).toEqual({ x: 140, y: 128 })
+    expect(probePoints(block, [block], viewport).filter(p => key(p) === '140,128')).toHaveLength(1)
+  })
+
+  it('never offers the same pixel twice', () => {
+    const block = { x: 20, y: 100, width: 240, height: 56 }
+    const points = probePoints(block, [block, { ...block }], viewport)
+    expect(new Set(points.map(key)).size).toBe(points.length)
+  })
+
+  it('always contains every point the fixed heuristic had — so nothing that worked before can refuse', () => {
+    // The structural guarantee behind the fix, over a spread of boxes and line-box lists, including ones
+    // that cover only part of the box, sit off screen, or are empty.
+    const boxes = [
+      { x: 20, y: 100, width: 150, height: 52 },
+      { x: 0, y: 0, width: 390, height: 844 },
+      { x: 300, y: 800, width: 200, height: 100 },
+      { x: 10, y: 10, width: 1, height: 1 },
+      { x: 40.5, y: 220.25, width: 77.3, height: 36.5 },
+    ]
+    const lists: Array<Array<{ x: number; y: number; width: number; height: number }>> = [
+      [],
+      [{ x: 20, y: 100, width: 5, height: 5 }],
+      [{ x: 500, y: 500, width: 20, height: 20 }],
+      [{ x: 20, y: 100, width: 150, height: 16 }, { x: 20, y: 136, width: 60, height: 16 }],
+    ]
+    for (const rect of boxes) {
+      const fixed = candidatePoints(rect, viewport).map(key)
+      for (const lineRects of lists) {
+        const offered = new Set(probePoints(rect, lineRects, viewport).map(key))
+        for (const k of fixed) expect(offered.has(k), `${k} from ${JSON.stringify(rect)} with ${JSON.stringify(lineRects)}`).toBe(true)
+      }
+    }
+  })
+
+  it('still offers the fixed points when the reported boxes are empty or all off screen', () => {
+    const rect = { x: 20, y: 100, width: 150, height: 52 }
+    expect(probePoints(rect, [], viewport)).toEqual(candidatePoints(rect, viewport))
+    expect(probePoints(rect, [{ x: 900, y: 900, width: 10, height: 10 }], viewport)).toEqual(candidatePoints(rect, viewport))
   })
 })

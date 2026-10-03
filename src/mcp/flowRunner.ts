@@ -14,8 +14,7 @@
 import type { NetworkRecord, NetworkState } from '../shared/networkRecord'
 import type { Flow, FlowStep } from '../shared/flow'
 import {
-  candidatePoints,
-  lineBoxPoints,
+  probePoints,
   isWhollyVisible,
   noMatchRefusal,
   noPointHitsRefusal,
@@ -283,11 +282,12 @@ async function firstPointThatHits(
   viewport: Viewport,
   lineRects: Box[] | undefined,
 ): Promise<{ point: { x: number; y: number } } | { saw: string[]; tried: number; lineBoxes?: number } | { unavailable: string }> {
-  // **Where the element is, when the page says; a guess only when it does not.** `lineRects` is the
-  // element's own boxes (`feat-inspect-line-rects`), so a point in one is inside the element and the
-  // first probe almost always answers. `undefined` is an app older than the field, which keeps the
-  // five fractions — the heuristic this replaces, still the right answer where nothing better is known.
-  const candidates = lineRects === undefined ? candidatePoints(rect, viewport) : lineBoxPoints(lineRects, viewport)
+  // **Where the element's text is, when the page says, and the fixed points after it.** `lineRects` is
+  // the element's own boxes (`feat-inspect-line-rects`): a point in one is inside the element, so a wrapped
+  // link's first probe lands. They are tried FIRST and never INSTEAD — a button whose label sits over its
+  // centre has nothing to report about where it is pressable, and the fixed points still reach its padding.
+  // `undefined` is an app older than the field: the fixed points alone, as before.
+  const candidates = probePoints(rect, lineRects, viewport)
   const saw: string[] = []
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1
   for (const point of candidates) {

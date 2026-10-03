@@ -197,6 +197,41 @@ export function lineBoxPoints(lineRects: Box[], viewport: Viewport): Array<{ x: 
 }
 
 /**
+ * Every point worth trying for an element, in order: **its line boxes first, then the fixed points
+ * inside its box** — the second list always, never instead.
+ *
+ * **Found by a reviewer, not by the author** (Idris's gate on `#543`): the first version probed the
+ * line boxes *alone*, and for a block that is one point, the centre. A `<button><span>Label</span></button>`
+ * paints its label over that point, so it resolved to the `<span>`, whose box is not the button's, and the
+ * step refused something the five fixed fractions had always pressed — the second lands on the padding.
+ * Line boxes say where an element's *text* is. They cannot say where an element is pressable when one of
+ * its children sits on top of it, and `getClientRects()` has nothing to report about that.
+ *
+ * So the fractions are kept as the fallback, and the old behaviour is a strict subset of the new one:
+ * anything the five points could press, this still presses. What the line boxes buy is order — a wrapped
+ * link's first probe lands, where the union's centre sat in the leading between its lines — not a smaller
+ * set. Deduplicated, so the common case (a block, whose line box centre is also the first fraction) is
+ * still one probe.
+ *
+ * `undefined` means the app reported no boxes (one older than the field): the fractions alone, as before.
+ */
+export function probePoints(
+  rect: Box,
+  lineRects: Box[] | undefined,
+  viewport: Viewport,
+): Array<{ x: number; y: number }> {
+  const fractions = candidatePoints(rect, viewport)
+  if (lineRects === undefined) return fractions
+  const seen = new Set<string>()
+  return [...lineBoxPoints(lineRects, viewport), ...fractions].filter(p => {
+    const key = `${p.x},${p.y}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/**
  * Why a selector could not be clicked, in the caller's words.
  *
  * **Each case names which of the two it was**, because "click failed" is the
@@ -253,9 +288,9 @@ export function noPointHitsRefusal(selector: string, rect: Box, tried: number, s
   const what = saw.length > 0 ? ` — the ${tried} points tried resolved to ${[...new Set(saw)].join(', ')} instead` : ''
   if (lineBoxes !== undefined) {
     // The page reported the element's own boxes, so the wrapped-inline explanation below is the wrong
-    // one: no point was guessed, and the gap between lines was never a candidate.
+    // one: the centre of each line box was tried before the fixed points, and none of them was the gap.
     const boxes = `${lineBoxes} line box${lineBoxes === 1 ? '' : 'es'}`
-    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside any of its ${boxes} resolves to that element`
+    const where = tried === 0 ? `none of its ${boxes} is on screen` : `no point inside it resolves to that element (the centre of each of its ${boxes} was tried first, then the fixed points inside the box)`
     return `${JSON.stringify(selector)} has a box (${rect.width}x${rect.height} at ${rect.x},${rect.y}) but ${where}${what}`
   }
   return (
