@@ -44,6 +44,8 @@ const REDIRECT = pathToFileURL(resolve(__dirname, '../fixtures/redirect.html')).
 const FORCE_STARTS = 6
 
 type Start = { at: number; url: string; byDocument: boolean; mirrored: boolean; fromBusDocument?: boolean }
+/** A commit as `commitTrace()` records it; `mirrorTerms` is only there once the record carries it. */
+type Commit = { at: number; url: string; kind: string; said: boolean; mirroring: boolean; mirrorTerms?: unknown }
 
 let app: ElectronApplication
 let info: ControlInfo
@@ -76,6 +78,13 @@ const startsNow = (): Promise<Start[]> =>
   app.evaluate(() => {
     const t = (globalThis as unknown as { __obsrv?: { target?: { starts?: Start[] } } }).__obsrv?.target
     return Array.isArray(t?.starts) ? [...t.starts] : []
+  })
+
+/** The last commits the target recorded, read through the accessor the arrivals guard already uses. */
+const commitsNow = (): Promise<Commit[]> =>
+  app.evaluate(() => {
+    const t = (globalThis as unknown as { __obsrv?: { target?: { commitTrace?: () => unknown[] } } }).__obsrv?.target
+    return ((t?.commitTrace?.() ?? []) as Commit[]).slice(-8)
   })
 
 const targetUrl = (): Promise<string> =>
@@ -130,6 +139,25 @@ test('the start a redirect commit is answered with belongs to that redirect, not
     `[redirect-forcing-route] startsForHairline before=${forHairline} after=${forHairlineAfter} ` +
       `boundary=${boundary} matched=${matched ? `at=${matched.at} byDocument=${matched.byDocument} age=${boundary - matched.at}ms` : 'none'}`,
   )
+
+  // **Print every start recorded at or after the boundary, whatever its address, and the
+  // commits beside them.** The line above names only the start `startFor` would answer
+  // with; on the one failure so far (`before=6 after=7`, `byDocument=false`, matched 99 ms
+  // before the boundary) it could not say what the 7th start WAS. `after - before` counts
+  // hairline starts and nothing else, and a start excluded by `!s.mirrored` is invisible in
+  // a find. Printed on pass and fail alike, before any assertion, so a failing run carries it.
+  const commits = await commitsNow()
+  const sinceBoundary = after
+    .filter(s => s.at >= boundary)
+    .map(s => ({
+      url: s.url === HAIRLINE ? 'hairline' : s.url === REDIRECT ? 'redirect' : s.url,
+      afterBoundaryMs: s.at - boundary,
+      byDocument: s.byDocument,
+      mirrored: s.mirrored,
+      fromBusDocument: s.fromBusDocument ?? null,
+    }))
+  console.log(`[redirect-forcing-route] startsSinceBoundary=${JSON.stringify(sinceBoundary)}`)
+  console.log(`[redirect-forcing-route] commits=${JSON.stringify(commits.map(c => ({ ...c, afterBoundaryMs: c.at - boundary })))}`)
 
   expect(matched, 'no start was found for the address the redirect landed on').toBeDefined()
   // **The assertion the test owns.** A start recorded before the redirect was
