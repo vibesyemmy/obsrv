@@ -957,7 +957,7 @@ note could be made. The retry's print is the usual shape: `byDocument: true`, `s
 **What it is, and is not.** It is the start-layer condition the 2026-09-28 candidate named — `startFor` answering with
 a start that is not the document's own, `byDocument: false` — **occurring in a natural run, once**, without the note
 being lost. It is not a missing note, and no other card or register entry records it. Together with §1 the start layer
-now has two occurrences (this one natural, §1's forced) against **13 of 13** at the commit layer; whether the two are
+now has two occurrences (this one natural, §1's forced) against **13 of 13** at the commit layer in §2's window (**14 of 14** over §5's); whether the two are
 the same assumption at two sites, as §2 puts it as a candidate, is unmeasured. One sighting on a feature branch,
 first attempt only; a candidate, by this card's own rule.
 
@@ -975,6 +975,8 @@ every `ci.yml` run since **09-28T00:00Z** and through 10-03 and ran the same cla
 
 **14 missing, 103 present, 0 counter-examples.** The extension adds one missing attempt, run `36455653071`
 (`feat/flow-tool`, 09-28 17:05Z, before §2's window), and the present attempts of the later runs. Nothing about the
-reading changes. **Only the §2 window was independently recounted** (Dogu, `#2972`: 0 of 13, 94 of 94 including run
-`36986610250`); this extension is Idris's parse alone, and it is the same parse, so it is no more independent than the
-§2 numbers were before Dogu's recount.
+reading changes. **Both windows have been recounted independently** (Dogu: `#2972` for §2's window, and `#3126` for this
+one, from every run since 09-28T00:00Z, **117 attempts, 14 missing, 103 present, 0 counter-examples**, matching this
+table exactly). That re-measures the table from the same logs and the same association; it does not test the mechanism.
+(His first pass was one present attempt short because one raw log had been saved empty; he found and corrected that
+himself, `#3126`, which is why the §2 figures above are not quoted from `#2972`.)
