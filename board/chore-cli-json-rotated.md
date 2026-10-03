@@ -1,6 +1,7 @@
 ---
 title: "The CLI's snap JSON has no `rotated`, which MCP replies derive; adding it needs Opeyemi's yes for cli.spec.ts"
-column: backlog
+column: done
+owner: "Henry"
 kind: chore
 criterion: C4
 order: 76
@@ -56,3 +57,8 @@ kept as written, because what it describes is what he was shown before he answer
 and the card's own words are *"It isn't authorised."* A peer asking to hold is not something to
 out-argue at 3am on a card that says that. What changed is the price of his yes: the evidence is
 measured and the branch is ready, so approving it is a sentence rather than an evening.
+
+## MERGED, 2026-09-30 — `#526` at `2d65389`
+
+`chore/cli-json-rotated` merged on Opeyemi's "Yes, merge it". Board never moved — found and fixed as
+board hygiene alongside the same gap on `feat-flow-type-text.md`.
