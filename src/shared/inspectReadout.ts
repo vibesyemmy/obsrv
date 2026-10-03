@@ -59,8 +59,8 @@ export interface InspectReadout {
   /**
    * The same box in page CSS px, scroll included — the space an audit
    * finding's rect is in, and what `highlight { space: 'page' }` takes. The
-   * viewport rect plus the target's scroll as the app records it; equal to
-   * `rect` on a headless load, which is at the top.
+   * viewport rect plus the page's scroll read in the same instant as the box
+   * (`InspectReport.scroll`); equal to `rect` on a headless load, which is at the top.
    */
   pageRect: { x: number; y: number; width: number; height: number }
   /** The same box in millimetres on this screen; null without a diagonal. */
@@ -120,8 +120,10 @@ export function inspectReadout(
   report: InspectReport,
   screen: InspectScreen,
   panel: InspectPanel,
-  scroll: { x: number; y: number } = { x: 0, y: 0 },
 ): InspectReadout {
+  // The page's scroll, as the page said it in the same call as the box (`InspectReport.scroll`), not a record of
+  // it kept elsewhere: a record can lag the page, a report of one instant cannot disagree with itself.
+  const scroll = report.scroll
   const ppi =
     screen.diagonalInches === null
       ? null

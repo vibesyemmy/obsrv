@@ -25,6 +25,7 @@ const grey: InspectReport = {
   disabled: false,
   readOnly: false,
   lineRects: [{ x: 16.4, y: 8, width: 300, height: 18.2 }],
+  scroll: { x: 0, y: 0 },
 }
 
 const screenOf = (id: string, textScale = 1): InspectScreen => {
@@ -39,10 +40,9 @@ const panelOf = (id: string): InspectPanel => {
 describe('inspectReadout: the element’s line boxes', () => {
   it('carries each box in the space of rect, rounded to a tenth the way rect is, and never as page-space', () => {
     const r = inspectReadout(
-      { ...grey, lineRects: [{ x: 16.44, y: 8.04, width: 299.96, height: 9.05 }, { x: 16.44, y: 26.31, width: 80.04, height: 9.05 }] },
+      { ...grey, lineRects: [{ x: 16.44, y: 8.04, width: 299.96, height: 9.05 }, { x: 16.44, y: 26.31, width: 80.04, height: 9.05 }], scroll: { x: 0, y: 500 } },
       screenOf('laptop-768'),
       panelOf('reference'),
-      { x: 0, y: 500 },
     )
     expect(r.lineRects).toEqual([
       { x: 16.4, y: 8, width: 300, height: 9.1 },

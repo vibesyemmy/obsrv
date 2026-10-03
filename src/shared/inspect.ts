@@ -12,7 +12,7 @@
  * produces it.
  */
 
-import { SHADOW_TREE_SCRIPT, shadowElementFromPoint, shadowParent, shadowStackFrom } from './scrollHost'
+import { SCROLL_HOST_SCRIPT, findScroller, rootScrolls, shadowElementFromPoint, shadowParent, shadowStackFrom } from './scrollHost'
 
 /** A colour as the page states it, 0..255 channels and 0..1 alpha. */
 export type RGBA = [number, number, number, number]
@@ -107,6 +107,24 @@ export interface InspectReport {
    * anything pressing it needs). An element with nothing drawn reports none.
    */
   lineRects: InspectRect[]
+  /**
+   * The page's scroll **at the instant `rect` was measured**, in the page's own CSS
+   * px: the window's scroll, or the scroll host's when the page scrolls an inner
+   * element (an app shell: the window cannot scroll). `rect` plus this is the box in
+   * page space, the space a page-space highlight is mapped back through. One offset
+   * for every element, as the record it replaces was, so an element outside the
+   * host (an app shell's fixed header) gets the host's offset too and still
+   * round-trips through a highlight; an audit finding maps such an element per
+   * element (`scrollOffset`), which is a separate, older inconsistency.
+   *
+   * It is read by the same synchronous call that measured the box, so the two
+   * cannot disagree. It used to be the session's RECORD of the scroll, fed by the
+   * preload's scroll reports, and those are deferred for up to 120 ms after any
+   * scroll the app itself applies (the echo window), so for that long `pageRect`
+   * was the app's earlier position and not the page's
+   * (`bug-recorded-scroll-lags-a-page-scroll`: 400 of 400 back-to-back reads stale).
+   */
+  scroll: { x: number; y: number }
 }
 
 /**
@@ -141,8 +159,8 @@ export const MAX_SELECTOR_LENGTH = 512
 /**
  * Runs inside the target page. Shipped as source (`INSPECT_SCRIPT`) and
  * evaluated there, so it may reference only page globals and the shadow-tree
- * helpers `INSPECT_SCRIPT` puts beside it (`SHADOW_TREE_SCRIPT`) — nothing
- * else from this module. `'point'` takes a viewport point; `'selector'` takes a
+ * and scroll-host helpers `INSPECT_SCRIPT` puts beside it (`SCROLL_HOST_SCRIPT`)
+ * — nothing else from this module. `'point'` takes a viewport point; `'selector'` takes a
  * CSS selector and reports its first match (an invalid selector, or one that
  * matches nothing, is null). Returns a plain object the parser on the main
  * side checks field by field; the page is not trusted, its DOM merely
@@ -323,6 +341,14 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
   const disabled = formField !== null && formField.disabled
   const readOnly = formField !== null && formField.readOnly
 
+  // Read here, beside the box and in the same synchronous run, so the scroll and the rect are of one instant.
+  // The host is found the way the preload finds it for an agent's `scroll`: the root when the root scrolls,
+  // else the largest visible scroller. The offset is the one the session's record held (the scroller's own
+  // position, the window's added), now read from the page instead of from reports that can lag it.
+  const host = rootScrolls() ? null : findScroller().el
+  // (`host` is non-null only when the root cannot scroll, so the window's own offset is 0 there and is not added.)
+  const scrollOf = host !== null ? { x: host.scrollLeft, y: host.scrollTop } : { x: window.scrollX, y: window.scrollY }
+
   return {
     tag: el.tagName.toLowerCase(),
     id: el.id,
@@ -343,6 +369,7 @@ export function inspectTarget(mode: 'point' | 'selector', a: number | string, b?
     disabled,
     readOnly,
     lineRects,
+    scroll: { x: scrollOf.x, y: scrollOf.y },
   }
 }
 
@@ -355,6 +382,7 @@ export function inspectAtPoint(x: number, y: number): InspectReport | null {
 
 /**
  * `inspectTarget` as source, for `executeJavaScriptInIsolatedWorld`, with the
- * shadow-tree helpers it calls beside it.
+ * shadow-tree and scroll-host helpers it calls beside it (`SCROLL_HOST_SCRIPT`
+ * carries the shadow-tree ones as its first half).
  */
-export const INSPECT_SCRIPT = `(() => {\n${SHADOW_TREE_SCRIPT}\n return (${inspectTarget.toString()})\n})()`
+export const INSPECT_SCRIPT = `(() => {\n${SCROLL_HOST_SCRIPT}\n return (${inspectTarget.toString()})\n})()`
