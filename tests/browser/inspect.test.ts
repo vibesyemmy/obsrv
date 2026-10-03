@@ -308,6 +308,8 @@ describe('lineRects, the element’s own boxes a click by selector aims at', () 
     const fromSource = new Function(`return ${INSPECT_SCRIPT}`)() as typeof inspectTarget
     const direct = report('#wrapped-two')
     expect((fromSource('selector', '#wrapped-two') as InspectReport).lineRects).toEqual(direct.lineRects)
+    // Two empty lists are equal, so say what the shipped form found rather than only that it agrees.
+    expect((fromSource('selector', '#wrapped-two') as InspectReport).lineRects).toHaveLength(2)
     expect(MAX_LINE_RECTS).toBe(32)
   })
 })
