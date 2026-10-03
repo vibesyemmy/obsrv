@@ -177,9 +177,11 @@ clean run of five. A clause it cannot resolve refuses the whole flow rather than
 running part of it, and clicking an element by *name* is not resolvable — a
 sentence names an intent, not an element — so an interaction stated in words needs
 `steps`. A step clicks by selector: `{"action":"click","target":".checkout-button"}`,
-which Obsrv inspects, scrolls into view if it is below the fold, and presses at the
-centre of the part on screen. It then checks what is drawn at that point — a wrapped link's box
-spans both lines and the gap between them, which the block around it paints — so no
+which Obsrv inspects, scrolls into view if it is below the fold, and presses at a point of
+it: the centre of its largest visible line box (`lineRects` on `obsrv_inspect`'s readout), then
+fixed points inside its box if that is not the element. It checks what is drawn at that point
+first — a wrapped link's box spans both lines and the gap between them, which the block around
+it paints — so no
 match, no area, could-not-be-scrolled-to, no-point-resolves-to-it and
 could-not-check are five separate refusals. `expect` on a step
 states what you expected there, and Obsrv reads the rendered page for that text

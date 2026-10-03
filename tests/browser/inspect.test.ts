@@ -290,6 +290,17 @@ describe('lineRects, the element’s own boxes a click by selector aims at', () 
     expect(r.rect.width * r.rect.height).toBe(0)
   })
 
+  it('drops a box with no area, which is what the published sentence "boxes with no area dropped" promises', () => {
+    const empty = document.createElement('span')
+    empty.id = 'empty-inline'
+    host.append(empty)
+    // The premise: the browser does report a box for an empty inline, and it has no width.
+    const raw = Array.from(empty.getClientRects())
+    expect(raw.length, 'the browser reported no box for an empty inline, so this proves nothing').toBeGreaterThan(0)
+    expect(raw.every(q => q.width * q.height === 0)).toBe(true)
+    expect(report('#empty-inline').lineRects).toEqual([])
+  })
+
   it('stops at 32 boxes, keeping the first ones in document order', () => {
     const many = document.createElement('div')
     many.id = 'many'

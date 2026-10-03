@@ -30,6 +30,11 @@
   <body>
     <div id="bar" onclick="log('bar')">a fixed header, 120px tall</div>
     <button id="top-cta" onclick="log('top')">top</button>
+    <!-- A wrapped link ABOVE the fold: the text-scale arm needs the line boxes without the scroll step, which
+         over-scrolls under a scale (bug-selector-click-over-scrolls-under-text-scale). -->
+    <p id="wrap-host-top" onclick="log('hosttop')" style="width: 150px; margin: 16px 0 0 20px; line-height: 2.2; font-size: 14px">
+      <a id="wrapped-link-top" href="#" onclick="log('wrappedtop'); return false;">A product title long enough to wrap</a>
+    </p>
     <div class="spacer"></div>
     <button id="below-cta" onclick="log('below')">below the fold</button>
     <!-- A label painted over the button's own centre (found by Idris's gate on #543): the centre resolves to

@@ -339,3 +339,40 @@ for (const [id, log] of [
     await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain(log)
   })
 }
+
+/**
+ * **The one new coupling in `feat-inspect-line-rects`, measured** (Idris's gate on `#543` asked for it):
+ * under a text scale the page's own CSS px are larger by the scale, so `rect` comes back multiplied
+ * (`TargetSource.inspectAt` / `inspectSelector`). The line boxes are the points a click is aimed at, and
+ * if they stayed in the page's px beside a scaled `rect`, the press would be chosen in one space and
+ * checked against a box in another. `scaleInspectGeometry` scales both; this proves it on a real page by
+ * pressing a wrapped link at scale 1.5 and checking the boxes still sit inside the scaled box. The link is
+ * above the fold on purpose: a below-the-fold selector click over-scrolls under a text scale, on `origin/main`
+ * too (`bug-selector-click-over-scrolls-under-text-scale`), and that is not what this arm measures.
+ */
+test('at a text scale of 1.5, the line boxes stay inside the scaled box and a wrapped link is pressed', async () => {
+  await reset()
+  expect((await call('setTextScale', { textScale: 1.5 }))['applied']).toBe(true)
+  try {
+    const readout = (await call('inspect', { selector: '#wrapped-link-top' }))['readout'] as {
+      rect: { x: number; y: number; width: number; height: number }
+      lineRects: Array<{ x: number; y: number; width: number; height: number }>
+    }
+    expect(readout.lineRects.length, 'the link did not wrap at this scale, so the boxes prove nothing').toBeGreaterThanOrEqual(2)
+    // Same space as `rect`: every box inside it (to rounding), none left behind in unscaled px.
+    for (const q of readout.lineRects) {
+      expect(q.x).toBeGreaterThanOrEqual(readout.rect.x - 0.2)
+      expect(q.y).toBeGreaterThanOrEqual(readout.rect.y - 0.2)
+      expect(q.x + q.width).toBeLessThanOrEqual(readout.rect.x + readout.rect.width + 0.2)
+      expect(q.y + q.height).toBeLessThanOrEqual(readout.rect.y + readout.rect.height + 0.2)
+    }
+    const probes = instrumented()
+    const result = await runFlow({ steps: [{ action: 'click', target: '#wrapped-link-top' }] }, { call: probes.call })
+    expect(result.steps[0], JSON.stringify(result.steps[0]?.error)).toMatchObject({ status: 'ran' })
+    expect(probes.probes, JSON.stringify(probes.probes)).toHaveLength(1)
+    await expect.poll(clicksSoFar, { timeout: 5_000 }).toContain('wrappedtop')
+    expect((await clicksSoFar())[0], 'the press reached the paragraph, not the link').toBe('wrappedtop')
+  } finally {
+    expect((await call('setTextScale', { textScale: 1 }))['applied']).toBe(true)
+  }
+})

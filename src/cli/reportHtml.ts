@@ -655,7 +655,7 @@ function clickBlock(c: FlowReportClick | undefined): string {
       : ''
   const where =
     c.point !== undefined
-      ? `<li>pressed at ${c.point.x}, ${c.point.y} — the centre of the part on screen</li>`
+      ? `<li>pressed at ${c.point.x}, ${c.point.y} — a point the page confirmed belongs to this element</li>`
       : `<li>nothing was pressed: no point inside it was on screen</li>`
   const scrolled =
     c.scrolledTo !== undefined

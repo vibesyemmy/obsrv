@@ -47,20 +47,35 @@ than a line in the fix.
 
 `readout.lineRects` is `Element.getClientRects()` in the space of `rect`: one box for a block, one per
 line for a wrapped inline and **not the leading between the lines**; document order, empty boxes dropped,
-at most 32. A click by selector now aims at the centre of the **largest visible** line box and still asks
-the page what is drawn there. `obsrv_inspect` gains five key paths (optional, "absent from an app older
-than the field"); `public-shape.json` and `breaking-changes.md` carry them.
+at most 32. A click by selector now tries the centre of each line box first, **largest visible first, and
+the five fixed fractions after them**, and still asks the page what is drawn at each point.
+`obsrv_inspect` gains five key paths (optional, "absent from an app older than the field");
+`public-shape.json` and `breaking-changes.md` carry them.
+
+**The first version of this PR dropped the fractions, and a reviewer found the regression.** It probed the
+line boxes alone, which for a block is one point, so a `<button><span>Label</span></button>` (label painted
+over the centre, resolves to the `<span>`) and an icon-plus-label button went from pressed to refused. Idris's
+gate reproduced it before the suite finished; my fixture's buttons were plain text, which is why 89/89 were
+green. Line boxes say where an element's *text* is; they cannot say where an element is pressable when a
+child covers it. The fix keeps the fractions after the boxes, so the old behaviour is a strict subset of the
+new one (a structural unit test pins that), and the fixture gained both buttons, each run with and without
+the field and required to press the same point.
 
 **Absent and `[]` are different facts and the code keeps them apart.** An app older than the field sends
-none, and the click falls back to the five fractions, so a newer server on an older app behaves as before.
+none, and the click uses the five fractions alone, so a newer server on an older app behaves as before.
 `[]` is a measurement. The parser is strict where `editable` was lenient, because a report without the
 field comes from the app's own script and is malformed, not old.
 
 **Measured on the offscreen app:** a two-line wrapped link costs **1** hit check with the field and **2**
 without it (a control arm strips the field, which is what an older app sends). The card said "up to four
 wasted probes"; that is the ceiling, and on this fixture the walk wasted one. A link that wraps past two
-lines lands on the link in one check. Sabotaged eight ways, each caught by the tests written for it.
+lines lands on the link in one check. Sabotaged a dozen ways, each caught by the tests written for it.
 
-**Not done, stated:** the flow report still says "the centre of the part on screen" and does not say the
-point came from a line box. That would be a report field, and nothing here needed it.
+**Found on the way, not fixed here:** a below-the-fold selector click under a text scale of 1.5 scrolls past
+the element and refuses, on `origin/main` too — `bug-selector-click-over-scrolls-under-text-scale`. The
+text-scale arm that proved the line boxes are scaled with `rect` therefore uses a link above the fold.
+
+**Not done, stated:** the flow report does not say whether the point came from a line box or a fixed point
+(its wording now says only "a point the page confirmed belongs to this element"). That would be a report
+field, and nothing here needed it.
 

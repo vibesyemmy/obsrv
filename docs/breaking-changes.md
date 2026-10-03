@@ -44,11 +44,16 @@ element that is not drawn.
 
 **What else changes, and is a value rather than a shape:** a click by selector (`obsrv_flow`) used to try
 five fixed fractions inside `rect` and keep the first the page said the element paints. With the field it
-presses the centre of the **largest visible line box**, still verified by asking the page what is drawn
-there. For a block that is the same point as before. For a wrapped link the point in `resolved.point`
-moves, and the hit check costs one probe where the guess walked (measured on the offscreen fixture: 1
-against 2 for a two-line link). An app older than the field keeps the five fractions, so a newer server
-driving an older app behaves exactly as it did.
+tries the centre of each **line box first, largest visible first, and the same five fixed fractions after
+them**, still verifying what the page draws at each point before pressing. The fractions are kept because
+line boxes say where an element's *text* is and say nothing about an element that a child covers: a button
+whose label sits over its centre resolves there to the label, and only a point on its padding identifies
+the button. (The first version of this change dropped the fractions and refused such buttons; a reviewer
+found it, and the old behaviour is now a strict subset of the new one.) For a block the first point is
+the same as before and the check costs the same one probe. For a wrapped link the point in `resolved.point`
+moves and the check costs one probe where the guess walked (measured on the offscreen fixture: 1 against 2
+for a two-line link). An app older than the field has no boxes to try first, so a newer server driving it
+behaves exactly as it did.
 
 ### The tools refuse an app older than 0.58.0
 

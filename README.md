@@ -232,12 +232,13 @@ Clicking an element by *name* is not resolvable — a sentence names an intent, 
 an element, and nothing resolving it can see your page — so an interaction stated
 in words still needs `steps`. A **step** can click by selector:
 `{"action": "click", "target": ".checkout-button"}`. Obsrv inspects that element,
-scrolls it into view if it is below the fold, and presses the centre of the part
-on screen; the report says which element, whether it had to scroll, and where it
-pressed. Obsrv then checks what is actually drawn at the point it chose, because an
-element's box can contain points it does not paint — a link whose text wraps has a
-box spanning both lines *and the gap between them*, and that gap belongs to the
-block around it. A selector matching nothing, an element with no area, one that
+scrolls it into view if it is below the fold, and presses a point of it: the centre of
+its largest visible line box (`obsrv_inspect` reports them as `lineRects`), then fixed
+points inside its box if that is not the element. The report says which element,
+whether it had to scroll, and where it pressed. Obsrv checks what is actually drawn at
+the point it chose before pressing, because an element's box can contain points it does
+not paint — a link whose text wraps has a box spanning both lines *and the gap between
+them*, and that gap belongs to the block around it. A selector matching nothing, an element with no area, one that
 could not be brought into view, one whose box holds no point that resolves to it,
 and a check that could not run are five different refusals, each saying which.
 
