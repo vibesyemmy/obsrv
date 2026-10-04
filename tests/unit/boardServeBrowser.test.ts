@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createServer, type Server } from 'node:net'
 import type { Readable } from 'node:stream'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -367,6 +367,24 @@ describe('board-serve in a browser', () => {
       git(f.clone, ['remote', 'set-url', 'origin', `git://127.0.0.1:${port}/repo`])
       const { listeningAfterMs } = await serve(f.clone, ['--ref', 'main', '--fetch-timeout-ms', '1000'])
       expect(listeningAfterMs).toBeLessThan(8_000)
+    },
+    TEST_MS,
+  )
+
+  it(
+    'a --ref shaped like an option is never run as one',
+    async () => {
+      // Catches: the branch handed to `git fetch <remote> <branch>` unguarded. Git reads `--upload-pack=<cmd>` after the
+      // remote as an OPTION and runs <cmd> (plain `git fetch origin '--upload-pack=touch M'` creates M; with `--` before
+      // the positionals it is an invalid refspec instead). It used to be stopped, by accident, by the `ls-remote`
+      // existence check that startup no longer makes. Git itself says such a name is not a valid branch name, so refusing
+      // a leading `-` (and passing `--`) loses nothing.
+      const f = fixture()
+      const marker = join(f.base, 'RAN_AS_AN_OPTION')
+      const { url } = await serve(f.clone, ['--ref', `--upload-pack=touch ${marker}`, '--fetch-timeout-ms', '3000'])
+      // Give the first poll time to run (it is bounded by the fetch timeout), then look for the marker.
+      await until('the first poll has reported', () => firstEvent(url), e => e.error !== '', 15_000).catch(() => undefined)
+      expect(existsSync(marker)).toBe(false)
     },
     TEST_MS,
   )
