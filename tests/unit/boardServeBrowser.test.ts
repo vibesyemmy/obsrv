@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process'
 import { createServer, type Server } from 'node:net'
 import type { Readable } from 'node:stream'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -367,6 +367,28 @@ describe('board-serve in a browser', () => {
       git(f.clone, ['remote', 'set-url', 'origin', `git://127.0.0.1:${port}/repo`])
       const { listeningAfterMs } = await serve(f.clone, ['--ref', 'main', '--fetch-timeout-ms', '1000'])
       expect(listeningAfterMs).toBeLessThan(8_000)
+    },
+    TEST_MS,
+  )
+
+  it(
+    'a --ref shaped like an option is never run as one, bare or after a real remote name',
+    async () => {
+      // Catches: the branch handed to `git fetch <remote> <branch>` unguarded. Git reads `--upload-pack=<cmd>` after the
+      // remote as an OPTION and runs <cmd> (plain `git fetch origin '--upload-pack=touch M'` creates M; with `--` before
+      // the positionals it is an invalid refspec instead). Both forms reach it: the whole value, and the part after a real
+      // remote (`origin/--upload-pack=...`). It used to be stopped, by accident, by the `ls-remote` existence check that
+      // startup no longer makes. Git itself says such a name is not a valid branch name, so refusing a leading `-` on the
+      // resolved branch (and passing `--`) loses nothing.
+      for (const form of ['bare', 'after a remote'] as const) {
+        const f = fixture()
+        const marker = join(f.base, 'RAN_AS_AN_OPTION')
+        const option = `--upload-pack=touch ${marker}`
+        const { url } = await serve(f.clone, ['--ref', form === 'bare' ? option : `origin/${option}`, '--fetch-timeout-ms', '3000'])
+        // Give the first poll time to run (it is bounded by the fetch timeout), then look for the marker.
+        await until('the first poll has reported', () => firstEvent(url), e => e.error !== '', 15_000).catch(() => undefined)
+        expect(existsSync(marker), form).toBe(false)
+      }
     },
     TEST_MS,
   )
