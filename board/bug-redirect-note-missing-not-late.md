@@ -980,3 +980,126 @@ one, from every run since 09-28T00:00Z, **117 attempts, 14 missing, 103 present,
 table exactly). That re-measures the table from the same logs and the same association; it does not test the mechanism.
 (His first pass was one present attempt short because one raw log had been saved empty; he found and corrected that
 himself, `#3126`, which is why the §2 figures above are not quoted from `#2972`.)
+
+## THE FIRST THREE FAILING PRINTS WITH THE TERMS, 2026-10-03 — `viaMirrorUrl` alone, every time
+
+**Sources.** Three first-try failures of `tests/e2e/arrivals.spec.ts:218` (*a page that really does redirect after loading
+still says so*), each at its assertion on `:247`, each **cleared by its own retry**, in three different CI runs:
+
+1. Run `37162125066`, the `ci.yml` run of `#550` (branch `fix/pagerect-from-one-instant`, head
+   `3ac9380631bc56dc63cc7266e884aeb538e3fc83`), attempt 1, at 23:34:49Z. The run ended `success`.
+2. Run `37160406685`, the `ci.yml` run of `#548` (branch `feat/awaiting-lane`, head
+   `6f8e9bad80474235cb08ff3c23993b6653cf8cd2`), **attempt 2**, at 23:54:32Z. Attempt 1 of that run was red for another
+   reason (a worker teardown after `tabs.spec.ts:929`, every test passing); it passed `arrivals` both times. Attempt 2
+   ended `success`.
+3. Run `37189124696`, the `ci.yml` run of `#549` (branch `feat/board-live-view`, head
+   `b1bd774b2e88373f373841dc7a7c0333a0ad57cf`), attempt 1, at 2026-10-04T08:32:15Z. The run ended `success`.
+
+`#540` and `#541` (merged as `be19825` and `8d8b282`) are in all three trees, so all three prints carry `mirrorTerms`. All
+are **after §5's window**, so §5's table does not include them. (§3 above still says `#540` is "Not merged"; that line is
+out of date, it merged. It is left as written.)
+
+**How common.** **Fourteen** CI attempts had the instrument in the tree CI ran and ran the e2e to its end; **three** of
+them are the prints below. The listing is every attempt of every `ci.yml` run created since `#540` merged
+(2026-10-03T22:35Z), keeping those whose suite job ran for the length of the e2e. **The criterion is the run's own
+checkout, not the pull request's head:** a `pull_request` run builds the merge of the head into `main`'s tip, and
+`main`'s tip (`998fbe6`) already had `#540`. The two `#546` runs say so in their own logs (`HEAD is now at 7db5807
+Merge 7f8567c0… into 998fbe61…`, `HEAD is now at 2a187d4 Merge 494c2316… into 998fbe61…`), carry `mirrorTerms` in their
+prints, and ran `arrivals` green. The fourteen:
+- the five `main` suites (`37158975731`, `…979107`, `…988570`, `…992530`, `…995878`);
+- `#546`: `37159176983` (run `cancelled`, suite job `success`, 659 passed) and `37159894326`;
+- `#548`: `37159693589` (run `cancelled`, suite job finished, 659 passed), and `37160406685` attempts 1 and 2;
+- `#549`: `37159968124`, `37165260134` and `37189124696` (the third print);
+- `#550`: `37162125066` (the first print).
+
+**Eleven** have no `arrivals` `✘` and no `note MISSING` print. Left out: the board-only runs, whose suite is
+short-circuited (2-4 s). An attempt is one app launch and one suite, so a re-run is counted separately from the attempt it
+follows. **This count was wrong several times and each time the error was mine or checked by a peer:** an earlier version of
+this section said ten attempts, two failures, and left out `#546`'s two runs as "an older tree with no `mirrorTerms.ts`";
+that tested the pull request's head and not what CI ran, and the logs refute it. Dogu's independent recount (`#3258`)
+found it; I checked the two `#546` logs myself. The figure had moved 8, 7, 8, 9, 10, then a wrong 11 and 12 before 14,
+and every wrong one was "the last count plus the one run I just read" instead of a fresh listing. A run created after this
+listing, or one still in progress (`#552`'s, when this was written), is a later row. **Three failures in fourteen
+attempts** is a stronger candidate than one, and still a candidate by this card's own rule.
+
+**The first print, observed, not interpreted** (log lines 1397-1582 of my own `gh run view --log` pull of `#550`'s
+run; times are the print's epoch milliseconds shown as UTC time of day; the "who" column is what the flags say):
+
+| time | what | flags | who |
+| --- | --- | --- | --- |
+| 23:34:48.946 | start `redirect.html` | `byDocument: false`, `mirrored: false` | the caller's own navigation |
+| 23:34:48.985 | **commit** `redirect.html` | `mirroring: false` | the caller's; the card's separator, as §2 expects |
+| 23:34:48.993 | start `hairline.html` | `byDocument: true`, `mirrored: false` | the page's own redirect (this is `matched`) |
+| 23:34:49.041 | start `hairline.html` | `byDocument: false`, `mirrored: true` | the bus's mirrored load, **48 ms** after the page's |
+| 23:34:49.046 | **commit** `hairline.html` | `mirroring: true` | see terms below |
+| 23:34:49.083 | **commit** `hairline.html` | `mirroring: true` | see terms below |
+
+Both `hairline.html` commits carry the same `mirrorTerms`: `mirrorRequested` = the same `hairline.html`,
+**`viaMirrorUrl: true`**, `byDocument: true`, **`viaNotByDocument: false`**, **`viaBusDocument: false`**. The reply
+carried `notes: []`; `startsForThisUrl: 5`.
+
+**The second print, the same way** (lines 512-682 of my pull of `#548`'s run with `--attempt 2`):
+
+| time | what | flags | who |
+| --- | --- | --- | --- |
+| 23:54:31.308 | start `redirect.html` | `byDocument: false`, `mirrored: false` | the caller's own navigation |
+| 23:54:31.339 | **commit** `redirect.html` | `mirroring: false` | the caller's, the separator again |
+| 23:54:31.352 | start `hairline.html` | `byDocument: true`, `mirrored: false` | the page's own redirect (this is `matched`) |
+| 23:54:31.377 | start `hairline.html` | `byDocument: false`, `mirrored: true` | the bus's mirrored load, **25 ms** after the page's |
+| 23:54:31.390 | **commit** `hairline.html` | `mirroring: true` | see terms below |
+
+The one `hairline.html` commit carries `mirrorRequested` = `hairline.html`, **`viaMirrorUrl: true`**, `byDocument: true`,
+**`viaNotByDocument: false`**, **`viaBusDocument: false`**: the same terms as the first print's two. `notes: []`;
+`startsForThisUrl: 6`.
+
+**The third print, the same way** (lines 1399-1583 of my pull of `#549`'s run at `b1bd774`; 2026-10-04, 08:32 UTC):
+
+| time | what | flags | who |
+| --- | --- | --- | --- |
+| 08:32:14.221 | start `redirect.html` | `byDocument: false`, `mirrored: false` | the caller's own navigation |
+| 08:32:14.236 | **commit** `redirect.html` | `mirroring: false` | the caller's, the separator again |
+| 08:32:14.242 | start `hairline.html` | `byDocument: true`, `mirrored: false` | the page's own redirect (this is `matched`) |
+| 08:32:14.267 | start `hairline.html` | `byDocument: false`, `mirrored: true` | the bus's mirrored load, **25 ms** after the page's |
+| 08:32:14.269 | **commit** `hairline.html` | `mirroring: true` | see terms below |
+| 08:32:14.294 | **commit** `hairline.html` | `mirroring: true` | see terms below |
+
+Both `hairline.html` commits carry `mirrorRequested` = `hairline.html`, **`viaMirrorUrl: true`**, `byDocument: true`,
+**`viaNotByDocument: false`**, **`viaBusDocument: false`**. `notes: []`; `startsForThisUrl: 6`. In all three prints no
+unmirrored commit follows the caller's `redirect.html`, so each is one more row for §2's separator (**0 of 3 missing with
+an unmirrored commit after it**; §5's counts are not re-run for them).
+
+**What differs between them.** The bus's mirrored start came 48 ms after the page's in the first print and 25 ms in the
+second and third; the first `hairline.html` commit followed the mirrored start by 5 ms, 13 ms and 2 ms. And the first
+and third prints have **two** `hairline.html` commits after the anchor (Dogu's `#3215` observation: two commits stamped
+as the bus's after one mirrored start), while the second has **one** commit after **two** `hairline.html` starts. So the
+two-commits feature **held in two of three prints and is not general**; Dogu said so himself (`#3231`), and Wren put it
+the same way (`#3230`): "the page's commit and the mirror's commit, both stamped" cannot be the whole description. Nothing
+should be built on the count of commits. Whether the page's navigation and the bus's collapsed into one commit in the
+second print, I cannot tell from the record; that is a question, not a finding.
+
+**The instrument discriminates; it does not print one thing.** In each log the *previous* test (the `:71` baseline,
+where no note is expected) printed its own commits with **different** terms. In the first log its `redirect.html` is
+stamped by `viaMirrorUrl` and `viaNotByDocument` together and its `hairline.html` by `viaBusDocument` alone; in the
+second and third, its `hairline.html` is stamped by `viaMirrorUrl` **and** `viaBusDocument` together. Baseline commits
+vary between runs too (Wren, `#3213`; Idris and Dogu on the second and third).
+
+**Reading, an inference from those three records:** the term that fired is `viaMirrorUrl` alone, every time. The commit
+that follows the caller's `redirect.html` is on `hairline.html`, an address the bus has in flight, so
+`url === mirrorRequested` holds, the commit is stamped the bus's, and `ipc.ts:231`'s `if (inPage || mirrored) return`
+drops it before the arrival count. That is the first of the three readings in `mirrorTerms.ts`'s header, and the other
+two are ruled out **in these three attempts**. This is **commit-layer**, the layer §2 and §5 count, not the start layer of
+§1 and §4.
+
+**What it does not establish.** Nothing about the other 15 failing attempts, which predate the instrument and carry no
+terms. Nothing about *why* the bus mirrors `hairline.html` at that moment; a reading, not checked, is that the native
+pane's own redirect result is mirrored into the target, so the address is requested twice by design. Nothing about a
+fix: `url === mirrorRequested` cannot tell two navigations to one address apart, so what does is a product choice
+(initiator, navigation identity) for the owner. Each print was read from its raw log by Idris, Wren and Dogu, each
+parsing it themselves (`#3213`, `#3215` for the first; `#3230`, `#3231` for the second; `#3255`, `#3256` for the third);
+that re-reads three logs, it adds no sighting.
+
+**Where this leaves the card.** Both events the `waiting:` line above names have now happened (`#540` merged; a failing
+`:89` print was read, three times). That line's wording is the owner's and is **not changed in this PR**. Three prints, one
+term, no counter-example, in three of fourteen attempts. Any later failure where a different term fires, or none, refutes
+the reading above, and any later failure where `viaMirrorUrl` alone fires again supports it. No fix on a candidate,
+however much stronger it has become.
