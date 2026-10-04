@@ -28,9 +28,11 @@ afterAll(() => {
 
 // Every test here builds a throwaway git repository and runs the real build in it, which is a handful of child
 // processes per test. vitest's 5 s default is enough on an idle machine (the whole file takes about 5 to 12 s) and
-// not on a loaded one: on the shared dev machine single tests ran 5.2 to 8.7 s at load 52 to 112, and failed with a
-// timeout, not an assertion (board/chore-boardlane-explicit-timeouts.md has the measurements). 30 s is the bound the
-// other board test files use, and is over three times the worst of those. It does not make any test faster.
+// not when child processes are slow: on the shared dev machine single tests ran 5.2 to 8.7 s in full-suite runs at
+// load 52 to 112, and failed with a timeout, not an assertion. CPU burners alone did not reproduce it, so what slowed
+// the children there is not established; a git that is slow to start does reproduce it. The measurements and the
+// checks are in board/chore-boardlane-explicit-timeouts.md. 30 s is the bound boardServe.test.ts uses for its tests,
+// and is over three times the worst of these. It does not make any test faster.
 const SLOW_MS = 30_000
 
 interface Run { status: number | null; stdout: string; stderr: string }

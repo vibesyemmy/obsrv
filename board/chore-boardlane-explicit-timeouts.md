@@ -28,6 +28,16 @@ All on the shared dev machine, every one of them a full `npm run test` unit run 
 
 **In CI it has not failed.** No CI run I or the other gates counted failed on this file. The one red CI attempt on these PRs, `#548`'s first (`37160406685`), was a worker teardown after `tabs.spec.ts:929` with every test passing; on run `37197856918` (`#549`'s last head) the 29 tests took 5.2 s in total on the runner. So this is a **dev-loop** defect, not a CI one, and the change is for the person running the suite on a busy machine. It should not be described as fixing a CI flake.
 
+## What the checks in the work PR showed about the mechanism
+
+The failures above were seen in full-suite runs on the shared dev machine at high load averages. **What slowed the child
+processes there is not established.** A `git` shim that adds 0.4 to 1 s to every call reproduces the failures (Dogu at 1 s: main's
+file 21 of 29 failed; Idris at 0.4 s: 13 of 29) and the change fixes them. **CPU burners alone did not**: Idris ran 70
+self-terminating burners on 14 cores (load 16 to 143) interleaved with the file, four runs, 29 of 29 every time, the slowest single
+test 1.2 s. So the change is shown to fix slow child processes, not shown to fix a CPU-load failure; the failure Idris saw at 5,303 ms
+came when three board files ran together, one driving Chromium, which points at contention with a heavy sibling (inferred, not
+tested).
+
 ## What this card is, and is not
 
 - **Is:** an explicit timeout on the tests in `tests/unit/boardLane.test.ts` that talk to a real process, sized for the work they do under load, so the file stops being the first thing that breaks on a busy machine. The same one-line fix Henry applied to `boardServe.test.ts`.
