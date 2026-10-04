@@ -30,11 +30,19 @@ const report: InspectReport = {
     { x: 10, y: 20, width: 100, height: 16 },
     { x: 10, y: 64, width: 40, height: 16 },
   ],
+  scroll: { x: 0, y: 300 },
 }
 
 describe('scaleInspectGeometry', () => {
   it('is the identity at scale 1, returning the very report it was given', () => {
     expect(scaleInspectGeometry(report, 1)).toBe(report)
+  })
+
+  it('leaves the scroll in the page\'s px: it is added to a scaled rect as the record always was, and is not itself a box', () => {
+    // `pageRect = rect + scroll` has always mixed the surface-px rect with a page-px scroll, and the selector
+    // click's scroll arithmetic (`scrollToShow`) divides by the scale on exactly that reading. Scaling the
+    // scroll here would change what `pageRect - rect` means.
+    expect(scaleInspectGeometry(report, 1.5).scroll).toEqual({ x: 0, y: 300 })
   })
 
   it('scales the box and every line box by the same factor', () => {

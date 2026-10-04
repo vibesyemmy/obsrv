@@ -189,6 +189,10 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
     if ((q.width as number) < 0 || (q.height as number) < 0) return null
     lineRects.push({ x: q.x as number, y: q.y as number, width: q.width as number, height: q.height as number })
   }
+  // The page's scroll at the instant the box was measured. Strict, like `lineRects` and for the same reason: this
+  // parser runs inside the app beside the script that sends the field, so a report without it is a malformed one,
+  // and reading it as {0, 0} would put `pageRect` at the top of a page that is not.
+  if (!isRecord(raw.scroll) || !isFiniteNumber(raw.scroll.x) || !isFiniteNumber(raw.scroll.y)) return null
   // A page that reports no opacity is fully opaque. Anything outside 0..1 is a
   // page saying something impossible, and the report is dropped whole rather
   // than clamped — the rule the rest of this parser follows.
@@ -224,6 +228,7 @@ export function parseInspectReport(raw: unknown): InspectReport | null {
     disabled: raw.disabled === true,
     readOnly: raw.readOnly === true,
     lineRects,
+    scroll: { x: raw.scroll.x, y: raw.scroll.y },
   }
 }
 

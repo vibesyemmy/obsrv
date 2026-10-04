@@ -508,7 +508,36 @@ describe('parseInspectReport', () => {
     background: [255, 255, 255, 1],
     backgroundNote: 'computed',
     lineRects: [{ x: 10, y: 10, width: 300, height: 15 }],
+    scroll: { x: 0, y: 120 },
   }
+
+  describe('scroll, the page\'s own position at the instant the box was measured', () => {
+    it('is carried as new numbers, root or host offset alike', () => {
+      const r = parseInspectReport({ ...good, scroll: { x: 4, y: 1695.5 } })!
+      expect(r.scroll).toEqual({ x: 4, y: 1695.5 })
+      expect(r.scroll).not.toBe(good.scroll)
+    })
+
+    it('is required: a report without it is malformed, not a page at the top', () => {
+      // Reading an absent scroll as {0, 0} would put `pageRect` at the top of a page that is not, with nothing saying
+      // so. This parser runs inside the app beside the script that sends the field, so a report without it is not an
+      // older one.
+      const { scroll: _omitted, ...without } = good
+      expect(parseInspectReport(without)).toBeNull()
+    })
+
+    it.each([
+      ['a string', { x: 0, y: '120' }],
+      ['NaN', { x: 0, y: Number.NaN }],
+      ['Infinity', { x: Number.POSITIVE_INFINITY, y: 0 }],
+      ['a missing axis', { x: 0 }],
+      ['null', null],
+      ['a number', 120],
+    ])('drops the whole report for a scroll that is %s', (_name, scroll) => {
+      expect(parseInspectReport({ ...good, scroll })).toBeNull()
+    })
+  })
+
   it('copies a good report field by field', () => {
     const r = parseInspectReport(good)!
     // `opacity` is supplied by the parser when the page omits it: a page that
@@ -862,6 +891,7 @@ describe('parseInspectReport and the layout viewport width', () => {
     background: [239, 239, 239, 1],
     backgroundNote: 'computed',
     lineRects: [{ x: 16, y: 54, width: 44, height: 44 }],
+    scroll: { x: 0, y: 0 },
   }
   it('carries the width the page laid out at — the readout needs it for a page drawn scaled to fit', () => {
     expect(parseInspectReport({ ...report, viewportWidth: 980 })?.viewportWidth).toBe(980)
