@@ -29,6 +29,7 @@
     "plugin:branch": "node scripts/build-plugin-branch.js",
     "version": "node scripts/sync-plugin-version.js && git add .claude-plugin .mcp.json",
     "board": "node scripts/build-board.js",
+    "board:serve": "node scripts/board-serve.js",
     "board:check": "node scripts/build-board.js --check",
     "status": "node scripts/status.js",
     "test:e2e:run": "npm run build && playwright test",
