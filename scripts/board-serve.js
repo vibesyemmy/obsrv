@@ -66,10 +66,35 @@ function resolveRef(asked) {
   }
   return { remote, branch: asked }
 }
-const resolved = resolveRef(REF_ASKED)
+
+// An argument that begins with `-` is an OPTION to git, not a ref:
+// `--ref "--upload-pack=touch X"` ran that command through `git fetch`. The
+// check is on the RESOLVED pieces, not the raw `--ref`, because
+// `origin/--upload-pack=…` resolves to remote `origin` and branch
+// `--upload-pack=…` and a raw-value check lets it straight through (Wren
+// measured exactly that). The `--` below is the load-bearing fix; this is the
+// second lock, and it names what it refused.
+function refuseOptionShaped(what, value) {
+  if (value.startsWith('-')) {
+    throw new Error(`${what} ${JSON.stringify(value)} starts with "-", which git reads as an option rather than a name`)
+  }
+}
+// A bad `--ref` does not kill the process: the server still listens and the
+// page says why. Exiting would leave a reader with a dead port and the reason
+// only in a terminal they may not be looking at — and it would mean the one
+// thing this file refuses, a failure that looks like nothing happening.
+let REF_FAULT = ''
+let resolved = { remote: '', branch: '' }
+try {
+  resolved = resolveRef(REF_ASKED)
+  refuseOptionShaped('--remote', resolved.remote)
+  refuseOptionShaped('the branch in --ref', resolved.branch)
+} catch (e) {
+  REF_FAULT = String((e && e.message) || e)
+}
 const REMOTE = resolved.remote
 const BRANCH = resolved.branch
-const REF = `${REMOTE}/${BRANCH}`
+const REF = REF_FAULT ? REF_ASKED : `${REMOTE}/${BRANCH}`
 const FETCH_TIMEOUT_MS = Number(argAfter('--fetch-timeout-ms', '20000'))
 const run = promisify(execFile)
 // Every git call the poller makes is ASYNC. It used to be execFileSync inside
@@ -92,7 +117,7 @@ async function buildAt(sha) {
     // fail invisibly and the server published an EMPTY BOARD (Idris). Passing
     // the archive through as a buffer means the archive's own failure throws.
     const archive = (
-      await run('git', ['-C', REPO, 'archive', sha, 'board'], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 })
+      await run('git', ['-C', REPO, 'archive', sha, '--', 'board'], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 })
     ).stdout
     await new Promise((resolve, reject) => {
       const tar = execFile('tar', ['-x', '-C', dir], err => (err ? reject(err) : resolve()))
@@ -163,14 +188,27 @@ async function poll() {
   // In-flight guard: a fetch slower than the interval would stack polls on each
   // other, each holding a child process and a temp directory.
   if (polling) return
+  // A ref we refused is never fetched: the fault is the answer, repeated to
+  // anyone who connects later rather than printed once at startup.
+  if (REF_FAULT) {
+    if (state.error !== REF_FAULT) {
+      state.error = REF_FAULT
+      announce()
+    }
+    return
+  }
   polling = true
   let moved = false
   try {
     // Bounded, and awaited rather than blocking: this used to be execFileSync
     // in the listen callback, so a remote that accepts and never answers made
     // the server answer 0 of the next 18-22 requests while claiming to be live.
-    await git(['fetch', REMOTE, BRANCH], FETCH_TIMEOUT_MS)
+    await git(['fetch', '--', REMOTE, BRANCH], FETCH_TIMEOUT_MS)
     state.fetchedAt = Date.now()
+    // No `--` here on purpose: for rev-parse it means "everything after is a
+    // PATH", so `rev-parse -- origin/main` resolves nothing and the server
+    // silently never builds (measured). REF cannot be option-shaped anyway —
+    // both halves are refused at startup.
     const sha = (await git(['rev-parse', REF])).trim()
     if (sha && sha !== state.sha) {
       const built = await buildAt(sha)

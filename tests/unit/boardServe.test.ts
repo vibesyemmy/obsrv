@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -358,6 +358,29 @@ describe('board-serve', () => {
     )
     expect(frame).toMatch(/upstream\/main/)
     expect(frame).toMatch(/nor a branch on origin/)
+  }, 30_000)
+
+  it('refuses an option-shaped branch even when a real remote is in front of it', async () => {
+    const f = fixture()
+    // The second form, which a raw-value check misses: `origin/--upload-pack=…`
+    // resolves to remote `origin` and branch `--upload-pack=…`, so the guard has
+    // to read the RESOLVED pieces. Wren measured the bare form refused and this
+    // one still creating the marker.
+    const marker = join(f.clone, '..', 'RAN_AS_AN_OPTION_PREFIXED')
+    const { url } = await serve(f.clone, ['--ref', `origin/--upload-pack=touch ${marker}`, '--interval-ms', '300'])
+    const frame = await until(
+      'the refusal reaches the page',
+      async () => {
+        const res = await fetch(`${url}/events`)
+        const reader = res.body!.getReader()
+        const text = new TextDecoder().decode((await reader.read()).value)
+        await reader.cancel()
+        return text
+      },
+      text => text.includes('"error":"') && !text.includes('"error":""'),
+    )
+    expect(frame).toMatch(/option/)
+    expect(existsSync(marker)).toBe(false)
   }, 30_000)
 
 })
