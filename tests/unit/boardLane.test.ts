@@ -26,6 +26,13 @@ afterAll(() => {
   for (const d of dirs) rmSync(d, { recursive: true, force: true })
 })
 
+// Every test here builds a throwaway git repository and runs the real build in it, which is a handful of child
+// processes per test. vitest's 5 s default is enough on an idle machine (the whole file takes about 5 to 12 s) and
+// not on a loaded one: on the shared dev machine single tests ran 5.2 to 8.7 s at load 52 to 112, and failed with a
+// timeout, not an assertion (board/chore-boardlane-explicit-timeouts.md has the measurements). 30 s is the bound the
+// other board test files use, and is over three times the worst of those. It does not make any test faster.
+const SLOW_MS = 30_000
+
 interface Run { status: number | null; stdout: string; stderr: string }
 
 function repo() {
@@ -72,14 +79,14 @@ describe('where a waiting line is allowed', () => {
     const out = r.run('--check')
     expect(out.stderr).toContain('1 cards render')
     expect(out.status).toBe(0)
-  })
+  }, SLOW_MS)
 
   it('allows it on a Next card', () => {
     const r = repo()
     r.write('a', card('Pick one', { column: 'next', waiting: '"Opeyemi: pick A or B"' }))
     r.commit('2026-10-01T10:00:00Z')
     expect(r.run('--check').status).toBe(0)
-  })
+  }, SLOW_MS)
 
   it.each(['backlog', 'next'])('still refuses a %s line that does not say who it waits on, naming the column', column => {
     const r = repo()
@@ -88,7 +95,7 @@ describe('where a waiting line is allowed', () => {
     const out = r.run('--check')
     expect(out.status).not.toBe(0)
     expect(out.stderr).toContain(`waiting: on a ${column === 'next' ? 'Next' : 'Backlog'} card names who it waits on, as "who: what"`)
-  })
+  }, SLOW_MS)
 
   it('still refuses a line on a Done card, and the message names the four columns that may carry one', () => {
     const r = repo()
@@ -97,7 +104,7 @@ describe('where a waiting line is allowed', () => {
     const out = r.run('--check')
     expect(out.status).not.toBe(0)
     expect(out.stderr).toContain('waiting: belongs on a Doing, Review, Backlog or Next card')
-  })
+  }, SLOW_MS)
 
   it('still requires the line on a Doing card (the existing rule is unchanged)', () => {
     const r = repo()
@@ -106,7 +113,7 @@ describe('where a waiting line is allowed', () => {
     const out = r.run('--check')
     expect(out.status).not.toBe(0)
     expect(out.stderr).toContain('a Doing card needs a waiting: line')
-  })
+  }, SLOW_MS)
 })
 
 describe('which cards are in the lane', () => {
@@ -131,7 +138,7 @@ describe('which cards are in the lane', () => {
     const ids = out.stdout.split('\n').filter(l => l.startsWith('- ')).map(l => l.split(' ')[1]).sort()
     expect(ids).toEqual(['backlog-ask', 'doing-ask', 'next-ask', 'review-ask'])
     expect(out.stdout).toContain('Awaiting Opeyemi: 4')
-  })
+  }, SLOW_MS)
 
   it('matches on who the line is addressed TO, not on his name appearing in it', () => {
     const out = mixed().run('--lane')
@@ -140,13 +147,13 @@ describe('which cards are in the lane', () => {
     expect(entries.some(l => l.includes('on-ci'))).toBe(false)
     // …but a line that merely MENTIONS him is named, so its author is not left believing it is listed.
     expect(out.stdout).toContain('(1 more waiting line mention him and are not listed: about-him)')
-  })
+  }, SLOW_MS)
 
   it('prints the ask and the column of each entry', () => {
     const out = mixed().run('--lane')
     expect(out.stdout).toContain('- backlog-ask [Backlog] choose the release class (')
     expect(out.stdout).toContain('- review-ask [Review] the OTP (')
-  })
+  }, SLOW_MS)
 
   it('says "none recorded" when no line names him, and says what that does and does not mean', () => {
     // NOT "none" / "nothing is waiting": an empty lane is a fact about the LINES. A card can wait on him with no
@@ -160,7 +167,7 @@ describe('which cards are in the lane', () => {
     expect(out).toContain("No card's waiting: line names Opeyemi.")
     expect(out).toContain('A card that waits on him without a waiting: line naming him is not listed.')
     expect(out).not.toMatch(/nothing is waiting/i)
-  })
+  }, SLOW_MS)
 
   describe('lines that mention him and are not in the lane', () => {
     function odd() {
@@ -178,7 +185,7 @@ describe('which cards are in the lane', () => {
       const out = odd().run('--lane').stdout
       expect(out).toContain('(3 more waiting lines mention him and are not listed: both, parens, about)')
       expect(out).toContain('- listed [Backlog] choose')
-    })
+    }, SLOW_MS)
 
     it('are named in the board, with links, and in the page data', () => {
       const r = odd()
@@ -186,14 +193,14 @@ describe('which cards are in the lane', () => {
       expect(r.read('docs/board.md')).toContain('3 more `waiting:` lines mention him and are not listed, because they do not start with his name: [`both`](../board/both.md), [`parens`](../board/parens.md), [`about`](../board/about.md).')
       const raw = /const DATA = JSON\.parse\((".*")\);/.exec(r.read('docs/board.html'))![1]!
       expect((JSON.parse(JSON.parse(raw)) as { mentions: string[] }).mentions).toEqual(['both', 'parens', 'about'])
-    })
+    }, SLOW_MS)
 
     it('say nothing when there are none', () => {
       const r = repo()
       r.write('listed', card('Listed', { column: 'backlog', waiting: '"Opeyemi: choose"' }))
       r.commit('2026-10-01T10:00:00Z')
       expect(r.run('--lane').stdout).not.toContain('mention him')
-    })
+    }, SLOW_MS)
   })
 })
 
@@ -208,7 +215,7 @@ describe('how old each line is', () => {
     r.write('a', card('Ask', { column: 'backlog', waiting: '"Opeyemi: second ask"' }, 'Body v2, edited a day later.'))
     r.commit('2026-10-03T09:00:00Z')
     expect(r.run('--lane').stdout).toContain('since 2026-10-03 09:00 UTC')
-  })
+  }, SLOW_MS)
 
   it('lists the oldest wait first, because that is the one to look at', () => {
     const r = repo()
@@ -220,7 +227,7 @@ describe('how old each line is', () => {
     // `older` is committed second but with an EARLIER date, so file order and history order disagree and
     // only a sort on the age can put it first.
     expect(ids).toEqual(['older', 'newer'])
-  })
+  }, SLOW_MS)
 
   it('says "age unknown" for a line with uncommitted edits, instead of a blank or a wrong date', () => {
     const r = repo()
@@ -230,7 +237,7 @@ describe('how old each line is', () => {
     const line = r.run('--lane').stdout.split('\n').find(l => l.startsWith('- a '))!
     expect(line).toContain('age unknown')
     expect(line).not.toContain('2026-10-01')
-  })
+  }, SLOW_MS)
 
   it('puts an unknown age after the known ones', () => {
     const r = repo()
@@ -239,7 +246,7 @@ describe('how old each line is', () => {
     r.write('unknown', card('Unknown', { column: 'backlog', waiting: '"Opeyemi: not committed"', order: '1' }))
     const ids = r.run('--lane').stdout.split('\n').filter(l => l.startsWith('- ')).map(l => l.split(' ')[1])
     expect(ids).toEqual(['known', 'unknown'])
-  })
+  }, SLOW_MS)
 
   it('says "age unknown" in a shallow checkout, where every line would otherwise date from HEAD', () => {
     const r = repo()
@@ -256,7 +263,7 @@ describe('how old each line is', () => {
     // `git add -A board scripts` committed the script too, so the shallow clone has it.
     expect(out.stdout).toContain('age unknown')
     expect(out.stdout).not.toContain('2026-10-03')
-  })
+  }, SLOW_MS)
 })
 
 describe('what the generated board shows', () => {
@@ -278,17 +285,17 @@ describe('what the generated board shows', () => {
     expect(lane).toBeLessThan(md.indexOf('## Backlog —'))
     expect(md).toContain('- [`ask`](../board/ask.md) · Backlog · choose the class · since 2026-10-01 10:00 UTC')
     expect(md).toContain('- [`doing-ask`](../board/doing-ask.md) · Doing · a time · since 2026-10-01 10:00 UTC')
-  })
+  }, SLOW_MS)
 
   it('keeps the card in its own column too: the lane is a view, not a move', () => {
     const md = board().read('docs/board.md')
     expect(md).toContain('## Backlog — 2')
     expect(md).toContain('### Doing ask')
-  })
+  }, SLOW_MS)
 
   it('says the count in the summary line', () => {
     expect(board().read('docs/board.md')).toMatch(/\*4 cards, 3 open, .* Awaiting Opeyemi, by waiting line: 2\.\*/)
-  })
+  }, SLOW_MS)
 
   it('renders the section even when the lane is empty, and says "none recorded", not "nothing is waiting"', () => {
     const r = repo()
@@ -301,7 +308,7 @@ describe('what the generated board shows', () => {
     expect(md).toContain('Awaiting Opeyemi, by waiting line: none recorded.')
     expect(md).not.toMatch(/nothing is waiting on Opeyemi/i)
     expect(md).not.toContain('— 0')
-  })
+  }, SLOW_MS)
 
   it('exports the lane and the wait line of a Backlog card to the page, so a card with a line is not missing from it', () => {
     const html = board().read('docs/board.html')
@@ -318,13 +325,13 @@ describe('what the generated board shows', () => {
     expect(backlog.find(c => c.id === 'plain')!.waiting).toBeNull()
     // …and a Doing card keeps its own contract: '' is moving, a line is a wait.
     expect(data.columns.find(c => c.id === 'doing')!.cards[0]!.waiting).toBe('Opeyemi: a time')
-  })
+  }, SLOW_MS)
 
   it('has a lane element in the page, filled in by the script', () => {
     const html = board().read('docs/board.html')
     expect(html).toContain('<section class="lane" id="lane"></section>')
     expect(html).toContain("'Awaiting Opeyemi · '")
-  })
+  }, SLOW_MS)
 
   it('says "none recorded" in the page too, with the same sentence as the board', () => {
     const r = repo()
@@ -338,7 +345,7 @@ describe('what the generated board shows', () => {
     expect(html).toContain("h.textContent = 'Awaiting Opeyemi · ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);")
     expect(html).toContain("' · awaiting Opeyemi, by waiting line: ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);")
     expect(html).not.toMatch(/Nothing is waiting on Opeyemi/i)
-  })
+  }, SLOW_MS)
 
   it('puts an ask into the page as TEXT: markup in it is never parsed (Idris checked in a browser; this pins the code)', () => {
     const r = repo()
@@ -352,7 +359,7 @@ describe('what the generated board shows', () => {
     const script = html.slice(html.indexOf('(function () {\n  const lane'), html.indexOf('const dlg = document.getElementById'))
     expect(script).toContain('ask.textContent = x.ask')
     for (const sink of ['innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write']) expect(script).not.toContain(sink)
-  })
+  }, SLOW_MS)
 
   it('writes NOTHING under --lane: it is a read', () => {
     const r = repo()
@@ -361,13 +368,13 @@ describe('what the generated board shows', () => {
     r.run('--lane')
     expect(r.exists('docs/board.md')).toBe(false)
     expect(r.exists('docs/board.html')).toBe(false)
-  })
+  }, SLOW_MS)
 
   it('tells a card author how to ask him something, and that the PR that acts on the answer deletes the line', () => {
     const md = board().read('docs/board.md')
     expect(md).toContain('**Asking Opeyemi something**')
     expect(md).toContain('The pull request that acts on his answer deletes the')
-  })
+  }, SLOW_MS)
 })
 
 describe('the real board still renders', () => {
@@ -375,5 +382,5 @@ describe('the real board still renders', () => {
     const r = spawnSync(process.execPath, [SCRIPT, '--check'], { cwd: join(__dirname, '..', '..'), encoding: 'utf8' })
     expect(r.stderr).toMatch(/\d+ cards render/)
     expect(r.status).toBe(0)
-  })
+  }, SLOW_MS)
 })

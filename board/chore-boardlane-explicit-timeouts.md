@@ -3,7 +3,7 @@ title: "boardLane's tests spawn real builds on vitest's 5 s default, and they ar
 column: doing
 kind: chore
 owner: "Dogu"
-waiting: ""
+waiting: "Idris: gate the work PR (a timeout raise is a tolerance change)"
 order: 125
 ---
 
