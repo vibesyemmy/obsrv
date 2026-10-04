@@ -394,6 +394,26 @@ describe('board-serve in a browser', () => {
   )
 
   it(
+    'a --ref that git would read as a refspec writes no ref in the checkout',
+    async () => {
+      // Catches: the branch handed to `git fetch -- <remote> <branch>` unchecked. `--` stops an OPTION, but a positional
+      // here is a REFSPEC, so `origin/main:refs/heads/NEW` fetches main INTO a new local branch `NEW` (and
+      // `...:refs/tags/T` creates a tag): `--ref` can write refs in the checkout it was only meant to read. Git itself
+      // rejects such a name (`git check-ref-format --branch` says "not a valid branch name": it forbids `:`, `*`, `?`,
+      // `[`, `^`, `~`, `\`, spaces, `..` and `@{`), so validating the resolved branch with it loses nothing and also
+      // covers a leading `-`.
+      const f = fixture()
+      const { url } = await serve(f.clone, ['--ref', 'origin/main:refs/heads/INJECTED_BY_REF', '--fetch-timeout-ms', '3000'])
+      await until('the first poll has reported', () => firstEvent(url), e => e.error !== '', 15_000).catch(() => undefined)
+      expect(git(f.clone, ['branch', '--list', 'INJECTED_BY_REF']).trim()).toBe('')
+      const tag = await serve(f.clone, ['--ref', 'origin/main:refs/tags/INJECTED_BY_REF', '--fetch-timeout-ms', '3000'])
+      await until('the first poll has reported', () => firstEvent(tag.url), e => e.error !== '', 15_000).catch(() => undefined)
+      expect(git(f.clone, ['tag', '--list', 'INJECTED_BY_REF']).trim()).toBe('')
+    },
+    TEST_MS,
+  )
+
+  it(
     'a remote that never answers does not stop it listening, and the page says it timed out',
     async () => {
       // Catches: the fetch timeout removed (the server would never leave its first poll), and `poll()`
