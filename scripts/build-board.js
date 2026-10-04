@@ -101,6 +101,12 @@ const fragment = process.argv.includes('--fragment')
 // "this page does not update itself" printed on a page that does is exactly
 // the quietly-false kind this project keeps finding.
 const auto = process.argv.includes('--auto')
+// `--auto-ref <ref>` names WHICH ref the page follows. `--auto` alone says
+// "rebuilt on every push to main", which is true of the Pages build and false
+// of a live server pointed at a branch — the page would claim main while
+// showing someone's branch, which is the quietly-false kind this board exists
+// to stop.
+const autoRef = argAfter('--auto-ref', '')
 
 // Left to right is the order work actually travels: raised, picked, claimed,
 // finished, merged. Backlog leads because that is where a card starts — it was
@@ -386,7 +392,7 @@ function boardData(stampText) {
         waitingSince: waitingSince(c),
       })),
   })).filter(c => c.cards.length > 0)
-  return JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto })
+  return JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto, autoRef })
 }
 
 function renderHtml(stampText) {
@@ -484,7 +490,10 @@ document.getElementById('sub').textContent =
 const st = document.getElementById('stamp');
 if (st && DATA.stamp) {
   const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
-  st.innerHTML = DATA.auto
+  const ref = DATA.autoRef ? DATA.autoRef.replace(/[<>&]/g, '') : '';
+  st.innerHTML = DATA.autoRef
+    ? 'Built from ' + where + ' and rebuilt when <b>' + ref + '</b> moves — <b>not main</b> unless that is main. The cards in <code>board/</code> are the source.'
+    : DATA.auto
     ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
     : 'Snapshot of ' + where + ' — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
 } else { st.remove(); }

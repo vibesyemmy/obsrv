@@ -165,6 +165,19 @@ describe('board-serve', () => {
     expect(seen).toContain('The first card')
   })
 
+  it('names the ref it follows, so a branch cannot be read as main', async () => {
+    const f = fixture()
+    // The fixture's remote only has main, so follow it by its full name and
+    // check the page says which ref — the failure this guards is a server on a
+    // BRANCH printing "rebuilt on every push to main".
+    const { url } = await serve(f.clone, ['--ref', 'origin/main'])
+    const data = await (await fetch(`${url}/data.json`)).json()
+    expect(data.autoRef).toBe('origin/main')
+    const html = await (await fetch(url)).text()
+    expect(html).toContain('rebuilt when')
+    expect(html).toContain('<b>not main</b> unless that is main')
+  })
+
   it('says the feed is failing rather than leaving stale cards looking current', async () => {
     const f = fixture()
     const { url } = await serve(f.clone, ['--interval-ms', '400'])

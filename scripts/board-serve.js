@@ -62,8 +62,11 @@ function buildAt(sha) {
         '--json', join(dir, 'board.json'),
         '--stamp', sha.slice(0, 9),
         // The page may truthfully say it keeps itself current: this process is
-        // what makes that true, and `--auto` is the flag that prints it.
-        '--auto',
+        // what makes that true, and `--auto-ref` is the flag that prints it —
+        // naming the ref, because a server pointed at a branch that claimed
+        // "rebuilt on every push to main" would be showing one thing and
+        // saying another.
+        '--auto', '--auto-ref', REF,
       ],
       { cwd: REPO, stdio: ['ignore', 'ignore', 'pipe'] },
     )
