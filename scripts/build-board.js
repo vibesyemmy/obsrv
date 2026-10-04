@@ -3,6 +3,7 @@
 //
 //   npm run board          write docs/board.md and docs/board.html from board/
 //   npm run board:check    fail if any card cannot be read or rendered
+//   npm run board -- --lane   print the Awaiting Opeyemi lane and write nothing
 //
 // The cards ARE the board. One file per card in board/, each with a small
 // frontmatter block and its evidence as the body. docs/board.md and
@@ -178,18 +179,27 @@ function parseCard(id, text) {
           `    wanted:   "Idris: ${String(card.waiting).replace(/^"|"$/g, '')}"   (or "ci: …", "event: …", or "" if it is moving)`,
       )
     }
-  } else if (col === 'review') {
+  } else if (col === 'review' || col === 'backlog' || col === 'next') {
     // Optional on Review (chore-waiting-field-refinements): a finished card
     // waits on a reviewer, and which one is not implied, so a line naming them
     // makes the review queue countable. Present, it names who, the same way.
+    //
+    // And optional on Backlog and Next (feat-awaiting-lane): a card that has not
+    // been claimed can still be stopped on a person's answer, and the person most
+    // often named is Opeyemi. `waiting: "Opeyemi: <the exact ask>"` is what puts
+    // a card in the Awaiting Opeyemi lane, which is derived from this field and
+    // is not a column anyone moves a card into by hand. The rule that keeps it
+    // honest is the one Doing already has: the pull request that acts on the
+    // answer deletes the line.
     if (card.waiting !== undefined && !/^[^:]{1,40}: \S/.test(card.waiting)) {
-      throw new Error(`board/${id}.md: waiting: on a Review card names who it waits on, as "who: what" — got ${JSON.stringify(card.waiting)}; delete the line to name nobody`)
+      const name = COLUMNS.find(c => c.id === col).name
+      throw new Error(`board/${id}.md: waiting: on a ${name} card names who it waits on, as "who: what" — got ${JSON.stringify(card.waiting)}; delete the line to name nobody`)
     }
   } else if (card.waiting !== undefined) {
-    // Off Doing and Review, nothing renders it and nothing waits: a `waiting`
-    // line on a finished card is a record kept where nobody reads it. Refused,
-    // so the close that moves a card out is the edit that removes it.
-    throw new Error(`board/${id}.md: waiting: belongs on a Doing or Review card, and this one is "${col}" — delete the line when a card leaves them`)
+    // On a Done card nothing renders it and nothing waits: a `waiting` line on
+    // a finished card is a record kept where nobody reads it. Refused, so the
+    // close that moves a card out is the edit that removes it.
+    throw new Error(`board/${id}.md: waiting: belongs on a Doing, Review, Backlog or Next card, and this one is "${col}" — delete the line when a card closes`)
   }
   // A card that isn't Done must not say it is. #139 merged the drawNow card's
   // resolved section while the card stayed in Next, because the edit meant to
@@ -257,6 +267,53 @@ const cards = readdirSync(CARDS)
   .map(n => parseCard(n.replace(/\.md$/, ''), readFileSync(join(CARDS, n), 'utf8')))
   .sort((a, b) => (a.order || 0) - (b.order || 0) || a.id.localeCompare(b.id))
 
+/**
+ * The Awaiting Opeyemi lane (feat-awaiting-lane): every card that is not Done and
+ * whose `waiting:` line names him, in whatever column it sits.
+ *
+ * **Derived, not a column.** A lane cards are moved into by hand is a second place
+ * the same fact lives, and the board moved into the repo to have one. Here the
+ * fact is the card's own `waiting:` line, and the lane is what that line says.
+ *
+ * **A derived lane goes stale somewhere else, so every line shows its age.** The
+ * redirect card asked him a question he had already answered, and it stood for
+ * about three days (2026-09-29 to 10-02) before anyone noticed: a hand-moved
+ * column would have kept it parked, and this lane would have kept it listed,
+ * just as wrongly. The age is when the `waiting:` line last changed (`waitingSince`),
+ * and where history cannot say, the lane says `age unknown` and does not leave a blank
+ * that reads as "recent". Oldest wait first, because that is the one to look at.
+ *
+ * Matched on the part of the line before the first colon, case-insensitively, and
+ * on that alone: `Opeyemi: …` is the ask, and `Idris: Opeyemi asked for this` is not.
+ */
+const awaitsOpeyemi = c => c.column !== 'done' && waitingOn(c).toLowerCase() === 'opeyemi'
+const askOf = c => c.waiting.slice(c.waiting.indexOf(':') + 1).trim()
+const colName = id => COLUMNS.find(col => col.id === id).name
+const lane = cards
+  .filter(awaitsOpeyemi)
+  .map(c => ({ c, since: waitingSince(c) }))
+  .sort((a, b) => (a.since ?? Infinity) - (b.since ?? Infinity) || (a.c.order || 0) - (b.c.order || 0) || a.c.id.localeCompare(b.c.id))
+// Lines that mention him and are NOT in the lane: "Opeyemi and Henry: …", "Opeyemi (OTP): …", or "Idris: Opeyemi
+// asked for this". The match is exact on purpose (the last of those must not be listed as his ask), but a
+// line that would be omitted silently is a line whose author believes it is listed, so they are counted
+// and named instead.
+const mentionsHim = cards.filter(c => c.column !== 'done' && c.waiting && /opeyemi/i.test(c.waiting) && !awaitsOpeyemi(c))
+const NOT_LISTED = 'A card that waits on him without a `waiting:` line naming him is not listed.'
+const noneRecorded = "No card's `waiting:` line names Opeyemi."
+const sinceText = since => (since === null ? 'age unknown (no git history for this line here)' : `since ${utc(since)}`)
+
+// `--lane` prints just this lane and writes nothing, for a tool to read
+// (`npm run status` can quote it) and for a person who wants the answer to one question.
+if (process.argv.includes('--lane')) {
+  // "none recorded", not "none": an empty lane means no card's waiting line names him, which is a fact about
+  // the lines, not about what waits on him (nobody may have written the line).
+  console.log(lane.length === 0 ? 'Awaiting Opeyemi: none recorded' : `Awaiting Opeyemi: ${lane.length}`)
+  if (lane.length === 0) console.log(`  ${noneRecorded.replace(/`/g, '')} ${NOT_LISTED.replace(/`/g, '')}`)
+  for (const { c, since } of lane) console.log(`- ${c.id} [${colName(c.column)}] ${askOf(c)} (${sinceText(since)})`)
+  if (mentionsHim.length > 0) console.log(`(${mentionsHim.length} more waiting line${mentionsHim.length === 1 ? '' : 's'} mention him and are not listed: ${mentionsHim.map(c => c.id).join(', ')})`)
+  process.exit(0)
+}
+
 const esc = s => String(s ?? '').replace(/\r/g, '')
 const open = cards.filter(c => c.column !== 'done')
 const byKind = k => open.filter(c => c.kind === k).length
@@ -278,7 +335,7 @@ const doingSummary =
 const out = []
 out.push('# The Obsrv board')
 out.push('')
-out.push(`*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed. ${doingSummary}.*`)
+out.push(`*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed. ${doingSummary}. Awaiting Opeyemi, by waiting line: ${lane.length === 0 ? 'none recorded' : lane.length}.*`)
 out.push('')
 out.push('**This file is generated. The board is [`board/`](../board), one file per')
 out.push('card — edit those.** `npm run board` regenerates this locally, and the')
@@ -303,6 +360,13 @@ out.push('can force. A card in Review may name its reviewer the same way. An uno
 out.push('a Doing card is moving unless it names what it waits on, and a card in')
 out.push('Review is finished and waiting on the maintainer rather than on help.')
 out.push('')
+out.push('**Asking Opeyemi something** is also a `waiting:` line, on a card in any column but Done:')
+out.push('`waiting: "Opeyemi: <the exact ask>"`. It puts the card in the **Awaiting Opeyemi** lane below,')
+out.push('which is derived from that line and is not a column — nobody moves a card into it. The lane')
+out.push('shows how long ago the line was set. **The pull request that acts on his answer deletes the')
+out.push('line**, as a Doing card does when it leaves Doing, or the lane keeps asking a question that')
+out.push('has been answered. `npm run board -- --lane` prints it.')
+out.push('')
 out.push('**How to read a commit on a card.** Where a card names delivered work it')
 out.push('gives a branch and then a sha as `as of` — `fix/thing (as of 9fe0fda)`. The')
 out.push('**branch is the address**; the sha is a timestamp. Unmerged branches get')
@@ -319,6 +383,26 @@ out.push('  labelled with a criterion (`A1`…`E2`). The board tracks work; read
 out.push('  states what would make the work finished.')
 out.push('- [`docs/limitations.md`](limitations.md) lists the things that look like bugs')
 out.push('  and are not. Worth two minutes before filing one.')
+out.push('')
+
+// The lane is printed even when it is empty: "nothing is waiting on him" and "the
+// lane did not render" are different facts, and a section that quietly omits itself
+// when empty fits both.
+out.push('---')
+out.push('')
+out.push(`## Awaiting Opeyemi — ${lane.length === 0 ? 'none recorded' : lane.length}`)
+out.push('')
+out.push('*Cards whose `waiting:` line names him, in any column but Done. Derived from that line, not a column;')
+out.push('the pull request that acts on his answer deletes the line. Oldest first.*')
+out.push('')
+// Empty is NOT "nothing waits on him". It is "no line names him", and a card can wait on him without one;
+// saying "nothing is waiting" here would be the board's own silence presented as an answer.
+if (lane.length === 0) out.push(`*${noneRecorded} ${NOT_LISTED}*`)
+for (const { c, since } of lane) out.push(`- [\`${esc(c.id)}\`](../board/${esc(c.id)}.md) · ${colName(c.column)} · ${esc(askOf(c))} · ${sinceText(since)}`)
+if (mentionsHim.length > 0) {
+  out.push('')
+  out.push(`*${mentionsHim.length} more \`waiting:\` line${mentionsHim.length === 1 ? '' : 's'} mention${mentionsHim.length === 1 ? 's' : ''} him and ${mentionsHim.length === 1 ? 'is' : 'are'} not listed, because ${mentionsHim.length === 1 ? 'it does' : 'they do'} not start with his name: ${mentionsHim.map(c => `[\`${esc(c.id)}\`](../board/${esc(c.id)}.md)`).join(', ')}.*`)
+}
 out.push('')
 
 for (const col of COLUMNS) {
@@ -385,14 +469,18 @@ function boardData(stampText) {
       .filter(c => c.column === col.id)
       .map(c => ({
         id: c.id, title: c.title, owner: c.owner ?? '', criterion: c.criterion ?? '', kind: c.kind ?? '', evidence: c.evidence ?? '',
-        // '' is moving, on Doing only; null is nothing to show — off Doing and
-        // Review, or a Review card that names nobody.
-        waiting: c.column === 'doing' ? (c.waiting ?? '') : c.column === 'review' && c.waiting ? c.waiting : null,
+        // '' is moving, on Doing only; null is nothing to show — a card in any
+        // other column that names nobody. (A Done card cannot carry a line at all.)
+        waiting: c.column === 'doing' ? (c.waiting ?? '') : c.waiting ? c.waiting : null,
         // The page says how long ago at the moment it is read, not when it was built.
         waitingSince: waitingSince(c),
       })),
   })).filter(c => c.cards.length > 0)
-  return JSON.stringify({ columns: data, open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto, autoRef })
+  // The lane travels with the cards: the live page repaints from this same
+  // JSON, so a lane built only into the HTML would vanish on the first repaint.
+  const mentionData = mentionsHim.map(c => c.id)
+  const laneData = lane.map(({ c, since }) => ({ id: c.id, title: c.title, column: c.column, columnName: colName(c.column), ask: askOf(c), waitingSince: since }))
+  return JSON.stringify({ columns: data, lane: laneData, mentions: mentionData, noneRecorded: noneRecorded.replace(/`/g, '') + ' ' + NOT_LISTED.replace(/`/g, ''), open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto, autoRef })
 }
 
 function renderHtml(stampText) {
@@ -465,11 +553,22 @@ function renderHtml(stampText) {
   .dbody code, .dbody :not(pre) > code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   .close { position: sticky; bottom: 0; display: block; width: 100%; padding: 11px; border: 0; border-top: 1px solid var(--line); background: var(--panel); color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; border-radius: 0 0 12px 12px; }
   .empty { color: var(--dim); font-style: italic; font-size: 12px; }
+  .lane { background: var(--panel); border: 1px solid var(--doing); border-radius: 10px; padding: 12px; margin: 0 0 14px; }
+  .lane h2 { font-size: 13px; margin: 0 0 2px; text-transform: uppercase; letter-spacing: .06em; color: var(--doing); }
+  .lane .blurb { margin-bottom: 8px; }
+  .lane ul { list-style: none; margin: 0; padding: 0; }
+  .lane li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 6px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+  .lane li:first-child { border-top: 0; }
+  .lane li:hover { background: var(--bg); }
+  .lane .ask { font-weight: 600; flex: 1 1 320px; }
+  .lane .age { color: var(--dim); font-size: 12px; }
+  .lane .age.unknown { font-style: italic; }
 </style>
 ${bodyOpen}<div class="wrap">
   <h1>The Obsrv board</h1>
   <p class="sub" id="sub"></p>
   <p class="stamp" id="stamp"></p>
+  <section class="lane" id="lane"></section>
   <div class="cols" id="cols"></div>
 </div>
 <dialog id="dlg">
@@ -486,7 +585,7 @@ const COLOR = { next: 'var(--next)', doing: 'var(--doing)', review: 'var(--revie
 // being read is its own kind of wrong answer.
 function paint(DATA) {
 document.getElementById('sub').textContent =
-  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary;
+  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary + ' · awaiting Opeyemi, by waiting line: ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);
 const st = document.getElementById('stamp');
 if (st && DATA.stamp) {
   const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
@@ -506,6 +605,7 @@ const ago = ms => {
 };
 const cols = document.getElementById('cols');
 cols.textContent = '';
+const byId = {};
 for (const col of DATA.columns) {
   const d = document.createElement('div');
   d.className = 'col';
@@ -537,12 +637,52 @@ for (const col of DATA.columns) {
       el.append(w);
     }
     el.addEventListener('click', () => open_(c, col));
+    byId[c.id] = { c, col };
     d.append(el);
   }
   cols.append(d);
 }
+// The Awaiting Opeyemi lane: derived from the cards' own waiting lines, so it is
+// printed even when empty. "Nothing is waiting on him" and "the lane did not
+// render" are different facts. Each line says how long ago it was set, at the
+// moment the page is read, because the lane that goes stale is the one that
+// keeps asking a question that has been answered.
+(function () {
+  const lane = document.getElementById('lane');
+  // Cleared first: paint() runs again on every repaint, and an uncleared lane
+  // stacks a second copy under the first.
+  lane.textContent = '';
+  const h = document.createElement('h2'); h.textContent = 'Awaiting Opeyemi · ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);
+  const b = document.createElement('p'); b.className = 'blurb';
+  b.textContent = 'Cards whose waiting line names him, in any column but Done. Derived from that line, not a column; the pull request that acts on his answer deletes it. Oldest first.';
+  lane.append(h, b);
+  if (DATA.lane.length === 0) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = DATA.noneRecorded; lane.append(e); }
+  else {
+  const ul = document.createElement('ul');
+  for (const x of DATA.lane) {
+    const li = document.createElement('li');
+    const ask = document.createElement('span'); ask.className = 'ask'; ask.textContent = x.ask;
+    const id = document.createElement('span'); id.className = 'id'; id.textContent = x.id + ' · ' + x.columnName;
+    const age = document.createElement('span'); age.className = 'age' + (x.waitingSince ? '' : ' unknown');
+    age.textContent = x.waitingSince ? 'set ' + ago(x.waitingSince) : 'age unknown';
+    li.append(ask, id, age);
+    li.addEventListener('click', () => { const hit = byId[x.id]; if (hit) open_(hit.c, hit.col); });
+    ul.append(li);
+  }
+  lane.append(ul);
+  }
+  if (DATA.mentions.length > 0) {
+    const m = document.createElement('p'); m.className = 'blurb';
+    m.textContent = DATA.mentions.length + ' more waiting line' + (DATA.mentions.length === 1 ? ' mentions' : 's mention') + ' him and ' + (DATA.mentions.length === 1 ? 'is' : 'are') + ' not listed, because ' + (DATA.mentions.length === 1 ? 'it does' : 'they do') + ' not start with his name: ' + DATA.mentions.join(', ') + '.';
+    lane.append(m);
+  }
+})();
 }
-paint(JSON.parse(${JSON.stringify(json)}));
+// Kept as a single "const DATA = JSON.parse(...)" line: it is the page's one
+// data literal, and #548's tests read it from the built page by that shape.
+// (No backticks in this comment — it lives inside a template literal.)
+const DATA = JSON.parse(${JSON.stringify(json)});
+paint(DATA);
 // The live server repaints through this; nothing in the committed page uses it.
 window.__boardPaint = paint;
 const dlg = document.getElementById('dlg');

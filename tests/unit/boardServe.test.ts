@@ -284,7 +284,9 @@ describe('board-serve', () => {
     const { url } = await serve(f.clone, ['--interval-ms', '400'])
     f.pushFile(
       'board/zz-bad.md',
-      '---\ntitle: "A card the guard refuses"\ncolumn: next\nkind: chore\norder: 900\nwaiting: "Opeyemi: not allowed off Doing"\n---\n\nEvidence.\n',
+      // A waiting line that names nobody: still refused after #548 widened
+      // which columns may carry one.
+      '---\ntitle: "A card the guard refuses"\ncolumn: backlog\nkind: chore\norder: 900\nwaiting: "no one is named here"\n---\n\nEvidence.\n',
     )
 
     const frame = await until(
