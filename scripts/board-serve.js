@@ -87,8 +87,21 @@ let REF_FAULT = ''
 let resolved = { remote: '', branch: '' }
 try {
   resolved = resolveRef(REF_ASKED)
+  // Order matters: the leading-dash refusal runs FIRST, because
+  // `check-ref-format` would read `--upload-pack=…` as one of its own options
+  // rather than as the name it is being asked about.
   refuseOptionShaped('--remote', resolved.remote)
   refuseOptionShaped('the branch in --ref', resolved.branch)
+  // `--ref "origin/main:refs/heads/zz"` reached `git fetch` as a REFSPEC and
+  // wrote a local branch; `:refs/tags/zz` wrote a tag (Idris #3283). `--` stops
+  // an option, not a refspec — a colon is not an option. git's own validator
+  // answers what a branch name may contain, and it is local, so it costs
+  // nothing before listen().
+  try {
+    execFileSync('git', ['-C', REPO, 'check-ref-format', '--branch', resolved.branch], { stdio: ['ignore', 'ignore', 'pipe'] })
+  } catch {
+    throw new Error(`the branch in --ref ${JSON.stringify(resolved.branch)} is not a valid branch name (git check-ref-format refuses it)`)
+  }
 } catch (e) {
   REF_FAULT = String((e && e.message) || e)
 }
@@ -259,16 +272,24 @@ const LIVE_CLIENT = `
   const when = ms => new Date(ms).toTimeString().slice(0, 8);
   let shown = '';
   const say = (text, bad) => { feed.textContent = text; feed.style.color = bad ? 'var(--doing)' : 'var(--dim)'; };
+  // Two frames close together put two fetches in flight, and the one that
+  // RESOLVES last used to paint last — so the page could end up showing an
+  // older board while saying it was live from the newer sha. A counter means
+  // only the newest handler may paint, set shown, or write the feed line.
+  let latest = 0;
   const es = new EventSource('/events');
   es.onmessage = async ev => {
     let msg = {};
     try { msg = JSON.parse(ev.data); } catch {}
     if (msg.error) { say('Live feed failing: ' + msg.error + ' — cards below are from ' + (msg.builtAt ? when(msg.builtAt) : 'an earlier read'), true); return; }
+    const mine = ++latest;
     if (msg.sha && msg.sha !== shown) {
       const data = await (await fetch('/data.json', { cache: 'no-store' })).json();
+      if (mine !== latest) return;
       window.__boardPaint(data);
       shown = msg.sha;
     }
+    if (mine !== latest) return;
     say('Live: repainted ' + when(msg.builtAt || Date.now()) + ' from ' + String(msg.sha || '').slice(0, 9) + '.');
   };
   // A closed EventSource reconnects on its own, but a page that says nothing
