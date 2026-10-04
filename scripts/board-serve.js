@@ -44,11 +44,17 @@ const INTERVAL_MS = Number(argAfter('--interval-ms', '20000'))
 const REF_ASKED = argAfter('--ref', 'origin/main')
 const REMOTE_ASKED = argAfter('--remote', '')
 // Resolved against the checkout's OWN remotes, not by splitting on the first
-// slash. `--ref upstream/main` used to fetch `origin upstream/main` and then
-// read `upstream/main`, which never moves — live, silent, and wrong. A name
-// that matches no remote and no branch is refused at startup rather than
-// served. Note `origin/idris/awaiting-opeyemi-lines`: the remote is the first
-// segment only when it IS a remote, and a branch may contain slashes.
+// slash: `--ref upstream/main` used to fetch `origin upstream/main` and then
+// read `upstream/main`, which nothing updates — live, silent and wrong. The
+// first segment counts as a remote only when it IS one, because a branch may
+// contain slashes (`origin/idris/awaiting-opeyemi-lines`).
+//
+// NOTHING HERE TOUCHES THE NETWORK. An earlier version ran `git ls-remote` to
+// check the branch existed, which is a network call before `listen()`: against
+// a remote that accepts and never answers it printed no port, no page and no
+// reason — the exact failure the async fetch had just removed, reached through
+// another door (Idris #3263, Dogu #3265). `git remote` is local. Whether the
+// branch exists is answered by the first poll, which is bounded and reports.
 const REMOTES = execFileSync('git', ['-C', REPO, 'remote'], { encoding: 'utf8' }).split('\n').map(r => r.trim()).filter(Boolean)
 function resolveRef(asked) {
   const head = asked.slice(0, asked.indexOf('/'))
@@ -58,21 +64,12 @@ function resolveRef(asked) {
   if (REMOTE_ASKED && !REMOTES.includes(REMOTE_ASKED)) {
     throw new Error(`--remote ${REMOTE_ASKED} is not a remote of ${REPO} (it has: ${REMOTES.join(', ') || 'none'})`)
   }
-  // A bare name, or a branch with slashes in it: it has to exist on the remote,
-  // or following it would be a page that never moves.
-  const heads = execFileSync('git', ['-C', REPO, 'ls-remote', '--heads', remote, asked], { encoding: 'utf8' }).trim()
-  if (!heads) {
-    throw new Error(
-      `--ref ${asked} names neither a remote of ${REPO} (${REMOTES.join(', ')}) nor a branch on ${remote}`,
-    )
-  }
   return { remote, branch: asked }
 }
 const resolved = resolveRef(REF_ASKED)
 const REMOTE = resolved.remote
 const BRANCH = resolved.branch
 const REF = `${REMOTE}/${BRANCH}`
-
 const FETCH_TIMEOUT_MS = Number(argAfter('--fetch-timeout-ms', '20000'))
 const run = promisify(execFile)
 // Every git call the poller makes is ASYNC. It used to be execFileSync inside
@@ -193,7 +190,13 @@ async function poll() {
     // The REASON (git's `fatal:`, or the board guard naming the bad card and
     // the rule) is on stderr; the message is only ever "Command failed: <the
     // command we just ran>", which the reader already knows.
-    const next = reasonOf(e)
+    let next = reasonOf(e)
+    // git's own words for this are "couldn't find remote ref <x>", which does
+    // not tell the reader that `--ref` may also name a remote. Startup cannot
+    // say it any more — checking would mean a network call before listen().
+    if (/couldn't find remote ref/i.test(next)) {
+      next = `${next} — --ref ${REF_ASKED} names neither a remote of this checkout (${REMOTES.join(', ')}) nor a branch on ${REMOTE}`
+    }
     if (next !== state.error) {
       state.error = next
       moved = true

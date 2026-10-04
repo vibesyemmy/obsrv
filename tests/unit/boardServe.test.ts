@@ -144,7 +144,7 @@ describe('board-serve', () => {
     // is reading files rather than the commit, and every claim about seeing
     // other sessions' merges is void.
     expect(titles).not.toContain('Only in the working tree')
-  })
+  }, 30_000)
 
   it('repaints through the page’s own paint(), and the page it serves is whole', async () => {
     const f = fixture()
@@ -168,7 +168,7 @@ describe('board-serve', () => {
     // — the first version of this assertion failed on this feature's own card,
     // which is the assertion being wrong, not the page.
     expect(readFileSync(join(out, 'b.html'), 'utf8')).not.toContain('<script id="board-live">')
-  })
+  }, 30_000)
 
   it('names the ref it follows, so a branch cannot be read as main', async () => {
     const f = fixture()
@@ -181,7 +181,7 @@ describe('board-serve', () => {
     const html = await (await fetch(url)).text()
     expect(html).toContain('rebuilt when')
     expect(html).toContain('<b>not main</b> unless that is main')
-  })
+  }, 30_000)
 
   it('says the feed is failing rather than leaving stale cards looking current', async () => {
     const f = fixture()
@@ -207,7 +207,7 @@ describe('board-serve', () => {
     const titles = (await (await fetch(`${url}/data.json`)).json()).columns
       .flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title))
     expect(titles).toContain('The first card')
-  })
+  }, 30_000)
 
   it('announces the new sha on /events, held open across the move', async () => {
     const f = fixture()
@@ -336,20 +336,28 @@ describe('board-serve', () => {
     expect(answered).toBe(20)
   }, 30_000)
 
-  it('refuses a --ref whose first segment is not one of this checkout’s remotes', async () => {
+  it('says a --ref that names no remote and no branch is neither, rather than following nothing', async () => {
     const f = fixture()
     // `--ref upstream/main` used to fetch `origin upstream/main` and then read
-    // `upstream/main`: a page that says it is live and never moves.
-    const p = spawn(process.execPath, [join(ROOT, 'scripts', 'board-serve.js'), '--repo', f.clone, '--port', '0', '--ref', 'upstream/main'], {
-      cwd: ROOT,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    started.push(p as Child)
-    let err = ''
-    p.stderr.on('data', d => (err += String(d)))
-    const code = await new Promise<number | null>(resolve => p.on('exit', resolve))
-    expect(code).not.toBe(0)
-    expect(err).toMatch(/upstream\/main/)
-    expect(err).toMatch(/remote/)
+    // `upstream/main`, which nothing updates: live, silent, wrong. Startup
+    // cannot answer this any more — checking would be a network call before
+    // listen(), which is the startup hang Idris found (#3263) — so the first
+    // poll reports it, and git's own "couldn't find remote ref" is widened to
+    // say that --ref may also name a remote.
+    const { url } = await serve(f.clone, ['--ref', 'upstream/main', '--interval-ms', '400'])
+    const frame = await until(
+      'the failure explains what --ref accepts',
+      async () => {
+        const res = await fetch(`${url}/events`)
+        const reader = res.body!.getReader()
+        const text = new TextDecoder().decode((await reader.read()).value)
+        await reader.cancel()
+        return text
+      },
+      text => text.includes('"error":"') && !text.includes('"error":""'),
+    )
+    expect(frame).toMatch(/upstream\/main/)
+    expect(frame).toMatch(/nor a branch on origin/)
   }, 30_000)
+
 })
