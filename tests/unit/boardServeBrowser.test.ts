@@ -353,6 +353,25 @@ describe('board-serve in a browser', () => {
   )
 
   it(
+    'resolving a bare --ref does not hold the port back when the remote never answers',
+    async () => {
+      // Catches: `resolveRef` running `git ls-remote` with execFileSync and no timeout BEFORE `listen()`. For a bare
+      // name (or a branch with slashes in it) that is the one network call made at startup, so a remote that accepts
+      // and never answers means no port, no page and nothing to say why: the failure the async fetch was meant to end,
+      // reached by a different door. `--ref origin/main` (a configured remote) skips the call and is covered above.
+      const f = fixture()
+      const hang = createServer(sock => sock.on('error', () => {}))
+      silent.push(hang)
+      await new Promise<void>(r => hang.listen(0, '127.0.0.1', r))
+      const port = (hang.address() as { port: number }).port
+      git(f.clone, ['remote', 'set-url', 'origin', `git://127.0.0.1:${port}/repo`])
+      const { listeningAfterMs } = await serve(f.clone, ['--ref', 'main', '--fetch-timeout-ms', '1000'])
+      expect(listeningAfterMs).toBeLessThan(8_000)
+    },
+    TEST_MS,
+  )
+
+  it(
     'a remote that never answers does not stop it listening, and the page says it timed out',
     async () => {
       // Catches: the fetch timeout removed (the server would never leave its first poll), and `poll()`
