@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { execFileSync, spawn, type ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -305,5 +306,50 @@ describe('board-serve', () => {
     // were on the next line and were being dropped.
     expect(frame).not.toMatch(/"error":"Command failed/)
     expect(frame).toMatch(/zz-bad|waiting/)
+  }, 30_000)
+  it('keeps answering while a fetch hangs, instead of starving every request', async () => {
+    const f = fixture()
+    const { url } = await serve(f.clone, ['--interval-ms', '200', '--fetch-timeout-ms', '30000'])
+
+    // A socket that ACCEPTS and never answers — the case both gates described.
+    // (`ext::sleep` does not reproduce it: git rejects that transport in 14 ms,
+    // so a test built on it passes against the broken server too. Measured.)
+    const dead = createServer(() => {})
+    await new Promise<void>(r => dead.listen(0, '127.0.0.1', r))
+    const port = (dead.address() as { port: number }).port
+    execFileSync('git', ['-C', f.clone, 'remote', 'set-url', 'origin', `git://127.0.0.1:${port}/x`], { stdio: 'ignore' })
+    await new Promise(r => setTimeout(r, 600))
+
+    // Each request is bounded: a blocking fetch does not refuse connections, it
+    // DEFERS them, so an unbounded test is answered 30 s late and calls that a
+    // pass. Starvation is a latency failure and needs a deadline to be seen.
+    let answered = 0
+    for (let i = 0; i < 20; i++) {
+      try {
+        const res = await fetch(`${url}/data.json`, { cache: 'no-store', signal: AbortSignal.timeout(2000) })
+        if (res.status === 200 && (await res.json()).total > 0) answered++
+      } catch {
+        // timed out: the event loop was busy inside the fetch
+      }
+    }
+    dead.close()
+    expect(answered).toBe(20)
+  }, 30_000)
+
+  it('refuses a --ref whose first segment is not one of this checkout’s remotes', async () => {
+    const f = fixture()
+    // `--ref upstream/main` used to fetch `origin upstream/main` and then read
+    // `upstream/main`: a page that says it is live and never moves.
+    const p = spawn(process.execPath, [join(ROOT, 'scripts', 'board-serve.js'), '--repo', f.clone, '--port', '0', '--ref', 'upstream/main'], {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    started.push(p as Child)
+    let err = ''
+    p.stderr.on('data', d => (err += String(d)))
+    const code = await new Promise<number | null>(resolve => p.on('exit', resolve))
+    expect(code).not.toBe(0)
+    expect(err).toMatch(/upstream\/main/)
+    expect(err).toMatch(/remote/)
   }, 30_000)
 })

@@ -22,7 +22,8 @@
 // having changed. So the page carries the state of its own feed, and says when
 // it last managed to read main.
 const { createServer } = require('node:http')
-const { execFileSync } = require('node:child_process')
+const { execFile, execFileSync } = require('node:child_process')
+const { promisify } = require('node:util')
 const { mkdtempSync, readFileSync, rmSync, mkdirSync } = require('node:fs')
 const { tmpdir } = require('node:os')
 const { join, dirname } = require('node:path')
@@ -41,18 +42,50 @@ const INTERVAL_MS = Number(argAfter('--interval-ms', '20000'))
 // remote, no error). A bare name is now resolved to the remote's ref and the
 // resolution is printed, so the page and the startup line say what is followed.
 const REF_ASKED = argAfter('--ref', 'origin/main')
-const REMOTE = argAfter('--remote', 'origin')
-const REF = REF_ASKED.includes('/') ? REF_ASKED : `${REMOTE}/${REF_ASKED}`
-const BRANCH = REF.slice(REF.indexOf('/') + 1)
+const REMOTE_ASKED = argAfter('--remote', '')
+// Resolved against the checkout's OWN remotes, not by splitting on the first
+// slash. `--ref upstream/main` used to fetch `origin upstream/main` and then
+// read `upstream/main`, which never moves — live, silent, and wrong. A name
+// that matches no remote and no branch is refused at startup rather than
+// served. Note `origin/idris/awaiting-opeyemi-lines`: the remote is the first
+// segment only when it IS a remote, and a branch may contain slashes.
+const REMOTES = execFileSync('git', ['-C', REPO, 'remote'], { encoding: 'utf8' }).split('\n').map(r => r.trim()).filter(Boolean)
+function resolveRef(asked) {
+  const head = asked.slice(0, asked.indexOf('/'))
+  if (asked.includes('/') && REMOTES.includes(head)) return { remote: head, branch: asked.slice(head.length + 1) }
+  const remote = REMOTE_ASKED || (REMOTES.includes('origin') ? 'origin' : REMOTES[0])
+  if (!remote) throw new Error(`${REPO} has no git remote, so there is nothing to follow`)
+  if (REMOTE_ASKED && !REMOTES.includes(REMOTE_ASKED)) {
+    throw new Error(`--remote ${REMOTE_ASKED} is not a remote of ${REPO} (it has: ${REMOTES.join(', ') || 'none'})`)
+  }
+  // A bare name, or a branch with slashes in it: it has to exist on the remote,
+  // or following it would be a page that never moves.
+  const heads = execFileSync('git', ['-C', REPO, 'ls-remote', '--heads', remote, asked], { encoding: 'utf8' }).trim()
+  if (!heads) {
+    throw new Error(
+      `--ref ${asked} names neither a remote of ${REPO} (${REMOTES.join(', ')}) nor a branch on ${remote}`,
+    )
+  }
+  return { remote, branch: asked }
+}
+const resolved = resolveRef(REF_ASKED)
+const REMOTE = resolved.remote
+const BRANCH = resolved.branch
+const REF = `${REMOTE}/${BRANCH}`
 
 const FETCH_TIMEOUT_MS = Number(argAfter('--fetch-timeout-ms', '20000'))
-const git = (args, timeout) =>
-  execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout })
+const run = promisify(execFile)
+// Every git call the poller makes is ASYNC. It used to be execFileSync inside
+// the listen callback, which holds the event loop: against a remote that
+// accepts and never answers, the server answered 0 of the next 18-22 requests
+// — the page went dark for the whole fetch timeout while claiming to be live.
+const git = async (args, timeout) =>
+  (await run('git', ['-C', REPO, ...args], { encoding: 'utf8', timeout, maxBuffer: 64 * 1024 * 1024 })).stdout
 
 // One build of one commit. The cards come out of the commit itself rather than
 // out of the working tree, so what is served is what main says even when this
 // checkout is mid-edit or on another branch.
-function buildAt(sha) {
+async function buildAt(sha) {
   const dir = mkdtempSync(join(tmpdir(), 'board-serve-'))
   try {
     mkdirSync(join(dir, 'board'), { recursive: true })
@@ -61,12 +94,14 @@ function buildAt(sha) {
     // exit status is `tar`'s, so a commit with no `board/` made `git archive`
     // fail invisibly and the server published an EMPTY BOARD (Idris). Passing
     // the archive through as a buffer means the archive's own failure throws.
-    const archive = execFileSync('git', ['-C', REPO, 'archive', sha, 'board'], {
-      maxBuffer: 256 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
+    const archive = (
+      await run('git', ['-C', REPO, 'archive', sha, 'board'], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 })
+    ).stdout
+    await new Promise((resolve, reject) => {
+      const tar = execFile('tar', ['-x', '-C', dir], err => (err ? reject(err) : resolve()))
+      tar.stdin.end(archive)
     })
-    execFileSync('tar', ['-x', '-C', dir], { input: archive, stdio: ['pipe', 'ignore', 'pipe'] })
-    execFileSync(
+    await run(
       process.execPath,
       [
         join(ROOT, 'scripts', 'build-board.js'),
@@ -82,7 +117,7 @@ function buildAt(sha) {
         // saying another.
         '--auto', '--auto-ref', REF,
       ],
-      { cwd: REPO, stdio: ['ignore', 'ignore', 'pipe'] },
+      { cwd: REPO, maxBuffer: 64 * 1024 * 1024 },
     )
     const json = readFileSync(join(dir, 'board.json'), 'utf8')
     // A board with no cards is a reading, not a page: it means the ref has no
@@ -98,6 +133,10 @@ function buildAt(sha) {
 // The first non-empty line of stderr, falling back to the message when a
 // failure carried none.
 function reasonOf(e) {
+  // A process we killed carries no stderr worth reading: `killed` with the
+  // signal we sent IS the reason, and "Command failed: git -C …" would hide
+  // that the remote simply never answered.
+  if (e && e.killed) return `timed out after ${FETCH_TIMEOUT_MS} ms: ${(e.cmd || 'git').split(' ')[0]} never answered`
   // A thrown guard prints a node stack, whose FIRST line is the file and line
   // number — so "first non-empty line of stderr" produced `build-board.js:192`,
   // which names the file that complained and not what it said. Skip the stack
@@ -122,16 +161,22 @@ function announce() {
 // One poll: read main, and rebuild only when its sha is one we have not built.
 // Rebuilding on every tick would burn a git archive and a full card parse to
 // produce a byte-identical page.
-function poll() {
+let polling = false
+async function poll() {
+  // In-flight guard: a fetch slower than the interval would stack polls on each
+  // other, each holding a child process and a temp directory.
+  if (polling) return
+  polling = true
   let moved = false
   try {
-    // Bounded: a remote that accepts and never answers used to hang the server
-    // before it ever listened, with no page to say so.
-    git(['fetch', REMOTE, BRANCH], FETCH_TIMEOUT_MS)
+    // Bounded, and awaited rather than blocking: this used to be execFileSync
+    // in the listen callback, so a remote that accepts and never answers made
+    // the server answer 0 of the next 18-22 requests while claiming to be live.
+    await git(['fetch', REMOTE, BRANCH], FETCH_TIMEOUT_MS)
     state.fetchedAt = Date.now()
-    const sha = git(['rev-parse', REF]).trim()
+    const sha = (await git(['rev-parse', REF])).trim()
     if (sha && sha !== state.sha) {
-      const built = buildAt(sha)
+      const built = await buildAt(sha)
       state.sha = sha
       state.html = built.html
       state.json = built.json
@@ -145,15 +190,16 @@ function poll() {
   } catch (e) {
     // Keep the last good cards on screen — but say the feed is broken, with the
     // time of the last successful read, so stale cards cannot pass for current.
-    // `e.message` is only ever "Command failed: <the command we just ran>" —
-    // which the reader already knows. The REASON (git's `fatal:`, or the board
-    // guard naming the bad card and the rule) is on stderr, and dropping it
-    // left the one line the author of a bad card needs out of the page.
+    // The REASON (git's `fatal:`, or the board guard naming the bad card and
+    // the rule) is on stderr; the message is only ever "Command failed: <the
+    // command we just ran>", which the reader already knows.
     const next = reasonOf(e)
     if (next !== state.error) {
       state.error = next
       moved = true
     }
+  } finally {
+    polling = false
   }
   if (moved) announce()
 }
@@ -217,9 +263,35 @@ const server = createServer((req, res) => {
     return
   }
   if (path === '/' || path === '/board.html') {
-    if (!state.html) {
+    if (!state.html && state.error) {
+      // Never built AND the last attempt failed: that is a standing answer, not
+      // a wait, so it is a failure status carrying the reason rather than a page
+      // that spins forever.
       res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' })
-      res.end(`board-serve has no build yet${state.error ? `: ${state.error}` : ''}\n`)
+      res.end(`board-serve has no build of ${REF}: ${state.error}\n`)
+      return
+    }
+    if (!state.html) {
+      // Listening before the first build means a reader can arrive before there
+      // are cards. A bare 503 would sit there forever — nothing on it reloads —
+      // so this is a page that says what it is waiting for and replaces itself
+      // the moment the first build lands.
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Obsrv Board</title>
+<style>body{font:14px/1.5 system-ui,sans-serif;margin:40px;color:#14171a;background:#f6f7f9}
+@media (prefers-color-scheme: dark){body{color:#e8ecf1;background:#14171a}} code{opacity:.8}</style></head>
+<body><p>Waiting for the first build of <code>${REF.replace(/[<>&]/g, '')}</code>…</p>
+<p id="why">${state.error ? `It has failed so far: <code>${String(state.error).replace(/[<>&]/g, '')}</code>` : ''}</p>
+<script>
+const es = new EventSource('/events');
+es.onmessage = ev => {
+  let m = {}; try { m = JSON.parse(ev.data); } catch {}
+  if (m.sha) { location.reload(); return; }
+  if (m.error) document.getElementById('why').textContent = 'It has failed so far: ' + m.error;
+};
+</script></body></html>
+`)
       return
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
