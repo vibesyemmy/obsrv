@@ -22,7 +22,7 @@ All on the shared dev machine, every one of them a full `npm run test` unit run 
 | 4 Oct 10:48 | `e49b4ad` | ~112 | **2 failed**: `allows "Opeyemi: <ask>" on a Backlog card…` at 5,542 ms; `…are named in the board, with links, and in the page data` at 5,436 ms |
 | 4 Oct 10:53 | `e49b4ad` | ~111 | **4 failed**, 5,242 to 8,728 ms |
 | 4 Oct 11:11 | `500d826` | ~52 | **1 failed**: `allows "Opeyemi: <ask>" on a Backlog card…` at 5,283 ms |
-| 4 Oct (Idris, in `#3283`) | `b668dea` | ~88 | **1 failed**: `matches on who the line is addressed TO…` at 5,303 ms |
+| 4 Oct, clock time not recorded, before 10:55 (Idris; the load is in `#3283`, the head in `#3359`) | `e49b4ad` | ~88 | **1 failed**: `matches on who the line is addressed TO…` at 5,303 ms |
 | 4 Oct 10:51 and 11:13, the file alone, twice each | `e49b4ad`, then `500d826` | ~19 to 20, then ~34 to 42 | **29 of 29 pass** every time (with `scrollHostScriptScoping`, 34 of 34) |
 | 4 Oct 11:20 | `500d826` | 7 to 13 | **green**, the file in about 10 s |
 
@@ -36,6 +36,6 @@ All on the shared dev machine, every one of them a full `npm run test` unit run 
 
 ## How it will be checked, so the PR is not taken on its word
 
-1. **By count, not by eye.** Henry's own blind find-and-replace for this hit a `spawn` options object and a promise executor, and typecheck caught it twice. The PR states how many tests in the file spawn a process and how many now carry a timeout.
+1. **By count, not by eye.** Henry's own blind find-and-replace for this hit a `spawn` options object and a promise executor, and typecheck caught it twice. The PR states how many tests in the file spawn a process and how many now carry a timeout, **taking the number of tests from vitest's own listing (29)**, not from `grep 'it('`, which gives 27 and misses the two that `it.each` expands to.
 2. **Under synthetic load, before and after.** Run the file against a fixed number of CPU burners with the current code (it should fail at the 5 s default, as above) and with the change (it should pass), burners started by PID and killed by PID, none left behind.
 3. **It is a tolerance change**, so by the QA-gate section of `CONTRIBUTING.md` it is gated. Idris is expected to gate it. The PR will say what it does not show: no CI run has ever failed on this file.
