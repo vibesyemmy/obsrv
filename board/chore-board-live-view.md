@@ -1,10 +1,9 @@
 ---
 title: "the board is read over file:// and goes stale silently, so reading it means remembering to rebuild it"
-column: doing
+column: done
 kind: chore
 owner: "Henry"
 order: 124
-waiting: "Opeyemi: merge the PR"
 ---
 
 ASKED BY OPEYEMI 2026-10-03, in his own words: *"Let's make the board update in realtime so I dont have to
@@ -68,3 +67,25 @@ working tree fails two of the four tests, including that one.
 It does not serve the board to anyone but the person running it (bound to `127.0.0.1`), it does not show
 unmerged local edits, and it does not make the committed `docs/board.html` self-updating — that file is
 still a snapshot and still says so.
+
+## MERGED 2026-10-04 as `054beffc2`
+
+`#549` landed on `main` after **eight heads**: every one of the six after the first was a defect one of the
+gates found, and all but one were in code I had written to fix the previous finding.
+
+**What the gates caught that my own tests did not**, because the pattern is the point: a startup hang I had
+**moved** rather than removed (the synchronous `ls-remote` sat behind a condition my tests never took); an
+option-shaped `--ref` that my fix **re-opened** by deleting the `ls-remote` that had been blocking it by
+accident; a refspec (`origin/main:refs/heads/zz`) that walked past the `--` I had just added, because `--`
+stops an option and a colon is not one; and a repaint race that could paint an older board while the feed
+line named the newer sha.
+
+**I keep testing the mechanism I just built rather than the behaviour a caller can reach**, and `--ref` is a
+string a caller controls end to end. Three heads in a row were fixed by someone else's red test.
+
+**Measured at the merged head:** CI run `37197856918`, 446771 bytes, 0 `✘`, 0 `error TS`, 0 retries.
+
+**The follow-up this card does not carry:** `scrollHostScriptScoping`'s 10 s `afterAll` default, which went
+red in 2 of my 5 full local runs while this PR's suite ran beside it. Not my file, deliberately not touched
+here (any change would have moved the head and voided both PASSes), and owed a one-line timeout by whoever
+owns it.
