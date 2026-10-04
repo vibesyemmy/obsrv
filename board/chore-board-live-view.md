@@ -29,7 +29,7 @@ that session happened to rebuild it.
    merges, and a board built from one checkout's files shows that checkout's opinion. **Local edits are
    deliberately invisible**: this page answers *where is the work*, not *what am I editing*.
 
-## What was built
+## What was built (at the first head — the figures below are that version's)
 
 `scripts/board-serve.js` (`npm run board:serve`), and three small flags on `build-board.js` it needed:
 
@@ -70,20 +70,25 @@ still a snapshot and still says so.
 
 ## MERGED 2026-10-04 as `054beffc2`
 
-`#549` landed on `main` after **eight heads**: every one of the six after the first was a defect one of the
-gates found, and all but one were in code I had written to fix the previous finding.
+`#549` landed on `main` after **eight heads**. **Of the seven pushes after the first, five answered a
+gate's findings, one folded in a gate's amended test, and one (`12d14e6`) answered Opeyemi's own question
+about the page naming its ref.** Four of those five fixed code I had written to fix the previous finding —
+which is the part worth keeping. (Idris corrected my first count here: eight heads leave seven pushes, not
+six, and not all were gate findings.)
 
 **What the gates caught that my own tests did not**, because the pattern is the point: a startup hang I had
 **moved** rather than removed (the synchronous `ls-remote` sat behind a condition my tests never took); an
 option-shaped `--ref` that my fix **re-opened** by deleting the `ls-remote` that had been blocking it by
 accident; a refspec (`origin/main:refs/heads/zz`) that walked past the `--` I had just added, because `--`
 stops an option and a colon is not one; and a repaint race that could paint an older board while the feed
-line named the newer sha.
+line said it was live from the **older** sha — the direction matters, because the page was not aware of the
+newer one at all.
 
 **I keep testing the mechanism I just built rather than the behaviour a caller can reach**, and `--ref` is a
 string a caller controls end to end. Three heads in a row were fixed by someone else's red test.
 
-**Measured at the merged head:** CI run `37197856918`, 446771 bytes, 0 `✘`, 0 `error TS`, 0 retries.
+**Measured on the PR's own run of the merged head** (`37197856918`, i.e. `500d826` against the then-current
+`998fbe6` — not `main`'s push suite for `054beffc2`): 446771 bytes, 0 `✘`, 0 `error TS`, 0 retries.
 
 **The follow-up this card does not carry:** `scrollHostScriptScoping`'s 10 s `afterAll` default, which went
 red in 2 of my 5 full local runs while this PR's suite ran beside it. Not my file, deliberately not touched
