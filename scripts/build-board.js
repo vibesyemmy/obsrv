@@ -496,7 +496,7 @@ if (st && DATA.stamp) {
     : DATA.auto
     ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
     : 'Snapshot of ' + where + ' — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
-} else { st.remove(); }
+} else if (st) { st.remove(); }
 // How long ago a wait was set, at the moment the page is read: the page is
 // built once and read for hours, so a "3 h ago" baked in at build time would
 // be the stale value this exists to expose.

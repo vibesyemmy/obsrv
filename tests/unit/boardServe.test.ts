@@ -57,6 +57,20 @@ function fixture() {
 
   return {
     clone,
+    /** Commit a file verbatim — used for a card the board guard must refuse. */
+    pushFile(path: string, body: string, branch = 'main') {
+      writeFileSync(join(work, path), body)
+      git(work, ['add', path])
+      git(work, ['commit', '-m', path])
+      git(work, ['push', '-q', 'origin', `main:${branch}`])
+    },
+    /** A ref whose tip has no board/ at all. */
+    pushBoardless(branch: string) {
+      git(work, ['rm', '-rq', 'board'])
+      git(work, ['commit', '-m', 'no board'])
+      git(work, ['push', '-q', 'origin', `main:${branch}`])
+      git(work, ['reset', '--hard', 'HEAD~1'])
+    },
     /** Commit another card to the remote, so the watched ref moves. */
     push(id: string, title: string) {
       writeFileSync(join(work, 'board', `${id}.md`), card(id, title))
@@ -92,6 +106,16 @@ async function serve(repo: string, extra: string[] = []) {
       reject(new Error(`exited ${code}; stderr: ${stderr.join('')}`))
     })
   })
+  // The server listens before its first build, so a test that fetches straight
+  // away can beat it. Wait until it has settled either way: built, or failed
+  // and said why.
+  const stop = Date.now() + 20_000
+  while (Date.now() < stop) {
+    const res = await fetch(`${url}/data.json`)
+    if (res.status === 200) break
+    if ((await res.text()).includes(':')) break
+    await new Promise(r => setTimeout(r, 100))
+  }
   return { url, stderr }
 }
 
@@ -145,26 +169,6 @@ describe('board-serve', () => {
     expect(readFileSync(join(out, 'b.html'), 'utf8')).not.toContain('<script id="board-live">')
   })
 
-  it('announces a new sha over SSE when the ref moves', async () => {
-    const f = fixture()
-    const { url } = await serve(f.clone, ['--interval-ms', '400'])
-    const first = (await (await fetch(`${url}/data.json`)).json()).columns
-      .flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title))
-    expect(first).not.toContain('The second card')
-
-    f.push('second', 'The second card')
-
-    const seen = await until(
-      'the new card is served',
-      async () => {
-        const d = await (await fetch(`${url}/data.json`, { cache: 'no-store' })).json()
-        return d.columns.flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title)) as string[]
-      },
-      t => t.includes('The second card'),
-    )
-    expect(seen).toContain('The first card')
-  })
-
   it('names the ref it follows, so a branch cannot be read as main', async () => {
     const f = fixture()
     // The fixture's remote only has main, so follow it by its full name and
@@ -203,4 +207,101 @@ describe('board-serve', () => {
       .flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title))
     expect(titles).toContain('The first card')
   })
+
+  it('announces the new sha on /events, held open across the move', async () => {
+    const f = fixture()
+    const { url } = await serve(f.clone, ['--interval-ms', '400'])
+    // Held open ACROSS the push. The version this replaces polled /data.json,
+    // so deleting announce() left it green — the headline feature had no test
+    // on the channel that carries it (Dogu, #3242).
+    const res = await fetch(`${url}/events`)
+    const reader = res.body!.getReader()
+    const decoder = new TextDecoder()
+    const opening = decoder.decode((await reader.read()).value!).split('data: ')[1] ?? ''
+    const first = JSON.parse(opening) as { sha: string }
+
+    f.push('third', 'The third card')
+
+    let announced = ''
+    const stop = Date.now() + 20_000
+    while (Date.now() < stop && !announced) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      for (const part of decoder.decode(chunk.value).split('\n\n')) {
+        const line = part.split('data: ')[1]
+        if (!line) continue
+        const msg = JSON.parse(line)
+        if (msg.sha && msg.sha !== first.sha) announced = msg.sha
+      }
+    }
+    await reader.cancel()
+    expect(announced).not.toBe('')
+  }, 30_000)
+
+  it('resolves a bare --ref to the remote, instead of silently following a local branch', async () => {
+    const f = fixture()
+    // `--ref main` used to fetch origin/main and then rev-parse main — the
+    // LOCAL branch — so the page claimed live and never moved, with no error.
+    const { url } = await serve(f.clone, ['--ref', 'main', '--interval-ms', '400'])
+    expect((await (await fetch(`${url}/data.json`)).json()).autoRef).toBe('origin/main')
+
+    f.push('fourth', 'The fourth card')
+
+    const titles = await until(
+      'a bare ref follows the remote',
+      async () => {
+        const d = await (await fetch(`${url}/data.json`, { cache: 'no-store' })).json()
+        return d.columns.flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title)) as string[]
+      },
+      t => t.includes('The fourth card'),
+    )
+    expect(titles).toContain('The first card')
+  }, 30_000)
+
+  it('follows a branch that is not main', async () => {
+    const f = fixture()
+    f.pushFile('board/on-branch.md', card('on-branch', 'Only on the branch'), 'sidebranch')
+    const { url } = await serve(f.clone, ['--ref', 'origin/sidebranch', '--interval-ms', '400'])
+    const d = await (await fetch(`${url}/data.json`)).json()
+    const titles = d.columns.flatMap((c: { cards: Array<{ title: string }> }) => c.cards.map(k => k.title))
+    expect(titles).toContain('Only on the branch')
+    expect(d.autoRef).toBe('origin/sidebranch')
+  }, 30_000)
+
+  it('refuses a ref whose tip has no board/, instead of serving an empty board', async () => {
+    const f = fixture()
+    f.pushBoardless('noboard')
+    const { url } = await serve(f.clone, ['--ref', 'origin/noboard', '--interval-ms', '400'])
+    // It used to answer 200 with total: 0 — git archive failed, but the shell
+    // pipeline's exit status was tar's, which is 0 (Idris, #3243).
+    const res = await fetch(url)
+    expect(res.status).toBe(503)
+    expect(await res.text()).toMatch(/board/)
+  }, 30_000)
+
+  it('puts the reason on the page, not the command line it ran', async () => {
+    const f = fixture()
+    const { url } = await serve(f.clone, ['--interval-ms', '400'])
+    f.pushFile(
+      'board/zz-bad.md',
+      '---\ntitle: "A card the guard refuses"\ncolumn: next\nkind: chore\norder: 900\nwaiting: "Opeyemi: not allowed off Doing"\n---\n\nEvidence.\n',
+    )
+
+    const frame = await until(
+      'the failure names its cause',
+      async () => {
+        const res = await fetch(`${url}/events`)
+        const reader = res.body!.getReader()
+        const text = new TextDecoder().decode((await reader.read()).value)
+        await reader.cancel()
+        return text
+      },
+      text => text.includes('"error":"') && !text.includes('"error":""'),
+    )
+    // "Command failed: node …/build-board.js --cards /var/folders/…" is the one
+    // thing the author of a bad card does not need; the rule and the file name
+    // were on the next line and were being dropped.
+    expect(frame).not.toMatch(/"error":"Command failed/)
+    expect(frame).toMatch(/zz-bad|waiting/)
+  }, 30_000)
 })

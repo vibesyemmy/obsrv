@@ -35,11 +35,19 @@ const argAfter = (flag, fallback) => {
 const PORT = Number(argAfter('--port', '4321'))
 const REPO = argAfter('--repo', ROOT)
 const INTERVAL_MS = Number(argAfter('--interval-ms', '20000'))
-const REF = argAfter('--ref', 'origin/main')
-const REMOTE = REF.includes('/') ? REF.split('/')[0] : 'origin'
-const BRANCH = REF.includes('/') ? REF.slice(REF.indexOf('/') + 1) : REF
+// A BARE `--ref main` used to fetch `origin/main` and then `rev-parse main`,
+// which reads the LOCAL branch: the page said it was live and silently never
+// moved (measured by Dogu and Idris independently — three polls behind a moving
+// remote, no error). A bare name is now resolved to the remote's ref and the
+// resolution is printed, so the page and the startup line say what is followed.
+const REF_ASKED = argAfter('--ref', 'origin/main')
+const REMOTE = argAfter('--remote', 'origin')
+const REF = REF_ASKED.includes('/') ? REF_ASKED : `${REMOTE}/${REF_ASKED}`
+const BRANCH = REF.slice(REF.indexOf('/') + 1)
 
-const git = args => execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+const FETCH_TIMEOUT_MS = Number(argAfter('--fetch-timeout-ms', '20000'))
+const git = (args, timeout) =>
+  execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout })
 
 // One build of one commit. The cards come out of the commit itself rather than
 // out of the working tree, so what is served is what main says even when this
@@ -48,10 +56,16 @@ function buildAt(sha) {
   const dir = mkdtempSync(join(tmpdir(), 'board-serve-'))
   try {
     mkdirSync(join(dir, 'board'), { recursive: true })
-    // git archive writes a tar; -x into the temp dir gives us board/*.md at that sha.
-    execFileSync('sh', ['-c', `git -C ${JSON.stringify(REPO)} archive ${sha} board | tar -x -C ${JSON.stringify(dir)}`], {
-      stdio: ['ignore', 'ignore', 'pipe'],
+    // Two calls, no shell. The old `sh -c` interpolated `--repo` into a command
+    // line (a checkout named `inj$(touch X)` ran it — Dogu), and a pipeline's
+    // exit status is `tar`'s, so a commit with no `board/` made `git archive`
+    // fail invisibly and the server published an EMPTY BOARD (Idris). Passing
+    // the archive through as a buffer means the archive's own failure throws.
+    const archive = execFileSync('git', ['-C', REPO, 'archive', sha, 'board'], {
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
+    execFileSync('tar', ['-x', '-C', dir], { input: archive, stdio: ['pipe', 'ignore', 'pipe'] })
     execFileSync(
       process.execPath,
       [
@@ -70,10 +84,31 @@ function buildAt(sha) {
       ],
       { cwd: REPO, stdio: ['ignore', 'ignore', 'pipe'] },
     )
-    return { html: readFileSync(join(dir, 'board.html'), 'utf8'), json: readFileSync(join(dir, 'board.json'), 'utf8') }
+    const json = readFileSync(join(dir, 'board.json'), 'utf8')
+    // A board with no cards is a reading, not a page: it means the ref has no
+    // `board/`, or every card failed to parse. Serving it silently is the quiet
+    // week this file's header refuses.
+    if (JSON.parse(json).total === 0) throw new Error(`${REF} has no cards in board/ at ${sha.slice(0, 9)}`)
+    return { html: readFileSync(join(dir, 'board.html'), 'utf8'), json }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+}
+
+// The first non-empty line of stderr, falling back to the message when a
+// failure carried none.
+function reasonOf(e) {
+  // A thrown guard prints a node stack, whose FIRST line is the file and line
+  // number — so "first non-empty line of stderr" produced `build-board.js:192`,
+  // which names the file that complained and not what it said. Skip the stack
+  // furniture and take the first line that carries a message.
+  const noise = /^(at\s|\^+$|\s*\||Node\.js v|\s*$)/
+  const lines = String((e && e.stderr) || '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !noise.test(l) && !/^[/~.].*:\d+$/.test(l))
+  const message = lines.find(l => /^(\w*Error|fatal|error):/i.test(l)) || lines[0]
+  return (message || String((e && e.message) || e).split('\n')[0]).replace(/^\w*Error:\s*/, '').slice(0, 300)
 }
 
 const state = { sha: '', html: '', json: '', builtAt: 0, error: '', fetchedAt: 0 }
@@ -90,7 +125,9 @@ function announce() {
 function poll() {
   let moved = false
   try {
-    git(['fetch', REMOTE, BRANCH])
+    // Bounded: a remote that accepts and never answers used to hang the server
+    // before it ever listened, with no page to say so.
+    git(['fetch', REMOTE, BRANCH], FETCH_TIMEOUT_MS)
     state.fetchedAt = Date.now()
     const sha = git(['rev-parse', REF]).trim()
     if (sha && sha !== state.sha) {
@@ -108,7 +145,11 @@ function poll() {
   } catch (e) {
     // Keep the last good cards on screen — but say the feed is broken, with the
     // time of the last successful read, so stale cards cannot pass for current.
-    const next = String((e && e.message) || e).split('\n')[0].slice(0, 200)
+    // `e.message` is only ever "Command failed: <the command we just ran>" —
+    // which the reader already knows. The REASON (git's `fatal:`, or the board
+    // guard naming the bad card and the rule) is on stderr, and dropping it
+    // left the one line the author of a bad card needs out of the page.
+    const next = reasonOf(e)
     if (next !== state.error) {
       state.error = next
       moved = true
@@ -163,6 +204,14 @@ const server = createServer((req, res) => {
     return
   }
   if (path === '/data.json') {
+    // The server listens before its first build (so a slow remote cannot hide
+    // the port); until that build lands there is no data, and answering 200
+    // with an empty body would make a caller's JSON.parse the error report.
+    if (!state.json) {
+      res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end(`board-serve has no build yet${state.error ? `: ${state.error}` : ''}\n`)
+      return
+    }
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
     res.end(state.json)
     return
@@ -181,13 +230,16 @@ const server = createServer((req, res) => {
   res.end('not found\n')
 })
 
-poll()
+// Listen FIRST. The first poll used to run before this, so a slow or hung
+// remote meant no port, no page and no way to see why.
 const timer = setInterval(poll, INTERVAL_MS)
 timer.unref?.()
 server.listen(PORT, '127.0.0.1', () => {
   const { port } = server.address()
   // Printed so a caller that asked for port 0 can find it, and so the line a
-  // reader copies is the one that works.
+  // reader copies is the one that works. It names the RESOLVED ref, so a bare
+  // `--ref main` cannot look like it is following the remote when it is not.
   console.log(`board-serve listening http://127.0.0.1:${port} (${REF}, every ${Math.round(INTERVAL_MS / 1000)}s)`)
+  poll()
 })
 process.on('SIGINT', () => { clearInterval(timer); server.close(); process.exit(0) })
