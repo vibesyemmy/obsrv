@@ -230,6 +230,45 @@ describe('board-serve in a browser', () => {
   )
 
   it(
+    'a repaint that resolves late does not paint over a newer one, or call the page live from the older sha',
+    async () => {
+      // Catches: the live client's `if (msg.sha !== shown) { data = await fetch('/data.json'); paint(data); shown = msg.sha }`
+      // with nothing ordering two handlers in flight at once. Two SSE messages arrive close together; their `/data.json`
+      // responses resolve OUT OF ORDER; the one that resolves last paints last, sets `shown` and the feed line to ITS
+      // sha, which is the older one. The page then shows an older board while saying "Live: repainted ... from <older>",
+      // and stays that way until the next push. (Candidate raised by Wren, #3284; reproduced with the route below.)
+      const f = fixture()
+      const { url } = await serve(f.clone)
+      const { page } = await onPage(url)
+      await until('the first repaint', () => snap(page), s => /^Live: repainted/.test(s.feed))
+      // Hold the FIRST data.json response (it carries the older board) until the second has been delivered.
+      let n = 0
+      let releaseFirst: () => void = () => undefined
+      const firstHeld = new Promise<void>(r => (releaseFirst = r))
+      await page.route('**/data.json', async route => {
+        n++
+        if (n === 1) {
+          const held = await route.fetch()
+          await firstHeld
+          await route.fulfill({ response: held })
+        } else {
+          await route.continue()
+          setTimeout(() => releaseFirst(), 600)
+        }
+      })
+      f.push({ 'zz-race-a.md': card('race a') })
+      await new Promise(r => setTimeout(r, 1200)) // the message for A is in flight, its response held
+      const shaB = f.push({ 'zz-race-b.md': card('race b') })
+      const settled = await until('the page has settled', () => snap(page), s => s.feed.includes(shaB) || n >= 2, 20_000).catch(() => snap(page))
+      await new Promise(r => setTimeout(r, 2_500)) // let the held response land last
+      const end = await snap(page)
+      expect(end.ids, `feed says: ${end.feed}; first read: ${settled.feed}`).toEqual(expect.arrayContaining(['zz-race-a', 'zz-race-b']))
+      expect(end.feed).toContain(shaB)
+    },
+    TEST_MS,
+  )
+
+  it(
     'names the ref it follows in the painted page, before and after a repaint',
     async () => {
       // The stamp's sentence was only ever checked as source text, so taking the "every push to main"
