@@ -1,6 +1,7 @@
 ---
 title: "Remove the deprecated `orientation` input once a breaking release is scheduled"
 column: backlog
+waiting: "Opeyemi: say when a breaking release ships; removing --orientation waits on that date"
 kind: chore
 criterion: C2
 order: 75
