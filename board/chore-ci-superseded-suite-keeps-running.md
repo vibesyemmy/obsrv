@@ -45,7 +45,7 @@ hold under `!cancelled()`. Measured (`#3543`), `scope` forced to fail by an `exi
 | variant | what the `test` job did | run |
 |---|---|---|
 | no status function (`if: !startsWith(github.ref, 'refs/tags/v')`), the control | `skipped` in 0 s | `37306363079` |
-| `!cancelled() && !startsWith(…)` | started on a macOS runner and ran until cancelled by hand (about 100 s after the request) | `37306369922` |
+| `!cancelled() && !startsWith(…)` | started on a macOS runner and ran until cancelled by hand (my `gh run cancel` call was at 11:59:06Z, from my own terminal clock in `#3543` and not in the API, and the job ended 12:00:46Z, about 100 s later; the API's duration for the job is 126 s) | `37306369922` |
 | `always() && !startsWith(…)` (as on `main`) | started the same way; a plain cancel did not end it within 2 minutes, `force-cancel` did | `37306373610` |
 
 **What that does not say:** the macOS suites were cancelled after a few minutes, so what a forced-failed `scope` leaves in the suite's own result
@@ -62,13 +62,27 @@ Idris, `#3532`, in Idris's words: two of the eight counted attempts at `arrivals
 suites that ran to the end and were stamped `cancelled` afterwards. If superseded suites are cancelled in about 80 seconds [the figure is from the first probe's poll, `#3530`; the API's job times give 67 s], that supply disappears:
 the natural rate of attempts drops by roughly a quarter (2 of 8; a small sample), so N would be reached more slowly, in exchange for four heads not losing 18 to
 26 minutes each. Idris thinks that is the right trade; **the figures are Idris's, from `#3532`, and were not recounted here.** At `#3556` the tally was ten, two of
-which Idris lists as superseded suites; at `#3731` it was sixteen attempts, and that message does not say how many of the six newer ones were superseded suites.
+which Idris lists as superseded suites; at `#3731` it was sixteen attempts, and that message does not say how many of the six newer ones were superseded suites. **Later the same evening `#3756` withdrew N and stopped the tally being a gate** (acceptance (d) was found to be measuring the machine), so the cost named here, N being reached more slowly, mostly goes away; the tally was 18 attempts (17 first-try passes, 1 first-try failure) at `#3759` (one more attempt, `37366445200`, was added by `#3778`).
+
+**Seen a third time, on `#574`'s run, 2026-10-05 evening (Wren `#3770`; checked against the API by Dogu):** run `37366445200` (head `bda4f3310`) was
+created 19:54:47Z and **had no jobs until 20:10:49Z, 16 minutes later, one second after the previous head's run `37363954066` ended its suite job**
+(20:10:48Z); that older suite was not cancelled by the newer push, as above. That is a real `ci.yml:176` effect. **What it is not:** the same run's
+`failure` stamp. Its `What this change touches` job ran 20:10:49Z to 20:25:52Z, exactly 903 s, with no runner: GitHub's own Actions incident (runner
+assignment delays, open from 19:11:58Z until it was marked resolved at 22:49:42Z), not this mechanism. Five small ubuntu jobs ended that way between 19:18Z and 20:10Z. **A cancelled `scope`
+makes `test` run the full macOS suite** (here 20:26:03Z to 20:50:05Z for a two-card change), which is the existing design, "unknown scope means run
+everything". **A passing suite inside a run stamped `failure`, and `gh run view --log` returning zero bytes for that run (Henry, `#3775`), are
+separate traps from this card's subject.**
 
 ## What is not measured
 
 - **What the required check shows on the SUPERSEDED head under `!cancelled()`** (it would read `cancelled`, and whether that blocks or confuses a merge
   is not known). The current behaviour on a real pull request was seen incidentally (above); the proposed one was not, and a controlled test is two pushes a
   minute apart on a draft with the one-line change. Idris, `#3532`, check 2.
+- **What `!cancelled()` does when `scope` never gets a runner and is cancelled by the runner-queue timeout.** The exact path is not reproduced: it has been seen only under
+  `always()` (`#574`'s run: the job `cancelled` at 903 s, the run `failure`, so the run was not cancelled; a cancelled `scope` falls through to a full macOS run).
+  **Measured for the nearest case:** a needed job cancelled by its own `timeout-minutes` (run `37383289168`, throwaway `push` workflow, one run): the dependent job with
+  `if: ${{ !cancelled() }}` ran, the default-`if:` control was skipped, `always()` ran, and the run's conclusion was `cancelled`, so `cancelled()` is a cancel request on the
+  workflow and not a cancelled job. A first attempt (`37383170896`) was invalid YAML (a `: ` inside an unquoted `echo`) and ran no jobs; the corrected run is the evidence.
 - **`main`.** `cancel-in-progress` is `false` there and the group carries the sha, so nothing supersedes a `main` run; the comment at `ci.yml:44` to
   `:47` explains why a cancelled `main` run is "a commit with NO CI answer". The change should leave `main` alone, and that has not been shown: it needs one
   real `main` push suite and one hand-cancelled one (Idris, check 3).

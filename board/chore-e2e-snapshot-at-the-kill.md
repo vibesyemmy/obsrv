@@ -13,14 +13,15 @@ section "A silent close sits before some failures", merged in `#569`) and the ro
 ## What is known, and the wall it hits
 
 `boundedClose` in `tests/e2e/launch.ts` gives `app.close()` ten seconds; past that it prints `[launch] app.close() has taken N ms;
-killing pid P` with the app's own log tail and kills the process. Ten hits are known in eight CI job logs (09-29 to 10-05); **seven
+killing pid P` with the app's own log tail and kills the process. Ten hits were known in eight CI job logs (09-29 to 10-05) **as of `#569`**, and run `37355564026` (`main`, 18:51Z) added an eleventh, so eleven in nine; **eight
 tails are silent** (`starting`, `gpu: …`, no `quitting`), so `app.quit()` did not reach `before-quit` in ten seconds, and three log
-`quitting`. Four of the five first-attempt failures that ran the full 30.0 s since `#540` have a silent tail.
+`quitting`. Four of the five first-attempt failures that ran the full 30.0 s since `#540` had a silent tail as of `#569`; the new one is a 30 s `beforeAll`
+hook timeout in `throttle-live.spec.ts`, which makes it five of six.
 
 Candidate readings, none excluded by the logs: the main process was **blocked** (a busy loop), the **harness's link** to it was stuck
-(the quit request never arrived), or the **runner** was stalled. One local datum (Idris, one laptop, 24 CPU burners, not CI) gave the
-slow-quit shape five of five and the silent shape none, so CPU starvation on that machine did not look like the silent seven. That is
-the only thing in the thread that discriminated anything, and it is one machine.
+(the quit request never arrived), or the **runner** was stalled. One local datum (Idris, one laptop, not CI) is five slow closes under 24 CPU burners **with a scratch event-logger patch in `targetSource.ts`**, all five tails with
+`quitting`; the patch is an unmeasured confound (the same loop was not run without it) and the file the figures came from did not survive a session restart.
+It is a reason to doubt that a starved runner explains the silent tails, and **a starved runner is not shown to be the explanation** (`#569` says the same).
 
 ## What to add
 
@@ -49,7 +50,8 @@ So it can rule candidates out; **it cannot name the cause**, and the last row le
 
 ## Not known
 
-Whether `ps` shows the Electron helper processes with the same flags on the macOS runner image; whether a snapshot adds noticeable
+**A hang inside `launchApp` never reaches `boundedClose`,** so the snapshot would not run there (Idris, `#3764`: one launch hang in 60 idle runs, `launchApp` waiting 10 s
+for the native pane's size text, `app` then undefined in `afterAll`); whether such a hang leaves the spawned app behind is unchecked. Whether `ps` shows the Electron helper processes with the same flags on the macOS runner image; whether a snapshot adds noticeable
 time to a kill that is already ten seconds late; how large the output is. All three are one run each to find out.
 
 ## Owner and decision
