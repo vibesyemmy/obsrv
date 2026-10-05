@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "event: #540 merged (the commit record names which term stamped a commit as the bus's), then the next arrivals :89 failure to read it — no fix until the instrument answers"
+waiting: "Idris: gate the fix"
 kind: bug
 release: blocks
 criterion: C5
@@ -1103,3 +1103,43 @@ that re-reads three logs, it adds no sighting.
 term, no counter-example, in three of fourteen attempts. Any later failure where a different term fires, or none, refutes
 the reading above, and any later failure where `viaMirrorUrl` alone fires again supports it. No fix on a candidate,
 however much stronger it has become.
+
+## DECIDED AND FIXED 2026-10-04/05
+
+**The decision, and whose it is.** I put the question to Opeyemi in my own session with my
+recommendation attached, and he answered **go**: *when a page redirects itself to an address and the bus
+starts a mirrored load of that same address a few tens of ms later, the page's commit **is** an arrival.*
+He had also written *"I agree with @Wren"* in the room (`#3370`), which matches; the ruling recorded here
+is the one he gave in session, on my recommendation, not an inference from the room line.
+
+**I first asked him the question with the two events in the wrong order** — bus first, page second. Idris
+caught it (`#3351`) from the instrument's own timestamps, Dogu confirmed them independently, Wren corrected
+her own repetition of my wording. The order is the fix: **the page's navigation starts first** (48 ms, then
+25 ms, then 25 ms ahead of the bus's mirrored start, across the three prints), and it is the one carrying
+`byDocument: true`.
+
+**What changed.** `isMirrorCommit` is gone from `TargetSource`; the decision is `isBusCommit` in
+`src/shared/mirrorTerms.ts`, taken from the recorded terms:
+
+    (viaMirrorUrl && !pageStartedFirst) || viaNotByDocument || viaBusDocument
+
+`pageStartedFirst` is new and recorded beside the others: the page's own non-mirrored start for this
+address began at or before the bus's mirrored one, and the commit is document-initiated. **A term that
+decides without being printed would put the guard print back to describing less than it judges.**
+
+**The duplication this removes was a stated limit that bit.** `tests/unit/mirrorTerms.test.ts` held a
+**verbatim copy** of the private expression, and its own header warned: *"if the real expression changes
+and this oracle does not, this test goes on passing."* The expression has now changed — a copy would have
+gone on agreeing with itself. The test calls `isBusCommit` directly.
+
+**The risk the fix had to avoid, and how it is pinned:** trading silent under-reporting for double
+counting. Both commits land on the same address, so the bus's own must still be suppressed. Three cases
+are tested from the opposite side — the bus's start first, the bus's load having no document initiator,
+and the tie — and removing `byDocument` from the guard fails them.
+
+**Sabotage:** reverting `&& !pageStartedFirst` fails three tests; dropping `byDocument` from
+`pageStartedFirst` fails the double-count guard.
+
+**What is still unmeasured here:** the end-to-end proof is `arrivals.spec.ts:89` passing on a run that
+would previously have failed, and that failure is rare — the unit tests pin the decision, not the sighting.
+The other 15 failing attempts predate the instrument and carry no terms, so nothing above speaks for them.

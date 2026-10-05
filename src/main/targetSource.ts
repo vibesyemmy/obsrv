@@ -19,7 +19,7 @@ import { withinBudget, type AskOutcome } from '../shared/measureBudget'
 import { DEFAULT_TEXT_SCALE, isTextScale } from '../shared/textScale'
 import { parseAuditReport, parseInspectReport, parseLintReport, parseObserveReport } from '../shared/ipcPayloads'
 import { normalizeUrl } from '../shared/url'
-import { mirrorTerms, type MirrorTerms } from '../shared/mirrorTerms'
+import { isBusCommit, mirrorTerms, type MirrorTerms } from '../shared/mirrorTerms'
 import { log } from './log'
 
 /**
@@ -354,10 +354,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * those two questions in separate fields is the point** — all four earlier
    * attempts on this card made one field answer both.
    */
-  private isMirrorCommit(url: string, byDocument: boolean): boolean {
-    if (this.mirrorRequested === undefined) return false
-    return url === this.mirrorRequested || !byDocument
-  }
+  /**
+   * Kept as the one-line statement of what the shared decision does, so a reader
+   * of this class is not sent away to find it. The decision itself is
+   * `isBusCommit` in `src/shared/mirrorTerms.ts`; nothing here evaluates it
+   * twice, which is how the old copy in the unit test came to be allowed to
+   * drift from this one.
+   */
   /**
    * Whether the document currently in this pane was put here by the sync bus.
    *
@@ -546,18 +549,21 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // `start.fromBusDocument` — what the pane's provenance was when THIS
       // navigation began — not `this.documentFromBus`, which may have moved
       // since under a concurrent mirror.
-      const fromBus = this.isMirrorCommit(url, byDocument) || (byDocument && start?.fromBusDocument === true)
+      // The terms are now the inputs to the decision rather than a parallel
+      // description of it: `isBusCommit` IS what `isMirrorCommit` used to be,
+      // moved into `src/shared/mirrorTerms.ts` so the unit test can call the
+      // real expression instead of keeping a copy that could drift from it.
+      const times = this.startTimes(url)
+      const terms = mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true, times.own, times.mirror)
+      const fromBus = isBusCommit(terms)
       this.documentFromBus = fromBus
-      // Evaluated beside `fromBus` from the same inputs and recorded, never fed back into it:
-      // `mirrorRequested` is cleared when `loadMirrored` returns, so it can only be read here,
-      // at the commit (`bug-redirect-note-missing-not-late`).
       this.record({
         at: Date.now(),
         url,
         kind: 'did-navigate',
         said: true,
         mirroring: fromBus,
-        mirrorTerms: mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true),
+        mirrorTerms: terms,
       })
       // Marked rather than withheld. Withholding it made whether a consumer
       // ever heard about a mirrored commit depend on a race: a mirrored load
@@ -1044,7 +1050,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
   /** Loads URL-bar input; returns the normalised URL that was requested. */
   /**
    * `load`, for the sync bus mirroring the other pane's commit into this one.
-   * See `mirrorRequested` and `isMirrorCommit`.
+   * See `mirrorRequested` and `isBusCommit` (`src/shared/mirrorTerms.ts`).
    */
   /**
    * The start this commit answers: the latest for the url that was **not** the
@@ -1082,6 +1088,19 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    */
   private startFor(url: string): { byDocument: boolean; fromBusDocument: boolean } | undefined {
     return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)
+  }
+
+  /**
+   * When each side last started navigating to this address: the page's own
+   * (non-mirrored) start, and the bus's mirrored one. The ORDER of those two is
+   * what tells a page's own redirect from the bus's load when both land on the
+   * same address — the discriminator `bug-redirect-note-missing-not-late` was
+   * missing, and it was in the record all along.
+   */
+  private startTimes(url: string): { own: number | null; mirror: number | null } {
+    const newest = (mirrored: boolean): number | null =>
+      [...this.starts].reverse().find(s => s.url === url && s.mirrored === mirrored)?.at ?? null
+    return { own: newest(false), mirror: newest(true) }
   }
 
 
