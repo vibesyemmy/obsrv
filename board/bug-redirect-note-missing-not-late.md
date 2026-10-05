@@ -1,10 +1,8 @@
 ---
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
-column: doing
+column: done
 owner: "Henry"
-waiting: "Idris: gate the fix"
 kind: bug
-release: blocks
 criterion: C5
 order: 90
 ---
@@ -1225,3 +1223,29 @@ with no commit and no failure never gets one. H1b is red without it and green wi
 between a start and its commit. The harness emits the events itself, so it can show the hole and show this
 closes it; the ordering guarantee is not in evidence. Idris said the same of the one-line version she
 tried.
+
+## MERGED 2026-10-05 as `d7942280b`, and the ordering claim now has real-Chromium evidence
+
+Idris's PASS at `d9f4533`; CI run `37284069660` counted: 461560 bytes, **1 `✘`** —
+`live-capture-notes.spec.ts:183`, retry-rescued and already in `docs/e2e-flakes.md`, unrelated to this
+change — 0 `error TS`.
+
+**Then she measured the one thing the harness could not.** The code comment said that nothing establishes
+Chromium never fires `did-stop-loading` between a start and its commit. She instrumented a scratch copy and
+ran nine navigation-heavy specs through real Chromium, idle twice and under 24 CPU burners three times:
+**2,914 events, 821 starts, 779 commits, 632 stops, 10 fails. Every commit matched an unanswered start, and
+there were zero premature retirements.**
+
+**Her own limits, kept because they are what make it evidence rather than proof:** `file://` fixtures, one
+macOS machine, Electron 43.4.1, and a loaded laptop rather than a slow CI runner.
+
+**And the retirement is not only an H1b fix.** 7 of 632 stops retired a start; all 7 were starts that never
+commit, **two of them the page-first shape from the prints** — two `hairline.html` starts 1.9 ms apart, the
+document-initiated one and one with no initiator, one commit, the stop clearing the leftover. In all 7 the
+address was navigated again and committed, so without the line a stale start would have sat in front of
+each of those later commits.
+
+**What is still not measured, and the card closes saying so:** the bug itself did not reproduce locally —
+**0 of 60 on `main`'s code and 0 of 60 on the fix**, fresh app per attempt, no retries. Nothing here is the
+end-to-end sighting. What is proven is the mechanism: the classification, through the real class, against a
+replay of a real print.
