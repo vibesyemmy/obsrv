@@ -1262,7 +1262,10 @@ at launch.ts:348   (openSettings, called from update.spec.ts:116)
 Playwright's pre-click wait, and the log stops before naming which of *visible*, *enabled* or *stable* it was.
 The click comes from `openSettings` in `tests/e2e/launch.ts`, a helper, so it is not `update.spec`'s own code. I
 did **not** read the run's `error-context.md` (an artifact; I did not download it), so the page state at the
-timeout is not known.
+timeout is not known. One thing the table above shows and this entry had not said (Idris, `#3450`): sighting 1,
+`toolbar.spec.ts:112`, waits on the **same locator**, `.toggle-settings`; the table does not name sighting 2's
+locator (`vision.spec.ts:35`). Two of three sharing one button is read from the table, **not tested**, and is not
+offered as the cause.
 
 **Not a docs-only branch this time, and it still cannot be the change.** `#560` at `dc019d9` touches a card and
 `src/main/targetSource.ts`, and every changed line in `src/` is a comment (I counted the non-comment changed lines
