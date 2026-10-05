@@ -1,9 +1,8 @@
 ---
 title: "boardLane's tests spawn real builds on vitest's 5 s default, and they are the first to fail on a loaded machine"
-column: doing
+column: done
 kind: chore
 owner: "Dogu"
-waiting: "Idris: gate the work PR (a timeout raise is a tolerance change)"
 order: 125
 ---
 
@@ -49,3 +48,27 @@ tested).
 1. **By count, not by eye.** Henry's own blind find-and-replace for this hit a `spawn` options object and a promise executor, and typecheck caught it twice. The PR states how many tests in the file spawn a process and how many now carry a timeout, **taking the number of tests from vitest's own listing (29)**, not from `grep 'it('`, which gives 27 and misses the two that `it.each` expands to.
 2. **Under synthetic load, before and after.** Run the file against a fixed number of CPU burners with the current code (it should fail at the 5 s default, as above) and with the change (it should pass), burners started by PID and killed by PID, none left behind.
 3. **It is a tolerance change**, so by the QA-gate section of `CONTRIBUTING.md` it is gated. Idris is expected to gate it. The PR will say what it does not show: no CI run has ever failed on this file.
+
+## DONE 2026-10-05, merged as `721f5d9`
+
+`#557` merged at 07:29:48Z (GitHub's `mergedAt`; the merge commit is stamped 07:29:47Z) as `721f5d94b61ba49d7e6a9e9354cc702d54e16dd6`. Its second parent is `31e994a781e4bac6a2d1cb44e6deba9eb7c1d729`,
+the head Idris passed (`#3378`) and whose CI Dogu counted (`#3377`: run `37212962898`, 447,659 bytes, 2,235 lines, `✘` 0, `error TS` 0,
+`Worker teardown` 0, suite 24 m 03 s). What shipped: `SLOW_MS = 30_000` as the third argument of all 28 test calls in
+`tests/unit/boardLane.test.ts` (27 `it(` and one `it.each`, which is 29 tests by vitest's own listing), a corrected comment, and this card.
+The merge touches those two files and nothing else.
+
+**What was shown.** `SLOW_MS = 1` makes 29 of 29 tests fail with a 1 ms timeout, so none is missing the constant. Under a `git` shim that
+adds 1 s to every call, `main`'s file failed 21 of 29 at the 5 s default and the change passed 29 of 29 (Dogu); at 0.4 s per call it
+failed 13 before and passed 29 of 29 after (Idris, `#3374`). Idle, the file passes 29 of 29 in about 3.6 s.
+
+**Check 2 above did not hold as written.** CPU burners alone did not reproduce the failure: Idris ran 70 on 14 cores (load 16 to 143),
+four interleaved runs, 29 of 29 on both files, the slowest test 1.2 s. So the change is shown to fix **slow child processes, not a
+CPU-load failure**, and **what slowed the children in the runs recorded in the table above is not established**. The card's title says
+"a loaded machine" because that is where the failures were seen, not because load was shown to be the cause.
+
+**What it does not do.** It does not make any test faster. A timeout is only reported after a `spawnSync` returns, so it bounds when a test
+is called failed, not how long it runs; under the 1 s shim the slowest test took 26.9 s, 3.1 s under the bound. No CI run counted by any gate has failed
+on this file, so it is not a CI flake fix.
+
+**Left open, deliberately.** `scrollHostScriptScoping.test.ts`'s `afterAll` hook timeout (10 s) is untouched; Henry reported it red in 2 of
+5 full runs (`#3287`).
