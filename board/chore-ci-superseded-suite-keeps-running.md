@@ -67,7 +67,7 @@ which Idris lists as superseded suites; at `#3731` it was sixteen attempts, and 
 created 19:54:47Z and **had no jobs until 20:10:49Z, 16 minutes later, one second after the previous head's run `37363954066` ended its suite job**
 (20:10:48Z); that older suite was not cancelled by the newer push, as above. That is a real `ci.yml:176` effect. **What it is not:** the same run's
 `failure` stamp. Its `What this change touches` job ran 20:10:49Z to 20:25:52Z, exactly 903 s, with no runner: GitHub's own Actions incident (runner
-assignment delays, open from 19:11:58Z), not this mechanism. Five small ubuntu jobs ended that way between 19:18Z and 20:10Z. **A cancelled `scope`
+assignment delays, open from 19:11:58Z until it was marked resolved at 22:49:42Z), not this mechanism. Five small ubuntu jobs ended that way between 19:18Z and 20:10Z. **A cancelled `scope`
 makes `test` run the full macOS suite** (here 20:26:03Z to 20:50:05Z for a two-card change), which is the existing design, "unknown scope means run
 everything". **A passing suite inside a run stamped `failure`, and `gh run view --log` returning zero bytes for that run (Henry, `#3775`), are
 separate traps from this card's subject.**
