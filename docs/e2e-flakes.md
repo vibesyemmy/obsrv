@@ -1300,6 +1300,53 @@ records for `update.spec.ts:115`, and its other `update.spec` entries (`:133`, `
 (a `page.reload` timeout; a poll of `getUpdate()`), so nothing here joins them. No cause is named and no card
 is filed by this paragraph; it records the sighting so that a fourth has something to land against.
 
+**A fourth sighting of the signature, 2026-10-05 (`browser-identity.spec.ts:41`).** Found by Wren reading the log
+(`#3469`); entered here by Dogu from the raw job log. Run `37294297527`, the pull-request run of `#561` at `d68d497` (a
+docs-only head), attempt 1; the run was later stamped `cancelled` (superseded) but its suite job finished `success`,
+10:05:43Z to 10:30:41Z (24 m 58 s). `browser-identity.spec.ts:41`, *a dense laptop is still a desktop browser*, failed its
+first attempt at **30.0 s** and passed on retry #1 in **1.4 s**:
+
+```
+TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('.preset-select')
+- locator resolved to <button type="button" role="combobox" … aria-label="Target screen" …>
+- attempting click action
+- waiting for element to be visible, enabled and stable
+at helpers/select.ts:194   (choose)
+```
+
+**What the log says and does not say.** As with `update.spec.ts:115`, the locator resolved to the real control, so "it never
+rendered" is ruled out; what ran out was Playwright's pre-click wait, and the log does not say which of *visible*, *enabled* or
+*stable* it was. The run's `error-context.md` (an artifact) was not read. This file is `serial`
+(`test.describe.configure({ mode: 'serial' })`), so the failure took the other four tests of the file down with it: they
+show `-` on the first pass and ran again, all five, on the retry.
+
+**Where it fell, for the entry's own question.** It was **test 3 of the run**, the first test of its file, in an app launched
+for that file at 10:07:35. `update.spec.ts:115` was test 646 (not the first of its file) and `toolbar.spec.ts:112` was 594, so
+the failures are not all at app launch. The same run's other first-attempt failure, `sync.spec.ts:139` (5.1 s), is a different
+mechanism with its own entry. **No cause is named, and one more sighting is still not a rate.** The locators so far are
+`.toggle-settings` (twice), `.preset-select`, and the one `vision.spec.ts:35` did not name: not one button.
+
+**What the suite minutes say about the first attempts** (Idris's table, recomputed by Dogu, 2026-10-05; the file lived in
+a session scratchpad that did not survive a restart, so the figures are as posted in the room, `#3665` and `#3666`, and the raw
+CI logs they came from are on GitHub). The entry's own rule asks what is common to the first attempt that stalls; the cheapest first cut is how long
+the runs that show it were. Population: every macOS suite job log Idris holds that has an e2e total, deduplicated by content,
+**40 rows**, Oct 2 to Oct 5, pull-request merge-ref runs and `main` pushes together, two of them `attempt 2`. **Not a sample of
+anything:** the logs were pulled for other reasons. The e2e minutes are the one Playwright `passed (X m)` line.
+
+| | n | min | median | max |
+| --- | --- | --- | --- | --- |
+| all rows | 40 | 19.6 | 22.6 | 26.1 |
+| since `#540` (2026-10-03T22:35Z) | 36 | 19.9 | 22.65 | 26.1 |
+
+**The two runs that show the click-wait text** ("visible, enabled and stable"): `37290561363` (`update.spec.ts:115`) at **25.7**
+minutes and `37294297527` (`browser-identity.spec.ts:41`) at **23.1**. **The file does not support "the slow runs are the ones
+with the stall":** the slowest e2e step, `37294469890` attempt 2 at 26.1 minutes, had no first-attempt `✘`, and `37319268852`
+ties 25.7 with one unrelated flaky. Dogu cross-checked the table against 36 logs both held at the time, and the e2e minutes agreed in all 36 (`#3666`).
+Columns Idris dropped as unreliable (log-span minutes, which include queue time on whole-run views, and the `(retry #` count)
+are not used here.
+
 
 ## `live-capture-notes.spec.ts:231` — a resize capture that applied one of five, 2026-09-21
 
