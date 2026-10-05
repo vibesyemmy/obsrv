@@ -48,6 +48,22 @@ for 661 tests (one unrelated flaky). That is a third *finished* suite job within
 crossed it (27 m 46 s, 27 m 55 s, 27 m 18 s). The window listing was **not re-run** for this either, and runs after 14:13Z that day are not
 counted here.
 
+**Added the evening of 2026-10-05, on `main`** (Idris counted it, `#3740`; Dogu and Wren re-read the job from the API and the log, `#3742`, `#3741`):
+the push suite for `#568`'s merge, run `37355564026` at `ec3beafe9e7b1ed148047a72f723211b510cd638`, suite job `111917026851`, 18:23:47Z to
+18:53:41Z, ran **29 m 54 s, `success`, 6 s under the nominal cap**, with the longest e2e step counted so far, **27.6 minutes** (659 passed, 1
+flaky, 1 skipped). The flaky was `throttle-live.spec.ts:82`, a `"beforeAll" hook timeout of 30000ms exceeded.`, with the harness's slow-close
+line (10 s) directly before it, about 45 s of the job with the tests it re-ran (Idris's estimate, `#3740`). Its sibling on `main`, `37355574685`
+(`#569`'s merge), started 3 s later on a tree that differs only in docs and ran **25 m 34 s**: a measured 4 m 20 s spread between concurrent,
+nearly identical jobs, which does not by itself say the runner caused it. On `main` `cancel-in-progress` is `false` and a cancelled run is "a
+commit with NO CI answer" (`ci.yml`'s own words), which is where a kill costs most.
+
+**The cap is enforced late, so "N seconds under" is not "N seconds from a kill" in either direction.** Two samples, on different runners, so not
+a distribution: a throwaway probe (`#3746`, run `37359806990`, ubuntu, `push` event, a different workflow from `ci.yml`) gave a job
+`timeout-minutes` of 1, and its step started 18:57:04Z and was cancelled at 18:58:32Z, **88 s later (28 s over)**; and the one macOS case,
+`#561`'s attempt 1, ended at **30 m 20 s on the 30-minute cap (20 s over)**. **The same probe showed `timeout-minutes` accepts an expression
+and evaluates it both ways** (`${{ github.ref == '...' && 1 || 3 }}` gave a 1-minute cap where the condition held and a 3-minute cap where
+it did not), at that strength: one run, `push` not `pull_request`.
+
 ## What is known about earlier cap hits, and what is not
 
 - `bug-no-traces-when-e2e-hangs`: as of its 2026-09-16 sweep of 607 runs, one job (control 4) had hit the limit.
@@ -61,6 +77,9 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
 
 1. **Raise `timeout-minutes`** (one line). Cost: a hung job holds a macOS runner longer, and `bug-no-traces-when-e2e-hangs` records that
    a job that outlasts the cap uploads no traces, so the longer the cap, the longer the window where a hang leaves nothing to read.
+   **A variant the probe makes possible, not tested on `ci.yml` and not proposed for merge:** `timeout-minutes: ${{ github.ref == 'refs/heads/main' && 45 || 30 }}`,
+   so pull-request jobs keep the cap they have and the cost above lands only on `main`, where a kill hurts most. A pull request's `github.ref` is
+   `refs/pull/N/merge`, which would read as the second value; that is inference, not a measurement.
 2. **Split the e2e step across two macOS jobs.** Wall-clock goes down; runner minutes and queue pressure go up (**not measured here**: the card's first version said a PR run
    sat about 16 minutes in the queue on 2026-10-05, and that was wrong twice over: the run was `37212962898` on **2026-10-04** (`#557`; Idris, `#3482`), and the wait was not a runner queue; Wren's read of the same day's jobs, `#3481`, found every macOS
    suite job starting 0.1 to 0.2 minutes after its scope job, so there was no runner queue, and the long waits were whole-run waits
