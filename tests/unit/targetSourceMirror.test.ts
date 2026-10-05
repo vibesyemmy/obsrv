@@ -28,6 +28,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  * two commits), not a recording from a real one. `arrivals` below is a labelled COPY of the rule in
  * `ipc.ts` (`watchArrivals`), not the live closure: if that rule changes, change it here.
  *
+ * R4 and G are the RECORDED case, not a model: R4 replays the fourth instrument print (below) through
+ * the real class, and G is its minimal form (an older MIRRORED start of the same address in the trace,
+ * which is what made #558's second head compare the wrong start times).
+ *
  * Authored by Idris (QA) as a gate probe for #558 and kept as the test of that fix. Written to
  * assert what is CORRECT, so against `main` E, A and A2 fail (E is the original bug; A and A2 are
  * the same bug with a second commit) and against #558's first head A, A2, C and F fail.
@@ -91,6 +95,8 @@ async function rig() {
   return {
     heard,
     at: (ms: number) => vi.setSystemTime(ms),
+    /** A navigation the pane itself made (an agent's `load`): no initiator, and not the bus's. */
+    ownStart: (url: string) => wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, url }),
     /** The page's own navigation: document-initiated, so it has an initiator. */
     pageStart: (url: string) =>
       wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, url, initiator: {} }),
@@ -258,5 +264,93 @@ describe('a commit on an address the bus is also loading, through the real Targe
     r.release()
     await loaded
     expect(said(r.heard)).toEqual([false, true])
+  })
+})
+
+const BASE = 'file:///Users/runner/work/obsrv/obsrv/tests/fixtures/'
+const HAIRLINE = BASE + 'hairline.html'
+const REDIRECT = BASE + 'redirect.html'
+
+describe('a recorded print, replayed through the real TargetSource', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /**
+   * The fourth instrument print of `bug-redirect-note-missing-not-late`: `main`'s push suite for
+   * 721f5d9 (run 37278055730), the retried `arrivals.spec.ts:218`, whose guard said "note MISSING
+   * where one was expected". Every start and commit below is one of the print's, in its order, with
+   * its `mirrored` and `initiator` flags; the times are the print's own, in ms. The commit it
+   * recorded as `mirroring: true` is the last one. On `main` this replay reproduces that: the same
+   * terms (`byDocument`, `viaMirrorUrl`, nothing else), which is what makes it a replay.
+   *
+   * The page's redirect (`…754`) comes AFTER a mirrored start of the same address (`…077`): an
+   * older mirror of the address is in the trace, and must not decide this commit.
+   */
+  it('R4: the page\'s own redirect to hairline, with an older mirrored start of hairline in the trace, is not the bus\'s', async () => {
+    const r = await rig()
+    r.at(520642)
+    r.ownStart(HAIRLINE)
+    r.at(520877)
+    r.commit(HAIRLINE)
+    r.at(520996)
+    const first = r.bus(REDIRECT) // the bus mirrors redirect.html in
+    await tick()
+    r.at(521071)
+    r.commit(REDIRECT) // claimed by the bus
+    r.release()
+    await first
+    r.at(521077)
+    const second = r.bus(HAIRLINE) // a mirrored hairline start, from a bus-placed document
+    await tick()
+    r.release()
+    await second // over before its commit lands, as in the print
+    r.at(521168)
+    r.commit(HAIRLINE)
+    r.at(521293)
+    r.ownStart(HAIRLINE)
+    r.at(521357)
+    r.commit(HAIRLINE)
+    r.at(521679)
+    r.ownStart(REDIRECT)
+    r.at(521741)
+    r.commit(REDIRECT)
+    r.at(521754)
+    r.pageStart(HAIRLINE) // the page's own redirect: document-initiated
+    r.at(521792)
+    const third = r.bus(HAIRLINE) // the bus's mirrored load of the same address, 38 ms later
+    await tick()
+    r.at(521838)
+    r.commit(HAIRLINE) // the commit the print recorded as mirroring: true
+    r.release()
+    await third
+    expect(r.heard.at(-1)?.fromBus).toBe(false)
+  })
+
+  it('G: R4 in its smallest form — an older mirrored (answered) start of the address, then the page\'s redirect first and the bus 25 ms later', async () => {
+    const r = await rig()
+    r.at(100)
+    const earlier = r.bus(ADDRESS)
+    await tick()
+    r.at(110)
+    r.commit(ADDRESS) // the bus's own earlier load of the address, answered
+    r.release()
+    await earlier
+    // an own navigation elsewhere, so the document is no longer the bus's (`viaBusDocument` rightly
+    // stamps a bus-placed document's own redirect as the bus's, which is not what G is about)
+    r.at(500)
+    r.ownStart(REDIRECT)
+    r.at(510)
+    r.commit(REDIRECT)
+    r.at(1000)
+    r.pageStart(ADDRESS)
+    r.at(1025)
+    const loaded = r.bus(ADDRESS)
+    await tick()
+    r.at(1030)
+    r.commit(ADDRESS)
+    r.release()
+    await loaded
+    expect(said(r.heard)).toEqual([true, false, false])
   })
 })
