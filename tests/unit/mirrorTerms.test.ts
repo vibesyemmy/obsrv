@@ -1,39 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { mirrorTerms, type MirrorTerms } from '../../src/shared/mirrorTerms'
+import { isBusCommit, mirrorTerms, type MirrorTerms } from '../../src/shared/mirrorTerms'
 
 /**
  * `mirrorTerms` records which term stamped a commit as the bus's
  * (`bug-redirect-note-missing-not-late`). It must **agree with the decision it describes** and
  * must **never be the decision**: `TargetSource` still computes `fromBus` itself.
  *
- * `ORACLE` below is the decision expression copied verbatim from `targetSource.ts` —
- * `isMirrorCommit`'s body, and the `fromBusDocument` arm of the `did-navigate` handler:
+ * **The oracle copy is gone.** This test used to hold a verbatim copy of `isMirrorCommit`'s body,
+ * because the real one was private to a class that needs Electron to build — and it said so:
+ * *"if the real expression changes and this oracle does not, this test goes on passing."* The
+ * decision now lives in `isBusCommit` beside the terms, so these call the real expression.
  *
- *   isMirrorCommit(url, byDocument):
- *     if (this.mirrorRequested === undefined) return false
- *     return url === this.mirrorRequested || !byDocument
- *   fromBus = this.isMirrorCommit(url, byDocument) || (byDocument && start?.fromBusDocument === true)
- *
- * It is a COPY, because `isMirrorCommit` is private to a class that needs Electron to build, so
- * this test cannot call the real one. That is a stated limit, not a hidden one: if the real
- * expression changes and this oracle does not, this test goes on passing. The runtime backstop is
- * the e2e guard print, which carries `mirroring` (the real decision) beside the recorded terms —
- * a disagreement is visible there. Change the two together.
+ * That limit was not theoretical: the expression DID change (the fix for this card), and a copy
+ * would have gone on agreeing with itself.
  */
-const ORACLE = (url: string, byDocument: boolean, mirrorRequested: string | undefined, startFromBusDocument: boolean): boolean => {
-  const isMirrorCommit = (): boolean => {
-    if (mirrorRequested === undefined) return false
-    return url === mirrorRequested || !byDocument
-  }
-  return isMirrorCommit() || (byDocument && startFromBusDocument)
-}
-
 const HAIRLINE = 'file:///fixtures/hairline.html'
 const REDIRECT = 'file:///fixtures/redirect.html'
-const or = (t: MirrorTerms): boolean => t.viaMirrorUrl || t.viaNotByDocument || t.viaBusDocument
+const or = (t: MirrorTerms): boolean => isBusCommit(t)
 
 describe('mirrorTerms', () => {
-  it('reproduces the decision over its whole truth table, so recording can never contradict it', () => {
+  it('records every term over the whole truth table, and the decision reads only those terms', () => {
     const inFlight: Array<[string, string | undefined]> = [
       ['none in flight', undefined],
       ['mirror asked for this very address', HAIRLINE],
@@ -44,8 +30,11 @@ describe('mirrorTerms', () => {
       for (const byDocument of [true, false]) {
         for (const startFromBusDocument of [true, false]) {
           const t = mirrorTerms(HAIRLINE, byDocument, mirrorRequested, startFromBusDocument)
-          expect(or(t), `${label}, byDocument=${byDocument}, fromBusDocument=${startFromBusDocument}`).toBe(
-            ORACLE(HAIRLINE, byDocument, mirrorRequested, startFromBusDocument),
+          // With no start times given, nothing is known to have started first, so the
+          // decision is the plain OR of the three terms — the behaviour before the fix.
+          expect(t.answeredOwnStart, `${label}, byDocument=${byDocument}`).toBe(false)
+          expect(isBusCommit(t), `${label}, byDocument=${byDocument}, fromBusDocument=${startFromBusDocument}`).toBe(
+            t.viaMirrorUrl || t.viaNotByDocument || t.viaBusDocument,
           )
           rows++
         }
@@ -66,6 +55,7 @@ describe('mirrorTerms', () => {
       viaMirrorUrl: true,
       viaNotByDocument: false,
       viaBusDocument: false,
+      answeredOwnStart: false,
     })
     expect(or(t)).toBe(true)
   })
@@ -101,8 +91,12 @@ describe('mirrorTerms', () => {
     expect(round['mirrorRequested']).toBeNull()
   })
 
-  it('carries exactly the five fields the guard print is read for, and no more', () => {
+  it('carries exactly the six fields the guard print is read for, and no more', () => {
+    // Six since the fix: `answeredOwnStart` is printed beside the others because it is now
+    // part of the decision, and a term that decides without being printed would put the guard
+    // print back to describing less than it judges.
     expect(Object.keys(mirrorTerms(HAIRLINE, true, HAIRLINE, false)).sort()).toEqual([
+      'answeredOwnStart',
       'byDocument',
       'mirrorRequested',
       'viaBusDocument',
@@ -110,4 +104,38 @@ describe('mirrorTerms', () => {
       'viaNotByDocument',
     ])
   })
+
+  it("the measured case: the commit answered the page's own start, so it is NOT the bus's", () => {
+    // The page's own start for hairline.html, answered by this commit, while the bus's
+    // mirrored load of the same address is in flight.
+    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_000)
+    expect(t.viaMirrorUrl).toBe(true)
+    expect(t.answeredOwnStart).toBe(true)
+    // Before the fix this was true, ipc.ts dropped the commit, and a redirect the user
+    // could see went unreported.
+    expect(isBusCommit(t)).toBe(false)
+  })
+
+  it('does not compare start TIMES, because an older mirror of the address is not this commit', () => {
+    // Print 4, replayed through the real class by Idris: a mirrored start of the address
+    // 677 ms BEFORE the page's own redirect made the time comparison answer false for a
+    // genuine page-first redirect. The term reads which start was answered, nothing else.
+    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_754)
+    expect(t.answeredOwnStart).toBe(true)
+    expect(isBusCommit(t)).toBe(false)
+  })
+
+  it("the other half: the bus's own mirrored load to the same address is still the bus's", () => {
+    // A commit that answered the BUS's own start passes no own-start time, so the term is
+    // false and the mirror still stamps — this is the double-count the fix must not open up.
+    const busStart = mirrorTerms(HAIRLINE, true, HAIRLINE, false, null)
+    expect(busStart.answeredOwnStart).toBe(false)
+    expect(isBusCommit(busStart)).toBe(true)
+
+    const noInitiator = mirrorTerms(HAIRLINE, false, HAIRLINE, false, 1_000)
+    expect(noInitiator.answeredOwnStart, 'the bus\'s load is never document-initiated').toBe(false)
+    expect(isBusCommit(noInitiator)).toBe(true)
+  })
+
+
 })

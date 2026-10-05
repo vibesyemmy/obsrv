@@ -2,7 +2,7 @@
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
 column: doing
 owner: "Henry"
-waiting: "event: #540 merged (the commit record names which term stamped a commit as the bus's), then the next arrivals :89 failure to read it — no fix until the instrument answers"
+waiting: "Idris: gate the fix"
 kind: bug
 release: blocks
 criterion: C5
@@ -1103,3 +1103,125 @@ that re-reads three logs, it adds no sighting.
 term, no counter-example, in three of fourteen attempts. Any later failure where a different term fires, or none, refutes
 the reading above, and any later failure where `viaMirrorUrl` alone fires again supports it. No fix on a candidate,
 however much stronger it has become.
+
+## DECIDED AND FIXED 2026-10-04/05
+
+**The decision, and whose it is.** I put the question to Opeyemi in my own session with my
+recommendation attached, and he answered **go**: *when a page redirects itself to an address and the bus
+starts a mirrored load of that same address a few tens of ms later, the page's commit **is** an arrival.*
+He had also written *"I agree with @Wren"* in the room (`#3370`), which matches; the ruling recorded here
+is the one he gave in session, on my recommendation, not an inference from the room line.
+
+**I first asked him the question with the two events in the wrong order** — bus first, page second. Idris
+caught it (`#3351`) from the instrument's own timestamps, Dogu confirmed them independently, Wren corrected
+her own repetition of my wording. The order is the fix: **the page's navigation starts first** (48 ms, then
+25 ms, then 25 ms ahead of the bus's mirrored start, across the three prints), and it is the one carrying
+`byDocument: true`.
+
+**What changed.** `isMirrorCommit` is gone from `TargetSource`; the decision is `isBusCommit` in
+`src/shared/mirrorTerms.ts`, taken from the recorded terms:
+
+    (viaMirrorUrl && !pageStartedFirst) || viaNotByDocument || viaBusDocument
+
+`pageStartedFirst` is new and recorded beside the others: the page's own non-mirrored start for this
+address began at or before the bus's mirrored one, and the commit is document-initiated. **A term that
+decides without being printed would put the guard print back to describing less than it judges.**
+
+**The duplication this removes was a stated limit that bit.** `tests/unit/mirrorTerms.test.ts` held a
+**verbatim copy** of the private expression, and its own header warned: *"if the real expression changes
+and this oracle does not, this test goes on passing."* The expression has now changed — a copy would have
+gone on agreeing with itself. The test calls `isBusCommit` directly.
+
+**The risk the fix had to avoid, and how it is pinned:** trading silent under-reporting for double
+counting. Both commits land on the same address, so the bus's own must still be suppressed. Three cases
+are tested from the opposite side — the bus's start first, the bus's load having no document initiator,
+and the tie — and removing `byDocument` from the guard fails them.
+
+**Sabotage:** reverting `&& !pageStartedFirst` fails three tests; dropping `byDocument` from
+`pageStartedFirst` fails the double-count guard.
+
+**What is still unmeasured here:** the end-to-end proof is `arrivals.spec.ts:89` passing on a run that
+would previously have failed, and that failure is rare — the unit tests pin the decision, not the sighting.
+The other 15 failing attempts predate the instrument and carry no terms, so nothing above speaks for them.
+
+## THE FIRST FIX WAS WRONG IN TWO WAYS, AND IDRIS'S HARNESS FOUND BOTH (2026-10-05)
+
+**She built the thing I had said was the real gap and had not built:** the **real `TargetSource`** under a
+fake `electron`, with the page's start, the bus's `loadMirrored` and the commits emitted in forced orders
+(`tests/unit/targetSourceMirror.test.ts`, her commit `cb2d0eb`, adopted here under her authorship).
+
+**A — my fix double-counted, in the common case.** When the bus's own commit landed, `startFor(url)`
+**skipped mirrored starts** and handed it the PAGE's start, so it reported `byDocument: true` and my
+`pageStartedFirst` guard made it the page's too: **two arrivals for one redirect**, where `main` reports
+one. **2 of the 3 instrument prints had two commits.** My own "the bus's load has no document initiator"
+test fed `byDocument: false` by hand, so it never saw the case it was written for — the test agreed with
+my model of the wiring rather than with the wiring.
+
+**C and F — a regression I introduced.** `startTimes().own` took the newest non-mirrored start **with no
+age bound and nothing consuming it**, over a 32-deep trace. So an earlier click to an address made a later
+bus-only mirror of it look like the page moving — a false *"the page navigated after it loaded"*, the
+`bug-arrivals` class the rule I replaced existed to prevent. `main` gets that case right.
+
+### What the fix is now
+
+**A start is answered once.** Each start carries `answered`; the commit that lands takes the **oldest
+unanswered start for the address, the bus's own included**, and marks it. Commits answer starts in the
+order the navigations began, which is what the prints show.
+
+**An abort answers its start too.** `did-fail-load` on the main frame marks it, because no commit ever
+will — without that, a cancelled page navigation leaves a start for a later mirror to be classified by
+(her case F).
+
+**`byDocument` therefore comes from the start the commit actually answers**, so the bus's commit stamps
+through `viaNotByDocument` as it always did, and the page's commit is an arrival.
+
+**Her eight cases pass.** Sabotage: removing the abort answer fails F; removing consumption at commit
+fails A, A2, C and B2; restoring newest-non-mirrored matching fails A, A2, C and F.
+
+**Measured: typecheck 0, build 0, unit 2006 passed / 1 skipped over 130 files.**
+
+**Still unmeasured:** the live sighting. Her harness drives the real classification but models Chromium's
+event order from the prints, and reads the consequence through a replica of `ipc.ts`'s counting rule
+rather than the live closure. The e2e remains the only end-to-end proof, and it is rare.
+
+## A THIRD DEFECT, FOUND BY REPLAYING THE REAL PRINT (2026-10-05)
+
+**Idris replayed print 4 through the real class** — `main`'s retried `arrivals.spec.ts:218`, run
+`37278055730` — and checked the replay was faithful by reproducing `main`'s own output (`mirroring: true`)
+before judging anything. On `main` it reproduces the bug, on `69d02c0` it is fixed, **and on `491518c` the
+redirect was suppressed again.**
+
+**Cause (her case G):** `mirrorStart` read `this.starts.find(st => st.url === url && st.mirrored)` — the
+**oldest** mirrored start of the address in the trace, answered or not. Print 4 has a mirrored `hairline`
+start **677 ms before** the page's own redirect, so the time comparison came out false for a genuine
+page-first redirect. **My eight-case harness could not see it**: not one of those cases has an older
+mirrored start of the same address.
+
+**The fix is to stop comparing times at all.** With consumption in place, *which start the commit answered*
+already settles whose navigation it is, so the term is now:
+
+    answeredOwnStart: byDocument && ownStartAt !== null
+
+renamed from `pageStartedFirst`, because a term whose name claims an ordering it no longer tests is the
+next reader's wrong turn. **This is also Idris's answer to the question I asked her** — whether that term
+was doing less work than its comment claimed. It was, and the extra work it appeared to do was the defect.
+
+**Sabotage:** reverting `&& !answeredOwnStart` fails five tests across both files.
+
+**One lock I could not pin, named rather than left looking load-bearing:** `!start.mirrored` beside
+`byDocument`. A mirrored start is never document-initiated, so `byDocument` already excludes it and
+removing the clause passes all eight harness cases. It is kept for intent, and it is untested.
+
+**Her residual risk was then demonstrated, so it is fixed rather than recorded.** She wrote it as a failing
+case (H1b): a start that is neither committed nor `did-fail-load`ed — a redirect source, or a silent
+supersede — stays unanswered, and the bus's later mirror of that address is classified by it. That is the
+same regression shape this fix already had to undo once, so leaving it recorded would have been leaving a
+known hole with a name.
+
+**`did-stop-loading` retires every unanswered start.** Loading has stopped, so nothing is pending: a start
+with no commit and no failure never gets one. H1b is red without it and green with it.
+
+**What that does NOT establish, and the harness cannot:** that Chromium never fires `did-stop-loading`
+between a start and its commit. The harness emits the events itself, so it can show the hole and show this
+closes it; the ordering guarantee is not in evidence. Idris said the same of the one-line version she
+tried.
