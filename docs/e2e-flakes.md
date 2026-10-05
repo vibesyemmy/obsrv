@@ -842,6 +842,18 @@ fail. The paragraphs above are left as written.
 
 ## `arrivals.spec.ts:89`: the moved note, read once, right after a different signal settles
 
+**FIXED ON `main` 2026-10-05 (`d7942280b`), so a failure here now is a REGRESSION, not a sighting.** This
+entry below was written when the cause was a candidate; it is not one any more. A page's own redirect to
+the address the sync bus was mirroring had its commit stamped as the bus's (`url === mirrorRequested`) and
+dropped before the arrival count, so the note never arrived — it was never late. The fix is in
+`src/shared/mirrorTerms.ts` (`isBusCommit`, `answeredOwnStart`) and `src/main/targetSource.ts` (a start is
+answered once, by its commit, by `did-fail-load`, or by `did-stop-loading`).
+
+**What is still open is the proof, not the diagnosis:** `bug-redirect-note-missing-not-late` stays in Doing
+until `arrivals.spec.ts:89` passes on first attempt across **counted CI attempts**, because one is not a
+sweep and local sweeps produced 0 of 60 on both the fixed and unfixed code. **If you are reading this after
+a failure: count the attempt, say so on that card, and do not re-register this as a flake.**
+
 `a page that really does redirect after loading still says so` polls the
 target's URL until the redirect has landed (`expect.poll(...).toBe(HAIRLINE)`,
 `tests/e2e/arrivals.spec.ts:97`), then makes one unpolled call to `movedNote()`

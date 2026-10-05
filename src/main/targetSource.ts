@@ -633,10 +633,15 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // fix already had to undo once (Idris's H1b; her case F is the same shape
       // with an abort, which Chromium does report).
       //
-      // **What this does not establish:** that Chromium never fires
-      // `did-stop-loading` between a start and its commit. H1b shows the hole
-      // and that this closes it; it does not show the ordering is guaranteed,
-      // and the harness cannot answer that because it emits the events itself.
+      // **How far the ordering has been checked.** Idris instrumented a scratch
+      // copy and ran nine navigation-heavy specs through real Chromium, idle
+      // and under 24 CPU burners: 2,914 events, 779 commits, 632 stops — every
+      // commit matched an unanswered start, and no commit arrived after a stop
+      // had retired its own start. Bounded evidence, not a guarantee: `file://`
+      // fixtures, one macOS machine, Electron 43.4.1, and a loaded laptop
+      // rather than a slow runner. The same run showed this line doing ordinary
+      // work — 7 of those stops retired a start that never commits, two of them
+      // the page-first shape of the prints.
       for (const start of this.starts) start.answered = true
       if (!this.internal) this.emit('loading', false)
     })
