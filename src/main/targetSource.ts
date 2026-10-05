@@ -626,6 +626,18 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       if (!this.internal) this.emit('loading', true)
     })
     wc.on('did-stop-loading', () => {
+      // Loading has stopped, so nothing is pending: a start that has not been
+      // answered by a commit or by `did-fail-load` never will be. Without this
+      // it stays in the trace and a LATER commit — the bus mirroring that same
+      // address in, say — gets classified by it, which is the regression this
+      // fix already had to undo once (Idris's H1b; her case F is the same shape
+      // with an abort, which Chromium does report).
+      //
+      // **What this does not establish:** that Chromium never fires
+      // `did-stop-loading` between a start and its commit. H1b shows the hole
+      // and that this closes it; it does not show the ordering is guaranteed,
+      // and the harness cannot answer that because it emits the events itself.
+      for (const start of this.starts) start.answered = true
       if (!this.internal) this.emit('loading', false)
     })
     wc.on('did-start-navigation', details => {

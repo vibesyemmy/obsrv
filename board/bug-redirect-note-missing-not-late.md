@@ -1212,7 +1212,16 @@ was doing less work than its comment claimed. It was, and the extra work it appe
 `byDocument`. A mirrored start is never document-initiated, so `byDocument` already excludes it and
 removing the clause passes all eight harness cases. It is kept for intent, and it is untested.
 
-**Her residual risk, recorded because it is not demonstrated and not fixed:** a start that is neither
-committed nor `did-fail-load`ed — a redirect source, or a silent supersede — stays unanswered, and a later
-commit could be classified by it. `did-stop-loading` is the candidate retirement signal. **No measurement
-shows it yet, so nothing has been built for it.**
+**Her residual risk was then demonstrated, so it is fixed rather than recorded.** She wrote it as a failing
+case (H1b): a start that is neither committed nor `did-fail-load`ed — a redirect source, or a silent
+supersede — stays unanswered, and the bus's later mirror of that address is classified by it. That is the
+same regression shape this fix already had to undo once, so leaving it recorded would have been leaving a
+known hole with a name.
+
+**`did-stop-loading` retires every unanswered start.** Loading has stopped, so nothing is pending: a start
+with no commit and no failure never gets one. H1b is red without it and green with it.
+
+**What that does NOT establish, and the harness cannot:** that Chromium never fires `did-stop-loading`
+between a start and its commit. The harness emits the events itself, so it can show the hole and show this
+closes it; the ordering guarantee is not in evidence. Idris said the same of the one-line version she
+tried.
