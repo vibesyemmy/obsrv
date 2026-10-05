@@ -46,11 +46,11 @@ roughly 25 macOS minutes to the end while the newer run waited behind it.
 
 ## What the change would do to the tally, and it should be named rather than discovered
 
-Idris, `#3532`, in his words: two of the eight counted attempts at `arrivals.spec.ts:218` at that time (`37294297527`, `37297276819`) came from superseded
+Idris, `#3532`, in Idris's words: two of the eight counted attempts at `arrivals.spec.ts:218` at that time (`37294297527`, `37297276819`) came from superseded
 suites that ran to the end and were stamped `cancelled` afterwards. If superseded suites are cancelled in about 80 seconds, that supply disappears:
 the natural rate of attempts drops by roughly a quarter (2 of 8; a small sample), so N would be reached more slowly, in exchange for four heads not losing 18 to
-26 minutes each. Idris thinks that is the right trade; **the figures are his, from `#3532`, and were not recounted here.** At `#3556` the tally was ten, two of
-which he lists as superseded suites.
+26 minutes each. Idris thinks that is the right trade; **the figures are Idris's, from `#3532`, and were not recounted here.** At `#3556` the tally was ten, two of
+which Idris lists as superseded suites.
 
 ## What is not measured
 
