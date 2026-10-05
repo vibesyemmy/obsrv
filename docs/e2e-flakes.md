@@ -1254,6 +1254,46 @@ recurring. At that point the question to ask is what is *common* to the first at
 the first window paint, a shared `beforeAll` — rather than anything in the individual test, since the
 tests have nothing else in common.
 
+**A third sighting of the signature, 2026-10-05** (found by Idris reading the log, `#3448`; entered here by Dogu). Run
+`37290561363`, the pull-request run of `#560` at `dc019d9`, attempt 1, `completed/success`. `update.spec.ts:115`, *the
+Settings block reports every state*, failed its first attempt at **30.0 s** and passed on retry #1 in **291 ms**, a 103×
+gap:
+
+```
+TimeoutError: page.click: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('.toggle-settings')
+- locator resolved to <button type="button" title="Settings" aria-label="Settings" aria-expanded="false" class="icon-button toggle-settings">…</button>
+- attempting click action
+- waiting for element to be visible, enabled and stable
+at launch.ts:348   (openSettings, called from update.spec.ts:116)
+```
+
+**What the log says and does not say.** The toggle was **present**: the locator resolved to the real button, so
+"it never rendered" is ruled out for this sighting, as it was for the `.toggle-panel` one below. What ran out was
+Playwright's pre-click wait, and the log stops before naming which of *visible*, *enabled* or *stable* it was.
+The click comes from `openSettings` in `tests/e2e/launch.ts`, a helper, so it is not `update.spec`'s own code. I
+did **not** read the run's `error-context.md` (an artifact; I did not download it), so the page state at the
+timeout is not known. One thing the table above shows and this entry had not said (Idris, `#3450`): sighting 1,
+`toolbar.spec.ts:112`, waits on the **same locator**, `.toggle-settings`; the table does not name sighting 2's
+locator (`vision.spec.ts:35`). Two of three sharing one button is read from the table, **not tested**, and is not
+offered as the cause.
+
+**Not a docs-only branch this time, and it still cannot be the change.** `#560` at `dc019d9` touches a card and
+`src/main/targetSource.ts`, and every changed line in `src/` is a comment (I counted the non-comment changed lines
+in that diff: 0). The run was also a **slow one**: the suite job took 27 m 46 s of the 30-minute cap, and it had
+**two other first-try failures**, both already in this register under their own entries and both rescued on
+retry: `image-mode.spec.ts:70` (30.0 s, then 594 ms) and `tab-switch-preset.spec.ts:89` (10.1 s, then 2.1 s). Three
+retry-rescued first attempts in one run; the run ended green.
+
+**What this does to the entry's own rule.** The rule above says a third sighting of the same signature makes
+this a finding and moves the question to what the first attempts have in common. The table above has two; this
+is another, so by the letter of that rule the signature now has at least three: a 30 s `page.click` that finds
+its element at once on the next attempt, on a spec not in the table. It is **one run**, the first this register
+records for `update.spec.ts:115`, and its other `update.spec` entries (`:133`, `:85`) are different mechanisms
+(a `page.reload` timeout; a poll of `getUpdate()`), so nothing here joins them. No cause is named and no card
+is filed by this paragraph; it records the sighting so that a fourth has something to land against.
+
 
 ## `live-capture-notes.spec.ts:231` — a resize capture that applied one of five, 2026-09-21
 
