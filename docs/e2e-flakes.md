@@ -1958,10 +1958,12 @@ waited the whole 30 s. That is not what an element that was slow to become click
 a short failure (`tabs.spec.ts:177`, 5.0 s) and before a 0 ms retry (`throttle-live.spec.ts:89`), so it is "a silent close sits
 before some failures of any length", not "a 30 s stall is a silent app".
 
-**One datum that discriminates a candidate (Idris, `#3660`, one laptop).** A local instrumented run for `#558` (2026-10-05, not
-CI, a scratch event-logger patch in `targetSource.ts`, 24 CPU burners) produced five slow closes and **all five tails have
-`quitting`**, 0.3 to 1.8 s after the `gpu` line: CPU starvation alone gave the slow-quit shape on that machine, not the silent
-one. So a starved runner should not be read as the explanation of the silent seven.
+**One datum, and a reason for doubt (Idris, `#3660`, one laptop, not CI).** A local instrumented run for `#558` (2026-10-05,
+a scratch event-logger patch in `targetSource.ts`, 24 CPU burners) produced five slow closes under load with that patch, and
+**all five tails have `quitting`**, 0.3 to 1.8 s after the `gpu` line. The patch is an unmeasured confound (the same loop was
+not run without it), and the file the figures came from (`ev558-load-run.txt`) did not survive a session restart, so this rests
+on the post alone. It is a reason to doubt that a starved runner explains the silent seven, and not a refutation of what a CI
+runner does: a starved runner **is not shown to be** the explanation.
 
 **What it does not say.** No cause: a blocked main-process loop, a stuck harness connection and a runner-level stall all
 still fit, and the logs cannot tell them apart (a process snapshot taken at the kill could rule some of them out;
