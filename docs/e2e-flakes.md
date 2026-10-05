@@ -1597,6 +1597,49 @@ named mechanism and both passed; the correlation (seven sightings, every failure
 at six candidates) is unexplained, and a missing note is still a wrong answer the
 caller cannot detect.
 
+## `redirect-mirrored-pool.spec.ts:124` — a first-attempt failure on `#560`'s run, 2026-10-05
+
+**One sighting, retry-rescued, the run green.** Run `37293811824`, the pull-request run of `#560` at `23701e6`,
+attempt 1, `completed/success`. This spec is the second route built above to reproduce the `arrivals` redirect
+bug; this is the first first-attempt failure of it this register records. Found by Idris reading the log
+(`#3456`); entered here by Dogu from my own pull of the same log (461,375 bytes, 2,306 lines), where it is the
+run's only `✘`: first attempt **1.9 s**, retry #1 passes in **2.0 s**. The failing line is the spec's last
+assertion (`:168`, `toBeGreaterThanOrEqual(boundary)`):
+
+```
+Error: the commit was answered with a start from 205 ms before the redirect was triggered — an earlier visit to
+the same address, chosen out of a pool of 11 where 5 were the bus's
+Expected: >= 1791195659638
+Received:    1791195659433
+```
+
+**What the test's own prints say, which is the part worth keeping.** Failing attempt: the `hairline` pool before
+the redirect `{"total":11,"mirrored":5,"byDocument":3}` and after it `{"total":11,"mirrored":5,"byDocument":3}`,
+**identical, so no new `hairline` start had been recorded when the test read the trace**; the start it matched
+was `byDocument=false fromBusDocument=true`, 205 ms before the boundary. Passing attempt: `{14,5,6}` before and
+`{15,5,7}` after, one new document-initiated start, 98 ms **after** the boundary.
+
+**Idris's reading, inferred from the spec's code and those prints, not reproduced; I did not read the run's
+`error-context.md`.** The loop's last pass (`i = 5`, odd, `FORCE_STARTS = 6`) leaves the target at `hairline`.
+After the boundary the spec does `navigate(REDIRECT)` and then `await expect.poll(targetUrl).toBe(HAIRLINE)`
+(`:153`), and that poll can be satisfied at once by the old URL, before the redirect has started; `startsNow()`
+then reads a trace with no start for the redirect yet, so the newest non-mirrored `hairline` start is an older
+one. I read those lines and the order is as described; whether the old URL really satisfied the poll in this run
+is the part nobody has shown. **If so it is a race in the test, not in the product.**
+
+**Not a regression of `#558`, on Idris's evidence, not re-done by me:** her diff of `main` before and after `#558`
+shows it changed start recording only by adding `answered: false`, with no change to `at`, `url`, `byDocument`,
+`mirrored` or `fromBusDocument`. Her history: no first-attempt failure in the 29 pre-`#558` CI logs she holds and
+one in the 4 suites since; uniform over those 33 the one would fall among the last four 12 percent of the time
+(4 of 33), so it is **not evidence of a regression**. I did not recount any of those logs.
+
+**What this entry is not.** No cause is confirmed and no card is filed by it; the run was green and `#560` was not
+held by it. A separate finding from the same message (`#3456`) is **not** this entry's business: this spec and
+`redirect-forcing-route.spec.ts` still compute a copy of the `startFor` rule that `#558` deleted (`startFor` now
+appears in `src/` only in three comments in `targetSource.ts`, which I grepped on `main`; no line numbers, because
+they moved by five within minutes of my first grep, when `#560`'s comment edit merged above them); Wren routed that
+as a chore (`#3457`).
+
 ## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
 
 **Named, not filed**, and named together because the two logs are the same log
