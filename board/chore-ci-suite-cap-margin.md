@@ -42,6 +42,12 @@ and 11:02Z on 2026-10-05 ran 27 m 46 s (`37290561363`), over the cap (`#561` att
 **not re-run** for this addition, so its minimum, median, mean, maximum and the 36 and 61 counts are as first written; the e2e range is now 19.9
 to 26.1. The cause of the slow runs is still unknown (see below).
 
+**Added later the same day** (Dogu, from the raw log of run `37319268852`, `#3642`; Idris counted it too, `#3643`): `#567`'s final-head
+run, suite job `111793913543`, 13:45:42Z to 14:13:00Z, ran **27 m 18 s, `success`, 2 m 42 s under the cap**, with an e2e step of 25.7 minutes
+for 661 tests (one unrelated flaky). That is a third *finished* suite job within 2 m 42 s of the cap on 2026-10-05, besides the one that
+crossed it (27 m 46 s, 27 m 55 s, 27 m 18 s). The window listing was **not re-run** for this either, and runs after 14:13Z that day are not
+counted here.
+
 ## What is known about earlier cap hits, and what is not
 
 - `bug-no-traces-when-e2e-hangs`: as of its 2026-09-16 sweep of 607 runs, one job (control 4) had hit the limit.
