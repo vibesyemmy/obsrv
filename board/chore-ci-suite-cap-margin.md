@@ -34,13 +34,21 @@ slowest finished job above. (The first version of this card gave `37197856918` a
 of the same logs caught it, `#3481`.) The comment above the e2e step in `ci.yml`
 still says e2e takes "≈17" minutes on a green main, with "≈12 spare"; **that is not what these logs show.**
 
+**Added the same day, after the listing above was written** (Idris, `#3538`, from Idris's own pull; Dogu counted the same log, `#3537`): `#561`'s
+attempt 2 (run `37294469890`, suite job `111731312723`) ran 11:02:20Z to 11:30:15Z, **27 m 55 s, `success`, 2 m 05 s under the cap**, and
+its e2e step took **26.1 minutes for 661 tests**. That is now the slowest finished suite job and the slowest e2e step this card holds; the 27.8
+and the 25.7 above are second place. **The rate above ("1 in 37") does not show the margin:** three suite jobs that started between 09:31Z
+and 11:02Z on 2026-10-05 ran 27 m 46 s (`37290561363`), over the cap (`#561` attempt 1) and 27 m 55 s (`#561` attempt 2). The window listing was
+**not re-run** for this addition, so its minimum, median, mean, maximum and the 36 and 61 counts are as first written; the e2e range is now 19.9
+to 26.1. The cause of the slow runs is still unknown (see below).
+
 ## What is known about earlier cap hits, and what is not
 
 - `bug-no-traces-when-e2e-hangs`: as of its 2026-09-16 sweep of 607 runs, one job (control 4) had hit the limit.
 - `bug-selector-click-over-scrolls-under-text-scale`: attempt 1 of run `37123672372` was cancelled at the cap (that card's text).
 - The attempt above. **That makes at least three; the history was not recounted for this card.**
 
-**Not known:** why the slow runs are slow (the e2e minutes vary by up to six (19.9 to 25.7) between suites of near-identical size, which points at the runner,
+**Not known:** why the slow runs are slow (the e2e minutes vary by up to six (19.9 to 25.7, and 26.1 since the addition above) between suites of near-identical size, which points at the runner,
 but that is a reading, not a measurement); whether cap hits cluster on slow runners; how long a hung run holds a runner today.
 
 ## Options, with the costs that are known, none chosen
@@ -51,6 +59,6 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
    sat about 16 minutes in the queue on 2026-10-05, and that was wrong twice over: the run was `37212962898` on **2026-10-04** (`#557`; Idris, `#3482`), and the wait was not a runner queue; Wren's read of the same day's jobs, `#3481`, found every macOS
    suite job starting 0.1 to 0.2 minutes after its scope job, so there was no runner queue, and the long waits were whole-run waits
    behind a PR's previous suite, a different mechanism the card does not cover).
-3. **Leave it.** Roughly 1 in 37 here; the cost of a hit is one re-run (about 25 minutes) **plus the 30 minutes the capped attempt already spent**, about 55 minutes of one PR's wall-clock in `#561`'s case (Wren, `#3481`; Idris agreed, `#3482`), and the gates already treat a cap hit as no result.
+3. **Leave it.** Roughly 1 in 37 here (and the addition above says the rate understates how close the others run); the cost of a hit is one re-run (about 25 minutes) **plus the 30 minutes the capped attempt already spent**, about 55 minutes of one PR's wall-clock in `#561`'s case (Wren, `#3481`; Idris agreed, `#3482`), and the gates already treat a cap hit as no result.
 
 The decision is Henry's and Opeyemi's: it trades CI cost against a rare re-run, and this card does not weigh it.
