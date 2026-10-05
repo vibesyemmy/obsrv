@@ -1964,6 +1964,61 @@ passenger of a bad runner.
 **Still true, and still the interesting part:** this is the file created to *fix* sync coupling by giving
 the test its own app. It has its own app here — the log shows a fresh pid — and it still hung.
 
+## A silent close sits before some failures: what the harness's own kill line shows (2026-09-29 to 2026-10-05)
+
+**What the line is.** `boundedClose` in `tests/e2e/launch.ts` gives `app.close()` ten seconds; past that it prints
+`[launch] app.close() has taken N ms; killing pid P. App log tail:` and the tail of the app's own log, then kills the process.
+The app logs `quitting` on `before-quit` (`src/main/index.ts:222`), so a tail with no `quitting` means `app.quit()` did not
+reach `before-quit` in those ten seconds; a tail with it means the quit began and did not finish.
+
+**The ten hits, in eight raw CI job logs.** Found by `grep -F 'app.close() has taken'` on the job log
+(`gh api repos/vibesyemmy/obsrv/actions/jobs/<job id>/logs`), not on the run page; the `error-context.md` artifacts were not
+read. Every hit sits directly before a `✘` line. All ten were re-read from the raw logs by Dogu on 2026-10-05 (the four
+from 09-29 and 09-30 were first found by Wren, `#3659`).
+
+| run | date (UTC), where | next `✘` after the hit | length | app-log tail | read by |
+| --- | --- | --- | --- | --- | --- |
+| `36504076439` | 09-29, `main` push, job failed | `visibility.spec.ts:66` | 2.1 s | `quitting` logged | Wren, Dogu |
+| `36599810778` | 09-29, `main` push, job failed | `tab-switch-preset.spec.ts:89` | 5.4 s | `quitting` logged | Wren, Dogu |
+| `36716844854` | 09-30, `main` push | `sync-mirror-mark.spec.ts:41` (the entry above) | **30.0 s** | **silent** | Wren, Dogu |
+| `36726476051` | 09-30, pull request | `tabs.spec.ts:177` | 5.0 s | **silent** | Wren, Dogu |
+| `37190742650` | 10-04, pull request, job failed | `throttle-live.spec.ts:89`, **the retry** (the first attempt's `✘`, 2.8 s, is the line before the hit) | 0 ms | **silent** | Dogu only |
+| `37206763443` | 10-04, `main` push (`#548`) | `sync-mirror-mark.spec.ts:41` | **30.0 s**, retry 1.2 s | **silent** | Dogu, Idris |
+| `37290561363` | 10-05, pull request | `image-mode.spec.ts:70` | **30.0 s**, retry 594 ms | **silent** | Dogu, Idris, Wren |
+| `37290561363` | 10-05, pull request | `tab-switch-preset.spec.ts:89` | 10.1 s | `quitting` logged, 16 s after the `gpu` line | Dogu, Idris, Wren |
+| `37290561363` | 10-05, pull request | `update.spec.ts:115` | **30.0 s**, retry 291 ms | **silent** | Dogu, Idris, Wren |
+| `37294297527` | 10-05, pull request | `browser-identity.spec.ts:41` | **30.0 s**, retry 1.4 s | **silent** | Dogu, Wren (Idris read the hit and the 30.0 s, not the retry's time) |
+
+**Seven of the ten tails are silent** (two lines, `starting` and `gpu: compositing enabled, webgl enabled`); three log
+`quitting`. In Dogu's 42 macOS suite logs from runs created between 2026-10-03T22:35Z (`#540`) and 2026-10-05T14:50Z there are
+**23 first-attempt `✘`**, and **five of them ran the full 30.0 s**: four have a hit (`sync-mirror-mark.spec.ts:41`,
+`image-mode.spec.ts:70`, `update.spec.ts:115`, `browser-identity.spec.ts:41`) and the fifth, `tabs.spec.ts:929`
+(`37160406685`), closed normally. Of the other 18 first-attempt failures, one has a hit (`tab-switch-preset.spec.ts:89`). Sixteen of the
+42 logs have a first-attempt `✘`; all four logs with a hit are among them, and **none of the 26 logs without one has a hit**.
+The calls that stalled for the 30 s were `page.click` (`.toggle-settings`, `.preset-select`), `page.press`
+(`.url-form input`) and one **main-process** `electronApplication.evaluate` (`sync-mirror-mark.spec.ts:46`).
+
+**What it says.** The register's earlier reading, that the hung close is the *aftermath* of the timeout (the
+`sync-mirror-mark.spec.ts:41` entry above), stands. What this adds: in a silent tail the app, or the harness's link to it,
+did not reach `before-quit` in the ten seconds of the close, and in the four 30 s failures the test's own call had already
+waited the whole 30 s. That is not what an element that was slow to become clickable looks like. A silent close also sits before
+a short failure (`tabs.spec.ts:177`, 5.0 s) and before a 0 ms retry (`throttle-live.spec.ts:89`), so it is "a silent close sits
+before some failures of any length", not "a 30 s stall is a silent app".
+
+**One datum, and a reason for doubt (Idris, `#3660`, one laptop, not CI).** A local instrumented run for `#558` (2026-10-05,
+a scratch event-logger patch in `targetSource.ts`, 24 CPU burners) produced five slow closes under load with that patch, and
+**all five tails have `quitting`**, 0.3 to 1.8 s after the `gpu` line. The patch is an unmeasured confound (the same loop was
+not run without it), and the file the figures came from (`ev558-load-run.txt`) did not survive a session restart, so this rests
+on the post alone. It is a reason to doubt that a starved runner explains the silent seven, and not a refutation of what a CI
+runner does: a starved runner **is not shown to be** the explanation.
+
+**What it does not say.** No cause: a blocked main-process loop, a stuck harness connection and a runner-level stall all
+still fit, and the logs cannot tell them apart (a process snapshot taken at the kill could rule some of them out;
+none is built, and nothing here depends on one). Not a rate: the logs were pulled for other reasons by three people and
+cover different windows; the 42 are Dogu's, the older four are Wren's, and Idris's CI logs overlap Dogu's and read the same
+way where they overlap (`#3660`). One hit (`37190742650`) was read by one person. The silent tails are not proved to be one
+thing.
+
 ## Sightings sweep 2026-10-03: what no card or entry covered
 
 Idris, for Wren (`#3110`). **Window:** the 170 `ci.yml` runs created since 2026-09-28T00:00Z through 10-03; raw logs for
