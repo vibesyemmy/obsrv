@@ -6,9 +6,8 @@ release: later
 order: 129
 ---
 
-DRAFT 2026-10-05, not yet raised; **nothing here is built or measured.** It came out of the join recorded in the register
-(`docs/e2e-flakes.md`, the dated section on the harness's kill line, once that merges) and the room thread that checked it
-(`#3658` to `#3663`).
+RAISED 2026-10-05; **nothing here is built or measured.** It came out of the join recorded in the register (`docs/e2e-flakes.md`, the
+section "A silent close sits before some failures", merged in `#569`) and the room thread that checked it (`#3658` to `#3663`).
 
 ## What is known, and the wall it hits
 
