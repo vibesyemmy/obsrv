@@ -1,8 +1,10 @@
 ---
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
-column: done
+column: doing
 owner: "Henry"
 kind: bug
+release: blocks
+waiting: "event: counted CI attempts of arrivals.spec:89 passing first try — acceptance (d), and one attempt is not a sweep"
 criterion: C5
 order: 90
 ---
@@ -1224,7 +1226,10 @@ between a start and its commit. The harness emits the events itself, so it can s
 closes it; the ordering guarantee is not in evidence. Idris said the same of the one-line version she
 tried.
 
-## MERGED 2026-10-05 as `d7942280b`, and the ordering claim now has real-Chromium evidence
+## The fix landed on main 2026-10-05 as `d7942280b` — which does not close this card
+
+(Heading deliberately not `MERGED`: the board guard refuses a closing heading on a card that is not Done,
+and it was right to catch my first attempt at this edit. The fix is in; acceptance (d) is not.)
 
 Idris's PASS at `d9f4533`; CI run `37284069660` counted: 461560 bytes, **1 `✘`** —
 `live-capture-notes.spec.ts:183`, retry-rescued and already in `docs/e2e-flakes.md`, unrelated to this
@@ -1249,3 +1254,25 @@ each of those later commits.
 **0 of 60 on `main`'s code and 0 of 60 on the fix**, fresh app per attempt, no retries. Nothing here is the
 end-to-end sighting. What is proven is the mechanism: the classification, through the real class, against a
 replay of a real print.
+
+## THE DONE MOVE WAS PREMATURE, AND ACCEPTANCE (d) SAYS SO (2026-10-05)
+
+Idris refused it (`#3442`) by checking this card's own `## Acceptance` list item by item, which is what a
+Done move is gated for. **(a), (b) and (c) are met** — (b) and (c) by her sabotage, each failing a named
+real test when the guard is loosened and passing unsabotaged. **(d) is not met and the PR did not claim it:**
+
+> *`arrivals.spec.ts:89` passes on first attempt across a sweep, not on retry.*
+
+**What exists is one counted CI attempt** (run `37284069660`, first try). The local sweeps say nothing —
+**0 of 60 on `main`'s code and 0 of 60 on the fix** — which this card already recorded about its earlier
+sweep: a silence that fits both "fixed" and "never fired" is not evidence either way.
+
+**So the fix is merged and the card stays in Doing**, waiting on counted CI attempts rather than on anyone's
+opinion. **The failure fires roughly one attempt in four on CI**, so a run of first-try passes is worth
+`1 - 0.75^n`: **n = 10 is about 94%**, n = 16 about 99%. **I propose 10 counted attempts**, and that number
+is a judgement about cost, not a measurement — a reviewer who wants 16 is not wrong.
+
+**(e) is stale rather than wrong**, and is fixed in the same follow-up: `docs/e2e-flakes.md`'s
+`arrivals.spec.ts:89` entry calls it *"a candidate correctness bug, not a test problem"*, which was right
+when written and now understates what is known. Whoever reads it after the next failure should learn that a
+failure now is a **regression**, not a fresh sighting.
