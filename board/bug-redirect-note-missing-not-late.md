@@ -4,7 +4,7 @@ column: doing
 owner: "Henry"
 kind: bug
 release: blocks
-waiting: "Idris: a demonstration that does not rest on winning a millisecond race — acceptance (d) as written cannot do it"
+waiting: "Idris: the throttled control replaces acceptance (d) — 30/30 at cpu-4x and cpu-6x, unthrottled still green, :176 still green"
 criterion: C5
 order: 90
 ---
@@ -1353,12 +1353,38 @@ stamped the bus's, **which is true of what happened in that pane**.
 and **no value of N could have closed it** — which means the question I put to Opeyemi could not have done
 what I told him it would. **It is withdrawn from his lane rather than left there to be answered.**
 
-**The tally is not wasted and is not a gate.** 10 of 10 first-try passes still says something true about
-ordinary conditions; it cannot say the thing (d) wanted. Idris keeps it as a record.
+**The tally is not wasted and is not a gate — and the number I quoted was wrong.** I said *"10 of 10
+first-try passes"*; the tally Idris keeps is **17 first-try passes and 1 first-try FAILURE over 18
+attempts** (`#3740`; the failure is run `37346121793`). **10 of 10 was true before that run, and I repeated
+it after.** Under the rule this card itself states, a first-try `✘` **reopens the card** — so the honest
+reading is not "a clean sweep that cannot prove anything", it is **a sweep with a failure in it, which is
+what prompted the diagnosis below.**
 
-**What would actually demonstrate the fix** is the open question this card now waits on: a test whose
-premise does not depend on winning a race — forcing the order rather than hoping for it, which is what her
-`targetSourceMirror.test.ts` harness already does at the unit level for the classification.
+### The replacement for (d), which is QA's to set and is Idris's proposal
+
+**A sweep of CI first-attempts cannot demonstrate a fix for a race this narrow. A throttle can**, because
+it gives a control with a **known failing baseline**:
+
+- the one-line variant passes **30 of 30 at `cpu-4x`** and **30 of 30 at `cpu-6x`** — against today's
+  unfixed baseline of **13 of 20 failing** and **1 of 30**;
+- **and** the unthrottled file still passes;
+- **and** `arrivals.spec.ts:176`, the counter-case where the caller never asked the target to move and no
+  note is correct, still passes.
+
+**The reproduction, minimal, so this card does not depend on a scratch that will be swept.** In a copy of
+`arrivals.spec.ts`, **one line** in the second test, between the 300 ms wait and `navigate(REDIRECT)`:
+
+```ts
+await call('setThrottle', { throttle: 'cpu-4x' })
+```
+
+Run the whole file (both tests, one shared app), fresh app per run, `--retries=0`. **Measured on `main`
+`b5ef904`, desk-safe: 13 of 20 fail minimal, 21 of 30 instrumented, 1 of 30 at `cpu-6x`, and 99 of 100 pass
+unthrottled** — the single unthrottled failure a launch timeout, not this. Every failure carries CI's error
+text.
+
+**What this is, in Idris's words and kept in them: a MODEL of the race** — a throttled renderer standing in
+for CI's slower one — **not a reproduction of the CI cause.** The CI-side measurement is hers in `#3757`.
 
 ### The gap this exposed is a separate defect, and it is filed as one
 
