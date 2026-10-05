@@ -982,6 +982,12 @@ one property that must hold either way: the start a redirect's commit is answere
 with belongs to **that** redirect, by a boundary timestamp the test owns rather
 than by a url match, which would restate `startFor`'s own predicate.
 
+**Retired 2026-10-05** (`chore-e2e-specs-copy-the-deleted-startfor`). Its premise,
+pool DEPTH and starts that are "never retired", stopped being true when `#558` made a
+start answered once, and what it asserted (a recorded fact about the trace) is a subset of
+what `redirect-mirrored-pool.spec.ts` now asserts through the product's own commit record.
+The history below is left as written.
+
 **In one CI run (`36578277923`), both arms:**
 
 | arm | starts for the url | matched start | result |
