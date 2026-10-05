@@ -48,7 +48,7 @@ for 661 tests (one unrelated flaky). That is a third *finished* suite job within
 crossed it (27 m 46 s, 27 m 55 s, 27 m 18 s). The window listing was **not re-run** for this either, and runs after 14:13Z that day are not
 counted here.
 
-**Added the evening of 2026-10-05, on `main`** (Idris counted it, `#3740`; Dogu and Wren re-read the job from the API and the log, `#3742`, `#3741`):
+**Added the evening of 2026-10-05, on `main`** (Idris counted it, `#3740`; Dogu re-read the job from the API and the log, `#3742`, and Wren from the API, `#3741`):
 the push suite for `#568`'s merge, run `37355564026` at `ec3beafe9e7b1ed148047a72f723211b510cd638`, suite job `111917026851`, 18:23:47Z to
 18:53:41Z, ran **29 m 54 s, `success`, 6 s under the nominal cap**, with the longest e2e step counted so far, **27.6 minutes** (659 passed, 1
 flaky, 1 skipped). The flaky was `throttle-live.spec.ts:82`, a `"beforeAll" hook timeout of 30000ms exceeded.`, with the harness's slow-close
