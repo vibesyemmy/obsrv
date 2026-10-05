@@ -166,14 +166,27 @@ jobs:
     # Not on a version tag: `tested-on-main` proves this tree already passed
     # here, on the `main` push the tag was cut from.
     #
-    # `always()` matters more than it looks: without it, a `scope` job that
-    # FAILED would skip this one, the required check would never arrive, and
-    # the pull request would be unmergeable with nothing to click. The cheap
-    # job must never be able to block the expensive one — it can only make it
-    # cheaper. A missing or empty output compares false against 'true'
-    # everywhere below, so anything unexpected lands on the full macOS run,
-    # which is the safe direction.
-    if: ${{ always() && !startsWith(github.ref, 'refs/tags/v') }}
+    # `!cancelled()` matters more than it looks, in two directions.
+    #
+    # Not the default `success()`: a `scope` job that FAILED would then skip
+    # this one, the required check would never arrive, and the pull request
+    # would be unmergeable with nothing to click. The cheap job must never be
+    # able to block the expensive one — it can only make it cheaper. A missing
+    # or empty output compares false against 'true' everywhere below, so
+    # anything unexpected lands on the full macOS run, which is the safe
+    # direction. (Measured with `scope` forced to fail: this job still runs.)
+    #
+    # Not `always()`: that runs this job even when the whole RUN was
+    # cancelled, and a newer push to the same pull request cancels the run
+    # before it (the concurrency group above). The superseded suite then kept
+    # its macOS runner to the end of its ~25 minutes, a plain cancel did not
+    # stop it, and the newer run waited behind it (measured on
+    # `workflow_dispatch` and once on a real pull request; see
+    # `board/chore-ci-superseded-suite-keeps-running.md`). With `!cancelled()`
+    # a cancelled run cancels this job too. What is still the case: a `scope`
+    # job cancelled by a runner-queue timeout is not a cancelled RUN, so this
+    # job still runs and falls back to the full suite, as designed.
+    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/v') }}
     needs: scope
     # The whole point: a board-only change takes a cheap runner and no macOS
     # queue. The job still runs, still carries this name, and still reports —
