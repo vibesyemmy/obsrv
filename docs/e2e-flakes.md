@@ -1636,8 +1636,9 @@ one in the 4 suites since; uniform over those 33 the one would fall among the la
 **What this entry is not.** No cause is confirmed and no card is filed by it; the run was green and `#560` was not
 held by it. A separate finding from the same message (`#3456`) is **not** this entry's business: this spec and
 `redirect-forcing-route.spec.ts` still compute a copy of the `startFor` rule that `#558` deleted (`startFor` now
-appears in `src/` only in three comments in `targetSource.ts`, lines 390, 652 and 662, which I grepped); Wren
-routed that as a chore (`#3457`).
+appears in `src/` only in three comments in `targetSource.ts`, which I grepped on `main`; no line numbers, because
+they moved by five within minutes of my first grep, when `#560`'s comment edit merged above them); Wren routed that
+as a chore (`#3457`).
 
 ## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
 
