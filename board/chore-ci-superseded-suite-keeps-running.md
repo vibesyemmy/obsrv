@@ -3,6 +3,7 @@ title: "a superseded pull-request suite keeps running to the end, because `alway
 column: backlog
 kind: chore
 release: later
+waiting: "Henry: go or no-go on the ci.yml:176 change"
 order: 128
 ---
 
