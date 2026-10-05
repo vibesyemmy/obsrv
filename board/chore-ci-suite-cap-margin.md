@@ -1,8 +1,10 @@
 ---
 title: "the suite job's 30-minute cap has a thin margin on a slow runner, and one attempt in the last two days crossed it"
-column: backlog
+column: doing
 kind: chore
 release: later
+owner: "Dogu"
+waiting: ""
 order: 127
 ---
 
