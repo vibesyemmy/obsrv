@@ -26,6 +26,15 @@ All on `workflow_dispatch` to throwaway branch refs, **one pair per variant, not
 
 So the mechanism and its size are measured (never cancelled in 8 minutes against cancelled in about 80 s). **A rate is not.**
 
+**Seen again on a real pull request, by accident, 2026-10-05 (`#569`, event `pull_request`, current `always()`):** not a controlled
+probe, so it is recorded as an observation. Run `37347660127` (head `b4595ce82`) was created 17:20:15Z and its suite job started
+17:20:31Z. A push at 17:21:28Z created run `37347809597`, and a second push at 17:21:52Z created `37347858609`; **the middle run, still
+`pending`, was cancelled at 17:21:53Z by the newer arrival, as `ci.yml`'s own comment says a pending run is, but the first run's
+suite job, already `in_progress`, was not.** A plain `gh run cancel` on it at about 17:21:55Z left it `in_progress` after 80 s more;
+`force-cancel` ended it at 17:23:36Z, and the newest run's suite job started at 17:23:56Z, 20 s later. So on a real pull request
+too, a superseded in-progress suite kept running through two newer pushes and a plain cancel for at least 1 m 40 s and ended only
+on `force-cancel`.
+
 **Why `always()` is there, and whether the one-line change keeps it.** The comment at `ci.yml:169` to `:175` says a `scope` job that FAILED would skip the
 `test` job, so the required check would never arrive and the pull request would be unmergeable. Idris asked (`#3532`, check 1) that this be shown to
 hold under `!cancelled()`. Measured (`#3543`), `scope` forced to fail by an `exit 1` in its `decide` step, one `workflow_dispatch` per variant:
@@ -54,8 +63,9 @@ which Idris lists as superseded suites.
 
 ## What is not measured
 
-- **A real pull request, two pushes a minute apart on a draft, and what the required check shows on the SUPERSEDED head** (it would read `cancelled`, and
-  whether that blocks or confuses a merge is not known). Idris, `#3532`, check 2.
+- **What the required check shows on the SUPERSEDED head under `!cancelled()`** (it would read `cancelled`, and whether that blocks or confuses a merge
+  is not known). The current behaviour on a real pull request was seen incidentally (above); the proposed one was not, and a controlled test is two pushes a
+  minute apart on a draft with the one-line change. Idris, `#3532`, check 2.
 - **`main`.** `cancel-in-progress` is `false` there and the group carries the sha, so nothing supersedes a `main` run; the comment at `ci.yml:44` to
   `:47` explains why a cancelled `main` run is "a commit with NO CI answer". The change should leave `main` alone, and that has not been shown: it needs one
   real `main` push suite and one hand-cancelled one (Idris, check 3).
