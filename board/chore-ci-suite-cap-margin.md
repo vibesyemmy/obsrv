@@ -79,9 +79,13 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
    a job that outlasts the cap uploads no traces, so a longer cap lets a hang with no finite timeout hold the runner longer. **A correction to the traces half of that sentence** (Dogu, `#3761`): `ci.yml`'s own comment above
    the traces step says a hang that ends as a test failure still uploads, and that only a run that outlasts the job's cap does not; every spec has a finite timeout (the
    longest is `surface-parity.spec.ts`'s 900 s), so **a longer cap turns a cancelled run with no traces into a failed one with traces**. That comment sized the cap
-   for one 900 s hang ("e2e ≈17 of 30 minutes, ≈12 spare"); at today's numbers the spare is about 6.0 minutes at the e2e median (22.6) and about 1.0 at its maximum (27.6),
-   with about 1.4 minutes of job overhead, so one hang no longer fits. A cap of 45 gives about 21.0 and 16.0, which fits both; 40 gives about 16.0 and 11.0, which fits at
-   the median only. Reasoned from the comment and the logs, not measured; the choice between 40 and 45 is Henry's.
+   for one 900 s hang ("e2e ≈17 of 30 minutes, ≈12 spare"); at today's numbers the spare is about 5.5 minutes at the e2e median (22.6) and about 0.1 at its maximum (27.6),
+   so one hang no longer fits at either. **The job overhead in that sum is Idris's figure, not mine** (`#3795`): job minutes minus the e2e step's minutes over 11 recent suite jobs, **minimum
+   1.52, median 1.87, maximum 2.27 minutes**, and the run with the 27.6-minute e2e step (`37355564026`) is the one with 2.27, which leaves 30 − 27.6 − 2.27 ≈ 0.1 minute: exactly the 6 seconds that
+   run had. (My first version used 1.4 minutes, taken from one run's steps before the e2e step and leaving out the rest of the job; no job measured is that low.) **With those inputs
+   (a 15-minute hang): cap 30 leaves about 5.5 at the median and 0.1 at the maximum; cap 40, 15.5 and 10.1; cap 45, 20.5 and 15.1.** So 40 fits one 900 s hang at the median only, and **45 fits it at the slowest
+   e2e step seen by about 8 seconds (15.1 against 15), not by minutes**; a cap that fits it with room at that maximum would be near 50. The 900 s is real (`surface-parity.spec.ts:44`,
+   `timeout: 900_000`, the only timeout of 600 s or more in `tests/e2e`). Reasoned from the comment and the logs, not measured; the choice is Henry's.
    **A variant the probe makes possible, not tested on `ci.yml` and not proposed for merge:** `timeout-minutes: ${{ github.ref == 'refs/heads/main' && 45 || 30 }}`,
    so pull-request jobs keep the cap they have and the cost above lands only on `main`, where a kill hurts most. A pull request's `github.ref` is
    `refs/pull/N/merge`, which would read as the second value; that is inference, not a measurement.
