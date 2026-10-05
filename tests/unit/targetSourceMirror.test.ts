@@ -101,6 +101,8 @@ async function rig() {
     pageStart: (url: string) =>
       wc.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false, url, initiator: {} }),
     commit: (url: string) => wc.emit('did-navigate', {}, url, 200, 'OK'),
+    /** The spinner stopped: nothing is pending any more, whether or not anything committed. */
+    stopLoading: () => wc.emit('did-stop-loading'),
     /** A navigation that ended without committing: Chromium aborted it, and the spinner stopped. */
     abort: (url: string) => {
       wc.emit('did-fail-load', {}, ERR_ABORTED, 'ERR_ABORTED', url, true)
@@ -352,5 +354,42 @@ describe('a recorded print, replayed through the real TargetSource', () => {
     r.release()
     await loaded
     expect(said(r.heard)).toEqual([true, false, false])
+  })
+})
+
+describe('a start that ended with no commit and no failure at its address', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /**
+   * H1b: an old document-initiated start of the address whose navigation ENDED elsewhere (it redirected,
+   * or was replaced): no `did-navigate` and no `did-fail-load` ever answers it, though the spinner stopped.
+   * Later the bus alone mirrors that address in, and its commit there must still be the bus's.
+   *
+   * A plausible trigger is a page that navigates to a gated address which redirects to /login, after which
+   * the user logs in and the other pane goes to that address. `main` classifies this correctly (it skips
+   * mirrored starts and the bus's `viaMirrorUrl` claims the commit); #558's heads call the bus's commit the
+   * page's, because the oldest UNANSWERED start of the address is that old one.
+   *
+   * One candidate fix, verified only against this fake: `did-stop-loading` marks every unanswered start
+   * answered. Whether that is safe in a real Chromium is not shown here (a stale stop arriving after a NEW
+   * start was recorded would retire it too early), so this test is the finding, not the endorsement.
+   */
+  it('H1b: the bus alone mirrors in an address that an old start of the page\'s never answered: the bus\'s', async () => {
+    const r = await rig()
+    r.at(100)
+    r.pageStart(ADDRESS) // ends by redirecting elsewhere: no commit here, no failure
+    r.at(150)
+    r.stopLoading()
+    r.at(5000)
+    const loaded = r.bus(ADDRESS)
+    await tick()
+    r.at(5020)
+    r.commit(ADDRESS)
+    r.release()
+    await loaded
+    expect(said(r.heard)).toEqual([true])
+    expect(arrivals(r.heard)).toBe(0)
   })
 })
