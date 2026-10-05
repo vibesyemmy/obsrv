@@ -52,7 +52,7 @@ counted here.
 the push suite for `#568`'s merge, run `37355564026` at `ec3beafe9e7b1ed148047a72f723211b510cd638`, suite job `111917026851`, 18:23:47Z to
 18:53:41Z, ran **29 m 54 s, `success`, 6 s under the nominal cap**, with the longest e2e step counted so far, **27.6 minutes** (659 passed, 1
 flaky, 1 skipped). The flaky was `throttle-live.spec.ts:82`, a `"beforeAll" hook timeout of 30000ms exceeded.`, with the harness's slow-close
-line (10 s) directly before it, about 45 s of the job with the tests it re-ran (Idris's estimate, `#3740`). Its sibling on `main`, `37355574685`
+line (10 s) directly before it, about 43 s of the job with the three retries it re-ran (Idris's corrected figure, `#3743`; Idris's first estimate was 45 s, withdrawn there), so the 4 m 20 s spread below is still almost entirely unexplained by it. Its sibling on `main`, `37355574685`
 (`#569`'s merge), started 3 s later on a tree that differs only in docs and ran **25 m 34 s**: a measured 4 m 20 s spread between concurrent,
 nearly identical jobs, which does not by itself say the runner caused it. On `main` `cancel-in-progress` is `false` and a cancelled run is "a
 commit with NO CI answer" (`ci.yml`'s own words), which is where a kill costs most.
@@ -61,8 +61,8 @@ commit with NO CI answer" (`ci.yml`'s own words), which is where a kill costs mo
 a distribution: a throwaway probe (`#3746`, run `37359806990`, ubuntu, `push` event, a different workflow from `ci.yml`) gave a job
 `timeout-minutes` of 1, and its step started 18:57:04Z and was cancelled at 18:58:32Z, **88 s later (28 s over)**; and the one macOS case,
 `#561`'s attempt 1, ended at **30 m 20 s on the 30-minute cap (20 s over)**. **The same probe showed `timeout-minutes` accepts an expression
-and evaluates it both ways** (`${{ github.ref == '...' && 1 || 3 }}` gave a 1-minute cap where the condition held and a 3-minute cap where
-it did not), at that strength: one run, `push` not `pull_request`.
+and evaluates it both ways** (`${{ github.ref == '...' && 1 || 3 }}` gave a 1-minute cap where the condition held; where it did not, the job ran its 100 s sleep and was not cut at 60 s,
+which shows it was not capped at one minute and not that its cap was three), at that strength: one run, `push` not `pull_request`.
 
 ## What is known about earlier cap hits, and what is not
 
@@ -76,7 +76,12 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
 ## Options, with the costs that are known, none chosen
 
 1. **Raise `timeout-minutes`** (one line). Cost: a hung job holds a macOS runner longer, and `bug-no-traces-when-e2e-hangs` records that
-   a job that outlasts the cap uploads no traces, so the longer the cap, the longer the window where a hang leaves nothing to read.
+   a job that outlasts the cap uploads no traces, so a longer cap lets a hang with no finite timeout hold the runner longer. **A correction to the traces half of that sentence** (Dogu, `#3761`): `ci.yml`'s own comment above
+   the traces step says a hang that ends as a test failure still uploads, and that only a run that outlasts the job's cap does not; every spec has a finite timeout (the
+   longest is `surface-parity.spec.ts`'s 900 s), so **a longer cap turns a cancelled run with no traces into a failed one with traces**. That comment sized the cap
+   for one 900 s hang ("e2e ≈17 of 30 minutes, ≈12 spare"); at today's numbers the spare is about 6.0 minutes at the e2e median (22.6) and about 1.0 at its maximum (27.6),
+   with about 1.4 minutes of job overhead, so one hang no longer fits. A cap of 45 gives about 21.0 and 16.0, which fits both; 40 gives about 16.0 and 11.0, which fits at
+   the median only. Reasoned from the comment and the logs, not measured; the choice between 40 and 45 is Henry's.
    **A variant the probe makes possible, not tested on `ci.yml` and not proposed for merge:** `timeout-minutes: ${{ github.ref == 'refs/heads/main' && 45 || 30 }}`,
    so pull-request jobs keep the cap they have and the cost above lands only on `main`, where a kill hurts most. A pull request's `github.ref` is
    `refs/pull/N/merge`, which would read as the second value; that is inference, not a measurement.
