@@ -48,9 +48,9 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
 1. **Raise `timeout-minutes`** (one line). Cost: a hung job holds a macOS runner longer, and `bug-no-traces-when-e2e-hangs` records that
    a job that outlasts the cap uploads no traces, so the longer the cap, the longer the window where a hang leaves nothing to read.
 2. **Split the e2e step across two macOS jobs.** Wall-clock goes down; runner minutes and queue pressure go up (**not measured here**: the card's first version said a PR run
-   sat about 16 minutes in the queue on 2026-10-05, and that was wrong; Wren's read of the same day's jobs, `#3481`, found every macOS
+   sat about 16 minutes in the queue on 2026-10-05, and that was wrong twice over: the run was `37212962898` on **2026-10-04** (`#557`; Idris, `#3482`), and the wait was not a runner queue; Wren's read of the same day's jobs, `#3481`, found every macOS
    suite job starting 0.1 to 0.2 minutes after its scope job, so there was no runner queue, and the long waits were whole-run waits
    behind a PR's previous suite, a different mechanism the card does not cover).
-3. **Leave it.** Roughly 1 in 37 here; the cost of a hit is one re-run (about 25 minutes), and the gates already treat a cap hit as no result.
+3. **Leave it.** Roughly 1 in 37 here; the cost of a hit is one re-run (about 25 minutes) **plus the 30 minutes the capped attempt already spent**, about 55 minutes of one PR's wall-clock in `#561`'s case (Wren, `#3481`; Idris agreed, `#3482`), and the gates already treat a cap hit as no result.
 
 The decision is Henry's and Opeyemi's: it trades CI cost against a rare re-run, and this card does not weigh it.
