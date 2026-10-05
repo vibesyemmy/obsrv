@@ -6,9 +6,10 @@ release: later
 order: 128
 ---
 
-DRAFT 2026-10-05, not yet raised. Written so it can go up the moment Henry and Opeyemi say whether the change is wanted; **nothing here is
-fixed or chosen**, and `.github/workflows/ci.yml` on `main` has not been touched. The candidate was Wren's; Dogu measured it (`#3530`,
-`#3543`).
+RAISED 2026-10-05 as a record of what was measured and what was not; **nothing here is fixed or chosen**, and `.github/workflows/ci.yml` on
+`main` has not been touched. The candidate was Wren's; Dogu measured it (`#3530`, `#3543`) and saw the current behaviour once more on a real
+pull request (`#3690`). Whether to change the line is Henry's and Opeyemi's call, since it changes what the required check shows for a
+superseded head.
 
 ## What was measured
 
@@ -59,7 +60,7 @@ Idris, `#3532`, in Idris's words: two of the eight counted attempts at `arrivals
 suites that ran to the end and were stamped `cancelled` afterwards. If superseded suites are cancelled in about 80 seconds, that supply disappears:
 the natural rate of attempts drops by roughly a quarter (2 of 8; a small sample), so N would be reached more slowly, in exchange for four heads not losing 18 to
 26 minutes each. Idris thinks that is the right trade; **the figures are Idris's, from `#3532`, and were not recounted here.** At `#3556` the tally was ten, two of
-which Idris lists as superseded suites.
+which Idris lists as superseded suites; at `#3731` it was sixteen attempts, and that message does not say how many of the six newer ones were superseded suites.
 
 ## What is not measured
 
