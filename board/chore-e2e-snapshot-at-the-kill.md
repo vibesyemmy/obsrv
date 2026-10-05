@@ -3,6 +3,7 @@ title: "when the e2e harness kills a hung app it prints the app's log tail and n
 column: backlog
 kind: chore
 release: later
+waiting: "Henry and Wren: whether to build it"
 order: 129
 ---
 
