@@ -4,7 +4,7 @@ column: doing
 owner: "Henry"
 kind: bug
 release: blocks
-waiting: "Opeyemi: set N, the number of first-try suite passes that closes acceptance (d) — the tally runs meanwhile, 8 of 8 so far"
+waiting: "Opeyemi: set N, the number of first-try suite passes that closes acceptance (d) — the running tally is in this card, not here"
 criterion: C5
 order: 90
 ---
@@ -188,6 +188,9 @@ one run that records `starts` and `initiator` at the moment of the dropped commi
 - **and a mirrored load never reports it**, with its own control — closing one direction while
   leaving the other is how this arrived here;
 - `arrivals.spec.ts:89` passes on first attempt across a sweep, not on retry;
+  *(2026-10-05: now `arrivals.spec.ts:218`, "a page that really does redirect after loading still says so" —
+  dated rather than rewritten, because this is the line the tally is measured against and a log search for
+  `:89` returns nothing, which reads as "no result" and not as "pass".)*
 - the `docs/e2e-flakes.md` entry is updated to say it was a bug and not a flake.
 
 ## Why the register was wrong, kept deliberately
@@ -1285,8 +1288,17 @@ Three corrections, all of them from the gate rather than from me.
 fix"*, counting only `main` push suites; Idris counts **any full `ci.yml` suite whose tested tree contains
 the fix, PR runs included** (`#3444`, `#3461`). **Hers governs from here**, and the card says so rather than
 leaving a reader to pick: the question acceptance (d) asks is *"does this test pass on first attempt when
-the fix is in the tree"*, and a PR suite answers it exactly as a push suite does. **The count by that rule
-is 8 of 8 at the time of writing.** Mine was not wrong, it was narrower — and two live rules in one project
+the fix is in the tree"*, and a PR suite answers it exactly as a push suite does. **The count by that rule was 8 of 8 at 12:30 WAT on
+2026-10-05** — a number that moves, so it lives here and not in the `waiting:` line.
+
+**The rule, written out so this card does not depend on reading three room messages:**
+
+- **an attempt counts when its suite JOB finished.** A job killed at the 30-minute cap, or cancelled
+  mid-run, counts as nothing — **the run's own stamp is irrelevant**, which is the part `#3444` left
+  ambiguous and `#3468` settled;
+- **the outcome is the FIRST attempt** of `arrivals.spec.ts:218`, read from the raw log. **A first-try `✘`
+  is a failure even when retry #1 rescues it**, and it reopens this card;
+- **each counted attempt is listed here by run id**, so the tally can be audited rather than believed. Mine was not wrong, it was narrower — and two live rules in one project
 is the shape that produces a disagreement nobody can settle later.
 
 **2. The test is not at `:89`.** It is `tests/e2e/arrivals.spec.ts:218`, *"a page that really does redirect
@@ -1296,7 +1308,14 @@ because a title survives an edit above it and a line number does not. The older 
 as they were written: they were true when written, and rewriting history to look tidy is how a record stops
 being one.
 
-**3. N is Opeyemi's, not mine — and the `waiting:` line now says so in the form the lane reads.** It named
+**3. N is Opeyemi's, not mine — and BOTH rates belong here, because the lane shows him the card and not
+the chat.** The failure rate is not settled: this card's `1 in 4` gives **94% at n = 10 and 99% at 16**;
+**Idris's measured rate from the 24 logs she holds is 1 in 6**, which gives **84% at 10 and 95% at 16**
+(her table: 83.8 / 88.8 / 94.6 / 97.4 at n = 10 / 12 / 16 / 20). **A decision taken on the higher rate
+alone would buy less confidence than it looks like buying**, so the number he is asked for should be read
+against the lower one.
+
+**And the `waiting:` line now says so in the form the lane reads.** It named
 an event before, so it mentioned him without asking him, and the lane listed it under "waiting lines that
 mention him and are not listed" — a question on his board that his board did not show him. I proposed 10 with the arithmetic (`1 - 0.75^n`: ~94% at 10, ~99% at 16)
 and labelled it a judgement about cost. **It is still a judgement about cost, and that is his to make** —
