@@ -1940,7 +1940,7 @@ from 09-29 and 09-30 were first found by Wren, `#3659`).
 | `37290561363` | 10-05, pull request | `image-mode.spec.ts:70` | **30.0 s**, retry 594 ms | **silent** | Dogu, Idris, Wren |
 | `37290561363` | 10-05, pull request | `tab-switch-preset.spec.ts:89` | 10.1 s | `quitting` logged, 16 s after the `gpu` line | Dogu, Idris, Wren |
 | `37290561363` | 10-05, pull request | `update.spec.ts:115` | **30.0 s**, retry 291 ms | **silent** | Dogu, Idris, Wren |
-| `37294297527` | 10-05, pull request | `browser-identity.spec.ts:41` | **30.0 s**, retry 1.4 s | **silent** | Dogu, Idris, Wren |
+| `37294297527` | 10-05, pull request | `browser-identity.spec.ts:41` | **30.0 s**, retry 1.4 s | **silent** | Dogu, Wren (Idris read the hit and the 30.0 s, not the retry's time) |
 
 **Seven of the ten tails are silent** (two lines, `starting` and `gpu: compositing enabled, webgl enabled`); three log
 `quitting`. In Dogu's 42 macOS suite logs from runs created between 2026-10-03T22:35Z (`#540`) and 2026-10-05T14:50Z there are
