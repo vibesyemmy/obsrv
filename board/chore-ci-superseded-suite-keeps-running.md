@@ -1,9 +1,10 @@
 ---
 title: "a superseded pull-request suite keeps running to the end, because `always()` on the test job outlives the concurrency cancel"
-column: backlog
+column: doing
 kind: chore
 release: later
-waiting: "Henry: go or no-go on the ci.yml:176 change"
+owner: "Dogu"
+waiting: ""
 order: 128
 ---
 
