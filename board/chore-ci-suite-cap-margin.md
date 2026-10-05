@@ -28,8 +28,10 @@ and `37160406685` attempt 1; their causes were not read for this card). The slow
 2.2 minutes under the cap. **That listing excludes `#561`'s attempt 1**: its run was still in progress (as attempt 2) when it was
 read. Counting it, **1 of 37 macOS suite jobs reached the cap** in the window.
 
-The e2e step itself, in five suites Dogu counted from the raw logs today: 19.9 to 22.6 minutes for 659 to 661 tests (`37197856918`,
-`37278055730`, `37290395143`, `37297104172`) and **25.7 minutes for 658 tests on `37290561363`**, the slowest finished job above. The comment above the e2e step in `ci.yml`
+The e2e step itself, in the suites Dogu counted from the raw logs today: **19.9 minutes** (`37194381795`, 659 tests), 20.1 (`37297104172`,
+661), 22.4 (`37278055730`, 660), 22.6 (`37290395143`, 661), 23.7 (`37197856918`, 659) and **25.7 minutes for 658 tests on `37290561363`**, the
+slowest finished job above. (The first version of this card gave `37197856918` as 19.9; that was the wrong run for that number. Wren's pull
+of the same logs caught it, `#3481`.) The comment above the e2e step in `ci.yml`
 still says e2e takes "≈17" minutes on a green main, with "≈12 spare"; **that is not what these logs show.**
 
 ## What is known about earlier cap hits, and what is not
@@ -45,8 +47,10 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
 
 1. **Raise `timeout-minutes`** (one line). Cost: a hung job holds a macOS runner longer, and `bug-no-traces-when-e2e-hangs` records that
    a job that outlasts the cap uploads no traces, so the longer the cap, the longer the window where a hang leaves nothing to read.
-2. **Split the e2e step across two macOS jobs.** Wall-clock goes down; runner minutes and queue pressure go up (a single PR run sat about
-   16 minutes in the queue on 2026-10-05).
+2. **Split the e2e step across two macOS jobs.** Wall-clock goes down; runner minutes and queue pressure go up (**not measured here**: the card's first version said a PR run
+   sat about 16 minutes in the queue on 2026-10-05, and that was wrong; Wren's read of the same day's jobs, `#3481`, found every macOS
+   suite job starting 0.1 to 0.2 minutes after its scope job, so there was no runner queue, and the long waits were whole-run waits
+   behind a PR's previous suite, a different mechanism the card does not cover).
 3. **Leave it.** Roughly 1 in 37 here; the cost of a hit is one re-run (about 25 minutes), and the gates already treat a cap hit as no result.
 
 The decision is Henry's and Opeyemi's: it trades CI cost against a rare re-run, and this card does not weigh it.
