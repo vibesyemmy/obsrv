@@ -1143,3 +1143,43 @@ and the tie — and removing `byDocument` from the guard fails them.
 **What is still unmeasured here:** the end-to-end proof is `arrivals.spec.ts:89` passing on a run that
 would previously have failed, and that failure is rare — the unit tests pin the decision, not the sighting.
 The other 15 failing attempts predate the instrument and carry no terms, so nothing above speaks for them.
+
+## THE FIRST FIX WAS WRONG IN TWO WAYS, AND IDRIS'S HARNESS FOUND BOTH (2026-10-05)
+
+**She built the thing I had said was the real gap and had not built:** the **real `TargetSource`** under a
+fake `electron`, with the page's start, the bus's `loadMirrored` and the commits emitted in forced orders
+(`tests/unit/targetSourceMirror.test.ts`, her commit `cb2d0eb`, adopted here under her authorship).
+
+**A — my fix double-counted, in the common case.** When the bus's own commit landed, `startFor(url)`
+**skipped mirrored starts** and handed it the PAGE's start, so it reported `byDocument: true` and my
+`pageStartedFirst` guard made it the page's too: **two arrivals for one redirect**, where `main` reports
+one. **2 of the 3 instrument prints had two commits.** My own "the bus's load has no document initiator"
+test fed `byDocument: false` by hand, so it never saw the case it was written for — the test agreed with
+my model of the wiring rather than with the wiring.
+
+**C and F — a regression I introduced.** `startTimes().own` took the newest non-mirrored start **with no
+age bound and nothing consuming it**, over a 32-deep trace. So an earlier click to an address made a later
+bus-only mirror of it look like the page moving — a false *"the page navigated after it loaded"*, the
+`bug-arrivals` class the rule I replaced existed to prevent. `main` gets that case right.
+
+### What the fix is now
+
+**A start is answered once.** Each start carries `answered`; the commit that lands takes the **oldest
+unanswered start for the address, the bus's own included**, and marks it. Commits answer starts in the
+order the navigations began, which is what the prints show.
+
+**An abort answers its start too.** `did-fail-load` on the main frame marks it, because no commit ever
+will — without that, a cancelled page navigation leaves a start for a later mirror to be classified by
+(her case F).
+
+**`byDocument` therefore comes from the start the commit actually answers**, so the bus's commit stamps
+through `viaNotByDocument` as it always did, and the page's commit is an arrival.
+
+**Her eight cases pass.** Sabotage: removing the abort answer fails F; removing consumption at commit
+fails A, A2, C and B2; restoring newest-non-mirrored matching fails A, A2, C and F.
+
+**Measured: typecheck 0, build 0, unit 2006 passed / 1 skipped over 130 files.**
+
+**Still unmeasured:** the live sighting. Her harness drives the real classification but models Chromium's
+event order from the prints, and reads the consequence through a replica of `ipc.ts`'s counting rule
+rather than the live closure. The e2e remains the only end-to-end proof, and it is rare.

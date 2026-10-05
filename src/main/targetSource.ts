@@ -384,7 +384,16 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * it 4 times in 20.
    */
   private documentFromBus = false
-  private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean; fromBusDocument: boolean }[] = []
+  /**
+   * `answered` is the fix Idris's harness forced (`#3383`): a start that has
+   * already been answered — by its own commit, or by Chromium aborting it —
+   * must not be found again. Without it, `startFor` kept handing an OLD
+   * document-initiated start to a LATER commit the bus caused, so a page's
+   * click to an address made every subsequent mirror of that address look like
+   * the page moving. That is the `bug-arrivals` class, and it is what my first
+   * attempt at this fix reintroduced.
+   */
+  private readonly starts: { at: number; url: string; byDocument: boolean; mirrored: boolean; fromBusDocument: boolean; answered: boolean }[] = []
   /**
    * Every main-frame commit this pane saw, and whether it said anything about
    * it.
@@ -544,7 +553,10 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       }
       // Carried before the record, so both the trace and the event see the
       // same answer for this commit.
-      const start = this.startFor(url)
+      // The start THIS commit answers, and it is consumed here so no later
+      // commit can be classified by it.
+      const start = this.answeringStart(url)
+      this.answerStart(url)
       const byDocument = start?.byDocument === true
       // `start.fromBusDocument` — what the pane's provenance was when THIS
       // navigation began — not `this.documentFromBus`, which may have moved
@@ -553,8 +565,12 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // description of it: `isBusCommit` IS what `isMirrorCommit` used to be,
       // moved into `src/shared/mirrorTerms.ts` so the unit test can call the
       // real expression instead of keeping a copy that could drift from it.
-      const times = this.startTimes(url)
-      const terms = mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true, times.own, times.mirror)
+      // Whose navigation this is, from the start it answers: the page's own when
+      // that start is not the bus's mirrored one. The bus's commit answers the
+      // bus's start, which is never document-initiated, so it still stamps.
+      const ownStart = start !== undefined && !start.mirrored ? start.at : null
+      const mirrorStart = this.starts.find(st => st.url === url && st.mirrored)?.at ?? null
+      const terms = mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true, ownStart, mirrorStart)
       const fromBus = isBusCommit(terms)
       this.documentFromBus = fromBus
       this.record({
@@ -593,6 +609,11 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
       // Internal plumbing failures (the recreation `about:blank` of a window
       // that was itself superseded or destroyed) are not the page's news.
+      // An aborted navigation answers its own start: no commit ever will, and a
+      // start left unanswered is one a LATER commit would be classified by
+      // (Idris's case F — a cancelled page navigation making the bus's own
+      // mirror of that address look like the page moving).
+      if (isMainFrame) this.answerStart(url)
       if (isMainFrame && code !== ERR_ABORTED && !this.internal) {
         this.emit('load-error', { code, description, url })
       }
@@ -606,6 +627,7 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
     wc.on('did-start-navigation', details => {
       if (details.isMainFrame && !details.isSameDocument) {
         this.starts.push({
+          answered: false,
           at: Date.now(),
           url: details.url,
           byDocument: (details as { initiator?: unknown }).initiator !== undefined,
@@ -1086,23 +1108,27 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
    * across both arms of `bug-arrivals`). A page reloading itself, or
    * redirecting, is news; a load main asked for is not.
    */
-  private startFor(url: string): { byDocument: boolean; fromBusDocument: boolean } | undefined {
-    return [...this.starts].reverse().find(s => s.url === url && !s.mirrored)
-  }
-
   /**
-   * When each side last started navigating to this address: the page's own
-   * (non-mirrored) start, and the bus's mirrored one. The ORDER of those two is
-   * what tells a page's own redirect from the bus's load when both land on the
-   * same address — the discriminator `bug-redirect-note-missing-not-late` was
-   * missing, and it was in the record all along.
+   * The start this commit answers: the OLDEST unanswered one for the address,
+   * the bus's own included. It used to skip mirrored starts and take the newest
+   * — which gave the bus's own commit the PAGE's start, so the commit that
+   * followed a mirrored load reported `byDocument: true` and was counted as a
+   * second arrival for one redirect (Idris, `#3383`, case A; 2 of the 3
+   * instrument prints had two commits, so that is the common path).
+   *
+   * Oldest-first because commits answer starts in the order the navigations
+   * began: in the measured case the page's start is first and its commit is
+   * first, and the bus's start and commit follow.
    */
-  private startTimes(url: string): { own: number | null; mirror: number | null } {
-    const newest = (mirrored: boolean): number | null =>
-      [...this.starts].reverse().find(s => s.url === url && s.mirrored === mirrored)?.at ?? null
-    return { own: newest(false), mirror: newest(true) }
+  private answeringStart(url: string): { byDocument: boolean; fromBusDocument: boolean; mirrored: boolean; at: number } | undefined {
+    return this.starts.find(s => s.url === url && !s.answered)
   }
 
+  /** Mark the start this commit (or abort) answers, so nothing later can reuse it. */
+  private answerStart(url: string): void {
+    const start = this.starts.find(s => s.url === url && !s.answered)
+    if (start) start.answered = true
+  }
 
   async loadMirrored(input: string): Promise<string> {
     // Normalised the way `load` normalises it, because the committed url is
