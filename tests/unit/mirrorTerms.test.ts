@@ -32,7 +32,7 @@ describe('mirrorTerms', () => {
           const t = mirrorTerms(HAIRLINE, byDocument, mirrorRequested, startFromBusDocument)
           // With no start times given, nothing is known to have started first, so the
           // decision is the plain OR of the three terms — the behaviour before the fix.
-          expect(t.pageStartedFirst, `${label}, byDocument=${byDocument}`).toBe(false)
+          expect(t.answeredOwnStart, `${label}, byDocument=${byDocument}`).toBe(false)
           expect(isBusCommit(t), `${label}, byDocument=${byDocument}, fromBusDocument=${startFromBusDocument}`).toBe(
             t.viaMirrorUrl || t.viaNotByDocument || t.viaBusDocument,
           )
@@ -55,7 +55,7 @@ describe('mirrorTerms', () => {
       viaMirrorUrl: true,
       viaNotByDocument: false,
       viaBusDocument: false,
-      pageStartedFirst: false,
+      answeredOwnStart: false,
     })
     expect(or(t)).toBe(true)
   })
@@ -92,53 +92,50 @@ describe('mirrorTerms', () => {
   })
 
   it('carries exactly the six fields the guard print is read for, and no more', () => {
-    // Six since the fix: `pageStartedFirst` is printed beside the others because it is now
+    // Six since the fix: `answeredOwnStart` is printed beside the others because it is now
     // part of the decision, and a term that decides without being printed would put the guard
     // print back to describing less than it judges.
     expect(Object.keys(mirrorTerms(HAIRLINE, true, HAIRLINE, false)).sort()).toEqual([
+      'answeredOwnStart',
       'byDocument',
       'mirrorRequested',
-      'pageStartedFirst',
       'viaBusDocument',
       'viaMirrorUrl',
       'viaNotByDocument',
     ])
   })
 
-  it("the measured case: the page's redirect started first, so its commit is NOT the bus's", () => {
-    // The three instrument prints, as numbers: the page's own start for hairline.html, then the
-    // bus's mirrored start for the same address 48 ms, 25 ms and 25 ms later.
-    for (const gap of [48, 25, 25]) {
-      const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_000, 1_000 + gap)
-      expect(t.viaMirrorUrl, `gap ${gap}`).toBe(true)
-      expect(t.pageStartedFirst, `gap ${gap}`).toBe(true)
-      // Before the fix this was true, ipc.ts dropped the commit, and a redirect the user
-      // could see went unreported.
-      expect(isBusCommit(t), `gap ${gap}`).toBe(false)
-    }
+  it("the measured case: the commit answered the page's own start, so it is NOT the bus's", () => {
+    // The page's own start for hairline.html, answered by this commit, while the bus's
+    // mirrored load of the same address is in flight.
+    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_000)
+    expect(t.viaMirrorUrl).toBe(true)
+    expect(t.answeredOwnStart).toBe(true)
+    // Before the fix this was true, ipc.ts dropped the commit, and a redirect the user
+    // could see went unreported.
+    expect(isBusCommit(t)).toBe(false)
+  })
+
+  it('does not compare start TIMES, because an older mirror of the address is not this commit', () => {
+    // Print 4, replayed through the real class by Idris: a mirrored start of the address
+    // 677 ms BEFORE the page's own redirect made the time comparison answer false for a
+    // genuine page-first redirect. The term reads which start was answered, nothing else.
+    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_754)
+    expect(t.answeredOwnStart).toBe(true)
+    expect(isBusCommit(t)).toBe(false)
   })
 
   it("the other half: the bus's own mirrored load to the same address is still the bus's", () => {
-    // The bus started first and its load is not document-initiated — both reasons stand on
-    // their own, and this is the double-count the fix must not open up.
-    const busFirst = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_050, 1_000)
-    expect(busFirst.pageStartedFirst).toBe(false)
-    expect(isBusCommit(busFirst)).toBe(true)
+    // A commit that answered the BUS's own start passes no own-start time, so the term is
+    // false and the mirror still stamps — this is the double-count the fix must not open up.
+    const busStart = mirrorTerms(HAIRLINE, true, HAIRLINE, false, null)
+    expect(busStart.answeredOwnStart).toBe(false)
+    expect(isBusCommit(busStart)).toBe(true)
 
-    const noInitiator = mirrorTerms(HAIRLINE, false, HAIRLINE, false, 1_000, 1_050)
-    expect(noInitiator.pageStartedFirst, 'the bus\'s load is never document-initiated').toBe(false)
+    const noInitiator = mirrorTerms(HAIRLINE, false, HAIRLINE, false, 1_000)
+    expect(noInitiator.answeredOwnStart, 'the bus\'s load is never document-initiated').toBe(false)
     expect(isBusCommit(noInitiator)).toBe(true)
   })
 
-  it('a tie goes to the document, which is the only one of the two with an initiator', () => {
-    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_000, 1_000)
-    expect(t.pageStartedFirst).toBe(true)
-    expect(isBusCommit(t)).toBe(false)
-  })
 
-  it('with no mirrored start recorded, a document-initiated start still counts as first', () => {
-    const t = mirrorTerms(HAIRLINE, true, HAIRLINE, false, 1_000, null)
-    expect(t.pageStartedFirst).toBe(true)
-    expect(isBusCommit(t)).toBe(false)
-  })
 })

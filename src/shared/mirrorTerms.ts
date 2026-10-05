@@ -37,16 +37,20 @@ export interface MirrorTerms {
   /** The navigation began in a document the bus placed, however late it landed. */
   viaBusDocument: boolean
   /**
-   * The page's own (non-mirrored) start for this address began at or before the bus's
-   * mirrored start for it — so this commit belongs to the navigation the DOCUMENT began,
-   * which the bus then happened to mirror onto the same address.
+   * This commit answered the page's OWN start — a document-initiated navigation that was not
+   * the bus's mirrored load. That is what `viaMirrorUrl` alone could not see: in every
+   * instrument print the page's redirect reached the address the bus was mirroring, and
+   * `url === mirrorRequested` claimed the page's commit, so `ipc.ts` dropped a redirect the
+   * user could see.
    *
-   * This is what `viaMirrorUrl` alone could not see. In all three instrument prints the
-   * page's redirect started first (by 48 ms, then 25 ms, then 25 ms) and the bus's mirrored
-   * load of the same address followed; `url === mirrorRequested` then claimed the page's own
-   * commit and `ipc.ts` dropped it, so a redirect the user could see went unreported.
+   * **It used to compare the two starts' TIMES, and that comparison was a defect.** It read
+   * the oldest mirrored start of the address in the whole trace, answered or not, so a mirror
+   * from 677 ms earlier (print 4, replayed through the real class by Idris) made a genuine
+   * page-first redirect come out false. The start the commit ANSWERS already settles whose
+   * navigation it is — consumption made the ordering question redundant, which is what she
+   * answered when I asked whether this term was doing less work than its name claimed.
    */
-  pageStartedFirst: boolean
+  answeredOwnStart: boolean
 }
 
 export function mirrorTerms(
@@ -54,10 +58,8 @@ export function mirrorTerms(
   byDocument: boolean,
   mirrorRequested: string | undefined,
   startFromBusDocument: boolean,
-  /** When the page's own (non-mirrored) start for this address was recorded, or null. */
+  /** When the start this commit ANSWERED was recorded, or null when it was the bus's own. */
   ownStartAt: number | null = null,
-  /** When the bus's mirrored start for this address was recorded, or null. */
-  mirrorStartAt: number | null = null,
 ): MirrorTerms {
   const inFlight = mirrorRequested !== undefined
   return {
@@ -67,9 +69,9 @@ export function mirrorTerms(
     viaNotByDocument: inFlight && !byDocument,
     viaBusDocument: byDocument && startFromBusDocument,
     // Only a document-initiated navigation can be the page's own; the bus's load is never
-    // one. `<=` because the two can share a millisecond, and in that tie the document's
-    // start is the one with an initiator.
-    pageStartedFirst: byDocument && ownStartAt !== null && (mirrorStartAt === null || ownStartAt <= mirrorStartAt),
+    // one. No time comparison: the caller passes the start this commit answered, and a
+    // comparison against "some mirrored start of this address" is what print 4 broke.
+    answeredOwnStart: byDocument && ownStartAt !== null,
   }
 }
 
@@ -82,11 +84,11 @@ export function mirrorTerms(
  * does not, this test goes on passing."* The expression is here now, so the test calls the
  * decision rather than a replica of it, and the two cannot drift.
  *
- * `viaMirrorUrl && !pageStartedFirst` is the fix for `bug-redirect-note-missing-not-late`:
+ * `viaMirrorUrl && !answeredOwnStart` is the fix for `bug-redirect-note-missing-not-late`:
  * reaching the address the bus asked for makes a commit the bus's **unless the page's own
  * navigation to it began first**, which is the measured case — and Opeyemi's decision
  * (2026-10-04, in session, on my recommendation) is that such a commit is an arrival.
  */
 export function isBusCommit(terms: MirrorTerms): boolean {
-  return (terms.viaMirrorUrl && !terms.pageStartedFirst) || terms.viaNotByDocument || terms.viaBusDocument
+  return (terms.viaMirrorUrl && !terms.answeredOwnStart) || terms.viaNotByDocument || terms.viaBusDocument
 }

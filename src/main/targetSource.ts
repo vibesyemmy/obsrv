@@ -568,9 +568,13 @@ export class TargetSource extends EventEmitter<TargetSourceEventMap> {
       // Whose navigation this is, from the start it answers: the page's own when
       // that start is not the bus's mirrored one. The bus's commit answers the
       // bus's start, which is never document-initiated, so it still stamps.
+      // `!start.mirrored` is a second lock and I could not pin it: a mirrored
+      // start is never document-initiated (`loadURL` carries no initiator), so
+      // `byDocument` already excludes it and removing this passes all eight
+      // harness cases. Kept because it states the intent at the point of use,
+      // and named as unpinned rather than left looking load-bearing.
       const ownStart = start !== undefined && !start.mirrored ? start.at : null
-      const mirrorStart = this.starts.find(st => st.url === url && st.mirrored)?.at ?? null
-      const terms = mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true, ownStart, mirrorStart)
+      const terms = mirrorTerms(url, byDocument, this.mirrorRequested, start?.fromBusDocument === true, ownStart)
       const fromBus = isBusCommit(terms)
       this.documentFromBus = fromBus
       this.record({

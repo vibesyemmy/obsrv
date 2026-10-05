@@ -1183,3 +1183,36 @@ fails A, A2, C and B2; restoring newest-non-mirrored matching fails A, A2, C and
 **Still unmeasured:** the live sighting. Her harness drives the real classification but models Chromium's
 event order from the prints, and reads the consequence through a replica of `ipc.ts`'s counting rule
 rather than the live closure. The e2e remains the only end-to-end proof, and it is rare.
+
+## A THIRD DEFECT, FOUND BY REPLAYING THE REAL PRINT (2026-10-05)
+
+**Idris replayed print 4 through the real class** — `main`'s retried `arrivals.spec.ts:218`, run
+`37278055730` — and checked the replay was faithful by reproducing `main`'s own output (`mirroring: true`)
+before judging anything. On `main` it reproduces the bug, on `69d02c0` it is fixed, **and on `491518c` the
+redirect was suppressed again.**
+
+**Cause (her case G):** `mirrorStart` read `this.starts.find(st => st.url === url && st.mirrored)` — the
+**oldest** mirrored start of the address in the trace, answered or not. Print 4 has a mirrored `hairline`
+start **677 ms before** the page's own redirect, so the time comparison came out false for a genuine
+page-first redirect. **My eight-case harness could not see it**: not one of those cases has an older
+mirrored start of the same address.
+
+**The fix is to stop comparing times at all.** With consumption in place, *which start the commit answered*
+already settles whose navigation it is, so the term is now:
+
+    answeredOwnStart: byDocument && ownStartAt !== null
+
+renamed from `pageStartedFirst`, because a term whose name claims an ordering it no longer tests is the
+next reader's wrong turn. **This is also Idris's answer to the question I asked her** — whether that term
+was doing less work than its comment claimed. It was, and the extra work it appeared to do was the defect.
+
+**Sabotage:** reverting `&& !answeredOwnStart` fails five tests across both files.
+
+**One lock I could not pin, named rather than left looking load-bearing:** `!start.mirrored` beside
+`byDocument`. A mirrored start is never document-initiated, so `byDocument` already excludes it and
+removing the clause passes all eight harness cases. It is kept for intent, and it is untested.
+
+**Her residual risk, recorded because it is not demonstrated and not fixed:** a start that is neither
+committed nor `did-fail-load`ed — a redirect source, or a silent supersede — stays unanswered, and a later
+commit could be classified by it. `did-stop-loading` is the candidate retirement signal. **No measurement
+shows it yet, so nothing has been built for it.**
