@@ -24,9 +24,9 @@ All on `workflow_dispatch` to throwaway branch refs, **one pair per variant, not
 | variant of `ci.yml:176` | what happened | runs |
 |---|---|---|
 | `always() && !startsWith(…)` (as on `main`) | second run stayed `pending` with no jobs; the first run's suite job stayed `in_progress` through every sample for about 8 minutes (30 samples); a plain `gh run cancel` did not stop it either, only `force-cancel` did | `37303720760`, `37303797249` |
-| `!cancelled() && !startsWith(…)` | the first run's suite job was `cancelled` about 80 s after the second dispatch; the second run went `queued`, then `in_progress` | `37304835711`, `37304912984` |
+| `!cancelled() && !startsWith(…)` | the first run's suite job was `cancelled` 67 s after the second dispatch (second dispatch 11:44:49Z, job ended 11:45:56Z by the API; a poll first saw it at 11:46:09Z, which is where an earlier "about 80 s" came from); the second run went `queued`, then `in_progress` | `37304835711`, `37304912984` |
 
-So the mechanism and its size are measured (never cancelled in 8 minutes against cancelled in about 80 s). **A rate is not.**
+So the mechanism and its size are measured (never cancelled in 8 minutes against cancelled in 67 s). **A rate is not.**
 
 **Seen again on a real pull request, by accident, 2026-10-05 (`#569`, event `pull_request`, current `always()`):** not a controlled
 probe, so it is recorded as an observation. Run `37347660127` (head `b4595ce82`) was created 17:20:15Z and its suite job started
@@ -58,7 +58,7 @@ roughly 25 macOS minutes to the end while the newer run waited behind it.
 ## What the change would do to the tally, and it should be named rather than discovered
 
 Idris, `#3532`, in Idris's words: two of the eight counted attempts at `arrivals.spec.ts:218` at that time (`37294297527`, `37297276819`) came from superseded
-suites that ran to the end and were stamped `cancelled` afterwards. If superseded suites are cancelled in about 80 seconds, that supply disappears:
+suites that ran to the end and were stamped `cancelled` afterwards. If superseded suites are cancelled in about 80 seconds [the figure is from the first probe's poll, `#3530`; the API's job times give 67 s], that supply disappears:
 the natural rate of attempts drops by roughly a quarter (2 of 8; a small sample), so N would be reached more slowly, in exchange for four heads not losing 18 to
 26 minutes each. Idris thinks that is the right trade; **the figures are Idris's, from `#3532`, and were not recounted here.** At `#3556` the tally was ten, two of
 which Idris lists as superseded suites; at `#3731` it was sixteen attempts, and that message does not say how many of the six newer ones were superseded suites.
