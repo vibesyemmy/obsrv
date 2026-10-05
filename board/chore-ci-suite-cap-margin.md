@@ -34,7 +34,7 @@ slowest finished job above. (The first version of this card gave `37197856918` a
 of the same logs caught it, `#3481`.) The comment above the e2e step in `ci.yml`
 still says e2e takes "≈17" minutes on a green main, with "≈12 spare"; **that is not what these logs show.**
 
-**Added the same day, after the listing above was written** (Idris, `#3538`, from his own pull; Dogu counted the same log, `#3537`): `#561`'s
+**Added the same day, after the listing above was written** (Idris, `#3538`, from Idris's own pull; Dogu counted the same log, `#3537`): `#561`'s
 attempt 2 (run `37294469890`, suite job `111731312723`) ran 11:02:20Z to 11:30:15Z, **27 m 55 s, `success`, 2 m 05 s under the cap**, and
 its e2e step took **26.1 minutes for 661 tests**. That is now the slowest finished suite job and the slowest e2e step this card holds; the 27.8
 and the 25.7 above are second place. **The rate above ("1 in 37") does not show the margin:** three suite jobs that started between 09:31Z
