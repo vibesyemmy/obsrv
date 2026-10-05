@@ -77,8 +77,11 @@ separate traps from this card's subject.**
 - **What the required check shows on the SUPERSEDED head under `!cancelled()`** (it would read `cancelled`, and whether that blocks or confuses a merge
   is not known). The current behaviour on a real pull request was seen incidentally (above); the proposed one was not, and a controlled test is two pushes a
   minute apart on a draft with the one-line change. Idris, `#3532`, check 2.
-- **What `!cancelled()` does when `scope` is cancelled by the runner-queue timeout rather than failing.** Not measured; the proposed line has only been tried
-  with `scope` failing (`#3543`). With `always()`, as today, a cancelled `scope` falls through to a full macOS run.
+- **What `!cancelled()` does when `scope` never gets a runner and is cancelled by the runner-queue timeout.** The exact path is not reproduced: it has been seen only under
+  `always()` (`#574`'s run: the job `cancelled` at 903 s, the run `failure`, so the run was not cancelled; a cancelled `scope` falls through to a full macOS run).
+  **Measured for the nearest case:** a needed job cancelled by its own `timeout-minutes` (run `37383289168`, throwaway `push` workflow, one run): the dependent job with
+  `if: ${{ !cancelled() }}` ran, the default-`if:` control was skipped, `always()` ran, and the run's conclusion was `cancelled`, so `cancelled()` is a cancel request on the
+  workflow and not a cancelled job. A first attempt (`37383170896`) was invalid YAML (a `: ` inside an unquoted `echo`) and ran no jobs; the corrected run is the evidence.
 - **`main`.** `cancel-in-progress` is `false` there and the group carries the sha, so nothing supersedes a `main` run; the comment at `ci.yml:44` to
   `:47` explains why a cancelled `main` run is "a commit with NO CI answer". The change should leave `main` alone, and that has not been shown: it needs one
   real `main` push suite and one hand-cancelled one (Idris, check 3).
