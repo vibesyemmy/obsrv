@@ -4,7 +4,7 @@ column: doing
 owner: "Henry"
 kind: bug
 release: blocks
-waiting: "Opeyemi: set N, the number of first-try suite passes that closes acceptance (d) — the running tally is in this card, not here"
+waiting: "Idris: the throttled control replaces acceptance (d) — 30/30 at cpu-4x and cpu-6x, unthrottled still green, :176 still green"
 criterion: C5
 order: 90
 ---
@@ -191,6 +191,10 @@ one run that records `starts` and `initiator` at the moment of the dropped commi
   *(2026-10-05: now `arrivals.spec.ts:218`, "a page that really does redirect after loading still says so" —
   dated rather than rewritten, because this is the line the tally is measured against and a log search for
   `:89` returns nothing, which reads as "no result" and not as "pass".)*
+  ***(2026-10-05, later: THIS ITEM IS UNSOUND AND IS WITHDRAWN AS A GATE — see "The sweep was measuring the
+  machine" below. The test's premise holds only when the target's script wins a race by single-digit
+  milliseconds, so a sweep of it measures the machine rather than the fix. Left in place because it is what
+  the card promised; replaced, not deleted.)***
 - the `docs/e2e-flakes.md` entry is updated to say it was a bug and not a flake.
 
 ## Why the register was wrong, kept deliberately
@@ -1322,3 +1326,69 @@ and labelled it a judgement about cost. **It is still a judgement about cost, an
 it trades CI time against confidence in a class-1 fix, which is exactly the kind of call this project sends
 to him. The card carries no N until he gives one; the tally runs regardless, so nothing is blocked while he
 decides.
+
+## The sweep was measuring the machine, and the N question should never have been asked (2026-10-05)
+
+**Idris reproduced the first-try failure on demand** (`#3752`), which nobody had managed since the fix
+landed, and it changes what this card can claim.
+
+**What she ran, desk-safe, fresh app per run, `--retries=0`, the whole file:** idle **59 of 60 pass** (the
+one failure a launch timeout in `beforeAll`, so neither test ran); under 16 burners **40 of 40 pass**; with
+the target's renderer on the repo's own **`cpu-4x`** preset, **21 of 30 FAIL** with CI's error text word for
+word. At `cpu-6x`, 1 of 30.
+
+**The mechanism, from event timelines rather than a reading of the code:** `navigate` loads `redirect.html`
+into both panes; the bus mirrors each pane's commit into the other; in **22 of 22** failing runs the bus's
+`loadMirrored(hairline)` landed **1 ms after** the target committed `redirect.html` and **replaced the
+document before its inline script ran** — a `console.log` placed before the `location.replace` is **absent
+in all 22 failures and present in both passes**. So the target never redirected itself: there is **no
+document-initiated start** (0 in every failing run, 1 in every passing one), and the landing commit is
+stamped the bus's, **which is true of what happened in that pane**.
+
+**Idle margin: 4 to 6 ms.** That is the whole premise of the test.
+
+### What that does to acceptance (d), which is mine to own
+
+**(d) asked for a sweep of a race.** A slower target renderer flips it, so the sweep measures the machine,
+and **no value of N could have closed it** — which means the question I put to Opeyemi could not have done
+what I told him it would. **It is withdrawn from his lane rather than left there to be answered.**
+
+**The tally is not wasted and is not a gate — and the number I quoted was wrong.** I said *"10 of 10
+first-try passes"*; the tally Idris keeps is **17 first-try passes and 1 first-try FAILURE over 18
+attempts** (`#3740`; the failure is run `37346121793`). **10 of 10 was true before that run, and I repeated
+it after.** Under the rule this card itself states, a first-try `✘` **reopens the card** — so the honest
+reading is not "a clean sweep that cannot prove anything", it is **a sweep with a failure in it, which is
+what prompted the diagnosis below.**
+
+### The replacement for (d), which is QA's to set and is Idris's proposal
+
+**A sweep of CI first-attempts cannot demonstrate a fix for a race this narrow. A throttle can**, because
+it gives a control with a **known failing baseline**:
+
+- the one-line variant passes **30 of 30 at `cpu-4x`** and **30 of 30 at `cpu-6x`** — against today's
+  unfixed baseline of **13 of 20 failing** and **1 of 30**;
+- **and** the unthrottled file still passes;
+- **and** `arrivals.spec.ts:176`, the counter-case where the caller never asked the target to move and no
+  note is correct, still passes.
+
+**The reproduction, minimal, so this card does not depend on a scratch that will be swept.** In a copy of
+`arrivals.spec.ts`, **one line** in the second test, between the 300 ms wait and `navigate(REDIRECT)`:
+
+```ts
+await call('setThrottle', { throttle: 'cpu-4x' })
+```
+
+Run the whole file (both tests, one shared app), fresh app per run, `--retries=0`. **Measured on `main`
+`b5ef904`, desk-safe: 13 of 20 fail minimal, 21 of 30 instrumented, 1 of 30 at `cpu-6x`, and 99 of 100 pass
+unthrottled** — the single unthrottled failure a launch timeout, not this. Every failure carries CI's error
+text.
+
+**What this is, in Idris's words and kept in them: a MODEL of the race** — a throttled renderer standing in
+for CI's slower one — **not a reproduction of the CI cause.** The CI-side measurement is hers in `#3757`.
+
+### The gap this exposed is a separate defect, and it is filed as one
+
+The caller asked for `redirect.html`; the reply measures `hairline.html` **with no note**. `#558`'s class of
+fix cannot reach it — **the guard answers "who made this commit", and the caller's question is "did I get
+the page I asked for"**. Filed as its own card rather than reopening this one, because the stamping here is
+correct and the fix for that gap is a product decision about what the reply must say.
