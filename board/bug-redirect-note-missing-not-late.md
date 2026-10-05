@@ -4,7 +4,7 @@ column: doing
 owner: "Henry"
 kind: bug
 release: blocks
-waiting: "event: counted CI attempts of arrivals.spec:89 passing first try — acceptance (d), and one attempt is not a sweep"
+waiting: "Opeyemi: set N, the number of first-try suite passes that closes acceptance (d) — the tally runs meanwhile, 8 of 8 so far"
 criterion: C5
 order: 90
 ---
@@ -1276,3 +1276,30 @@ is a judgement about cost, not a measurement — a reviewer who wants 16 is not 
 `arrivals.spec.ts:89` entry calls it *"a candidate correctness bug, not a test problem"*, which was right
 when written and now understates what is known. Whoever reads it after the next failure should learn that a
 failure now is a **regression**, not a fresh sighting.
+
+## THE TALLY RULE, THE TEST'S NAME, AND WHO SETS N (2026-10-05)
+
+Three corrections, all of them from the gate rather than from me.
+
+**1. Two counting rules were running at once, which is worse than either.** I wrote *"one so far since the
+fix"*, counting only `main` push suites; Idris counts **any full `ci.yml` suite whose tested tree contains
+the fix, PR runs included** (`#3444`, `#3461`). **Hers governs from here**, and the card says so rather than
+leaving a reader to pick: the question acceptance (d) asks is *"does this test pass on first attempt when
+the fix is in the tree"*, and a PR suite answers it exactly as a push suite does. **The count by that rule
+is 8 of 8 at the time of writing.** Mine was not wrong, it was narrower — and two live rules in one project
+is the shape that produces a disagreement nobody can settle later.
+
+**2. The test is not at `:89`.** It is `tests/e2e/arrivals.spec.ts:218`, *"a page that really does redirect
+after loading still says so"* — the line number moved and this card kept citing the old one in five places,
+including the `waiting:` line a reader is most likely to act on. **It is named by its title from here**,
+because a title survives an edit above it and a line number does not. The older references below are left
+as they were written: they were true when written, and rewriting history to look tidy is how a record stops
+being one.
+
+**3. N is Opeyemi's, not mine — and the `waiting:` line now says so in the form the lane reads.** It named
+an event before, so it mentioned him without asking him, and the lane listed it under "waiting lines that
+mention him and are not listed" — a question on his board that his board did not show him. I proposed 10 with the arithmetic (`1 - 0.75^n`: ~94% at 10, ~99% at 16)
+and labelled it a judgement about cost. **It is still a judgement about cost, and that is his to make** —
+it trades CI time against confidence in a class-1 fix, which is exactly the kind of call this project sends
+to him. The card carries no N until he gives one; the tally runs regardless, so nothing is blocked while he
+decides.
