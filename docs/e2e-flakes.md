@@ -1733,6 +1733,53 @@ appears in `src/` only in three comments in `targetSource.ts`, which I grepped o
 they moved by five within minutes of my first grep, when `#560`'s comment edit merged above them); Wren routed that
 as a chore (`#3457`).
 
+## `redirect-mirrored-pool.spec.ts:176` — the converted spec's first first-attempt failure in CI, 2026-10-06
+
+**One sighting, retry-rescued, the run green.** Run `37394200312`, the pull-request run of `#580` at `37b97e0`,
+attempt 1, `completed/success`; the tested tree is `92ac39d Merge 37b97e0… into 2b279b3`, which carries `#567`
+(the conversion of the spec above, merged as `17433b716`). Found by Idris reading the log (`#3818`, `#3819`); entered
+here by Dogu from the raw job log (`112046223528`, 00:29:01Z to 00:54:34Z, 25 m 33 s; 193,868 bytes, 1,412 lines),
+where it is the run's only `✘`: test 492 failed its first attempt at 00:49:26.7Z in **2.3 s**, and retry #1 (test
+493) passed in **2.4 s**. The error is the spec's first recorded-fact assertion (`:273`, Idris):
+
+```
+Error: no document-initiated, non-mirrored start of hairline was recorded after the redirect was triggered
+```
+
+**What the spec's own prints say, which is the part worth keeping** (they are printed on pass and fail alike, before
+any assertion). Failing attempt: the `hairline` pool before the redirect `{"total":13,"mirrored":6,"byDocument":4}`,
+after it `{"total":14,"mirrored":7,"byDocument":4}`; **the `hairline` starts since the boundary are one entry,
+`{+25 ms, byDocument false, mirrored true}`**; the commits since the boundary are `redirect` at +23 ms
+(`mirroring: false`, `byDocument: false`, `answeredOwnStart: false`) and `hairline` at +38 ms (`mirroring: false`,
+`byDocument: false`, `mirrorRequested: null`, `answeredOwnStart: false`). Passing retry: pool `{14,7,5}` before and
+`{15,7,6}` after; the one `hairline` start since the boundary `{+40 ms, byDocument true, mirrored false}`; commits
+`redirect` at +33 ms and `hairline` at +71 ms (`byDocument: true`, `answeredOwnStart: true`, `mirroring: false`).
+
+**The reading (Idris, `#3819`; Dogu read the same print and agrees it says this, and has not reproduced it).** The bus's
+mirrored `hairline` start arrived 2 ms after the redirect page committed, so the page's own `location.replace` produced
+no start before the document was replaced. **That is the shape of `arrivals.spec.ts:218`'s CI failure** (`37346121793`:
+the mirrored start 24 ms after the redirect start, no document-initiated start at all), and of the race Idris measured
+for it (`navigate` loads the redirect page into both panes, and the spec's premise is that the target's own redirect
+wins by milliseconds; with the target on `cpu-4x` `:218` fails 21 of 30). "Same trigger" here rests on the printed
+record: Idris's throttle run on this spec had not happened when `#3819` said so.
+
+**One difference, recorded as a question and not a finding.** The landing commit here is stamped **`mirroring: false`**
+with `mirrorRequested: null`, where `:218`'s failing print had `mirroring: true` with the mirror still in flight. The
+assertions after the one that fired (`mirroring` false, `answeredOwnStart` true) were not reached, so what they would
+have said is unknown. **If a bus-loaded commit can be classified after `loadMirrored` has cleared `mirrorRequested`, the
+product would stamp it as the page's own arrival**, the opposite misattribution to `:218`'s, on an attempt where the page
+never redirected itself. Candidate only; no one has built that input.
+
+**Why the sweeps did not see it, and the accounting.** The spec was swept idle (Dogu 13 of 13, Idris 40 of 40) and under
+24 CPU burners (Idris 60 of 60); on a developer machine the target wins the race by 4 to 6 ms idle, which is why. Dogu's PASS
+of `#567` (`#3642`) said it did not cover the spec's rate in CI. Of the CI attempts of the converted spec Idris has
+read, 10 passed first try and this one did not (`#3819`); Dogu holds three passes (`#568`'s, `#569`'s, and `main` at
+`ad3650646`) and this one. **That is not a rate**: the runs were read for other reasons and nobody sampled them.
+
+**What this entry is not.** No cause is confirmed here and no card is filed by it; the run was green and `#580` is not
+held by it (a one-line timeout change cannot touch a spec). The change that addresses it, holding the native pane out of
+the redirect page in both this spec and `arrivals.spec.ts:218`, is Idris's and is not built (`#3821`).
+
 ## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
 
 **Named, not filed**, and named together because the two logs are the same log
