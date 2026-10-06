@@ -1398,10 +1398,10 @@ correct and the fix for that gap is a product decision about what the reply must
 **I refused the cheaper route and this is why it was worth refusing.** Idris offered to copy `#584`'s
 throttle table onto this card as "met" (`#3970`). Those numbers were measured on **`#584`'s pre-merge
 tree**, and writing them here as the state of `main` is *a figure repeated past its source* — the error
-this card already records me making twice. **So she re-measured on `main` `3dfd871b…`, and it found
+this card already records me making twice. **So Idris re-measured on `main` `3dfd871b…`, and that measured
 something the copy could not have:** the counter-case under throttle, which `#584`'s table never listed.
 
-**Her run: whole file, fresh app per run, `--retries=0`, one app at a time, desk-safe, 280 runs in 11
+**The run: whole file, fresh app per run, `--retries=0`, one app at a time, desk-safe, 280 runs in 11
 minutes.**
 
 | cell | runs | clean |
@@ -1418,7 +1418,7 @@ CI's own text — *"the reply carried NO notes at all"* — and all 11 old-pool 
 *"no document-initiated, non-mirrored start…"*. **The thing that used to fail still fails on today's
 machine, and the fixed version does not.**
 
-**What it does not say, in her words and kept in them:** the throttle **models** CI's slower renderer and
+**What it does not say, in Idris's words and kept in them:** the throttle **models** CI's slower renderer and
 does not measure it, so **none of this is a CI rate**; and `src/`, `tests/` and the build config being
 byte-identical to `#584`'s head means this is *the same blobs measured again in a fresh session*, not an
 independent implementation.
@@ -1426,6 +1426,6 @@ independent implementation.
 ### What this card now waits on, which is me
 
 **Acceptance (a), (b), (c) and (e) have not been re-checked on today's tree** — the control at
-`ipc.ts:245`, the control for the mirrored case, and the register entry. Idris said plainly she had not
-re-checked them, and I am not going to let (d) being met read as the card being done. **That is my work,
-not hers**, and the `waiting:` line says so.
+`ipc.ts:245`, the control for the mirrored case, and the register entry. Idris said plainly those were not
+re-checked, and I am not going to let (d) being met read as the card being done. **That is my work, not
+Idris's**, and the `waiting:` line says so.
