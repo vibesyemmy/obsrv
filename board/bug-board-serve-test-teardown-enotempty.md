@@ -67,6 +67,12 @@ Not measured: that the sighted run had a git in flight at the kill. The log does
 | retries removed, exit wait kept | 0 | `ENOTEMPTY` |
 | exit wait removed, retries kept | **10** | |
 
+**How the old teardown was run.** My "old teardown" row is the helper with its retries and exit wait taken out, so it is kill-then-remove run
+through the helper's own code, not main's two lines as text. Henry (room message 4066) ran main's literal shape against the same kind of detached-writer parent in a
+pristine copy, 6 trials each: **old 0 of 6 clean (6 of 6 `ENOTEMPTY, Directory not empty`), new 6 of 6 clean.** The two agree. They are not independent
+in the one respect that matters: both writers are hot loops (700 ms of back-to-back file creation), far harder on the directory than `git fetch` is.
+That is why a hot loop fails 10 of 10 and 6 of 6 and CI showed this once in 484 logs; neither measurement says anything about the CI rate.
+
 What this shows: **the control fails on the old teardown, every time, and passes on the fix, every time.** It is not flaky in either direction
 over these ten, and ten runs bound nothing about a rate.
 
@@ -80,6 +86,33 @@ What it does not show, and the table says so on its last row:
   writer was a `git`. It shows that *if* a writer outlives the kill, the old teardown fails and the new one does not.
 - **The real test file was not looped on the old teardown** to see whether `ENOTEMPTY` can be provoked there. It is a way to find out whether the
   reading is right, and it was not done.
+
+## The wiring is guarded too (added after room message 4066)
+
+`killAndRemove.test.ts` tests the helper, and for the first version of this branch nothing failed if either `afterEach` went back to the two old
+lines: the fix was wired by habit. `tests/unit/teardownWiring.test.ts` adds two checks over the real files:
+
+1. **The shape that failed, by its text.** A file that kills a child (`.kill(`, not `process.kill(pid, 0)`) and removes a directory with `recursive`
+   and no `maxRetries` in the call. A recursive removal in a file that kills nothing is left alone: `electronPath.test.ts` removes 20 directories after an
+   `execFile` it awaited, which is not this shape, and a rule that flagged it would have meant editing a file nobody asked about.
+2. **The two call sites import the helper and call it with the lists they fill** (`started`/`servers` and `dirs`).
+
+Sabotaged, each restored with `git checkout --` (the first version had one survivor, below):
+
+| sabotage | caught by |
+|---|---|
+| browser file back to kill + bare `rmSync` | both checks |
+| `boardServe.test.ts` back to kill + bare `rmSync` | both checks |
+| import kept, call replaced by kill + `rmSync` with `maxRetries` | the call check only |
+| no kill, bare `rmSync`, import removed | the call check only |
+| kill + `rmSync(d, OPTS)` through a named const, import removed | the call check only |
+| a **new** file with the old shape | the scan only |
+| `killAndRemove([], dirs)` (no children), either file | the call check (a **survivor of the first version**, fixed by checking the arguments) |
+| `killAndRemove(servers, [])` (no directories) | the call check |
+
+What it cannot see: options passed by name (`rmSync(d, OPTS)` has no `recursive` to read, so the scan assumes it is fine; the call check covers the
+two known files), a kill through a wrapper, and **the exit wait**, which no check here or in the control shows matters. Population when written: no
+other file under `tests/unit` kills a child (`mcpControl.test.ts` has one `process.kill(pid, 0)`, an existence probe).
 
 ## What would reopen this
 
