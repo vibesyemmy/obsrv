@@ -222,12 +222,25 @@ suite jobs** (runs created from 2026-09-27, every attempt), the test ran in **17
 **Both are the white render, not a weak red.** That is the reading this card's own "How to read it when it
 fires" list calls the **capture or compositing** branch — *"the capture read a white frame, which is a
 capture or compositing question, not a vision one"* — and it is now the only branch any recorded firing
-has taken. **Three recorded sightings, three whites, no reds.**
+has taken.
 
-**What that does NOT settle, and the register says it too:** it is **not a rate** (the window does not
-reach this card's own three cited runs — `34977896287`, `35853805499`, `35874763546` — and nobody recorded
-the pixel for those), and it is **not a cause**. The mechanism behind an unpainted frame at that moment is
-still named rather than proven, which is why this card is open.
+**Four sightings, and the pixel is recorded for three of them** (Wren corrected my first draft of this
+section, which said nobody had recorded the earlier ones — **this card itself records them**, two sections
+above):
+
+| sighting | pixel |
+| --- | --- |
+| `34977896287` (09-17) | red and green both 255, **blue discarded by the old message** — read as white from the 09-23 shape |
+| `35853805499` (09-23) | `[255,255,255]` |
+| `36556822266` (09-29) | `[255,255,255]` |
+| `37410068785` (10-06) | `[255,255,255]` |
+
+**`35874763546` is not a sighting at all** and my first draft listed it as one: this card cites it as
+Idris's PASS run for `#458`, `0 ✘`. **None of the four is red.**
+
+**What that does NOT settle:** it is **not a rate** — the 178-job window does not reach the two earlier
+sightings — and it is **not a cause**. The mechanism behind an unpainted frame at that moment is still
+named rather than proven, which is why this card is open.
 
 **What would close it:** a firing whose pixel is **not** white, which would move the card to the rendering
 branch and make it a different bug; or a demonstrated mechanism for the unpainted frame. **Neither is a
