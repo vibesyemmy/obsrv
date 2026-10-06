@@ -63,6 +63,11 @@ took **31 ms** and returned **692 rows, 255,673 bytes**. The runner's figure is 
 5. **Added time to the kill: expected tens of milliseconds, worst case 1.0 s**, on a kill that is already 10 s late. If the runner's `ps` costs more than the cap allows, the
    design changes, not the cap.
 
+**Amended 2026-10-06, after the build (Wren's read, `#4002`):** (i) the worst case is **1.0 s, or 1.25 s if the inner cap itself failed**: `snapshotThenKill` races the snapshot against a
+second timer 250 ms longer, so a snapshot that never settles still cannot hold the kill. (ii) **The busiest-other-processes rows print the executable's name and no arguments.** The app's
+own rows keep theirs, because the flags are what tell a GPU helper from a renderer; a host process is only being named as busy, its arguments are somebody else's, and on a laptop the
+busiest five can be anything that is on a command line, in a log that gets pasted and uploaded. (iii) A process table read of 5,000 rows or more says the read was cut there.
+
 ## Controls it needs before anyone reads a snapshot
 
 1. A main process busy-waiting for 45 s (an `electronApplication.evaluate` that spins): the snapshot must read busy.
