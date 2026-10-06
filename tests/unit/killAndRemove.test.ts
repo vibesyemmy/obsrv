@@ -90,16 +90,23 @@ describe('killAndRemove against a real writer that outlives the process it was s
   it('removes the directory although something is still writing into it after the parent is gone', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kill-and-remove-'))
     const parent = spawn(process.execPath, ['-e', PARENT, dir], { stdio: 'ignore' })
-    // Until the writer has made its first file it is not a writer, and the old teardown passes this test vacuously
-    // (measured by Wren on the first version, which slept a fixed 150 ms: on a slower machine the writer was not up
-    // yet at the kill). So wait for the file, and fail loudly if it never appears.
-    await vi.waitFor(
-      () => {
-        if (readdirSync(dir).length === 0) throw new Error('the writer has not made its first file')
-      },
-      { timeout: 8_000, interval: 10 },
-    )
-    await killAndRemove([parent], [dir])
-    expect(existsSync(dir)).toBe(false)
+    try {
+      // Until the writer has made its first file it is not a writer, and the old teardown passes this test vacuously
+      // (measured by Wren on the first version, which slept a fixed 150 ms: on a slower machine the writer was not up
+      // yet at the kill). So wait for the file, and fail loudly if it never appears.
+      await vi.waitFor(
+        () => {
+          if (readdirSync(dir).length === 0) throw new Error('the writer has not made its first file')
+        },
+        { timeout: 8_000, interval: 10 },
+      )
+      await killAndRemove([parent], [dir])
+      expect(existsSync(dir)).toBe(false)
+    } finally {
+      // A failure above must not leave the parent running (it holds a live interval) or the directory behind. The
+      // second call is a no-op on a parent that is gone and a directory that is gone, and its own error is not
+      // allowed to replace the one being thrown.
+      await killAndRemove([parent], [dir]).catch(() => {})
+    }
   }, 20_000)
 })
