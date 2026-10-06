@@ -1627,6 +1627,42 @@ between the readings existed only inside an assertion that had already stopped t
 *before* the first `setPreset`, so `applied: false` can be read as "already there" or "not up yet". That
 is a two-line change to the spec and it is worth making the next time anyone is in the file.
 
+### Counted again, 2026-10-06: five sightings, four different statements, and two that print the app's reply
+
+Idris's table (`#3934`), each failing statement re-read by Dogu from the failure block's own `>` and `at` lines in the saved job
+logs; the 09-23 row is this entry's own. Line numbers are as each job's tree printed them, and whether the spec changed between the
+runs was not checked.
+
+| run | date | length | failed at | the spec's `[tab-switch]` reply line | kill-line tail |
+| --- | --- | --- | --- | --- | --- |
+| `35875864196` (`#459`) | 09-23 | not re-read | `:91`, the first `setPreset(LAPTOP)`'s `applied` (this entry) | none: the line prints later | not read (before the kill-line sweep) |
+| `36519694953` | 09-29 | 2.2 s | `:94`, the second `setPreset(LAPTOP)`'s `applied` | none | `quitting` |
+| `36599810778` | 09-29 | 5.4 s | `:106`, the `rendererCaughtUp` poll, 3000 ms | `applied=false presetId=laptop-768` | `quitting` |
+| `37290561363` | 10-05 | 10.1 s | `:93`, the `rendererCaughtUp` poll, 10,000 ms | none | `quitting` |
+| `37425109815` | 10-06 | 5.4 s | `:106`, the same poll, 3000 ms | `applied=false presetId=laptop-768` | **silent** |
+
+**What the printed line is.** `[tab-switch] setPreset reply: …` (`tab-switch-preset.spec.ts:101-102` on `main` at `857c5bc8`) is
+the reply to the **phone** `setPreset` the test sends straight after `activateTab(b)` with the gap held open (`hold(HOLD_MS)`,
+600 ms, through `OBSRV_TEST_TABS_CHANGED_DELAY_MS`, `ipc.ts:1371`). That is the call the test exists to check, not a setup step.
+A passing attempt prints `applied=true presetId=iphone-61`; the two `:106` failures printed `applied=false presetId=laptop-768`.
+
+**What `applied=false` means in the app.** `controlServer.ts:467` sends `setPreset` through `applyAndConfirm` (`:763`), which
+applies the patch and polls `status` every 25 ms for up to `APPLY_WAIT_MS = 2_000` (`:81`) for `s.presetId === id && pageBack(s)`,
+then replies `{ ok: true, applied, ...status }` (`:795`). So the failing reply says that for 2 s after the phone preset was
+sent, `status` never showed `iphone-61` on the tab in front and still showed `laptop-768`. The gap is 600 ms. Then `:106` waits
+3000 ms (`HOLD_MS * 5`) for `rendererCaughtUp` (`:55`: the renderer's selected tab sits where main's front tab does) and did not
+get it. **Both failures are on the question the test's header says it was written for:** a preset sent between main switching
+tabs and the renderer learning of it. Idris saw the pairing first (`#3934`); the source reading is Dogu's (`#3937`).
+
+**What this does not say.**
+- **That the defect is back.** `bug-preset-after-tab-switch-lands-on-the-other-tab` is `column: done`, and its title says the
+  defect was reproduced with the gap forced open and fixed (2026-09-16, Henry). The sentence above, "a flake here does not mean that bug is back", is about
+  the `:91` shape; this entry did not cover `:106` until now, and nothing here reopens or edits a card (that is Henry's).
+- **That it is not.** A runner starved past 2 s and 3 s fits the same two lines. The logs do not show which tab received the
+  preset, and the retry passed every time (2.4 s on the latest).
+- Two `:106` sightings six days apart are a pair, not a rate. No cause. They differ in the close tail (`quitting` on one,
+  silent on the other), so the tail is not set by which failure came before it.
+
 ## `cli.spec.ts:212`: a leaked temp dir after SIGTERM, and why this one is not noise
 
 Seen **twice** on 2026-09-28, both rescued on retry: run
@@ -2263,6 +2299,17 @@ parser, 180 of 180 jobs) agree on every figure here, and a third parse by Wren o
 the same; it cannot see a hit those lists omit. All three read the same `app.close() has taken` line, so the agreement says the
 count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
 are unread.
+
+**One more hit, outside the sweep, 2026-10-06 (`37425109815`).** The sweep above ended at 04:26Z. Since then `ci.yml` has run
+twice (`37418289163`, the `#587` pull-request run: 0 hits; `37425109815`, the `main` push for its merge: 1), so this is the only
+hit known beyond the 29. The totals above are the sweep's and are not edited; with this one it would be 30 hits in 26 jobs, 14
+silent, 24 followed by a `✘`.
+
+| run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
+| --- | --- | --- | --- | --- | --- |
+| `37425109815` | 10-06, `main` push | ✘ `tab-switch-preset.spec.ts:89` | 5.4 s | **silent** (10,008 ms; two lines) | Dogu, Idris, Wren (raw pulls, `#3933`, `#3934`, `#3935`) |
+
+It is the second 5.4 s `tab-switch-preset.spec.ts:89` hit; the first (`36599810778`) logged `quitting`. See that entry above.
 
 ## Sightings sweep 2026-10-03: what no card or entry covered
 
