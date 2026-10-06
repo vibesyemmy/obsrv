@@ -158,8 +158,17 @@ describe('rotate is the only way to turn a screen', () => {
     })
     for (const [tool, said] of Object.entries(refusals)) {
       expect(said, `${tool} did not refuse the removed key`).toContain('unknown input key `orientation`')
-      expect(said, `${tool}'s refusal does not name the replacement`).toContain('rotate: true')
     }
+    // **The two tools are not interchangeable here, and the first version of
+    // this test treated them as if they were.** `obsrv_snap` takes `rotate`, so
+    // its refusal says to pass it. `obsrv_presets` does NOT — and told to "pass
+    // `rotate: true`" a caller earns a second refusal, `unknown input key
+    // ``rotate```. Wren found that on the pushed head (room #4041), so the
+    // assertion is per tool: promise the flag only where it exists, and point
+    // at the tools that have it where it does not.
+    expect(refusals.obsrv_snap, 'snap takes rotate, so its refusal should say to pass it').toContain('rotate: true')
+    expect(refusals.obsrv_presets, 'presets cannot rotate, so it must not promise rotate').not.toContain('pass `rotate: true`')
+    expect(refusals.obsrv_presets, 'presets should point at the tools that can rotate').toMatch(/tools that take `rotate` are .*obsrv_snap/)
   })
 
   it('every tool publishes an input schema that refuses unknown keys', async () => {

@@ -184,7 +184,24 @@ describe('parseArgs: --rotate, after --orientation was removed', () => {
     // `src/cli/args.ts`). The flag worked for months and is in old scripts and
     // in anything an agent learned before this release, so "unknown flag"
     // alone leaves the caller guessing which of thirty flags replaced it.
-    expect(() => snap('x.test', '--orientation', 'landscape')).toThrow(/--rotate/)
+    //
+    // **Scoped to the hint, and that is the whole point of these three lines.**
+    // The parser appends the full usage text, which names `--rotate` among
+    // thirty flags, so a bare `toThrow(/--rotate/)` passes with the hint never
+    // printed — Wren measured it on the pushed head: 59 of 59 with
+    // `REMOVED_FLAGS` silenced (room #4041). The message is
+    // `unknown flag: --X\n\n<hint>\n\n<usage>`, so the hint is the second block.
+    const said = (() => {
+      try {
+        snap('x.test', '--orientation', 'landscape')
+        return ''
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e)
+      }
+    })()
+    const hint = said.split('\n\n')[1] ?? ''
+    expect(hint, `no hint block in: ${said.slice(0, 120)}`).toContain('--orientation was removed')
+    expect(hint).toContain('--rotate')
   })
 
   it('turns one flag into two different shapes, because the presets are stored differently', () => {

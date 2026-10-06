@@ -73,7 +73,12 @@ test('the removed --orientation flag is refused, and the refusal names --rotate'
   expect(r.code, 'the CLI accepted a flag that no longer exists').not.toBe(0)
   const said = `${r.stderr}\n${r.stdout}`
   expect(said).toContain('unknown flag: --orientation')
-  expect(said, 'the refusal does not say what to use instead').toContain('--rotate')
+  // Scoped to the hint block for the reason `cliArgs.test.ts` gives: the usage
+  // text the parser appends names `--rotate` on its own, so asserting on the
+  // whole message would pass with no hint printed at all (Wren, room #4041).
+  const hint = said.split('\n\n')[1] ?? ''
+  expect(hint, `no hint block in: ${said.slice(0, 160)}`).toContain('--orientation was removed')
+  expect(hint, 'the refusal does not say what to use instead').toContain('--rotate')
 })
 
 test('a run that named no rotation carries no rotated key at all', async () => {

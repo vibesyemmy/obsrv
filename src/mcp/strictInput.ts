@@ -58,18 +58,38 @@ const isRawShape = (v: unknown): v is Record<string, unknown> => {
 }
 
 /**
+ * Which tools take `rotate`, filled in as they register.
+ *
+ * Read at CALL time, not at registration, so it is complete by the time any
+ * refusal is written however the registrations are ordered. It exists because
+ * **three tools do not take `rotate` at all** (`obsrv_diff`, `obsrv_presets`,
+ * `obsrv_flow`), and the first version of this file told their callers to
+ * "pass `rotate: true`" — advice that earns a second refusal, `unknown input
+ * key \`rotate\``. Found by Wren on the pushed head (room #4041). A set built
+ * from the shapes rather than a hard-coded list, so it cannot go stale when a
+ * tool gains or loses the input.
+ */
+const rotateTools = new Set<string>()
+
+/**
  * The sentence the caller reads. Written for an agent that has just been
  * refused: it names what was wrong, what the tool accepts instead, and — for
- * the key this exists for — the flag that replaced it.
+ * the key this exists for — where the rotation went.
  *
  * `rotate` is named explicitly rather than left to the accepted-keys list,
  * because the list does not say which of a dozen keys is the one that would
- * have turned the screen.
+ * have turned the screen. On a tool that cannot rotate, the ones that can are
+ * named instead: the caller's next call has to go somewhere.
  */
 function refusal(tool: string, keys: readonly string[], accepted: readonly string[]): string {
-  const removed = keys.includes('orientation')
-    ? ' `orientation` was removed from this surface: pass `rotate: true` to turn the screen a quarter turn (it names the shape you get rather than the preset\'s stored form).'
-    : ''
+  const elsewhere = [...rotateTools].sort().join(', ')
+  const removed = !keys.includes('orientation')
+    ? ''
+    : accepted.includes('rotate')
+      ? ' `orientation` was removed from this surface: pass `rotate: true` to turn the screen a quarter turn (it names the shape you get rather than the preset\'s stored form).'
+      : ` \`orientation\` was removed from this surface, and this tool has no rotation input of its own${
+          elsewhere === '' ? '' : `; the tools that take \`rotate\` are ${elsewhere}`
+        }.`
   return (
     `${tool}: unknown input key${keys.length === 1 ? '' : 's'} ${keys.map(k => `\`${k}\``).join(', ')}.` +
     `${removed} This tool takes: ${accepted.join(', ')}. ` +
@@ -91,6 +111,7 @@ export function refuseUnknownInputKeys(target: { registerTool: unknown }): void 
     if (!isRawShape(shape)) return register(name, config, handler)
     const tool = String(name)
     const accepted = Object.keys(shape).sort()
+    if (accepted.includes('rotate')) rotateTools.add(tool)
     const strict = z.strictObject(shape as Record<string, z.ZodType>, {
       error: issue => (issue.code === 'unrecognized_keys' ? refusal(tool, issue.keys, accepted) : undefined),
     })
