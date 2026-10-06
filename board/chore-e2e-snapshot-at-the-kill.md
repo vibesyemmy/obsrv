@@ -63,10 +63,20 @@ took **31 ms** and returned **692 rows, 255,673 bytes**. The runner's figure is 
 5. **Added time to the kill: expected tens of milliseconds, worst case 1.0 s**, on a kill that is already 10 s late. If the runner's `ps` costs more than the cap allows, the
    design changes, not the cap.
 
-**Amended 2026-10-06, after the build (Wren's read, `#4002`):** (i) the worst case is **1.0 s, or 1.25 s if the inner cap itself failed**: `snapshotThenKill` races the snapshot against a
-second timer 250 ms longer, so a snapshot that never settles still cannot hold the kill. (ii) **The busiest-other-processes rows print the executable's name and no arguments.** The app's
-own rows keep theirs, because the flags are what tell a GPU helper from a renderer; a host process is only being named as busy, its arguments are somebody else's, and on a laptop the
-busiest five can be anything that is on a command line, in a log that gets pasted and uploaded. (iii) A process table read of 5,000 rows or more says the read was cut there.
+**Amended 2026-10-06, after the build (Wren's read `#4002`, Idris's gate `#4003` and `#4005`):** (i) the worst case is **1.0 s, or 1.25 s if the inner cap itself failed**: `snapshotThenKill` races the snapshot against a
+second timer 250 ms longer, so a snapshot that never settles still cannot hold the kill. (ii) **The busiest-other-processes rows name a process by the last part of the first word of its command and print nothing after it.** The app's own rows keep their arguments, because the
+flags are what tell a GPU helper from a renderer; a host process is only being named as busy, its arguments are somebody else's, and on a laptop the busiest five can be anything that is
+on a command line, in a log that gets pasted and uploaded. `ps` cannot say where an executable ends and its first argument begins when the path has spaces, so the rule does not try, and a
+program whose path has a space reads as its first word (`Google` for `Google Chrome Helper`). A first version cut at the first ` -` and printed every argument that did not start with a dash
+(`curl https://x?token=...`, `python3 main.py secret`); Idris and Wren each found it, `#4005` and `#4006`. (iii) A process table read of 5,000 rows or more says the read was cut there.
+
+## Built 2026-10-06
+
+`tests/e2e/helpers/killSnapshot.ts` (the snapshot, pure parsing and formatting plus a bounded runner), `snapshotThenKill` and an exported `boundedClose` in `tests/e2e/launch.ts`, and
+`tests/unit/killSnapshot.test.ts`. The unit tests drive each failure the budget names (`ps` failing, throwing, hanging, flooding; load unreadable; a throwing kill), the kill wiring in
+`boundedClose` with a fake app (a hung close ends in the report and then the kill, even when the snapshot never settles; a close inside the grace is not killed and leaves no timer; a
+failing close reaches the caller; and the real defaults), and one against the real `ps`. Each property was broken in turn to check a test notices, and the ones that survived were fixed
+(an untested line cap, an unreachable byte cut, and a kill call whose deletion left every test green until `boundedClose` was made testable).
 
 ## Controls it needs before anyone reads a snapshot
 
