@@ -152,20 +152,35 @@ const CLOSE_GRACE_MS = 10_000
  * `closed` and `exiting`, so the tail says which stretch did not finish.
  * The spec that saw it stays green; the line in the output is the report.
  */
-async function boundedClose(raw: ElectronApplication): Promise<void> {
-  closeRequested.add(raw)
-  const logFile = logFileOf(raw)
+/**
+ * Exported, with its three collaborators as optional parameters, so a unit
+ * test can drive it with a fake app and a short grace: the property that
+ * matters, that a hung close ends in a kill, is otherwise only visible in a
+ * real hang. Callers pass nothing and get the real grace, the snapshot and
+ * `stderr`.
+ */
+export async function boundedClose(
+  raw: Pick<ElectronApplication, 'close' | 'process'>,
+  deps: {
+    graceMs?: number
+    killAfterSnapshot?: (proc: ChildProcess) => Promise<void>
+    write?: (text: string) => void
+  } = {},
+): Promise<void> {
+  const { graceMs = CLOSE_GRACE_MS, killAfterSnapshot = snapshotThenKill, write = (text: string) => void process.stderr.write(text) } = deps
+  closeRequested.add(raw as ElectronApplication)
+  const logFile = logFileOf(raw as ElectronApplication)
   const started = Date.now()
   const timer = setTimeout(() => {
     const proc = raw.process()
     // The tail first: the launcher removes the user-data directory, log
     // included, as soon as the process is gone.
-    process.stderr.write(
+    write(
       `[launch] app.close() has taken ${Date.now() - started} ms; killing pid ${proc.pid}. ` +
         `App log tail:\n${logTail(logFile)}\n`,
     )
-    void snapshotThenKill(proc)
-  }, CLOSE_GRACE_MS)
+    void killAfterSnapshot(proc)
+  }, graceMs)
   try {
     await raw.close()
   } finally {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { snapshotThenKill } from '../e2e/launch'
+import type { ChildProcess } from 'node:child_process'
+import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
@@ -75,11 +76,25 @@ describe('shortCommand', () => {
 })
 
 describe('hostCommand', () => {
-  it('names a process that is not the app by its executable and nothing else', () => {
+  it('names a process that is not the app by the last part of its first word, and nothing after it', () => {
     expect(hostCommand('/usr/bin/some-other-burner --token=SECRET --flag')).toBe('some-other-burner')
-    expect(hostCommand('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper --type=renderer')).toBe('Google Chrome Helper')
     expect(hostCommand('node server.js --password hunter2')).toBe('node')
     expect(hostCommand('/sbin/launchd')).toBe('launchd')
+    expect(hostCommand('-bash')).toBe('-bash')
+  })
+
+  it('keeps arguments that do not start with a dash out of the name, which is most of them', () => {
+    expect(hostCommand('curl https://example.com/path?token=SECRET')).toBe('curl')
+    expect(hostCommand('/usr/bin/python3 /opt/app/main.py secret123')).toBe('python3')
+    expect(hostCommand('node /app/server.js SECRET')).toBe('node')
+    expect(hostCommand('/usr/bin/ssh user@host.example.com')).toBe('ssh')
+    expect(hostCommand('/Applications/Foo.app/Contents/MacOS/Foo SECRET')).toBe('Foo')
+    expect(hostCommand('/usr/bin/curl https://example.com/api?token=abc123')).toBe('curl')
+    expect(hostCommand('/usr/local/bin/psql postgres://user:pw@host/db')).toBe('psql')
+  })
+
+  it('reads a program whose path has a space as its first word, which loses a name and prints nothing of the arguments', () => {
+    expect(hostCommand('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper --type=renderer')).toBe('Google')
   })
 })
 
@@ -127,6 +142,27 @@ describe('formatSnapshot', () => {
     expect(text).toContain('--type=gpu-process')
     expect(text).toContain('other')
     expect(text).not.toContain('SECRET')
+  })
+
+  it("prints none of the arguments of any process that is not the app's, whatever their shape", () => {
+    const hostCommands = [
+      'curl https://example.com/path?token=SECRET',
+      '/usr/bin/python3 /opt/app/main.py secret123',
+      'node /app/server.js SECRET',
+      '/usr/bin/ssh user@host.example.com',
+      '/Applications/Foo.app/Contents/MacOS/Foo SECRET',
+      '/usr/bin/some-other-burner --token=SECRET --flag',
+      'node server.js --password hunter2',
+      '/usr/bin/curl https://example.com/api?token=abc123',
+      '/usr/local/bin/psql postgres://user:pw@host/db',
+    ]
+    const table = ['4001 1 S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0']
+    hostCommands.forEach((c, i) => table.push(`${9000 + i} 1 R ${(90 - i).toFixed(1)} 0:01.00 01:00 ${c}`))
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(table.join('\n')), load: [1], cores: 2, psMs: 5 })
+    for (const leak of ['SECRET', 'secret123', 'token=', 'hunter2', 'abc123', 'postgres://', 'user@host', 'main.py', 'server.js']) expect(text).not.toContain(leak)
+    // And the host rows are there, so the absence above is not an empty section.
+    expect(text).toContain('curl')
+    expect(text).toContain('python3')
   })
 
   it('says when it read only part of an enormous table', () => {
@@ -309,5 +345,62 @@ describe('snapshotThenKill: the kill happens whatever the snapshot does', () => 
       },
     }
     await expect(snapshotThenKill(throwing, async () => 'SNAP', () => {})).resolves.toBeUndefined()
+  })
+})
+
+describe('boundedClose ends a hung close in a kill', () => {
+  // A fake app: `process()` is the child the harness would kill, `close()` is whatever the test makes of it.
+  const fakeApp = (close: () => Promise<void>) => {
+    const calls: string[] = []
+    const proc = { pid: 4001, kill: (signal?: NodeJS.Signals | number): boolean => (calls.push(`kill ${String(signal)}`), true) }
+    return { calls, app: { close, process: () => proc as unknown as ChildProcess } }
+  }
+  const settle = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
+
+  it('writes the report and then kills the app when close() outlasts the grace', async () => {
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    const written: string[] = []
+    void boundedClose(app, {
+      graceMs: 30,
+      write: text => void written.push(text),
+      killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', text => void written.push(text)),
+    })
+    await settle(150)
+    expect(calls).toEqual(['kill SIGKILL'])
+    expect(written[0]).toMatch(/^\[launch\] app\.close\(\) has taken \d+ ms; killing pid 4001\. App log tail:/)
+    expect(written.join('')).toContain('SNAP')
+  })
+
+  it('kills even when the snapshot never settles', async () => {
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    void boundedClose(app, {
+      graceMs: 30,
+      write: () => {},
+      killAfterSnapshot: proc => snapshotThenKill(proc, () => new Promise<string>(() => {}), () => {}, 40),
+    })
+    await settle(250)
+    expect(calls).toEqual(['kill SIGKILL'])
+  })
+
+  it('with its defaults takes the real snapshot of the real process table, and then kills', async () => {
+    // Only the grace is shortened and the report line captured. The snapshot is the real one (a pid that is not in the table), and so is the kill's path.
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    void boundedClose(app, { graceMs: 30, write: () => {} })
+    await settle(900)
+    expect(calls).toEqual(['kill SIGKILL'])
+  })
+
+  it('does not kill an app whose close finishes inside the grace, and leaves no timer behind', async () => {
+    const { calls, app } = fakeApp(() => Promise.resolve())
+    await boundedClose(app, { graceMs: 30, write: () => {}, killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', () => {}) })
+    await settle(120)
+    expect(calls).toEqual([])
+  })
+
+  it('passes a failing close on to the caller, and still does not kill afterwards', async () => {
+    const { calls, app } = fakeApp(() => Promise.reject(new Error('Target page, context or browser has been closed')))
+    await expect(boundedClose(app, { graceMs: 30, write: () => {} })).rejects.toThrow('has been closed')
+    await settle(120)
+    expect(calls).toEqual([])
   })
 })
