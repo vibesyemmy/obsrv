@@ -903,8 +903,8 @@ their first attempt in the same run.
 `middle pixel rgb: [255,255,255]`, `Expected: > 295, Received: 255`** at `vision.spec.ts:114`: the pure white this entry describes.
 It did not run in four jobs: `37369912376` and `37369906774` (cancelled, 7 KB), `36467712974` (cancelled run) and `37408764721`
 (cancelled when `#586` was pushed). **The window does not reach** the 09-17 sighting above or the three runs
-`board/bug-vision-47-normal-not-red.md` cites (`34977896287`, `35853805499`, `35874763546`). Not a rate; no cause; Dogu's
-count alone, with Idris's independent count offered (`#3888`) and not yet run.
+`board/bug-vision-47-normal-not-red.md` cites (`34977896287`, `35853805499`, `35874763546`). Not a rate; no cause. Dogu's and
+Idris's counts agree (`#3895`), and Wren pulled both rows from the raw API (`#3889`).
 
 ## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
 
@@ -2245,8 +2245,9 @@ columns (the next result is the first `✓`, `✘` or `-` line after the hit; wh
 
 **What this does not say.** No cause; the same three explanations still fit, and 13 silent against 16 `quitting` does not say
 they are one thing or two. Not a rate. "Next result line" is what was read, not each hit's whole neighbourhood, so a `✓` after
-a hit does not say the close was harmless. **One reader:** these counts are Dogu's alone; Idris has offered an independent
-count from the same saved logs (`#3888`) and had not run it when this was written. `error-context.md` and `playwright-flaky`
+a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, own pulls and own
+parser, 180 of 180 jobs) agree on every figure here. Both read the same `app.close() has taken` line, so the agreement says the
+count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
 are unread.
 
 ## Sightings sweep 2026-10-03: what no card or entry covered
