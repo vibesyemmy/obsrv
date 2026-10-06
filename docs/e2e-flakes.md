@@ -634,7 +634,7 @@ the `issued` row in the failing attempt's mirror record.
   the other corner, so it does not decide whether they are one bug or two.
 
 **What the sweep covered.** 177 suite jobs, from runs created on or after
-2026-09-27 (the first suite job read was created 09-28 16:28Z, the last 10-06
+2026-09-27 (the first suite job read is from a run created 09-28 16:28Z, the last 10-06
 02:26Z), chosen by the suite job's name and a duration of at least 600 s and not
 by the run's conclusion: `37294297527` is stamped `cancelled` and its suite job
 is `success`. No log came back empty. 175 of the 177 contain a `[sync138]` line;
@@ -895,6 +895,17 @@ assertion already prints what distinguishes them.
 while the hint shows, and it had already shifted two measurement specs. A 26 px shift moves the sampled
 point *within* the content; it does not turn it white. And the four `diagonal-hint` tests passed on
 their first attempt in the same run.
+
+**Counted 2026-10-06 (`#3887`): two firings in the 180 saved suite jobs, both white, both rescued.** The test ran in 176 of the
+180 jobs (runs created from 2026-09-27; first run created 09-28 16:28Z, last 10-06 04:26Z). First-attempt `✘` in **two**, each passed on
+`retry #1`, none failed on a retry: run `36556822266` (created 09-29 10:38Z; suite job `109374902472`; test 625, 438 ms, retry 373 ms) and run
+`37410068785` (created 10-06 03:40Z, suite job `112096421115`, `#586`'s pull-request run; test 659, 639 ms, retry 324 ms). **Both print
+`middle pixel rgb: [255,255,255]`, `Expected: > 295, Received: 255`** at `vision.spec.ts:114`: the pure white this entry describes.
+It did not run in four jobs: `37369912376` and `37369906774` (cancelled, 7 KB), `36467712974` (cancelled run) and `37408764721`
+(cancelled when `#586` was pushed). **The window does not reach** the 09-17 sighting above or the three runs
+`board/bug-vision-47-normal-not-red.md` cites (`34977896287`, `35853805499`, `35874763546`). Not a rate; no cause. Dogu's and
+Idris's counts agree (`#3895`), and Wren pulled both rows from the raw API (`#3889`).
+
 ## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
 
 `the menu applies a CPU rate to the target: the same work takes several times
@@ -1414,7 +1425,37 @@ show `-` on the first pass and ran again, all five, on the retry.
 for that file at 10:07:35. `update.spec.ts:115` was test 646 (not the first of its file) and `toolbar.spec.ts:112` was 594, so
 the failures are not all at app launch. The same run's other first-attempt failure, `sync.spec.ts:139` (5.1 s), is a different
 mechanism with its own entry. **No cause is named, and one more sighting is still not a rate.** The locators so far are
-`.toggle-settings` (twice), `.preset-select`, and the one `vision.spec.ts:35` did not name: not one button.
+`.toggle-settings` (twice), `.preset-select`, and `.vision-deutan` for `vision.spec.ts:35`, which this entry did not name and
+whose job log shows never resolving (read 2026-10-06, under the fifth sighting below): not one button.
+
+**A fifth sighting of the signature, 2026-10-06 (`fit-pan.spec.ts:93`).** Found by Dogu reading the `main` push suite for the
+`#586` merge (`#3868`); Idris and Wren pulled the same job and read the same figures (`#3869`, `#3875`). Run `37413726703`,
+`push` at `6a04f0f13`, suite job `112107660736`, attempt 1, `success`. `fit-pan.spec.ts:93`, *fit draws the whole viewport inside
+the pane and the footer says so*, test 202, failed its first attempt at **30.0 s** and passed on retry #1 in **723 ms**:
+
+```
+TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+- waiting for locator('.view-1x')
+- locator resolved to <button type="button" class="view-1x" aria-pressed="false" title="Actual size …">Actual</button>
+- attempting click action
+- waiting for element to be visible, enabled and stable
+at setView (fit-pan.spec.ts:41)
+```
+
+**What the log says and does not say.** As with `toolbar.spec.ts:112`, `update.spec.ts:115` and `browser-identity.spec.ts:41`,
+the locator resolved to the real control, so "it never rendered" is ruled out *for those*, and the log does not say which of
+*visible*, *enabled* or *stable* it was. **That does not extend to `vision.spec.ts:35`** (Idris, `#3904`; read again by Dogu from the
+raw job log, run `35597133483`, suite job `106324485776`): its call log is the single line `waiting for locator('.vision-deutan')`,
+and the job log has no `locator resolved` and no `attempting click action`, so for that one the locator never resolved in 30 s,
+which the log reads as consistent with the element not being found and does not explain. That is a different shape from the
+other four, and nothing here says the five share a cause. The `fit-pan.spec.ts:93` failure was **not the first test of its file**:
+`fit-pan.spec.ts:85` passed in 55 ms at 04:38:45.820Z; the app the kill line names (pid 30688) had started at 04:38:44.114Z, before it, and the failing click began after it.
+This file is not `serial`: the retry ran this one test. **The harness's kill line follows it** (`app.close() has taken 10003 ms`,
+a silent tail), 40.153 s after test 85 passed; less the 10.003 s close, that is 30.150 s, the click's budget (Idris, `#3871`), so
+the close came after the timeout. **No cause is named, and one more sighting is still not a rate.** The locators so far are
+`.toggle-settings` (twice), `.preset-select`, `.view-1x`, and `.vision-deutan`, which never resolved: not one button. The
+error-context artifact and `playwright-flaky` (id `11390724548` on this run) were not read.
 
 **What the suite minutes say about the first attempts** (Idris's table, recomputed by Dogu, 2026-10-05; the file lived in
 a session scratchpad that did not survive a restart, so the figures are as posted in the room, `#3665` and `#3666`, and the raw
@@ -2113,8 +2154,8 @@ reach `before-quit` in those ten seconds; a tail with it means the quit began an
 
 **The ten hits, in eight raw CI job logs.** Found by `grep -F 'app.close() has taken'` on the job log
 (`gh api repos/vibesyemmy/obsrv/actions/jobs/<job id>/logs`), not on the run page; the `error-context.md` artifacts were not
-read. Every hit sits directly before a `✘` line. All ten were re-read from the raw logs by Dogu on 2026-10-05 (the four
-from 09-29 and 09-30 were first found by Wren, `#3659`).
+read. Every one of these ten sits directly before a `✘` line; **that does not hold across the days counted below**. All ten
+were re-read from the raw logs by Dogu on 2026-10-05 (the four from 09-29 and 09-30 were first found by Wren, `#3659`).
 
 | run | date (UTC), where | next `✘` after the hit | length | app-log tail | read by |
 | --- | --- | --- | --- | --- | --- |
@@ -2158,6 +2199,70 @@ none is built, and nothing here depends on one). Not a rate: the logs were pulle
 cover different windows; the 42 are Dogu's, the older four are Wren's, and Idris's CI logs overlap Dogu's and read the same
 way where they overlap (`#3660`). One hit (`37190742650`) was read by one person. The silent tails are not proved to be one
 thing.
+
+**Counted again, 2026-10-06: 29 hits in 25 jobs. The table above is the part of them its windows reached.** Dogu, from
+the raw job logs (`gh run view --log --job <id>`), after the `main` push for the `#586` merge (`37413726703`, below) added a
+silent hit the table lacks and raised the question of how many others it lacks. **The logs:** 180 suite jobs, from runs created
+on or after 2026-09-27 (first run created 09-28 16:28Z, last 10-06 04:26Z): the 177 of the `sync.spec.ts:139` sweep (suite jobs of 600 s
+or more, chosen by job name and not by run conclusion) and three more by id (`37408764721`, `37410068785`, `37413726703`).
+180 of 180 pulled, return code 0, none empty (smallest 7,267 bytes). **A control:** in this register's own window (runs created
+10-03T22:35Z to 10-05T14:50Z) the sweep finds the same 42 jobs and the same six hits as the table, and all ten of the table's
+tails and next-`✘` rows read the same from these logs.
+
+**What the 29 are.** Every hit took 10,001 to 10,022 ms to close (Dogu's parse; Idris's parser reproduced the range and both ends, `#3904`). **13 tails are silent** (two lines, `starting` and `gpu`) and
+**16 log `quitting`**. **The next result line after the hit is a `✘` in 23 and a `✓` in 6.** 11 of the 23 `✘` ran the full 30.0 s:
+8 after a silent tail and 3 after one that logged `quitting` (`throttle-refused.spec.ts:164`, `image-tabs.spec.ts:82`,
+`native-pane.spec.ts:62`, all 09-28 and 09-29). Five jobs with a hit contain no `✘` at all (`36464104648`, `36619187164`,
+`36648615234`, `36653034749`, `37399203900`). The ten rows above plus these 19 are the 29; the 19 follow, with the same
+columns (the next result is the first `✓`, `✘` or `-` line after the hit; whether each `✘` was then rescued was not read):
+
+| run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
+| --- | --- | --- | --- | --- | --- |
+| `36464104648` | 09-28, pull request | ✓ `consent.spec.ts:119` | 7 ms | `quitting` logged | Dogu, Idris (parser) |
+| `36470833485` | 09-28, pull request | ✓ `tabs.spec.ts:1080` | 16.7 s | `quitting` logged | Dogu, Idris (parser) |
+| `36479230614` | 09-28, pull request | ✘ `throttle-refused.spec.ts:164` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36486270346` | 09-28, `main` push | ✘ `image-tabs.spec.ts:82` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36519694953` | 09-29, `main` push | ✘ `tab-switch-preset.spec.ts:89` | 2.2 s | `quitting` logged | Dogu, Idris (parser) |
+| `36519694953` | 09-29, `main` push | ✘ `update.spec.ts:85` | 10.1 s | `quitting` logged | Dogu, Idris (parser) |
+| `36526844845` | 09-29, pull request | ✘ `live-capture-notes.spec.ts:101` | 3.6 s | `quitting` logged | Dogu, Idris (parser) |
+| `36530455782` | 09-29, `main` push | ✘ `sync-trace.spec.ts:63` | 30.0 s | **silent** | Dogu, Idris (parser) |
+| `36541147424` | 09-29, `main` push | ✘ `live-capture-notes.spec.ts:231` | 14.9 s | `quitting` logged | Dogu, Idris (parser) |
+| `36541147424` | 09-29, `main` push | ✘ `orientation.spec.ts:114` | 10.6 s | `quitting` logged | Dogu, Idris (parser) |
+| `36556822266` | 09-29, pull request | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** | Dogu, Idris (parser), Wren |
+| `36577980330` | 09-29, pull request | ✘ `native-pane.spec.ts:62` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36608642138` | 09-29, pull request | ✘ `throttle-live.spec.ts:48` | 0 ms | **silent** | Dogu, Idris (parser) |
+| `36619187164` | 09-29, pull request | ✓ `sync-mirror-mark.spec.ts:41` | 1.1 s | **silent** | Dogu, Idris (parser) |
+| `36648615234` | 09-30, pull request | ✓ `quit.spec.ts:26` | 11.7 s | `quitting` logged | Dogu, Idris (parser) |
+| `36653034749` | 09-30, `main` push | ✓ `navigate-budget.spec.ts:93` | 3.3 s | `quitting` logged | Dogu, Idris (parser) |
+| `37355564026` | 10-05, `main` push | ✘ `throttle-live.spec.ts:82` | 0 ms | **silent** | Dogu, Idris (parser) |
+| `37399203900` | 10-06, pull request | ✓ `vision-confirm.spec.ts:125` | 31 ms | `quitting` logged | Dogu, Idris (parser), Wren |
+| `37413726703` | 10-06, `main` push | ✘ `fit-pan.spec.ts:93` | 30.0 s | **silent** | Dogu, Idris (parser), Wren |
+
+*Read by.* **Dogu** parsed all 19 rows from the saved logs. **Idris compared all 19 by parser, not by eye** (run, date, where, next
+result and spec, length and tail: 0 mismatches, with a control that does mismatch, `#3904`) and the ten rows of the table above
+the same way (spec, length and tail: 10 of 10, `#3906`); Idris did not read the raw neighbourhood of each of the 19 and did not
+check whether each `✘` was rescued. **Wren compared the next-result kind, the tail and the 30.0 s flag of all 29 rows by parser**,
+from a third pull of the 25 jobs the two tables name (0 mismatches, `#3907`), and **read the raw logs** of `36556822266`,
+`37399203900` and the whole `fit-pan` job (`#3889`, `#3899`, `#3875`). "(parser)" in the column marks a comparison, not a read.
+
+**What this changes in the section above.**
+- **"Seven of the ten tails are silent" is true of those ten and is not the shape of the set.** Across the 29 it is 13 silent and
+  16 not. A silent tail is not the majority, and the three `quitting` hits before a 30.0 s `✘` show that 30.0 s does not mean silent.
+- **"Every hit sits directly before a `✘` line" holds for the ten and not across the days read here:** 6 of the 29 are followed by
+  a `✓`, five of them with `quitting` logged and one silent (`36619187164`, before `sync-mirror-mark.spec.ts:41` passing in 1.1 s).
+  A slow close is not always followed by a failure.
+- **"None of the 26 logs without a first-attempt `✘` has a hit" holds for the 42 and is not general:** four of the five jobs with
+  no `✘` and a hit are before that window (09-28 to 09-30) and one is after it (`37399203900`, run created 10-06 01:26Z).
+- **`37413726703` (`fit-pan.spec.ts:93`, below) is the 13th silent hit and the latest of the 29.** By the table's own
+  definition it is its eleventh row.
+
+**What this does not say.** No cause; the same three explanations still fit, and 13 silent against 16 `quitting` does not say
+they are one thing or two. Not a rate. "Next result line" is what was read, not each hit's whole neighbourhood, so a `✓` after
+a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, own pulls and own
+parser, 180 of 180 jobs) agree on every figure here, and a third parse by Wren of the 25 jobs the two tables name (`#3907`) reads
+the same; it cannot see a hit those lists omit. All three read the same `app.close() has taken` line, so the agreement says the
+count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
+are unread.
 
 ## Sightings sweep 2026-10-03: what no card or entry covered
 
