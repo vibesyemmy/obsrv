@@ -192,7 +192,18 @@ jobs:
     # queue. The job still runs, still carries this name, and still reports —
     # it is the required check, and it must arrive.
     runs-on: ${{ needs.scope.outputs.board_only == 'true' && 'ubuntu-latest' || 'macos-14' }}
-    timeout-minutes: 30
+    # 50, sized from the logs and not from a round number. The suite job is
+    # setup (about 1.5 to 2.3 minutes) plus the e2e step (median 22.6 over 40
+    # logs, 2026-10-02 to 05; slowest seen 27.6). A `main` push suite finished 29 m 54 s
+    # into the old 30 (run 37355564026), and the cap is enforced 20 to 30 s late,
+    # so "N seconds under" is not N seconds from a kill. On `main` a cancelled
+    # run is a commit with NO CI answer. The spare that matters is one hung
+    # attempt in surface-parity.spec.ts (900 s): at the slowest e2e seen that
+    # needs a cap of about 45 to fit by seconds, and 50 fits it with about 5
+    # minutes to spare. The table is in board/chore-ci-suite-cap-margin.md.
+    # What it costs: a hung job holds a macOS runner 20 minutes longer than it
+    # did. The release job below keeps its own 30.
+    timeout-minutes: 50
     steps:
       - name: Say what this run did not do
         if: ${{ needs.scope.outputs.board_only == 'true' }}
@@ -311,11 +322,14 @@ jobs:
       # Runs 34995218008 and 35086053288 are that shape ("Test timeout of
       # 30000ms exceeded", e2e red, this step green).
       #
-      # What ends `cancelled` is a run that outlasts the JOB's 30 minutes (the
-      # e2e step has no `timeout-minutes` of its own). e2e takes ≈17 of those on
-      # a green main, so ≈12 are spare: one hung attempt in
-      # surface-parity.spec.ts (serial, `timeout: 900_000`) spends them by
-      # itself, and so does a hang that catches many tests at once. Then
+      # What ends `cancelled` is a run that outlasts the JOB's 50 minutes (the
+      # e2e step has no `timeout-minutes` of its own). e2e takes ≈23 of those on
+      # a green main (median 22.6 over 40 logs, slowest seen 27.6) plus ≈2 of setup, so
+      # ≈20 to 25 are spare: one hung attempt in surface-parity.spec.ts (serial,
+      # `timeout: 900_000`, 15 minutes) fits in them; a second does not, nor does
+      # a hang that catches many tests at once, and with `retries: 1` a hang
+      # that recurs doubles. (At the old 30 minutes the spare was ≈5.5 at the
+      # median and ≈0.1 at the slowest, so one hang already did not fit.) Then
       # `steps.e2e.outcome` is `cancelled`, not `failure`, and this step is
       # skipped. Observed on run 35115147209 — a deliberate hang that really did
       # exhaust the 30 minutes ("The job has exceeded the maximum execution time
