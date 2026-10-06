@@ -2218,29 +2218,32 @@ columns (the next result is the first `✓`, `✘` or `-` line after the hit; wh
 
 | run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
 | --- | --- | --- | --- | --- | --- |
-| `36464104648` | 09-28, pull request | ✓ `consent.spec.ts:119` | 7 ms | `quitting` logged | Dogu, Idris |
-| `36470833485` | 09-28, pull request | ✓ `tabs.spec.ts:1080` | 16.7 s | `quitting` logged | Dogu, Idris |
-| `36479230614` | 09-28, pull request | ✘ `throttle-refused.spec.ts:164` | 30.0 s | `quitting` logged | Dogu, Idris |
-| `36486270346` | 09-28, `main` push | ✘ `image-tabs.spec.ts:82` | 30.0 s | `quitting` logged | Dogu, Idris |
-| `36519694953` | 09-29, `main` push | ✘ `tab-switch-preset.spec.ts:89` | 2.2 s | `quitting` logged | Dogu |
-| `36519694953` | 09-29, `main` push | ✘ `update.spec.ts:85` | 10.1 s | `quitting` logged | Dogu |
-| `36526844845` | 09-29, pull request | ✘ `live-capture-notes.spec.ts:101` | 3.6 s | `quitting` logged | Dogu |
-| `36530455782` | 09-29, `main` push | ✘ `sync-trace.spec.ts:63` | 30.0 s | **silent** | Dogu |
-| `36541147424` | 09-29, `main` push | ✘ `live-capture-notes.spec.ts:231` | 14.9 s | `quitting` logged | Dogu |
-| `36541147424` | 09-29, `main` push | ✘ `orientation.spec.ts:114` | 10.6 s | `quitting` logged | Dogu |
-| `36556822266` | 09-29, pull request | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** | Dogu, Wren |
-| `36577980330` | 09-29, pull request | ✘ `native-pane.spec.ts:62` | 30.0 s | `quitting` logged | Dogu, Idris |
-| `36608642138` | 09-29, pull request | ✘ `throttle-live.spec.ts:48` | 0 ms | **silent** | Dogu |
-| `36619187164` | 09-29, pull request | ✓ `sync-mirror-mark.spec.ts:41` | 1.1 s | **silent** | Dogu, Idris |
-| `36648615234` | 09-30, pull request | ✓ `quit.spec.ts:26` | 11.7 s | `quitting` logged | Dogu, Idris |
-| `36653034749` | 09-30, `main` push | ✓ `navigate-budget.spec.ts:93` | 3.3 s | `quitting` logged | Dogu, Idris |
-| `37355564026` | 10-05, `main` push | ✘ `throttle-live.spec.ts:82` | 0 ms | **silent** | Dogu |
-| `37399203900` | 10-06, pull request | ✓ `vision-confirm.spec.ts:125` | 31 ms | `quitting` logged | Dogu, Idris, Wren |
-| `37413726703` | 10-06, `main` push | ✘ `fit-pan.spec.ts:93` | 30.0 s | **silent** | Dogu, Idris, Wren |
+| `36464104648` | 09-28, pull request | ✓ `consent.spec.ts:119` | 7 ms | `quitting` logged | Dogu, Idris (parser) |
+| `36470833485` | 09-28, pull request | ✓ `tabs.spec.ts:1080` | 16.7 s | `quitting` logged | Dogu, Idris (parser) |
+| `36479230614` | 09-28, pull request | ✘ `throttle-refused.spec.ts:164` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36486270346` | 09-28, `main` push | ✘ `image-tabs.spec.ts:82` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36519694953` | 09-29, `main` push | ✘ `tab-switch-preset.spec.ts:89` | 2.2 s | `quitting` logged | Dogu, Idris (parser) |
+| `36519694953` | 09-29, `main` push | ✘ `update.spec.ts:85` | 10.1 s | `quitting` logged | Dogu, Idris (parser) |
+| `36526844845` | 09-29, pull request | ✘ `live-capture-notes.spec.ts:101` | 3.6 s | `quitting` logged | Dogu, Idris (parser) |
+| `36530455782` | 09-29, `main` push | ✘ `sync-trace.spec.ts:63` | 30.0 s | **silent** | Dogu, Idris (parser) |
+| `36541147424` | 09-29, `main` push | ✘ `live-capture-notes.spec.ts:231` | 14.9 s | `quitting` logged | Dogu, Idris (parser) |
+| `36541147424` | 09-29, `main` push | ✘ `orientation.spec.ts:114` | 10.6 s | `quitting` logged | Dogu, Idris (parser) |
+| `36556822266` | 09-29, pull request | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** | Dogu, Idris (parser), Wren |
+| `36577980330` | 09-29, pull request | ✘ `native-pane.spec.ts:62` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36608642138` | 09-29, pull request | ✘ `throttle-live.spec.ts:48` | 0 ms | **silent** | Dogu, Idris (parser) |
+| `36619187164` | 09-29, pull request | ✓ `sync-mirror-mark.spec.ts:41` | 1.1 s | **silent** | Dogu, Idris (parser) |
+| `36648615234` | 09-30, pull request | ✓ `quit.spec.ts:26` | 11.7 s | `quitting` logged | Dogu, Idris (parser) |
+| `36653034749` | 09-30, `main` push | ✓ `navigate-budget.spec.ts:93` | 3.3 s | `quitting` logged | Dogu, Idris (parser) |
+| `37355564026` | 10-05, `main` push | ✘ `throttle-live.spec.ts:82` | 0 ms | **silent** | Dogu, Idris (parser) |
+| `37399203900` | 10-06, pull request | ✓ `vision-confirm.spec.ts:125` | 31 ms | `quitting` logged | Dogu, Idris (parser), Wren |
+| `37413726703` | 10-06, `main` push | ✘ `fit-pan.spec.ts:93` | 30.0 s | **silent** | Dogu, Idris (parser), Wren |
 
-*Read by:* Idris's count (`#3895`) covers all 19 rows in its totals; a row is credited to Idris only where `#3895` names it
-(the six `✓` rows, the three `quitting` rows before a 30.0 s `✘`, and `fit-pan.spec.ts:93`). Wren read the tail and next result of
-`36556822266` and `37399203900` and the whole `fit-pan` job (`#3889`, `#3875`). The rest are read by Dogu alone.
+*Read by.* **Dogu** parsed all 19 rows from the saved logs. **Idris compared all 19 by parser, not by eye** (run, date, where, next
+result and spec, length and tail: 0 mismatches, with a control that does mismatch, `#3904`) and the ten rows of the table above
+the same way (spec, length and tail: 10 of 10, `#3906`); Idris did not read the raw neighbourhood of each of the 19 and did not
+check whether each `✘` was rescued. **Wren compared the next-result kind, the tail and the 30.0 s flag of all 29 rows by parser**,
+from a third pull of the 25 jobs the two tables name (0 mismatches, `#3907`), and **read the raw logs** of `36556822266`,
+`37399203900` and the whole `fit-pan` job (`#3889`, `#3899`, `#3875`). "(parser)" in the column marks a comparison, not a read.
 
 **What this changes in the section above.**
 - **"Seven of the ten tails are silent" is true of those ten and is not the shape of the set.** Across the 29 it is 13 silent and
@@ -2256,7 +2259,8 @@ columns (the next result is the first `✓`, `✘` or `-` line after the hit; wh
 **What this does not say.** No cause; the same three explanations still fit, and 13 silent against 16 `quitting` does not say
 they are one thing or two. Not a rate. "Next result line" is what was read, not each hit's whole neighbourhood, so a `✓` after
 a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, own pulls and own
-parser, 180 of 180 jobs) agree on every figure here. Both read the same `app.close() has taken` line, so the agreement says the
+parser, 180 of 180 jobs) agree on every figure here, and a third parse by Wren of the 25 jobs the two tables name (`#3907`) reads
+the same; it cannot see a hit those lists omit. All three read the same `app.close() has taken` line, so the agreement says the
 count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
 are unread.
 
