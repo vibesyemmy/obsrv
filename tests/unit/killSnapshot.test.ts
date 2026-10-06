@@ -2,10 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ChildProcess } from 'node:child_process'
 import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
+  capText,
+  describeHidden,
+  pickTreeRows,
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
   hostCommand,
+  parentCommand,
   parsePs,
   shortCommand,
   takeKillSnapshot,
@@ -98,6 +102,22 @@ describe('hostCommand', () => {
   })
 })
 
+describe('parentCommand', () => {
+  it('names the Playwright worker by its first word and its script, and nothing after', () => {
+    expect(parentCommand('/Users/runner/hostedtoolcache/node/24.10.0/arm64/bin/node /Users/runner/work/obsrv/node_modules/playwright/lib/workerProcessEntry.js')).toBe('node workerProcessEntry.js')
+    expect(parentCommand('node /x/workerProcessEntry.js --worker=3 --token=SECRET extra')).toBe('node workerProcessEntry.js')
+  })
+
+  it('prints no argument of whatever launched the app on a local run', () => {
+    expect(parentCommand('node scripts/run-e2e.js --token=SECRET')).toBe('node run-e2e.js')
+    expect(parentCommand('node scripts/run-e2e.js SECRET')).toBe('node run-e2e.js')
+    expect(parentCommand('bash -c "export TOKEN=SECRET; run"')).toBe('bash')
+    expect(parentCommand('/usr/local/bin/python3 -m pytest --api-key SECRET')).toBe('python3')
+    expect(parentCommand('/usr/bin/some-launcher SECRET --flag')).toBe('some-launcher')
+    expect(parentCommand('/sbin/launchd')).toBe('launchd')
+  })
+})
+
 describe('treeOf', () => {
   it('returns the root and every descendant, root first', () => {
     expect(treeOf(parsePs(TABLE), 4001).map(r => r.pid)).toEqual([4001, 4002, 4003, 4004])
@@ -165,6 +185,71 @@ describe('formatSnapshot', () => {
     expect(text).toContain('python3')
   })
 
+  describe("the app's parent, the harness process that holds the link", () => {
+    const worker = '14927 14900 S< 0.9 0:01.26 00:50 /Users/runner/hostedtoolcache/node/24.10.0/arm64/bin/node /Users/runner/work/obsrv/node_modules/playwright/lib/workerProcessEntry.js'
+    const app = (ppid: number) => `4001 ${ppid} S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0`
+
+    it('prints its state, CPU and name, so a busy, stopped or idle harness reads differently', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain("the app's parent, the process that launched it:")
+      expect(text).toMatch(/14927\s+14900\s+S<\s+0\.9\s+0:01\.26/)
+      expect(text).toContain('node workerProcessEntry.js')
+      expect(text).not.toContain('reparented')
+    })
+
+    it("prints no argument of a parent that is not the Playwright worker, through the whole snapshot", () => {
+      const launcher = '14927 14900 S 0.1 0:00.50 00:50 node /home/me/run-e2e.js --api-key=SECRET positional-SECRET'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([launcher, app(14927)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain('node run-e2e.js')
+      expect(text).not.toContain('SECRET')
+    })
+
+    it('says so when the parent is not in the table, which means the process that launched the app had gone', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs(app(777)), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain("the app's parent, pid 777, is not in the process table")
+    })
+
+    it('says the app was reparented when its parent is pid 1', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs(['1 0 Ss 0.1 13:05.94 17:52:54 /sbin/launchd', app(1)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain('pid 1: the app was reparented')
+    })
+
+    it('does not list the parent a second time among the busiest other processes', () => {
+      const busy = '14927 14900 R 99.0 0:41.26 00:50 /usr/bin/node /x/workerProcessEntry.js'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([busy, app(14927), '9000 1 R 50.0 0:01.00 00:10 /usr/bin/other'].join('\n')), load: [1], cores: 2, psMs: 5 })
+      // As a pid (first column): the app's own row also carries 14927, as its ppid.
+      expect(text.split('\n').filter(l => /^\s+14927\s/.test(l)).length).toBe(1)
+    })
+
+    it('stays inside the line and byte caps, and a huge app tree does not crowd out the parent or the host rows', () => {
+      const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${'z'.repeat(60)}${i}`).join('\n')
+      const other = '9000 1 R 70.0 0:01.00 00:10 /usr/bin/busy-other'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927), many, other].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
+      expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(SNAPSHOT_MAX_BYTES)
+      // The point of the follow-up: these survive a tree of 401 rows.
+      expect(text).toContain("the app's parent, the process that launched it")
+      expect(text).toContain('node workerProcessEntry.js')
+      expect(text).toContain('busiest other processes on the host')
+      expect(text).toContain('busy-other')
+      expect(text).toMatch(/… and \d+ more descendants/)
+    })
+
+    it('does not say the process had gone when the table read was cut before it', () => {
+      const filler = Array.from({ length: 6_000 }, (_, i) => `${i + 100} 1 S 0.0 0:00.00 00:01 /bin/x${i}`)
+      const cutTable = parsePs(filler.join('\n'))
+      expect(cutTable.length).toBeGreaterThanOrEqual(5_000)
+      const noApp = formatSnapshot({ pid: 4_000_000, rows: cutTable, load: [], cores: 1, psMs: 1 })
+      expect(noApp).toContain('was not found in the first')
+      expect(noApp).not.toContain('had already gone')
+      const orphan = [...filler.slice(0, 4_990), '8000001 7000000 S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0', ...filler.slice(4_990, 5_100)]
+      // pid 8000001: the filler's pids run from 100, so none of them collides with the app's.
+      const noParent = formatSnapshot({ pid: 8_000_001, rows: parsePs(orphan.join('\n')), load: [], cores: 1, psMs: 1 })
+      expect(noParent).toContain("the app's parent, pid 7000000, was not found in the first rows")
+      expect(noParent).not.toContain('had already gone')
+    })
+  })
+
   it('says when it read only part of an enormous table', () => {
     const rows = Array.from({ length: 6_000 }, (_, i) => `${i + 1} 1 S 0.0 0:00.00 00:01 /bin/x${i}`).join('\n')
     // A pid that is not in the table, so the host section is printed (every row here is a descendant of pid 1).
@@ -181,21 +266,51 @@ describe('formatSnapshot', () => {
     expect(text.split('\n').every(l => l.length < 220)).toBe(true)
   })
 
-  it('caps the number of lines on its own, when short rows would not reach the byte cap', () => {
-    const short = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 x`).join('\n')
-    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${short}`), load: [1], cores: 2, psMs: 5 })
-    // The line cap and the cap's own note: 41 lines at most, and under the byte cap, so the byte cap did not cut it and only the line cap can have.
+  it('limits the app tree to a bounded number of rows and says how many it left out', () => {
+    const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${i}`).join('\n')
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
+    expect(text).toMatch(/… and 385 more descendants \(S×385; busiest 0\.0%\)/)
+    expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES)
+  })
+
+  it('never leaves the busy or stopped child out of a large tree, wherever it sits in the table', () => {
+    const kids = Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${i}`)
+    kids[29] = '5029 4001 R 99.0 0:41.00 00:41 /bin/spinning-child'
+    kids[24] = '5024 4001 T 0.0 0:00.10 00:41 /bin/stopped-child'
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...kids].join('\n')), load: [1], cores: 2, psMs: 5 })
+    expect(text).toMatch(/5029\s+4001\s+R\s+99\.0/)
+    expect(text).toMatch(/5024\s+4001\s+T\s+0\.0/)
+    expect(text).toMatch(/… and 15 more descendants \(S×15; busiest 0\.0%\)/)
+  })
+
+  it('says what a large tree left out, so that leaving it out is a reading too', () => {
+    // 30 sleeping children with %cpu 0.0 to 2.9: the 15 busiest are printed, so the 15 left out top out at 1.4.
+    const rows = parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 S ${(i * 0.1).toFixed(1)} 0:00.01 00:01 /bin/c${i}`)].join('\n'))
+    const { shown, hidden } = pickTreeRows(treeOf(rows, 4001))
+    expect(shown[0]?.pid).toBe(4001)
+    expect(shown.length).toBe(16)
+    expect(describeHidden(hidden)).toBe('S×15; busiest 1.4%')
+    expect(describeHidden([])).toBe('; busiest 0.0%')
+  })
+
+})
+
+describe('capText, the guard on how much is ever printed', () => {
+  it('caps the number of lines on its own, when short lines would not reach the byte cap', () => {
+    const text = capText(Array.from({ length: 400 }, (_, i) => `  row ${i}`))
     expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
     expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(SNAPSHOT_MAX_BYTES)
     expect(text).toContain('output capped')
   })
 
-  it('caps lines and bytes when the table is large, and says it did', () => {
-    const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 /bin/child-${'z'.repeat(80)}${i}`).join('\n')
-    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
-    expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
+  it('caps the bytes when long lines would stay under the line cap, and says it did', () => {
+    const text = capText(Array.from({ length: 30 }, (_, i) => `  row ${i} ${'x'.repeat(300)}`))
     expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(SNAPSHOT_MAX_BYTES)
     expect(text).toContain('output capped')
+  })
+
+  it('leaves a short snapshot alone', () => {
+    expect(capText(['a', 'b'])).toBe('a\nb')
   })
 })
 

@@ -78,6 +78,15 @@ program whose path has a space reads as its first word (`Google` for `Google Chr
 failing close reaches the caller; and the real defaults), and one against the real `ps`. Each property was broken in turn to check a test notices, and the ones that survived were fixed
 (an untested line cap, an unreachable byte cut, and a kill call whose deletion left every test green until `boundedClose` was made testable).
 
+**Follow-up, 2026-10-06 (Wren's suggestion, `#4038`): the snapshot also prints the app's parent**, the Playwright worker that holds the link to the app, with its state, `%cpu`, CPU time and name. It is in
+the `ps -A` table already, so there is no second command and the budget is unchanged. If the parent is not in the table it says the process that launched the app had gone, and a parent of pid 1 is called
+a reparenting. It is the half of "stuck link or starved runner" that the app's own tree cannot show: a worker that is busy, stopped or gone reads differently from one that is idle. It is not listed a second
+time among the busiest other processes. It is **named, not quoted**: the first word and, when the second word is a script, that script's file name (`node workerProcessEntry.js`), and nothing after
+it, because a local run can be launched by any script with any arguments and this text goes into a log that gets pasted (Idris's pre-read, `#4049`). **The app's own tree is limited to 16 rows**, so a large tree can never crowd the parent and the host rows out of the 40-line cap (Wren, `#4051`); **the 16 are chosen by what they say, not by table order**:
+the root, then any descendant that is not plainly sleeping or idle (`R`, `T`, `U`, `Z`), then the busiest by `%cpu`, so the one busy or stopped child cannot be the row that was left out; and the line that says how many
+were left out also says what they were doing (`… and 15 more descendants (S×15; busiest 0.0%)`), so that leaving rows out is a reading too (Wren, `#4053`); and **a process missing from a table that was read to its 5,000-row limit is
+reported as not found in the rows read, not as having gone.** Tested for each case, and sabotage-checked.
+
 ## Controls it needs before anyone reads a snapshot
 
 1. A main process busy-waiting for 45 s (an `electronApplication.evaluate` that spins): the snapshot must read busy.
@@ -100,6 +109,17 @@ another, and a busy one read `R`. **(b) The load average did not separate contro
 burners or not, so the busiest-process rows are what carries the host reading. **(c) A busy host is ordinary on this runner**: Spotlight alone used 20 to 63% of it in controls 1
 and 2, so a reading of "host busy" in a real hang needs that baseline beside it before it says anything. One runner image, one probe each time, not a rate.
 
+**The first snapshot from a real hang, 2026-10-06 (`#593`'s own suite, run `37455521138`, `fit-pan.spec.ts:93`, first attempt 30.0 s, retry `✓` in 386 ms).** Report line 11:30:12.163Z, snapshot
+header 81 ms later (`ps took 43 ms`), tail silent (`starting`, `gpu`, no `quitting`). **The app was idle, not busy and not stopped:** main in state `S<s` at **0.0% CPU** (0:00.50 of CPU in 41 s),
+its six helpers `S<` at 0.0 to 0.4%. **The host was saturated:** load 15.19 / 14.34 / 11.26 on 3 cores, **`mds_stores` (Spotlight) at 110.0%** and four `mdworker_shared` at 15.1 to 22.5%. In the table
+that is the row "main not busy, host load high": it **rules out a busy loop in main and a stopped main**, fits a starved runner, still fits a stuck harness link, and names no cause. Three limits:
+it is one hang; it is a reading **at the kill, about 40 s after the click began waiting**, not at the start; and the healthy probe runs already showed Spotlight at 20 to 63% and loads of 10 to 37, so a
+saturated host is not in itself unusual on this image. **An observation, not a cause (Wren, `#4038`):** none of the app's seven processes was runnable (all `S`, about 0%), and each carried `<`, a raised
+priority, which a Spotlight indexer does not; a process queued behind a busy host would more often read `R` and have accumulated CPU time. That fits "waiting for an event that did not arrive" at least as
+well as "starved", and `ps` inside the guest cannot show a hypervisor taking the vCPU, so it excludes neither. **And the click's call log went further than in the earlier `fit-pan` sighting:** `.view-1x`
+resolved, then `element is visible, enabled and stable`, `scrolling into view if needed`, `done scrolling`, **`performing click action`**, then nothing for the rest of the 30 s, so the actionability checks all
+passed and the stall was in the click being performed. The next datum that would help is on the harness side, which is what the parent row below is for.
+
 **Control 4 has no deterministic method that I could find, and the last row of the table stays unresolved.** Candidates considered: stopping the Playwright worker stops the
 thing that prints; pausing main through the inspector gives a main that is not running, which is the same row; closing the inspector makes `close()` reject quickly and not hang;
 and Playwright connects to the app's inspector port directly, so the harness has no hook to blackhole it. "The harness's link is stuck while the app is healthy" and "main is
@@ -113,8 +133,8 @@ path that every process in the tree shares is cut off (the first probe cut each 
 464 to 473 rows, under the 40 lines and 4,096 bytes. In the job log the reporter's `✓` line can land inside a snapshot, because stderr and stdout are merged by line.
 
 **Still not known.** **A hang inside `launchApp` never reaches `boundedClose`,** so the snapshot would not run there (Idris, `#3764`: one launch hang in 60 idle runs, `launchApp` waiting 10 s
-for the native pane's size text, `app` then undefined in `afterAll`); whether such a hang leaves the spawned app behind is unchecked. **What a snapshot reads in a real hang** is the point
-of the whole card and is unknown until one is caught; the probe only shows what each deliberate cause looks like. The cost on a runner that is itself hung is unmeasured.
+for the native pane's size text, `app` then undefined in `afterAll`); whether such a hang leaves the spawned app behind is unchecked. **What a snapshot reads in a real hang** is the point of the whole card: one has been caught (above), one reading, and the controls only show what each deliberate cause looks like. The cost on a
+runner that is itself hung is measured once, in that hang: `ps took 43 ms`.
 
 ## Owner and decision
 

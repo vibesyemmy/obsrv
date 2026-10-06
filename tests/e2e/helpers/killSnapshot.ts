@@ -45,6 +45,8 @@ const PS_MAX_BUFFER = 4 * 1024 * 1024
 const MAX_ROWS = 5_000
 const COMMAND_CHARS = 100
 const TOP_HOST_ROWS = 5
+/** Rows of the app's own tree printed: the parent and the host rows after it must never be crowded out of the line cap by a large tree. */
+const MAX_TREE_ROWS = 16
 
 /** pid, parent, state, %cpu, cumulative CPU time, elapsed, command. No header (`=` suffixes). */
 export const PS_ARGS = ['-A', '-o', 'pid=,ppid=,state=,%cpu=,time=,etime=,command='] as const
@@ -154,8 +156,26 @@ const rowLine = (r: ProcRow, command: string): string =>
   `  ${String(r.pid).padStart(7)} ${String(r.ppid).padStart(7)} ${r.state.padEnd(4)} ${r.cpu.toFixed(1).padStart(5)} ` +
   `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(command, COMMAND_CHARS)}`
 
+/**
+ * The process that launched the app, named by its first word and, when that is a script, the script's file name: `node workerProcessEntry.js`.
+ *
+ * In the harness this is the Playwright worker, and the file name is what says so. Nothing after it
+ * is printed: a local run can be launched by any script with any arguments, and this text goes into a log
+ * that gets pasted, so an argument (a flag, a token, a path to a secret) is not named here any more than
+ * it is for a host process. A second word is taken only when it ends in a script extension and does not
+ * start with a dash.
+ */
+export function parentCommand(command: string): string {
+  const words = command.trim().split(/\s+/)
+  const base = (w: string): string => w.slice(w.lastIndexOf('/') + 1) || w
+  const first = base(words[0] ?? '')
+  const second = words[1]
+  return second !== undefined && !second.startsWith('-') && /\.(?:[cm]?js|ts)$/.test(second) ? `${first} ${base(second)}` : first
+}
+
 const rowText = (r: ProcRow): string => rowLine(r, shortCommand(r.command))
 const hostRowText = (r: ProcRow): string => rowLine(r, hostCommand(r.command))
+const parentRowText = (r: ProcRow): string => rowLine(r, parentCommand(r.command))
 
 const COLUMNS = '  pid     ppid    st    %cpu       time     elapsed  command'
 
@@ -175,20 +195,86 @@ export interface SnapshotInput {
 export function formatSnapshot(input: SnapshotInput): string {
   const { pid, rows, load, cores, psMs } = input
   const tree = treeOf(rows, pid)
+  // A table read of MAX_ROWS or more was cut: a process that is not in what was read may be in the rest.
+  const readWasCut = rows.length >= MAX_ROWS
   const lines: string[] = [
     `[launch] kill snapshot for pid ${pid} (ps took ${psMs} ms; load ${load.map(n => n.toFixed(2)).join(' ')} on ${cores} cores):`,
   ]
   if (tree.length === 0) {
-    lines.push(`  pid ${pid} is not in the process table: it had already gone when the snapshot ran`)
+    lines.push(
+      readWasCut
+        ? `  pid ${pid} was not found in the first ${rows.length} rows of the process table, and the read was cut there`
+        : `  pid ${pid} is not in the process table: it had already gone when the snapshot ran`,
+    )
   } else {
-    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.map(rowText))
+    const { shown, hidden } = pickTreeRows(tree)
+    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...shown.map(rowText))
+    if (hidden.length > 0) lines.push(`  … and ${hidden.length} more descendants (${describeHidden(hidden)})`)
   }
-  const top = topByCpu(rows, TOP_HOST_ROWS, new Set(tree.map(r => r.pid)))
-  if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length >= MAX_ROWS ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
+  const root = tree[0]
+  const parent = root ? rows.find(r => r.pid === root.ppid) : undefined
+  if (root) lines.push(...parentLines(root.ppid, parent, readWasCut))
+  const top = topByCpu(rows, TOP_HOST_ROWS, new Set([...tree.map(r => r.pid), ...(parent ? [parent.pid] : [])]))
+  if (top.length > 0) lines.push(`  busiest other processes on the host (${readWasCut ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
   return capText(lines)
 }
 
-function capText(lines: readonly string[]): string {
+/**
+ * Which of a large app tree to print: the root, then the descendants that say the most, not the first ones in table order.
+ *
+ * A snapshot that left out the one runnable or stopped child would read "nothing busy here" while the busy one sat in
+ * the rows it did not print. So the slots go first to any descendant whose state is not plain sleeping or idle
+ * (`R`, `T`, `U`, `Z`), then to the busiest by `%cpu`, and what is left out is summarised (`describeHidden`). The printed
+ * rows keep the table's order.
+ */
+export function pickTreeRows(tree: readonly ProcRow[]): { shown: ProcRow[]; hidden: ProcRow[] } {
+  if (tree.length <= MAX_TREE_ROWS) return { shown: [...tree], hidden: [] }
+  const [root, ...rest] = tree as [ProcRow, ...ProcRow[]]
+  const notAsleep = (r: ProcRow): number => (/^[SI]/.test(r.state) ? 0 : 1)
+  const ranked = rest.map((r, i) => ({ r, i })).sort((a, b) => notAsleep(b.r) - notAsleep(a.r) || b.r.cpu - a.r.cpu || a.i - b.i)
+  const chosen = new Set(ranked.slice(0, MAX_TREE_ROWS - 1).map(x => x.i))
+  return { shown: [root, ...rest.filter((_r, i) => chosen.has(i))], hidden: rest.filter((_r, i) => !chosen.has(i)) }
+}
+
+/** What the rows that were left out of the tree were doing, so that leaving them out is itself a reading: `S×12, busiest 0.0%`. */
+export function describeHidden(hidden: readonly ProcRow[]): string {
+  const states = new Map<string, number>()
+  for (const r of hidden) states.set(r.state.charAt(0) || '?', (states.get(r.state.charAt(0) || '?') ?? 0) + 1)
+  const busiest = hidden.reduce((m, r) => Math.max(m, r.cpu), 0)
+  return `${[...states].map(([s, n]) => `${s}×${n}`).join(' ')}; busiest ${busiest.toFixed(1)}%`
+}
+
+/**
+ * The process that launched the app: in the harness, the Playwright worker that holds the link to it.
+ *
+ * The app's own tree can say whether the app was busy, stopped or idle, and
+ * cannot say whether the other end of the link was. A worker that is busy,
+ * stopped or gone reads differently from one that is idle, which is the half of
+ * "stuck link or starved runner" the tree cannot show (Wren, `#4038`). It is in
+ * the table already, so this costs no second command. It is named, not quoted:
+ * see `parentCommand`.
+ *
+ * pid 1 is the launcher's own stand-in for "no parent": an app whose launcher
+ * died is reparented to it, so a parent of 1 says the launcher had gone.
+ */
+function parentLines(ppid: number, parent: ProcRow | undefined, cut: boolean): string[] {
+  if (!parent) {
+    return [
+      cut
+        ? `  the app's parent, pid ${ppid}, was not found in the first rows of the process table, and the read was cut there`
+        : `  the app's parent, pid ${ppid}, is not in the process table: the process that launched the app had already gone`,
+    ]
+  }
+  const reparented = ppid === 1 ? ' (pid 1: the app was reparented, so the process that launched it had already gone)' : ''
+  return [`  the app's parent, the process that launched it${reparented}:`, COLUMNS, parentRowText(parent)]
+}
+
+/**
+ * The output caps. With the app's tree limited to `MAX_TREE_ROWS`, `formatSnapshot` stays under them by construction
+ * (about 31 lines at most); this is the guard that keeps a later change to that from printing without bound, and it is
+ * exported so it can be tested on its own.
+ */
+export function capText(lines: readonly string[]): string {
   const NOTE = '  … output capped'
   let kept = lines.slice(0, SNAPSHOT_MAX_LINES)
   let capped = kept.length < lines.length
