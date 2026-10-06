@@ -347,6 +347,14 @@ describe('boundedClose ends a hung close in a kill', () => {
     expect(calls).toEqual(['kill SIGKILL'])
   })
 
+  it('with its defaults takes the real snapshot of the real process table, and then kills', async () => {
+    // Only the grace is shortened and the report line captured. The snapshot is the real one (a pid that is not in the table), and so is the kill's path.
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    void boundedClose(app, { graceMs: 30, write: () => {} })
+    await settle(900)
+    expect(calls).toEqual(['kill SIGKILL'])
+  })
+
   it('does not kill an app whose close finishes inside the grace, and leaves no timer behind', async () => {
     const { calls, app } = fakeApp(() => Promise.resolve())
     await boundedClose(app, { graceMs: 30, write: () => {}, killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', () => {}) })
