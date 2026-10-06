@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ChildProcess } from 'node:child_process'
 import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
+  capText,
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
@@ -218,11 +219,32 @@ describe('formatSnapshot', () => {
       expect(text.split('\n').filter(l => /^\s+14927\s/.test(l)).length).toBe(1)
     })
 
-    it('stays inside the line and byte caps with the extra rows', () => {
+    it('stays inside the line and byte caps, and a huge app tree does not crowd out the parent or the host rows', () => {
       const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${'z'.repeat(60)}${i}`).join('\n')
-      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927), many].join('\n')), load: [1], cores: 2, psMs: 5 })
+      const other = '9000 1 R 70.0 0:01.00 00:10 /usr/bin/busy-other'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927), many, other].join('\n')), load: [1], cores: 2, psMs: 5 })
       expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
       expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(SNAPSHOT_MAX_BYTES)
+      // The point of the follow-up: these survive a tree of 401 rows.
+      expect(text).toContain("the app's parent, the process that launched it")
+      expect(text).toContain('node workerProcessEntry.js')
+      expect(text).toContain('busiest other processes on the host')
+      expect(text).toContain('busy-other')
+      expect(text).toMatch(/… and \d+ more descendants/)
+    })
+
+    it('does not say the process had gone when the table read was cut before it', () => {
+      const filler = Array.from({ length: 6_000 }, (_, i) => `${i + 100} 1 S 0.0 0:00.00 00:01 /bin/x${i}`)
+      const cutTable = parsePs(filler.join('\n'))
+      expect(cutTable.length).toBeGreaterThanOrEqual(5_000)
+      const noApp = formatSnapshot({ pid: 4_000_000, rows: cutTable, load: [], cores: 1, psMs: 1 })
+      expect(noApp).toContain('was not found in the first')
+      expect(noApp).not.toContain('had already gone')
+      const orphan = [...filler.slice(0, 4_990), '8000001 7000000 S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0', ...filler.slice(4_990, 5_100)]
+      // pid 8000001: the filler's pids run from 100, so none of them collides with the app's.
+      const noParent = formatSnapshot({ pid: 8_000_001, rows: parsePs(orphan.join('\n')), load: [], cores: 1, psMs: 1 })
+      expect(noParent).toContain("the app's parent, pid 7000000, was not found in the first rows")
+      expect(noParent).not.toContain('had already gone')
     })
   })
 
@@ -242,21 +264,30 @@ describe('formatSnapshot', () => {
     expect(text.split('\n').every(l => l.length < 220)).toBe(true)
   })
 
-  it('caps the number of lines on its own, when short rows would not reach the byte cap', () => {
-    const short = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 x`).join('\n')
-    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${short}`), load: [1], cores: 2, psMs: 5 })
-    // The line cap and the cap's own note: 41 lines at most, and under the byte cap, so the byte cap did not cut it and only the line cap can have.
+  it('limits the app tree to a bounded number of rows and says how many it left out', () => {
+    const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${i}`).join('\n')
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
+    expect(text).toMatch(/… and 385 more descendants/)
+    expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES)
+  })
+})
+
+describe('capText, the guard on how much is ever printed', () => {
+  it('caps the number of lines on its own, when short lines would not reach the byte cap', () => {
+    const text = capText(Array.from({ length: 400 }, (_, i) => `  row ${i}`))
     expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
     expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(SNAPSHOT_MAX_BYTES)
     expect(text).toContain('output capped')
   })
 
-  it('caps lines and bytes when the table is large, and says it did', () => {
-    const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 /bin/child-${'z'.repeat(80)}${i}`).join('\n')
-    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
-    expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
+  it('caps the bytes when long lines would stay under the line cap, and says it did', () => {
+    const text = capText(Array.from({ length: 30 }, (_, i) => `  row ${i} ${'x'.repeat(300)}`))
     expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(SNAPSHOT_MAX_BYTES)
     expect(text).toContain('output capped')
+  })
+
+  it('leaves a short snapshot alone', () => {
+    expect(capText(['a', 'b'])).toBe('a\nb')
   })
 })
 

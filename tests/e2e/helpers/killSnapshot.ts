@@ -45,6 +45,8 @@ const PS_MAX_BUFFER = 4 * 1024 * 1024
 const MAX_ROWS = 5_000
 const COMMAND_CHARS = 100
 const TOP_HOST_ROWS = 5
+/** Rows of the app's own tree printed: the parent and the host rows after it must never be crowded out of the line cap by a large tree. */
+const MAX_TREE_ROWS = 16
 
 /** pid, parent, state, %cpu, cumulative CPU time, elapsed, command. No header (`=` suffixes). */
 export const PS_ARGS = ['-A', '-o', 'pid=,ppid=,state=,%cpu=,time=,etime=,command='] as const
@@ -193,17 +195,24 @@ export interface SnapshotInput {
 export function formatSnapshot(input: SnapshotInput): string {
   const { pid, rows, load, cores, psMs } = input
   const tree = treeOf(rows, pid)
+  // A table read of MAX_ROWS or more was cut: a process that is not in what was read may be in the rest.
+  const cut = rows.length >= MAX_ROWS
   const lines: string[] = [
     `[launch] kill snapshot for pid ${pid} (ps took ${psMs} ms; load ${load.map(n => n.toFixed(2)).join(' ')} on ${cores} cores):`,
   ]
   if (tree.length === 0) {
-    lines.push(`  pid ${pid} is not in the process table: it had already gone when the snapshot ran`)
+    lines.push(
+      cut
+        ? `  pid ${pid} was not found in the first ${rows.length} rows of the process table, and the read was cut there`
+        : `  pid ${pid} is not in the process table: it had already gone when the snapshot ran`,
+    )
   } else {
-    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.map(rowText))
+    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.slice(0, MAX_TREE_ROWS).map(rowText))
+    if (tree.length > MAX_TREE_ROWS) lines.push(`  … and ${tree.length - MAX_TREE_ROWS} more descendants`)
   }
   const root = tree[0]
   const parent = root ? rows.find(r => r.pid === root.ppid) : undefined
-  if (root) lines.push(...parentLines(root.ppid, parent))
+  if (root) lines.push(...parentLines(root.ppid, parent, cut))
   const top = topByCpu(rows, TOP_HOST_ROWS, new Set([...tree.map(r => r.pid), ...(parent ? [parent.pid] : [])]))
   if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length >= MAX_ROWS ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
   return capText(lines)
@@ -222,13 +231,24 @@ export function formatSnapshot(input: SnapshotInput): string {
  * pid 1 is the launcher's own stand-in for "no parent": an app whose launcher
  * died is reparented to it, so a parent of 1 says the launcher had gone.
  */
-function parentLines(ppid: number, parent: ProcRow | undefined): string[] {
-  if (!parent) return [`  the app's parent, pid ${ppid}, is not in the process table: the process that launched the app had already gone`]
+function parentLines(ppid: number, parent: ProcRow | undefined, cut: boolean): string[] {
+  if (!parent) {
+    return [
+      cut
+        ? `  the app's parent, pid ${ppid}, was not found in the first rows of the process table, and the read was cut there`
+        : `  the app's parent, pid ${ppid}, is not in the process table: the process that launched the app had already gone`,
+    ]
+  }
   const reparented = ppid === 1 ? ' (pid 1: the app was reparented, so the process that launched it had already gone)' : ''
   return [`  the app's parent, the process that launched it${reparented}:`, COLUMNS, parentRowText(parent)]
 }
 
-function capText(lines: readonly string[]): string {
+/**
+ * The output caps. With the app's tree limited to `MAX_TREE_ROWS`, `formatSnapshot` stays under them by construction
+ * (about 31 lines at most); this is the guard that keeps a later change to that from printing without bound, and it is
+ * exported so it can be tested on its own.
+ */
+export function capText(lines: readonly string[]): string {
   const NOTE = '  … output capped'
   let kept = lines.slice(0, SNAPSHOT_MAX_LINES)
   let capped = kept.length < lines.length
