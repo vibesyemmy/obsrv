@@ -1,4 +1,4 @@
-import { maxCssViewport, orientationWordNote, resolveRotate } from '../shared/calibration'
+import { maxCssViewport } from '../shared/calibration'
 import { MAX_SELECTOR_LENGTH } from '../shared/inspect'
 import { isThrottleId, THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { DEFAULT_TEXT_SCALE, MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
@@ -28,14 +28,12 @@ export interface RenderSpec {
    */
   orientation: Orientation
   /**
-   * Whether a rotation flag was given **at all** — `--rotate`, or `--orientation`
-   * with either word.
+   * Whether `--rotate` was given.
    *
    * Keyed on the flag rather than on the value, for the reason `throttle` is
-   * (see below): `--orientation portrait` is a baseline someone asked for by
-   * name, and **the flagless JSON is a contract**. `snap` reports `rotated` only
-   * when this is true, so a run that named no rotation produces byte-identical
-   * output to every run before this field existed.
+   * (see below): **the flagless JSON is a contract**. `snap` reports `rotated`
+   * only when this is true, so a run that named no rotation produces
+   * byte-identical output to every run before that field existed.
    */
   rotateAsked: boolean
   /**
@@ -60,13 +58,6 @@ export interface RenderSpec {
    * included, so a baseline can be asked for by name.
    */
   throttle: string | null
-  /**
-   * Set only when the deprecated --orientation word contradicted the shape it
-   * produced: landscape on a landscape-stored preset gives portrait. Absent
-   * otherwise, including whenever --rotate was used, because then there is no
-   * word to contradict (bug-orientation-name).
-   */
-  orientationNote?: string
 }
 
 export interface AuditCommand {
@@ -217,21 +208,6 @@ ${presets}
                        1080x1920; iphone-61 --rotate is landscape. The diagonal, raster
                        density and physical size never change — it is the same panel
                        turned sideways.
-  --orientation <o>    DEPRECATED, use --rotate. Kept with its current meaning rather
-                       than redefined, because redefining it would silently change what
-                       every existing caller gets.
-                       portrait | landscape (default ${DEFAULT_ORIENTATION}). This names the
-                       preset's *stored* orientation, not the shape you get:
-                         portrait  = the preset exactly as the table above lists it
-                         landscape = that rotated a quarter turn (width and height swap)
-                       Every mobile preset is stored portrait, so for those the two
-                       readings agree. The laptop and desktop presets are stored
-                       landscape-natural, so --orientation landscape turns them into a
-                       portrait screen — which is how you render a 1080p monitor stood on
-                       end (1080p-24 becomes 1080x1920). Applies to custom --width/--height
-                       dims too. The diagonal, raster density and physical size never
-                       change: it is the same panel turned sideways. Each render's JSON
-                       and log line name the resulting shape.
   --text-scale <f>     Browser zoom as reflow, e.g. 1.5 for a user at 150% (default 1;
                        ${MIN_TEXT_SCALE} to ${MAX_TEXT_SCALE}). The page lays out in 1/f of the screen's CSS
                        viewport at f times its density — what a larger-text setting or a
@@ -323,10 +299,10 @@ warning naming the cut load; inspect errors instead, naming the same.`
 /** Flags that take no value. */
 const BOOLEAN_FLAGS = new Set(['full-page', 'tiled', 'single-surface', 'keep-stuck-chrome', 'json', 'no-walk', 'groups-only', 'rotate'])
 /** Flags that consume the next token. */
-const VALUE_FLAGS = new Set(['preset', 'profile', 'orientation', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
+const VALUE_FLAGS = new Set(['preset', 'profile', 'out', 'out-dir', 'wait', 'timeout', 'matrix', 'width', 'height', 'dsf', 'diagonal', 'tap-mm', 'text-mm', 'text-scale', 'throttle', 'at', 'selector', 'thin-px'])
 type Command = 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint'
 /** Flags every command takes. */
-const SHARED_FLAGS = new Set(['preset', 'profile', 'orientation', 'rotate', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
+const SHARED_FLAGS = new Set(['preset', 'profile', 'rotate', 'wait', 'timeout', 'width', 'height', 'dsf', 'diagonal', 'text-scale', 'throttle'])
 /**
  * The rest, per command. A flag outside a command's set is refused, and the
  * message names the first command (in this order) that takes it — so
@@ -443,31 +419,17 @@ function resolveTextScale(flags: Map<string, string | true>): number {
 }
 
 /**
- * `--rotate` and the deprecated `--orientation`, resolved into one answer.
+ * `--rotate`, resolved into the stored-form word the renderer uses.
  *
- * `--orientation` names the preset's STORED form, so `landscape` means "the
- * rotated one" and gives a portrait screen on every monitor and laptop. That
- * inversion is `bug-orientation-name`, and `--rotate` is the flag that says the
- * thing itself. The word keeps its meaning rather than being redefined, because
- * redefining it would turn a confusing name into a silent wrong answer for
- * every caller relying on today's behaviour (Henry's call).
- *
- * Returns the literal word too, so a reply can point out where it inverted —
- * only where it actually did.
+ * **`--orientation` was removed in the breaking release** (`docs/breaking-changes.md`): it named the
+ * preset's STORED form, so `landscape` meant "the rotated one" and gave a portrait screen on every
+ * monitor and laptop — `bug-orientation-name`. `--rotate` says the thing itself, and is the only way
+ * to ask now. An unknown flag is refused by the parser, so a caller still passing the old one is told
+ * rather than silently ignored.
  */
-function resolveOrientation(flags: Map<string, string | true>): { orientation: Orientation; given: Orientation | undefined; rotate: boolean; asked: boolean } {
-  const raw = flags.get('orientation')
-  let given: Orientation | undefined
-  if (raw !== undefined) {
-    if (!isOrientation(raw)) throw new ArgError(`--orientation: expected portrait or landscape, got "${String(raw)}"`)
-    given = raw
-  }
-  const wants = flags.get('rotate') === true ? true : undefined
-  const resolved = resolveRotate(given, wants)
-  if ('refuse' in resolved) throw new ArgError(`--rotate and --orientation disagree. ${resolved.refuse}`)
-  // `asked` is the flag's presence, not its value: `--orientation portrait` named
-  // a rotation and got none, and a caller who named it is owed the answer.
-  return { orientation: resolved.rotate ? 'landscape' : DEFAULT_ORIENTATION, given, rotate: resolved.rotate, asked: raw !== undefined || wants === true }
+function resolveOrientation(flags: Map<string, string | true>): { orientation: Orientation; rotate: boolean; asked: boolean } {
+  const rotate = flags.get('rotate') === true
+  return { orientation: rotate ? 'landscape' : DEFAULT_ORIENTATION, rotate, asked: rotate }
 }
 
 /**
@@ -476,17 +438,10 @@ function resolveOrientation(flags: Map<string, string | true>): { orientation: O
  * sideways rather than a different one. Applied here, before the diff bounds
  * are checked, so those check the viewport that will actually be rendered.
  */
-function orientSpec(spec: RenderSpec, orientation: Orientation, given?: Orientation, asked = false): RenderSpec {
-  const turned =
-    orientation !== 'landscape'
-      ? { ...spec, orientation, rotateAsked: asked }
-      : { ...spec, orientation, rotateAsked: asked, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
-  // Computed per spec rather than per run, because `--matrix` rotates several
-  // presets at once and the word inverts on some of them and not others: a
-  // single run can legitimately owe a note about `1080p-24` and none about
-  // `iphone-61`.
-  const note = orientationWordNote(given, turned.cssWidth, turned.cssHeight)
-  return note === null ? turned : { ...turned, orientationNote: note }
+function orientSpec(spec: RenderSpec, orientation: Orientation, asked = false): RenderSpec {
+  return orientation !== 'landscape'
+    ? { ...spec, orientation, rotateAsked: asked }
+    : { ...spec, orientation, rotateAsked: asked, cssWidth: spec.cssHeight, cssHeight: spec.cssWidth }
 }
 
 /**
@@ -534,18 +489,18 @@ function resolveScreens(flags: Map<string, string | true>): { specs: RenderSpec[
       textScale: DEFAULT_TEXT_SCALE,
       throttle: null,
     }
-    return { specs: [orientSpec(spec, orientation, rot.given, rot.asked)], matrix: false }
+    return { specs: [orientSpec(spec, orientation, rot.asked)], matrix: false }
   }
 
   const matrixRaw = flags.get('matrix')
   if (typeof matrixRaw === 'string') {
     const ids = matrixRaw.split(',').map(s => s.trim()).filter(s => s.length > 0)
     if (ids.length === 0) throw new ArgError('--matrix: expected a comma-separated list of preset ids')
-    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation, rot.given, rot.asked)), matrix: true }
+    return { specs: ids.map(id => orientSpec(presetSpec(id), orientation, rot.asked)), matrix: true }
   }
 
   const id = typeof flags.get('preset') === 'string' ? (flags.get('preset') as string) : DEFAULT_PRESET
-  return { specs: [orientSpec(presetSpec(id), orientation, rot.given, rot.asked)], matrix: false }
+  return { specs: [orientSpec(presetSpec(id), orientation, rot.asked)], matrix: false }
 }
 
 function resolveProfile(flags: Map<string, string | true>): string {
@@ -618,7 +573,7 @@ export function parseArgs(argv: string[]): CliCommand {
   const orientation = rot.orientation
     const textScale = resolveTextScale(flags)
     const throttle = resolveThrottle(flags)
-    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation, rot.given, rot.asked), textScale, throttle }))
+    const reportSpecs = named ? specs : DEFAULT_REPORT_MATRIX.map(id => ({ ...orientSpec(presetSpec(id), orientation, rot.asked), textScale, throttle }))
     const out = typeof flags.get('out') === 'string' ? (flags.get('out') as string) : DEFAULT_REPORT_OUT
     return {
       command,

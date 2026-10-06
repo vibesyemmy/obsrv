@@ -13,7 +13,7 @@ const screen = (over: Partial<ReportScreen> = {}): ReportScreen => ({
   diagonalInches: 15.6,
   ppi: 100.4,
   physicalMm: { width: 345.5, height: 194.2 },
-  orientation: 'landscape',
+  screenShape: 'landscape',
   png,
   settled: true,
   audit: {

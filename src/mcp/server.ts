@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { orientationFromRotate, resolveRotate, rotatedFromOrientation } from '../shared/calibration'
+import { orientationFromRotate, rotatedFromOrientation } from '../shared/calibration'
 import { THROTTLE_IDS, THROTTLE_PROFILES } from '../shared/throttle'
 import { MAX_TEXT_SCALE, MIN_TEXT_SCALE } from '../shared/textScale'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
@@ -208,19 +208,6 @@ function spawnCli(args: string[], killAfterMs: number): Promise<Omit<CliRun, 'el
 
 const toolError = (text: string): CallToolResult => ({ isError: true, content: [{ type: 'text', text }] })
 
-/**
- * A disagreeing `rotate` and `orientation`, refused before a headless render,
- * as obsrv_snap refuses it. The argument builders pass `--rotate` only when it
- * is true — the CLI has no flag for false — so `rotate: false` never reached
- * the CLI, and `orientation: 'landscape', rotate: false` rendered rotated on
- * audit, lint, inspect and report with no refusal (Wren's release sweep of
- * #178). The MCP layer is the last place both values are visible.
- */
-function refusedRotation(input: { orientation?: Orientation; rotate?: boolean }): CallToolResult | null {
-  const wanted = resolveRotate(input.orientation, input.rotate)
-  return 'refuse' in wanted ? toolError(wanted.refuse) : null
-}
-
 function cliFailure(command: 'snap' | 'diff' | 'audit' | 'report' | 'inspect' | 'lint', run: CliRun, killAfterMs: number): CallToolResult {
   if (run.killed) return toolError(killedMessage(command, killAfterMs, run.stderr))
   return toolError(`obsrv ${command} failed (exit ${run.code ?? 'unknown'}): ${stderrTail(run.stderr)}`)
@@ -263,20 +250,7 @@ const rotateField = z
   .describe(
     'Turn the screen a quarter turn: width and height swap. Says the thing itself, and is the flag to ' +
       'use — 1080p-24 with rotate: true is 1080x1920, iphone-61 with rotate: true is landscape. The ' +
-      'diagonal, raster density and physical size never change: it is the same panel turned sideways. ' +
-      'Giving both this and orientation, disagreeing, is refused rather than guessed.',
-  )
-
-const orientationField = z
-  .enum(['portrait', 'landscape'])
-  .optional()
-  .describe(
-    'DEPRECATED, use `rotate`. Kept with its current meaning until a breaking release, because redefining it ' +
-      'would silently change what every existing caller gets. The word names how the preset is stored, not the ' +
-      'shape you get: portrait (the default) is the preset as obsrv_presets lists it, landscape is that turned a ' +
-      'quarter turn. Every mobile preset is stored portrait, so for those the two readings agree; the monitors ' +
-      'and laptops are stored landscape, so landscape turns 1080p-24 into a 1080x1920 portrait screen. A ' +
-      '`rotate` and `orientation` that disagree are refused wherever rotation applies.',
+      'diagonal, raster density and physical size never change: it is the same panel turned sideways.',
   )
 
 const throttleField = z
@@ -295,7 +269,6 @@ const snapInputShape = {
     .enum(PRESET_IDS)
     .optional()
     .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
-  orientation: orientationField,
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
@@ -391,26 +364,16 @@ const snapOutputShape = {
     .number()
     .optional()
     .describe('Applied CSS viewport height, already rotated. Headless: grown under fullPage. Live: what the app is rendering.'),
-  orientation: z
-    .string()
-    .optional()
-    .describe(
-      "Live only: the app's rotation flag — 'portrait' (the preset as its table stores it) or 'landscape' " +
-        '(rotated a quarter turn). See `screenShape` for the shape that produced. Headless runs report the ' +
-        'applied `cssWidth`/`cssHeight` instead, which say the same thing exactly.',
-    ),
   rotated: z
     .boolean()
     .optional()
     .describe(
-      'Whether the screen was turned a quarter turn from the preset stored form. Says plainly what the ' +
-        'deprecated orientation flag says confusingly: orientation names the STORED form, so landscape on a ' +
-        'monitor preset produces a PORTRAIT screen. Read this; screenShape gives the shape itself on a live reply.',
+      'Whether the screen was turned a quarter turn from the preset stored form. ' +
+        'Read this; screenShape gives the shape itself on a live reply.',
     ),
   screenShape: z.string().optional().describe('Live only. ' + "The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
-        "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
-        "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
-        "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
+        "what was asked for: a fresh 1080p-24 tab is a 1920x1080 landscape screen, and `rotate: true` makes it " +
+        "portrait. Report this word to the user."),
   deviceScaleFactor: z.number().optional().describe('Device pixels per CSS pixel of the screen being rendered, on either surface.'),
   textScale: z.number().optional().describe('Browser zoom as reflow the page was rendered at. Present only when a scale other than 1 was applied.'),
   throttle: z.string().optional().describe('Headless only, and only when `throttle` was given: the conditions applied.'),
@@ -569,9 +532,9 @@ const presetsOutputShape = {
       }),
     )
     .describe("The `throttle` values obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report take: Chrome DevTools' presets.").optional(),
-  orientation: z
+  rotation: z
     .string()
-    .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation.').optional(),
+    .describe('How the cssWidth/cssHeight below relate to rotation, and how to ask for the screen turned a quarter turn.').optional(),
   presets: z.array(
     z.object({
       id: z.string(),
@@ -612,7 +575,6 @@ const driveInputShape = {
     .optional()
     .describe('Navigate the app (both panes) to this http://, https:// or file:// URL (bare hosts also work).'),
   preset: z.enum(PRESET_IDS).optional().describe('Apply this screen preset, exactly as clicking the toolbar would.'),
-  orientation: orientationField,
   rotate: rotateField,
   textScale: z
     .number()
@@ -780,26 +742,16 @@ const driveOutputShape = {
     .describe(
       'The last main-frame load that failed, or null. A failed load empties both panes while `url` still reads back the address asked for, so a capture taken now is a blank frame of a page that never arrived — check this before believing one. Cleared when the next navigation starts. Absent from an app older than the field.',
     ),
-  orientation: z
-    .string()
-    .describe(
-      "The rotation flag, in the words of the deprecated `orientation` input: 'portrait' (the preset as its " +
-        "table stores it) or 'landscape' (rotated a quarter turn). `rotated` says the same as a boolean, and " +
-        '`rotate` is what to pass to change it; for the shape the screen actually has, read `screenShape`. ' +
-        'Reported as \'portrait\' by an app older than rotation, which is what such an app shows.',
-    ),
   rotated: z
     .boolean()
     .optional()
     .describe(
-      'Whether the screen was turned a quarter turn from the preset stored form. Says plainly what the ' +
-        'deprecated orientation flag says confusingly: orientation names the STORED form, so landscape on a ' +
-        'monitor preset produces a PORTRAIT screen. Read this, or screenShape for the shape itself.',
+      'Whether the screen was turned a quarter turn from the preset stored form. ' +
+        'Read this, or screenShape for the shape itself.',
     ),
   screenShape: z.string().describe("The shape the screen actually has: 'portrait' or 'landscape'. Derived from the CSS dimensions, not from " +
-        "the `orientation` flag beside it — the flag means 'the preset as its table stores it' vs 'rotated a " +
-        "quarter turn', so for a landscape-natural monitor preset the two diverge (a fresh 1080p-24 tab is " +
-        "orientation 'portrait' on a 1920x1080 landscape screen). Report this word to the user, not the flag."),
+        "what was asked for: a fresh 1080p-24 tab is a 1920x1080 landscape screen, and `rotate: true` makes it " +
+        "portrait. Report this word to the user."),
   cssWidth: z
     .number()
     .describe('The CSS viewport the target is rendering at, already rotated. 0 from an app that predates the field.'),
@@ -1046,13 +998,10 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
       if (nav['loading'] === true) warnings.push(NAVIGATE_CUT_NOTE)
     }
     if (input.preset !== undefined) await controlCall(info, 'setPreset', { id: input.preset }, LIVE_APPLY_TIMEOUT_MS)
-    // `rotate` and the deprecated `orientation` reach the same control call,
-    // resolved by the same function the CLI uses, so the two surfaces cannot
-    // drift on what a disagreeing pair means (bug-orientation-name).
-    if (input.orientation !== undefined || input.rotate !== undefined) {
-      const wanted = resolveRotate(input.orientation, input.rotate)
-      if ('refuse' in wanted) return toolError(wanted.refuse)
-      await controlCall(info, 'setOrientation', { orientation: orientationFromRotate(wanted.rotate) }, LIVE_APPLY_TIMEOUT_MS)
+    // The app's control command still speaks the stored-form word; `rotate` is
+    // translated into it here, in one place, so the surfaces cannot drift.
+    if (input.rotate !== undefined) {
+      await controlCall(info, 'setOrientation', { orientation: orientationFromRotate(input.rotate) }, LIVE_APPLY_TIMEOUT_MS)
     }
     if (input.textScale !== undefined) {
       await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
@@ -1136,11 +1085,10 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     preset: status.presetId,
     profile: status.profileId,
     ...(status.deviceScaleFactor === undefined ? {} : { deviceScaleFactor: status.deviceScaleFactor }),
-    orientation: status.orientation,
-    // Derived here, from the app's own flag, rather than carried up from the
-    // CLI: the headless reply derives the same fact from the resolved request,
-    // so both surfaces answer `rotated` and neither reads it off the other
-    // (`bug-orientation-name`, and the C4 parity gap it opened).
+    // Derived here, from the app's own stored-form flag, rather than carried up
+    // from the CLI: the headless reply derives the same fact from the resolved
+    // request, so both surfaces answer `rotated` and neither reads it off the
+    // other (`bug-orientation-name`, and the C4 parity gap it opened).
     rotated: rotatedFromOrientation(status.orientation),
     screenShape: status.screenShape,
     textScale: status.textScale,
@@ -1266,8 +1214,7 @@ server.registerTool(
     // `cliFailure`, and the answer is what this reply reports as `rotated` —
     // derived from the request the render was built from, not read back out of
     // the CLI's JSON, which does not carry it.
-    const wanted = resolveRotate(input.orientation, input.rotate)
-    if ('refuse' in wanted) return toolError(wanted.refuse)
+    const wanted = { rotate: input.rotate === true }
 
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     const pngPath = join(dir, 'snap.png')
@@ -1374,7 +1321,6 @@ const auditInputShape = {
     .enum(PRESET_IDS)
     .optional()
     .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
-  orientation: orientationField,
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
@@ -1562,7 +1508,7 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
     const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+    for (const k of ['preset', 'rotate', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
       if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     // The app answers with the CLI's own result plus the screen it
@@ -1672,8 +1618,6 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_audit needs `url`; without one it can only audit a running Obsrv with agent control on (mode: live).')
     }
-    const auditRotation = refusedRotation(input)
-    if (auditRotation) return auditRotation
     let args: string[]
     try {
       args = buildAuditArgs({ ...input, url: input.url.trim() })
@@ -1706,7 +1650,6 @@ const lintInputShape = {
         "screen, text scale and panel in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
     ),
   preset: z.enum(PRESET_IDS).optional().describe('Headless: the target screen. Default: 1080p-24. Use obsrv_presets for ids.'),
-  orientation: orientationField,
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Headless custom CSS viewport width. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Headless custom CSS viewport height. Needs width.'),
@@ -1868,7 +1811,7 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'rotate', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
+    for (const k of ['preset', 'rotate', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
       if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const { ok: _ok, textScale, ...judged } = answer
@@ -1980,8 +1923,6 @@ server.registerTool(
     if (input.url === undefined || input.url.trim().length === 0) {
       return toolError('headless obsrv_lint needs `url`; without one it can only lint a running Obsrv with agent control on (mode: live).')
     }
-    const lintRotation = refusedRotation(input)
-    if (lintRotation) return lintRotation
     let args: string[]
     try {
       args = buildLintArgs({ ...input, url: input.url.trim() })
@@ -2028,7 +1969,6 @@ const inspectInputShape = {
         "screen and panel in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
     ),
   preset: z.enum(PRESET_IDS).optional().describe('Headless: the target screen. Default: 1080p-24. Use obsrv_presets for ids.'),
-  orientation: orientationField,
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Headless custom CSS viewport width. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Headless custom CSS viewport height. Needs width.'),
@@ -2165,7 +2105,6 @@ const reportInputShape = {
     .min(1)
     .optional()
     .describe(`Screens to cover, by preset id (obsrv_presets lists them). Default: ${DEFAULT_REPORT_MATRIX.join(', ')}.`),
-  orientation: orientationField,
   rotate: rotateField,
   textScale: z
     .number()
@@ -2274,8 +2213,6 @@ server.registerTool(
   async (input: ReportToolInput): Promise<CallToolResult> => {
     const badScheme = urlSchemeError(input.url)
     if (badScheme) return toolError(badScheme)
-    const reportRotation = refusedRotation(input)
-    if (reportRotation) return reportRotation
     const dir = await mkdtemp(join(tmpdir(), 'obsrv-mcp-'))
     let args: string[]
     try {
@@ -2311,9 +2248,9 @@ server.registerTool(
       `(\`launched: true\` on that call), including a call with no inputs.\n\n` +
       `Only the supplied inputs run (none = read the current state, which still launches the app first if it is not ` +
       `running), in this fixed order: tab → focus → url → ` +
-      `preset → orientation → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
+      `preset → rotate → textScale → onionSkin → throttle → profile → viewMode → panes → vision → pixelExact → reload → back → forward → scroll → panTo → click → highlight → ` +
       `capture → closeTab. ` +
-      `The result is the final status: app version, the URL showing, and the selected preset/orientation/profile/view. A ` +
+      `The result is the final status: app version, the URL showing, and the selected preset/rotation/profile/view. A ` +
       `click that navigates is reflected in that status — the call waits briefly (up to 2 s) for the commit. A ` +
       `scroll adds \`scrolled\` (the offset actually reached) and \`scroller\` ('root' or 'element'): compare ` +
       `\`scrolled\` with what you asked for rather than trusting the call's success, and use \`scroll.scrollSelector\` ` +
@@ -2341,7 +2278,6 @@ server.registerTool(
     tab?: string
     url?: string
     preset?: string
-    orientation?: 'portrait' | 'landscape'
     rotate?: boolean
     textScale?: number
     onionSkin?: number
@@ -2411,14 +2347,10 @@ server.registerTool(
       // After the preset, before everything else: rotation is applied on top of
       // whichever screen is in force, so a call carrying both has to land in
       // that order or the rotation would be spent on the outgoing preset.
-      // `rotate` and the deprecated `orientation` reach this one control call
-      // through the function the CLI and live snap also resolve with, so the
-      // surfaces cannot drift on what a disagreeing pair means. Until this
-      // line, drive's schema accepted `rotate` and the handler dropped it.
-      if (input.orientation !== undefined || input.rotate !== undefined) {
-        const wanted = resolveRotate(input.orientation, input.rotate)
-        if ('refuse' in wanted) return toolError(wanted.refuse)
-        await controlCall(live.info, 'setOrientation', { orientation: orientationFromRotate(wanted.rotate) }, LIVE_APPLY_TIMEOUT_MS)
+      // `rotate` is translated into the app's stored-form control word here,
+      // the same way live snap does it, so the surfaces cannot drift.
+      if (input.rotate !== undefined) {
+        await controlCall(live.info, 'setOrientation', { orientation: orientationFromRotate(input.rotate) }, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
@@ -2471,7 +2403,7 @@ server.registerTool(
       // heavy page whose reload outlasted the apply budget (bbc.com after a
       // phone flip). Wait for a tab that is neither blank nor loading before
       // anything below steers or photographs it, as the snap has since 0.43.0.
-      if (input.preset !== undefined || input.orientation !== undefined || input.rotate !== undefined) {
+      if (input.preset !== undefined || input.rotate !== undefined) {
         const s = await settlePage(
           {
             status: async () => {
@@ -2599,7 +2531,7 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     if (Array.isArray(answer['notes'])) notes.unshift(...(answer['notes'] as unknown[]).map(String))
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
-    for (const k of ['preset', 'orientation', 'rotate', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
+    for (const k of ['preset', 'rotate', 'profile', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
       if (input[k] !== undefined) notes.push(`\`${k}\` is headless-only and was ignored in live mode; the app's own ${k === 'preset' ? 'screen' : k === 'rotate' ? 'rotation' : k} was used.`)
     }
     const structured = {
@@ -2671,8 +2603,6 @@ server.registerTool(
     if (requestedMode === 'live') return toolError(liveModeError(resolved.why, resolved.notes))
     const why = resolved.why
     const notes = resolved.notes
-    const inspectRotation = refusedRotation(input)
-    if (inspectRotation) return inspectRotation
     let args: string[]
     try {
       args = buildInspectArgs({ ...input, ...(input.url !== undefined ? { url: input.url.trim() } : {}) })
@@ -2705,15 +2635,15 @@ server.registerTool(
       `List every screen preset (id, label, group, CSS dims, deviceScaleFactor, panel diagonal, derived physical ` +
       `ppi), panel profile (id, label, simulation params) and throttle preset (network conditions, CPU rate) accepted ` +
       `by obsrv_snap, obsrv_diff, obsrv_audit and obsrv_report. Read straight ` +
-      `from the app's preset table — nothing is rendered. The dimensions are each preset's natural orientation ` +
-      `(portrait for the mobile ones, landscape for the monitors); every preset also rotates — see the ` +
-      `\`orientation\` note in the result.`,
+      `from the app's preset table — nothing is rendered. The dimensions are each preset's natural shape ` +
+      `(portrait for the mobile ones, landscape for the monitors); every preset also rotates with ` +
+      `\`rotate\` — see the \`rotation\` note in the result.`,
     inputSchema: {
       group: z
         .enum(['laptop', 'desktop', 'mobile', 'laptops', 'desktops', 'phones', 'phone'])
         .optional()
         .describe(
-          'Only the screen presets of this group (phones is an alias of mobile), and only them: the throttles, profiles and orientation note are left out. Omit for the whole catalog.',
+          'Only the screen presets of this group (phones is an alias of mobile), and only them: the throttles, profiles and rotation note are left out. Omit for the whole catalog.',
         ),
     },
     outputSchema: presetsOutputShape,

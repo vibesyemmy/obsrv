@@ -69,16 +69,12 @@ describe('buildSnapArgs', () => {
       'snap', URL, '--preset', 'android-65', '--profile', 'budget-tn', '--full-page', '--wait', '500', '--timeout', '60000', '--out', OUT,
     ])
   })
-  it('orientation maps to --orientation, for a preset and for custom dims alike', () => {
-    expect(buildSnapArgs({ url: URL, preset: 'iphone-61', orientation: 'landscape' }, OUT)).toEqual([
-      'snap', URL, '--preset', 'iphone-61', '--orientation', 'landscape', '--out', OUT,
+  it('never builds the removed --orientation flag, whatever the input', () => {
+    expect(buildSnapArgs({ url: URL, preset: 'iphone-61' }, OUT)).toEqual(['snap', URL, '--preset', 'iphone-61', '--out', OUT])
+    expect(buildSnapArgs({ url: URL, width: 900, height: 600 }, OUT)).toEqual([
+      'snap', URL, '--width', '900', '--height', '600', '--out', OUT,
     ])
-    expect(buildSnapArgs({ url: URL, width: 900, height: 600, orientation: 'portrait' }, OUT)).toEqual([
-      'snap', URL, '--orientation', 'portrait', '--width', '900', '--height', '600', '--out', OUT,
-    ])
-  })
-  it('omits --orientation entirely when the caller did not ask, so the CLI default stands', () => {
-    expect(buildSnapArgs({ url: URL, preset: 'iphone-61' }, OUT)).not.toContain('--orientation')
+    expect(buildSnapArgs({ url: URL, preset: 'iphone-61', rotate: true }, OUT)).not.toContain('--orientation')
   })
   it('waitMs 0 is passed through, not dropped as falsy', () => {
     expect(buildSnapArgs({ url: URL, waitMs: 0 }, OUT)).toEqual(['snap', URL, '--wait', '0', '--out', OUT])
@@ -391,11 +387,12 @@ describe('listCatalog', () => {
     expect(catalog.presets.find(p => p.id === 'iphone-61')?.ppi).toBe(461)
   })
   it('documents that the dimensions are natural and every preset rotates', () => {
-    expect(catalog.orientation).toContain('natural orientation')
-    expect(catalog.orientation).toContain('landscape')
+    expect(catalog.rotation).toContain('natural shape')
+    expect(catalog.rotation).toContain('landscape')
+    expect(catalog.rotation).toContain('rotate: true')
     // The invariant an agent most needs stated, since it is what makes a
     // rotated render comparable to its unrotated self.
-    expect(catalog.orientation).toContain('orientation-independent')
+    expect(catalog.rotation).toContain('independent of it')
   })
   it('lists every panel profile with raw params and a human summary', () => {
     expect(catalog.profiles).toHaveLength(4)
@@ -409,11 +406,11 @@ describe('listCatalog', () => {
 })
 
 describe('buildAuditArgs', () => {
-  it('maps the preset, orientation, thresholds and budgets to their flags', () => {
+  it('maps the preset, thresholds and budgets to their flags', () => {
     expect(buildAuditArgs({ url: URL })).toEqual(['audit', URL])
     expect(
-      buildAuditArgs({ url: URL, preset: 'android-65', orientation: 'landscape', tapMm: 9, textMm: 1.5, waitMs: 250, timeoutMs: 5000 }),
-    ).toEqual(['audit', URL, '--preset', 'android-65', '--orientation', 'landscape', '--tap-mm', '9', '--text-mm', '1.5', '--wait', '250', '--timeout', '5000'])
+      buildAuditArgs({ url: URL, preset: 'android-65', tapMm: 9, textMm: 1.5, waitMs: 250, timeoutMs: 5000 }),
+    ).toEqual(['audit', URL, '--preset', 'android-65', '--tap-mm', '9', '--text-mm', '1.5', '--wait', '250', '--timeout', '5000'])
   })
   it('custom dimensions map to --width/--height with the optional --dsf and --diagonal', () => {
     expect(buildAuditArgs({ url: URL, width: 1280, height: 720, deviceScaleFactor: 2, diagonalInches: 14 })).toEqual([
@@ -447,9 +444,9 @@ describe('buildReportArgs', () => {
   it('always writes the HTML via --out, and lists presets as --matrix', () => {
     expect(buildReportArgs({ url: URL }, '/tmp/r/report.html')).toEqual(['report', URL, '--out', '/tmp/r/report.html'])
     expect(
-      buildReportArgs({ url: URL, presets: ['laptop-768', 'android-65'], orientation: 'landscape', profile: 'budget-tn', tapMm: 6, textMm: 1.5, waitMs: 100, timeoutMs: 9000 }, '/tmp/r/report.html'),
+      buildReportArgs({ url: URL, presets: ['laptop-768', 'android-65'], profile: 'budget-tn', tapMm: 6, textMm: 1.5, waitMs: 100, timeoutMs: 9000 }, '/tmp/r/report.html'),
     ).toEqual([
-      'report', URL, '--matrix', 'laptop-768,android-65', '--orientation', 'landscape', '--profile', 'budget-tn',
+      'report', URL, '--matrix', 'laptop-768,android-65', '--profile', 'budget-tn',
       '--tap-mm', '6', '--text-mm', '1.5', '--wait', '100', '--timeout', '9000', '--out', '/tmp/r/report.html',
     ])
   })
@@ -601,7 +598,7 @@ describe('the address a measurement answers under', () => {
  * Checked through the real parser rather than by comparing argv strings: the
  * question is what screen a caller gets, and only the parser answers that.
  */
-describe('rotate reaches the headless surface as the screen the deprecated word produced', () => {
+describe('rotate reaches the headless surface as the screen it names', () => {
   it('every builder that takes orientation also emits --rotate', () => {
     expect(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)).toContain('--rotate')
     expect(buildAuditArgs({ url: URL, preset: '1080p-24', rotate: true })).toContain('--rotate')
@@ -615,15 +612,16 @@ describe('rotate reaches the headless surface as the screen the deprecated word 
     expect(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: false }, OUT)).not.toContain('--rotate')
   })
 
-  it('lands on one screen either way — 1080p-24 turned a quarter turn is 1080x1920', () => {
-    const viaFlag = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)) as SnapCommand
-    const viaWord = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', orientation: 'landscape' }, OUT)) as SnapCommand
-    expect(viaFlag.specs[0]?.cssWidth).toBe(1080)
-    expect(viaFlag.specs[0]?.cssHeight).toBe(1920)
-    expect([viaWord.specs[0]?.cssWidth, viaWord.specs[0]?.cssHeight]).toEqual([1080, 1920])
+  it('turns 1080p-24 a quarter turn into 1080x1920, and leaves it alone without the flag', () => {
+    const rotated = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT)) as SnapCommand
+    const asStored = parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24' }, OUT)) as SnapCommand
+    expect([rotated.specs[0]?.cssWidth, rotated.specs[0]?.cssHeight]).toEqual([1080, 1920])
+    expect([asStored.specs[0]?.cssWidth, asStored.specs[0]?.cssHeight]).toEqual([1920, 1080])
   })
 
-  it('refuses a disagreeing pair at the CLI it built the args for, not only in the handler', () => {
-    expect(() => parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', orientation: 'portrait', rotate: true }, OUT))).toThrow(/disagree/)
+  it('builds args the CLI accepts, now that there is no second way to ask', () => {
+    // The disagreeing-pair refusal went with the word: `rotate` is the only
+    // input, so the args it builds cannot contradict themselves.
+    expect(() => parseArgs(buildSnapArgs({ url: URL, preset: '1080p-24', rotate: true }, OUT))).not.toThrow()
   })
 })

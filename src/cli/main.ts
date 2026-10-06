@@ -854,11 +854,7 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
       // reason says whether waiting longer could have helped.
       settled: r.frame.settled,
       ...(r.frame.settled ? {} : { unsettledReason: r.frame.unsettledReason }),
-      // Said only where the deprecated --orientation word inverted: a phone
-      // asked for landscape got landscape and is owed nothing. In the reply
-      // rather than on stderr alone, because the caller who passed the flag is
-      // usually an agent reading JSON (bug-orientation-name).
-      warnings: spec.orientationNote === undefined ? r.warnings : [...r.warnings, spec.orientationNote],
+      warnings: r.warnings,
     })
   }
   await machine(cmd.matrix ? results : results[0])
@@ -1560,7 +1556,12 @@ async function runReport(cmd: ReportCommand): Promise<void> {
         ppi === null
           ? null
           : { width: (r.cssWidth * spec.deviceScaleFactor * 25.4) / ppi, height: (r.cssHeight * spec.deviceScaleFactor * 25.4) / ppi },
-      orientation: screenShape(r.cssWidth, r.cssHeight),
+      // `screenShape`, not `orientation`: this holds the shape the dimensions
+      // actually have, which is why the removal of the `orientation` INPUT
+      // renamed it rather than deleting it — unrotated on a laptop preset it
+      // reads `landscape` while `rotated` is false, and these rows carry
+      // neither `rotated` nor any other shape (`docs/breaking-changes.md`).
+      screenShape: screenShape(r.cssWidth, r.cssHeight),
       png: toImage(encodePng(img), img.width, img.height),
       settled: r.frame.settled,
       unsettledReason: r.frame.unsettledReason,
