@@ -92,7 +92,8 @@ export interface ReportScreen {
   ppi: number | null
   /** The screen's physical size in mm, when the diagonal is known. */
   physicalMm: { width: number; height: number } | null
-  orientation: 'portrait' | 'landscape'
+  /** The shape the dimensions actually have — renamed from `orientation` when that input was removed. */
+  screenShape: 'portrait' | 'landscape'
   /** The render, at the screen's device pixels, panel profile applied. */
   png: ReportImage
   settled: boolean
@@ -364,7 +365,7 @@ function screenSection(s: ReportScreen, thresholds: AuditThresholds): string {
     `<section id="${escapeHtml(s.presetId)}">` +
     `<h2>${escapeHtml(s.label)}</h2>` +
     `<p class="facts"><b>${s.cssWidth}×${s.cssHeight}</b> CSS px${s.deviceScaleFactor !== 1 ? ` at <b>${s.deviceScaleFactor}x</b>` : ''} · ` +
-    `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.orientation)}` +
+    `${s.png.width}×${s.png.height} device px · ${physical} · ${density} · ${escapeHtml(s.screenShape)}` +
     `${s.textScale !== 1 ? ` · text <b>${escapeHtml(formatTextScale(s.textScale))}</b>` : ''}` +
     `${s.settledMs === undefined ? '' : s.settledMs === null ? ' · <span class="bad">never settled</span>' : ` · settled in <b>${num(s.settledMs / 1000, 1)} s</b>`}` +
     `${s.settled ? '' : ' · <span class="bad">not settled</span>'}` +

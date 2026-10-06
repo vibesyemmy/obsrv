@@ -12,7 +12,6 @@
     "mode = [headless|live]",
     "navigated",
     "onionSkin",
-    "orientation",
     "out",
     "panes",
     "pngPath",
@@ -325,7 +324,6 @@
     "loading",
     "mode",
     "onionSkin",
-    "orientation",
     "panes",
     "pngPath",
     "presetId",
@@ -427,7 +425,6 @@
     "why = [declined|headless-only|launch-timeout|no-display|requested]"
   ],
   "obsrv_presets": [
-    "orientation",
     "presets",
     "presets[].cssHeight",
     "presets[].cssWidth",
@@ -446,6 +443,7 @@
     "profiles[].label",
     "profiles[].nits",
     "profiles[].summary",
+    "rotation",
     "throttles",
     "throttles[].cpuRate",
     "throttles[].id",

@@ -134,20 +134,14 @@ describe('parseArgs: snap', () => {
   })
 })
 
-describe('parseArgs: --orientation', () => {
-  it('defaults to portrait, which is the preset exactly as stored', () => {
+describe('parseArgs: --rotate, after --orientation was removed', () => {
+  it('leaves the preset exactly as stored when no rotation is asked for', () => {
     expect(snap('x.test', '--preset', 'iphone-61').specs[0]).toMatchObject({ cssWidth: 393, cssHeight: 852 })
-    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'portrait').specs[0]).toMatchObject({
-      cssWidth: 393,
-      cssHeight: 852,
-    })
   })
 
-  it('swaps the CSS axes in landscape, leaving dsf and diagonal alone', () => {
-    expect(snap('x.test', '--preset', 'iphone-61', '--orientation', 'landscape').specs[0]).toEqual({
+  it('swaps the CSS axes, leaving dsf and diagonal alone', () => {
+    expect(snap('x.test', '--preset', 'iphone-61', '--rotate').specs[0]).toEqual({
       presetId: 'iphone-61',
-      // `--orientation landscape` was given, so the spec records that a rotation
-      // flag was named at all — which is what `snap --json` keys `rotated` on.
       rotateAsked: true,
       cssWidth: 852,
       cssHeight: 393,
@@ -159,7 +153,7 @@ describe('parseArgs: --orientation', () => {
   })
 
   it('rotates every entry of a matrix', () => {
-    const cmd = snap('x.test', '--matrix', 'iphone-61,android-65', '--orientation', 'landscape')
+    const cmd = snap('x.test', '--matrix', 'iphone-61,android-65', '--rotate')
     expect(cmd.specs.map(sp => [sp.cssWidth, sp.cssHeight])).toEqual([
       [852, 393],
       [800, 360],
@@ -167,63 +161,58 @@ describe('parseArgs: --orientation', () => {
   })
 
   it('rotates custom dims too', () => {
-    expect(snap('x.test', '--width', '900', '--height', '600', '--orientation', 'landscape').specs[0]).toMatchObject({
+    expect(snap('x.test', '--width', '900', '--height', '600', '--rotate').specs[0]).toMatchObject({
       cssWidth: 600,
       cssHeight: 900,
     })
   })
 
   it('applies to diff as well, and the 1x/2x bounds are checked after rotating', () => {
-    expect(diff('x.test', '--preset', 'laptop-768', '--orientation', 'landscape').spec).toMatchObject({
+    expect(diff('x.test', '--preset', 'laptop-768', '--rotate').spec).toMatchObject({
       cssWidth: 768,
       cssHeight: 1366,
     })
-    // 1600x900 fits a 2x reference either way round; 2560x1440 fits neither.
-    expect(() => diff('x.test', '--preset', '1440p-27', '--orientation', 'landscape')).toThrow(/2x reference/)
+    expect(() => diff('x.test', '--preset', '1440p-27', '--rotate')).toThrow(/2x reference/)
   })
 
-  it('rejects anything that is not one of the two words', () => {
-    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/--orientation/)
-    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/portrait/)
-    expect(() => snap('x.test', '--orientation')).toThrow(/--orientation requires a value/)
+  it('refuses the removed word rather than ignoring it, and says what to use instead', () => {
+    // An unknown flag is refused by the parser, so a caller who still passes
+    // `--orientation` is told instead of silently given an unrotated screen.
+    expect(() => snap('x.test', '--orientation', 'landscape')).toThrow(/unknown flag: --orientation/)
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/unknown flag: --orientation/)
+    // **The refusal has to name the replacement** (`REMOVED_FLAGS` in
+    // `src/cli/args.ts`). The flag worked for months and is in old scripts and
+    // in anything an agent learned before this release, so "unknown flag"
+    // alone leaves the caller guessing which of thirty flags replaced it.
+    //
+    // **Scoped to the hint, and that is the whole point of these three lines.**
+    // The parser appends the full usage text, which names `--rotate` among
+    // thirty flags, so a bare `toThrow(/--rotate/)` passes with the hint never
+    // printed — Wren measured it on the pushed head: 59 of 59 with
+    // `REMOVED_FLAGS` silenced (room #4041). The message is
+    // `unknown flag: --X\n\n<hint>\n\n<usage>`, so the hint is the second block.
+    const said = (() => {
+      try {
+        snap('x.test', '--orientation', 'landscape')
+        return ''
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e)
+      }
+    })()
+    const hint = said.split('\n\n')[1] ?? ''
+    expect(hint, `no hint block in: ${said.slice(0, 120)}`).toContain('--orientation was removed')
+    expect(hint).toContain('--rotate')
   })
 
-  it('carries the flag on every spec, so a matrix run can report per render', () => {
-    const cmd = snap('x.test', '--matrix', 'iphone-61,1080p-24', '--orientation', 'landscape')
+  it('turns one flag into two different shapes, because the presets are stored differently', () => {
+    const cmd = snap('x.test', '--matrix', 'iphone-61,1080p-24', '--rotate')
     expect(cmd.specs.map(sp => sp.orientation)).toEqual(['landscape', 'landscape'])
-    // The measured surprise the help text now has to explain: one flag, two
-    // different resulting shapes, because the two presets are stored
-    // differently.
     expect(cmd.specs.map(sp => [sp.cssWidth, sp.cssHeight])).toEqual([
       [852, 393],
       [1080, 1920],
     ])
   })
-
-  it('--help explains that the flag names the stored orientation, not the shape', () => {
-    const help = parseArgs(['--help'])
-    expect(help.command).toBe('help')
-    const text = help.command === 'help' ? help.text : ''
-    expect(text).toContain('--orientation')
-    expect(text).toContain('landscape')
-    // The three things a reader cannot work out from "portrait | landscape".
-    expect(text).toContain('not the shape you get')
-    expect(text).toContain('landscape-natural')
-    expect(text).toContain('1080x1920')
-  })
-
-  it('the diff bound message names the rotation rather than blaming the preset id', () => {
-    // "1440p-27 is 1440×2560" would describe a shape that id never has.
-    const err = (): void => {
-      diff('x.test', '--preset', '1440p-27', '--orientation', 'landscape')
-    }
-    expect(err).toThrow(/rotated a quarter turn/)
-    expect(err).toThrow(/1440×2560/)
-    // Unrotated, there is no rotation to mention.
-    expect(() => diff('x.test', '--preset', '1440p-27')).toThrow(/"1440p-27" is 2560×1440/)
-  })
 })
-
 describe('parseArgs: diff', () => {
   it('defaults mirror snap, without an out file', () => {
     const cmd = diff('x.test')
@@ -318,7 +307,7 @@ describe('parseArgs: report', () => {
     expect(cmd.textMm).toBe(1.5)
   })
   it('rotates the default matrix too', () => {
-    expect(report('x.test', '--orientation', 'landscape').specs.map(s => [s.cssWidth, s.cssHeight])).toEqual([
+    expect(report('x.test', '--rotate').specs.map(s => [s.cssWidth, s.cssHeight])).toEqual([
       [768, 1366], [1080, 1920], [800, 360], [852, 393],
     ])
   })
@@ -409,7 +398,7 @@ describe('parseArgs: audit --groups-only', () => {
  * `--rotate` says the thing itself. Henry's call was to add it, keep the word's
  * meaning, deprecate it, and refuse a disagreeing pair.
  */
-describe('--rotate, and the deprecated --orientation beside it', () => {
+describe('--rotate, which replaced the removed --orientation', () => {
   it('rotates a landscape-stored preset into portrait, which is what the old word did', () => {
     const cmd = snap('https://example.com', '--preset', '1080p-24', '--rotate')
     expect(cmd.specs[0]?.cssWidth).toBe(1080)
@@ -428,51 +417,17 @@ describe('--rotate, and the deprecated --orientation beside it', () => {
     expect(cmd.specs[0]?.cssHeight).toBe(1080)
   })
 
-  it('produces the same SCREEN as --orientation landscape, differing only by the note', () => {
-    const viaWord = snap('https://example.com', '--preset', '1080p-24', '--orientation', 'landscape')
-    const viaFlag = snap('https://example.com', '--preset', '1080p-24', '--rotate')
-    // The note is the whole difference, and it should be: the word inverted
-    // here and is owed an explanation, while --rotate said it plainly.
-    const { orientationNote, ...word } = viaWord.specs[0]!
-    expect(viaFlag.specs[0]!).toEqual(word)
-    expect(orientationNote).toContain('produced a portrait screen')
+  it('refuses --orientation, which was removed with the breaking release', () => {
+    // The word named the preset's STORED form, so `landscape` gave a PORTRAIT
+    // screen on every monitor (`bug-orientation-name`). A caller still passing
+    // it is told, not silently given an unrotated screen.
+    expect(() => snap('https://example.com', '--preset', '1080p-24', '--orientation', 'landscape')).toThrow(/orientation/)
   })
 
-  it('accepts the pair when they agree', () => {
-    const cmd = snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'landscape')
-    expect(cmd.specs[0]?.cssWidth).toBe(1080)
-  })
-
-  it('REFUSES the pair when they disagree, rather than picking one', () => {
-    // The whole point: guessing which half the caller meant is how the
-    // original defect cost a day.
-    expect(() => snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'portrait')).toThrow(ArgError)
-    expect(() => snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'portrait')).toThrow(/disagree/)
+  it('refuses the removed word beside it too, rather than resolving a pair', () => {
+    // The disagreeing-pair refusal is gone with the word: there is no second
+    // way to ask any more, so there is nothing to disagree with.
+    expect(() => snap('https://example.com', '--preset', '1080p-24', '--rotate', '--orientation', 'portrait')).toThrow(/orientation/)
   })
 })
 
-describe('the note that says where the word inverted', () => {
-  it('is carried on the spec when --orientation landscape gave a portrait screen', () => {
-    const cmd = snap('https://example.com', '--preset', '1080p-24', '--orientation', 'landscape')
-    expect(cmd.specs[0]?.orientationNote).toContain('produced a portrait screen')
-    expect(cmd.specs[0]?.orientationNote).toContain('rotate: true')
-  })
-
-  it('is absent when the word was true — a phone asked for landscape got landscape', () => {
-    const cmd = snap('https://example.com', '--preset', 'iphone-61', '--orientation', 'landscape')
-    expect(cmd.specs[0]?.orientationNote).toBeUndefined()
-  })
-
-  it('is absent when --rotate was used, because there is no word to contradict', () => {
-    const cmd = snap('https://example.com', '--preset', '1080p-24', '--rotate')
-    expect(cmd.specs[0]?.orientationNote).toBeUndefined()
-  })
-
-  it('is per spec under --matrix, not per run', () => {
-    // The word inverts on the monitor and not on the phone, in one run.
-    const cmd = snap('https://example.com', '--matrix', '1080p-24,iphone-61', '--orientation', 'landscape')
-    const byPreset = new Map(cmd.specs.map(s => [s.presetId, s.orientationNote]))
-    expect(byPreset.get('1080p-24')).toContain('produced a portrait screen')
-    expect(byPreset.get('iphone-61')).toBeUndefined()
-  })
-})

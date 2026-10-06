@@ -1,6 +1,5 @@
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { THROTTLE_PROFILES } from '../shared/throttle'
-import type { Orientation } from '../shared/types'
 
 /**
  * Pure helpers for the MCP server (`src/mcp/server.ts`): tool-input → CLI
@@ -22,7 +21,6 @@ export interface SnapToolInput {
   url: string
   preset?: string | undefined
   /** Rotates whatever screen the run resolves — preset or custom dims alike. */
-  orientation?: Orientation | undefined
   rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
@@ -57,7 +55,6 @@ export interface DiffToolInput {
 export interface AuditToolInput {
   url: string
   preset?: string | undefined
-  orientation?: Orientation | undefined
   rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
@@ -79,7 +76,6 @@ export interface AuditToolInput {
 export interface LintToolInput {
   url: string
   preset?: string | undefined
-  orientation?: Orientation | undefined
   rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
@@ -105,7 +101,6 @@ export interface InspectToolInput {
   at?: { x: number; y: number } | undefined
   selector?: string | undefined
   preset?: string | undefined
-  orientation?: Orientation | undefined
   rotate?: boolean | undefined
   width?: number | undefined
   height?: number | undefined
@@ -122,7 +117,6 @@ export interface ReportToolInput {
   url: string
   /** Preset ids; the CLI's default matrix when omitted. */
   presets?: string[] | undefined
-  orientation?: Orientation | undefined
   rotate?: boolean | undefined
   textScale?: number | undefined
   /** Network and CPU conditions (`--throttle`); see the catalog's `throttles`. */
@@ -179,7 +173,6 @@ export function buildInspectArgs(input: InspectToolInput): string[] {
   if (input.at !== undefined) args.push('--at', `${input.at.x},${input.at.y}`)
   else args.push('--selector', input.selector!.trim())
   if (input.preset !== undefined) args.push('--preset', input.preset)
-  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
@@ -201,7 +194,6 @@ export function buildReportArgs(input: ReportToolInput, outPath: string): string
     if (input.presets.length === 0) throw new UsageError('`presets` must name at least one preset id, or be omitted for the default matrix.')
     args.push('--matrix', input.presets.join(','))
   }
-  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.rotate === true) args.push('--rotate')
   if (input.textScale !== undefined) args.push('--text-scale', String(input.textScale))
   if (input.throttle !== undefined) args.push('--throttle', input.throttle)
@@ -231,7 +223,6 @@ export function buildLintArgs(input: LintToolInput): string[] {
   }
   const args = ['lint', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
-  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
@@ -267,7 +258,6 @@ export function buildAuditArgs(input: AuditToolInput): string[] {
   }
   const args = ['audit', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
-  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
@@ -312,7 +302,6 @@ export function buildSnapArgs(input: SnapToolInput, outPath: string): string[] {
 
   const args = ['snap', input.url]
   if (input.preset !== undefined) args.push('--preset', input.preset)
-  if (input.orientation !== undefined) args.push('--orientation', input.orientation)
   if (input.rotate === true) args.push('--rotate')
   if (custom) {
     args.push('--width', String(input.width), '--height', String(input.height))
@@ -723,13 +712,12 @@ export interface PresetEntry {
  * repeated per entry: it is true of every preset in the table, and a field
  * saying "rotatable: true" fourteen times would carry less than one sentence.
  */
-export const ORIENTATION_NOTE =
-  'cssWidth/cssHeight are each preset\'s natural orientation — portrait for every mobile preset, ' +
+export const ROTATION_NOTE =
+  'cssWidth/cssHeight are each preset\'s natural shape — portrait for every mobile preset, ' +
   'landscape for the monitor and laptop ones. Every preset rotates: pass rotate: true to obsrv_snap, ' +
-  'obsrv_audit, obsrv_lint, obsrv_inspect, obsrv_report or obsrv_drive to swap the two axes a quarter turn ' +
-  '(the deprecated orientation: "landscape" means the same). Rotation changes nothing else — ' +
-  'the diagonal, deviceScaleFactor, ppi and physical size are all orientation-independent, so a ' +
-  'rotated screen is the same panel turned sideways rather than a different one.'
+  'obsrv_audit, obsrv_lint, obsrv_inspect, obsrv_report or obsrv_drive to swap the two axes a quarter turn. ' +
+  'Rotation changes nothing else — the diagonal, deviceScaleFactor, ppi and physical size are all ' +
+  'independent of it, so a rotated screen is the same panel turned sideways rather than a different one.'
 
 export interface ProfileEntry {
   id: string
@@ -756,14 +744,14 @@ export interface Catalog {
   profiles: ProfileEntry[]
   /** The `throttle` values snap, diff, audit and report take: DevTools' presets. */
   throttles: ThrottleEntry[]
-  /** See ORIENTATION_NOTE — how the dimensions above relate to rotation. */
-  orientation: string
+  /** See ROTATION_NOTE — how the dimensions above relate to rotation. */
+  rotation: string
 }
 
 /** The `obsrv_presets` payload, straight from src/shared/presets.ts — no spawn. */
 export function listCatalog(): Catalog {
   return {
-    orientation: ORIENTATION_NOTE,
+    rotation: ROTATION_NOTE,
     throttles: THROTTLE_PROFILES.map(t => ({ id: t.id, label: t.label, network: t.network, cpuRate: t.cpuRate, summary: t.summary })),
     presets: SCREEN_PRESETS.map(p => ({
       id: p.id,

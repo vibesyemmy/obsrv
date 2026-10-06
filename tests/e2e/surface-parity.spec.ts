@@ -401,7 +401,9 @@ for (const page of PAGES) {
       row.notes = { headless: notesIn(h), live: notesIn(l) }
       const witness = (v: unknown): Record<string, unknown> => {
         const o = (v ?? {}) as Record<string, unknown>
-        const keys = ['mode', 'preset', 'presetId', 'pageHeight', 'viewport', 'orientation', 'screenShape', 'targets', 'layoutScale', 'walked', 'documentLocked']
+        // Diagnostics only (`k in o`, asserted nowhere). `orientation` left the
+        // list with the field: a key no reply can carry is a column of blanks.
+        const keys = ['mode', 'preset', 'presetId', 'pageHeight', 'viewport', 'screenShape', 'targets', 'layoutScale', 'walked', 'documentLocked']
         return Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]]))
       }
       row.surface = { headless: witness(h), live: witness(l) }
@@ -468,7 +470,12 @@ const EXPLAINED: { tool: string; path: string; why: string }[] = [
   { tool: 'obsrv_snap', path: 'textScale', why: 'as textScale' },
   { tool: 'obsrv_snap', path: 'throttle', why: "as obsrv_inspect's throttle" },
   // A live capture is of a window, and reports the window it captured.
-  ...['orientation', 'screenShape', 'viewMode', 'panes', 'loading', 'onionSkin', 'navigated', 'width', 'height'].map(path => ({
+  // `orientation` stood at the head of this list until the breaking release
+  // removed it from the live reply. The row named a difference that no longer
+  // exists, and the check at the foot of this file ("every written reason still
+  // describes a real difference") is written to go red on exactly that — so the
+  // row goes rather than the check (Idris and Wren, room #4022 / #4023).
+  ...['screenShape', 'viewMode', 'panes', 'loading', 'onionSkin', 'navigated', 'width', 'height'].map(path => ({
     tool: 'obsrv_snap',
     path,
     why: 'window state; a headless render has no window',

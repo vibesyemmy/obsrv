@@ -79,8 +79,10 @@ produced almost everything from one page and a calibration resting on one page
 is not one. Both extra sites are design-forward marketing pages of the kind
 that reaches for light weights: chosen to give the rule its best chance of
 firing, not its easiest silence. Viewports are stated in pixels rather than by
-preset id, because `--orientation` names which *stored* form to use and a
-preset id alone does not pin the screen.
+preset id, because a preset id alone does not pin the screen — it names a
+stored shape that `--rotate` turns a quarter turn. (Calibrated while the
+removed `--orientation` flag was the way to say that; the pixels are what was
+measured either way.)
 
 **1920×1080 @1x** — findings at each candidate threshold:
 

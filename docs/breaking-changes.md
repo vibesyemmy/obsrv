@@ -56,11 +56,72 @@ report consumers and is named here as one, rather than smuggled in under the inp
 
 **2. `obsrv_presets`'s `orientation` is a description string, not a value.** It explains *"how the
 cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation"* — prose about the
-input being removed. **Decision: the text is rewritten to say `rotate`**; the field stays, because it
-describes the reply rather than restating it.
+input being removed. **Decision: the text is rewritten to say `rotate`.**
+
+**CORRECTED when the code landed: the field does NOT stay — it is renamed to `rotation`.** This entry first
+said *"the field stays, because it describes the reply rather than restating it"*. **That was written before
+the code and it is wrong about what shipped**: a key named `orientation` that no longer describes any
+`orientation` is the same misleading name the removal exists to retire, so it carries the name of what it
+describes. **A consumer reading `obsrv_presets`' `orientation` finds it gone**, which is a second renamed
+reply key beside `screens[].orientation`, and this entry would not have said so. Caught by Wren against
+the shape guard (`#4013`).
+
+### Every MCP tool now refuses an unknown top-level input key, naming it
+
+**This entry promised an argument error for `orientation:` before the code delivered one.** The first
+code change removed the key from every input shape and left it at that — and the MCP surface **silently
+dropped** it: arguments are parsed against a plain `z.object`, zod strips what it does not know, so
+`obsrv_snap { preset: '1080p-24', orientation: 'landscape' }` returned a **1920×1080** screen with
+`isError: false` and `warnings: []`. The caller asked for a rotation by name and was given the unrotated
+screen with nothing in the reply to say so — `docs/release-gate.md` **class 1**, *"a wrong answer the
+caller cannot detect"*. The CLI refused the flag all along, so the two surfaces answered the same question
+differently and the MCP answer was the undetectable one. **Found by Wren and Idris with two independent
+probes before release** (`#4019`, `#4022`); the sentence in *What breaks* below was true of the CLI and
+false of MCP when it was written.
+
+**The fix is `src/mcp/strictInput.ts`, and its scope is wider than the removed key.** Every tool's input
+is registered as a strict object, so **any** unknown top-level key is now an error that names the key and
+lists what the tool does take, where before it was dropped in silence — a typo, an obsolete name, or a key
+a newer skill teaches to an older pinned server (the skill and the npm package ship separately; Idris's
+point, `#4026`). For `orientation` the message also names `rotate`. The CLI's refusal now names `--rotate`
+the same way (`REMOVED_FLAGS` in `src/cli/args.ts`), so both surfaces answer alike.
+
+**What this changes for a caller that was passing an extra key and working:** that call now fails. It was
+already not doing what its arguments said.
+
+**Two limits, named rather than left to be discovered.** **(1) Top level only** — a nested unknown key
+(`obsrv_flow`'s steps, for one) is still dropped, measured against the built server; `orientation` was
+only ever a top-level flag, so this closes the case it was written for and no more. **(2)** The published
+`inputSchema` of every tool now carries `additionalProperties: false`. That does **not** move
+`docs/public-shape.json`, because `scripts/public-shape.js` reads each tool's **output** schema only — so
+it is recorded here on its own account rather than by the shape guard.
+
+**Output strictness is unchanged and still test-only** (`src/mcp/strictOutput.ts`). The asymmetry is
+deliberate: an undeclared key in a *reply* is a field nobody asked for and is harmless to a tolerant
+client, while an unknown key in a *request* is something the caller asked for and did not get. Only the
+second is a wrong answer.
+
+### What the code change moved, measured from the built server
+
+`docs/public-shape.json`, regenerated from `tools/list` rather than from the zod:
+
+| tool | removed | added |
+| --- | --- | --- |
+| `obsrv_snap` | `orientation` | — |
+| `obsrv_drive` | `orientation` | — |
+| `obsrv_presets` | `orientation` | **`rotation`** |
+
+**`obsrv_report`'s `screens[].orientation` → `screenShape`** does not appear in that table because the
+report's rows are not an MCP output schema; it is a break for report consumers all the same, and it is
+named above.
+
+**Still to come in this release, and not in that change:** control's `setOrientation`. The app speaks the
+stored-form word and the MCP translates `rotate` into it in one place; removing it is an app-side protocol
+change with its own e2e.
 
 **What breaks:** a caller passing `--orientation` or `orientation:` gets an argument error instead of a
-screen; a client reading `orientation` from an MCP reply finds it absent; **a report consumer reading
+screen — **true of both surfaces only after the strictness change above; the MCP half dropped the key in
+silence when this line was first written**; a client reading `orientation` from an MCP reply finds it absent; **a report consumer reading
 `screens[].orientation` finds it renamed to `screenShape`, with the same values it always had.** On the MCP surface the removal is
 breaking in both directions — every output schema is `additionalProperties: false`, so a client holding the
 old schema also rejects a reply that no longer carries it. **Restart the session after upgrading.**
