@@ -87,6 +87,25 @@ What it does not show, and the table says so on its last row:
 - **The real test file was not looped on the old teardown** to see whether `ENOTEMPTY` can be provoked there. It is a way to find out whether the
   reading is right, and it was not done.
 
+## The control's head start was a fixed 150 ms, and that made it blind on a slower machine (Wren, room message 4074)
+
+The first version of the real-writer test slept 150 ms and then killed the parent. If the writer had not started by then, the old teardown had nothing to
+race and **passed the control**. Wren measured it (the parent delaying the writer by S ms, 8 runs per cell, old teardown): `ENOTEMPTY` 8 of 8 at S=0, 2 of 8 at
+S=100, 0 of 8 at S=250 and S=500. Henry re-ran his own old-vs-new probe, which used the same 150 ms, with the delay (6 trials per cell): old 6/6 red at S=0,
+**2/6 at S=100, 0/6 from S=250**, so his "0 of 6 clean" figure above is about that laptop at that moment, not about the control's power. CI is where this matters: the one
+real hang's snapshot printed load 15.19 on 3 cores, where a node child can take well over 100 ms to start.
+
+The test now waits for the writer's first file (`vi.waitFor`, 10 ms interval, 8 s cap) and **fails** if none appears, so the writer is provably running when the parent
+is told to die. It also cleans up its parent and directory on a failing run (a sabotage that never started the writer left both behind; found by running it).
+
+Measured against the new test, old teardown, 8 runs per cell, the writer starting S ms late: **S = 0, 100, 250, 500, 1000: failed 8 of 8 in every cell.** The fix: passed 4 of 4 at S = 0, 500, 1000.
+As a control for the method, the *first* version of the test against the old teardown at S=250 **passed 8 of 8** (blind), as Wren found, so the method can see
+the problem it reports gone. A writer that never starts within the cap fails the test with `the writer has not made its first file`.
+
+**Not shown, and not rounded up:** Henry's own re-run of the new wait at S=100 gave old teardown red **5 of 6**, against my 8 of 8 and Wren's 8 of 8: three small samples, three
+loads, and I have no reading of the difference. The S rows test the wait (the writer is late), **not a starved runner that delays the kill after the writer is up**: the writer
+runs 700 ms of wall clock, so a kill later than that finds nothing to race and the old teardown passes again. That case is not covered, and it is the one a loaded CI runner most resembles.
+
 ## The wiring is guarded too (added after room message 4066)
 
 `killAndRemove.test.ts` tests the helper, and for the first version of this branch nothing failed if either `afterEach` went back to the two old

@@ -2425,6 +2425,8 @@ kill, wait for the exit (bounded), and remove with `maxRetries: 5`; a test with 
 teardown and passes **10 of 10** on the fix. **Removing the exit wait alone leaves that control green, so the control does not show the exit wait
 matters**; the retries are what covers a late writer. Henry's own run of main's literal shape against a detached writer, 6 trials each, agrees (old 0 of 6
 clean, new 6 of 6). The control is a model of the mechanism, not a reproduction of the CI window: both writers are hot loops, and neither says anything about the CI rate.
+Its first version slept a fixed 150 ms before the kill and was **blind when the writer started late** (old teardown red 0 of 8 at 250 ms late); it now waits for the writer's first file and
+fails if none appears (red 8 of 8 at 0 to 1000 ms late). A starved runner that delays the *kill* past the writer's 700 ms is not covered.
 `tests/unit/teardownWiring.test.ts` fails if either hook stops using the helper, or a new file kills a child and removes a directory without `maxRetries`.
 
 **What would change this entry:** a second `ENOTEMPTY` from either hook after the fix, which would put the 5.2 s retry window or the named
