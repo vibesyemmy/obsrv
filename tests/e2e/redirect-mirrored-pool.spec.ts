@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, rendererWindow } from './launch'
+import { holdNativeOutOf } from './holdNativeOut'
 
 /**
  * **A page's own redirect, after a pool of starts that includes the bus's, is still reported as the page's.**
@@ -44,6 +45,16 @@ import { launchApp, rendererWindow } from './launch'
  * test now waits for the target to be at `hairline`, not loading, and quiet for `QUIET_MS`, and it reads the
  * redirect's own landing as the `hairline` commit that FOLLOWS the redirect page's own commit. If something
  * else commits first, the failure says the pool was not settled rather than blaming the product.
+ *
+ * **The redirect is triggered with the native pane held out of the redirect page, and this paragraph says why.**
+ * `navigate` loads both panes, so the native pane's own redirect landed in the target through the bus and, when it
+ * landed first, replaced the redirect page BEFORE its script ran: the page's own start never existed. That failed
+ * this spec's first attempt on CI (run `37394200312`, the bus's mirrored `hairline` start 2 ms after the redirect
+ * page committed), after the sweeps above had passed 40 of 40 idle and 60 of 60 under burners, because on a
+ * developer machine the target wins. With the target on `cpu-4x` and no hold-out, 13 of 20 runs failed with that
+ * same message (`#3752`'s model; a throttled renderer standing in for CI's slower one, not a measurement of CI).
+ * `holdNativeOut.ts` has the mechanism and what it does not cover: **the ordering where the bus wins is a product
+ * question (`bug-measured-page-is-not-the-asked-page`) and is neither asserted nor pinned here.**
  *
  * **It may pass here and fail in CI.** The register records 3 in 20 in CI against 0 in 40 locally for the
  * original bug, so no single run can assert that either way; this asserts the property that must hold on any
@@ -173,6 +184,13 @@ test.afterAll(async () => {
   await app?.close()
 })
 
+/** Set when the native pane is held out of the redirect page; released after the test, whatever its outcome. */
+let releaseNative: (() => Promise<void>) | undefined
+test.afterEach(async () => {
+  await releaseNative?.()
+  releaseNative = undefined
+})
+
 test('a page’s own redirect, after a pool of starts that includes the bus’s, is still reported as the page’s', async () => {
   // Build the pool. Each pass leaves the target somewhere else (`tall.html`) and
   // then drives the NATIVE pane through `redirect.html`, whose two hops the bus
@@ -220,6 +238,13 @@ test('a page’s own redirect, after a pool of starts that includes the bus’s,
 
   // Ground truth the test owns: nothing recorded before this instant belongs to
   // the redirect that is about to happen.
+  // **The native pane is held out of the redirect page, so the target's own redirect has no competitor.**
+  // `navigate` loads both panes; when the native pane's redirect landed first, the bus loaded the landing into
+  // the target before the page's script ran, and the page's own start never existed (`holdNativeOut.ts`; the
+  // same race as `arrivals.spec.ts:218`, `#3752`). That is what failed this spec's first attempt on CI, run
+  // `37394200312`, 2 ms after the redirect page committed. Installed AFTER the pool is built, because the pool
+  // needs the native pane's own redirects.
+  releaseNative = await holdNativeOutOf(app, [REDIRECT])
   const boundary = Date.now()
   await call('navigate', { url: REDIRECT })
 
@@ -264,6 +289,14 @@ test('a page’s own redirect, after a pool of starts that includes the bus’s,
     `after the boundary the redirect page was started ${redirectStarts} times and committed ${redirectCommits} times, not once each: ` +
       'something else was still loading it, so the pool was not settled and what follows would not be about this redirect',
   ).toEqual([1, 1])
+
+  // Held out, the native pane never lands `hairline`, so the bus has nothing to mirror into the target after
+  // the boundary. A mirrored `hairline` start there means the hold-out is not in force: this run is not about
+  // the page's own redirect, and it says so here instead of failing on a missing own start.
+  expect(
+    startsSinceBoundary.filter(s => s.mirrored),
+    'the native pane was held out of the redirect page, yet the bus mirrored hairline into the target after the boundary: the hold-out is not in force, so this run is not about the page’s own redirect',
+  ).toEqual([])
 
   // **A recorded fact, not a rule copied from the product:** the redirect started a navigation of its own,
   // so a document-initiated, non-mirrored start of the address exists at or after the boundary.
