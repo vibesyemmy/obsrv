@@ -633,19 +633,21 @@ the `issued` row in the failing attempt's mirror record.
   named above needs the `arrivals` route to *reproduce* with no abort; this is
   the other corner, so it does not decide whether they are one bug or two.
 
-**What the sweep covered.** 177 suite jobs, from runs created on or after
-2026-09-27 (the first suite job read is from a run created 09-28 16:28Z, the last 10-06
-02:26Z), chosen by the suite job's name and a duration of at least 600 s and not
-by the run's conclusion: `37294297527` is stamped `cancelled` and its suite job
-is `success`. No log came back empty. 175 of the 177 contain a `[sync138]` line;
-the two that do not are `cancelled` jobs of 694 s and 709 s (`37369906774`,
-`37369912376`). The line has been in
+**What the sweep covered.** 178 readable suite jobs of 600 s or more, from runs created on or after 2026-09-27 through
+10-06 04:26Z (the first from a run created 09-28 16:28Z), every attempt of every run, each pulled by job id through the raw API
+(`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`), chosen by the suite job's name and a duration of at least 600 s and not
+by the run's conclusion: `37294297527` is stamped `cancelled` and its suite job is `success`. **Corrected 2026-10-06:** this
+paragraph first said 177 jobs with no log empty, read with `gh run view --log --job`, which returns a run's *latest* attempt's log
+for any of its job ids; six re-run runs were read as their attempt 2 twice and their attempt 1 not at all (Wren, `#3946`; Idris,
+`#3947`). 177 of the 178 contain a `[sync138]` line; the one that does not is `37408764721`, a cancelled job. Two cancelled
+attempt-1 jobs of 694 s and 709 s (`111969388200` and `111969404835`, runs `37369906774` and `37369912376`) answer 404
+`BlobNotFound`: they are **unread**, not "without a line". The line has been in
 the spec since 2026-09-16 (`dc8bd84`; its current shape, with `other native loads
 after it`, from `509d2e3` the same evening); **this sweep did not read 09-16 to
 09-27**, so it says nothing about those days.
 
-**Three more jobs print a failed step-2 load and the test passed.** Runs
-`36474748542` (52 ms), `36467712974` (114 ms) and `36612587616` (70 ms) print
+**Four more jobs print a failed step-2 load and the test passed.** Runs
+`36474748542` (52 ms), `36467712974` (114 ms), `36612587616` (70 ms) and `37123672372` (131 ms, attempt 1) print
 `step-2 native load: failed in …` with `native commits after it: 2` or `3` and
 `target url-changed: 2`, and `sync.spec.ts:139` is `✓` on its first attempt. A
 passing log does not print the failed load's record, so these are **not** counted
@@ -655,14 +657,14 @@ alone does not fail the test; in the five that did, the target also emitted no
 
 **What this does not say.**
 - It is **not a rate.** Five first-attempt failures with this signature among
-  the 175 suite jobs that reached the test is a count over a window in which the
+  the 177 suite jobs that reached the test is a count over a window in which the
   code under test changed; the jobs are every one saved, not a draw.
 - It does **not** say this is the `arrivals` race, or that it is not
   (the "Related" paragraph above keeps that open), and it does not say the app is
   wrong to abort the load: the register's words stand, "nothing here says the
   app is wrong to abort it".
 - It does **not** say every `sync.spec.ts:139` first-attempt failure is this one.
-  The same 177 jobs hold seven, and **two of the seven are teardowns**, not this:
+  The same jobs hold seven, and **two of the seven are teardowns**, not this:
   `electronApplication.evaluate: Target page, context or browser has been closed`,
   at 127 ms and 149 ms, with no step-2 line printed for that attempt. They are
   `#483` (run `36474113601`, suite job `109103468365`, 09-28), the one named above,
@@ -896,13 +898,14 @@ while the hint shows, and it had already shifted two measurement specs. A 26 px 
 point *within* the content; it does not turn it white. And the four `diagonal-hint` tests passed on
 their first attempt in the same run.
 
-**Counted 2026-10-06 (`#3887`): two firings in the 180 saved suite jobs, both white, both rescued.** The test ran in 176 of the
-180 jobs (runs created from 2026-09-27; first run created 09-28 16:28Z, last 10-06 04:26Z). First-attempt `✘` in **two**, each passed on
+**Counted 2026-10-06 (`#3887`): two firings in the 178 readable suite jobs, both white, both rescued.** The test ran in 174 of the
+178 readable suite jobs (runs created from 2026-09-27, every attempt, raw API; first run created 09-28 16:28Z, last 10-06 04:26Z). First-attempt `✘` in **two**, each passed on
 `retry #1`, none failed on a retry: run `36556822266` (created 09-29 10:38Z; suite job `109374902472`; test 625, 438 ms, retry 373 ms) and run
 `37410068785` (created 10-06 03:40Z, suite job `112096421115`, `#586`'s pull-request run; test 659, 639 ms, retry 324 ms). **Both print
 `middle pixel rgb: [255,255,255]`, `Expected: > 295, Received: 255`** at `vision.spec.ts:114`: the pure white this entry describes.
-It did not run in four jobs: `37369912376` and `37369906774` (cancelled, 7 KB), `36467712974` (cancelled run) and `37408764721`
-(cancelled when `#586` was pushed). **The window does not reach** the 09-17 sighting above or the three runs
+It did not run in four of those jobs, all cancelled before reaching it: `37408764721` (when `#586` was pushed), `36467712974`, and
+the attempt-1 jobs of `37123672372` and `37294469890`; two more jobs (`111969388200`, `111969404835`) are unread (404). **Corrected
+2026-10-06:** this paragraph first said 176 of 180 and named two 7 KB logs that were attempt 2's board-only logs. **The window does not reach** the 09-17 sighting above or the three runs
 `board/bug-vision-47-normal-not-red.md` cites (`34977896287`, `35853805499`, `35874763546`). Not a rate; no cause. Dogu's and
 Idris's counts agree (`#3895`), and Wren pulled both rows from the raw API (`#3889`).
 
@@ -1566,6 +1569,11 @@ note means the growth was late rather than absent, and the walk's own account of
 unaffected. A fix, if one is ever wanted, is a fixture that stops growing before the probe — not a
 longer wait, which cannot make a still-growing page settle.
 
+**Counted again, 2026-10-06.** In the 178 readable suite jobs (09-28 to 10-06 04:26Z, raw API, every attempt) the test has six
+first-attempt `✘`, in six runs, each passed on `retry #1`: `36463050844` attempt 2, `36592408376`, `36596468138`, `37123672372`, `37160406685` attempt 2, `37346134084`. **`#588`'s attempt 1 (`37428504822`) is the seventh:** 1.3 s,
+retry ✓ 1.2 s, and the sentence that arrived instead was the motion note ("this page was still moving when it was measured: 40 had
+been replaced in the 255 ms after the figures were taken"). Which sentence arrived in the six was not re-read. Not a rate; no cause.
+
 ## `frame-bus.spec.ts:40`: the wait admitted an unpainted frame
 
 Seen once, on run [`35851213703`](https://github.com/vibesyemmy/obsrv/actions/runs/35851213703)
@@ -1997,6 +2005,17 @@ artifacts carry the Electron stdout up to the last line before the close; a cras
 leaves a signal or a stack there, a harness close does not. Read that before
 writing either cause down.
 
+**Counted again, 2026-10-06 (`37428504822`, `#588`'s pull-request run): the same two lines on both attempts of one job, and the
+next attempt of the run passed.** The sweep (178 readable suite jobs, 09-28 to 10-06 04:26Z, raw API, every attempt) has one earlier
+first-attempt `✘` of this test, `36556822266` above, rescued. In `#588`'s run, attempt 1 (suite job `112153643896`):
+`mirror-302.spec.ts:99` failed at 30.0 s (test 434) **and again on `retry #1` at 30.0 s (test 435)**, each with `Test timeout of
+30000ms exceeded.` and `electronApplication.evaluate: Target page, context or browser has been closed`, at `launch.ts:105` via
+`mirror-302.spec.ts:106:13` (Idris, `#3944`). Each attempt's app has a harness kill line directly before its `✘` (10,002 ms and
+10,005 ms, both silent: `starting` and `gpu`, no `quitting`). Attempt 2 of the run (suite job `112163825257`), the same head and the
+same merge ref: the test passed in 258 ms. **So "rescued by a bare retry in under 330 ms" above is true of the two sightings it
+covers and not of this one**, and the discriminator above (did the process exit, or did the harness close it) is still unread:
+`error-context.md` and `playwright-flaky` were not downloaded. One run, no cause, no rate; `#588`'s diff is one docs file.
+
 ## THE EIGHTH SIGHTING RULES OUT THE DROP FOR ITS OWN ATTEMPT TOO, AND NAMES WHERE TO LOOK NEXT, 2026-09-29
 
 Run `36596468138` (`#516`'s own suite), `arrivals.spec.ts:181`, note MISSING, retry-rescued.
@@ -2244,21 +2263,26 @@ cover different windows; the 42 are Dogu's, the older four are Wren's, and Idris
 way where they overlap (`#3660`). One hit (`37190742650`) was read by one person. The silent tails are not proved to be one
 thing.
 
-**Counted again, 2026-10-06: 29 hits in 25 jobs. The table above is the part of them its windows reached.** Dogu, from
-the raw job logs (`gh run view --log --job <id>`), after the `main` push for the `#586` merge (`37413726703`, below) added a
-silent hit the table lacks and raised the question of how many others it lacks. **The logs:** 180 suite jobs, from runs created
-on or after 2026-09-27 (first run created 09-28 16:28Z, last 10-06 04:26Z): the 177 of the `sync.spec.ts:139` sweep (suite jobs of 600 s
-or more, chosen by job name and not by run conclusion) and three more by id (`37408764721`, `37410068785`, `37413726703`).
-180 of 180 pulled, return code 0, none empty (smallest 7,267 bytes). **A control:** in this register's own window (runs created
-10-03T22:35Z to 10-05T14:50Z) the sweep finds the same 42 jobs and the same six hits as the table, and all ten of the table's
-tails and next-`✘` rows read the same from these logs.
+**Counted again, 2026-10-06: 30 hits in 26 jobs. The table above is the part of them its windows reached.** Dogu, from
+the raw job logs, after the `main` push for the `#586` merge (`37413726703`, below) added a silent hit the table lacks and raised
+the question of how many others it lacks. **The logs:** 178 readable suite jobs of 600 s or more, from every attempt of every run
+created on or after 2026-09-27 through 10-06 04:26Z (the first from a run created 09-28 16:28Z), each pulled by job id through the
+raw API (`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`), bytes and hash per row, 178 distinct hashes. **Corrected
+2026-10-06:** this paragraph first said 29 hits in 25 jobs from 180 job ids read with `gh run view --log --job`, which returns a
+run's *latest* attempt's log for any of its job ids. Six re-run runs were read as their attempt 2 twice (174 distinct logs) and
+one hit in an attempt-1 job, `36585126404`, was never read (Wren, `#3946`; Idris, `#3947`). Eight jobs answer 404 and are
+**unread, not zero**: the 694 s and 709 s attempt-1 jobs `111969388200` and `111969404835`, and six of 555 s or less that were
+cancelled or skipped. **A control:** in this register's own window (runs created 10-03T22:35Z to
+10-05T14:50Z) the sweep finds the same 42 jobs and the same six hits as the table, and all ten of the table's tails and
+next-`✘` rows read the same from these logs.
 
-**What the 29 are.** Every hit took 10,001 to 10,022 ms to close (Dogu's parse; Idris's parser reproduced the range and both ends, `#3904`). **13 tails are silent** (two lines, `starting` and `gpu`) and
-**16 log `quitting`**. **The next result line after the hit is a `✘` in 23 and a `✓` in 6.** 11 of the 23 `✘` ran the full 30.0 s:
-8 after a silent tail and 3 after one that logged `quitting` (`throttle-refused.spec.ts:164`, `image-tabs.spec.ts:82`,
-`native-pane.spec.ts:62`, all 09-28 and 09-29). Five jobs with a hit contain no `✘` at all (`36464104648`, `36619187164`,
-`36648615234`, `36653034749`, `37399203900`). The ten rows above plus these 19 are the 29; the 19 follow, with the same
-columns (the next result is the first `✓`, `✘` or `-` line after the hit; whether each `✘` was then rescued was not read):
+**What the 30 are.** Every hit took 10,001 to 10,022 ms to close (Dogu's parse; Idris's parser reproduced the range and both
+ends, `#3904`). **14 tails are silent** (two lines, `starting` and `gpu`) and **16 log `quitting`**. **The next result line after
+the hit is a `✘` in 24 and a `✓` in 6.** 11 of the 24 `✘` ran the full 30.0 s: 8 after a silent tail and 3 after one that logged
+`quitting` (`throttle-refused.spec.ts:164`, `image-tabs.spec.ts:82`, `native-pane.spec.ts:62`, all 09-28 and 09-29). Five jobs with
+a hit contain no `✘` at all (`36464104648`, `36619187164`, `36648615234`, `36653034749`, `37399203900`). The ten rows above plus
+these 20 are the 30; the 20 follow, with the same columns (the next result is the first `✓`, `✘` or `-` line after the hit;
+whether each `✘` was then rescued was not read):
 
 | run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
 | --- | --- | --- | --- | --- | --- |
@@ -2274,6 +2298,7 @@ columns (the next result is the first `✓`, `✘` or `-` line after the hit; wh
 | `36541147424` | 09-29, `main` push | ✘ `orientation.spec.ts:114` | 10.6 s | `quitting` logged | Dogu, Idris (parser) |
 | `36556822266` | 09-29, pull request | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** | Dogu, Idris (parser), Wren |
 | `36577980330` | 09-29, pull request | ✘ `native-pane.spec.ts:62` | 30.0 s | `quitting` logged | Dogu, Idris (parser) |
+| `36585126404` | 09-29, pull request (attempt 1) | ✘ `throttle-live.spec.ts:48` | 0 ms | **silent** | Dogu, Wren, Idris (raw pulls, `#3946`, `#3947`) |
 | `36608642138` | 09-29, pull request | ✘ `throttle-live.spec.ts:48` | 0 ms | **silent** | Dogu, Idris (parser) |
 | `36619187164` | 09-29, pull request | ✓ `sync-mirror-mark.spec.ts:41` | 1.1 s | **silent** | Dogu, Idris (parser) |
 | `36648615234` | 09-30, pull request | ✓ `quit.spec.ts:26` | 11.7 s | `quitting` logged | Dogu, Idris (parser) |
@@ -2290,34 +2315,45 @@ from a third pull of the 25 jobs the two tables name (0 mismatches, `#3907`), an
 `37399203900` and the whole `fit-pan` job (`#3889`, `#3899`, `#3875`). "(parser)" in the column marks a comparison, not a read.
 
 **What this changes in the section above.**
-- **"Seven of the ten tails are silent" is true of those ten and is not the shape of the set.** Across the 29 it is 13 silent and
+- **"Seven of the ten tails are silent" is true of those ten and is not the shape of the set.** Across the 30 it is 14 silent and
   16 not. A silent tail is not the majority, and the three `quitting` hits before a 30.0 s `✘` show that 30.0 s does not mean silent.
-- **"Every hit sits directly before a `✘` line" holds for the ten and not across the days read here:** 6 of the 29 are followed by
+- **"Every hit sits directly before a `✘` line" holds for the ten and not across the days read here:** 6 of the 30 are followed by
   a `✓`, five of them with `quitting` logged and one silent (`36619187164`, before `sync-mirror-mark.spec.ts:41` passing in 1.1 s).
   A slow close is not always followed by a failure.
 - **"None of the 26 logs without a first-attempt `✘` has a hit" holds for the 42 and is not general:** four of the five jobs with
   no `✘` and a hit are before that window (09-28 to 09-30) and one is after it (`37399203900`, run created 10-06 01:26Z).
-- **`37413726703` (`fit-pan.spec.ts:93`, below) is the 13th silent hit and the latest of the 29.** By the table's own
+- **`37413726703` (`fit-pan.spec.ts:93`, below) is the 14th silent hit and the latest of the 30.** By the table's own
   definition it is its eleventh row.
 
-**What this does not say.** No cause; the same three explanations still fit, and 13 silent against 16 `quitting` does not say
+**What this does not say.** No cause; the same three explanations still fit, and 14 silent against 16 `quitting` does not say
 they are one thing or two. Not a rate. "Next result line" is what was read, not each hit's whole neighbourhood, so a `✓` after
-a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, own pulls and own
-parser, 180 of 180 jobs) agree on every figure here, and a third parse by Wren of the 25 jobs the two tables name (`#3907`) reads
-the same; it cannot see a hit those lists omit. All three read the same `app.close() has taken` line, so the agreement says the
-count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
-are unread.
+a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, `#3947`, `#3955`: own
+parsers) agree on every figure here, and a third parse by Wren (`#3907`, `#3946`, `#3949`, from the API's own run list) reads the
+same. All three now read the logs through the raw API, which rules out a parser slip and not a defect in the stored logs
+(Wren checked the per-attempt logs zip for the six re-run runs: 12 of 12 job-attempts agree, `#3958`), and all read the same
+`app.close() has taken` line, so the agreement says the count is right for that definition, not that the line is the right thing
+to count. `error-context.md` and `playwright-flaky` are unread.
 
-**One more hit, outside the sweep, 2026-10-06 (`37425109815`).** The sweep above ended at 04:26Z. Since then `ci.yml` has run
-twice (`37418289163`, the `#587` pull-request run: 0 hits; `37425109815`, the `main` push for its merge: 1), so this is the only
-hit known beyond the 29. The totals above are the sweep's and are not edited; with this one it would be 30 hits in 26 jobs, 14
-silent, 24 followed by a `✘`.
+**More hits after the sweep, 2026-10-06.** The sweep above ended at 04:26Z. Since then `ci.yml` has run three times:
+`37418289163` (the `#587` pull-request run: 0 hits), `37425109815` (the `main` push for its merge: 1) and `37428504822` (the `#588`
+pull-request run: 3 hits in attempt 1, none in attempt 2). The totals above are the sweep's and are not edited; with these four hits
+they would be **34 hits in 28 jobs, 17 silent, 17 `quitting`, 27 followed by a `✘` and 7 by a `✓`** (Dogu and Idris, `#3947`).
 
 | run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
 | --- | --- | --- | --- | --- | --- |
 | `37425109815` | 10-06, `main` push | ✘ `tab-switch-preset.spec.ts:89` | 5.4 s | **silent** (10,008 ms; two lines) | Dogu, Idris, Wren (raw pulls, `#3933`, `#3934`, `#3935`) |
+| `37428504822` attempt 1 | 10-06, pull request | ✓ `consent.spec.ts:119` | 8 ms | `quitting` logged (10,005 ms; five lines) | Dogu, Idris, Wren (`#3944`, `#3945`) |
+| `37428504822` attempt 1 | 10-06, pull request | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** (10,002 ms; two lines) | Dogu, Idris, Wren (`#3944`, `#3945`) |
+| `37428504822` attempt 1 | 10-06, pull request | ✘ `mirror-302.spec.ts:99`, `retry #1` | 30.0 s | **silent** (10,005 ms; two lines) | Dogu, Idris, Wren (`#3944`, `#3945`) |
 
-It is the second 5.4 s `tab-switch-preset.spec.ts:89` hit; the first (`36599810778`) logged `quitting`. See that entry above.
+The first is the second 5.4 s `tab-switch-preset.spec.ts:89` hit; the earlier one (`36599810778`) logged `quitting`. See that entry
+above. The last two are the same test failing both attempts of one job, each with its own silent close; see the
+`mirror-302.spec.ts:99` entry.
+
+**Method, for the next count.** Pull every suite job by id from the raw API (`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`),
+listing jobs per attempt (`/runs/<id>/attempts/<n>/jobs`), with bytes and a hash per row; for any run with `run_attempt` above 1,
+compare the attempts' hashes before counting; list a 404 as unread. `gh run view --log --job <id>` is not safe for a re-run run:
+it answers with the latest attempt's log for either job id.
 
 ## Sightings sweep 2026-10-03: what no card or entry covered
 
