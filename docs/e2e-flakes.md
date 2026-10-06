@@ -549,8 +549,11 @@ process dying. Not reproduced locally (25 hammer rounds, 48 spec runs, no
 exit); no crash report from CI. On the ledger, with the exit signal and
 crash reports the first things to look at if it returns.
 
-Mode three, and it is the live one — **`sync.spec.ts:139` twice on 2026-09-28/29
-with one signature: a native load that fails in 0 ms.** Same assertion as mode
+Mode three, and it is the live one — **`sync.spec.ts:139` with one signature: a
+native load of `redirect.html` that is aborted in 0–1 ms (18 ms once).** It was
+written up on `#485` and `#489` (2026-09-28/29) and **counted at five sightings
+on 2026-10-06, below**; the paragraphs from here to "This is a third mode" are
+as first written, about those two. Same assertion as mode
 one (`seen.length >= 1` against zero, *"the target emitted no url-changed"*),
 retry-rescued both times, on `#485` and `#489` — neither of which touches
 redirect code. What separates the attempts is printed by the spec's own
@@ -585,6 +588,84 @@ establish that**, and the discriminator is cheap: whoever runs the forcing
 test should watch for **both** signatures. If the `arrivals` route reproduces
 and the 0 ms abort never appears, they are two bugs and this entry keeps its
 own.
+
+**Counted again, 2026-10-06: five sightings, not two.** The fifth was found by
+Idris reading the log of the `#581` merge's push run (room `#3854`); the fourth was
+already in this file, named at the `browser-identity.spec.ts:41` entry as
+"a different mechanism with its own entry" and never counted here; the earliest,
+`#481`'s, is in no entry. Dogu's sweep of every saved suite job, counted
+from the raw logs: `[sync138] step-2 native load: failed in …` followed by
+`✘ sync.spec.ts:139` on the first attempt and `✓ … (retry #1)`, and in each the
+failing attempt's own record carries one failed native load, `redirect.html`,
+`ERR_FAILED (-2)`, after the target's move to `hairline.html` on branch `issued`
+(`other was …/redirect.html`):
+
+| PR or run | run (suite job) | head | created | step-2 line | `tookMs` | abort after the target's `issued` move |
+|---|---|---|---|---|---|---|
+| `#481` | `36455553267` (`109040931450`) | `a7c9ee13d` | 09-28 17:04Z | failed in 18ms | 18 | 22 ms |
+| `#485` | `36479230614` (`109120539028`) | `cc434110d` | 09-28 20:26Z | failed in 0ms | 0 | 14 ms |
+| `#489` | `36496705263` (`109177903098`) | `acd588d89` | 09-28 23:12Z | failed in 0ms | 0 | 34 ms |
+| `#561`'s pull-request run | `37294297527` (`111711823346`) | `d68d497ac` | 10-05 10:05Z | failed in 0ms | 0 | 11 ms |
+| `main` push, the `#581` merge | `37404143379` (`112077843475`) | `698656963` | 10-06 02:26Z | failed in 1ms | 1 | 16 ms |
+
+The `#485` row's 14 ms is the figure written above; it reads the same from the
+raw log. The other four are read the same way: the abort's `at` minus the `at` of
+the `issued` row in the failing attempt's mirror record.
+
+**What the table changes in the entry above.**
+- **The 0 ms is not the discriminator.** The durations are 0, 0, 0, 1 and 18 ms.
+  What the five share is the error string, the file (`redirect.html`), the order
+  (the abort comes 11–34 ms after the target had already moved on) and the
+  counts (`native commits after it: 1`, `target url-changed: 0`). The sentence
+  above, "`ERR_FAILED (-2)` with a zero duration is an aborted navigation, not a
+  slow one", is true of three of the five and says nothing about `#481`'s 18 ms
+  or this run's 1 ms.
+- **The hold-out from `#584` cannot be what stops it.** `sync.spec.ts` has no
+  `holdNativeOut` (0 mentions on `698656963`; it launches its own app in
+  `beforeAll`), and four of the five trees predate `#584` (merged 2026-10-06 as
+  `9d60fcd`; three of the runs are from 09-28, and `d68d497`'s base has no
+  `tests/e2e/holdNativeOut.ts`). The fifth is a `main` tree that includes
+  `#584` (it is an ancestor) and failed anyway.
+- **In the fifth run's job, the `arrivals` route did not reproduce while the
+  abort did.** `arrivals.spec.ts:184` and `:226` and
+  `redirect-mirrored-pool.spec.ts:194` were `✓` on their first attempt (tests 1,
+  2, 492) in the same job as the `✘` on `sync.spec.ts:139`. The discriminator
+  named above needs the `arrivals` route to *reproduce* with no abort; this is
+  the other corner, so it does not decide whether they are one bug or two.
+
+**What the sweep covered.** 177 suite jobs, from runs created on or after
+2026-09-27 (the first suite job read was created 09-28 16:28Z, the last 10-06
+02:26Z), chosen by the suite job's name and a duration of at least 600 s and not
+by the run's conclusion: `37294297527` is stamped `cancelled` and its suite job
+is `success`. No log came back empty. 175 of the 177 contain a `[sync138]` line;
+the two that do not are `cancelled` jobs of 694 s and 709 s (`37369906774`,
+`37369912376`). The line has been in
+the spec since 2026-09-17 (`b137671`); **this sweep did not read 09-17 to 09-27**,
+so it says nothing about those days.
+
+**Three more jobs print a failed step-2 load and the test passed.** Runs
+`36474748542` (52 ms), `36467712974` (114 ms) and `36612587616` (70 ms) print
+`step-2 native load: failed in …` with `native commits after it: 2` or `3` and
+`target url-changed: 2`, and `sync.spec.ts:139` is `✓` on its first attempt. A
+passing log does not print the failed load's record, so these are **not** counted
+as sightings: what failed in them is unread. They do say that a failed step-2 load
+alone does not fail the test; in the five that did, the target also emitted no
+`url-changed`.
+
+**What this does not say.**
+- It is **not a rate.** Five first-attempt failures with this signature among
+  the 175 suite jobs that reached the test is a count over a window in which the
+  code under test changed; the jobs are every one saved, not a draw.
+- It does **not** say this is the `arrivals` race, or that it is not
+  (the "Related" paragraph above keeps that open), and it does not say the app is
+  wrong to abort the load: the register's words stand, "nothing here says the
+  app is wrong to abort it".
+- It does **not** say every `sync.spec.ts:139` first-attempt failure is this one;
+  `#483`'s, above, is a teardown.
+- Why the abort comes when it does is **not** read: no mirror record was parsed
+  beyond the `issued` row and the failed load, and the `playwright-flaky`
+  artifact (id `11387656817` on the fifth run) has not been downloaded; that
+  waits on Opeyemi's go.
 
 ## `sync.spec`: the scroll read that hung, once
 
