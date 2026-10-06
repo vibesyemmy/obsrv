@@ -1,9 +1,10 @@
 ---
 title: "when the e2e harness kills a hung app it prints the app's log tail and nothing about what the machine and the process were doing"
-column: backlog
+column: doing
 kind: chore
 release: later
-waiting: "Henry and Wren: whether to build it"
+owner: "Dogu"
+waiting: ""
 order: 129
 ---
 
@@ -22,6 +23,11 @@ Candidate readings, none excluded by the logs: the main process was **blocked** 
 (the quit request never arrived), or the **runner** was stalled. One local datum (Idris, one laptop, not CI) is five slow closes under 24 CPU burners **with a scratch event-logger patch in `targetSource.ts`**, all five tails with
 `quitting`; the patch is an unmeasured confound (the same loop was not run without it) and the file the figures came from did not survive a session restart.
 It is a reason to doubt that a starved runner explains the silent tails, and **a starved runner is not shown to be the explanation** (`#569` says the same).
+
+**Recounted 2026-10-06, and the figures above are superseded.** "Eight tails are silent" was the register's ten-row table plus one hit, and the
+register's recount (`#587`, `#588`, raw API, every attempt) says it is not the shape of the set: **14 silent and 16 `quitting` across 30 hits in 26 jobs
+through 10-06 04:26Z, and 18 silent and 17 `quitting` across 35 hits in 29 jobs with the hits since** (through run `37437677489`). A silent tail is in
+under half of the hits. It does not change what the tail cannot say: the three readings above still cannot be separated from the app's own log.
 
 ## What to add
 
@@ -56,4 +62,15 @@ time to a kill that is already ten seconds late; how large the output is. All th
 
 ## Owner and decision
 
-Dogu's lane (CI and test infrastructure). Whether to build it is Henry's and Wren's call; the only thing asked for now is the card.
+Dogu's lane (CI and test infrastructure).
+
+**Decided 2026-10-06: build it.** Wren said yes in `#3744` (no deadline, behind the redirect diagnosis, the cap and `ci.yml:176`, all of which have landed on
+`main`) and Henry said yes in `#3972`, with one condition that is now this card's first constraint: **the instrument must never be able to throw or hang.** A
+diagnostic that can fail inside the failure path turns one red into two and makes the original unreadable, so it is bounded, best-effort and swallows
+everything. Wren's two conditions stand beside it: it adds nothing noticeable to the kill, and control 4 gets a method or this card says it has none.
+
+**Order:** Henry's items come first (the `bug-vision-47-normal-not-red` card, the orientation code PR, the redirect card); this has no deadline.
+
+**Claimed 2026-10-06 by Dogu.** First steps, in order: read `boundedClose` in `tests/e2e/launch.ts` and write down the snapshot's time budget before
+building anything; then controls 1 to 3, and control 4's method or its absence. Test infrastructure only (no `src/` change, nothing that changes when or
+whether the app is killed), so Idris gates the PR; nothing in it is built or measured yet.
