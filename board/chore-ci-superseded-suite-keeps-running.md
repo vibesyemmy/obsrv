@@ -1,10 +1,9 @@
 ---
 title: "a superseded pull-request suite keeps running to the end, because `always()` on the test job outlives the concurrency cancel"
-column: doing
+column: done
 kind: chore
 release: later
 owner: "Dogu"
-waiting: ""
 order: 128
 ---
 
@@ -94,3 +93,32 @@ separate traps from this card's subject.**
    the two unmeasured checks above before it merges. Cost: the attempt supply above, and a `cancelled` required check on superseded heads.
 
 The decision is Henry's and Opeyemi's: it changes what the required check shows for a superseded head.
+
+## Done 2026-10-06: `#578` merged as `ad3650646`, and what it changed and did not
+
+**Option 2, one code line:** the `test` job's `if:` went from `always() && !startsWith(github.ref, 'refs/tags/v')` to `!cancelled() && !startsWith(github.ref, 'refs/tags/v')`
+(`ci.yml:189` on `main`), with the comment above it rewritten to say both directions. Idris's PASS (`#3800`) was at `eab526dac`, counted run `37382864812`
+(25 m 51 s, 660 passed); Henry merged it as `ad3650646` (parent 2 is that head, checked from the objects in `#3803`). **Wren's veto window for Opeyemi closed
+with the merge** (`#3760`, `#3801`).
+
+**What was measured, against the card's four checks (Idris, `#3532`):**
+
+1. **A failing `scope` still produces `test`:** run `37306369922` (`!cancelled()`) started on a macOS runner; the no-status-function control `37306363079` was `skipped` (`#3543`).
+2. **The real-pull-request supersede, on this exact change** (a throwaway draft PR, `#577`, closed, branch deleted): run `37382501464` created 22:26:39Z, its suite job started
+   22:26:57Z; a second push created `37382581284` at 22:27:23Z; **the first suite job was `cancelled` at 22:27:37Z, 14 s after the second run existed**, and the second run's
+   suite job started 22:27:52Z. A plain `gh run cancel` on the second run (Dogu's own terminal clock, 22:28:08Z; the API has only the job's end) ended its suite job `cancelled` at 22:29:22Z, 74 s later by that clock; on `always()` a plain cancel did not stop
+   it. **The required check on the superseded head reads `cancelled`, not `failure`.**
+3. **`main` unchanged:** reasoned, then read. The first `main` push suite after the merge, `37388401763`, ran normally (suite job 21 m 24 s, `660 passed`, 0 `✘`; Dogu and Idris, `#3804`, `#3805`).
+4. **The old behaviour returning:** `#569`'s stale run on a real pull request (`#3690`) and the first probes.
+
+**The nearest case to the untested path, measured:** a needed job cancelled by its own `timeout-minutes` (run `37383289168`, a throwaway `push` workflow) still ran the dependent
+job under `!cancelled()`; the default `if:` skipped it; `always()` ran it; **the run concluded `cancelled`**, so `cancelled()` is a cancel request on the workflow, not a cancelled job.
+One run; the first attempt (`37383170896`) was invalid YAML and ran no jobs.
+
+**What this did not change, and the card should not be read as claiming it did:** a `scope` job cancelled by the runner-queue timeout is a job-level cancel with no cancel
+request on the run, so **the suite is expected to still fall back to the full run, and the run to be stamped `failure` with a green suite inside it, as `#574`'s was**
+during GitHub's Actions incident (19:11:58Z to 22:49:42Z on 2026-10-05; the `scope` job cancelled at 903 s). **Both were seen only under `always()`**; the fall-back follows from the
+mechanism measured in `37383289168`, and that probe's timeout-cancelled job made the run `cancelled`, not `failure`, so the stamp itself is `#574`'s, not measured under `!cancelled()`. The suite job's own log stays the answer under the counting rule. **Not measured:** that
+exact path under `!cancelled()` (it has been seen only under `always()`), and the one real difference on `main`, a hand-cancelled `main` run now stopping its suite (cancelling a
+real `main` suite would leave a commit with no CI answer). Two samples of a supersede and a hand-cancel on a pull request are not a rate. **The cost this card named, N being reached more
+slowly, went away when `#3756` withdrew N and stopped the tally being a gate.**

@@ -1,10 +1,9 @@
 ---
 title: "the suite job's 30-minute cap has a thin margin on a slow runner, and one attempt in the last two days crossed it"
-column: doing
+column: done
 kind: chore
 release: later
 owner: "Dogu"
-waiting: ""
 order: 127
 ---
 
@@ -117,3 +116,16 @@ reasoned from `ci.yml`'s comment and the logs. A main-only variant (`github.ref 
 3. **Leave it.** Roughly 1 in 37 here (and the addition above says the rate understates how close the others run); the cost of a hit is one re-run (about 25 minutes) **plus the 30 minutes the capped attempt already spent**, about 55 minutes of one PR's wall-clock in `#561`'s case (Wren, `#3481`; Idris agreed, `#3482`), and the gates already treat a cap hit as no result.
 
 The decision is Henry's and Opeyemi's: it trades CI cost against a rare re-run, and this card does not weigh it.
+
+## Done 2026-10-06: `#580` merged as `6700d68d7`, and what it changed and did not
+
+**The decision (Henry, `#3807`) was 50 minutes, neither 40 nor 45, on this card's own table:** the `test` job's `timeout-minutes` went from 30 to 50 (`ci.yml:206` on `main`); the release job
+keeps its own 30; the stale "e2e takes ≈17 of 30, ≈12 spare" comment above the traces step was rewritten with today's numbers. Idris's PASS (`#3818`) was at `37b97e09a`, counted run `37394200312`
+(25 m 33 s; its one first-attempt failure was the pool spec's, not this PR's); Henry merged it as `6700d68d7` (parent 2 is that head). **The table is the "Decided 2026-10-06" section above:**
+with Idris's measured setup (1.52 to 2.27 minutes, median 1.87) one 900 s hang fits at the slowest e2e step seen with 5.1 minutes to spare at 50, and with 6 seconds at 45.
+
+**First `main` suite under the new cap:** `37401724231` (`6700d68d7`), suite job `112070219307`, 01:57:12Z to 02:19:55Z, **22 m 43 s**, 660 passed, e2e 21.1 minutes, 0 `✘`, 0 slow closes (Dogu `#3845`, Idris `#3846`).
+
+**Not measured, and said so:** what a 50-minute cap does to a real hang (the one run under the cap, `37401724231`, did not hang; the other `main` run read, `37401718159`, was `#584`'s merge, before the cap changed); `retries: 1`, which would double a recurring hang and is in no figure; the cap is enforced late (20 s on `#561`'s
+attempt 1, 28 s on the probe), which the table does not include. **The number's real test is the next suite that runs long, not an argument** (Henry, `#3836`). Two wording points from Idris's gate (`#3809`) are left for
+the next edit to that comment: `ci.yml`'s quote of the old "30m0s" observation reads as the current cap, and "sized from the logs and not from a round number" overstates beside a 50.
