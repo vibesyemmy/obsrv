@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChildProcess } from 'node:child_process'
 import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
@@ -365,8 +365,8 @@ describe('boundedClose ends a hung close in a kill', () => {
       write: text => void written.push(text),
       killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', text => void written.push(text)),
     })
-    await settle(150)
-    expect(calls).toEqual(['kill SIGKILL'])
+    // Waits for the kill and not for a fixed time: the snapshot is bounded at about a second by design, and a loaded runner must not fail a correct build.
+    await vi.waitFor(() => expect(calls).toEqual(['kill SIGKILL']), { timeout: 3_000 })
     expect(written[0]).toMatch(/^\[launch\] app\.close\(\) has taken \d+ ms; killing pid 4001\. App log tail:/)
     expect(written.join('')).toContain('SNAP')
   })
@@ -378,16 +378,15 @@ describe('boundedClose ends a hung close in a kill', () => {
       write: () => {},
       killAfterSnapshot: proc => snapshotThenKill(proc, () => new Promise<string>(() => {}), () => {}, 40),
     })
-    await settle(250)
-    expect(calls).toEqual(['kill SIGKILL'])
+    await vi.waitFor(() => expect(calls).toEqual(['kill SIGKILL']), { timeout: 3_000 })
   })
 
   it('with its defaults takes the real snapshot of the real process table, and then kills', async () => {
     // Only the grace is shortened and the report line captured. The snapshot is the real one (a pid that is not in the table), and so is the kill's path.
     const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
     void boundedClose(app, { graceMs: 30, write: () => {} })
-    await settle(900)
-    expect(calls).toEqual(['kill SIGKILL'])
+    // The real snapshot is bounded at 1.0 s and the backstop at 1.25 s, so a fixed wait of under that could miss a correct kill on a starved runner.
+    await vi.waitFor(() => expect(calls).toEqual(['kill SIGKILL']), { timeout: 4_000 })
   })
 
   it('does not kill an app whose close finishes inside the grace, and leaves no timer behind', async () => {

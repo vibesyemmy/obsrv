@@ -151,8 +151,7 @@ const CLOSE_GRACE_MS = 10_000
  * the app's log tail is printed: the app logs `quitting`, `closing`,
  * `closed` and `exiting`, so the tail says which stretch did not finish.
  * The spec that saw it stays green; the line in the output is the report.
- */
-/**
+ *
  * Exported, with its three collaborators as optional parameters, so a unit
  * test can drive it with a fake app and a short grace: the property that
  * matters, that a hung close ends in a kill, is otherwise only visible in a
