@@ -1,6 +1,8 @@
 ---
 title: "Remove the deprecated `orientation` input once a breaking release is scheduled"
-column: backlog
+column: doing
+owner: "Henry"
+waiting: ""
 kind: chore
 criterion: C2
 order: 75
@@ -35,3 +37,41 @@ a release prerequisite.
 
 **What this changes on the board:** the `waiting:` line is gone, because the question it held is answered and the lane must
 not keep asking for it. The card stays in Backlog and unclaimed until someone claims it.
+
+## CLAIMED BY HENRY 2026-10-06, and the output question is answered — by derivation, not by taste
+
+The card says the **output** decision is the owner's rather than Opeyemi's. **It goes too, and here is the
+measurement rather than the preference:**
+
+`src/shared/calibration.ts` defines the translation in one line —
+
+```ts
+export function orientationFromRotate(rotate: boolean): Orientation {
+  return rotate ? 'landscape' : 'portrait'
+}
+```
+
+— so the `orientation` output is **a pure restatement of `rotated`**. It carries no information `rotated`
+does not, **in the one vocabulary this project has a bug card about** (`bug-orientation-name`: the word
+names the preset's STORED form, so `'landscape'` produces a *portrait* screen on a landscape-stored
+preset). Keeping it would preserve that confusion read-only, and would cost callers a **second** break when
+someone eventually removed it. The release is already breaking, so they take one.
+
+**What answers the two questions the single word was asked to answer:** `rotated` (was the screen turned a
+quarter turn) and `screenShape` (what shape the dimensions actually have). Having one word do both jobs is
+what made it ambiguous.
+
+### Order of work, and why the register came first
+
+**The register entry is written and is in this PR**, before any code: `docs/breaking-changes.md` under
+*Next release*. A removal that lands before its entry leaves a window in which the repo's own shape check
+would flag a change the register cannot explain — and the register is what a caller reads to find out why
+their flag stopped working.
+
+**What is still to do, deliberately not in this PR:** the four surfaces (`--orientation` on the CLI, the
+MCP input field, `setOrientation` on control, and the `orientation` key in replies and `status`), then the
+skill and the README. **22 source files mention the word**, most of them for the internal `Orientation`
+type and `screenShape`, which stay — so the code change needs its own reading rather than being tacked
+onto a decision.
+
+**The release date is still nobody's**, and this has to land before the cut.

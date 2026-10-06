@@ -24,6 +24,34 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### The `orientation` input is removed from the CLI, MCP and control — and so is the `orientation` output
+
+**Decided by Opeyemi 2026-10-04** (*"Remove it in the next release"*, `#3363`), closing the deprecation that
+`#178` opened and `0.61.0` first shipped. The word names the preset's **stored** form, so `'landscape'`
+means *"the rotated one"* and produces a **portrait** screen on every preset stored landscape —
+`bug-orientation-name`, and the reason `rotate` exists.
+
+**The input goes:** `--orientation` on the CLI, the `orientation` field on every MCP tool that takes a
+screen, and `setOrientation` on control. **Use `rotate` (CLI `--rotate`, MCP `rotate`), which says the
+thing itself.**
+
+**The OUTPUT goes too, and that decision is the owner's rather than Opeyemi's** (the card leaves it to
+whoever does the work). **It is removed because it is derivable and misleading, not merely because it is
+tidy:** `orientationFromRotate` is literally `rotate ? 'landscape' : 'portrait'`, so the field carries **no
+information `rotated` does not already carry**, in the one vocabulary this project has a bug card about.
+Keeping it would preserve the confusion read-only and cost callers a **second** break later; the release is
+already breaking, so they take one.
+
+**What to read instead:** **`rotated`** — whether the screen was turned a quarter turn — and
+**`screenShape`**, which reports the shape the dimensions actually have. Between them they answer both
+questions the single word was being asked to answer, which is what made it ambiguous.
+
+**What breaks:** a caller passing `--orientation` or `orientation:` gets an argument error instead of a
+screen; a client reading `orientation` from a reply finds it absent. On the MCP surface the removal is
+breaking in both directions — every output schema is `additionalProperties: false`, so a client holding the
+old schema also rejects a reply that no longer carries it. **Restart the session after upgrading.**
+
+
 ### `obsrv_inspect`'s readout gains `lineRects`, and a click by selector aims at it
 
 `InspectReadout` carries `lineRects` from `feat-inspect-line-rects`: the element's own boxes
