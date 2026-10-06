@@ -75,6 +75,24 @@ which shows it was not capped at one minute and not that its cap was three), at 
 **Not known:** why the slow runs are slow (the e2e minutes vary by up to six (19.9 to 25.7, and 26.1 since the addition above) between suites of near-identical size, which points at the runner,
 but that is a reading, not a measurement); whether cap hits cluster on slow runners; how long a hung run holds a runner today.
 
+## Decided 2026-10-06: the suite job's cap goes to 50 minutes (Henry, `#3807`)
+
+**Henry chose 50, neither 40 nor 45,** on this card's own table: at 45 the margin for one 900 s hang at the slowest e2e step is 6 seconds, and a cap whose worst-case
+margin is six seconds is the defect being fixed one size up. The asymmetry Henry gave: a genuinely hung job at 50 costs five minutes more than at 45, and a cap that clips a
+legitimate run costs a full re-run and a false red someone has to diagnose. **The table, so nobody has to trust the number** (spare minutes for one 15-minute hang, with
+setup 1.87 at the median and 2.27 at the maximum, from `#3795`):
+
+| cap | spare at e2e median 22.6 | after a 900 s hang | spare at e2e maximum 27.6 | after a 900 s hang |
+| --- | --- | --- | --- | --- |
+| 30 | 5.5 | does not fit | 0.1 | does not fit |
+| 40 | 15.5 | 0.5 | 10.1 | does not fit |
+| 45 | 20.5 | 5.5 | 15.1 | 0.1 (6 s) |
+| **50** | **25.5** | **10.5** | **20.1** | **5.1** |
+
+The change is the `test` job's `timeout-minutes` only (the release job keeps its 30), with the stale "≈17 / ≈12 spare" comment above the traces step rewritten. The cap is
+enforced 20 to 30 s late (the probe in `#3746`, `#561` attempt 1), which this table does not include. **Not measured:** what a 50-minute cap does to a real hang; the table is
+reasoned from `ci.yml`'s comment and the logs. A main-only variant (`github.ref == 'refs/heads/main' && 45 || 30`) is not what was chosen.
+
 ## Options, with the costs that are known, none chosen
 
 1. **Raise `timeout-minutes`** (one line). Cost: a hung job holds a macOS runner longer, and `bug-no-traces-when-e2e-hangs` records that
@@ -86,7 +104,8 @@ but that is a reading, not a measurement); whether cap hits cluster on slow runn
    1.52, median 1.87, maximum 2.27 minutes**, and the run with the 27.6-minute e2e step (`37355564026`) is the one with 2.27, which leaves 30 − 27.6 − 2.27 ≈ 0.1 minute: exactly the 6 seconds that
    run had. (My first version used 1.4 minutes, taken from one run's steps before the e2e step and leaving out the rest of the job; no job measured is that low.) **With those inputs
    (a 15-minute hang): cap 30 leaves about 5.5 at the median and 0.1 at the maximum; cap 40, 15.5 and 10.1; cap 45, 20.5 and 15.1.** So 40 fits one 900 s hang at the median only, and **45 fits it at the slowest
-   e2e step seen by about 8 seconds (15.1 against 15), not by minutes**; a cap that fits it with room at that maximum would be near 50. The 900 s is real (`surface-parity.spec.ts:44`,
+   e2e step seen by 6 seconds, not by minutes** (the job that set that maximum ran 1,794 s; a 45-minute cap is 2,700 s, so 906 s are spare against a 900 s hang); **50 leaves 25.5 at the median and 20.1 at the
+   maximum for one hang, so 10.5 and 5.1 minutes remain after it.** The 900 s is real (`surface-parity.spec.ts:44`,
    `timeout: 900_000`, the only timeout of 600 s or more in `tests/e2e`). Reasoned from the comment and the logs, not measured; the choice is Henry's.
    **A variant the probe makes possible, not tested on `ci.yml` and not proposed for merge:** `timeout-minutes: ${{ github.ref == 'refs/heads/main' && 45 || 30 }}`,
    so pull-request jobs keep the cap they have and the cost above lands only on `main`, where a kill hurts most. A pull request's `github.ref` is
