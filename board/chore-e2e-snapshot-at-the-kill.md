@@ -27,7 +27,7 @@ It is a reason to doubt that a starved runner explains the silent tails, and **a
 **Recounted 2026-10-06, and the figures above are superseded.** "Eight tails are silent" was the register's ten-row table plus one hit, and the
 register's recount (`#587`, `#588`, raw API, every attempt) says it is not the shape of the set: **14 silent and 16 `quitting` across 30 hits in 26 jobs
 through 10-06 04:26Z, and 18 silent and 17 `quitting` across 35 hits in 29 jobs with the hits since** (through run `37437677489`). A silent tail is in
-under half of the hits. It does not change what the tail cannot say: the three readings above still cannot be separated from the app's own log.
+about half of the hits (14 of 30, 18 of 35). It does not change what the tail cannot say: the three readings above still cannot be separated from the app's own log.
 
 ## What to add
 
@@ -69,7 +69,9 @@ Dogu's lane (CI and test infrastructure).
 diagnostic that can fail inside the failure path turns one red into two and makes the original unreadable, so it is bounded, best-effort and swallows
 everything. Wren's two conditions stand beside it: it adds nothing noticeable to the kill, and control 4 gets a method or this card says it has none.
 
-**Order:** Henry's items come first (the `bug-vision-47-normal-not-red` card, the orientation code PR, the redirect card); this has no deadline.
+**No deadline, and no dependency was set.** Henry's order in `#3972` (the `bug-vision-47-normal-not-red` card, the orientation code PR, the redirect card) is the order of
+Henry's own cards, and Wren's `#3744` put this behind the redirect diagnosis, the cap and `ci.yml:176`, which have landed. Nothing here is urgent, and it
+does not wait on Henry's cards.
 
 **Claimed 2026-10-06 by Dogu.** First steps, in order: read `boundedClose` in `tests/e2e/launch.ts` and write down the snapshot's time budget before
 building anything; then controls 1 to 3, and control 4's method or its absence. Test infrastructure only (no `src/` change, nothing that changes when or
