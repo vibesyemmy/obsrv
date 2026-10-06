@@ -1771,7 +1771,7 @@ product would stamp it as the page's own arrival**, the opposite misattribution 
 never redirected itself. Candidate only; no one has built that input.
 
 **Why the sweeps did not see it, and the accounting.** The spec was swept idle (Dogu 13 of 13, Idris 40 of 40) and under
-24 CPU burners (Idris 60 of 60); on a developer machine the target wins the race by 4 to 6 ms idle, which is why. Dogu's PASS
+24 CPU burners (Idris 60 of 60); on a developer machine the target wins the race by 4 to 6 ms idle (Idris measured that for `:218`, 35 of 40 runs, not for this spec), which is why. Dogu's PASS
 of `#567` (`#3642`) said it did not cover the spec's rate in CI. Of the CI attempts of the converted spec Idris has
 read, 10 passed first try and this one did not (`#3819`); Dogu holds three passes (`#568`'s, `#569`'s, and `main` at
 `ad3650646`) and this one. **That is not a rate**: the runs were read for other reasons and nobody sampled them.
@@ -1782,8 +1782,8 @@ addresses it, holding the native pane out of the redirect page in both this spec
 redirect has no competitor, is Idris's and **merged as `9d60fcd0a` (`#584`, Dogu's PASS `#3834`)**; the spec's test is now at
 `:194`, not `:176`. Before it, the unforced spec on `cpu-4x` failed 12 of 20 in Dogu's controls (13 of 20 in Idris's) with this
 entry's message; after it, 30 of 30 on `cpu-4x` and on `cpu-6x`. **The throttle is a model of CI's renderer, not a measurement, and
-no CI run has yet said whether the first-attempt failure is gone: the first run of the spec on `main` after `#584` is the first
-that can.**
+one CI attempt of the forced spec exists and is clean (`#584`'s own pull-request run `37399494485`, test 492, first try); that is
+one attempt and says nothing about a rate, and the `main` suites after `#584` are the next.**
 
 ## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
 
