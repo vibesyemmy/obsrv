@@ -46,6 +46,23 @@ already printed stays as it is. Test infrastructure only: no `src/` change, no c
 
 So it can rule candidates out; **it cannot name the cause**, and the last row leaves two readings standing.
 
+## Time budget, written 2026-10-06 before any code (`#3999`)
+
+**Measured once, on one laptop (macOS 27.0.1, idle), to choose between one sample and two.** BSD `ps` `%cpu` is not a lifetime average there: a node process
+spinning for 4 s read **98.5** at 1.5 s, then **3.1, 1.2, 0.4** over the second after the spin, while its cumulative CPU time stayed at `0:04.03`. So one sample reads busy
+against idle, and a second sample (which would add a gap) is not taken unless a control shows it is needed. One `ps -A -o pid=,ppid=,state=,%cpu=,time=,etime=,command=`
+took **31 ms** and returned **692 rows, 255,673 bytes**. The runner's figure is **unmeasured** and is the first thing the CI probe records.
+
+1. **Hard cap on the whole snapshot: 1,000 ms wall**, enforced by a race against a timer; past it the kill proceeds whatever the snapshot is doing.
+2. **One subprocess only**, the `ps` above, with its own 500 ms timeout (SIGKILL on expiry) and a 4 MB `maxBuffer`; its streams and handle are released at the cap. Host
+   load comes from `os.loadavg()` and `os.cpus().length` in-process.
+3. **Output cap: 40 lines and 4,096 bytes**: the app's process tree (pid, ppid, state, `%cpu`, CPU time, elapsed, command cut to 100 characters), the top 5 host processes
+   by `%cpu`, the load average.
+4. **It cannot throw.** The whole function is inside a try/catch; a failure prints one line, `snapshot unavailable: <reason>`; `proc.kill('SIGKILL')` is in a `finally`;
+   the `stderr` write is guarded too. No `src/` change, nothing that changes whether the app is killed.
+5. **Added time to the kill: expected tens of milliseconds, worst case 1.0 s**, on a kill that is already 10 s late. If the runner's `ps` costs more than the cap allows, the
+   design changes, not the cap.
+
 ## Controls it needs before anyone reads a snapshot
 
 1. A main process busy-waiting for 45 s (an `electronApplication.evaluate` that spins): the snapshot must read busy.
