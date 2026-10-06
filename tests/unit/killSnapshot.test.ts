@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { snapshotThenKill } from '../e2e/launch'
+import type { ChildProcess } from 'node:child_process'
+import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
@@ -309,5 +310,54 @@ describe('snapshotThenKill: the kill happens whatever the snapshot does', () => 
       },
     }
     await expect(snapshotThenKill(throwing, async () => 'SNAP', () => {})).resolves.toBeUndefined()
+  })
+})
+
+describe('boundedClose ends a hung close in a kill', () => {
+  // A fake app: `process()` is the child the harness would kill, `close()` is whatever the test makes of it.
+  const fakeApp = (close: () => Promise<void>) => {
+    const calls: string[] = []
+    const proc = { pid: 4001, kill: (signal?: NodeJS.Signals | number): boolean => (calls.push(`kill ${String(signal)}`), true) }
+    return { calls, app: { close, process: () => proc as unknown as ChildProcess } }
+  }
+  const settle = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
+
+  it('writes the report and then kills the app when close() outlasts the grace', async () => {
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    const written: string[] = []
+    void boundedClose(app, {
+      graceMs: 30,
+      write: text => void written.push(text),
+      killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', text => void written.push(text)),
+    })
+    await settle(150)
+    expect(calls).toEqual(['kill SIGKILL'])
+    expect(written[0]).toMatch(/^\[launch\] app\.close\(\) has taken \d+ ms; killing pid 4001\. App log tail:/)
+    expect(written.join('')).toContain('SNAP')
+  })
+
+  it('kills even when the snapshot never settles', async () => {
+    const { calls, app } = fakeApp(() => new Promise<void>(() => {}))
+    void boundedClose(app, {
+      graceMs: 30,
+      write: () => {},
+      killAfterSnapshot: proc => snapshotThenKill(proc, () => new Promise<string>(() => {}), () => {}, 40),
+    })
+    await settle(250)
+    expect(calls).toEqual(['kill SIGKILL'])
+  })
+
+  it('does not kill an app whose close finishes inside the grace, and leaves no timer behind', async () => {
+    const { calls, app } = fakeApp(() => Promise.resolve())
+    await boundedClose(app, { graceMs: 30, write: () => {}, killAfterSnapshot: proc => snapshotThenKill(proc, async () => 'SNAP', () => {}) })
+    await settle(120)
+    expect(calls).toEqual([])
+  })
+
+  it('passes a failing close on to the caller, and still does not kill afterwards', async () => {
+    const { calls, app } = fakeApp(() => Promise.reject(new Error('Target page, context or browser has been closed')))
+    await expect(boundedClose(app, { graceMs: 30, write: () => {} })).rejects.toThrow('has been closed')
+    await settle(120)
+    expect(calls).toEqual([])
   })
 })
