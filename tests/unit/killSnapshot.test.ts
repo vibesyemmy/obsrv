@@ -284,12 +284,15 @@ describe('formatSnapshot', () => {
   })
 
   it('says what a large tree left out, so that leaving it out is a reading too', () => {
-    const rows = parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 ${i < 20 ? 'S' : 'I'} ${(i % 3) * 0.2} 0:00.01 00:01 /bin/c${i}`)].join('\n'))
+    // 30 sleeping children with %cpu 0.0 to 2.9: the 15 busiest are printed, so the 15 left out top out at 1.4.
+    const rows = parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 S ${(i * 0.1).toFixed(1)} 0:00.01 00:01 /bin/c${i}`)].join('\n'))
     const { shown, hidden } = pickTreeRows(treeOf(rows, 4001))
     expect(shown[0]?.pid).toBe(4001)
     expect(shown.length).toBe(16)
-    expect(describeHidden(hidden)).toMatch(/^S×\d+ I×\d+; busiest \d\.\d%$|^[SI]×\d+; busiest \d\.\d%$/)
+    expect(describeHidden(hidden)).toBe('S×15; busiest 1.4%')
+    expect(describeHidden([])).toBe('; busiest 0.0%')
   })
+
 })
 
 describe('capText, the guard on how much is ever printed', () => {
