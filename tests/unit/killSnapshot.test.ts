@@ -6,6 +6,7 @@ import {
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
   hostCommand,
+  parentCommand,
   parsePs,
   shortCommand,
   takeKillSnapshot,
@@ -98,6 +99,22 @@ describe('hostCommand', () => {
   })
 })
 
+describe('parentCommand', () => {
+  it('names the Playwright worker by its first word and its script, and nothing after', () => {
+    expect(parentCommand('/Users/runner/hostedtoolcache/node/24.10.0/arm64/bin/node /Users/runner/work/obsrv/node_modules/playwright/lib/workerProcessEntry.js')).toBe('node workerProcessEntry.js')
+    expect(parentCommand('node /x/workerProcessEntry.js --worker=3 --token=SECRET extra')).toBe('node workerProcessEntry.js')
+  })
+
+  it('prints no argument of whatever launched the app on a local run', () => {
+    expect(parentCommand('node scripts/run-e2e.js --token=SECRET')).toBe('node run-e2e.js')
+    expect(parentCommand('node scripts/run-e2e.js SECRET')).toBe('node run-e2e.js')
+    expect(parentCommand('bash -c "export TOKEN=SECRET; run"')).toBe('bash')
+    expect(parentCommand('/usr/local/bin/python3 -m pytest --api-key SECRET')).toBe('python3')
+    expect(parentCommand('/usr/bin/some-launcher SECRET --flag')).toBe('some-launcher')
+    expect(parentCommand('/sbin/launchd')).toBe('launchd')
+  })
+})
+
 describe('treeOf', () => {
   it('returns the root and every descendant, root first', () => {
     expect(treeOf(parsePs(TABLE), 4001).map(r => r.pid)).toEqual([4001, 4002, 4003, 4004])
@@ -173,8 +190,15 @@ describe('formatSnapshot', () => {
       const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927)].join('\n')), load: [1], cores: 2, psMs: 5 })
       expect(text).toContain("the app's parent, the process that launched it:")
       expect(text).toMatch(/14927\s+14900\s+S<\s+0\.9\s+0:01\.26/)
-      expect(text).toContain('workerProcessEntry.js')
+      expect(text).toContain('node workerProcessEntry.js')
       expect(text).not.toContain('reparented')
+    })
+
+    it("prints no argument of a parent that is not the Playwright worker, through the whole snapshot", () => {
+      const launcher = '14927 14900 S 0.1 0:00.50 00:50 node /home/me/run-e2e.js --api-key=SECRET positional-SECRET'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([launcher, app(14927)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain('node run-e2e.js')
+      expect(text).not.toContain('SECRET')
     })
 
     it('says so when the parent is not in the table, which means the process that launched the app had gone', () => {

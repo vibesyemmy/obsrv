@@ -154,8 +154,26 @@ const rowLine = (r: ProcRow, command: string): string =>
   `  ${String(r.pid).padStart(7)} ${String(r.ppid).padStart(7)} ${r.state.padEnd(4)} ${r.cpu.toFixed(1).padStart(5)} ` +
   `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(command, COMMAND_CHARS)}`
 
+/**
+ * The process that launched the app, named by its first word and, when that is a script, the script's file name: `node workerProcessEntry.js`.
+ *
+ * In the harness this is the Playwright worker, and the file name is what says so. Nothing after it
+ * is printed: a local run can be launched by any script with any arguments, and this text goes into a log
+ * that gets pasted, so an argument (a flag, a token, a path to a secret) is not named here any more than
+ * it is for a host process. A second word is taken only when it ends in a script extension and does not
+ * start with a dash.
+ */
+export function parentCommand(command: string): string {
+  const words = command.trim().split(/\s+/)
+  const base = (w: string): string => w.slice(w.lastIndexOf('/') + 1) || w
+  const first = base(words[0] ?? '')
+  const second = words[1]
+  return second !== undefined && !second.startsWith('-') && /\.(?:[cm]?js|ts)$/.test(second) ? `${first} ${base(second)}` : first
+}
+
 const rowText = (r: ProcRow): string => rowLine(r, shortCommand(r.command))
 const hostRowText = (r: ProcRow): string => rowLine(r, hostCommand(r.command))
+const parentRowText = (r: ProcRow): string => rowLine(r, parentCommand(r.command))
 
 const COLUMNS = '  pid     ppid    st    %cpu       time     elapsed  command'
 
@@ -198,8 +216,8 @@ export function formatSnapshot(input: SnapshotInput): string {
  * cannot say whether the other end of the link was. A worker that is busy,
  * stopped or gone reads differently from one that is idle, which is the half of
  * "stuck link or starved runner" the tree cannot show (Wren, `#4038`). It is in
- * the table already, so this costs no second command. It is the harness's own
- * process, so it keeps its name and arguments, like the app's.
+ * the table already, so this costs no second command. It is named, not quoted:
+ * see `parentCommand`.
  *
  * pid 1 is the launcher's own stand-in for "no parent": an app whose launcher
  * died is reparented to it, so a parent of 1 says the launcher had gone.
@@ -207,7 +225,7 @@ export function formatSnapshot(input: SnapshotInput): string {
 function parentLines(ppid: number, parent: ProcRow | undefined): string[] {
   if (!parent) return [`  the app's parent, pid ${ppid}, is not in the process table: the process that launched the app had already gone`]
   const reparented = ppid === 1 ? ' (pid 1: the app was reparented, so the process that launched it had already gone)' : ''
-  return [`  the app's parent, the process that launched it${reparented}:`, COLUMNS, rowText(parent)]
+  return [`  the app's parent, the process that launched it${reparented}:`, COLUMNS, parentRowText(parent)]
 }
 
 function capText(lines: readonly string[]): string {
