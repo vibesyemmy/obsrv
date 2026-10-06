@@ -112,9 +112,25 @@ export function topByCpu(rows: readonly ProcRow[], count: number, exclude: Reado
 
 const cut = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
+/**
+ * The executable's own name and its arguments, without the install path.
+ *
+ * Every process in the app's tree shares one long path
+ * (`…/node_modules/electron/dist/Electron.app/Contents/Frameworks/…`), and the
+ * only thing that tells a GPU helper from a renderer is a flag after it
+ * (`--type=gpu-process`). Cut at a fixed width, the path used up the width on
+ * the first CI probe and every helper read the same.
+ */
+export function shortCommand(command: string): string {
+  const firstArg = command.indexOf(' -')
+  const exe = firstArg === -1 ? command : command.slice(0, firstArg)
+  const slash = exe.lastIndexOf('/')
+  return slash === -1 ? command : exe.slice(slash + 1) + (firstArg === -1 ? '' : command.slice(firstArg))
+}
+
 const rowText = (r: ProcRow): string =>
   `  ${String(r.pid).padStart(7)} ${String(r.ppid).padStart(7)} ${r.state.padEnd(4)} ${r.cpu.toFixed(1).padStart(5)} ` +
-  `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(r.command, COMMAND_CHARS)}`
+  `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(shortCommand(r.command), COMMAND_CHARS)}`
 
 const COLUMNS = '  pid     ppid    st    %cpu       time     elapsed  command'
 

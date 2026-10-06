@@ -5,6 +5,7 @@ import {
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
   parsePs,
+  shortCommand,
   takeKillSnapshot,
   topByCpu,
   treeOf,
@@ -55,6 +56,23 @@ describe('parsePs', () => {
   })
 })
 
+describe('shortCommand', () => {
+  const root = '/Users/runner/work/obsrv/obsrv/node_modules/electron/dist/Electron.app/Contents'
+
+  it('keeps the helper type, which is what tells the processes in the tree apart', () => {
+    expect(shortCommand(`${root}/Frameworks/Electron Helper (GPU).app/Contents/MacOS/Electron Helper (GPU) --type=gpu-process --x=1`)).toBe(
+      'Electron Helper (GPU) --type=gpu-process --x=1',
+    )
+    expect(shortCommand(`${root}/MacOS/Electron -r /w/loader.js --inspect=0 /w/out/main/index.js`)).toBe('Electron -r /w/loader.js --inspect=0 /w/out/main/index.js')
+  })
+
+  it('shortens a bare path to its last part, and leaves a command with no path alone', () => {
+    expect(shortCommand('/sbin/launchd')).toBe('launchd')
+    expect(shortCommand('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')).toBe('Google Chrome')
+    expect(shortCommand('node -e while(1){}')).toBe('node -e while(1){}')
+  })
+})
+
 describe('treeOf', () => {
   it('returns the root and every descendant, root first', () => {
     expect(treeOf(parsePs(TABLE), 4001).map(r => r.pid)).toEqual([4001, 4002, 4003, 4004])
@@ -86,7 +104,7 @@ describe('formatSnapshot', () => {
     expect(text).toContain('kill snapshot for pid 4001 (ps took 31 ms; load 3.50 2.25 1.00 on 3 cores)')
     expect(text).toMatch(/4003\s+4001\s+R\s+98\.5\s+0:41\.20/)
     expect(text).toContain('busiest other processes on the host')
-    expect(text).toContain('/usr/bin/some-other-burner')
+    expect(text).toContain('some-other-burner --flag')
   })
 
   it('says so when the process is not in the table, instead of printing an empty tree', () => {
