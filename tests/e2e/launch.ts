@@ -1,7 +1,9 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import type { ChildProcess } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { SNAPSHOT_TOTAL_MS, takeKillSnapshot } from './helpers/killSnapshot'
 
 /**
  * Launches the built app with test hooks enabled, in a throwaway user-data
@@ -149,25 +151,84 @@ const CLOSE_GRACE_MS = 10_000
  * the app's log tail is printed: the app logs `quitting`, `closing`,
  * `closed` and `exiting`, so the tail says which stretch did not finish.
  * The spec that saw it stays green; the line in the output is the report.
+ *
+ * Exported, with its three collaborators as optional parameters, so a unit
+ * test can drive it with a fake app and a short grace: the property that
+ * matters, that a hung close ends in a kill, is otherwise only visible in a
+ * real hang. Callers pass nothing and get the real grace, the snapshot and
+ * `stderr`.
  */
-async function boundedClose(raw: ElectronApplication): Promise<void> {
-  closeRequested.add(raw)
-  const logFile = logFileOf(raw)
+export async function boundedClose(
+  raw: Pick<ElectronApplication, 'close' | 'process'>,
+  deps: {
+    graceMs?: number
+    killAfterSnapshot?: (proc: ChildProcess) => Promise<void>
+    write?: (text: string) => void
+  } = {},
+): Promise<void> {
+  const { graceMs = CLOSE_GRACE_MS, killAfterSnapshot = snapshotThenKill, write = (text: string) => void process.stderr.write(text) } = deps
+  closeRequested.add(raw as ElectronApplication)
+  const logFile = logFileOf(raw as ElectronApplication)
   const started = Date.now()
   const timer = setTimeout(() => {
     const proc = raw.process()
     // The tail first: the launcher removes the user-data directory, log
     // included, as soon as the process is gone.
-    process.stderr.write(
+    write(
       `[launch] app.close() has taken ${Date.now() - started} ms; killing pid ${proc.pid}. ` +
         `App log tail:\n${logTail(logFile)}\n`,
     )
-    proc.kill('SIGKILL')
-  }, CLOSE_GRACE_MS)
+    void killAfterSnapshot(proc)
+  }, graceMs)
   try {
     await raw.close()
   } finally {
     clearTimeout(timer)
+  }
+}
+
+/**
+ * One snapshot of the process table and the load, then the kill.
+ *
+ * The kill is in a `finally`, so it happens whatever the snapshot does:
+ * `takeKillSnapshot` does not throw and settles inside `SNAPSHOT_TOTAL_MS`,
+ * and this races it against a second timer a little longer than that, so a
+ * snapshot that somehow never settles still cannot hold the kill back. All
+ * of it is guarded, because it runs from a timer callback and a throw there
+ * is an uncaught error in the worker, which turns one red into two. The
+ * snapshot costs the kill at most `SNAPSHOT_TOTAL_MS` (plus the margin), on
+ * a kill that is already `CLOSE_GRACE_MS` late; whether it costs more than a
+ * few tens of milliseconds on the CI runner is what the card's probe measures
+ * (`board/chore-e2e-snapshot-at-the-kill.md`).
+ *
+ * Exported, with its collaborators as parameters, so a unit test can make
+ * each of them fail, hang or throw and check that the kill still happens.
+ */
+export async function snapshotThenKill(
+  proc: Pick<ChildProcess, 'pid' | 'kill'>,
+  take: (pid: number | undefined) => Promise<string> = takeKillSnapshot,
+  write: (text: string) => void = text => void process.stderr.write(text),
+  boundMs: number = SNAPSHOT_TOTAL_MS + 250,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const text = await Promise.race([
+      take(proc.pid),
+      new Promise<string>(resolve => {
+        timer = setTimeout(() => resolve(`snapshot unavailable: no answer within ${boundMs} ms`), boundMs)
+        timer.unref()
+      }),
+    ])
+    write(`${text}\n`)
+  } catch {
+    // `take` does not reject by design, and `write` can fail on a closed stderr; nothing here may stand between the report and the kill.
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+    try {
+      proc.kill('SIGKILL')
+    } catch {
+      // The process is already gone.
+    }
   }
 }
 
