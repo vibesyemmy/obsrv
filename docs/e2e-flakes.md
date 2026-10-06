@@ -1649,17 +1649,25 @@ A passing attempt prints `applied=true presetId=iphone-61`; the two `:106` failu
 **What `applied=false` means in the app.** `controlServer.ts:467` sends `setPreset` through `applyAndConfirm` (`:763`), which
 applies the patch and polls `status` every 25 ms for up to `APPLY_WAIT_MS = 2_000` (`:81`) for `s.presetId === id && pageBack(s)`,
 then replies `{ ok: true, applied, ...status }` (`:795`). So the failing reply says that for 2 s after the phone preset was
-sent, `status` never showed `iphone-61` on the tab in front and still showed `laptop-768`. The gap is 600 ms. Then `:106` waits
+sent, `status` never showed `iphone-61` on the tab in front and still showed `laptop-768`. `applied` is the whole predicate and it
+has two clauses; the failing reply prints `presetId=laptop-768`, so the first (`s.presetId === id`) is the one that did not hold,
+not `pageBack`. "On the tab in front" is main's own record: `status()` resolves the tab at call time (`ipc.ts:1634` onward: an
+agent's command "lands on whichever tab is in front when it arrives") and `uiState.presetId` reads `tab().presetId`
+(`ipc.ts:917`); the code does not say which tab received the patch (Idris, `#3938`). The gap is 600 ms. Then `:106` waits
 3000 ms (`HOLD_MS * 5`) for `rendererCaughtUp` (`:55`: the renderer's selected tab sits where main's front tab does) and did not
-get it. **Both failures are on the question the test's header says it was written for:** a preset sent between main switching
-tabs and the renderer learning of it. Idris saw the pairing first (`#3934`); the source reading is Dogu's (`#3937`).
+get it. **Only the two `:106` sightings are on the question the test's header says it was written for** (a preset sent between
+main switching tabs and the renderer learning of it): `hold(HOLD_MS)` is `:98`, and `:91`, `:93` and `:94` fail before it, with no
+forced gap, in plain apply and catch-up calls (Wren, `#3939`). A defect that exists only in the held gap cannot produce those
+three, so the five cannot all be the done card's defect; at most the two at `:106` could. Idris saw the pairing first (`#3934`);
+the source reading is Dogu's (`#3937`), checked by Idris (`#3938`).
 
 **What this does not say.**
 - **That the defect is back.** `bug-preset-after-tab-switch-lands-on-the-other-tab` is `column: done`, and its title says the
   defect was reproduced with the gap forced open and fixed (2026-09-16, Henry). The sentence above, "a flake here does not mean that bug is back", is about
   the `:91` shape; this entry did not cover `:106` until now, and nothing here reopens or edits a card (that is Henry's).
-- **That it is not.** A runner starved past 2 s and 3 s fits the same two lines. The logs do not show which tab received the
-  preset, and the retry passed every time (2.4 s on the latest).
+- **That it is not.** A runner starved past 2 s and 3 s fits the same two lines, and so does a stalled app: `applied=false
+  presetId=laptop-768` is also what a reply prints when nothing was applied within 2 s. The logs do not show which tab received
+  the preset, and the retry passed every time (2.4 s on the latest).
 - Two `:106` sightings six days apart are a pair, not a rate. No cause. They differ in the close tail (`quitting` on one,
   silent on the other), so the tail is not set by which failure came before it.
 
