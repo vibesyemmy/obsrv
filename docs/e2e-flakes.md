@@ -640,8 +640,9 @@ by the run's conclusion: `37294297527` is stamped `cancelled` and its suite job
 is `success`. No log came back empty. 175 of the 177 contain a `[sync138]` line;
 the two that do not are `cancelled` jobs of 694 s and 709 s (`37369906774`,
 `37369912376`). The line has been in
-the spec since 2026-09-17 (`b137671`); **this sweep did not read 09-17 to 09-27**,
-so it says nothing about those days.
+the spec since 2026-09-16 (`dc8bd84`; its current shape, with `other native loads
+after it`, from `509d2e3` the same evening); **this sweep did not read 09-16 to
+09-27**, so it says nothing about those days.
 
 **Three more jobs print a failed step-2 load and the test passed.** Runs
 `36474748542` (52 ms), `36467712974` (114 ms) and `36612587616` (70 ms) print
@@ -660,8 +661,14 @@ alone does not fail the test; in the five that did, the target also emitted no
   (the "Related" paragraph above keeps that open), and it does not say the app is
   wrong to abort the load: the register's words stand, "nothing here says the
   app is wrong to abort it".
-- It does **not** say every `sync.spec.ts:139` first-attempt failure is this one;
-  `#483`'s, above, is a teardown.
+- It does **not** say every `sync.spec.ts:139` first-attempt failure is this one.
+  The same 177 jobs hold seven, and **two of the seven are teardowns**, not this:
+  `electronApplication.evaluate: Target page, context or browser has been closed`,
+  at 127 ms and 149 ms, with no step-2 line printed for that attempt. They are
+  `#483` (run `36474113601`, suite job `109103468365`, 09-28), the one named above,
+  and `#544` (run `37120875494`, suite job `111196592516`, 10-03), which this
+  register did not name before. Both are retry-rescued; no job has a `:139`
+  failure on its retry.
 - Why the abort comes when it does is **not** read: no mirror record was parsed
   beyond the `issued` row and the failed load, and the `playwright-flaky`
   artifact (id `11387656817` on the fifth run) has not been downloaded; that
