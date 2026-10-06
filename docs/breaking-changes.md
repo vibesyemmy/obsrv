@@ -56,8 +56,33 @@ report consumers and is named here as one, rather than smuggled in under the inp
 
 **2. `obsrv_presets`'s `orientation` is a description string, not a value.** It explains *"how the
 cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation"* — prose about the
-input being removed. **Decision: the text is rewritten to say `rotate`**; the field stays, because it
-describes the reply rather than restating it.
+input being removed. **Decision: the text is rewritten to say `rotate`.**
+
+**CORRECTED when the code landed: the field does NOT stay — it is renamed to `rotation`.** This entry first
+said *"the field stays, because it describes the reply rather than restating it"*. **That was written before
+the code and it is wrong about what shipped**: a key named `orientation` that no longer describes any
+`orientation` is the same misleading name the removal exists to retire, so it carries the name of what it
+describes. **A consumer reading `obsrv_presets`' `orientation` finds it gone**, which is a second renamed
+reply key beside `screens[].orientation`, and this entry would not have said so. Caught by Wren against
+the shape guard (`#4013`).
+
+### What the code change moved, measured from the built server
+
+`docs/public-shape.json`, regenerated from `tools/list` rather than from the zod:
+
+| tool | removed | added |
+| --- | --- | --- |
+| `obsrv_snap` | `orientation` | — |
+| `obsrv_drive` | `orientation` | — |
+| `obsrv_presets` | `orientation` | **`rotation`** |
+
+**`obsrv_report`'s `screens[].orientation` → `screenShape`** does not appear in that table because the
+report's rows are not an MCP output schema; it is a break for report consumers all the same, and it is
+named above.
+
+**Still to come in this release, and not in that change:** control's `setOrientation`. The app speaks the
+stored-form word and the MCP translates `rotate` into it in one place; removing it is an app-side protocol
+change with its own e2e.
 
 **What breaks:** a caller passing `--orientation` or `orientation:` gets an argument error instead of a
 screen; a client reading `orientation` from an MCP reply finds it absent; **a report consumer reading
