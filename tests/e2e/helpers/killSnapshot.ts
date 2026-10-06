@@ -183,9 +183,31 @@ export function formatSnapshot(input: SnapshotInput): string {
   } else {
     lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.map(rowText))
   }
-  const top = topByCpu(rows, TOP_HOST_ROWS, new Set(tree.map(r => r.pid)))
+  const root = tree[0]
+  const parent = root ? rows.find(r => r.pid === root.ppid) : undefined
+  if (root) lines.push(...parentLines(root.ppid, parent))
+  const top = topByCpu(rows, TOP_HOST_ROWS, new Set([...tree.map(r => r.pid), ...(parent ? [parent.pid] : [])]))
   if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length >= MAX_ROWS ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
   return capText(lines)
+}
+
+/**
+ * The process that launched the app: in the harness, the Playwright worker that holds the link to it.
+ *
+ * The app's own tree can say whether the app was busy, stopped or idle, and
+ * cannot say whether the other end of the link was. A worker that is busy,
+ * stopped or gone reads differently from one that is idle, which is the half of
+ * "stuck link or starved runner" the tree cannot show (Wren, `#4038`). It is in
+ * the table already, so this costs no second command. It is the harness's own
+ * process, so it keeps its name and arguments, like the app's.
+ *
+ * pid 1 is the launcher's own stand-in for "no parent": an app whose launcher
+ * died is reparented to it, so a parent of 1 says the launcher had gone.
+ */
+function parentLines(ppid: number, parent: ProcRow | undefined): string[] {
+  if (!parent) return [`  the app's parent, pid ${ppid}, is not in the process table: the process that launched the app had already gone`]
+  const reparented = ppid === 1 ? ' (pid 1: the app was reparented, so the process that launched it had already gone)' : ''
+  return [`  the app's parent, the process that launched it${reparented}:`, COLUMNS, rowText(parent)]
 }
 
 function capText(lines: readonly string[]): string {

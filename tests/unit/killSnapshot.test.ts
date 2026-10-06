@@ -165,6 +165,43 @@ describe('formatSnapshot', () => {
     expect(text).toContain('python3')
   })
 
+  describe("the app's parent, the harness process that holds the link", () => {
+    const worker = '14927 14900 S< 0.9 0:01.26 00:50 /Users/runner/hostedtoolcache/node/24.10.0/arm64/bin/node /Users/runner/work/obsrv/node_modules/playwright/lib/workerProcessEntry.js'
+    const app = (ppid: number) => `4001 ${ppid} S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0`
+
+    it('prints its state, CPU and name, so a busy, stopped or idle harness reads differently', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain("the app's parent, the process that launched it:")
+      expect(text).toMatch(/14927\s+14900\s+S<\s+0\.9\s+0:01\.26/)
+      expect(text).toContain('workerProcessEntry.js')
+      expect(text).not.toContain('reparented')
+    })
+
+    it('says so when the parent is not in the table, which means the process that launched the app had gone', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs(app(777)), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain("the app's parent, pid 777, is not in the process table")
+    })
+
+    it('says the app was reparented when its parent is pid 1', () => {
+      const text = formatSnapshot({ pid: 4001, rows: parsePs(['1 0 Ss 0.1 13:05.94 17:52:54 /sbin/launchd', app(1)].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text).toContain('pid 1: the app was reparented')
+    })
+
+    it('does not list the parent a second time among the busiest other processes', () => {
+      const busy = '14927 14900 R 99.0 0:41.26 00:50 /usr/bin/node /x/workerProcessEntry.js'
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([busy, app(14927), '9000 1 R 50.0 0:01.00 00:10 /usr/bin/other'].join('\n')), load: [1], cores: 2, psMs: 5 })
+      // As a pid (first column): the app's own row also carries 14927, as its ppid.
+      expect(text.split('\n').filter(l => /^\s+14927\s/.test(l)).length).toBe(1)
+    })
+
+    it('stays inside the line and byte caps with the extra rows', () => {
+      const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${'z'.repeat(60)}${i}`).join('\n')
+      const text = formatSnapshot({ pid: 4001, rows: parsePs([worker, app(14927), many].join('\n')), load: [1], cores: 2, psMs: 5 })
+      expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
+      expect(Buffer.byteLength(text, 'utf8')).toBeLessThanOrEqual(SNAPSHOT_MAX_BYTES)
+    })
+  })
+
   it('says when it read only part of an enormous table', () => {
     const rows = Array.from({ length: 6_000 }, (_, i) => `${i + 1} 1 S 0.0 0:00.00 00:01 /bin/x${i}`).join('\n')
     // A pid that is not in the table, so the host section is printed (every row here is a descendant of pid 1).
