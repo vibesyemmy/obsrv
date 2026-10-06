@@ -1,0 +1,76 @@
+# A one-off probe, on a throwaway branch, never to be merged: does `sudo mdutil -a -i off` change how busy Spotlight is
+# on a macos-14 runner while a file-writing job runs? Two arms on two runners in the same run (same day, same pool).
+# It measures the SWITCH, not the e2e hangs: the suite is not run. Nothing here touches ci.yml or main.
+name: probe-mdutil
+on:
+  push:
+    branches: [probe/mdutil-effect]
+permissions:
+  contents: read
+jobs:
+  probe:
+    name: spotlight indexing ${{ matrix.arm }}
+    runs-on: macos-14
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: ['on', 'off']
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Machine
+        run: |
+          sw_vers; uname -m; sysctl -n hw.ncpu; uptime
+      - name: Spotlight status before
+        run: |
+          mdutil -a -s || true
+          ps -A -o pid=,state=,%cpu=,time=,command= | grep -E '(^| )(mds|mdworker|mds_stores)' | grep -v grep | head -8 | cut -c1-120 || true
+      - name: Switch indexing off (arm off only)
+        if: matrix.arm == 'off'
+        run: |
+          sudo mdutil -a -i off
+          echo "mdutil exit=$?"
+      - name: Spotlight status after the step
+        run: |
+          mdutil -a -s || true
+      - name: Start the sampler
+        run: |
+          cat > "$RUNNER_TEMP/sample.sh" <<'EOS'
+          #!/bin/bash
+          start=$(date +%s)
+          while true; do
+            now=$(date +%s)
+            s=$(top -l 2 -s 2 -n 60 -o cpu -stats command,cpu | awk '/^Processes:/{b++} b==2 && NF>=2 && $1 ~ /^(mds|mdworker|mds_stores|mdsync|corespotlightd)/ {s+=$NF} END{printf "%.1f", s+0}')
+            echo "t=$((now-start))s spotlight_cpu=${s} load=$(sysctl -n vm.loadavg | tr -d '{}')" >> "$RUNNER_TEMP/samples.txt"
+          done
+          EOS
+          : > "$RUNNER_TEMP/samples.txt"
+          nohup bash "$RUNNER_TEMP/sample.sh" > /dev/null 2>&1 &
+          echo $! > "$RUNNER_TEMP/sampler.pid"
+          echo "sampler pid $(cat "$RUNNER_TEMP/sampler.pid")"
+      - name: Settle 30 s
+        run: |
+          sleep 30
+          echo "MARK churn" >> "$RUNNER_TEMP/samples.txt"
+      - name: Churn, npm ci
+        run: |
+          npm ci --no-audit --no-fund > /dev/null 2>&1; echo "npm ci exit=$?"
+          echo "MARK quiet" >> "$RUNNER_TEMP/samples.txt"
+      - name: Quiet 60 s
+        run: |
+          sleep 60
+          echo "MARK end" >> "$RUNNER_TEMP/samples.txt"
+      - name: Stop the sampler and summarise
+        run: |
+          kill "$(cat "$RUNNER_TEMP/sampler.pid")" 2>/dev/null || true
+          echo "--- samples (${{ matrix.arm }})"; cat "$RUNNER_TEMP/samples.txt"
+          echo "--- summary (${{ matrix.arm }}): spotlight_cpu summed over mds, mdworker*, mds_stores, mdsync, corespotlightd"
+          awk 'BEGIN{phase="settle"} /^MARK/{phase=$2; next} {split($2,a,"="); v=a[2]+0; n[phase]++; s[phase]+=v; if (v>m[phase]) m[phase]=v} END{ for (p in n) printf "phase %-12s samples=%d mean=%.1f max=%.1f\n", p, n[p], s[p]/n[p], m[p] }' "$RUNNER_TEMP/samples.txt" | sort
+          echo "(phase settle = the 30 s before npm ci, churn = npm ci, quiet = the minute after it, end = whatever was sampled after that)"
+          mdutil -a -s || true
