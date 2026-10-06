@@ -24,6 +24,48 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+### The `orientation` input is removed from the CLI, MCP and control — and so is the `orientation` output
+
+**Decided by Opeyemi 2026-10-04** (*"Remove it in the next release"*, `#3363`), closing the deprecation that
+`#178` opened and `0.61.0` first shipped. The word names the preset's **stored** form, so `'landscape'`
+means *"the rotated one"* and produces a **portrait** screen on every preset stored landscape —
+`bug-orientation-name`, and the reason `rotate` exists.
+
+**The input goes:** `--orientation` on the CLI, the `orientation` field on every MCP tool that takes a
+screen, and `setOrientation` on control. **Use `rotate` (CLI `--rotate`, MCP `rotate`), which says the
+thing itself.**
+
+**The MCP reply's `orientation` goes too, and that decision is the owner's rather than Opeyemi's** (the
+card leaves it to whoever does the work). **It is removed because it is derivable there, not merely because
+it is tidy:** `server.ts` emits `orientation: status.orientation` beside
+`rotated: rotatedFromOrientation(status.orientation)`, and `calibration.ts` defines the two as inverses
+over a two-value word — **no information `rotated` does not already carry**. **What to read instead:**
+`rotated`, and `screenShape` where the reply carries it.
+
+**TWO OTHER FIELDS SHARE THE NAME AND NOT THE MEANING, and they are separate decisions.** I first wrote
+this entry as *"the `orientation` key in replies and `status`"*, which was over-broad; **Wren checked the
+derivation I asked the room to attack and found both** (`#3822`).
+
+**1. `obsrv_report`'s `screens[].orientation` is NOT the rotate word — it is the shape.** `cli/main.ts`
+pushes `orientation: screenShape(r.cssWidth, r.cssHeight)` on every row. On a laptop preset **unrotated**
+it reads `landscape` while `rotated` is `false`, where the derivation above would say `portrait`. **And
+those rows carry neither `rotated` nor `screenShape`**, so deleting the key would leave a report consumer
+with no shape at all and the advice "read `rotated` and `screenShape` instead" would be false.
+**Decision: it is RENAMED to `screenShape`**, which is what it has always held. That is its own break for
+report consumers and is named here as one, rather than smuggled in under the input's removal.
+
+**2. `obsrv_presets`'s `orientation` is a description string, not a value.** It explains *"how the
+cssWidth/cssHeight below relate to rotation, and how to ask for the other orientation"* — prose about the
+input being removed. **Decision: the text is rewritten to say `rotate`**; the field stays, because it
+describes the reply rather than restating it.
+
+**What breaks:** a caller passing `--orientation` or `orientation:` gets an argument error instead of a
+screen; a client reading `orientation` from an MCP reply finds it absent; **a report consumer reading
+`screens[].orientation` finds it renamed to `screenShape`, with the same values it always had.** On the MCP surface the removal is
+breaking in both directions — every output schema is `additionalProperties: false`, so a client holding the
+old schema also rejects a reply that no longer carries it. **Restart the session after upgrading.**
+
+
 ### `obsrv_inspect`'s readout gains `lineRects`, and a click by selector aims at it
 
 `InspectReadout` carries `lineRects` from `feat-inspect-line-rects`: the element's own boxes
