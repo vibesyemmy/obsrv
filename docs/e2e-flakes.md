@@ -909,6 +909,13 @@ the attempt-1 jobs of `37123672372` and `37294469890`; two more jobs (`111969388
 `board/bug-vision-47-normal-not-red.md` cites (`34977896287`, `35853805499`, `35874763546`). Not a rate; no cause. Dogu's and
 Idris's counts agree (`#3895`), and Wren pulled both rows from the raw API (`#3889`).
 
+**Seen again 2026-10-06, and the pixel was black (`#592`'s suite, run `37463948210`, job `112270207388`, attempt 1, `success`).** First attempt `✘` in 136 ms, `retry #1` `✓` in 334 ms;
+`Error: middle pixel rgb: [0,0,0]`, `Expected: > 40, Received: 0` at `vision.spec.ts:114:68`. **The first sighting whose pixel is not white** (Wren, `#4092`: the fifth sighting and the fourth with a pixel; Wren's count, not re-derived here, and the card
+`board/bug-vision-47-normal-not-red.md` is Henry's). Two things this changes in what this entry says above: **(1)** the inference "pure white: nothing painted yet" leaned on white being the page's background, and black has no such
+reading, so "the frame had not been painted" is a reading that still fits and is no longer the one the pixel points to; a black pixel fits a surface that was never filled, a cleared backing store, or a capture of nothing, and the entry does not know which.
+**(2)** The assertion cannot tell them apart either, as above: `normal[0] > normal[1] + 40` fails on `[0,0,0]` for the same reason as on white. What is still true: every firing this register records passed on its retry, the pixel is printed, and the next
+person should read the pixel before the channel. Not a rate, no cause, and no change to the 2-in-178 count above (this run was created after that window closed at 04:26Z).
+
 ## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
 
 `the menu applies a CPU rate to the target: the same work takes several times
