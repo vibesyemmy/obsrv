@@ -2405,3 +2405,25 @@ not a fix.
 **Limits.** This is one parse of retained logs by one reader. The `arrivals` table behind the redirect card was
 independently recounted over its narrower window (Dogu, `#2972`); this sweep as a whole was not, though Wren checked the
 `throttle-live` run by hand (`#3114`). No row was reproduced.
+
+## `boardServeBrowser.test.ts`: `ENOTEMPTY` in the teardown, once, 2026-10-06
+
+A unit test, not an e2e spec, listed here because it is the same kind of record (a CI failure that was not the claim under test) and the
+register already carries the other unit-step ones. **One sighting in 484 saved suite logs: a candidate, not a rate.**
+
+`#594`, run `37461396063`, attempt 1, job `112261642861`: the test's `afterEach` failed with `ENOTEMPTY, Directory not empty:
+…/board-serve-browser-GYIFEr` at its `rmSync` (`boardServeBrowser.test.ts:48`). No assertion error in the log. The retry passed, as far as
+the PR's second attempt had run when this was written (it had not finished; its count is the PR's).
+
+**The reading, which is of the code and not a measurement of that run:** the hook sent `SIGKILL` to the server and removed the directory in the
+same turn. The server's poller runs `git fetch` as its own child, so killing the server does not stop a git that is mid-write in
+`clone/.git`, and a recursive remove racing a writer is the usual way to `ENOTEMPTY`. (`tar -x` in `buildAt` extracts into a *different* temp
+directory and is not the writer here.) The log does not show a git in flight at the kill.
+
+**What was changed and what the control shows** is on `board/bug-board-serve-test-teardown-enotempty.md`: the two `boardServe*` hooks now
+kill, wait for the exit (bounded), and remove with `maxRetries: 5`; a test with a real detached late writer fails **0 of 10** on the old
+teardown and passes **10 of 10** on the fix. **Removing the exit wait alone leaves that control green, so the control does not show the exit wait
+matters**; the retries are what covers a late writer. The control is a model of the mechanism, not a reproduction of the CI window.
+
+**What would change this entry:** a second `ENOTEMPTY` from either hook after the fix, which would put the 5.2 s retry window or the named
+writer in question.
