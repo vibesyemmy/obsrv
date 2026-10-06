@@ -1,6 +1,5 @@
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { THROTTLE_PROFILES } from '../shared/throttle'
-import type { Orientation } from '../shared/types'
 
 /**
  * Pure helpers for the MCP server (`src/mcp/server.ts`): tool-input → CLI

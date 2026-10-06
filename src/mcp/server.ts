@@ -11,6 +11,7 @@ import { pruneTempDirs } from '../shared/pruneTemp'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import { refuseUnknownInputKeys } from './strictInput'
 import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { flowRunnerDeps, runFlowTool } from './flowTool'
 import { startFlow } from './flowRunner'
@@ -18,7 +19,7 @@ import { budgetKindFor } from './flowBudget'
 import { DEFAULT_REPORT_MATRIX, DEFAULT_TAP_MM, DEFAULT_TEXT_MM, DEFAULT_TIMEOUT_MS } from '../cli/args'
 import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_MAX_MS} from '../shared/control'
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
-import { MAX_SCROLL_SELECTOR, type Orientation } from '../shared/types'
+import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
 import { controlCall, ensureLive, type LiveApp } from './control'
 import { unsupportedAppNote } from '../shared/minimumApp'
@@ -1143,6 +1144,15 @@ const server = new McpServer({ name: 'obsrv-mcp-server', version: VERSION })
  * catch.
  */
 rejectUndeclaredKeysUnderTest(server)
+
+/**
+ * Every tool refuses an unknown top-level input key rather than dropping it
+ * (`strictInput.ts`), in production and for every client. Installed here
+ * because it replaces the *schema* in each registration, so it has to run
+ * before any tool registers; it wraps no handler, so its order against the
+ * two wrappers above does not matter.
+ */
+refuseUnknownInputKeys(server)
 
 function stampLaneResults(target: McpServer, stamp: string): void {
   type Register = (name: unknown, config: unknown, handler: unknown) => unknown

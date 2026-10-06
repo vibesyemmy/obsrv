@@ -175,11 +175,16 @@ describe('parseArgs: --rotate, after --orientation was removed', () => {
     expect(() => diff('x.test', '--preset', '1440p-27', '--rotate')).toThrow(/2x reference/)
   })
 
-  it('refuses the removed word rather than ignoring it', () => {
+  it('refuses the removed word rather than ignoring it, and says what to use instead', () => {
     // An unknown flag is refused by the parser, so a caller who still passes
     // `--orientation` is told instead of silently given an unrotated screen.
-    expect(() => snap('x.test', '--orientation', 'landscape')).toThrow(/orientation/)
-    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/orientation/)
+    expect(() => snap('x.test', '--orientation', 'landscape')).toThrow(/unknown flag: --orientation/)
+    expect(() => snap('x.test', '--orientation', 'sideways')).toThrow(/unknown flag: --orientation/)
+    // **The refusal has to name the replacement** (`REMOVED_FLAGS` in
+    // `src/cli/args.ts`). The flag worked for months and is in old scripts and
+    // in anything an agent learned before this release, so "unknown flag"
+    // alone leaves the caller guessing which of thirty flags replaced it.
+    expect(() => snap('x.test', '--orientation', 'landscape')).toThrow(/--rotate/)
   })
 
   it('turns one flag into two different shapes, because the presets are stored differently', () => {

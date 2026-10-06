@@ -805,8 +805,8 @@ async function runSnap(cmd: SnapCommand): Promise<void> {
     writeFileSync(out, encodePng(img))
     // The shape is named for the reader, never left to be inferred from the
     // digits: under `--matrix` one run prints several lines, and a single
-    // `--orientation landscape` flips a landscape-natural preset into a
-    // portrait screen, so the lines legitimately disagree with each other.
+    // `--rotate` turns a landscape-natural preset into a portrait screen, so
+    // the lines legitimately disagree with each other.
     //
     // Human output only. The JSON already carries `cssWidth`/`cssHeight`, from
     // which any consumer derives the shape exactly, and that object is a

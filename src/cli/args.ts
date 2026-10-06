@@ -321,6 +321,28 @@ const EXTRA_FLAGS: Record<Command, Set<string>> = {
   inspect: new Set(['at', 'selector']),
 }
 
+/**
+ * Flags this project has REMOVED, and the sentence that says what to use now.
+ *
+ * An unknown flag is already refused, so nothing here changes whether a call
+ * fails — it changes whether the caller can fix it. `--orientation` is not a
+ * typo a reader can spot: it worked for months, it is in old scripts and in
+ * anything an agent learned before this release, and "unknown flag" alone
+ * leaves them to guess which of thirty flags replaced it.
+ *
+ * A table rather than a branch, so the next removal is one line rather than a
+ * second special case. The MCP surface answers the same way for the same
+ * reason (`src/mcp/strictInput.ts`).
+ */
+const REMOVED_FLAGS = new Map<string, string>([
+  [
+    'orientation',
+    "--orientation was removed in the breaking release: it named the preset's STORED form, so " +
+      '`--orientation landscape` turned a monitor or laptop into a portrait screen. Use --rotate, which turns the ' +
+      'screen a quarter turn whatever the preset is stored as.',
+  ],
+])
+
 interface Parsed {
   url: string
   flags: Map<string, string | true>
@@ -340,7 +362,8 @@ function collect(command: Command, argv: string[]): Parsed {
         if (value === undefined || value.startsWith('--')) throw new ArgError(`--${name} requires a value`)
         flags.set(name, value)
       } else {
-        throw new ArgError(`unknown flag: --${name}\n\n${usage()}`)
+        const removed = REMOVED_FLAGS.get(name)
+        throw new ArgError(`unknown flag: --${name}${removed === undefined ? '' : `\n\n${removed}`}\n\n${usage()}`)
       }
     } else if (url === null) {
       url = token

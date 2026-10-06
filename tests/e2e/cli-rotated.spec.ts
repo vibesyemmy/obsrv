@@ -24,12 +24,16 @@ import { pathToFileURL } from 'node:url'
 const BIN = resolve(__dirname, '../../bin/obsrv.js')
 const PAGE = pathToFileURL(resolve(__dirname, '../fixtures/button.html')).href
 
-function runCli(args: string[]): Promise<{ code: number | null; stdout: string }> {
+function runCli(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise(done => {
     const child = spawn(process.execPath, [BIN, ...args], { cwd: resolve(__dirname, '../..') })
     let stdout = ''
+    let stderr = ''
     child.stdout.on('data', d => (stdout += d))
-    child.on('close', code => done({ code, stdout }))
+    // Captured because a refusal is the subject of one test below, and an
+    // argument error is written here rather than to stdout.
+    child.stderr.on('data', d => (stderr += d))
+    child.on('close', code => done({ code, stdout, stderr }))
   })
 }
 
@@ -58,13 +62,18 @@ test('a rotated render says so, and the dimensions agree with the word', async (
   expect({ w: json.cssWidth, h: json.cssHeight }).toEqual({ w: 852, h: 393 })
 })
 
-test('a run that named a rotation and got none says false, rather than saying nothing', async () => {
-  // `--orientation portrait` asked by name and was answered no. Keyed on the
-  // flag, not the value — the same rule `--throttle none` follows, and the
-  // reason a caller who named it is owed the answer.
-  const json = await snap('--orientation', 'portrait')
-  expect(json.rotated).toBe(false)
-  expect({ w: json.cssWidth, h: json.cssHeight }).toEqual({ w: 393, h: 852 })
+test('the removed --orientation flag is refused, and the refusal names --rotate', async () => {
+  // This test used to pass `--orientation portrait` and assert `rotated: false`
+  // — the flag asked by name and answered no. The flag is gone in the breaking
+  // release (`docs/breaking-changes.md`), so what is worth guarding is the
+  // REFUSAL: an unknown flag already fails the run, and the addition is that
+  // the message names the replacement. A caller whose script still passes the
+  // old flag cannot fix it from "unknown flag" alone (Wren, room #4019).
+  const r = await runCli(['snap', PAGE, '--preset', 'iphone-61', '--orientation', 'portrait'])
+  expect(r.code, 'the CLI accepted a flag that no longer exists').not.toBe(0)
+  const said = `${r.stderr}\n${r.stdout}`
+  expect(said).toContain('unknown flag: --orientation')
+  expect(said, 'the refusal does not say what to use instead').toContain('--rotate')
 })
 
 test('a run that named no rotation carries no rotated key at all', async () => {

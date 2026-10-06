@@ -213,12 +213,38 @@ test('OBSRV_HEADLESS=1 renders headlessly and names the variable, before the har
   }
 })
 
-test('a deprecated orientation that inverts on this preset says so, and the answer says what the screen actually is', async () => {
-  // `orientation` names the preset's STORED form, so 'landscape' on a preset
-  // stored landscape turns it and gives a PORTRAIT screen. #241 wrote the
-  // sentence for exactly that trap and no reply had carried it (c5): the
-  // suite only ever passed an orientation that agreed with the shape.
-  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: '1080p-24', orientation: 'landscape' })
+test('the removed orientation key is refused by name, and rotate turns the same screen', async () => {
+  // This test used to pass `orientation: 'landscape'` and assert the sentence
+  // that said the word had inverted. The key is gone in the breaking release,
+  // and the case worth guarding is now the REFUSAL — because without
+  // `src/mcp/strictInput.ts` this exact call succeeds: the SDK parses arguments
+  // against a plain `z.object`, zod drops an unknown key, and the caller gets a
+  // 1920x1080 screen with `isError: false` and `warnings: []`. A rotation asked
+  // for by name and silently not done is `docs/release-gate.md` class 1 — "a
+  // wrong answer the caller cannot detect". Found by Wren and Idris with two
+  // independent probes (room #4019, #4022).
+  //
+  // **The SDK does not throw here, which is worth stating because the obvious
+  // way to write this test assumes it does.** An input-validation failure comes
+  // back as a resolved reply with `isError: true`, no `structuredContent` and
+  // the message in `content` — so `rejects.toThrow` would pass on a server that
+  // accepted the key and failed later for any other reason. This reads the
+  // sentence, and names the reply when the call is NOT refused.
+  const refused = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: '1080p-24', orientation: 'landscape' }).then(
+    r => r,
+    (e: unknown) => ({ isError: true, content: [{ type: 'text', text: e instanceof Error ? e.message : String(e) }] }) as CallToolResult,
+  )
+  const refusal =
+    refused.isError === true
+      ? ((refused.content ?? []) as { text?: string }[]).map(b => b.text ?? '').join(' ')
+      : `NOT REFUSED: ${JSON.stringify(refused.structuredContent).slice(0, 300)}`
+  expect(refusal).toContain('unknown input key `orientation`')
+  expect(refusal, 'the refusal does not say what to use instead').toContain('rotate: true')
+
+  // The replacement, on the same preset, so the pair reads as one fact:
+  // 1080p-24 is stored landscape, so a quarter turn is the 1080x1920 portrait
+  // screen the old word produced by accident.
+  const r = await call('obsrv_snap', { url: fixture('solid-red.html'), preset: '1080p-24', rotate: true })
   expect(r.isError).toBeFalsy()
   const s = r.structuredContent as { rotated?: boolean; screenShape?: string; cssWidth: number; cssHeight: number; warnings: string[] }
   expect(s).toMatchObject({ rotated: true, cssWidth: 1080, cssHeight: 1920 })
@@ -226,10 +252,9 @@ test('a deprecated orientation that inverts on this preset says so, and the answ
   // the shape through `rotated` and the applied dimensions instead. Asserted
   // because the first draft of this test expected it and CI said otherwise.
   expect(s.screenShape).toBeUndefined()
-  expect(s.warnings.join('\n'), JSON.stringify(s.warnings)).toContain(
-    "orientation: 'landscape' produced a portrait screen (1080x1920). That flag names the preset's STORED form rather than the shape you get, " +
-      'so the word inverts on presets stored the other way round. Use rotate: true to say it directly; screenShape always reports what you actually got.',
-  )
+  // Nothing left to warn about: the word that inverted is not in the reply, the
+  // schemas or the descriptions (`tests/unit/rotateOnlyWay.test.ts`).
+  expect(s.warnings.join('\n'), JSON.stringify(s.warnings)).not.toMatch(/orientation/i)
 })
 
 test('audit, lint and inspect name why they ran headless, like snap', async () => {

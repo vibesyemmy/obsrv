@@ -210,7 +210,10 @@ reply) found **173 sinks**:
 - a `notes:` or `warnings:` property (not the zod schemas);
 - the `warn(…)` and `onWarn(…)` callbacks, which land in the CLI's warnings (not `log.warn`, which writes
   the log file, and not `strictOutput.ts`'s `warn`, which defaults to stderr);
-- `orientationNote`.
+- `orientationNote` — **gone in the breaking release** (`docs/breaking-changes.md`), along with
+  `orientationWordNote` in `src/shared/calibration.ts`, which produced it. The 173 was counted before
+  that removal and is left as counted rather than adjusted by hand; this line says which sink no longer
+  exists.
 
 From each sink it followed the value back through conditionals, concatenations, variables and what is
 pushed onto them, helper calls (to their `return`s), parameters (to every call site), destructured
@@ -346,7 +349,7 @@ arms (1, 2 and 4), and the fix as written reds none.
 | `src/shared/inspectReadout.ts:134` | `cli-inspect.spec:147`, both routes and an opaque twin | `35194508818` |
 | `src/cli/lint.ts:517` | `cli-lint.spec:181`, text at 1:1 | `35194508818` |
 | `src/shared/layoutScale.ts:52` | `cli-layout-scale.spec:137`, `initial-scale` above 1 | `35194508818` |
-| `src/shared/calibration.ts:165` | `mcp.spec:211`, the `orientation` word inverting | `35194508818` |
+| ~~`src/shared/calibration.ts:165`~~ | **removed in the breaking release**; last seen by `mcp.spec:211`, the `orientation` word inverting | `35194508818` |
 | `src/mcp/server.ts:2538` | `mcp-live.spec:417`, live inspect's headless-only key | `35194508818` |
 | `src/cli/audit.ts:215` | `cli-audit.spec:331`, a page past the collection caps | `35199168099` |
 | `src/cli/lint.ts:526` | `cli-lint.spec:270`, the same shape for text, edges and images | `35199168099` |
