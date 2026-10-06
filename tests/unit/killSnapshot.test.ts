@@ -4,6 +4,7 @@ import {
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
+  hostCommand,
   parsePs,
   shortCommand,
   takeKillSnapshot,
@@ -73,6 +74,15 @@ describe('shortCommand', () => {
   })
 })
 
+describe('hostCommand', () => {
+  it('names a process that is not the app by its executable and nothing else', () => {
+    expect(hostCommand('/usr/bin/some-other-burner --token=SECRET --flag')).toBe('some-other-burner')
+    expect(hostCommand('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome Helper --type=renderer')).toBe('Google Chrome Helper')
+    expect(hostCommand('node server.js --password hunter2')).toBe('node')
+    expect(hostCommand('/sbin/launchd')).toBe('launchd')
+  })
+})
+
 describe('treeOf', () => {
   it('returns the root and every descendant, root first', () => {
     expect(treeOf(parsePs(TABLE), 4001).map(r => r.pid)).toEqual([4001, 4002, 4003, 4004])
@@ -104,7 +114,25 @@ describe('formatSnapshot', () => {
     expect(text).toContain('kill snapshot for pid 4001 (ps took 31 ms; load 3.50 2.25 1.00 on 3 cores)')
     expect(text).toMatch(/4003\s+4001\s+R\s+98\.5\s+0:41\.20/)
     expect(text).toContain('busiest other processes on the host')
-    expect(text).toContain('some-other-burner --flag')
+    expect(text).toContain('some-other-burner')
+  })
+
+  it("does not print the arguments of a process that is not the app's, and does print the app's own", () => {
+    const table = [
+      '4001 1 S 0.1 0:01.00 01:00 /Applications/Electron.app/Contents/MacOS/Electron --inspect=0',
+      '4002 4001 S 0.1 0:01.00 01:00 /x/Electron Helper (GPU).app/Contents/MacOS/Electron Helper (GPU) --type=gpu-process',
+      '9000 1 R 90.0 0:01.00 01:00 /usr/bin/other --token=SECRET',
+    ].join('\n')
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(table), load: [1], cores: 2, psMs: 5 })
+    expect(text).toContain('--type=gpu-process')
+    expect(text).toContain('other')
+    expect(text).not.toContain('SECRET')
+  })
+
+  it('says when it read only part of an enormous table', () => {
+    const rows = Array.from({ length: 6_000 }, (_, i) => `${i + 1} 1 S 0.0 0:00.00 00:01 /bin/x${i}`).join('\n')
+    // A pid that is not in the table, so the host section is printed (every row here is a descendant of pid 1).
+    expect(formatSnapshot({ pid: 4_000_000, rows: parsePs(rows), load: [], cores: 1, psMs: 1 })).toContain('the read was cut there')
   })
 
   it('says so when the process is not in the table, instead of printing an empty tree', () => {
