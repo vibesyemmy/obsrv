@@ -1425,7 +1425,8 @@ show `-` on the first pass and ran again, all five, on the retry.
 for that file at 10:07:35. `update.spec.ts:115` was test 646 (not the first of its file) and `toolbar.spec.ts:112` was 594, so
 the failures are not all at app launch. The same run's other first-attempt failure, `sync.spec.ts:139` (5.1 s), is a different
 mechanism with its own entry. **No cause is named, and one more sighting is still not a rate.** The locators so far are
-`.toggle-settings` (twice), `.preset-select`, and the one `vision.spec.ts:35` did not name: not one button.
+`.toggle-settings` (twice), `.preset-select`, and `.vision-deutan` for `vision.spec.ts:35`, which this entry did not name and
+whose job log shows never resolving (read 2026-10-06, under the fifth sighting below): not one button.
 
 **A fifth sighting of the signature, 2026-10-06 (`fit-pan.spec.ts:93`).** Found by Dogu reading the `main` push suite for the
 `#586` merge (`#3868`); Idris and Wren pulled the same job and read the same figures (`#3869`, `#3875`). Run `37413726703`,
@@ -1442,13 +1443,18 @@ Call log:
 at setView (fit-pan.spec.ts:41)
 ```
 
-**What the log says and does not say.** As with the four above, the locator resolved to the real control, so "it never rendered"
-is ruled out, and the log does not say which of *visible*, *enabled* or *stable* it was. It was **not the first test of its file**:
+**What the log says and does not say.** As with `toolbar.spec.ts:112`, `update.spec.ts:115` and `browser-identity.spec.ts:41`,
+the locator resolved to the real control, so "it never rendered" is ruled out *for those*, and the log does not say which of
+*visible*, *enabled* or *stable* it was. **That does not extend to `vision.spec.ts:35`** (Idris, `#3904`; read again by Dogu from the
+raw job log, run `35597133483`, suite job `106324485776`): its call log is the single line `waiting for locator('.vision-deutan')`,
+and the job log has no `locator resolved` and no `attempting click action`, so for that one the locator never resolved in 30 s,
+which the log reads as consistent with the element not being found and does not explain. That is a different shape from the
+other four, and nothing here says the five share a cause. The `fit-pan.spec.ts:93` failure was **not the first test of its file**:
 `fit-pan.spec.ts:85` passed in 55 ms at 04:38:45.820Z; the app the kill line names (pid 30688) had started at 04:38:44.114Z, before it, and the failing click began after it.
 This file is not `serial`: the retry ran this one test. **The harness's kill line follows it** (`app.close() has taken 10003 ms`,
 a silent tail), 40.153 s after test 85 passed; less the 10.003 s close, that is 30.150 s, the click's budget (Idris, `#3871`), so
 the close came after the timeout. **No cause is named, and one more sighting is still not a rate.** The locators so far are
-`.toggle-settings` (twice), `.preset-select`, `.view-1x`, and the one `vision.spec.ts:35` did not name: not one button. The
+`.toggle-settings` (twice), `.preset-select`, `.view-1x`, and `.vision-deutan`, which never resolved: not one button. The
 error-context artifact and `playwright-flaky` (id `11390724548` on this run) were not read.
 
 **What the suite minutes say about the first attempts** (Idris's table, recomputed by Dogu, 2026-10-05; the file lived in
@@ -2203,7 +2209,7 @@ or more, chosen by job name and not by run conclusion) and three more by id (`37
 10-03T22:35Z to 10-05T14:50Z) the sweep finds the same 42 jobs and the same six hits as the table, and all ten of the table's
 tails and next-`✘` rows read the same from these logs.
 
-**What the 29 are.** Every hit took 10,001 to 10,022 ms to close (Dogu's parse; Idris's count did not include the milliseconds). **13 tails are silent** (two lines, `starting` and `gpu`) and
+**What the 29 are.** Every hit took 10,001 to 10,022 ms to close (Dogu's parse; Idris's parser reproduced the range and both ends, `#3904`). **13 tails are silent** (two lines, `starting` and `gpu`) and
 **16 log `quitting`**. **The next result line after the hit is a `✘` in 23 and a `✓` in 6.** 11 of the 23 `✘` ran the full 30.0 s:
 8 after a silent tail and 3 after one that logged `quitting` (`throttle-refused.spec.ts:164`, `image-tabs.spec.ts:82`,
 `native-pane.spec.ts:62`, all 09-28 and 09-29). Five jobs with a hit contain no `✘` at all (`36464104648`, `36619187164`,
@@ -2250,7 +2256,7 @@ columns (the next result is the first `✓`, `✘` or `-` line after the hit; wh
 **What this does not say.** No cause; the same three explanations still fit, and 13 silent against 16 `quitting` does not say
 they are one thing or two. Not a rate. "Next result line" is what was read, not each hit's whole neighbourhood, so a `✓` after
 a hit does not say the close was harmless. **Two counts, one definition:** Dogu's and Idris's (`#3895`, own pulls and own
-parser, 180 of 180 jobs) agree on every figure here except the close times above, which only Dogu parsed. Both read the same `app.close() has taken` line, so the agreement says the
+parser, 180 of 180 jobs) agree on every figure here. Both read the same `app.close() has taken` line, so the agreement says the
 count is right for that definition, not that the line is the right thing to count. `error-context.md` and `playwright-flaky`
 are unread.
 
