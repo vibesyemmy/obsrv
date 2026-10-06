@@ -81,7 +81,8 @@ failing close reaches the caller; and the real defaults), and one against the re
 **Follow-up, 2026-10-06 (Wren's suggestion, `#4038`): the snapshot also prints the app's parent**, the Playwright worker that holds the link to the app, with its state, `%cpu`, CPU time and name. It is in
 the `ps -A` table already, so there is no second command and the budget is unchanged. If the parent is not in the table it says the process that launched the app had gone, and a parent of pid 1 is called
 a reparenting. It is the half of "stuck link or starved runner" that the app's own tree cannot show: a worker that is busy, stopped or gone reads differently from one that is idle. It is not listed a second
-time among the busiest other processes. Tested for each case, and sabotage-checked.
+time among the busiest other processes. It is **named, not quoted**: the first word and, when the second word is a script, that script's file name (`node workerProcessEntry.js`), and nothing after
+it, because a local run can be launched by any script with any arguments and this text goes into a log that gets pasted (Idris's pre-read, `#4049`). Tested for each case, and sabotage-checked.
 
 ## Controls it needs before anyone reads a snapshot
 
