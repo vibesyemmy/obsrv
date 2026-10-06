@@ -12,7 +12,8 @@ import { join } from 'node:path'
  *    recursively without `maxRetries` in the call. `process.kill(pid, 0)` (an existence probe) is not a
  *    child kill, and a recursive removal in a file that kills nothing is left alone: `electronPath` and
  *    others remove 20 directories after an `execFile` they awaited, and that is not this shape;
- *  - the two known call sites import the helper.
+ *  - the two known call sites import the helper and call it with the lists they fill (a call with an
+ *    empty children list would still be "wired" and kill nothing; that survived the first version).
  *
  * What a source scan cannot see: options passed by name (`rmSync(d, OPTS)` has no `recursive` to read,
  * so it is assumed fine), and a file that kills through a wrapper. Population when this was written: no
@@ -98,11 +99,15 @@ describe('the real files under tests/unit', () => {
     expect(offenders).toEqual([])
   })
 
-  it('both board-serve test files take their teardown from killAndRemove, which is where a late writer is handled', () => {
-    for (const f of ['boardServe.test.ts', 'boardServeBrowser.test.ts']) {
+  it('both board-serve test files take their teardown from killAndRemove, handing it the servers they started and the directories they made', () => {
+    const calls: Record<string, RegExp> = {
+      'boardServe.test.ts': /\bkillAndRemove\(\s*started\.splice\(0\)\s*,\s*dirs\.splice\(0\)\s*\)/,
+      'boardServeBrowser.test.ts': /\bkillAndRemove\(\s*servers\.splice\(0\)\s*,\s*dirs\.splice\(0\)\s*\)/,
+    }
+    for (const [f, call] of Object.entries(calls)) {
       const code = stripComments(read(f))
       expect(code, `${f} imports the helper`).toMatch(/from '\.\/killAndRemove'/)
-      expect(code, `${f} calls it`).toMatch(/\bkillAndRemove\(/)
+      expect(code, `${f} calls it with its children and its directories`).toMatch(call)
     }
   })
 })
