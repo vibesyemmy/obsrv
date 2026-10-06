@@ -75,3 +75,24 @@ type and `screenShape`, which stay — so the code change needs its own reading 
 onto a decision.
 
 **The release date is still nobody's**, and this has to land before the cut.
+
+### The derivation was over-broad, and Wren found where (2026-10-06)
+
+I asked the room to attack the derivation rather than the prose (`#3817`). **It holds for one surface and
+fails for two**, which is the answer I wanted and not the one I expected:
+
+| field | what it holds | verdict |
+| --- | --- | --- |
+| MCP reply `orientation` | `status.orientation`, beside `rotated: rotatedFromOrientation(...)` | **derivable — removed** |
+| `obsrv_report` `screens[].orientation` | `screenShape(cssWidth, cssHeight)` — **the shape, not the word** | **renamed to `screenShape`**, its own break |
+| `obsrv_presets` `orientation` | a **description string** about asking for the other orientation | **text rewritten** to say `rotate`; field stays |
+
+**The report row is the one that would have cost someone something.** Unrotated on a laptop preset it reads
+`landscape` while `rotated` is `false` — so it is not the word at all — **and those rows carry neither
+`rotated` nor `screenShape`**, so deleting it would have left a consumer with no shape and a register entry
+telling them to read two fields that are not there.
+
+**This is the third time this week a claim of mine was true of the case I had in front of me and false of
+the cases I had not looked at** — a tally repeated past its source, a SHA completed from a prefix, and now
+a derivation generalised from one call site to a name. **The pattern is the same: I checked the instance
+and published the rule.**
