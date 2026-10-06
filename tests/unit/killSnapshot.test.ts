@@ -3,6 +3,8 @@ import type { ChildProcess } from 'node:child_process'
 import { boundedClose, snapshotThenKill } from '../e2e/launch'
 import {
   capText,
+  describeHidden,
+  pickTreeRows,
   SNAPSHOT_MAX_BYTES,
   SNAPSHOT_MAX_LINES,
   formatSnapshot,
@@ -267,8 +269,26 @@ describe('formatSnapshot', () => {
   it('limits the app tree to a bounded number of rows and says how many it left out', () => {
     const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${i}`).join('\n')
     const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
-    expect(text).toMatch(/… and 385 more descendants/)
+    expect(text).toMatch(/… and 385 more descendants \(S×385; busiest 0\.0%\)/)
     expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES)
+  })
+
+  it('never leaves the busy or stopped child out of a large tree, wherever it sits in the table', () => {
+    const kids = Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 S 0.0 0:00.01 00:01 /bin/child-${i}`)
+    kids[29] = '5029 4001 R 99.0 0:41.00 00:41 /bin/spinning-child'
+    kids[24] = '5024 4001 T 0.0 0:00.10 00:41 /bin/stopped-child'
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...kids].join('\n')), load: [1], cores: 2, psMs: 5 })
+    expect(text).toMatch(/5029\s+4001\s+R\s+99\.0/)
+    expect(text).toMatch(/5024\s+4001\s+T\s+0\.0/)
+    expect(text).toMatch(/… and 15 more descendants \(S×15; busiest 0\.0%\)/)
+  })
+
+  it('says what a large tree left out, so that leaving it out is a reading too', () => {
+    const rows = parsePs(['4001 1 S 0.0 0:00.01 00:01 /app', ...Array.from({ length: 30 }, (_, i) => `${5000 + i} 4001 ${i < 20 ? 'S' : 'I'} ${(i % 3) * 0.2} 0:00.01 00:01 /bin/c${i}`)].join('\n'))
+    const { shown, hidden } = pickTreeRows(treeOf(rows, 4001))
+    expect(shown[0]?.pid).toBe(4001)
+    expect(shown.length).toBe(16)
+    expect(describeHidden(hidden)).toMatch(/^S×\d+ I×\d+; busiest \d\.\d%$|^[SI]×\d+; busiest \d\.\d%$/)
   })
 })
 

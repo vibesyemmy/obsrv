@@ -196,26 +196,52 @@ export function formatSnapshot(input: SnapshotInput): string {
   const { pid, rows, load, cores, psMs } = input
   const tree = treeOf(rows, pid)
   // A table read of MAX_ROWS or more was cut: a process that is not in what was read may be in the rest.
-  const cut = rows.length >= MAX_ROWS
+  const readWasCut = rows.length >= MAX_ROWS
   const lines: string[] = [
     `[launch] kill snapshot for pid ${pid} (ps took ${psMs} ms; load ${load.map(n => n.toFixed(2)).join(' ')} on ${cores} cores):`,
   ]
   if (tree.length === 0) {
     lines.push(
-      cut
+      readWasCut
         ? `  pid ${pid} was not found in the first ${rows.length} rows of the process table, and the read was cut there`
         : `  pid ${pid} is not in the process table: it had already gone when the snapshot ran`,
     )
   } else {
-    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.slice(0, MAX_TREE_ROWS).map(rowText))
-    if (tree.length > MAX_TREE_ROWS) lines.push(`  … and ${tree.length - MAX_TREE_ROWS} more descendants`)
+    const { shown, hidden } = pickTreeRows(tree)
+    lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...shown.map(rowText))
+    if (hidden.length > 0) lines.push(`  … and ${hidden.length} more descendants (${describeHidden(hidden)})`)
   }
   const root = tree[0]
   const parent = root ? rows.find(r => r.pid === root.ppid) : undefined
-  if (root) lines.push(...parentLines(root.ppid, parent, cut))
+  if (root) lines.push(...parentLines(root.ppid, parent, readWasCut))
   const top = topByCpu(rows, TOP_HOST_ROWS, new Set([...tree.map(r => r.pid), ...(parent ? [parent.pid] : [])]))
-  if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length >= MAX_ROWS ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
+  if (top.length > 0) lines.push(`  busiest other processes on the host (${readWasCut ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
   return capText(lines)
+}
+
+/**
+ * Which of a large app tree to print: the root, then the descendants that say the most, not the first ones in table order.
+ *
+ * A snapshot that left out the one runnable or stopped child would read "nothing busy here" while the busy one sat in
+ * the rows it did not print. So the slots go first to any descendant whose state is not plain sleeping or idle
+ * (`R`, `T`, `U`, `Z`), then to the busiest by `%cpu`, and what is left out is summarised (`describeHidden`). The printed
+ * rows keep the table's order.
+ */
+export function pickTreeRows(tree: readonly ProcRow[]): { shown: ProcRow[]; hidden: ProcRow[] } {
+  if (tree.length <= MAX_TREE_ROWS) return { shown: [...tree], hidden: [] }
+  const [root, ...rest] = tree as [ProcRow, ...ProcRow[]]
+  const notAsleep = (r: ProcRow): number => (/^[SI]/.test(r.state) ? 0 : 1)
+  const ranked = rest.map((r, i) => ({ r, i })).sort((a, b) => notAsleep(b.r) - notAsleep(a.r) || b.r.cpu - a.r.cpu || a.i - b.i)
+  const chosen = new Set(ranked.slice(0, MAX_TREE_ROWS - 1).map(x => x.i))
+  return { shown: [root, ...rest.filter((_r, i) => chosen.has(i))], hidden: rest.filter((_r, i) => !chosen.has(i)) }
+}
+
+/** What the rows that were left out of the tree were doing, so that leaving them out is itself a reading: `S×12, busiest 0.0%`. */
+export function describeHidden(hidden: readonly ProcRow[]): string {
+  const states = new Map<string, number>()
+  for (const r of hidden) states.set(r.state.charAt(0) || '?', (states.get(r.state.charAt(0) || '?') ?? 0) + 1)
+  const busiest = hidden.reduce((m, r) => Math.max(m, r.cpu), 0)
+  return `${[...states].map(([s, n]) => `${s}×${n}`).join(' ')}; busiest ${busiest.toFixed(1)}%`
 }
 
 /**
