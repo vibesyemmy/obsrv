@@ -128,9 +128,29 @@ export function shortCommand(command: string): string {
   return slash === -1 ? command : exe.slice(slash + 1) + (firstArg === -1 ? '' : command.slice(firstArg))
 }
 
-const rowText = (r: ProcRow): string =>
+/**
+ * Only the executable's name, with no arguments, for a process that is not the app's own.
+ *
+ * The app's own tree keeps its arguments, because they are what tell a GPU
+ * helper from a renderer. A host process is only being named as busy, and its
+ * arguments are somebody else's: on a laptop the busiest five can be anything,
+ * with whatever was passed on its command line, and this text lands in a log
+ * that gets pasted and uploaded.
+ */
+export function hostCommand(command: string): string {
+  const firstArg = command.indexOf(' -')
+  const exe = firstArg === -1 ? command : command.slice(0, firstArg)
+  const slash = exe.lastIndexOf('/')
+  // A path may hold spaces in the app's name (`Google Chrome Helper`); a bare command is its first word.
+  return slash === -1 ? (exe.split(/\s+/)[0] ?? exe) : exe.slice(slash + 1)
+}
+
+const rowLine = (r: ProcRow, command: string): string =>
   `  ${String(r.pid).padStart(7)} ${String(r.ppid).padStart(7)} ${r.state.padEnd(4)} ${r.cpu.toFixed(1).padStart(5)} ` +
-  `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(shortCommand(r.command), COMMAND_CHARS)}`
+  `${r.time.padStart(10)} ${r.etime.padStart(11)}  ${cut(command, COMMAND_CHARS)}`
+
+const rowText = (r: ProcRow): string => rowLine(r, shortCommand(r.command))
+const hostRowText = (r: ProcRow): string => rowLine(r, hostCommand(r.command))
 
 const COLUMNS = '  pid     ppid    st    %cpu       time     elapsed  command'
 
@@ -159,7 +179,7 @@ export function formatSnapshot(input: SnapshotInput): string {
     lines.push(`  the app and its descendants (${tree.length}):`, COLUMNS, ...tree.map(rowText))
   }
   const top = topByCpu(rows, TOP_HOST_ROWS, new Set(tree.map(r => r.pid)))
-  if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length} in the table):`, COLUMNS, ...top.map(rowText))
+  if (top.length > 0) lines.push(`  busiest other processes on the host (${rows.length >= MAX_ROWS ? `at least ${rows.length}, the read was cut there` : `${rows.length} in the table`}):`, COLUMNS, ...top.map(hostRowText))
   return capText(lines)
 }
 
