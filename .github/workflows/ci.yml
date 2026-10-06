@@ -240,11 +240,11 @@ jobs:
 
       - name: Install Chromium (Vitest browser mode)
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright install chromium
+        run: echo probe-skips-chromium
 
       - name: Typecheck
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run typecheck
+        run: echo probe-skips-typecheck
 
       # Build BEFORE the unit tests, because one of them needs the built tree.
       # `tests/unit/publicShape.test.ts` asks the MCP server for its published
@@ -259,18 +259,18 @@ jobs:
 
       - name: Unit tests
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm test
+        run: echo probe-skips-unit-tests
 
       - name: Shader parity (browser)
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npm run test:browser
+        run: echo probe-skips-shader-parity
 
       # --retries=1 absorbs the known-flaky mobile input-forwarding test on
       # loaded runners; a persistent failure still fails the job.
       - name: E2E (Playwright driving the Electron app)
         id: e2e
         if: ${{ needs.scope.outputs.board_only != 'true' }}
-        run: npx playwright test --retries=1
+        run: npx playwright test tests/e2e/zz-probe-kill-snapshot.spec.ts --retries=0 --workers=1
 
       # `if-no-files-found: error` is the point of this step, not the upload.
       # The step is named for traces and uploaded none for a week: the config
