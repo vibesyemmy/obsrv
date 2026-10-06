@@ -129,20 +129,25 @@ export function shortCommand(command: string): string {
 }
 
 /**
- * Only the executable's name, with no arguments, for a process that is not the app's own.
+ * A process that is not the app's own, named by the basename of the first word of its command and nothing after it.
  *
  * The app's own tree keeps its arguments, because they are what tell a GPU
  * helper from a renderer. A host process is only being named as busy, and its
  * arguments are somebody else's: on a laptop the busiest five can be anything,
- * with whatever was passed on its command line, and this text lands in a log
- * that gets pasted and uploaded.
+ * with whatever was passed on its command line (a URL with a token in it, a
+ * script and its argument), and this text lands in a log that gets pasted and
+ * uploaded. `ps` cannot say where an executable ends and its first argument
+ * begins when the path has spaces, so this does not try: it takes the first
+ * whitespace-delimited word, the executable or the start of its path, and
+ * keeps only the last part of that. The cost is a name: a program whose path
+ * has a space reads as its first word (`Google` for `Google Chrome Helper`).
+ * Cutting at the first ` -` instead keeps every argument that does not start
+ * with a dash, which is most of them (`curl https://x?token=...`).
  */
 export function hostCommand(command: string): string {
-  const firstArg = command.indexOf(' -')
-  const exe = firstArg === -1 ? command : command.slice(0, firstArg)
-  const slash = exe.lastIndexOf('/')
-  // A path may hold spaces in the app's name (`Google Chrome Helper`); a bare command is its first word.
-  return slash === -1 ? (exe.split(/\s+/)[0] ?? exe) : exe.slice(slash + 1)
+  const first = command.trimStart().split(/\s+/, 1)[0] ?? ''
+  const slash = first.lastIndexOf('/')
+  return (slash === -1 ? first : first.slice(slash + 1)) || first
 }
 
 const rowLine = (r: ProcRow, command: string): string =>
