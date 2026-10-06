@@ -126,6 +126,6 @@ with Idris's measured setup (1.52 to 2.27 minutes, median 1.87) one 900 s hang f
 
 **First `main` suite under the new cap:** `37401724231` (`6700d68d7`), suite job `112070219307`, 01:57:12Z to 02:19:55Z, **22 m 43 s**, 660 passed, e2e 21.1 minutes, 0 `✘`, 0 slow closes (Dogu `#3845`, Idris `#3846`).
 
-**Not measured, and said so:** what a 50-minute cap does to a real hang (neither run hung); `retries: 1`, which would double a recurring hang and is in no figure; the cap is enforced late (20 s on `#561`'s
+**Not measured, and said so:** what a 50-minute cap does to a real hang (the one run under the cap, `37401724231`, did not hang; the other `main` run read, `37401718159`, was `#584`'s merge, before the cap changed); `retries: 1`, which would double a recurring hang and is in no figure; the cap is enforced late (20 s on `#561`'s
 attempt 1, 28 s on the probe), which the table does not include. **The number's real test is the next suite that runs long, not an argument** (Henry, `#3836`). Two wording points from Idris's gate (`#3809`) are left for
 the next edit to that comment: `ci.yml`'s quote of the old "30m0s" observation reads as the current cap, and "sized from the logs and not from a round number" overstates beside a 50.
