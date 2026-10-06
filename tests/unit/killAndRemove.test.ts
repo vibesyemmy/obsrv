@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { REMOVE_OPTIONS, killAndRemove } from './killAndRemove'
@@ -72,7 +72,8 @@ describe('killAndRemove, the contract', () => {
 
 describe('killAndRemove against a real writer that outlives the process it was started by', () => {
   // The parent starts a detached writer and waits. Killing the parent does not stop the writer, which keeps creating
-  // files in the directory for another 700 ms: the shape of board-serve's `git` and `tar` children.
+  // files in the directory for 700 ms: the shape of board-serve's `git fetch` child, which is the server's child and
+  // not the test's.
   const WRITER = `
     const { writeFileSync } = require('node:fs')
     const { join } = require('node:path')
@@ -89,7 +90,15 @@ describe('killAndRemove against a real writer that outlives the process it was s
   it('removes the directory although something is still writing into it after the parent is gone', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'kill-and-remove-'))
     const parent = spawn(process.execPath, ['-e', PARENT, dir], { stdio: 'ignore' })
-    await new Promise(r => setTimeout(r, 150))
+    // Until the writer has made its first file it is not a writer, and the old teardown passes this test vacuously
+    // (measured by Wren on the first version, which slept a fixed 150 ms: on a slower machine the writer was not up
+    // yet at the kill). So wait for the file, and fail loudly if it never appears.
+    await vi.waitFor(
+      () => {
+        if (readdirSync(dir).length === 0) throw new Error('the writer has not made its first file')
+      },
+      { timeout: 8_000, interval: 10 },
+    )
     await killAndRemove([parent], [dir])
     expect(existsSync(dir)).toBe(false)
   }, 20_000)
