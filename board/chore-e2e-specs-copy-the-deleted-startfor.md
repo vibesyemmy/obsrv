@@ -1,9 +1,8 @@
 ---
 title: "two e2e specs still hold a copy of the `startFor` rule that `#558` deleted, and one of them races its own poll"
-column: doing
+column: done
 kind: chore
 owner: "Idris"
-waiting: ""
 release: later
 order: 130
 ---
@@ -44,3 +43,18 @@ Both specs get fixed in one change, with the poll race:
 2. **A control for the copy:** after the change, a sabotage of `answeringStart` (take the NEWEST unanswered start) must fail the specs under option A, or the names must say what they check under option B. The PR states which.
 3. **`--repeat-each` fresh-app runs on both specs, idle and under bounded PID-killed load, with the pool-shape floors still asserted.** It will say plainly that the original failure was seen once and not reproduced, so a green sweep proves little about the race.
 4. **It is a test change, so it is gated** (Dogu); it will say what it does not show.
+
+## Done 2026-10-06: `#567` merged as `17433b716`, and what it did and did not show
+
+**Option A for `redirect-mirrored-pool.spec.ts`, retirement (option C) for `redirect-forcing-route.spec.ts`; no `src/` change.** `#567` was gated by Dogu at the head it merged (`c4880e4e8`; the PASS and the counted run `37319268852` are in `#3642`), and merged as `17433b716`: parent 2 is that gated head, the tree equals `git merge-tree` of its parents, and the files are the three the PR named (checked from the objects when it landed). The pool spec now reads the product's own answer from `commitTrace()` (`mirrorTerms.answeredOwnStart`, and `mirroring === false`) instead of a copy of the deleted `startFor` rule; the forcing-route spec, whose premise (pool depth, starts never retired) `#558` removed and whose assertions were a subset of the pool spec's, is deleted, with a dated note in `docs/e2e-flakes.md`.
+
+**Against the four checks this card set:**
+
+1. **The race control.** The URL-only poll with the target's navigation started 600 ms late: fails 3 of 3; the wait for the redirect's own commit: passes 3 of 3 under the same delay.
+2. **The copy control.** `answeringStart` ignoring `answered`: the unconverted spec passes 3 of 3 (blind), the converted fails 3 of 3. **The `did-stop-loading` retire-all removed: the unconverted spec passes 3 of 3, the converted one fails in most runs and not all** (10 of 10, then 17 of 20 at `4e71f7ae`, which is code-identical to the merged head (comments only), and 9 of 13 in Dogu's independent set; 36 of 43 pooled), the passes being runs whose pool left no stale unanswered document-initiated start. Dogu's sabotage set also showed the newest-unanswered rule caught in 2 of 3 and **the pre-`#558` rule (skip mirrored starts) seen by neither spec nor the unit harness: not known whether that is equivalence or a gap**.
+3. **Sweeps.** Fresh app per run, `--retries=0`: idle 40 of 40, under 24 CPU burners (killed by PID) 60 of 60, on the final code. **The first loaded sweep found a defect in the spec itself** (1 of 30: a mirrored commit still in flight when the boundary was taken, read as the redirect's), fixed by settling the pool before the boundary, two guards that name a setup failure as one, and a straggler control (the earlier version fails 6 of 6, the settled one passes 6 of 6).
+4. **Gated and said plainly what it does not show:** the original CI failure (run `37293811824`) was seen once and not reproduced, so a green sweep proves little about it; nothing here is a CI rate; the evidence is one macOS machine, `file://` fixtures, Electron 43.4.1.
+
+**One thing that happened after the move was written, kept here because a Done card should not leave it unsaid:** on 2026-10-06 the delivered pool spec failed a FIRST attempt in CI (run `37394200312`, `#580`'s pull-request run, test 492, rescued by retry #1). Its own printed record is the same shape as `arrivals.spec.ts:218`'s first-try failure: the bus's mirrored `hairline` load arrived 2 ms after the redirect page committed and no document-initiated start was recorded, so the page's own redirect never happened in the target. **Of the 11 CI attempts of that spec I have read, from the PR's own runs onward (`4e71f7a`'s first), 10 passed first try and this one did not.** The local sweeps this card asked for (idle 40 of 40, burners 60 of 60) could not see it, because on a developer machine the target wins the race. This card does not claim it fixed: it is the same trigger as `bug-redirect-note-missing-not-late`'s, and the change that removes it from both specs is separate work.
+
+**Separate from this card:** diagnosing the first-try failure of `arrivals.spec.ts:218` (run `37346121793`) found a race in that test's own premise; that is tracked on `bug-redirect-note-missing-not-late` and `bug-measured-page-is-not-the-asked-page`, not here, and nothing on this card claims it.
