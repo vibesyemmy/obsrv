@@ -91,8 +91,8 @@ What it does not show, and the table says so on its last row:
 
 The first version of the real-writer test slept 150 ms and then killed the parent. If the writer had not started by then, the old teardown had nothing to
 race and **passed the control**. Wren measured it (the parent delaying the writer by S ms, 8 runs per cell, old teardown): `ENOTEMPTY` 8 of 8 at S=0, 2 of 8 at
-S=100, 0 of 8 at S=250 and S=500. Henry re-ran his own old-vs-new probe, which used the same 150 ms, with the delay (6 trials per cell): old 6/6 red at S=0,
-**2/6 at S=100, 0/6 from S=250**, so his "0 of 6 clean" figure above is about that laptop at that moment, not about the control's power. CI is where this matters: the one
+S=100, 0 of 8 at S=250 and S=500. Henry re-ran the old-vs-new probe of room message 4066, which used the same 150 ms, with the delay (6 trials per cell): old 6/6 red at S=0,
+**2/6 at S=100, 0/6 from S=250**, so the "0 of 6 clean" figure above is about that laptop at that moment, not about the control's power. CI is where this matters: the one
 real hang's snapshot printed load 15.19 on 3 cores, where a node child can take well over 100 ms to start.
 
 The test now waits for the writer's first file (`vi.waitFor`, 10 ms interval, 8 s cap) and **fails** if none appears, so the writer is provably running when the parent
