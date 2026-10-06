@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, rendererWindow } from './launch'
+import { holdNativeOutOf } from './holdNativeOut'
 
 /**
  * "The page navigated after it loaded" is about the PAGE moving, not about
@@ -173,6 +174,13 @@ test.afterAll(async () => {
   await app.close()
 })
 
+/** Set by a test that holds the native pane out of an address; released after it, whatever the outcome. */
+let releaseNative: (() => Promise<void>) | undefined
+test.afterEach(async () => {
+  await releaseNative?.()
+  releaseNative = undefined
+})
+
 test('the target mirroring the native pane is not the page navigating', async () => {
   // Only the NATIVE pane is driven, so every commit the target makes is the
   // bus's doing. The target ends on the address it started on, and must say
@@ -222,6 +230,14 @@ test('a page that really does redirect after loading still says so', async () =>
   // the case above and this one with it would be worse than the defect.
   await call('navigate', { url: HAIRLINE })
   await new Promise(r => setTimeout(r, 300))
+  // **The native pane is held out of the redirect page, so the target's own redirect has no competitor**
+  // (`holdNativeOut.ts` says why: `navigate` loads both panes, and when the native pane's redirect landed first
+  // the bus loaded the landing into the target BEFORE the page's script ran, so the page never redirected itself
+  // there. The idle margin was 4 to 6 ms, and with the target on `cpu-4x` 21 of 30 runs failed; one CI run of
+  // `main` failed its first attempt this way, `37346121793`). This is the case where the page really does
+  // redirect in the target. **The other ordering, where the bus wins, is not asserted here and is not pinned
+  // either way**: it is `bug-measured-page-is-not-the-asked-page`'s question.
+  releaseNative = await holdNativeOutOf(app, [REDIRECT])
   await call('navigate', { url: REDIRECT })
   await expect.poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.webContents.getURL()), { timeout: 10_000 }).toBe(HAIRLINE)
 
@@ -235,6 +251,19 @@ test('a page that really does redirect after loading still says so', async () =>
   const notes = await notesNow()
   const note = movedIn(notes)
   const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined, notes)
+  // **A failure that names its own cause.** Held out, the native pane never lands `hairline`, so the bus has
+  // nothing to mirror into the target after the redirect page starts. A mirrored `hairline` start there means
+  // the hold-out is not in force and this run is not the case the test is about; say so before the product's
+  // answer is read, not as a missing note.
+  if (seen.reachable) {
+    const redirectAt = seen.starts.map(x => x.url).lastIndexOf(REDIRECT)
+    expect(redirectAt, `the redirect page's own start is not among the target's last ${seen.starts.length} starts: ${JSON.stringify(seen.starts)}`).toBeGreaterThanOrEqual(0)
+    const mirroredAfter = seen.starts.slice(redirectAt + 1).filter(x => x.url === HAIRLINE && x.mirrored)
+    expect(
+      mirroredAfter,
+      `the native pane was held out of the redirect page, yet the bus mirrored hairline into the target after it started: the hold-out is not in force, so this run is not about the page's own redirect (${JSON.stringify(mirroredAfter)})`,
+    ).toEqual([])
+  }
   // **The message says what the reply DID carry**, because "no note" and "a
   // different note" are the two readings eight sightings could not separate, and
   // the second one is not a silence at all. Whoever reads the next failure should
