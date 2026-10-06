@@ -142,6 +142,7 @@ describe('rotate is the only way to turn a screen', () => {
     // the message in `content` — so a test written around a rejection would
     // pass on a server that accepted the key and returned any error at all.
     // This reads the sentence.
+    const tools = await listTools()
     const refusals = await withClient(async c => {
       const out: Record<string, string> = {}
       for (const [name, args] of [
@@ -168,7 +169,23 @@ describe('rotate is the only way to turn a screen', () => {
     // at the tools that have it where it does not.
     expect(refusals.obsrv_snap, 'snap takes rotate, so its refusal should say to pass it').toContain('rotate: true')
     expect(refusals.obsrv_presets, 'presets cannot rotate, so it must not promise rotate').not.toContain('pass `rotate: true`')
-    expect(refusals.obsrv_presets, 'presets should point at the tools that can rotate').toMatch(/tools that take `rotate` are .*obsrv_snap/)
+    // **The named list must EQUAL the tools that publish `rotate`, not merely
+    // contain one of them.** `toMatch(/… are .*obsrv_snap/)` passed on two
+    // wrong lists that Idris and Wren each built as mutants (#4047, #4048): a
+    // set filled for every tool names all nine including the non-rotating ones,
+    // and a set frozen at registration names only the takers registered so far
+    // — `obsrv_diff` would have said "obsrv_snap." alone. Both satisfy a
+    // substring and neither is the sentence a caller can act on.
+    const takers = tools
+      .filter(t => (t.inputSchema as { properties?: Record<string, unknown> })?.properties?.rotate !== undefined)
+      .map(t => t.name)
+      .sort()
+    expect(takers.length, 'no tool publishes rotate — the list below would be vacuous').toBeGreaterThan(3)
+    const named = /tools that take `rotate` are ([^.]+)\./.exec(refusals.obsrv_presets ?? '')?.[1] ?? ''
+    expect(
+      named.split(', ').map(s => s.trim()).sort(),
+      `presets named "${named}" but the tools that publish rotate are ${takers.join(', ')}`,
+    ).toEqual(takers)
   })
 
   it('every tool publishes an input schema that refuses unknown keys', async () => {

@@ -11,6 +11,7 @@ import { pruneTempDirs } from '../shared/pruneTemp'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
+import { driveReplyStatus } from './driveReply'
 import { refuseUnknownInputKeys } from './strictInput'
 import { rejectUndeclaredKeysUnderTest } from './strictOutput'
 import { flowRunnerDeps, runFlowTool } from './flowTool'
@@ -2499,7 +2500,11 @@ server.registerTool(
       const status = parseControlStatus(await controlCall(live.info, 'status', {}, LIVE_STATUS_TIMEOUT_MS))
       if (!status) return toolError('the control server returned a malformed status')
       const structured = {
-        ...status,
+        // `driveReplyStatus`, not `...status`: the spread is the only place a
+        // reply's keys come from the app rather than from the handler that
+        // declares them, and it shipped an `orientation` the published schema
+        // had stopped declaring (src/mcp/driveReply.ts).
+        ...driveReplyStatus(status),
         // The app's rotation flag said plainly, beside the word it comes from
         // — the same derivation obsrv_snap does on both of its surfaces.
         rotated: rotatedFromOrientation(status.orientation),
