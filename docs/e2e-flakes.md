@@ -1777,8 +1777,13 @@ read, 10 passed first try and this one did not (`#3819`); Dogu holds three passe
 `ad3650646`) and this one. **That is not a rate**: the runs were read for other reasons and nobody sampled them.
 
 **What this entry is not.** No cause is confirmed here and no card is filed by it; the run was green and `#580` is not
-held by it (a one-line timeout change cannot touch a spec). The change that addresses it, holding the native pane out of
-the redirect page in both this spec and `arrivals.spec.ts:218`, is Idris's and is not built (`#3821`).
+held by it (a one-line timeout change cannot touch a spec). **Added the same day, after it was first written:** the change that
+addresses it, holding the native pane out of the redirect page in both this spec and `arrivals.spec.ts:218` so the target's own
+redirect has no competitor, is Idris's and **merged as `9d60fcd0a` (`#584`, Dogu's PASS `#3834`)**; the spec's test is now at
+`:194`, not `:176`. Before it, the unforced spec on `cpu-4x` failed 12 of 20 in Dogu's controls (13 of 20 in Idris's) with this
+entry's message; after it, 30 of 30 on `cpu-4x` and on `cpu-6x`. **The throttle is a model of CI's renderer, not a measurement, and
+no CI run has yet said whether the first-attempt failure is gone: the first run of the spec on `main` after `#584` is the first
+that can.**
 
 ## `mirror-302.spec.ts:99` and `native-pane.spec.ts:62` — two 30 s hangs with one shape, 2026-09-29
 
