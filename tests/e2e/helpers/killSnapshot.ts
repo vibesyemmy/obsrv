@@ -156,9 +156,8 @@ function capText(lines: readonly string[]): string {
     kept = kept.slice(0, -1)
     capped = true
   }
-  const text = kept.join('\n') + (capped ? `\n${NOTE}` : '')
-  // One line can still be longer than the byte cap on its own; cut it by bytes.
-  return Buffer.byteLength(text, 'utf8') <= SNAPSHOT_MAX_BYTES ? text : Buffer.from(text, 'utf8').subarray(0, SNAPSHOT_MAX_BYTES).toString('utf8')
+  // No line can exceed the byte cap by itself: a command is cut to COMMAND_CHARS characters, so a line is a few hundred bytes at most.
+  return kept.join('\n') + (capped ? `\n${NOTE}` : '')
 }
 
 /** One running `ps`: its output, and a way to release it that cannot throw. */

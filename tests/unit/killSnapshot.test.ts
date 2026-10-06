@@ -99,6 +99,15 @@ describe('formatSnapshot', () => {
     expect(text.split('\n').every(l => l.length < 220)).toBe(true)
   })
 
+  it('caps the number of lines on its own, when short rows would not reach the byte cap', () => {
+    const short = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 x`).join('\n')
+    const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${short}`), load: [1], cores: 2, psMs: 5 })
+    // The line cap and the cap's own note: 41 lines at most, and under the byte cap, so the byte cap did not cut it and only the line cap can have.
+    expect(text.split('\n').length).toBeLessThanOrEqual(SNAPSHOT_MAX_LINES + 1)
+    expect(Buffer.byteLength(text, 'utf8')).toBeLessThan(SNAPSHOT_MAX_BYTES)
+    expect(text).toContain('output capped')
+  })
+
   it('caps lines and bytes when the table is large, and says it did', () => {
     const many = Array.from({ length: 400 }, (_, i) => `${5000 + i} 4001 S ${(i % 90).toFixed(1)} 0:00.01 00:01 /bin/child-${'z'.repeat(80)}${i}`).join('\n')
     const text = formatSnapshot({ pid: 4001, rows: parsePs(`4001 1 S 0.0 0:00.01 00:01 /app\n${many}`), load: [1], cores: 2, psMs: 5 })
