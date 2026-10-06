@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { killAndRemove } from './killAndRemove'
 
 /**
  * `scripts/board-serve.js`: the board served over http, repainting when the ref
