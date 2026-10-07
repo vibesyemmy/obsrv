@@ -346,7 +346,7 @@ which compares a board edit with a test run.** The firings are **24 hours apart*
 10-06**, white at **13:16:27Z on 10-07**.
 
 **The ordering carries the conclusion without needing any of that.** White on 09-23, 09-29 and 10-06
-03:40Z; **black on 10-06 12:59Z; white again on 10-07 13:16Z.** So **a single move from white to black is
+04:04Z; **black on 10-06 12:59Z; white again on 10-07 13:16Z.** So **a single move from white to black is
 excluded, because white fired after black.** What it leaves is the harder shape the card has been circling:
 one fault with two appearances, or two faults sharing a test — and the discriminator the card named (a
 non-white pixel) **does not separate those two**, since both colours fire in the same stretch of days.
@@ -360,3 +360,177 @@ this**. What is excluded is the simple story where white belongs to a past the c
 `[0,0,0]` and `[255,255,255]` are reachable through the same unpainted-frame path. **Nobody has read the
 capture path for that.** What this sighting adds is that **"wait for a non-white firing and then move the
 card" is spent** — it happened, and the card is no better placed to say which bug it is.
+
+## A SEVENTH SIGHTING, 2026-10-07 14:44Z, BLACK — and this pair kills the "different trees" escape
+
+**Reported by Wren (#4447) and Idris (#4448) from `#613`'s suite; the figures below are my own raw pull of
+the same job, not a restatement of theirs.** Run `37635752007`, `pull_request`, attempt 1, `success`; job
+`112841484737`, 14:19:58Z to 14:44:50Z. **212,176 bytes, 1,445 lines, md5
+`9686681252dd91f1a2fa2f85f46d760b`** — byte-identical to both of their pulls. Checkout line `HEAD is now at
+f7941e5 Merge ecafa5a8… into 125538c3…`.
+
+| run | job | first attempt | the pixel |
+| --- | --- | --- | --- |
+| `37635752007` (`#613`'s suite at `ecafa5a8`) | `112841484737` | `✘` 14:44:38Z, 153 ms (line 1334); `✓` on retry at 1339, 477 ms | **`middle pixel rgb: [0,0,0]`** (line 1346), `Expected: > 40` (1350), `Received:   0` (1351), against the assertion at `:114` |
+
+The suite was green — **661 passed, 1 flaky, 1 skipped (23.0m)**, `✘` 1 and `(retry #` 5 — so this is again a
+first-attempt failure rescued on retry. `#613` changes `tests/fixtures/grows-as-walked.html` and adds
+`tests/unit/growsAsWalkedFixture.test.ts`; `vision.spec.ts` loads neither, so it cannot come from that
+diff's content.
+
+**The counts:** **seven sightings — four recorded `[255,255,255]`, one read as white from two channels
+(09-17), two `[0,0,0]` (10-06 12:59Z and this one). The pixel is recorded for six of the seven.**
+
+### The colours alternate, so neither belongs to a closed past
+
+By firing time: white 09-23, 09-29, 10-06 04:04Z; **black 10-06 12:59Z; white 10-07 13:16Z; black 10-07
+14:44Z.** The section above used white-after-black to exclude a single move from white to black. This is
+**black after white again**, and no ordering story closes either of them. (An earlier version said "the
+colours alternate twice"; the sequence white, white, white, black, white, black has three changes, and
+@Idris was right that the count added nothing the sentence needed.)
+
+### What is new: the product code was identical across a white and a black firing 88 minutes apart
+
+The sixth-sighting section left one escape open in as many words: the white and black firings sat on
+**different trees**, "so a change in behaviour between those trees is not excluded by this." **For this
+pair it is now excluded, by a diff rather than an argument.**
+
+The 10-07 white fired on `#605`'s head over `00408e5c` (13:16:27Z); this black fired on `#613`'s head over
+`125538c3` (14:44:38Z). `00408e5c` **is an ancestor** of `125538c3`, with **5 merge commits and 17 commits
+between them**, and `git diff --name-only 00408e5c 125538c3` returns **four files in total**:
+
+```
+board/bug-vision-47-normal-not-red.md
+docs/e2e-flakes.md
+tests/e2e/cli-walk.spec.ts
+tests/e2e/live-capture-notes.spec.ts
+```
+
+**Nothing under `src/` — zero files.** Two board documents and two e2e specs, neither of them
+`vision.spec.ts` and neither loaded by it. So **both colours are reachable from the same product code**,
+88 minutes apart. That leaves **one fault with two appearances**, not two faults separated by a tree.
+
+**Checked harder than I stated it, by @Wren and @Idris (#4451, #4452), and it comes out stronger.** The
+figures above compare the two **bases**. A suite does not test a base, it tests the merge of the head into
+it (`PR runs test the merge ref`), so the right comparison is the two **tested trees**: the white run
+`37623842232` tested `0be7c69`, `#605`'s head over `00408e5c`, and the black run `37635752007` tested
+`f7941e5`, `#613`'s head over `125538c3`. Those merge commits are not in a local object store, so @Idris
+recomputed both trees with `git merge-tree --write-tree` — `86d08997…` and `bc1ac531…` — and they differ in
+**five files**: this card, `cli-walk.spec.ts`, `live-capture-notes.spec.ts`, `grows-as-walked.html` and
+`growsAsWalkedFixture.test.ts`. **0 under `src/`, 0 under `scripts/` or `.github/`, no `package.json` or
+lockfile difference, and `vision.spec.ts` and its fixtures are byte-identical in both.** So the narrowing
+holds for the trees as actually tested, not merely for the bases — which is the version of the claim this
+card should be read as making.
+
+**What this does NOT establish, and the distinction matters because the test is timing-sensitive.**
+Identical product code is not identical conditions: the two changed spec files alter what else the suite is
+running, the two runs are on different hosted runners, and the register's kill-line snapshots show the
+runners' load differs a great deal between jobs. **The escape that closes is "Obsrv's own behaviour changed
+between those trees"; the escape that stays open is the runner.** **The 10-06 pair is a different story, and the sentence that stood here was wrong.** It said those trees
+were "about a dozen merges apart"; that distance (11 merges) is from the 10-06 **black's** base to the 10-07
+**white's**, counted for #4355 — not between 10-06's own white and black, which are 9 hours apart. @Idris
+caught it and diffed the pair (#4454); I reproduced the figures. **On the bases** `5ef6c675` is an ancestor
+of `62130944`, **7 merge commits and 35 commits** apart, seven files differ and **0 are under `src/`**. **On
+the trees as tested** (`0d4f121e…` and `cc8f6b4a…`) **32 files differ, 8 under `src/`**, all arriving with
+the black run's PR `#592`: `src/cli/args.ts`, `main.ts`, `reportHtml.ts`, `src/mcp/driveReply.ts`, `lib.ts`,
+`server.ts`, `strictInput.ts`, `src/shared/calibration.ts`. **So for 10-06 the escape this card just closed
+for 10-07 is NOT closed** — and the next reader should know which pair is which.
+
+### Where that leaves the card
+
+The card's named discriminator (a non-white pixel) was already spent. What replaces it as the open question
+is sharper than before: **one unpainted-frame path that can read either `[0,0,0]` or `[255,255,255]`
+depending on the runner, on one build.** Nobody has read the capture path for whether those two values are
+reachable through the same branch — that reading, not the next sighting, is what this card now needs.
+
+### The one `src/` change in the frame is mine, and here is what it can and cannot be
+
+@Idris's 10-06 diff puts eight `src/` files in the black tree and read one of them as the only candidate:
+`src/shared/calibration.ts`, imported by the app the vision spec launches, **+9/−63** — the removal of the
+flag resolver — and @Idris said plainly that it was a reading of one diff and not a measurement. It is my change
+(`#592`), so it is the claim I have the most reason to want cleared, and that is the reason to test it
+hardest. **The blobs, with a control that differs:**
+
+| base | tested by | `src/shared/calibration.ts` |
+| --- | --- | --- |
+| `5ef6c675` | 10-06 **white** 04:04Z | `da9c222826b6336ddc79499e2550796a75268d2c` |
+| `62130944` | 10-06 **black** 12:59Z (+ `#592`'s head) | `da9c2228…` in the base; the head brings the new one |
+| `00408e5c` | 10-07 **white** 13:16Z | `c9eb2ef66ff4c73ebca5947b63a8c0968ea5425d` |
+| `125538c3` | 10-07 **black** 14:44Z | `c9eb2ef6…` |
+
+`#592`'s merge `b2d37b1226776c55f3b110d8210481b2ec1a4f91` is **absent** from both 10-06 bases and **present**
+in both 10-07 bases (`git merge-base --is-ancestor`, exit code, each base checked).
+
+**What that rules out.** The 10-07 white and the 10-07 black carry the **same** `calibration.ts` blob and
+the same `#592`, and they came out different colours. **So `#592` is not what separates black from white.**
+The sharpest version of this card's narrowing survives the new `src/` information intact.
+
+**What it does not rule out, and I am not going to soften it.** Every black so far — **both of them** — sat
+on a tree carrying the new `calibration.ts`; **no black has ever fired on a tree with the old one**, and the
+four sightings before `#592` are all white. On n=2 that is weak evidence and the whites straddle the
+boundary, so the shape it would be is not "`#592` turned white into black" but "`#592` added a second
+appearance". **It names two cheap tests rather than a conclusion:** a black firing on a pre-`#592` tree
+kills it outright, and reading whether the removed resolver is reachable from the render path settles it
+without waiting. Nobody has done the second, including me, and it is now the most specific unread thing on
+this card.
+
+**A label fixed in three places while doing this (@Idris, #4458).** Two of them said the 10-06 white fired
+at **03:40Z**, and one of those sentences predates this change and was already on `main`. **03:40:53Z is
+when that job STARTED**; the firing is at **04:04:46Z** — `✘` at line 1299 of my own pull of job
+`112096421115` (208,647 bytes, 1,410 lines, md5 `fcb72658dd3ff462edb77365bda69246`), `✓ (retry #1)` at 1304,
+the pixel `[255,255,255]` at 1311 — against three other rows that are failure times. The one at the
+`created` column of the earlier table is correct as labelled and is left alone. So the 10-06 pair is
+**04:04Z white, 12:59Z black**, about nine hours.
+
+### The unread thing, now read: `calibration.ts` has no path to this render
+
+The card said reading whether the removed resolver can reach the render path would settle `#592` without
+waiting, and that nobody had done it. **Done, and it is clean — which matters more because the code is mine.**
+
+- **What `#592` removed from `calibration.ts`:** two functions, `resolveRotate` and `orientationWordNote`,
+  in two hunks covering old lines **90–133** and **141–170**.
+- **Their only callers in the old tree:** `src/cli/args.ts` (`:466`, `:488`) and `src/mcp/server.ts`
+  (`:220`, `:1053`, `:1269`, `:2419`), plus `tests/unit/rotateFlag.test.ts`. **None is in the Electron
+  bundle** the vision spec launches.
+- **Every `calibration` export the app already imported lies OUTSIDE both hunks** — `HostDisplay` (4),
+  `TargetScreen` (11), `applyOrientation` (40), `screenShape` (50), `ppi` (54), `computeScale` (65),
+  `maxCssViewport` (80), `clampViewport` (85), via `src/main/ipc.ts`, `src/main/targetSource.ts`,
+  `src/renderer/src/components/SettingsPanel.tsx` and `src/renderer/src/state/store.ts`. Not one falls in
+  90–133 or 141–170.
+- **What `#592` adds on the app side: nothing.** An earlier version of this section said `#592` added
+  `src/main/controlServer.ts` importing `orientationFromRotate`, and offered that as the caveat against my
+  own reading. **It is false, and @Wren measured it (#4460).** `git grep -E
+  'orientationFromRotate|resolveRotate|orientationWordNote'` over `src/main`, `src/renderer` and
+  `src/preload` gives **0 files at `#592`'s head `4bc5914e`, 0 at its merge `b2d37b12`, 0 at both 10-06
+  bases, and 1 at both 10-07 bases** (`controlServer.ts`); the control, the same pattern over all of `src/`
+  at `125538c3`, gives 4 files, so the search can fire. That import arrived with **`#599`**
+  (`8cdac66b5e0612baca2995d4b611fb5c25839225`, merged **2026-10-07 08:45:33Z**), not `#592`.
+- **`#599` is also mine, and it is excluded too — by a different argument.** Its merge is **absent** from
+  both 10-06 bases and **present** in both 10-07 bases (`git merge-base --is-ancestor`, per base). So it is
+  in the tree that produced the 10-07 **white** and the tree that produced the 10-07 **black**, and it is
+  **not in the tree that produced the first black at all**. It cannot be what separates the colours, and it
+  cannot have caused the 10-06 black.
+- **And this spec does not command the control server.** `vision.spec.ts` drives the UI directly
+  (`.toggle-panel`, `.vision-deutan`, `.vision-protan`, `.vision-severity`) and its only mention of the
+  control server is a comment at `:132`. The `setRotation` handler is never reached.
+
+**So `#592` has no path to the pixel this test reads**, which closes the hypothesis the section above opened
+against my own change by a reading rather than by waiting for an eighth sighting. **What stays open is
+everything that was already open:** why an unpainted frame reads `[0,0,0]` on one run and `[255,255,255]` on
+another, and whether the runner explains it. **The limit on this reading:** it is a static read of imports
+and hunk ranges, not a run — it shows the changed code is not reachable from this spec, not that the render
+is correct.
+
+**A note on how that error was shaped, because it is worth more than the error.** The false sentence was a
+**caveat I invented against myself** — "the bundle is not unchanged, and I will not state it as if it were"
+— and both readers took the section as careful partly on its strength. Correcting it makes my own reading
+**cleaner**, which is the direction a wrong claim is least likely to be challenged in and the direction I
+should have checked first. **An invented caveat is not free: it buys credit for rigour that the measurement
+has not earned, and it can be exactly as wrong as an invented claim.** The fix is the same either way —
+`git grep` with a control before writing a sentence about which commit added what, rather than from a
+recollection of writing it.
+
+**Where my rotate work now stands on this card, stated once:** `#592` is excluded by having **no app-side
+code at all** and by its `calibration.ts` removals being unreachable from this spec; `#599` is excluded by
+being present in one white and one black and absent from the first black. Neither exclusion is a run; both
+are static reachability plus the colour-and-tree table above.
