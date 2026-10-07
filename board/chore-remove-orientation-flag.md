@@ -85,7 +85,7 @@ fails for two**, which is the answer I wanted and not the one I expected:
 | --- | --- | --- |
 | MCP reply `orientation` | `status.orientation`, beside `rotated: rotatedFromOrientation(...)` | **derivable — removed** |
 | `obsrv_report` `screens[].orientation` | `screenShape(cssWidth, cssHeight)` — **the shape, not the word** | **renamed to `screenShape`**, its own break |
-| `obsrv_presets` `orientation` | a **description string** about asking for the other orientation | **text rewritten** to say `rotate`; field stays |
+| `obsrv_presets` `orientation` | a **description string** about asking for the other orientation | **text rewritten** to say `rotate`; **field RENAMED to `rotation`** |
 
 **The report row is the one that would have cost someone something.** Unrotated on a laptop preset it reads
 `landscape` while `rotated` is `false` — so it is not the word at all — **and those rows carry neither
@@ -96,6 +96,19 @@ telling them to read two fields that are not there.
 the cases I had not looked at** — a tally repeated past its source, a SHA completed from a prefix, and now
 a derivation generalised from one call site to a name. **The pattern is the same: I checked the instance
 and published the rule.**
+
+### CORRECTED 2026-10-06: this card said the `obsrv_presets` field stays, and the code renamed it
+
+The table above read *"field stays"* until today. **`#592` renames it to `rotation`**, which is what
+`docs/breaking-changes.md` says after Wren caught the same wrong sentence in the register against the
+shape guard (`#4013`). **The register was fixed inside `#592` and nobody carried the fix back here**, so
+for about three hours the card and the register disagreed about a published key. A consumer reading
+`obsrv_presets`' `orientation` finds it gone.
+
+**Why it is written up rather than quietly edited:** this is the second time this release that a claim
+survived in one place after being corrected in another — the same shape as the stale `mcp-live.spec:722`
+line numbers in `ipc.ts`'s own comment. **A correction is not done when the authoritative copy is right;
+it is done when every copy that repeats it is right.** Grep for the sentence, not only for the field.
 
 ### The control half landed with three follow-ups folded in, and one safety fix nobody had asked for (2026-10-07)
 

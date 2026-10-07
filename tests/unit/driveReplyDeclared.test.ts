@@ -23,9 +23,11 @@ import { DRIVE_DROPPED_STATUS_KEYS, driveReplyStatus } from '../../src/mcp/drive
  * reason `scripts/public-shape.js` gives: "declared" means what a client holds.
  *
  * **What it does not check:** that the handler calls `driveReplyStatus`. Put
- * `...status` back and this still passes — the live specs in `mcp-live.spec.ts`
- * are what notice, as they did. This makes the *set relation* a unit-level
- * fact so a new field on the app's status costs one red unit test instead of
+ * `...status` back and this still passes — **measured, not assumed**. The
+ * wiring is `tests/unit/driveReplyWired.test.ts`'s job, which drives the built
+ * server against a stub control server and goes red on exactly that mutant
+ * while this file stays green. This one makes the *set relation* a unit-level
+ * fact, so a new field on the app's status costs one red unit test instead of
  * 29 red e2e tests half an hour later.
  */
 
