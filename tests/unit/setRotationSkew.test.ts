@@ -84,6 +84,29 @@ describe('rotating the live screen across the app/server version skew', () => {
     expect(app.seen.filter(c => c === 'setRotation' || c === 'setOrientation')).toEqual(['setRotation', 'setOrientation'])
   })
 
+  it('the fallback carries `rotate: false` too, and does not just ask for the rotated screen', async () => {
+    // **The mutant this exists for, found by Idris on the pushed head (#4201):**
+    // a fallback that ignores `rotate` and always sends `orientation:
+    // 'landscape'` passed every other test here, because each of them only ever
+    // asks for `rotate: true`. Against an older app that would answer
+    // `obsrv_drive { rotate: false }` with a ROTATED screen — a wrong answer the
+    // caller cannot detect, which is the whole class this release is about.
+    // Both directions through the deprecated name, so neither value is merely
+    // "the state it was already in".
+    app = await startStubApp({ unknown: ['setRotation'] })
+
+    const on = await driveRotate(app.controlFile, true)
+    expect(on.isError, on.text.slice(0, 300)).toBe(false)
+    expect(app.orientation()).toBe('landscape')
+
+    const off = await driveRotate(app.controlFile, false)
+    expect(off.isError, off.text.slice(0, 300)).toBe(false)
+    expect(app.orientation(), 'the fallback asked for a rotated screen when none was wanted').toBe('portrait')
+    expect(off.structured['rotated']).toBe(false)
+    // Every turn went through the deprecated name, since the stub has no `setRotation`.
+    expect(app.seen.filter(c => c === 'setOrientation').length).toBe(2)
+  })
+
   it('a 400 that is not an unknown command is NOT retried under the other name', async () => {
     app = await startStubApp({ badPayload: ['setRotation'] })
     const r = await driveRotate(app.controlFile)
