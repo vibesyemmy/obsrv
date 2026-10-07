@@ -2358,7 +2358,7 @@ above. The last two are the same test failing both attempts of one job, each wit
 `mirror-302.spec.ts:99` entry.
 
 **Counted again, 2026-10-07: 38 hits in 32 jobs, 21 silent and 17 `quitting`, 31 followed by a `✘` and 7 by a `✓`** (Dogu; one count, not yet read by anyone
-else). **The sweep:** every `ci.yml` run created after 2026-10-06 04:26:00Z through run `37590281828` (created 10-07 07:54Z), every attempt, the suite job of
+else). **The sweep:** every `ci.yml` run created after 2026-10-06 04:26:00Z through run `37591133225` (created 10-07 08:02Z, the latest there was when the sweep ran), every attempt, the suite job of
 each pulled by id from the raw API: 42 runs listed, **40 suite jobs read, 0 unread**, 22 of them 600 s or more. **It reproduces the totals already recorded:** its hits
 between the boundary and run `37437677489` are the four in the table above and `37437677489` (`solo-target.spec.ts:128`), which with the 30 in 26 above are the
 **35 in 29, 18 silent and 17 `quitting`** the snapshot card quotes. Four more since, all silent, all followed by a `✘`:
@@ -2375,10 +2375,10 @@ ref and has none. **Excluded, and why:** 12 hits in four jobs of 71 to 106 s on 
 the snapshot probe's own deliberate hangs (controls 1 to 3 on the card), not natural hits, and each is under the 600 s this register's count uses.
 
 **What this does not say.** No cause. Not a rate, and the figure that follows is the same thing with a denominator: applying this register's rule (suite jobs of 600 s or more) to the sweep gives 21 new readable jobs after the boundary job
-(`112107660736`, already in the 178), six of which carry the eight new hits, so **32 jobs with a hit among 199 readable ones, about 16%, against 26 in 178, about 15%, before**. The 178 was not re-derived for this, the
+(`112107660736`, already in the 178), six of which carry the eight new hits, so **32 jobs with a hit among 199 readable ones, about 16%, against 26 in 178, about 15%, before**. **A second count of the hits by Idris (`#4218`), from Idris's own population and parser, reproduces every hit-level figure** (8 hits in 6 jobs after the boundary, 7 silent and 1 `quitting`, and the same close durations); **Idris's window ends at run `37590281828`, which is 38 suite jobs and 19 of 600 s or more, so 32 of 197 (16.2%)**. The two jobs of mine that Idris's population lacks are suite jobs of runs created after that, `37591086451` (`#598`'s branch) and `37591133225` (`#599`'s), both cancelled, 1,222 s and 1,069 s, with no hit: that is the whole difference, and either denominator gives about 16%. The 178 was not re-derived for this, the
 window is different, and a job that was cancelled after a hit (`37454972364`) counts as a hit. `37454972364` is also the one hit in this table where the next result is a `retry #1` `✘` and not a first-attempt one. **Also seen in the same logs, not kill-line hits, each
 a known entry:** `cli-walk.spec.ts:192` (`#597`'s suite, run `37590281828`: first attempt `✘` in 1.3 s, `retry #1` `✓` in 1.2 s) and `live-capture-notes.spec.ts:231` (`main`'s push suite for the `#596` merge, run `37590020307`, job `112689058136`:
-first attempt `✘` in 57.1 s after three tries with `settled=false`, `retry` `✓`; read from the raw log, md5 `79c94db3`, the same as Idris's count in `#4208`).
+first attempt `✘` in 57.1 s after five tries with `settled=false` (`no capture reached its budget covered in 5 tries`), `retry` `✓`; read from the raw log, md5 `79c94db3`, the same as Idris's count in `#4208`).
 
 **Method, for the next count.** Pull every suite job by id from the raw API (`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`),
 listing jobs per attempt (`/runs/<id>/attempts/<n>/jobs`), with bytes and a hash per row; for any run with `run_attempt` above 1,
