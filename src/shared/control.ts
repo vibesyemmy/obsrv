@@ -306,7 +306,9 @@ export const CONTROL_COMMANDS = [
   'setViewMode',
   'setPanes',
   'setVision',
+  // `setOrientation` is DEPRECATED and still accepted: see `rotateApplyError`.
   'setOrientation',
+  'setRotation',
   'setTextScale',
   'setOnionSkin',
   'captureVisible',
@@ -482,9 +484,32 @@ export function viewModeApplyError(v: unknown): string | null {
 /**
  * Validates a `setOrientation` payload. Unlike a preset id there is no table to
  * miss, so the message just names the two words rather than listing anything.
+ *
+ * **`setOrientation` is deprecated and still accepted** (`docs/breaking-changes.md`,
+ * the breaking release). `setRotation` replaces it, because `orientation` named
+ * the preset's STORED form — `'landscape'` meant "the rotated one" and produced a
+ * portrait screen on every preset stored landscape, `bug-orientation-name`.
+ *
+ * **Why it is kept rather than removed, measured rather than assumed:** the MCP
+ * server ships on npm and the app ships as a DMG, and the version floor runs one
+ * way only — the client refuses an app below `MINIMUM_APP_VERSION`, and the app
+ * never checks the client. A removal therefore breaks rotation for anyone whose
+ * pinned npm package is older than their app, and the error they get says "the
+ * app was closed or Agent control was toggled off", which is false and sends
+ * them nowhere useful (measured against a stub app, room #4101). Opeyemi chose
+ * this shape; the alias goes in the release after this one.
  */
 export function orientationApplyError(v: unknown): string | null {
   return isOrientation(v) ? null : `setOrientation payload must be { orientation: 'portrait' | 'landscape' }`
+}
+
+/**
+ * Validates a `setRotation` payload: a plain boolean, which is the whole point
+ * of the rename. A quarter turn is a quarter turn whatever the preset is stored
+ * as, so there is no word to invert.
+ */
+export function rotateApplyError(v: unknown): string | null {
+  return typeof v === 'boolean' ? null : `setRotation payload must be { rotate: true | false }`
 }
 
 /** Validates a `setTextScale` payload: a finite number within the range the app renders. */

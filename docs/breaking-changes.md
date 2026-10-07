@@ -115,9 +115,35 @@ second is a wrong answer.
 report's rows are not an MCP output schema; it is a break for report consumers all the same, and it is
 named above.
 
-**Still to come in this release, and not in that change:** control's `setOrientation`. The app speaks the
-stored-form word and the MCP translates `rotate` into it in one place; removing it is an app-side protocol
-change with its own e2e.
+### Control gains `setRotation`; `setOrientation` is deprecated and still accepted
+
+**Decided by Opeyemi 2026-10-07**, after the cost of removing it outright was measured rather than
+estimated. `setRotation { rotate: true | false }` is the command to send. **`setOrientation` keeps working
+this release** and goes in the next one.
+
+**Why it is not removed now, and this is the part worth keeping.** The MCP server ships on npm, the app
+ships as a DMG, and they update independently — and **the version floor runs one way only**: the client
+refuses an app below `MINIMUM_APP_VERSION`, and the app never checks the client's version. So the two skew
+directions need different answers, and an earlier plan that covered only one of them was caught in review:
+
+- **an older pinned server against a newer app** — the app still accepts `setOrientation`. Measured
+  against a stub app: with the command removed, `obsrv_drive { rotate: true }` fails with *"unknown
+  command"* and the client's own advice reads *"the app was closed or Agent control was toggled off"*,
+  which is false and sends the user nowhere useful.
+- **a newer server against an older app** — the MCP sends `setRotation` and **falls back to
+  `setOrientation` on a `400 unknown command`**, so live rotation keeps working on every DMG in the wild.
+  The fallback is deliberately narrow: any other 400 (a payload error, which would be a bug in our own
+  client) surfaces instead of being re-sent under the other name. A version gate was the alternative and
+  was rejected because the release that first carries `setRotation` has no number yet, so the constant
+  would have been a guess.
+
+**`MINIMUM_APP_VERSION` is not moved for this.** Moving it would refuse every live tool on an older app
+rather than just this one command.
+
+**What does NOT change:** `status` still answers `orientation`, and `tabs.json` still persists it. The
+stored-form word stays the app's internal vocabulary with one translation in one place
+(`src/shared/calibration.ts`), which is what kept `orientation` from meaning two things in the first
+place. **What breaks:** nothing, for either skew direction — which is the point of the shape chosen.
 
 **What breaks:** a caller passing `--orientation` or `orientation:` gets an argument error instead of a
 screen — **true of both surfaces only after the strictness change above; the MCP half dropped the key in

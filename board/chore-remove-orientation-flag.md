@@ -96,3 +96,33 @@ telling them to read two fields that are not there.
 the cases I had not looked at** — a tally repeated past its source, a SHA completed from a prefix, and now
 a derivation generalised from one call site to a name. **The pattern is the same: I checked the instance
 and published the rule.**
+
+### The control half landed with three follow-ups folded in, and one safety fix nobody had asked for (2026-10-07)
+
+`setRotation` is added and `setOrientation` stays accepted this release — **Opeyemi's shape**, chosen after
+the cost of a hard removal was measured rather than estimated: an older pinned npm server against a newer
+app fails with *"unknown command"* while the client's own advice reads *"the app was closed or Agent control
+was toggled off"*, which is false and sends the user nowhere.
+
+**Three items came out of the reads and were held back, then pushed together when a safety fix forced a
+push anyway:** the `rotate: false` case for the fallback (**Idris's surviving mutant** — a fallback ignoring
+`rotate` passed all 134 unit files, and against an older app would answer `rotate: false` with a rotated
+screen); **Wren's eight-tag measurement**, which is a stronger basis for the `/unknown command/` trigger
+than the sentence it shipped with; and **Idris's hazard** that `presetApplyError` echoes the caller's string,
+so the same trigger copied onto `setPreset` could be fired by an id containing the phrase. All three are now
+in the code rather than in a chat log.
+
+**The safety fix, which is the part worth remembering.** Both new stub tests spawned the built MCP server
+**without `OBSRV_TEST=1`**, and one of them carried a comment arguing against it. Without that variable a
+discovery which is neither live nor declined reaches `cannotLaunchReason`, which returns null on a Mac — and
+the server **launches the installed Obsrv on the maintainer's real profile**, on every `npm test`, invisibly
+on CI where no app is installed. **Found by Idris** (`#4205`) the same day they made that accident by hand
+(`chore-probe-opened-the-real-profile`), and partly owned by Wren, whose probe supplied the harness without
+naming the fence.
+
+**It is now a structural invariant and not a note:** `tests/unit/mcpStubFence.test.ts` scans every file in
+`tests/unit` for a spawn of that server and fails on any whose env omits the fence, with its own fixtures
+for the cases a text scan gets wrong and a non-vacuity check so an unmatched pattern cannot read as clean.
+**It immediately found a fourth site nobody had named**, `devMcp.test.ts`, pre-existing on `main`: the
+dev-lane proxy, which lists tools and never drives a live one, so it was not firing — fenced anyway, because
+a uniform invariant is worth more than an exemption (measured: 13 of 13 either way).

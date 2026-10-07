@@ -150,7 +150,7 @@ describe('defaultControlFilePath', () => {
 })
 
 describe('command validation', () => {
-  it('knows exactly the thirty-three commands', () => {
+  it('knows exactly the thirty-four commands', () => {
     expect([...CONTROL_COMMANDS].sort()).toEqual([
       'activateTab',
       'audit',
@@ -178,6 +178,9 @@ describe('command validation', () => {
       'setPixelExact',
       'setPreset',
       'setProfile',
+      // `setRotation` replaces `setOrientation`, which stays accepted this release
+      // (`docs/breaking-changes.md`): both names are in the list on purpose.
+      'setRotation',
       'setTextScale',
       'setThrottle',
       'setViewMode',

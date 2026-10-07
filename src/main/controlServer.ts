@@ -1,3 +1,4 @@
+import { orientationFromRotate } from '../shared/calibration'
 import { randomBytes } from 'node:crypto'
 import {
   parseAuditRequest,
@@ -32,6 +33,7 @@ import {
   profileApplyError,
   tokenEqual,
   orientationApplyError,
+  rotateApplyError,
   onionSkinApplyError,
   textScaleApplyError,
   throttleApplyError,
@@ -491,10 +493,24 @@ export class ControlServer {
         return this.applyAndConfirm({ panes }, s => s.panes === panes)
       }
 
+      // DEPRECATED, still accepted: an older pinned MCP server sends this one,
+      // and the app has no way to know the client's version. `setRotation`
+      // below is the same apply through the word the renderer stores.
       case 'setOrientation': {
         const err = orientationApplyError(payload.orientation)
         if (err) return reply(400, { error: err })
         const orientation = payload.orientation as Orientation
+        const pageBack = this.pageBack()
+        return this.applyAndConfirm({ orientation }, s => s.orientation === orientation && pageBack(s))
+      }
+
+      case 'setRotation': {
+        const err = rotateApplyError(payload.rotate)
+        if (err) return reply(400, { error: err })
+        // The renderer and `tabs.json` keep the stored-form word, deliberately:
+        // one translation in one place beats a second vocabulary inside the app
+        // (`src/shared/calibration.ts`). What changed is the name a client says.
+        const orientation = orientationFromRotate(payload.rotate as boolean)
         const pageBack = this.pageBack()
         return this.applyAndConfirm({ orientation }, s => s.orientation === orientation && pageBack(s))
       }
