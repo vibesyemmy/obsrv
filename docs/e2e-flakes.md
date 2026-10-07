@@ -1278,8 +1278,8 @@ warning, the no-acknowledgement one, so on those attempts the capture classified
 gate was false, not because another warning displaced it. **The entry's "one note's producer returning before the other's" and the restatement in `#4290` that a frame-identity warning "replaces" the
 onion-skin sentence describe a mechanism the code does not have.** **The two absences are separate facts and these logs do not connect them:** the null says only that no acknowledgement came within 400 ms,
 and the missing settle sentence says the capture called the page settled; whether one caused the other is not shown. The older two sightings' arrays were not read, so they may have differed.
-**A cheap next datum, not made here:** put the reply's `settled` and `unsettledReason` into the assertion's message at `:194`, so the next sighting prints the verdict
-instead of being inferred from the array's length. **Counts:** five sightings with run ids, **three of the no-acknowledgement sentence (10-05, 10-06, 10-07) and two of the older-frame one**; not a rate; no cause.
+**The cheap next datum was made after this entry was written, in `#606` (`b018322d`, Henry; passed by Idris):** the assertion's message at `:194` now prints `settled` and `unsettledReason` beside the warnings, so the next sighting
+says the verdict instead of its being inferred from the array's length. **That change post-dates every sighting above, so none of the five printed it.** **Counts:** five sightings with run ids, **three of the no-acknowledgement sentence (10-05, 10-06, 10-07) and two of the older-frame one**; not a rate; no cause.
 **Not counted:** an earlier one Henry read without a run id (`#602`'s "earlier tonight"), and a `:183` flaky in room `#1561` with no run id, which may be a sixth or a duplicate.
 
 ## `live-drive.spec.ts:1069`: a resize capture that came back settled, once
