@@ -1258,7 +1258,7 @@ today's sentence is the "renderer did not answer a draw within 400 ms" branch**,
 while the earlier two are "the renderer answered with a frame number behind the latest sent". Both are reading, not measurement: nothing in these logs says why
 the renderer was late or behind.
 
-**What the code does not support: "crowds out".** In `captureTarget` (`ipc.ts:1755` to `1775`) the frame warning is pushed first (`:1762`) and the onion-skin sentence is pushed by its own
+**What the code does not support: "crowds out".** In `captureTarget` (`ipc.ts:1755` to `1775`) the frame warning is computed and pushed first (`:1762` and `:1763`) and the onion-skin sentence is pushed by its own
 condition (`settled` is `painting` or `animating`, and the skin is on, `:1770`); **nothing in the first suppresses the second.** **What the arrays do say** (Wren, `#4291`, and the same
 in both logs here): `Settle` is `settled`, `resizing`, `painting`, `animating` or `blank`, and each of the last four pushes its own sentence (`:1766` to `:1769`); **each of today's replies held exactly one
 warning, the no-acknowledgement one, so on those attempts the capture classified the page as `settled`**, which is the only verdict that pushes none, and the onion-skin sentence was absent because its
