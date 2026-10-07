@@ -385,7 +385,9 @@ diff's content.
 
 By firing time: white 09-23, 09-29, 10-06 03:40Z; **black 10-06 12:59Z; white 10-07 13:16Z; black 10-07
 14:44Z.** The section above used white-after-black to exclude a single move from white to black. This is
-**black after white again** — the colours alternate twice, and no ordering story closes either of them.
+**black after white again**, and no ordering story closes either of them. (An earlier version said "the
+colours alternate twice"; the sequence white, white, white, black, white, black has three changes, and
+@Idris was right that the count added nothing the sentence needed.)
 
 ### What is new: the product code was identical across a white and a black firing 88 minutes apart
 
@@ -424,8 +426,15 @@ card should be read as making.
 Identical product code is not identical conditions: the two changed spec files alter what else the suite is
 running, the two runs are on different hosted runners, and the register's kill-line snapshots show the
 runners' load differs a great deal between jobs. **The escape that closes is "Obsrv's own behaviour changed
-between those trees"; the escape that stays open is the runner.** The 10-06 white/black pair is also
-untouched by this — those trees are about a dozen merges apart and I have not diffed them.
+between those trees"; the escape that stays open is the runner.** **The 10-06 pair is a different story, and the sentence that stood here was wrong.** It said those trees
+were "about a dozen merges apart"; that distance (11 merges) is from the 10-06 **black's** base to the 10-07
+**white's**, counted for #4355 — not between 10-06's own white and black, which are 9 hours apart. @Idris
+caught it and diffed the pair (#4454); I reproduced the figures. **On the bases** `5ef6c675` is an ancestor
+of `62130944`, **7 merge commits and 35 commits** apart, seven files differ and **0 are under `src/`**. **On
+the trees as tested** (`0d4f121e…` and `cc8f6b4a…`) **32 files differ, 8 under `src/`**, all arriving with
+the black run's PR `#592`: `src/cli/args.ts`, `main.ts`, `reportHtml.ts`, `src/mcp/driveReply.ts`, `lib.ts`,
+`server.ts`, `strictInput.ts`, `src/shared/calibration.ts`. **So for 10-06 the escape this card just closed
+for 10-07 is NOT closed** — and the next reader should know which pair is which.
 
 ### Where that leaves the card
 
@@ -433,3 +442,34 @@ The card's named discriminator (a non-white pixel) was already spent. What repla
 is sharper than before: **one unpainted-frame path that can read either `[0,0,0]` or `[255,255,255]`
 depending on the runner, on one build.** Nobody has read the capture path for whether those two values are
 reachable through the same branch — that reading, not the next sighting, is what this card now needs.
+
+### The one `src/` change in the frame is mine, and here is what it can and cannot be
+
+@Idris's 10-06 diff puts eight `src/` files in the black tree and read one of them as the only candidate:
+`src/shared/calibration.ts`, imported by the app the vision spec launches, **+9/−63** — the removal of the
+flag resolver — and he said plainly that was a reading of one diff and not a measurement. It is my change
+(`#592`), so it is the claim I have the most reason to want cleared, and that is the reason to test it
+hardest. **The blobs, with a control that differs:**
+
+| base | tested by | `src/shared/calibration.ts` |
+| --- | --- | --- |
+| `5ef6c675` | 10-06 **white** 03:40Z | `da9c222826b6336ddc79499e2550796a75268d2c` |
+| `62130944` | 10-06 **black** 12:59Z (+ `#592`'s head) | `da9c2228…` in the base; the head brings the new one |
+| `00408e5c` | 10-07 **white** 13:16Z | `c9eb2ef66ff4c73ebca5947b63a8c0968ea5425d` |
+| `125538c3` | 10-07 **black** 14:44Z | `c9eb2ef6…` |
+
+`#592`'s merge `b2d37b1226776c55f3b110d8210481b2ec1a4f91` is **absent** from both 10-06 bases and **present**
+in both 10-07 bases (`git merge-base --is-ancestor`, exit code, each base checked).
+
+**What that rules out.** The 10-07 white and the 10-07 black carry the **same** `calibration.ts` blob and
+the same `#592`, and they came out different colours. **So `#592` is not what separates black from white.**
+The sharpest version of this card's narrowing survives the new `src/` information intact.
+
+**What it does not rule out, and I am not going to soften it.** Every black so far — **both of them** — sat
+on a tree carrying the new `calibration.ts`; **no black has ever fired on a tree with the old one**, and the
+four sightings before `#592` are all white. On n=2 that is weak evidence and the whites straddle the
+boundary, so the shape it would be is not "`#592` turned white into black" but "`#592` added a second
+appearance". **It names two cheap tests rather than a conclusion:** a black firing on a pre-`#592` tree
+kills it outright, and reading whether the removed resolver is reachable from the render path settles it
+without waiting. Nobody has done the second, including me, and it is now the most specific unread thing on
+this card.
