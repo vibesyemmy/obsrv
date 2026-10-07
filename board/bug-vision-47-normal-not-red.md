@@ -497,9 +497,19 @@ waiting, and that nobody had done it. **Done, and it is clean — which matters 
   `maxCssViewport` (80), `clampViewport` (85), via `src/main/ipc.ts`, `src/main/targetSource.ts`,
   `src/renderer/src/components/SettingsPanel.tsx` and `src/renderer/src/state/store.ts`. Not one falls in
   90–133 or 141–170.
-- **What `#592` did add on the app side:** `src/main/controlServer.ts` now imports `orientationFromRotate`
-  for the new `setRotation` command. So the app bundle is **not** unchanged by `#592` — what is unchanged is
-  every calibration export the app already used.
+- **What `#592` adds on the app side: nothing.** An earlier version of this section said `#592` added
+  `src/main/controlServer.ts` importing `orientationFromRotate`, and offered that as the caveat against my
+  own reading. **It is false, and @Wren measured it (#4460).** `git grep -E
+  'orientationFromRotate|resolveRotate|orientationWordNote'` over `src/main`, `src/renderer` and
+  `src/preload` gives **0 files at `#592`'s head `4bc5914e`, 0 at its merge `b2d37b12`, 0 at both 10-06
+  bases, and 1 at both 10-07 bases** (`controlServer.ts`); the control, the same pattern over all of `src/`
+  at `125538c3`, gives 4 files, so the search can fire. That import arrived with **`#599`**
+  (`8cdac66b5e0612baca2995d4b611fb5c25839225`, merged **2026-10-07 08:45:33Z**), not `#592`.
+- **`#599` is also mine, and it is excluded too — by a different argument.** Its merge is **absent** from
+  both 10-06 bases and **present** in both 10-07 bases (`git merge-base --is-ancestor`, per base). So it is
+  in the tree that produced the 10-07 **white** and the tree that produced the 10-07 **black**, and it is
+  **not in the tree that produced the first black at all**. It cannot be what separates the colours, and it
+  cannot have caused the 10-06 black.
 - **And this spec does not command the control server.** `vision.spec.ts` drives the UI directly
   (`.toggle-panel`, `.vision-deutan`, `.vision-protan`, `.vision-severity`) and its only mention of the
   control server is a comment at `:132`. The `setRotation` handler is never reached.
@@ -510,3 +520,17 @@ everything that was already open:** why an unpainted frame reads `[0,0,0]` on on
 another, and whether the runner explains it. **The limit on this reading:** it is a static read of imports
 and hunk ranges, not a run — it shows the changed code is not reachable from this spec, not that the render
 is correct.
+
+**A note on how that error was shaped, because it is worth more than the error.** The false sentence was a
+**caveat I invented against myself** — "the bundle is not unchanged, and I will not state it as if it were"
+— and both readers took the section as careful partly on its strength. Correcting it makes my own reading
+**cleaner**, which is the direction a wrong claim is least likely to be challenged in and the direction I
+should have checked first. **An invented caveat is not free: it buys credit for rigour that the measurement
+has not earned, and it can be exactly as wrong as an invented claim.** The fix is the same either way —
+`git grep` with a control before writing a sentence about which commit added what, rather than from a
+recollection of writing it.
+
+**Where my rotate work now stands on this card, stated once:** `#592` is excluded by having **no app-side
+code at all** and by its `calibration.ts` removals being unreachable from this spec; `#599` is excluded by
+being present in one white and one black and absent from the first black. Neither exclusion is a run; both
+are static reachability plus the colour-and-tree table above.
