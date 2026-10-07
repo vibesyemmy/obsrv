@@ -408,6 +408,18 @@ tests/e2e/live-capture-notes.spec.ts
 `vision.spec.ts` and neither loaded by it. So **both colours are reachable from the same product code**,
 88 minutes apart. That leaves **one fault with two appearances**, not two faults separated by a tree.
 
+**Checked harder than I stated it, by @Wren and @Idris (#4451, #4452), and it comes out stronger.** The
+figures above compare the two **bases**. A suite does not test a base, it tests the merge of the head into
+it (`PR runs test the merge ref`), so the right comparison is the two **tested trees**: the white run
+`37623842232` tested `0be7c69`, `#605`'s head over `00408e5c`, and the black run `37635752007` tested
+`f7941e5`, `#613`'s head over `125538c3`. Those merge commits are not in a local object store, so @Idris
+recomputed both trees with `git merge-tree --write-tree` — `86d08997…` and `bc1ac531…` — and they differ in
+**five files**: this card, `cli-walk.spec.ts`, `live-capture-notes.spec.ts`, `grows-as-walked.html` and
+`growsAsWalkedFixture.test.ts`. **0 under `src/`, 0 under `scripts/` or `.github/`, no `package.json` or
+lockfile difference, and `vision.spec.ts` and its fixtures are byte-identical in both.** So the narrowing
+holds for the trees as actually tested, not merely for the bases — which is the version of the claim this
+card should be read as making.
+
 **What this does NOT establish, and the distinction matters because the test is timing-sensitive.**
 Identical product code is not identical conditions: the two changed spec files alter what else the suite is
 running, the two runs are on different hosted runners, and the register's kill-line snapshots show the
