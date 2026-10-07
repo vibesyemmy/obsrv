@@ -2357,6 +2357,29 @@ The first is the second 5.4 s `tab-switch-preset.spec.ts:89` hit; the earlier on
 above. The last two are the same test failing both attempts of one job, each with its own silent close; see the
 `mirror-302.spec.ts:99` entry.
 
+**Counted again, 2026-10-07: 38 hits in 32 jobs, 21 silent and 17 `quitting`, 31 followed by a `✘` and 7 by a `✓`** (Dogu; one count, not yet read by anyone
+else). **The sweep:** every `ci.yml` run created after 2026-10-06 04:26:00Z through run `37590281828` (created 10-07 07:54Z), every attempt, the suite job of
+each pulled by id from the raw API: 42 runs listed, **40 suite jobs read, 0 unread**, 22 of them 600 s or more. **It reproduces the totals already recorded:** its hits
+between the boundary and run `37437677489` are the four in the table above and `37437677489` (`solo-target.spec.ts:128`), which with the 30 in 26 above are the
+**35 in 29, 18 silent and 17 `quitting`** the snapshot card quotes. Four more since, all silent, all followed by a `✘`:
+
+| run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
+| --- | --- | --- | --- | --- | --- |
+| `37437677489` | 10-06, `main` push | ✘ `solo-target.spec.ts:128` | 30.0 s | **silent** (10,009 ms; two lines) | Dogu |
+| `37454972364` | 10-06, pull request (`#592`'s branch; the job was later cancelled) | ✘ `mcp-live.spec.ts:977`, `retry #1` | 4.1 s | **silent** (10,002 ms; two lines) | Dogu |
+| `37455521138` | 10-06, pull request (`#593`'s own suite) | ✘ `fit-pan.spec.ts:93` | 30.0 s | **silent** (10,008 ms; two lines) | Dogu; the snapshot, Wren (`#4038`) |
+| `37463948210` | 10-06, pull request (`#592`'s suite at `4bc5914e`) | ✘ `flow-type-text.spec.ts:100` | 30.0 s | **silent** (10,003 ms; two lines) | Dogu; Idris (`#4129`: figures matched from Idris's own pull) |
+
+The first row is already counted in the 35 and is listed because the register did not have it. **The last two rows carry the two real-hang snapshots** (see the snapshot card); `37454972364` predates the snapshot on its merge
+ref and has none. **Excluded, and why:** 12 hits in four jobs of 71 to 106 s on the branch `probe/kill-snapshot` (runs `37452623714`, `37453082900`, `37454123538`, `37454530676`): those are
+the snapshot probe's own deliberate hangs (controls 1 to 3 on the card), not natural hits, and each is under the 600 s this register's count uses.
+
+**What this does not say.** No cause. Not a rate, and the figure that follows is the same thing with a denominator: applying this register's rule (suite jobs of 600 s or more) to the sweep gives 21 new readable jobs after the boundary job
+(`112107660736`, already in the 178), six of which carry the eight new hits, so **32 jobs with a hit among 199 readable ones, about 16%, against 26 in 178, about 15%, before**. The 178 was not re-derived for this, the
+window is different, and a job that was cancelled after a hit (`37454972364`) counts as a hit. `37454972364` is also the one hit in this table where the next result is a `retry #1` `✘` and not a first-attempt one. **Also seen in the same logs, not kill-line hits, each
+a known entry:** `cli-walk.spec.ts:192` (`#597`'s suite, run `37590281828`: first attempt `✘` in 1.3 s, `retry #1` `✓` in 1.2 s) and `live-capture-notes.spec.ts:231` (`main`'s push suite for the `#596` merge, run `37590020307`, job `112689058136`:
+first attempt `✘` in 57.1 s after three tries with `settled=false`, `retry` `✓`; read from the raw log, md5 `79c94db3`, the same as Idris's count in `#4208`).
+
 **Method, for the next count.** Pull every suite job by id from the raw API (`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`),
 listing jobs per attempt (`/runs/<id>/attempts/<n>/jobs`), with bytes and a hash per row; for any run with `run_attempt` above 1,
 compare the attempts' hashes before counting; list a 404 as unread. `gh run view --log --job <id>` is not safe for a re-run run:
