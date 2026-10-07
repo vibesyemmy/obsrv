@@ -921,6 +921,8 @@ person should read the pixel before the channel. Not a rate, no cause, and no ch
 white (`[255,255,255]`), one read as white from two channels (09-17, blue discarded by the old message), one black (10-06). **So the black firing is one of six, not a change of colour**, and what the white ones and the black one have in common is still only that the frame had
 nothing in it; nobody has said whether one path makes both. The card (`board/bug-vision-47-normal-not-red.md`, Henry's) was merged before this run finished and does not count it; it is not edited here. Not a rate; no cause.
 
+**Seen a seventh time, 2026-10-07, and black again (`#613`'s suite, run `37635752007`, job `112841484737`, md5 `9686681252dd91f1a2fa2f85f46d760b`).** First attempt `✘` in 153 ms at `vision.spec.ts:114`, `retry #1` `✓` in 477 ms, `middle pixel rgb: [0,0,0]`. **The second black one and the third firing in about 34 hours** (10-06 12:59Z black, 10-07 13:16Z white, 10-07 14:44Z black): the black reading is not a one-off, and white and black alternate across the runs on the same code. The card (`board/bug-vision-47-normal-not-red.md`, Henry's) carries the same sighting. Not a rate; no cause.
+
 ## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
 
 `the menu applies a CPU rate to the target: the same work takes several times
@@ -1282,6 +1284,8 @@ and the missing settle sentence says the capture called the page settled; whethe
 says the verdict instead of its being inferred from the array's length. **That change post-dates every sighting above, so none of the five printed it.** **Counts:** five sightings with run ids, **three of the no-acknowledgement sentence (10-05, 10-06, 10-07) and two of the older-frame one**; not a rate; no cause.
 **Not counted:** an earlier one Henry read without a run id (`#602`'s "earlier tonight"), and a `:183` flaky in room `#1561` with no run id, which may be a sixth or a duplicate.
 
+**A sixth sighting, and the first to print the verdict, 2026-10-07 (`#608`'s suite, run `37628147623`, job `112815227905`, md5 `3f635e71bf4fcae0dc4e896ee5149164`).** First attempt `✘` in 5.5 s, `retry #1` `✓` in 5.9 s, with the message `#606` added: **`settled=true unsettledReason=undefined warnings=["the renderer did not say which frame it drew, so the capture may show an older frame than the target painted"]`.** That is the verdict the entry above had inferred from the array's length, now read directly: **the capture called the page `settled`**, with no settle sentence and the one no-acknowledgement sentence. **It is the fourth sighting of the no-acknowledgement sentence and the first to print `settled`; the earlier five did not, because the message that prints it landed after them.** It does not say why a painting page was called settled or why no acknowledgement arrived inside 400 ms. Not a rate; no cause.
+
 ## `live-drive.spec.ts:1069`: a resize capture that came back settled, once
 
 **First sighting 2026-09-20**, on `#388`'s run `35493231097`:
@@ -1627,6 +1631,8 @@ first-attempt `✘`, in six runs, each passed on `retry #1`: `36463050844` attem
 retry ✓ 1.2 s, and the sentence that arrived instead was the motion note ("this page was still moving when it was measured: 40 had
 been replaced in the 255 ms after the figures were taken"). Which sentence arrived in the six was not re-read. Not a rate; no cause.
 
+**Cause measured and fixed, 2026-10-07.** On `main`'s push suite for the `#606` merge (run `37627283309`, job `112812249976`, md5 `3c4c096d3a40e434263bbc925d231189`) the test **failed on both attempts**, and the whole received string was the motion note ("40 had been replaced in the 255 ms after the figures were taken", 258 ms on the retry) with **no walk-coverage sentence at all**: so the earlier reading above, that two sentences compete, did not describe it. `#612` made the test print `pageHeight`, `walked` and the full warnings, and **the next firing, in `#612`'s own suite (run `37631647065`, job `112827239238`, md5 `c193c67b5585e1627d7c72b2e09aec04`), printed `pageHeight=2550`** (six rows) with the motion note; a passing run reads 19550. **So the figures were taken while the page was still six rows tall and the fixture's 40 rows arrived inside the 250 ms probe.** The cause was the fixture: it grew from a `scroll` listener, and a scroll event is delivered at the next frame, not inside the call that scrolls, so on a slow runner the audit measured first. **`#613` makes the growth synchronous with the walk's own `window.scrollTo`** (the fixture wraps it), with a headless-Chromium unit test that reads the height in that same call (old fixture 2550, new 19550) and a check that `walkStep` still calls `window.scrollTo`. **Since it landed the test passed first time in `#613`'s own suite (job `112841484737`) and in `main`'s push suites for the `#612` and `#613` merges.** That is three passes at a rate the register has at about one job in twenty-five; it is a sample, not a verification, and the unit test is what guards the property. **Not shown:** why the frame was late on that runner, and the product-side question (wait one frame after the walk returns to the top) is a separate card and not decided.
+
 ## `frame-bus.spec.ts:40`: the wait admitted an unpainted frame
 
 Seen once, on run [`35851213703`](https://github.com/vibesyemmy/obsrv/actions/runs/35851213703)
@@ -1787,6 +1793,13 @@ spec or the CLI's teardown was changed.
 immediately before it, `cli.spec.ts:203` ("snap leaves no obsrv-cli-* user-data dirs behind in os.tmpdir", 4.7 s), passed. **What this adds to "The second sighting tilts it":** three occurrences, each with exactly one directory and a different
 suffix, which is the same tendency and still not proof; the creation-time measurement above is still what would separate the two readings, and nobody has made it. **What it does not say:** nothing about cause, nothing about a rate (no denominator beyond 09-28's "twice in roughly six suite runs that evening"),
 and `#605` changes only `docs/e2e-flakes.md`, so the failure cannot come from that PR's content. `tests/e2e/cli.spec.ts` is still not a file a session may edit without Opeyemi's say-so, so this remains a record.
+
+**Seen a fourth time, 2026-10-07, and again exactly one directory.** Run `37642311295` attempt 2, job `112867820800` (`#611`'s pull-request suite, re-run; the `✘` is at 15:35:00Z), first attempt `✘` in 493 ms, `retry #1` `✓`
+in 578 ms: `Expected: []`, `Received: ["obsrv-cli-641C0b"]` at `cli.spec.ts:253` (found by Henry, `#4630`; read again from the raw log by Dogu, 211,808 bytes, 1,448 lines, md5 `38db0fe4…`). The test that ran immediately
+before it, `cli.spec.ts:203` (4.3 s), passed, as in the third. **What this adds to "The second sighting tilts it":** four occurrences, each with exactly one directory; I compared this suffix with the third's (`sab9po`) and
+not with the first two's, so "a different suffix each time" is not claimed here. The creation-time measurement above is still what would separate the two readings, and nobody has made it. **What it does not say:** nothing
+about cause, nothing about a rate (one log), and `#611` changes only two `board/` files, so the failure cannot come from that PR's content. `tests/e2e/cli.spec.ts` is still not a file a session may edit without Opeyemi's
+say-so, so this remains a record.
 
 ## `panes.spec.ts`, the `page.press` timeout, named because it shares a test with a card it is not evidence for
 
@@ -2430,6 +2443,16 @@ window is different, and a job that was cancelled after a hit (`37454972364`) co
 a known entry:** `cli-walk.spec.ts:192` (`#597`'s suite, run `37590281828`: first attempt `✘` in 1.3 s, `retry #1` `✓` in 1.2 s) and `live-capture-notes.spec.ts:231` (`main`'s push suite for the `#596` merge, run `37590020307`, job `112689058136`:
 first attempt `✘` in 57.1 s after five tries with `settled=false` (`no capture reached its budget covered in 5 tries`), `retry` `✓`; read from the raw log, md5 `79c94db3`, the same as Idris's count in `#4208`).
 
+**Three more hits, 2026-10-07, after the table above** (each read from the raw job log by Dogu; the first two found by Wren and Idris). **Counts as an addition, not a sweep:** these take the totals to **41 hits in 35 jobs, 22 silent and 19 `quitting`**, 33 followed by a `✘` and 8 by a `✓`, **as far as the runs read go**; a run not read could hold another.
+
+| run | run created (UTC), where | next result after the hit | length | app-log tail | read by |
+| --- | --- | --- | --- | --- | --- |
+| `37627685923`, job `112813647663` | 10-07, `main` push (`#605`'s merge) | ✘ `mirror-302.spec.ts:99` | 30.0 s | **silent** (10,003 ms; two lines) | Wren, Dogu |
+| `37628147623`, job `112815227905` | 10-07, pull request (`#608`'s suite) | ✘ `controls.spec.ts:54` | 30.0 s | `quitting` logged **about five seconds after the close began** (10,005 ms; four lines) | Idris, Wren, Dogu |
+| `37635577346`, job `112840866337` | 10-07, `main` push (`#612`'s merge) | ✓ `status-at-launch.spec.ts:106` | 15.6 s (includes the close) | `quitting` logged **half a second after the close began**, then no exit (10,003 ms; four lines) | Wren, Dogu |
+
+**Of the five real-hang snapshots now on record, four have Spotlight at the top of the busiest host rows** (the two from 10-06 at load 15 to 17, the `controls.spec.ts:54` one at load 15.9, and the last row above at load 6.6 with `mds_stores` at 134%); **one, the first row above, was on a lighter host (load 2.85 on 3 cores) with no Spotlight among its five busiest.** The snapshot card (`board/chore-e2e-snapshot-at-the-kill.md`) holds all five snapshots with their figures; this register holds the hits. **The last row is the first hit that left no `✘` behind** among the captured ones, and the first with `quitting` logged at once and no exit. One instant per snapshot; no cause; no rate.
+
 **Method, for the next count.** Pull every suite job by id from the raw API (`gh api repos/vibesyemmy/obsrv/actions/jobs/<id>/logs`),
 listing jobs per attempt (`/runs/<id>/attempts/<n>/jobs`), with bytes and a hash per row; for any run with `run_attempt` above 1,
 compare the attempts' hashes before counting; list a 404 as unread. `gh run view --log --job <id>` is not safe for a re-run run:
@@ -2469,6 +2492,8 @@ emitted 4 keys its own output schema does not declare"*, fixed in `c656b5f`) and
 or show at all` entry above covers the file's four hide-first tests, `:66` among them, and says CI has never shown it.
 **The CI sighting is a different mechanism**: the hide events were delivered (the `painting` poll at `:75` passed) and the
 resume half failed at `:76`. It is listed in the table because no entry names `:66` by line, not because that entry is wrong.
+
+**`cli-walk-limits.spec.ts:262`, a second sighting with a different message, 2026-10-07.** `main`'s push suite for the `#613` merge (run `37639639973`, job `112854956334`, md5 `af43d9a897ea52fec55aa84608e1744a`): first attempt `✘` after **40.0 s**, `retry #1` `✓` in 2.2 s, with `[{"type":"text","text":"the running app refused the audit: obsrv control navigate timed out after 40000 ms"}]` at `cli-walk-limits.spec.ts:258`, **where the row above recorded `{"screenfuls":5,"atEnd":false,"ms":2483}`**. A control `navigate` that did not answer in 40 s, **with no kill line in that log**, so it is not a close hang. Found by Idris and Wren (`#4483`, `#4484`); read again from the raw log by Dogu. One sighting of this message; no cause; no rate.
 
 **`text-scale.spec.ts:141` is the "garbage collected" class, through its own fix.** The error at `launch.ts:105` is
 inside `hardenEvaluate`, which the section above says makes the awaited promise "never unreferenced while unsettled". One
