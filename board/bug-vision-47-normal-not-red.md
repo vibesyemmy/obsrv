@@ -346,7 +346,7 @@ which compares a board edit with a test run.** The firings are **24 hours apart*
 10-06**, white at **13:16:27Z on 10-07**.
 
 **The ordering carries the conclusion without needing any of that.** White on 09-23, 09-29 and 10-06
-03:40Z; **black on 10-06 12:59Z; white again on 10-07 13:16Z.** So **a single move from white to black is
+04:04Z; **black on 10-06 12:59Z; white again on 10-07 13:16Z.** So **a single move from white to black is
 excluded, because white fired after black.** What it leaves is the harder shape the card has been circling:
 one fault with two appearances, or two faults sharing a test — and the discriminator the card named (a
 non-white pixel) **does not separate those two**, since both colours fire in the same stretch of days.
@@ -383,7 +383,7 @@ diff's content.
 
 ### The colours alternate, so neither belongs to a closed past
 
-By firing time: white 09-23, 09-29, 10-06 03:40Z; **black 10-06 12:59Z; white 10-07 13:16Z; black 10-07
+By firing time: white 09-23, 09-29, 10-06 04:04Z; **black 10-06 12:59Z; white 10-07 13:16Z; black 10-07
 14:44Z.** The section above used white-after-black to exclude a single move from white to black. This is
 **black after white again**, and no ordering story closes either of them. (An earlier version said "the
 colours alternate twice"; the sequence white, white, white, black, white, black has three changes, and
@@ -447,13 +447,13 @@ reachable through the same branch — that reading, not the next sighting, is wh
 
 @Idris's 10-06 diff puts eight `src/` files in the black tree and read one of them as the only candidate:
 `src/shared/calibration.ts`, imported by the app the vision spec launches, **+9/−63** — the removal of the
-flag resolver — and he said plainly that was a reading of one diff and not a measurement. It is my change
+flag resolver — and @Idris said plainly that it was a reading of one diff and not a measurement. It is my change
 (`#592`), so it is the claim I have the most reason to want cleared, and that is the reason to test it
 hardest. **The blobs, with a control that differs:**
 
 | base | tested by | `src/shared/calibration.ts` |
 | --- | --- | --- |
-| `5ef6c675` | 10-06 **white** 03:40Z | `da9c222826b6336ddc79499e2550796a75268d2c` |
+| `5ef6c675` | 10-06 **white** 04:04Z | `da9c222826b6336ddc79499e2550796a75268d2c` |
 | `62130944` | 10-06 **black** 12:59Z (+ `#592`'s head) | `da9c2228…` in the base; the head brings the new one |
 | `00408e5c` | 10-07 **white** 13:16Z | `c9eb2ef66ff4c73ebca5947b63a8c0968ea5425d` |
 | `125538c3` | 10-07 **black** 14:44Z | `c9eb2ef6…` |
@@ -473,3 +473,40 @@ appearance". **It names two cheap tests rather than a conclusion:** a black firi
 kills it outright, and reading whether the removed resolver is reachable from the render path settles it
 without waiting. Nobody has done the second, including me, and it is now the most specific unread thing on
 this card.
+
+**A label fixed in three places while doing this (@Idris, #4458).** Two of them said the 10-06 white fired
+at **03:40Z**, and one of those sentences predates this change and was already on `main`. **03:40:53Z is
+when that job STARTED**; the firing is at **04:04:46Z** — `✘` at line 1299 of my own pull of job
+`112096421115` (208,647 bytes, 1,410 lines, md5 `fcb72658dd3ff462edb77365bda69246`), `✓ (retry #1)` at 1304,
+the pixel `[255,255,255]` at 1311 — against three other rows that are failure times. The one at the
+`created` column of the earlier table is correct as labelled and is left alone. So the 10-06 pair is
+**04:04Z white, 12:59Z black**, about nine hours.
+
+### The unread thing, now read: `calibration.ts` has no path to this render
+
+The card said reading whether the removed resolver can reach the render path would settle `#592` without
+waiting, and that nobody had done it. **Done, and it is clean — which matters more because the code is mine.**
+
+- **What `#592` removed from `calibration.ts`:** two functions, `resolveRotate` and `orientationWordNote`,
+  in two hunks covering old lines **90–133** and **141–170**.
+- **Their only callers in the old tree:** `src/cli/args.ts` (`:466`, `:488`) and `src/mcp/server.ts`
+  (`:220`, `:1053`, `:1269`, `:2419`), plus `tests/unit/rotateFlag.test.ts`. **None is in the Electron
+  bundle** the vision spec launches.
+- **Every `calibration` export the app already imported lies OUTSIDE both hunks** — `HostDisplay` (4),
+  `TargetScreen` (11), `applyOrientation` (40), `screenShape` (50), `ppi` (54), `computeScale` (65),
+  `maxCssViewport` (80), `clampViewport` (85), via `src/main/ipc.ts`, `src/main/targetSource.ts`,
+  `src/renderer/src/components/SettingsPanel.tsx` and `src/renderer/src/state/store.ts`. Not one falls in
+  90–133 or 141–170.
+- **What `#592` did add on the app side:** `src/main/controlServer.ts` now imports `orientationFromRotate`
+  for the new `setRotation` command. So the app bundle is **not** unchanged by `#592` — what is unchanged is
+  every calibration export the app already used.
+- **And this spec does not command the control server.** `vision.spec.ts` drives the UI directly
+  (`.toggle-panel`, `.vision-deutan`, `.vision-protan`, `.vision-severity`) and its only mention of the
+  control server is a comment at `:132`. The `setRotation` handler is never reached.
+
+**So `#592` has no path to the pixel this test reads**, which closes the hypothesis the section above opened
+against my own change by a reading rather than by waiting for an eighth sighting. **What stays open is
+everything that was already open:** why an unpainted frame reads `[0,0,0]` on one run and `[255,255,255]` on
+another, and whether the runner explains it. **The limit on this reading:** it is a static read of imports
+and hunk ranges, not a run — it shows the changed code is not reachable from this spec, not that the render
+is correct.
