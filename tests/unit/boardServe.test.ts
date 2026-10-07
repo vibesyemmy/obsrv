@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { killAndRemove } from './killAndRemove'
 
 /**
  * `scripts/board-serve.js`: the board served over http, repainting when the ref
@@ -22,9 +23,9 @@ type Child = ChildProcessByStdio<null, Readable, Readable>
 const started: Child[] = []
 const dirs: string[] = []
 
-afterEach(() => {
-  for (const p of started.splice(0)) p.kill('SIGKILL')
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+afterEach(async () => {
+  // Kill, wait for the exit, then remove with retries (see killAndRemove.ts).
+  await killAndRemove(started.splice(0), dirs.splice(0))
 })
 
 function card(id: string, title: string, column = 'backlog') {

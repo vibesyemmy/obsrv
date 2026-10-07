@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { killAndRemove } from './killAndRemove'
 
 /**
  * `scripts/board-serve.js` driven the way a reader meets it: a real server against a real
@@ -43,9 +44,10 @@ afterAll(async () => {
   await browser?.close()
 })
 afterEach(async () => {
-  for (const p of servers.splice(0)) p.kill('SIGKILL')
   for (const s of silent.splice(0)) s.close()
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+  // Kill, wait for the exit, then remove with retries: removing the directory on the line after a SIGKILL failed
+  // with ENOTEMPTY on #594's first suite attempt, with every assertion passed (see killAndRemove.ts).
+  await killAndRemove(servers.splice(0), dirs.splice(0))
 })
 
 const git = (cwd: string, args: string[]) =>
