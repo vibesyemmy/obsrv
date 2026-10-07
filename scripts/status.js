@@ -345,12 +345,12 @@ function buildReport(run, env, now) {
 
   if (!env.OBSRV_ROOM_DB) {
     sections.push({
-      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_DB to the room database file, and OBSRV_ROOM_ID to the room's id. This is NOT "no PASS found".`,
+      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_DB to the room database file, and OBSRV_ROOM_ID to the room's id. This is NOT "no PASS found".\nTo read it, run: OBSRV_ROOM_DB=<path to the room database file> OBSRV_ROOM_ID=<the room's id, or all> npm run status`,
       ok: true,
     })
   } else if (!env.OBSRV_ROOM_ID) {
     sections.push({
-      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_ID to the id of the room that talks about this repository, or to "all" to read every room in the database (a PR number in another room's PASS would become a row). This is NOT "no PASS found".`,
+      text: `${header('PASS ledger', 'the room database', now())}\nNOT CONFIGURED: set OBSRV_ROOM_ID to the id of the room that talks about this repository, or to "all" to read every room in the database (a PR number in another room's PASS would become a row). This is NOT "no PASS found".\nTo read it, run: OBSRV_ROOM_ID=<the room's id, or all> npm run status   (OBSRV_ROOM_DB is already set here)`,
       ok: true,
     })
   } else {
