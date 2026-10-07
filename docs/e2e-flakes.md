@@ -1236,6 +1236,38 @@ runs, not as either sentence being wrong. Reasoned, not measured: nobody has
 read the two producers' order in `capture.ts` yet. Left in the register
 because it now has a consistent signature across sightings, not a fix.
 
+**Two more sightings, 2026-10-06 and 2026-10-07, and they show a different sentence of the same producer.** Found by Wren in `main`'s
+push suite for the `#603` merge (`#4289`); the first was in a log already pulled for the kill-line recount. Each is a first-attempt `✘` and a
+`retry #1` `✓`:
+
+| run | where | first attempt | retry | the reply's warnings |
+| --- | --- | --- | --- | --- |
+| `37463948210`, job `112270207388` | 10-06 12:46Z, pull request (`#592`'s suite) | `✘` 5.1 s | `✓` 3.3 s | exactly `["the renderer did not say which frame it drew, so the capture may show an older frame than the target painted"]` |
+| `37619435722`, job `112785754822` | 10-07 12:26Z, `main` push (`#603`'s merge) | `✘` 4.4 s | `✓` 4.0 s | the same single sentence |
+
+**The producer read the section above said nobody had done** (Dogu, source at `main` `00408e5c`; Henry read the first half independently, `#4290`;
+a reading of the code, not a run). **There is one producer and the two sentences are two of its three branches:** `frameIdentityWarning(acked,
+latest, ready)` (`src/main/frameCheck.ts:25`) returns `NOT_DELIVERED` when the pane is not subscribed, `NO_ACKNOWLEDGEMENT` when `acked === null`, and the
+`OLDER_FRAME` sentence with its two numbers when `acked < latest`; `isFrameIdentityWarning` (`:43`) treats all three as one thing by design. **The
+two sightings above are the earlier entry's mechanism firing a branch it had not shown, and the third branch, `NOT_DELIVERED`, has not been seen.**
+The register's older "crowds out" sentence mentioned a producer's order in `capture.ts`; the code is `ipc.ts`, and what it says is below.
+
+**What `acked === null` means, from the code:** `flushRendererDraw` (`src/main/ipc.ts:1574`) sends the renderer a draw request and waits
+**`DRAW_FLUSH_MS` = 400 ms** for its acknowledgement; no answer in 400 ms (or a destroyed window, or the test-only `OBSRV_TEST_NO_DRAW_ACK`) resolves `null`. **So
+today's sentence is the "renderer did not answer a draw within 400 ms" branch**, a short wait on a runner whose load average the kill snapshots put at 15 on 3 cores,
+while the earlier two are "the renderer answered with a frame number behind the latest sent". Both are reading, not measurement: nothing in these logs says why
+the renderer was late or behind.
+
+**What the code does not support: "crowds out".** In `captureTarget` (`ipc.ts:1755` to `1775`) the frame warning is pushed first (`:1762`) and the onion-skin sentence is pushed by its own
+condition (`settled` is `painting` or `animating`, and the skin is on, `:1770`); **nothing in the first suppresses the second.** **What the arrays do say** (Wren, `#4291`, and the same
+in both logs here): `Settle` is `settled`, `resizing`, `painting`, `animating` or `blank`, and each of the last four pushes its own sentence (`:1766` to `:1769`); **each of today's replies held exactly one
+warning, the no-acknowledgement one, so on those attempts the capture classified the page as `settled`**, which is the only verdict that pushes none, and the onion-skin sentence was absent because its
+gate was false, not because another warning displaced it. **The entry's "one note's producer returning before the other's" and the restatement in `#4290` that a frame-identity warning "replaces" the
+onion-skin sentence describe a mechanism the code does not have.** What the two absences share is a page that had not yet shown frames to the pane (a renderer with nothing to acknowledge in 400 ms, a settle
+loop that called the page quiet), which is a reading and not a measurement. The earlier two sightings' arrays were not read, so they may have differed. The heading above keeps its original wording only because it is
+the entry's name. **A cheap next datum, not made here:** put the reply's `settled` and `unsettledReason` into the assertion's message at `:194`, so the next sighting prints the verdict
+instead of being inferred from the array's length. **Counts:** four sightings now (two of each sentence) plus an earlier one Henry read without a run id; not a rate; no cause.
+
 ## `live-drive.spec.ts:1069`: a resize capture that came back settled, once
 
 **First sighting 2026-09-20**, on `#388`'s run `35493231097`:
