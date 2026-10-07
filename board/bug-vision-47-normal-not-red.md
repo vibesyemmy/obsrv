@@ -245,3 +245,43 @@ named rather than proven, which is why this card is open.
 **What would close it:** a firing whose pixel is **not** white, which would move the card to the rendering
 branch and make it a different bug; or a demonstrated mechanism for the unpainted frame. **Neither is a
 sweep anyone can run on demand** — the two firings are 7 days apart in 174 runs.
+
+## A FIFTH SIGHTING, 2026-10-06, AND ITS PIXEL IS NOT WHITE — the discriminator this card named has fired
+
+**This card's own closing line says what would move it: *"a firing whose pixel is **not** white, which
+would move the card to the rendering branch and make it a different bug"*. That firing happened on
+2026-10-06 and sat unrecorded here for a day**, while the card kept saying every recorded firing had taken
+the capture-or-compositing branch.
+
+| run | created | job | the pixel |
+| --- | --- | --- | --- |
+| `37463948210` | 10-06, `#592`'s suite at `4bc5914e` | `112270207388` | **`middle pixel rgb: [0,0,0]`** |
+
+**Read from the raw job log, not from a summary:** first attempt `✘` at 12:59:58Z in **136 ms**, `retry #1`
+`✓` at 13:00:01Z, and the failure prints `Error: middle pixel rgb: [0,0,0]` against the assertion at
+`tests/e2e/vision.spec.ts:114`, `expect(normal[0], …).toBeGreaterThan(normal[1]! + 40)` — red must beat
+green by 40, and `[0,0,0]` fails it with every channel at zero. **It is in `docs/e2e-flakes.md`** (the
+register recorded it as "the pixel was black" the same day); **it was never carried back to this card**,
+which is the card that holds the pixel table and the discriminator.
+
+**So the reading table above is incomplete.** It lists two signatures — `[255,255,255]` washed-out white,
+`[255,255,0]` shader-still-applied — and **black is a third that nothing here anticipated**. White is a
+frame that was composited wrong; **black is a frame with nothing in it at all**, which is not the same
+question, and the card's title ("comes back white") no longer covers every sighting.
+
+**What this does NOT say, and the restraint matters because the card names this as its closer.** **One
+black sighting is a candidate, not a second mechanism**: it is a single first-attempt failure, retry-rescued
+like the other four, and nothing in that log says why the frame was empty. It does **not** establish the
+rendering branch — it establishes that **a firing has taken a reading the card did not have a branch for**,
+which is weaker than "move the card" and stronger than "another white one". **Five sightings now, four
+white and one black**, and the pixel is recorded for all five.
+
+**What I would want before anyone moves this card anywhere:** whether `[0,0,0]` is reachable through the
+same unpainted-frame path the white readings are attributed to, or only through a different one. That is a
+reading of the capture path, not a sweep, and **nobody has done it** — including me, and I own this card.
+
+**How this went unrecorded for a day, since it is the same error twice in two days.** I counted that very
+job on 10-06, named `vision.spec.ts:47` among its three retry-rescued crosses, and wrote that it was *"a
+fourth sighting for it, not a clean run"* — then did not open the card to add it. **The register had it and
+the card did not**, which is exactly the shape I raised against the `live-capture-notes` entry this
+morning, where I had done the same thing with run `37284069660`.
