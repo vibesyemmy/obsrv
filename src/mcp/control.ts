@@ -121,9 +121,24 @@ export function controlCall(
  *
  * **The fallback is narrow on purpose.** Only a 400 whose message says *unknown
  * command* is retried: a `setRotation payload must be …` is a bug in this file
- * and must surface, not be re-sent under another name. The app's own wording is
- * the signal (`controlServer.ts`, "unknown command — allowed: …"), and both
- * sides of that string live in this repository.
+ * and must surface, not be re-sent under another name.
+ *
+ * **What makes that trigger safe is measured, not argued** — Wren and Idris each
+ * checked it independently (rooms #4197, #4201). `controlServer.ts` emits that
+ * reply **byte-identical at all eight supported tags**, 0.58.0 through 0.63.1,
+ * which is the whole `MINIMUM_APP_VERSION` range; `git log -S` puts its only
+ * introduction at the control server's first commit; and the phrase has **one**
+ * HTTP emission in `src/` (the CLI's `unknown command: <word>` is a thrown
+ * `ArgError` that never becomes a control reply). So it cannot be too narrow for
+ * any app this server can reach, and `ControlCallError`'s own prefix
+ * (`obsrv control setRotation:`) cannot match it either.
+ *
+ * **A hazard for anyone copying this pattern, from Idris:** `presetApplyError`
+ * and `profileApplyError` **echo the caller's string** (`unknown preset "<id>"`),
+ * so the same trigger on a `setPreset` or `setProfile` fallback could be fired by
+ * an id that contains the phrase. `setRotation`'s only 400s are the dispatch
+ * default and static payload text, which is why it is safe here — and why this
+ * must not be widened to "any 400".
  *
  * The extra round trip happens only against an app that lacks the command.
  */

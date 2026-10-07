@@ -106,7 +106,14 @@ describe('the obsrv-dev proxy', () => {
       listChanged++
     })
     const inherited = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined))
-    await client.connect(new StdioClientTransport({ command: process.execPath, args: [PROXY], env: { ...inherited, OBSRV_DEV_HOME: home } }))
+    // `OBSRV_TEST=1` is the launch fence (`tests/unit/mcpStubFence.test.ts`):
+    // without it, any MCP server reached through this proxy that hits a
+    // discovery which is neither live nor declined will launch the INSTALLED
+    // Obsrv on the developer's real profile. This test lists tools and never
+    // drives a live one, so it was not firing — but the uniform invariant is
+    // worth more than an exemption, and fencing it changes nothing here
+    // (measured: 13 of 13 either way).
+    await client.connect(new StdioClientTransport({ command: process.execPath, args: [PROXY], env: { ...inherited, OBSRV_TEST: '1', OBSRV_DEV_HOME: home } }))
   }, 20_000)
 
   afterAll(async () => {

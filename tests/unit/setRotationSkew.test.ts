@@ -41,7 +41,14 @@ async function driveRotate(controlFile: string, rotate = true): Promise<{ isErro
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER],
-    env: { ...process.env, OBSRV_CONTROL_FILE: controlFile },
+    // **`OBSRV_TEST=1` is a fence, not a formality.** `ensureLive` uses a
+    // reachable app without consulting it, but any discovery that comes back
+    // neither live nor declined asks `cannotLaunchReason`, which returns null on
+    // a Mac without this variable — and then the server **launches the installed
+    // Obsrv on the developer's real profile**, takes the desk and writes to it.
+    // Nothing sets it for unit runs. Found by Idris on the pushed head (#4205),
+    // who had made exactly that accident by hand earlier the same day (#4018).
+    env: { ...process.env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: controlFile },
   })
   await client.connect(transport)
   try {
