@@ -916,6 +916,11 @@ reading, so "the frame had not been painted" is a reading that still fits and is
 **(2)** The assertion cannot tell them apart either, as above: `normal[0] > normal[1] + 40` fails on `[0,0,0]` for the same reason as on white. What is still true: every firing this register records passed on its retry, the pixel is printed, and the next
 person should read the pixel before the channel. Not a rate, no cause, and no change to the 2-in-178 count above (this run was created after that window closed at 04:26Z).
 
+**Seen again 2026-10-07, and this one was white, 15 minutes after the black one reached the card (`#607`).** Run `37623842232`, job `112801077324` (`#605`'s pull-request suite): first attempt `✘` in 624 ms at 13:16:27Z, `retry #1` `✓` in 611 ms;
+`Error: middle pixel rgb: [255,255,255]`, `Expected: > 295, Received: 255` at `vision.spec.ts:114:68` (found by Wren, `#4341`; read again from the raw log by Dogu, md5 `5dc50112…`). **The sixth sighting, and the pixel is now recorded for five of the six:** four recorded
+white (`[255,255,255]`), one read as white from two channels (09-17, blue discarded by the old message), one black (10-06). **So the black firing is one of six, not a change of colour**, and what the white ones and the black one have in common is still only that the frame had
+nothing in it; nobody has said whether one path makes both. The card (`board/bug-vision-47-normal-not-red.md`, Henry's) was merged before this run finished and does not count it; it is not edited here. Not a rate; no cause.
+
 ## `throttle-live.spec.ts:55`: the un-throttle ratio, contention only
 
 `the menu applies a CPU rate to the target: the same work takes several times
@@ -1735,6 +1740,12 @@ an unrelated reason (something sweeps `/private/tmp`), so it cannot be inspected
 **Not investigated further here, deliberately:** `tests/e2e/cli.spec.ts` is not a file this session
 may edit without Opeyemi's say-so, so this entry is a record rather than a fix, and nothing about the
 spec or the CLI's teardown was changed.
+
+**Seen a third time, 2026-10-07, and again exactly one directory.** Run `37623842232`, job `112801077324` (`#605`'s pull-request suite, 13:01:28Z), first attempt `✘` in 627 ms,
+`retry #1` `✓` in 866 ms: `Expected: []`, `Received: ["obsrv-cli-sab9po"]` at `cli.spec.ts:253`, a suffix the two above do not show (found by Wren, `#4341`; read again from the raw log by Dogu, 212,953 bytes, 1,469 lines, md5 `5dc50112…`). The test that ran
+immediately before it, `cli.spec.ts:203` ("snap leaves no obsrv-cli-* user-data dirs behind in os.tmpdir", 4.7 s), passed. **What this adds to "The second sighting tilts it":** three occurrences, each with exactly one directory and a different
+suffix, which is the same tendency and still not proof; the creation-time measurement above is still what would separate the two readings, and nobody has made it. **What it does not say:** nothing about cause, nothing about a rate (this entry has never had a denominator),
+and `#605` changes only `docs/e2e-flakes.md`, so the failure cannot come from that PR's content. `tests/e2e/cli.spec.ts` is still not a file a session may edit without Opeyemi's say-so, so this remains a record.
 
 ## `panes.spec.ts`, the `page.press` timeout, named because it shares a test with a card it is not evidence for
 
