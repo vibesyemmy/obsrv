@@ -1450,8 +1450,8 @@ had not been re-checked since; the `waiting:` line named Henry for it. Item by i
   (`answeredOwnStart, byDocument, mirrorRequested, viaBusDocument, viaMirrorUrl, viaNotByDocument`).
 - **(b) a genuine same-address `location.replace` reports the note, with a control that fails when the guard at
   `ipc.ts:245` is loosened — MET**, by `mcp-live.spec.ts:746` and `:997` going red under sabotage A (the
-  `!byDocument` half dropped), measured by Idris. **Henry's first answer on this item was wrong**: he reported the
-  half as uncontrolled, having searched only `arrivals.spec.ts`, where the controls live in `mcp-live.spec.ts`.
+  `!byDocument` half dropped), measured by Idris. **Henry's first answer on this item was wrong**: the half was
+  reported as uncontrolled, having searched only `arrivals.spec.ts`, where the controls live in `mcp-live.spec.ts`.
 - **(c) a mirrored load never reports it, with its own control — MET.** Sabotage C (`isBusCommit` forced to
   `false`, rebuilt) reds `arrivals.spec.ts:184` only, and it stays green under both halves of the ipc guard being
   loosened, which is right: its lever is the mirror decision, not that guard.
@@ -1460,7 +1460,7 @@ had not been re-checked since; the `waiting:` line named Henry for it. Item by i
   control, which is met**: 280 runs, Idris, 10-06.
 - **(e) the `docs/e2e-flakes.md` entry says it was a bug and not a flake — MET.** The entry already reads *"FIXED
   ON `main` 2026-10-05 (`d7942280b`), so a failure here now is a REGRESSION, not a sighting."* **Henry's first
-  search for it returned 0 hits** because the phrase he searched contains markdown (`a candidate **correctness**
+  search for it returned 0 hits** because the phrase searched contains markdown (`a candidate **correctness**
   bug`); a whitespace-flattened search found it. A near-miss report of a fixed doc as unfixed.
 
 **What this closure does NOT cover, and it has its own card.** The two controls for (b) are **order-dependent**:

@@ -135,6 +135,15 @@ give each test its own query (`?t=746`, `?t=997`) — a unique query makes the U
 differ. **The pair went `✓ ✓`, and the order that was red (`:746` -> `:760` -> `:785` -> `:997`) went `✓`
 throughout.** Not run with the whole file, and not sharded.
 
+**One more of mine, since this card is where the harness mistakes are collected.** When the board-only
+required check came back green having run nothing, I reported verifying the mechanism in `ci.yml` rather
+than inferring it from a short log. **The log I had already pulled says it three times in plain words** —
+*"Board-only change: the suite was NOT run. This green means the change touches only `board/` — not that
+the tests passed"* — at lines 35, 36 and 55 **of 56**, and `ci.yml` has printed it since 2026-09-15
+(`a20bf2f`). I read the first 30 lines, grepped for result lines, and went to the workflow; the answer was
+below where I stopped. **Reading a 56-line log to its end would have been quicker than reading the
+workflow**, and my account made not doing so sound like diligence.
+
 **So the fix is now specified rather than guessed, and it is still open.** The fixture is used by those two
 tests only, and an unqueried load keeps the old key, so nothing else changes. **The control stays the same:**
 insert `:785` before it and it must still pass.
