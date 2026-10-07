@@ -382,6 +382,8 @@ describe('the whole report', () => {
     const { fn, calls } = stub()
     const r = status.buildReport(fn, {}, () => AT)
     expect(r.text).toContain('NOT CONFIGURED: set OBSRV_ROOM_DB to the room database file, and OBSRV_ROOM_ID')
+    // It says what to run, not only what is missing: a fresh session hit exactly that gap.
+    expect(r.text).toContain("To read it, run: OBSRV_ROOM_DB=<path to the room database file> OBSRV_ROOM_ID=<the room's id, or all> npm run status")
     expect(r.text).toContain('This is NOT "no PASS found"')
     expect(r.text).not.toContain('no PASS verdict found')
     expect(calls.some(c => c.cmd === 'sqlite3')).toBe(false)
@@ -393,6 +395,8 @@ describe('the whole report', () => {
     const { fn, calls } = stub()
     const r = status.buildReport(fn, { OBSRV_ROOM_DB: '/x.db' }, () => AT)
     expect(r.text).toContain('NOT CONFIGURED: set OBSRV_ROOM_ID to the id of the room that talks about this repository')
+    expect(r.text).toContain("To read it, run: OBSRV_ROOM_ID=<the room's id, or all> npm run status")
+    expect(r.text).not.toContain('<path to the room database file>')
     expect(r.text).toContain('This is NOT "no PASS found"')
     expect(r.text).not.toContain('no PASS verdict found')
     expect(calls.some(c => c.cmd === 'sqlite3')).toBe(false)

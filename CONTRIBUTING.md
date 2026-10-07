@@ -165,6 +165,17 @@ were in good faith, and both produced a verdict-shaped sentence that was not the
 guard catches a mistaken paraphrase and a false claim of authority, which is why it is worth keeping
 for the first reason even if you never expect the second.
 
+**Reading the evidence for a gate: `npm run status`.** It lists the open PRs, their heads and the suite runs on
+them and, when it is told where the room is, a ledger of the `PASS:` lines against each head. It is evidence and
+not a verdict, and it only reads. **The ledger needs two variables, set per machine and per session, because one is
+a path to a local file and the other is a room id, so neither can live in the repo:**
+`OBSRV_ROOM_DB=<path to the room database file> OBSRV_ROOM_ID=<the room's id, or all> npm run status`.
+**Without them that section says `NOT CONFIGURED`, which is not "no PASS found", and the command still exits 0:** a
+script or a skim that reads only the exit code cannot tell a run with the ledger from a run without it, so read the
+text, or check that both variables are set. **A suite is counted from its job log, not from the run's conclusion:**
+pull the job by id from the raw API, per attempt, and write down its bytes, lines and an md5, as `docs/e2e-flakes.md`
+sets out under "Method, for the next count".
+
 ## Work parked on somebody's word is still somebody's work
 
 **If a card is waiting on a person, hand it over rather than let it be rebuilt.**
