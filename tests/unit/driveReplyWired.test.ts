@@ -104,9 +104,17 @@ async function drive(): Promise<{ isError: boolean; structured: Record<string, u
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [SERVER],
-    // No OBSRV_TEST here: it refuses to launch an app, and nothing should be
-    // launched anyway — the stub is already "running" as far as discovery goes.
-    env: { ...process.env, OBSRV_CONTROL_FILE: controlFile },
+    // **`OBSRV_TEST=1` is the launch fence.** An earlier version of this file
+    // left it out and argued for doing so — "nothing should be launched anyway"
+    // — which is the reasoning inverted: refusing to launch is exactly what a
+    // stub test wants. `ensureLive` uses a reachable app without consulting the
+    // variable, but a discovery that comes back neither live nor declined asks
+    // `cannotLaunchReason`, which returns null on a Mac without it, and the
+    // server then **launches the installed Obsrv on the developer's real
+    // profile** — on every `npm test`, and invisibly on CI where no app is
+    // installed. Found by Idris (room #4205), who had made that exact accident
+    // by hand the same day. `tests/unit/mcpStubFence.test.ts` now guards it.
+    env: { ...process.env, OBSRV_TEST: '1', OBSRV_CONTROL_FILE: controlFile },
   })
   await client.connect(transport)
   try {
@@ -142,6 +150,17 @@ describe('the live drive reply, against a stub control server', () => {
 
   it('carries no `orientation`, which is what a restored `...status` spread would break', async () => {
     const r = await drive()
+    // **Asserted before the key check, and what it is for was measured rather
+    // than assumed — my first version of this comment got it wrong.**
+    // `OBSRV_TEST=1` also switches on the strict-output check, so under the
+    // restored-`...status` mutant the call comes back as an ERROR with no
+    // `structuredContent`: the key check below then passes over an empty list.
+    // It is the `rotated` assertion that actually catches the mutant, not that
+    // one. So this line is not what makes the test non-vacuous; it is what makes
+    // the FAILURE say the call errored, instead of leaving a reader to work that
+    // out from `rotated` being undefined. Measured both ways: with the mutant
+    // and without this line the file is still 2 failed of 3.
+    expect(r.isError, r.text.slice(0, 300)).toBe(false)
     expect(Object.keys(r.structured), 'the drive reply carries a key its published schema refuses').not.toContain('orientation')
     // The fact it replaces, so the removal did not take the information with it.
     expect(r.structured['rotated']).toBe(true)
