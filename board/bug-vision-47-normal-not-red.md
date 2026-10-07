@@ -360,3 +360,64 @@ this**. What is excluded is the simple story where white belongs to a past the c
 `[0,0,0]` and `[255,255,255]` are reachable through the same unpainted-frame path. **Nobody has read the
 capture path for that.** What this sighting adds is that **"wait for a non-white firing and then move the
 card" is spent** — it happened, and the card is no better placed to say which bug it is.
+
+## A SEVENTH SIGHTING, 2026-10-07 14:44Z, BLACK — and this pair kills the "different trees" escape
+
+**Reported by Wren (#4447) and Idris (#4448) from `#613`'s suite; the figures below are my own raw pull of
+the same job, not a restatement of theirs.** Run `37635752007`, `pull_request`, attempt 1, `success`; job
+`112841484737`, 14:19:58Z to 14:44:50Z. **212,176 bytes, 1,445 lines, md5
+`9686681252dd91f1a2fa2f85f46d760b`** — byte-identical to both of their pulls. Checkout line `HEAD is now at
+f7941e5 Merge ecafa5a8… into 125538c3…`.
+
+| run | job | first attempt | the pixel |
+| --- | --- | --- | --- |
+| `37635752007` (`#613`'s suite at `ecafa5a8`) | `112841484737` | `✘` 14:44:38Z, 153 ms (line 1334); `✓` on retry at 1339, 477 ms | **`middle pixel rgb: [0,0,0]`** (line 1346), `Expected: > 40` (1350), `Received:   0` (1351), against the assertion at `:114` |
+
+The suite was green — **661 passed, 1 flaky, 1 skipped (23.0m)**, `✘` 1 and `(retry #` 5 — so this is again a
+first-attempt failure rescued on retry. `#613` changes `tests/fixtures/grows-as-walked.html` and adds
+`tests/unit/growsAsWalkedFixture.test.ts`; `vision.spec.ts` loads neither, so it cannot come from that
+diff's content.
+
+**The counts:** **seven sightings — four recorded `[255,255,255]`, one read as white from two channels
+(09-17), two `[0,0,0]` (10-06 12:59Z and this one). The pixel is recorded for six of the seven.**
+
+### The colours alternate, so neither belongs to a closed past
+
+By firing time: white 09-23, 09-29, 10-06 03:40Z; **black 10-06 12:59Z; white 10-07 13:16Z; black 10-07
+14:44Z.** The section above used white-after-black to exclude a single move from white to black. This is
+**black after white again** — the colours alternate twice, and no ordering story closes either of them.
+
+### What is new: the product code was identical across a white and a black firing 88 minutes apart
+
+The sixth-sighting section left one escape open in as many words: the white and black firings sat on
+**different trees**, "so a change in behaviour between those trees is not excluded by this." **For this
+pair it is now excluded, by a diff rather than an argument.**
+
+The 10-07 white fired on `#605`'s head over `00408e5c` (13:16:27Z); this black fired on `#613`'s head over
+`125538c3` (14:44:38Z). `00408e5c` **is an ancestor** of `125538c3`, with **5 merge commits and 17 commits
+between them**, and `git diff --name-only 00408e5c 125538c3` returns **four files in total**:
+
+```
+board/bug-vision-47-normal-not-red.md
+docs/e2e-flakes.md
+tests/e2e/cli-walk.spec.ts
+tests/e2e/live-capture-notes.spec.ts
+```
+
+**Nothing under `src/` — zero files.** Two board documents and two e2e specs, neither of them
+`vision.spec.ts` and neither loaded by it. So **both colours are reachable from the same product code**,
+88 minutes apart. That leaves **one fault with two appearances**, not two faults separated by a tree.
+
+**What this does NOT establish, and the distinction matters because the test is timing-sensitive.**
+Identical product code is not identical conditions: the two changed spec files alter what else the suite is
+running, the two runs are on different hosted runners, and the register's kill-line snapshots show the
+runners' load differs a great deal between jobs. **The escape that closes is "Obsrv's own behaviour changed
+between those trees"; the escape that stays open is the runner.** The 10-06 white/black pair is also
+untouched by this — those trees are about a dozen merges apart and I have not diffed them.
+
+### Where that leaves the card
+
+The card's named discriminator (a non-white pixel) was already spent. What replaces it as the open question
+is sharper than before: **one unpainted-frame path that can read either `[0,0,0]` or `[255,255,255]`
+depending on the runner, on one build.** Nobody has read the capture path for whether those two values are
+reachable through the same branch — that reading, not the next sighting, is what this card now needs.
