@@ -270,8 +270,8 @@ title ("comes back white") no longer covers every sighting.
 
 **What is established about the two colours, and no more.** My first draft said white was "composited
 wrong" and black "a frame with nothing in it at all, which is not the same question" — **that contradicts
-this card eleven lines earlier**, which says *"White is what an unpainted surface looks like"* and
-attributes white to the unpainted-frame path (Idris caught it). What holds: **both readings are an
+this card under *"The mechanism, named and NOT proven"*** (line 64), which says *"White is what an
+**unpainted** surface looks like"* and attributes white to the unpainted-frame path (Idris caught it). What holds: **both readings are an
 empty-looking frame and they differ in colour.** White fits an unpainted surface because white is the
 page's background; black fits a surface never filled, or a cleared backing store. **Whether one path
 produces both is the open question below, not something this section answers.**
@@ -287,7 +287,7 @@ sourced it): **five sightings — three recorded `[255,255,255]`, one read as wh
 (`34977896287`, 09-17, where the old message discarded blue and could not tell `255,255,255` from
 `255,255,0`, `vision.spec.ts:109`), and one `[0,0,0]`. The pixel is recorded for four of the five.** My
 first draft said "four white and one black ... recorded for all five", which contradicted this card's own
-line *"Four sightings, and the pixel is recorded for three of them"* two sections above — **the card was
+line *"Four sightings, and the pixel is recorded for three of them"* in the section above — **the card was
 right and I was one sighting too generous in both halves.**
 
 **What I would want before anyone moves this card anywhere:** whether `[0,0,0]` is reachable through the
