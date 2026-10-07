@@ -49,17 +49,37 @@ controls for a `release: blocks` item.
 3. **"A predecessor that leaves the target on a different page restores it"**, mine — **refuted** by
    `:760`, which measures another page and does not restore it.
 
-## What is known about the one predecessor that does restore it
+## ESTABLISHED: the preset change is the active ingredient, not the navigation
+
+**Measured by changing one thing inside the restoring test rather than comparing two different tests.**
+`:977` is `obsrv_drive { url: fixture('tall.html'), preset: 'android-65' }`. Dropping **only** the
+`preset` from that call, so it still navigates away, and running `:746` -> `:977` -> `:997` three times
+each way:
+
+| `:977`'s call | `:997` |
+| --- | --- |
+| `{ url, preset: 'android-65' }` (as shipped) | **passes 3 of 3** |
+| `{ url }` only, preset change removed | **fails 3 of 3** |
+
+**So a preset change is what restores `:997`'s ability to see the reload, and navigating away does not.**
+This is a within-test comparison with one variable moved, which is why it settles what the earlier
+`:977`-against-`:760` pair only pointed at: that pair was one instance each way across two different tests.
+
+**What it still does not say:** *why* a preset change restores it. The remaining hypothesis is that
+changing the preset recreates the target's web contents and so clears the session storage the fixture
+keys its one reload off. **That is unrun**, and the experiment is below.
+
+## What was known about the one predecessor that does restore it
 
 `:977` is `obsrv_drive { url: fixture('tall.html'), preset: 'android-65' }` — it **navigates away AND
 changes the preset**, and it is the only preset change between lines 746 and 997, so the effect cannot be
 confirmed on a second instance without writing a test. `:760` navigates away without a preset change and
 does not restore it, which points at the preset change rather than the navigation.
 
-**The experiment that would settle it, named rather than left to be re-derived:** load the fixture, set a
-`sessionStorage` key, apply a preset change through the control server, and read the key back. If a preset
-change recreates the target's web contents and clears session storage, the mechanism is explained and the
-fix is obvious. **Nobody has run it.**
+**The experiment that would settle the remaining question, named rather than left to be re-derived:** load
+the fixture, set a `sessionStorage` key, apply a preset change through the control server, and read the key
+back. If a preset change recreates the target's web contents and clears session storage, the mechanism is
+explained. **Nobody has run it** — and it is no longer needed for the fix below, only for the explanation.
 
 ## The fix this is asking for, which is not "find the cause"
 
