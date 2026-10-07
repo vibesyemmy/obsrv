@@ -309,3 +309,54 @@ reporter, who said as much in their own check of this PR.
 **It is also the same error twice in two days.** This morning I raised exactly this against the
 `live-capture-notes` entry, having done it myself with run `37284069660`: **noticing a sighting inside a CI
 count is not recording it on the card.**
+
+## A SIXTH SIGHTING, 2026-10-07, AND IT IS WHITE AGAIN — recorded in minutes rather than in a day
+
+**Filed within three minutes of the run, which is the point.** The section above records that the black
+firing sat unrecorded for a day because noticing it in a CI count is not recording it here. **The figures,
+from the stamps rather than from my impression** (an earlier version of this heading said "fifteen minutes"
+and the text "within twenty" — both wrong, Wren): the run completed **13:16:39Z**, Wren reported it at
+**13:18:03Z** (**84 seconds**), and this card change was opened at **13:19:25Z** (**2 min 46 s** after the
+run). The shorter figures are the ones that make the point.
+
+| run | job | first attempt | the pixel |
+| --- | --- | --- | --- |
+| `37623842232` (`#605`'s suite at `d6c08910`) | `112801077324` | `✘` 13:16:27Z, 624 ms; `✓` on retry at 13:16:30Z | **`middle pixel rgb: [255,255,255]`**, `Expected: > 295`, `Received: 255` |
+
+**My own raw pull** (212,953 bytes, 1,469 lines, md5 `5dc501124fe8be43354177f4e010d3b8`): the cross at line
+1332, the retry at 1337, the pixel at 1369 against the assertion at `:114`. The suite was green — 660
+passed, 2 flaky — so this is a first-attempt failure rescued on retry, **like the five whose retry this card
+records**. (An earlier version said "like all six"; Idris checked it and the 09-17 sighting's own account
+here never records a retry rescuing it — what it records is that another test had always failed before it in
+the same run.)
+
+**The counts, with the same care as the section above:** **six sightings — four recorded `[255,255,255]`,
+one read as white from two channels (09-17), one `[0,0,0]` (10-06). The pixel is recorded for five of the
+six.**
+
+## What the sixth does to this card's own closing logic, and it is worth saying plainly
+
+The card's closer is *"a firing whose pixel is **not** white, which would move the card to the rendering
+branch and make it a different bug"*.
+
+**The argument as first written here was wrong and Wren caught it.** It said the white firing followed the
+black one "fifteen minutes later" and that "both readings are live in the same hour" — **but those fifteen
+minutes are from when the black one reached this CARD (13:01Z on 10-07) to the white FIRING (13:16:27Z),
+which compares a board edit with a test run.** The firings are **24 hours apart**: black at **12:59:58Z on
+10-06**, white at **13:16:27Z on 10-07**.
+
+**The ordering carries the conclusion without needing any of that.** White on 09-23, 09-29 and 10-06
+03:40Z; **black on 10-06 12:59Z; white again on 10-07 13:16Z.** So **a single move from white to black is
+excluded, because white fired after black.** What it leaves is the harder shape the card has been circling:
+one fault with two appearances, or two faults sharing a test — and the discriminator the card named (a
+non-white pixel) **does not separate those two**, since both colours fire in the same stretch of days.
+
+**The limit, which the first version overstated as "rules out".** The two firings are on **different
+trees** — the black one tested `#592`'s head on that day's `main`, the white one tested `#605` on
+`00408e5c` after about a dozen merges — so **a change in behaviour between those trees is not excluded by
+this**. What is excluded is the simple story where white belongs to a past the card can close.
+
+**That is a limit on the card's own plan, not a new cause**, and the open question is unchanged: whether
+`[0,0,0]` and `[255,255,255]` are reachable through the same unpainted-frame path. **Nobody has read the
+capture path for that.** What this sighting adds is that **"wait for a non-white firing and then move the
+card" is spent** — it happened, and the card is no better placed to say which bug it is.
