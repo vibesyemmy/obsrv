@@ -191,7 +191,18 @@ test('a window capture of a painting page with the skin on says the ghosting is 
   expect(set.applied, `the skin was refused: ${JSON.stringify(set)}`).toBe(true)
 
   const r = await call('captureTarget')
-  expect(warningsOf(r), JSON.stringify(warningsOf(r))).toContain(
+  // **The verdict, not only the warnings — and the reply knew it all along.**
+  // The sightings in this test's register entry were diagnosed by inferring the
+  // settle verdict from the warnings array's *length*: a reply that doubts its
+  // own frame leaves one warning and no settle sentence, and `settled: true` is
+  // the only verdict that pushes none (`ipc.ts:1766-1771`). That took three
+  // readers and a round of deduction to establish; printing it makes the next
+  // sighting say it. `unsettledReason` is absent when settled, and a page still
+  // `painting` arrives as `'timeout'` (`settleFields`, `ipc.ts:1184`).
+  expect(
+    warningsOf(r),
+    `settled=${JSON.stringify(r.settled)} unsettledReason=${JSON.stringify(r.unsettledReason)} warnings=${JSON.stringify(warningsOf(r))}`,
+  ).toContain(
     'the onion skin is blending two frames of a page that keeps painting: the ghosting is the animation, not the raster',
   )
 })
