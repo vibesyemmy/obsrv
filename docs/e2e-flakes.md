@@ -1211,7 +1211,11 @@ first, since a loop-breaker fixture racing a fixed 3 s window
 (`LOOP_WINDOW_MS`, see `sync.spec.ts:138`'s entry above) on a loaded runner is
 a narrower margin than most of this suite already accepts elsewhere.
 
-## `live-capture-notes.spec.ts:183`: the stale-frame note crowds out the onion-skin one
+## `live-capture-notes.spec.ts:183`: a frame-identity warning where the onion-skin sentence was expected
+
+**Corrected 2026-10-07: the heading used to say the stale-frame note "crowds out" the onion-skin one, and the code does not do that.** The two sentences the first sightings and the later ones show are branches of one function
+(`frameIdentityWarning`), and the frame warning is pushed independently of the onion-skin sentence; its absence means the settle verdict was `settled`. The older text below is kept as it was written, and what
+the code shows is in "Two more sightings" at the end of this entry (Wren, `#4291`; Henry, `#4293`; Idris, `#4292`).
 
 `a window capture of a painting page with the skin on says the ghosting is
 the animation` expects the reply to contain the onion-skin blending sentence
