@@ -1247,7 +1247,7 @@ seen it when counting `#558`'s suite before merging it (`#3440`) and recorded th
 
 | run | where | first attempt | retry | the reply's warnings |
 | --- | --- | --- | --- | --- |
-| `37284069660`, job `111687482088` | 10-05 08:30Z, pull request (`#558`'s suite, `fix/redirect-arrival-not-the-mirror`) | `✘` 5.5 s | `✓` 4.1 s | exactly `["the renderer did not say which frame it drew, so the capture may show an older frame than the target painted"]` (two hits in the log: the error line and `Received array:` of the one attempt) |
+| `37284069660`, job `111687482088` | 10-05 09:09Z, pull request (`#558`'s suite, `fix/redirect-arrival-not-the-mirror`) | `✘` 5.5 s | `✓` 4.1 s | exactly `["the renderer did not say which frame it drew, so the capture may show an older frame than the target painted"]` (two hits in the log: the error line and `Received array:` of the one attempt) |
 | `37463948210`, job `112270207388` | 10-06 12:46Z, pull request (`#592`'s suite) | `✘` 5.1 s | `✓` 3.3 s | the same single sentence |
 | `37619435722`, job `112785754822` | 10-07 12:26Z, `main` push (`#603`'s merge) | `✘` 4.4 s | `✓` 4.0 s | the same single sentence |
 
@@ -1262,7 +1262,7 @@ The register's older "crowds out" sentence mentioned a producer's order in `capt
 
 **What `acked === null` means, from the code:** `flushRendererDraw` (`src/main/ipc.ts:1574`) sends the renderer a draw request and waits
 **`DRAW_FLUSH_MS` = 400 ms** for its acknowledgement; no answer in 400 ms (or a destroyed window, or the test-only `OBSRV_TEST_NO_DRAW_ACK`) resolves `null`. **So
-the no-acknowledgement sentence is the "renderer did not answer a draw within 400 ms" branch**, a short wait on a runner whose load average the kill snapshots put at 15 on 3 cores,
+the no-acknowledgement sentence is the "renderer did not answer a draw within 400 ms" branch**, a short wait (in the 10-06 job a kill snapshot 86 s before the `:183` `✘` puts the runner at load 16.82 15.88 11.90 on 3 cores; the 10-05 and 10-07 logs have no kill report, so that is one sighting of three),
 while the earlier two sightings are "the renderer answered with a frame number behind the latest sent". Both are reading, not measurement: nothing in these logs says why
 the renderer was late or behind.
 
