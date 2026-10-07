@@ -2358,8 +2358,8 @@ above. The last two are the same test failing both attempts of one job, each wit
 `mirror-302.spec.ts:99` entry.
 
 **Counted again, 2026-10-07: 38 hits in 32 jobs, 21 silent and 17 `quitting`, 31 followed by a `✘` and 7 by a `✓`** (Dogu; one count, not yet read by anyone
-else). **The sweep:** every `ci.yml` run created after 2026-10-06 04:26:00Z through run `37591133225` (created 10-07 08:02Z, the latest there was when the sweep ran), every attempt, the suite job of
-each pulled by id from the raw API: 42 runs listed, **40 suite jobs read, 0 unread**, 22 of them 600 s or more. **It reproduces the totals already recorded:** its hits
+else). **The sweep:** every `ci.yml` run created after 2026-10-06 04:26:00Z and before 08:26Z on 10-07 (**this takes in run `37413726703`, the boundary, which the section above already counts: it is one of the jobs read and its hit is not counted twice**), every attempt, the suite job of
+each pulled by id from the raw API: **42 runs listed: 37 of id up to `37590281828`, and five above it** (`37591086451` and `37591133225`, whose suites were cancelled and are read, with no hit; `37593043755`, `37593275426` and `37593512567`, whose suites were still running and are **not** read). **40 suite jobs read, 0 unread**, 22 of them 600 s or more. **It reproduces the totals already recorded:** its hits
 between the boundary and run `37437677489` are the four in the table above and `37437677489` (`solo-target.spec.ts:128`), which with the 30 in 26 above are the
 **35 in 29, 18 silent and 17 `quitting`** the snapshot card quotes. Four more since, all silent, all followed by a `✘`:
 
