@@ -1,10 +1,9 @@
 ---
 title: "a page that redirects itself back to the address the pane already holds can go unreported, and it is not a timing race"
-column: doing
+column: done
 owner: "Henry"
 kind: bug
 release: blocks
-waiting: "Henry: re-check the other acceptance items on today's tree — the throttled control is met, 280 runs, 2026-10-06"
 criterion: C5
 order: 90
 ---
@@ -1429,3 +1428,51 @@ independent implementation.
 `ipc.ts:245`, the control for the mirrored case, and the register entry. Idris said plainly those were not
 re-checked, and I am not going to let (d) being met read as the card being done. **That is my work, not
 Idris's**, and the `waiting:` line says so.
+
+## DONE 2026-10-07: every acceptance item met or replaced, each one re-checked on the tree rather than taken from this card
+
+The fix merged as `d7942280b` on **10-05** (`git show -s` gives 2026-10-05 10:29:40 +0100, and the register
+says 10-05 too; an earlier version of this section said 10-06 — Wren). **What kept this card open after that
+was its own acceptance list**, which
+had not been re-checked since; the `waiting:` line named Henry for it. Item by item, with what was run:
+
+- **(a) the cause named from a run that recorded `byDocument` and the `starts` entry — MET.** No code change was
+  needed to answer it: `arrivals.spec.ts`'s probe **prints on every pass by design** (its own comment: an
+  instrument that runs only on the failure path is a control nobody has watched succeed). Run on `main`'s code,
+  both tests `✓`, and the two cases differ in exactly the field this card names — the mirrored load (**the case
+  the probe LABELS `(:71)`, now at `arrivals.spec.ts:184`**) gives `matched.byDocument false`,
+  `startsForThisUrl 2`, no note; the genuine self-redirect (**labelled `(:89)`, now at `:226`**) gives
+  `byDocument true`, `startsForThisUrl 4`, the note present. **Those labels are stale strings in the spec**,
+  hardcoded at `:200` and `:253` and left behind as the file grew, so a reader who greps this card for
+  `:184` would otherwise meet two numberings for one test — found by Wren. **Fixing them in the spec is owed
+  to the next PR that touches `arrivals.spec.ts`**, which is the order-independence fix. The `starts` entry is recorded whole
+  (`answered, at, url, byDocument, mirrored, fromBusDocument`) with every commit carrying `mirrorTerms`
+  (`answeredOwnStart, byDocument, mirrorRequested, viaBusDocument, viaMirrorUrl, viaNotByDocument`).
+- **(b) a genuine same-address `location.replace` reports the note, with a control that fails when the guard at
+  `ipc.ts:245` is loosened — MET**, by `mcp-live.spec.ts:746` and `:997` going red under sabotage A (the
+  `!byDocument` half dropped), measured by Idris. **Henry's first answer on this item was wrong**: the half was
+  reported as uncontrolled, having searched only `arrivals.spec.ts`, where the controls live in `mcp-live.spec.ts`.
+- **(c) a mirrored load never reports it, with its own control — MET.** Sabotage C (`isBusCommit` forced to
+  `false`, rebuilt) reds `arrivals.spec.ts:184` only, and it stays green under both halves of the ipc guard being
+  loosened, which is right: its lever is the mirror decision, not that guard.
+- **(d) `arrivals.spec.ts` passing on first attempt across a sweep — WITHDRAWN as a gate** (see above) because the
+  test's premise is a single-digit-millisecond race, so a sweep measures the machine. **Replaced by the throttled
+  control, which is met**: 280 runs, Idris, 10-06.
+- **(e) the `docs/e2e-flakes.md` entry says it was a bug and not a flake — MET.** The entry already reads *"FIXED
+  ON `main` 2026-10-05 (`d7942280b`), so a failure here now is a REGRESSION, not a sighting."* **Henry's first
+  search for it returned 0 hits** because the phrase searched contains markdown (`a candidate **correctness**
+  bug`); a whitespace-flattened search found it. A near-miss report of a fixed doc as unfixed.
+
+**What this closure does NOT cover, and it has its own card.** The two controls for (b) are **order-dependent**:
+`:997` goes green-but-blind when a particular test precedes it, and the active ingredient is now established as a
+**preset change** (removing only the `preset` from the restoring call flips it: passes 3 of 3 with, fails 3 of 3
+without). That is `bug-live-reload-control-is-order-dependent`, filed rather than folded in here — **the
+acceptance never asked for order-independence, and closing a gap by widening the item it belongs to is the
+comfortable direction.** **The mechanism was unrun when that card was
+written and has since been run** (Idris, room `#4246`, before this closure): it needs a fresh document **and**
+a cleared `sessionStorage` key, and a preset change supplies the second only when it moves the device scale
+factor. That card now carries the correction, including that two of its three "refutations" rested on invalid
+experiments of mine.
+
+**Of the four items, the two answered by reading were the two answered wrongly first** ((b) and (e), both
+Henry's); the two answered by running something held up. That is the lesson this card leaves.
