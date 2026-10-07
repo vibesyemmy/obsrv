@@ -199,7 +199,18 @@ test('a page that grew under the walk is told it grew, not offered a modal', asy
   const m = JSON.parse(r.stdout)
   expect(m.walked).toMatchObject({ atEnd: true })
   const warnings = m.warnings.join(' ')
-  expect(warnings).toMatch(/the page grew as it was walked/)
+  // **The measurement, not only the sentence.** This test failed on both attempts of
+  // `main`'s `#606` push suite with the motion note and no coverage sentence at all
+  // (`docs/e2e-flakes.md`, the `cli-walk.spec.ts:192` entry). The reading is that the
+  // fixture's 40 rows arrived AFTER the figures were taken (the scroll event for the
+  // walk's return to the top is delivered at the next frame, and nothing guarantees one
+  // before the figures), which would leave the page near six rows tall (about 2,500 px)
+  // at measurement. `pageHeight` is what says so: a short one beside the motion note
+  // proves it, and a tall one would contradict it. It is already in the audit's JSON.
+  expect(
+    warnings,
+    `pageHeight=${JSON.stringify(m.pageHeight)} walked=${JSON.stringify(m.walked)} warnings=${JSON.stringify(m.warnings)}`,
+  ).toMatch(/the page grew as it was walked/)
   expect(warnings).not.toMatch(/a modal or a locked scroll/)
 })
 
