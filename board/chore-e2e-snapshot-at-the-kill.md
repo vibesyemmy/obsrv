@@ -120,6 +120,17 @@ well as "starved", and `ps` inside the guest cannot show a hypervisor taking the
 resolved, then `element is visible, enabled and stable`, `scrolling into view if needed`, `done scrolling`, **`performing click action`**, then nothing for the rest of the 30 s, so the actionability checks all
 passed and the stall was in the click being performed. The next datum that would help is on the harness side, which is what the parent row below is for.
 
+**The second snapshot from a real hang, 2026-10-06 (`#592`'s suite at `4bc5914e`, run `37463948210`, job `112270207388`, attempt 1, `success`; `flow-type-text.spec.ts:100`, first attempt 30.0 s, retry `✓` in 644 ms).**
+Found by Idris (`#4090`); read again here from the raw job log (1,532 lines, 222,296 bytes, md5 `23b6b4b0`), where it is the run's one `app.close() has taken 10003 ms`. Kill line 12:45:32.877Z; snapshot header 155 ms later (`ps took 96 ms`),
+tail silent (`starting` at 12:44:51.019Z, `gpu`, no `quitting`), so the app had been up **42 s** and logged two lines, 0.4 s apart, in the first of them. **Same shape as the first, nearly figure for figure:** the app idle, not busy and not stopped:
+main `S<s` at **0.0%** with **0:01.18** of CPU in 00:42 (the first: 0:00.50 in 41 s), the gpu helper 1.2% (0:01.23), the network service and four renderers `S<` at 0.0% (0:00.12 to 0:00.64), **seven processes and none runnable, each carrying `<`**
+(Wren's observation on the first applies unchanged). **The host was saturated again, a little differently:** load 16.82 / 15.88 / 11.90 on 3 cores (462 processes), **`mds` 45.1%**, `mdworker_shared` 40.5%, `mdworker` 30.1%, `mds_stores` 29.7%
+and a second `mdworker_shared` 20.8%, **four of those five in state `U`** (uninterruptible wait, which in the first snapshot no busiest row was). It rules out the same two things as the first (a busy loop in main, which would show
+CPU time in the tens of seconds and shows one; a stopped main) and **names no cause**. Two readings of one shape, now twice: the harness's link stuck, or the runner stalled, and the idle and unrunnable app fits both. What a second one adds: **it is not a
+property of `fit-pan`** (a different file, a different first test, `flow-type-text.spec.ts:100` being the file's first), and the host's Spotlight use was lower (45% against 110%), so the saturation is not one number. What it does not add:
+**this merge ref carries `#593`'s snapshot and not `#594`'s parent row, so the half the parent row exists to show is still unseen**; two hangs are not a rate; and the healthy probes already read Spotlight at 20 to 63%. The register's totals
+(through run `37437677489`) do not include this hit or the first one's run, and are not updated here.
+
 **Control 4 has no deterministic method that I could find, and the last row of the table stays unresolved.** Candidates considered: stopping the Playwright worker stops the
 thing that prints; pausing main through the inspector gives a main that is not running, which is the same row; closing the inspector makes `close()` reject quickly and not hang;
 and Playwright connects to the app's inspector port directly, so the harness has no hook to blackhole it. "The harness's link is stuck while the app is healthy" and "main is
