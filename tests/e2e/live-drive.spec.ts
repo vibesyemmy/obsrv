@@ -239,6 +239,78 @@ test('navigate + setPreset over HTTP actually drive the app', async () => {
   expect(String(custom.body.error)).toContain('custom')
 })
 
+test('setRotation rotates the driven app, and status reports it', async () => {
+  // `setRotation { rotate }` is the command to send (`docs/agent-control.md`).
+  // It replaces `setOrientation`, which named the preset's STORED form, so
+  // `'landscape'` meant "the rotated one" and gave a portrait screen on every
+  // preset stored landscape. The deprecated name is still accepted and has its
+  // own test below this one; both are the same apply.
+  await call('setPreset', { id: 'iphone-61' })
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 393, height: 852 })
+
+  const rotated = await call('setRotation', { rotate: true })
+  expect(rotated.status).toBe(200)
+  expect(rotated.body).toMatchObject({ ok: true, applied: true })
+  // The renderer store applies it exactly as a toolbar click would, so the
+  // offscreen target really resized — the reply alone would prove nothing.
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 852, height: 393 })
+  await expect(page.locator('.orientation-control button.orient-landscape')).toHaveAttribute('aria-pressed', 'true')
+
+  // `status` still answers the stored-form word: it is the app's internal
+  // vocabulary and this release does not change it (`docs/breaking-changes.md`).
+  const status = await call('status')
+  expect(status.body).toMatchObject({ orientation: 'landscape', presetId: 'iphone-61' })
+
+  // Back again, so `rotate: false` is not merely "not rotated yet".
+  await call('setRotation', { rotate: false })
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 393, height: 852 })
+
+  const bad = await call('setRotation', { rotate: 'yes' })
+  expect(bad.status).toBe(400)
+  expect(String(bad.body.error)).toContain('rotate')
+  // A refused payload changes nothing.
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport()))
+    .toEqual({ width: 393, height: 852 })
+})
+
+test('the deprecated setOrientation and setRotation are the same apply, in both directions', async () => {
+  // The alias exists because the npm server and the DMG update independently
+  // and the version floor runs one way only, so an older pinned server still
+  // sends the old name (`docs/breaking-changes.md`). What this pins is that it
+  // is the SAME apply and not a second path that could drift: each name is
+  // asked for a state the other one just left.
+  await call('setPreset', { id: 'iphone-61' })
+  const viewport = () => app.evaluate(() => (globalThis as any).__obsrv.target.getViewport())
+
+  await call('setRotation', { rotate: true })
+  await expect.poll(viewport).toEqual({ width: 852, height: 393 })
+  await call('setOrientation', { orientation: 'portrait' })
+  await expect.poll(viewport).toEqual({ width: 393, height: 852 })
+
+  await call('setOrientation', { orientation: 'landscape' })
+  await expect.poll(viewport).toEqual({ width: 852, height: 393 })
+  await call('setRotation', { rotate: false })
+  await expect.poll(viewport).toEqual({ width: 393, height: 852 })
+
+  // And both are refused the same way on a bad payload, so neither is a looser
+  // door into the same apply.
+  for (const [command, payload] of [
+    ['setRotation', { rotate: 'sideways' }],
+    ['setOrientation', { orientation: true }],
+  ] as const) {
+    const r = await call(command, payload)
+    expect(r.status, `${command} accepted a bad payload`).toBe(400)
+  }
+  await expect.poll(viewport).toEqual({ width: 393, height: 852 })
+})
+
 test('setOrientation rotates the driven app, and status reports it', async () => {
   await call('setPreset', { id: 'iphone-61' })
   await expect

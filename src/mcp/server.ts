@@ -22,7 +22,7 @@ import { parseControlStatus, HIGHLIGHT_DURATION_DEFAULT_MS, HIGHLIGHT_DURATION_M
 import { PANEL_PROFILES, SCREEN_PRESETS } from '../shared/presets'
 import { MAX_SCROLL_SELECTOR } from '../shared/types'
 import { normalizeUrl } from '../shared/url'
-import { controlCall, ensureLive, type LiveApp } from './control'
+import { controlCall, ensureLive, setRotationCall, type LiveApp } from './control'
 import { unsupportedAppNote } from '../shared/minimumApp'
 import { walkPage, type WalkDeps, type Walked } from './walk'
 import { devLane, devMode, laneStamp, stampField, withStamp } from './devLane'
@@ -1003,7 +1003,7 @@ async function liveSnap(app: LiveApp, input: SnapToolInput, notes: string[], lau
     // The app's control command still speaks the stored-form word; `rotate` is
     // translated into it here, in one place, so the surfaces cannot drift.
     if (input.rotate !== undefined) {
-      await controlCall(info, 'setOrientation', { orientation: orientationFromRotate(input.rotate) }, LIVE_APPLY_TIMEOUT_MS)
+      await setRotationCall(info, input.rotate, LIVE_APPLY_TIMEOUT_MS)
     }
     if (input.textScale !== undefined) {
       await controlCall(info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)
@@ -2361,7 +2361,7 @@ server.registerTool(
       // `rotate` is translated into the app's stored-form control word here,
       // the same way live snap does it, so the surfaces cannot drift.
       if (input.rotate !== undefined) {
-        await controlCall(live.info, 'setOrientation', { orientation: orientationFromRotate(input.rotate) }, LIVE_APPLY_TIMEOUT_MS)
+        await setRotationCall(live.info, input.rotate, LIVE_APPLY_TIMEOUT_MS)
       }
       if (input.textScale !== undefined) {
         await controlCall(live.info, 'setTextScale', { textScale: input.textScale }, LIVE_APPLY_TIMEOUT_MS)

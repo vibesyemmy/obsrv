@@ -63,8 +63,18 @@ list, from `CONTROL_COMMANDS`:
 `captureTarget`, `captureVisible`, `captureRaster`
 
 **Change how it renders:** `setPreset`, `setProfile`, `setViewMode`,
-`setPanes`, `setOrientation`, `setPixelExact`, `setTextScale`, `setThrottle`,
+`setPanes`, `setRotation`, `setPixelExact`, `setTextScale`, `setThrottle`,
 `setOnionSkin`, `setVision`
+
+`setRotation` takes `{ rotate: true | false }` and turns the screen a quarter
+turn. **`setOrientation { orientation: 'portrait' | 'landscape' }` is deprecated
+and still accepted**, and is listed here rather than hidden because an app in
+the wild answers both and a reader debugging an older client should find it:
+that word named the preset's **stored** form, so `'landscape'` meant "the
+rotated one" and produced a **portrait** screen on every preset stored
+landscape. It goes in the release after the one that added `setRotation`
+(`docs/breaking-changes.md`); until then the two are the same apply under two
+names, and clients should send `setRotation`.
 
 **The window itself:** `focusWindow`
 

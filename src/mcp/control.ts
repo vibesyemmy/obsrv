@@ -11,6 +11,7 @@ import {
   type ControlStatus,
 } from '../shared/control'
 import { cannotLaunchReason, DECLINED_NOTE, DEV_RELAUNCH_NOTE, LAUNCH_TIMEOUT_MS, type HeadlessPlan, type HeadlessWhy, type LivePlan } from './lib'
+import { orientationFromRotate } from '../shared/calibration'
 import { devLane, devMode, PACKAGE_ROOT } from './devLane'
 import { launchApp, resolveDefaultTarget, type LaunchHandle } from './launch'
 
@@ -93,6 +94,47 @@ export function controlCall(
     req.on('error', reject)
     req.end(body)
   })
+}
+
+/**
+ * Turn the live screen: `setRotation` where the app has it, `setOrientation`
+ * where it does not.
+ *
+ * **Both halves of the version skew, which is why this is a function and not a
+ * command name at the two call sites.** The MCP server ships on npm and the app
+ * ships as a DMG, and they update independently:
+ *
+ *  - **an older pinned server against a newer app** — handled on the app side,
+ *    which still accepts `setOrientation` this release
+ *    (`docs/breaking-changes.md`);
+ *  - **a newer server against an older app** — handled here. Every DMG in the
+ *    wild answers `400 unknown command` to `setRotation`, so sending only the
+ *    new name would break live rotation for anyone who updates npm first.
+ *    Raised by Wren before this was built (room #4189).
+ *
+ * **A fallback rather than a version gate**, which was the alternative: gating
+ * on `status.version` needs the version that first carries `setRotation`, and
+ * that release has no number yet — a constant written now is a guess, and a
+ * wrong one silently takes the wrong branch. `MINIMUM_APP_VERSION` must not be
+ * moved for this either; it would refuse every live tool on an older app rather
+ * than just this one command.
+ *
+ * **The fallback is narrow on purpose.** Only a 400 whose message says *unknown
+ * command* is retried: a `setRotation payload must be …` is a bug in this file
+ * and must surface, not be re-sent under another name. The app's own wording is
+ * the signal (`controlServer.ts`, "unknown command — allowed: …"), and both
+ * sides of that string live in this repository.
+ *
+ * The extra round trip happens only against an app that lacks the command.
+ */
+export async function setRotationCall(info: ControlInfo, rotate: boolean, timeoutMs: number): Promise<Record<string, unknown>> {
+  try {
+    return await controlCall(info, 'setRotation', { rotate }, timeoutMs)
+  } catch (e) {
+    const unknownCommand = e instanceof ControlCallError && e.statusCode === 400 && /unknown command/.test(e.message)
+    if (!unknownCommand) throw e
+    return controlCall(info, 'setOrientation', { orientation: orientationFromRotate(rotate) }, timeoutMs)
+  }
 }
 
 export interface LiveApp {
