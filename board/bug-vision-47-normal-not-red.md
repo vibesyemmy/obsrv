@@ -265,23 +265,47 @@ register recorded it as "the pixel was black" the same day); **it was never carr
 which is the card that holds the pixel table and the discriminator.
 
 **So the reading table above is incomplete.** It lists two signatures — `[255,255,255]` washed-out white,
-`[255,255,0]` shader-still-applied — and **black is a third that nothing here anticipated**. White is a
-frame that was composited wrong; **black is a frame with nothing in it at all**, which is not the same
-question, and the card's title ("comes back white") no longer covers every sighting.
+`[255,255,0]` shader-still-applied — and **black is a third that nothing here anticipated**. The card's
+title ("comes back white") no longer covers every sighting.
+
+**What is established about the two colours, and no more.** My first draft said white was "composited
+wrong" and black "a frame with nothing in it at all, which is not the same question" — **that contradicts
+this card eleven lines earlier**, which says *"White is what an unpainted surface looks like"* and
+attributes white to the unpainted-frame path (Idris caught it). What holds: **both readings are an
+empty-looking frame and they differ in colour.** White fits an unpainted surface because white is the
+page's background; black fits a surface never filled, or a cleared backing store. **Whether one path
+produces both is the open question below, not something this section answers.**
 
 **What this does NOT say, and the restraint matters because the card names this as its closer.** **One
 black sighting is a candidate, not a second mechanism**: it is a single first-attempt failure, retry-rescued
 like the other four, and nothing in that log says why the frame was empty. It does **not** establish the
 rendering branch — it establishes that **a firing has taken a reading the card did not have a branch for**,
-which is weaker than "move the card" and stronger than "another white one". **Five sightings now, four
-white and one black**, and the pixel is recorded for all five.
+which is weaker than "move the card" and stronger than "another white one".
+
+**The count, corrected to agree with this card rather than with my first draft** (Wren raised it, Idris
+sourced it): **five sightings — three recorded `[255,255,255]`, one read as white from two channels
+(`34977896287`, 09-17, where the old message discarded blue and could not tell `255,255,255` from
+`255,255,0`, `vision.spec.ts:109`), and one `[0,0,0]`. The pixel is recorded for four of the five.** My
+first draft said "four white and one black ... recorded for all five", which contradicted this card's own
+line *"Four sightings, and the pixel is recorded for three of them"* two sections above — **the card was
+right and I was one sighting too generous in both halves.**
 
 **What I would want before anyone moves this card anywhere:** whether `[0,0,0]` is reachable through the
 same unpainted-frame path the white readings are attributed to, or only through a different one. That is a
 reading of the capture path, not a sweep, and **nobody has done it** — including me, and I own this card.
 
-**How this went unrecorded for a day, since it is the same error twice in two days.** I counted that very
-job on 10-06, named `vision.spec.ts:47` among its three retry-rescued crosses, and wrote that it was *"a
-fourth sighting for it, not a clean run"* — then did not open the card to add it. **The register had it and
-the card did not**, which is exactly the shape I raised against the `live-capture-notes` entry this
-morning, where I had done the same thing with run `37284069660`.
+**How this went unrecorded for a day, and the account is worse than my first draft made it.** **Wren
+reported the black pixel to the room at 13:04:30Z on 10-06** (`#4092`), addressed to me, naming it the
+**first non-white** reading and naming this card as `release: blocks` and mine. **My own message followed
+three seconds later** (`#4093`, 13:04:33Z), listing `vision.spec.ts:47` among three retry-rescued crosses as
+*"a fourth sighting for it, not a clean run"* — three seconds is not long enough to have read theirs, which
+explains those three seconds and **not the day after them**.
+
+**And I cannot claim it never reached me: it was delivered.** My room watcher's own output file for that
+window holds `"seq":4092`. So the sequence is: a peer identified the card's named discriminator, said so to
+me, the message arrived — and **the card was not edited by anyone for a day**, by me who own it or by the
+reporter, who said as much in their own check of this PR.
+
+**It is also the same error twice in two days.** This morning I raised exactly this against the
+`live-capture-notes` entry, having done it myself with run `37284069660`: **noticing a sighting inside a CI
+count is not recording it on the card.**
