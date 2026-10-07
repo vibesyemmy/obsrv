@@ -128,8 +128,8 @@ main `S<s` at **0.0%** with **0:01.18** of CPU in 00:42 (the first: 0:00.50 in 4
 and a second `mdworker_shared` 20.8%, **four of those five in state `U`** (uninterruptible wait, which in the first snapshot no busiest row was). It rules out the same two things as the first (a busy loop in main, which would show
 CPU time in the tens of seconds and shows one; a stopped main) and **names no cause**. Two readings of one shape, now twice: the harness's link stuck, or the runner stalled, and the idle and unrunnable app fits both. What a second one adds: **it is not a
 property of `fit-pan`** (a different file, a different first test, `flow-type-text.spec.ts:100` being the file's first), and the host's Spotlight use was lower (45% against 110%), so the saturation is not one number. What it does not add:
-**this merge ref carries `#593`'s snapshot and not `#594`'s parent row, so the half the parent row exists to show is still unseen**; two hangs are not a rate; and the healthy probes already read Spotlight at 20 to 63%. The register's totals
-(through run `37437677489`) do not include this hit or the first one's run, and are not updated here.
+**this merge ref carries `#593`'s snapshot and not `#594`'s parent row, so the half the parent row exists to show is still unseen**; two hangs are not a rate; and the healthy probes already read Spotlight at 20 to 63%. The register's recount of
+2026-10-07 (`docs/e2e-flakes.md`, "Counted again, 2026-10-07": 38 hits in 32 jobs, 21 silent and 17 `quitting`) includes this hit and the first one's run; it is one count, by Dogu.
 
 **Control 4 has no deterministic method that I could find, and the last row of the table stays unresolved.** Candidates considered: stopping the Playwright worker stops the
 thing that prints; pausing main through the inspector gives a main that is not running, which is the same row; closing the inspector makes `close()` reject quickly and not hang;
