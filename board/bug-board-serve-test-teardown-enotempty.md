@@ -71,7 +71,7 @@ Not measured: that the sighted run had a git in flight at the kill. The log does
 through the helper's own code, not main's two lines as text. Henry (room message 4066) ran main's literal shape against the same kind of detached-writer parent in a
 pristine copy, 6 trials each: **old 0 of 6 clean (6 of 6 `ENOTEMPTY, Directory not empty`), new 6 of 6 clean.** The two agree. They are not independent
 in the one respect that matters: both writers are hot loops (700 ms of back-to-back file creation), far harder on the directory than `git fetch` is.
-That is why a hot loop fails 10 of 10 and 6 of 6 and CI showed this once in 484 logs; neither measurement says anything about the CI rate.
+That is why the old teardown fails 10 of 10 and 6 of 6 against a hot loop, and CI showed this once in 484 logs; neither measurement says anything about the CI rate.
 
 What this shows: **the control fails on the old teardown, every time, and passes on the fix, every time.** It is not flaky in either direction
 over these ten, and ten runs bound nothing about a rate.

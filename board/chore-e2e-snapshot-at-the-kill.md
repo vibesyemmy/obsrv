@@ -4,7 +4,7 @@ column: doing
 kind: chore
 release: later
 owner: "Dogu"
-waiting: ""
+waiting: "event: a real hang that prints the parent row; none has since `#594` merged (12:42Z 10-06)"
 order: 129
 ---
 

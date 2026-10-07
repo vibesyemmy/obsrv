@@ -2419,8 +2419,8 @@ A unit test, not an e2e spec, listed here because it is the same kind of record 
 register already carries the other unit-step ones. **One sighting in 484 saved suite logs: a candidate, not a rate.**
 
 `#594`, run `37461396063`, attempt 1, job `112261642861`: the test's `afterEach` failed with `ENOTEMPTY, Directory not empty:
-…/board-serve-browser-GYIFEr` at its `rmSync` (`boardServeBrowser.test.ts:48`). No assertion error in the log. The retry passed, as far as
-the PR's second attempt had run when this was written (it had not finished; its count is the PR's).
+…/board-serve-browser-GYIFEr` at its `rmSync` (`boardServeBrowser.test.ts:48`). No assertion error in the log. The retry passed: attempt 2
+of the same run (`37461396063`, job `112263020983`) was `success`, counted by Idris, Henry and Dogu (`#4077`, `#4079`, `#4078`).
 
 **The reading, which is of the code and not a measurement of that run:** the hook sent `SIGKILL` to the server and removed the directory in the
 same turn. The server's poller runs `git fetch` as its own child, so killing the server does not stop a git that is mid-write in
@@ -2428,8 +2428,8 @@ same turn. The server's poller runs `git fetch` as its own child, so killing the
 directory and is not the writer here.) The log does not show a git in flight at the kill.
 
 **What was changed and what the control shows** is on `board/bug-board-serve-test-teardown-enotempty.md`: the two `boardServe*` hooks now
-kill, wait for the exit (bounded), and remove with `maxRetries: 5`; a test with a real detached late writer fails **0 of 10** on the old
-teardown and passes **10 of 10** on the fix. **Removing the exit wait alone leaves that control green, so the control does not show the exit wait
+kill, wait for the exit (bounded), and remove with `maxRetries: 5`; a test with a real detached late writer passes **0 of 10** on the old
+teardown (red every time) and **10 of 10** on the fix. **Removing the exit wait alone leaves that control green, so the control does not show the exit wait
 matters**; the retries are what covers a late writer. Henry's own run of main's literal shape against a detached writer, 6 trials each, agrees (old 0 of 6
 clean, new 6 of 6). The control is a model of the mechanism, not a reproduction of the CI window: both writers are hot loops, and neither says anything about the CI rate.
 Its first version slept a fixed 150 ms before the kill and was **blind when the writer started late** (old teardown red 0 of 8 at 250 ms late); it now waits for the writer's first file and

@@ -2,7 +2,7 @@
 title: "A hand probe of obsrv_snap without mode: headless started the installed Obsrv on the real profile: revert it, or leave it?"
 column: backlog
 kind: chore
-waiting: "Opeyemi: revert (on your word Idris removes the stray tab and the one history entry, with a copy of each file kept first) or leave (the next launch shows one stray active tab on a fixture file that will be gone after tonight; closing it clears it)?"
+waiting: "Idris: do the revert Opeyemi agreed to (reported by Henry, room #4188): copies of both files first, kept outside the profile; leave the stale SingletonLock and control.json alone"
 order: 133
 ---
 
@@ -13,3 +13,5 @@ DISCLOSED 2026-10-06 by Idris (room #4018). The default mode `auto` drives the v
 The rule it points at, already practised in the room: a hand probe of an MCP tool passes `mode: "headless"` or runs under `OBSRV_TEST=1`, and checks `ps` for `/Applications/Obsrv.app` before and after.
 
 Text drafted by Wren (room #4124) from Idris's disclosure and carried onto the board by Dogu; the figures are Idris's and none of it was re-checked by the carrier. **Idris first recommended leaving it, on the reason that the next normal use rewrites both files, and withdrew that in room #4129 because the reason hid the stray active tab: there is no recommendation now, and the choice is Opeyemi's.** A related card, `bug-drive-empty-call-launches-the-app`, is about a different thing (an empty `obsrv_drive` call starting the app) and is `done`.
+
+**Answered 2026-10-07, second-hand.** Henry reported in room #4188 that Opeyemi, asked in Henry's session, took Henry's recommendation, which was **revert**: remove tab 1, set `activeIndex` back to 0 and delete the one `history.json` entry, **keeping a copy of both files first**. Henry's two asks of the revert: **keep the copies outside `~/Library/Application Support/Obsrv`** so a later launch cannot read them as app data, and **leave the stale `SingletonLock` and `control.json` alone** (a dead pid reads as no app, and removing them is one more write to the profile than the decision covers). The belief about the original `tabs.json` stays a belief; the copies are what make the revert reversible if it is wrong. The carrier of this card did not see Opeyemi's answer; this line is Henry's report of it. The revert itself is Idris's, and the card moves when Idris says it is done.
