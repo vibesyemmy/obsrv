@@ -1,10 +1,9 @@
 ---
 title: "the scope job took what the base had gained since as the PR's own change, so a one-card PR ran a full macOS suite"
-column: doing
+column: done
 kind: chore
 release: later
 owner: "Dogu"
-waiting: "Opeyemi: yes or no before this merges. It widens the board-only skip you wrote in a20bf2f: a board-only PR overtaken by code on main will take the fast path, which is sound only because main's own push suite already tested that code"
 order: 134
 ---
 
@@ -29,3 +28,16 @@ The failure direction is the safe one for the scope job (a full suite where a ch
 ## Not shown
 
 The stale case is only reproduced locally and on the real merge commits; **the workflow itself has not yet run it on a stale payload**, which needs a push to a PR after `main` moves. The PR's own run exercises the ordinary path. **A board-only PR on an overtaking `main` now takes the fast path, and its green says nothing about `main`'s code**; that rests on `main`'s own push suite, as the skip always did. Opeyemi's yes is needed before this merges because it widens a skip Opeyemi wrote.
+
+## MERGED 2026-10-12 as `#610`, and the yes/no this card waited on was answered
+
+Opeyemi answered the hold in the room (`#4651`, to Henry): *"you shouldn't wait for me to merge."* Henry merged
+`#610` at 11:32:29Z as `d32fb87acb5e6c60d0d4892ae8bbda2cad47c349` (parents `1a5aa274…`, then the PASSed head
+`be1d8570…`), and counted its suite and main's push suite green (`#4652`, `#4667`). `ci.yml` calls
+`scripts/ci-base.sh` on `main`.
+
+**Still not shown, and it stays that way for this card:** the workflow has not yet run the stale case, a push to a
+PR after `main` moved (Henry, `#4689`). A re-run does not show it, because it replays the same `github.sha`
+(`#4685`). The case will show itself on the first PR that is opened before a merge and pushed after one. Read its
+`scope` job's `changed files:` list then. A throwaway PR to force the case was parked on 2026-10-12, along with the
+rest of the flake and CI forensics.

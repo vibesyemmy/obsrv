@@ -1,6 +1,6 @@
 ---
 title: "a reply can measure a page the caller never asked for, and say nothing about it"
-column: backlog
+column: next
 kind: bug
 release: blocks
 criterion: C5
@@ -48,20 +48,41 @@ reply looks exactly like a successful measurement of what they asked for. `relea
 reading; a reviewer who thinks the caller can detect it from `status.url` should say so and downgrade it,
 naming the field that makes it detectable.
 
-## What is NOT decided here, deliberately
+## The shape, as relayed from the Resolver session on 2026-10-12: a note, plus an `asked` field
 
-**The shape of the answer is a product decision and is Opeyemi's, not engineering's.** At least three
-shapes exist, and they are not equivalent:
+**Relayed, not yet confirmed where the builder works.** Resolver reports that Opeyemi picked this in Resolver's own
+session at about 18:45Z. Nobody else can read that session. Until Opeyemi confirms it in the building session or
+in one Wren can read, this section is Resolver's account. If the confirmation differs, change this section.
 
-- **a note** — the reply says the address it measured is not the address asked for, and keeps measuring;
-- **a refusal** — the call fails rather than returning figures for a page nobody asked about;
-- **a field** — `asked` beside `url`, leaving the caller to compare, which is the cheapest to build and the
+What room `#4695` carries: the chosen option, **"Note + `asked` field"**, which had been described to Opeyemi as
+*"Keep measuring, add a note saying the measured address differs from the asked one, plus an `asked` field beside
+`url` for machines."* Resolver adds one disclosure: it marked that option as its recommendation when it put the
+question.
+
+So the reply keeps its measurements, carries a note naming both addresses, and has an `asked` field beside `url`.
+
+## The shapes that were open (kept for the record)
+
+Before the choice above, three shapes were open, and they are not equivalent:
+
+- **a note**: the reply says the address it measured is not the address asked for, and keeps measuring;
+- **a refusal**: the call fails rather than return figures for a page nobody asked about;
+- **a field**: `asked` beside `url`, leaving the caller to compare, which is the cheapest to build and the
   easiest to ignore.
 
-**No code is written and no option is recommended on this card**, because choosing one is choosing what
-Obsrv owes a caller when its own plumbing moves the page. The counter-case is already in the suite and
-must keep passing: `arrivals.spec.ts:176`, where the caller never asked the target to move and **no note is
-the right answer**.
+## What is still open after the shape
+
+- the note's exact wording;
+- the type and nullability of the `asked` field;
+- which replies carry it (snap, audit, lint, inspect, report, drive), and which CLI output prints the note.
+
+No code is written yet. The counter-case is already in the suite and must keep passing: `arrivals.spec.ts`,
+"the target mirroring the native pane is not the page navigating" (it was at `:176` when this card was written and
+has moved since, so cite it by title). There the caller never asked the target to move, and **no note is the
+right answer**.
+
+**Whoever touches `arrivals.spec.ts` also renames its guard labels `(:71)` and `(:89)` to test titles.** They cite
+lines that have been wrong since before `a0615e4` (Wren, room `#4701`).
 
 ## What would make this urgent
 
