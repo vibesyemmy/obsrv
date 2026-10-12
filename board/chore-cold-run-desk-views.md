@@ -1,7 +1,7 @@
 ---
 title: "Two first-run views only a desk can show: a browser-downloaded DMG, and an MCP call launching the app"
 column: backlog
-waiting: "Opeyemi: say when to run the LAUNCH half of view 2 (Obsrv quit first, so the call launches it); the running-app half was run 2026-10-12"
+waiting: "Opeyemi: run the LAUNCH half of view 2 yourself (Obsrv quit, then an obsrv_snap from a fresh session), or allow it on a disposable profile; an agent session reaching for your real profile stays refused"
 kind: chore
 criterion: A3
 order: 81
@@ -79,7 +79,9 @@ first `obsrv_snap` call, with Obsrv not running, was **refused by the session's 
 ran. Opeyemi then launched the installed app themselves ("I have launched the app"; pid 15446, up 1 m 35 s at
 22:57:05Z) and repeated the instruction. So this records **an MCP call driving an already-running app**, not one
 launching it. Before anything ran, Resolver backed up `tabs.json` and `history.json` (md5 `1bb02408…`,
-`58da21f1…`).
+`58da21f1…`), into the Resolver session's scratchpad, `view2-backup/`. That directory is
+session-local and swept with the session, so restore from it soon or not at all; quit Obsrv first, or the app
+rewrites the files on its next save.
 
 **The call:** `obsrv_snap { url: "https://example.com" }` from the Resolver session, default `mode: auto`. The
 MCP was the published `getobsrv@0.63.1`, the pinned release; its schema still lists `orientation`. The installed
@@ -88,9 +90,14 @@ app is 0.63.1.
 **What the reply said:**
 - `mode: "live"`, `navigated: true`, `settled: true`, `warnings: []`.
 - No `launched` field, which fits an app that was already running.
-- **`preset: "sxga-19"`** (1280×1024): the preset the app was already on. No preset was passed, and the tool's
-  description says the default is `1080p-24`. In live mode the app's own preset was kept. Recorded as observed,
-  not judged.
+- **`preset: "sxga-19"`** (1280×1024): the preset the app was already on, with no preset passed. **That is the
+  output's documented contract**: `src/mcp/server.ts:1406` says "Live: the app's preset", and Henry argued it on
+  the merits (`#4796`): a live call should not silently change the screen the person is looking at. **But the
+  input's own description disagrees for this case.** `src/mcp/server.ts:273` (and `:1334`) describe `preset` as
+  "Mutually exclusive with width/height. Default: 1080p-24.", with no live qualifier, so a caller reading the
+  input expects `1080p-24`. `1080p-24` is `DEFAULT_PRESET` (`src/cli/args.ts:175`), the headless default. This
+  is the first time anyone has watched the live branch of that field fire on a real app. No defect filed; the
+  input description's wording is Henry's call.
 - `orientation: "portrait"` is still in the reply; 0.64.0 removes it.
 
 **What appeared on screen** (the returned window capture): tab 1 navigated to `https://example.com/`, the
