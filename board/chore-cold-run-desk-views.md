@@ -98,17 +98,19 @@ app is 0.63.1.
 - **`preset: "sxga-19"`** (1280×1024): the preset the app was already on, with no preset passed. **The reply is
   truthful, and the behaviour is right on the merits** (Henry, `#4796`): a live call should not silently change
   the screen the person is looking at. **But the input contract says otherwise, and that is a documentation
-  defect** (Henry `#4799`/`#4802`, Wren `#4798`/`#4801`, Idris `#4800`). Per tool:
+  defect** (Henry `#4799`/`#4802`, Wren `#4798`/`#4801`; the per-tool citations below are Idris's, `#4800`, which
+  gave the lines and noted that other tools qualify the default, without calling it a defect). Per tool:
   - **`obsrv_snap`:** input `src/mcp/server.ts:273` (in `snapInputShape`, from `:268`) reads "Mutually exclusive
     with width/height. Default: 1080p-24.", with no live qualifier. The live behaviour is stated only on the
     output, `:360` (in `snapOutputShape`, from `:340`): "Headless, the one applied; live, the one selected in the
     app."
   - **`obsrv_audit`:** the same pair, input `:1334` against output `:1406` ("Live: the app's preset").
-  - **The 1x tool:** input `:469` also says "Default: 1080p-24." unqualified.
-  - **Already right:** `:1663` and `:1982` read "Headless: the target screen. Default: 1080p-24."
+  - **`obsrv_diff`:** input `:469` (`diffInputShape`) also says "Default: 1080p-24." unqualified.
+  - **Already right:** `obsrv_lint`'s input `:1663` (`lintInputShape`) and `obsrv_inspect`'s `:1982`
+    (`inspectInputShape`) read "Headless: the target screen. Default: 1080p-24."
 
   A caller reads the input to decide what to send, so a live call with no preset is promised `1080p-24` and gets
-  the app's preset. It is detectable from the reply, so it is not class 1. The fix is to give `:273`, `:469` and
+  the app's preset. It is detectable from the reply, so it reads as not class 1; the class is the Lead's to set. The fix is to give `:273`, `:469` and
   `:1334` the `:1663` wording: scope the default to headless and say what live does. `1080p-24` is
   `DEFAULT_PRESET` (`src/cli/args.ts:175`). This run is the first time anyone watched the live branch of that
   field fire on a real app.
