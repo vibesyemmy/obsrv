@@ -25,11 +25,19 @@
   // already finished walking — so the reload hangs off the first scroll the
   // walk performs. The commit then lands inside the measurement window every
   // time, which is the condition under test rather than a hope about speed.
-  if (!sessionStorage.getItem('obsrv-walk-reload')) {
+  //
+  // The one-shot is keyed on the query, so each test that loads this page
+  // with its own query meets a fresh document AND an unspent key. A key
+  // without the query survives navigation and lasts as long as the target's
+  // web contents. So whichever test ran first spent it, and a later test saw
+  // no reload and failed with no defect present
+  // (bug-live-reload-control-is-order-dependent).
+  const key = 'obsrv-walk-reload:' + location.search
+  if (!sessionStorage.getItem(key)) {
     addEventListener(
       'scroll',
       () => {
-        sessionStorage.setItem('obsrv-walk-reload', '1')
+        sessionStorage.setItem(key, '1')
         location.reload()
       },
       { once: true },

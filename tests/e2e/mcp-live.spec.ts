@@ -744,7 +744,8 @@ test('a live audit of a page locked behind a dialog says the walk scrolled the d
  * live path took a snapshot at each end and could not see either.
  */
 test('a live audit of a page that reloads to the same address mid-walk says it moved', async () => {
-  const r = await call('obsrv_audit', { url: fixture('reloads-during-walk.html'), mode: 'live', groupsOnly: true })
+  // Its own query, so the fixture's one-shot reload is unspent whatever ran before this test.
+  const r = await call('obsrv_audit', { url: fixture('reloads-during-walk.html') + '?t=live-audit', mode: 'live', groupsOnly: true })
   expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
@@ -995,7 +996,8 @@ test('a preset change is not reported as the page navigating', async () => {
  * surviving in the site next door.
  */
 test('a live lint of a page that reloads to the same address says it moved', async () => {
-  const r = await call('obsrv_lint', { url: fixture('reloads-during-walk.html'), mode: 'live', groupsOnly: true })
+  // Its own query, so the fixture's one-shot reload is unspent whatever ran before this test.
+  const r = await call('obsrv_lint', { url: fixture('reloads-during-walk.html') + '?t=live-lint', mode: 'live', groupsOnly: true })
   expect(r.isError, JSON.stringify(r.content).slice(0, 300)).toBeFalsy()
   const s = r.structuredContent as { warnings?: string[]; notes?: string[] }
   const said = [...(s.warnings ?? []), ...(s.notes ?? [])].join(' ')
