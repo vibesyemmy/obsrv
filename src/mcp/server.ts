@@ -1660,7 +1660,7 @@ const lintInputShape = {
       "auto (default): a running Obsrv with agent control on is linted — the page the user is looking at, on the " +
         "screen, text scale and panel in force — else a headless load of `url`. 'live' requires the app; 'headless' never touches it.",
     ),
-  preset: z.enum(PRESET_IDS).optional().describe('The target screen. Headless: default 1080p-24. Live: applied to the running app if passed, otherwise the screen the app is already on is used. Use obsrv_presets for ids.'),
+  preset: z.enum(PRESET_IDS).optional().describe('Headless: the target screen. Default: 1080p-24. Use obsrv_presets for ids.'),
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Headless custom CSS viewport width. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Headless custom CSS viewport height. Needs width.'),
