@@ -566,6 +566,27 @@ sentence the fix wrote.
   - `ipc.ts:1603` and `:1604`, the two bounds, are named reasons now (`:1752` and `:1753`), measured
     over 12 launches and 3 reloads.
 
+## Written after the counts: `measuredElsewhereNote`, 2026-10-12
+
+One producer added by `#621` (merged `51eb7116`), for `bug-measured-page-is-not-the-asked-page`. The totals
+above (58 call sites, 173 sinks) were counted before it and are left as counted, the same convention this file
+uses for `orientationNote`'s removal. This section says what they do not include.
+
+| written at | pushed in | the sentence, shaped |
+| --- | --- | --- |
+| `src/shared/measureBudget.ts:290` **(observed)** | main | the figures are of <…>, not of <…>, which the last navigate asked for: this pane moved there after the navigate without the page moving itself… — produced on CI by `measured-page.spec.ts`, "a measurement of a page the bus carried the target to says which page it measured" (inspect) and "a live lint carries the same sentence…" (lint), in `#621`'s suite (job `114988475283`) and `main`'s push suite for the merge (job `114998882763`) |
+
+**It reaches four live replies, through one site.** `whichPage` in `src/main/ipc.ts` pushes it, and four handlers
+call `whichPage`: inspect, audit, lint and `observeText` (Idris's `grep -n` on `51eb7116`, room `#4755`).
+**Observed on two of the four:** inspect and lint, by the tests named above. Audit and `observeText` share the
+call, and no test was written to produce the sentence through them. Live snap and the report do not call `whichPage`.
+
+**Its absence is held too, which a search for the words will not find.** Three tests in the same file assert the
+sentence is **not** in the reply: a pane carried away and back, a server's 302 to a login page, and an
+agent-issued Back. One more asserts that exactly one sentence names a self-redirect. Those four are what caught
+Idris's mutants of the wiring (`#4741`). The file's own lesson applies: the words are in `elsewhereIn`'s
+`'without the page moving itself'`, not in each assertion, so search for the helper as well as the text.
+
 ## Sentences outside the notes/warnings net, counted 2026-09-23
 
 `chore-sentences-outside-notes-net`. `c5` set ten aside and said nobody had swept for the rest; Kenya's
