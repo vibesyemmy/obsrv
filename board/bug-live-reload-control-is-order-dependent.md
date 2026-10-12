@@ -1,6 +1,6 @@
 ---
 title: "the two controls for the self-reload note go red with no defect present, depending on which test runs before them"
-column: backlog
+column: done
 kind: bug
 criterion: C5
 order: 95
@@ -157,3 +157,27 @@ that ran its predecessor in the wrong position. **Both invalid experiments were 
 clean negative results.** The pattern is not "I guessed wrong" — it is that **a harness that quietly does
 something other than what the sentence describes produces a confident refutation**, and I published two of
 them on one card.
+
+## FIXED 2026-10-12 in `#618`, merged as `e3e9c407`
+
+The fix is the one Idris measured on 10-07, as specified in the correction above. The fixture keys its one-shot
+on `'obsrv-walk-reload:' + location.search`, and each control loads it with its own query: `?t=live-audit` for
+"a live audit of a page that reloads to the same address mid-walk says it moved", and `?t=live-lint` for "a live
+lint of a page that reloads to the same address says it moved". **Cite them by those titles.** The line numbers
+above are as of 10-06, and the lint control sits at `:998` after `#618`.
+
+**The control this card asked for was met, in its own order.** Idris ran the card's red order (the audit control,
+"a live audit of a page that stays put says nothing about navigating", "after a Back the agent issued, a live
+audit, lint and inspect say which page they measured", then the lint control), `--retries=0`, both sides
+of `#618`: `✓ ✓ ✓ ✘` on `384f43a0` before it, and `✓ ✓ ✓ ✓` on `main` `9e434cd6` after it (room `#4728`). Other
+local runs, `--retries=0`, each by the session named: Resolver, the three-test order (audit, Back, lint), ✘ on
+lint unfixed, then ✓✓✓ twice fixed; Idris, the pair (audit, lint), ✘ on lint on `main`, then ✓✓ twice and the
+three-test order once on the PR head. None of these local runs was reproduced by Wren. **The controls are not blind:** sabotaging the product guard (`ipc.ts:245`
+without `&& !byDocument`, rebuilt) reddens both. Idris also reddened the lint control with each of three
+mutants of the PR: the global key, no queries, and a shared query. So the key change and the per-test
+queries are each necessary. The macOS suite on `#618` was 662 passed, 1 skipped, `✘` 0, retries 0 (job
+`114967316083`, md5 `a87b9bce…`: one job log, pulled and counted by Idris, Wren and Resolver). That shows nothing else broke, not
+that the fix works: in file order the controls already passed.
+
+**Not covered:** sharded orders, and the fixture's one other consumer, `scripts/b5-fixture-sweep.js`, which
+loads it bare and was not run (Idris, `#4721`).
