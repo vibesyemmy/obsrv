@@ -78,10 +78,16 @@ jobs:
           fetch-depth: 0
 
       - env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          # The base is read from the merge commit itself, not from the event
+          # payload's `base.sha`, which a push after the base moved leaves stale
+          # (scripts/ci-base.sh says why).
+          BASE=$(bash scripts/ci-base.sh "$EVENT_NAME" "$HEAD_SHA" "$PR_HEAD" "$BEFORE")
           # An unknown base means this could not compare. Say so rather than
           # pass quietly: a check that cannot see the diff must not leave a
           # green that reads as "the shape did not move".
@@ -123,9 +129,17 @@ jobs:
 
       - id: decide
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
+          # What THIS change touches, against the tip it would land on: the merge
+          # commit's first parent, not the event payload's `base.sha`, which a push
+          # after the base moved leaves stale and which then lists what the base
+          # gained meanwhile (#608). scripts/ci-base.sh prints nothing when it
+          # cannot say, and nothing means the full suite just below.
+          BASE=$(bash scripts/ci-base.sh "$EVENT_NAME" "${{ github.sha }}" "$PR_HEAD" "$BEFORE")
           # A first push to a branch, or a force-push, can leave BASE empty or
           # unreachable. Unknown means run everything: the cheap answer must
           # never be the one that skips a suite.
