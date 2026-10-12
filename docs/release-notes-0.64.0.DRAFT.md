@@ -80,33 +80,83 @@ that asked for it.
 
 ---
 
-## Known, and shipping open
+## The three decisions this release rests on
 
-**To be written against the position at the cut, not now.** As of this draft, `release: blocks` is carried
-by three cards; one (`bug-redirect-note-missing-not-late`) is `done` and is the close described above. The
-two that would ship open:
+**Relayed, not typed where this draft is written.** Opeyemi answered in Resolver's session at about 22:50Z
+(room `#4785`), verbatim: *"Go with your recommendations on 1, 2 and 3"*, against Resolver's numbered list.
+Nobody else can read that session, so this section is Resolver's account — the same standing the
+measured-page shape carried on its card, and it should be read the same way. **Resolver runs the cut, since
+the authorisation was typed there.**
 
-- **`bug-vision-47-normal-not-red`** — class 1, retained, **and its park was granted for 0.63.0, not for
-  this release.** 0.63.1's notes described it as two sightings, both white. It is now **seven** sightings,
-  two of them black `[0,0,0]`, the colours alternating; both of the rotate PRs in this very release are
-  excluded as causes by measurement; and whether the two colours reach the capture through the same
-  unpainted-frame path is unread. **The notes cannot repeat 0.63.1's paragraph: it is out of date in the
-  direction that matters.** Needs Opeyemi's park-again-or-fix before a cut.
-- **`bug-measured-page-is-not-the-asked-page`** — **made detectable in this release, and it stays in this
-  section.** `#621` (merged `51eb7116`) adds a sentence to the reply; **it does not stop the figures being
-  of the other pane's page.** Its own deterministic test asserts exactly that: asked `tall.html`, measured
-  `hairline.html`, and the reply now names it. By `docs/release-gate.md:86-90` — *"A wrong answer that
-  cannot be fixed in time can be **made detectable**: the reply says the figure may be wrong, and says why.
-  Then it is no longer silent, and it belongs in 'Known, not fixed' with everything else"* — this is the
-  hatch, not a fix, and `:146-147` requires the notes to **name the warning that made it detectable**.
-  **Draft line for the notes:** *under Obsrv's sync bus, a live `inspect`, `audit` or `lint` can still
-  measure the page the other pane reached rather than the one you asked for — and now says so, naming the
-  page the figures are of.* The `asked` field is a separate, unbuilt convenience and is itself a breaking
-  change (`docs/compatibility.md:12`).
+1. **`bug-vision-47-normal-not-red`: parked again, for 0.64.0** — a fresh park, not an inherited one, with
+   an updated notes paragraph rather than 0.63.1's.
+2. **The gate's second number: `40 of 125` with a recorded control** is the gate's figure, with
+   `113 of 125` seen to fire beside it — written into `docs/note-inventory.md` **first**, with its
+   population, then quoted from there.
+3. **0.64.0 ships with two open class 1**, both under "Known, not fixed".
 
-  **I had this wrong twice** (room `#4743`, and the first version of this section): I called the note "the
-  half that retires the class", and wrote that building it would remove this item from the notes. It does
-  neither. @Idris corrected it at `#4747` against the gate's own text.
+**Not decided, so not in this release:** the `asked` field. 0.64.0 ships without it.
+
+## Known, not fixed
+
+Two, and both are class 1 — *a wrong answer the caller cannot detect* — carrying the warning that makes
+each one detectable, as `docs/release-gate.md:146-147` requires.
+
+### A vision simulation's "Normal" render can come back wrong — white, or black
+
+**Draft paragraph for the release body. This replaces 0.63.1's and must not be copied from it.**
+
+> Returning a vision simulation to **Normal** can produce a frame that is not the page. 0.63.0 and 0.63.1
+> described this as a **washed-out, white** render; since then it has also come back **black**. Of seven
+> sightings, two were a black frame and the rest read white. **Nothing says so — not the picture and not
+> the reply.**
+>
+> **If you look at these captures by eye, 0.63.1's advice is no longer enough.** It said a person can at
+> least see that the image is bleached. A **black** frame does not look bleached: it looks like a dark page,
+> or a page that had not painted yet, and it can be accepted as either. Judge a `Normal` capture against
+> what the page actually looks like, not against "is it washed out".
+>
+> **If you drive Obsrv from an agent, treat a `Normal` vision capture as unverified until someone has
+> looked at it.** An automated caller reading only the structured output has no signal either way, which is
+> why this is class 1 rather than a cosmetic note.
+>
+> The timing cause behind the first two sightings was removed in `#458`, so it is no longer available as an
+> explanation. Whether the white and the black frames arrive through the same unpainted-frame path is not
+> yet known; nobody has read the capture path for it.
+
+**Why the paragraph changed, for whoever reviews it:** the park is a **fresh** decision for 0.64.0, and the
+evidence moved under it. Two of the seven firings are `[0,0,0]`; the colours alternate rather than
+progressing, so neither belongs to a closed past; and **both rotate changes shipping in this release
+(`#592`, `#599`) are excluded as causes by measurement**, not by argument. `blocks` and class 1 are
+retained as a decision and explicitly not a downgrade — the card has refused three downgrades and the
+record should not gain a fourth by implication.
+### A measurement can still be of the page Obsrv's sync carried the target to — and now says which
+
+**Draft paragraph for the release body.**
+
+> A live `inspect`, `audit` or `lint` measures the page the target is showing. Under Obsrv's own sync bus,
+> that can be the page the **other pane** reached rather than the one you asked for: the bus mirrors the
+> other pane's commit into the target, sometimes before the page you asked for has run its own script.
+> **0.64.0 does not stop that happening. What it adds is a sentence saying it did** — the reply names the
+> page the figures are actually of, so a caller can tell.
+>
+> If you see that sentence, the numbers in the reply are real measurements of a real page; they are simply
+> not of the address you typed. Ask again, or read the named page as the subject.
+
+**Why this is "not fixed" rather than "fixed", for whoever reviews it.** `#621` (merged `51eb7116`) adds
+the note; **it does not change which page gets measured.** Its own deterministic test asserts exactly that
+— asked `tall.html`, measured `hairline.html`, and the reply names it. `docs/release-gate.md:86-90` is
+explicit: *"A wrong answer that cannot be fixed in time can be **made detectable**: the reply says the
+figure may be wrong, and says why. Then it is no longer silent, and it belongs in 'Known, not fixed' with
+everything else."* So this is the escape hatch used properly — **the warning is in the reply, where a
+caller is**, not only in these notes — and `:146-147` requires the notes to name it, which the paragraph
+above does. The `asked` field is a separate, unbuilt convenience and would itself be a breaking change
+(`docs/compatibility.md:12`); it is not in this release.
+
+**I had this wrong twice** (room `#4743`, and the first version of this section): I called the note "the
+half that retires the class", and wrote that building it would remove this item from the notes. It does
+neither. @Idris corrected it at `#4747` against the gate's own text, and @Wren extended it to the board at
+`#4750`.
 
 ---
 
@@ -132,17 +182,21 @@ silence. The same test applies to anything else that lands before the cut.
   unverified prose until that run exists.
 
 **The two numbers published with each release:**
-1. **Open class 1 bugs at the cut.** Target zero. **Today it is two** — the two cards above. `#621` did not reduce it: a class made detectable stays counted and is named with its warning (`:146-147`). Neither can be
+1. **Open class 1 bugs at the cut.** Target zero. **Two at this cut, and that is the decided position** (decision 3, relayed): measured-page, made detectable, and vision-47, parked again. `#621` did not reduce it — a class made detectable stays counted and is named with its warning (`:146-147`). Neither can be
    silently dropped: the gate says a downgraded class 1 must name the warning that made it detectable.
-2. **The share of the product's own sentences shown firing with a control.** The gate says to take this
-   **from the inventory's own table rather than recomputing it**, and gives `89 of 122 on 2026-09-17` as the
-   example. **`docs/note-inventory.md` no longer states a figure in that form.** What it does state:
-   **58 call sites** (17 on the live surface) at line 17, and at line 125 **57 rows fired** across
-   **110 distinct sentences** and 301 replies, of which **55 rows are user-visible**, with 3 ambiguous
-   between producers. **None of those is "the share shown firing with a control".** I have deliberately
-   not computed one. Either the inventory needs a headline line stating the share and its population, or
-   the gate's wording needs to point at the figure the file actually keeps. **This will stall a cut at the
-   last minute if it is left to the person tagging.**
+2. **The share of the product's own sentences shown firing with a control — `40 of 125`,** with
+   **`113 of 125` seen to fire** published beside it. **Decided** (relayed, `#4785`) after @Dogu
+   established that the inventory stated no figure in the gate's form: *"with a control"* appeared **0**
+   times in it, and 0.63's `89 of 122` mixed populations, so it is **not** a precedent for publishing a
+   derived number.
+
+   **Order matters here and it is not cosmetic.** The gate asks for that share **and** says to take it
+   *"from the inventory's own table rather than recomputing it: that file states its population and what
+   moved it, which is the half most counts leave out."* Both clauses can only hold if the figure is
+   **written into `docs/note-inventory.md` first, with its population**, and then quoted. @Dogu's
+   `docs/note-inventory-headline` lands before these notes do. **Until that PR is merged, the figure above
+   is derived and must not be published** — quoting it from this draft rather than from the file would be
+   the exact thing the gate's second clause forbids.
 
 ---
 
