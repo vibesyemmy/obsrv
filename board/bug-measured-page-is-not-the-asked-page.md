@@ -1,6 +1,6 @@
 ---
 title: "a reply can measure a page the caller never asked for, and say nothing about it"
-column: next
+column: done
 kind: bug
 release: blocks
 criterion: C5
@@ -88,3 +88,30 @@ lines that have been wrong since before `a0615e4` (Wren, room `#4701`).
 
 A field report of a measurement attributed to the wrong page — an audit, lint or snap result a user acted
 on, where the address in the reply was not the address they drove to.
+
+## FIXED 2026-10-12 in `#621` (merged `51eb7116`), by the note; the `asked` field moved to its own card
+
+The class-1 defect was *"a correct measurement of a page the caller did not ask for, with no sentence anywhere in
+the reply that the address moved under them."* **There is now a sentence**, so the wrong answer is detectable
+from the reply. This card's own rule for leaving `blocks` is to name the warning that makes it detectable:
+`measuredElsewhereNote` (`src/shared/measureBudget.ts`), wired into `whichPage` (`src/main/ipc.ts`):
+
+> the figures are of ‹measured›, not of ‹asked›, which the last navigate asked for: this pane moved there after
+> the navigate without the page moving itself, most often Obsrv's sync loading the page its other pane reached
+
+It is compared, not counted. It fires only when the page measured is none of the addresses the earlier sentences
+named (asked, landed, arrived at), and it never says the page navigated. That was Henry's constraint (`#4723`):
+"who made this commit" stays the count's question. The counter-case, "the target mirroring the native pane is
+not the page navigating", passed first time in `#621`'s suite.
+
+**Pinned by** `tests/e2e/measured-page.spec.ts`, which drives the mechanism every run rather than the card's
+race. On `main` before the fix, the inspect test failed with "the reply carried NO notes at all". Idris ran five
+mutants of the wiring and all five were caught (room `#4741`). Suite job `114988475283`: 668 passed, 1 skipped,
+`✘` 0, retries 0 (counted by Wren, Idris and Henry from one log, md5 `627561ca…`).
+
+**Not covered:** the real race under `cpu-4x`, which the deterministic test stands in for; the CLI's headless
+path (one pane, no bus); `docs/note-inventory.md`, which does not list the new call site yet.
+
+**The `asked` field is not built.** Adding it is breaking (`docs/compatibility.md:12`). Opeyemi has the cost and
+has not answered. It is no longer on the class-1 path, so it lives on `feat-asked-field-beside-url`, waiting on
+that answer.
