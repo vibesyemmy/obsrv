@@ -92,14 +92,32 @@ two that would ship open:
   excluded as causes by measurement; and whether the two colours reach the capture through the same
   unpainted-frame path is unread. **The notes cannot repeat 0.63.1's paragraph: it is out of date in the
   direction that matters.** Needs Opeyemi's park-again-or-fix before a cut.
-- **`bug-measured-page-is-not-the-asked-page`** — class 1, `release: blocks`, shape decided
-  ("note + `asked` field"), **not built**. If it is built before the cut this section loses it; if not, the
-  notes must describe it in the terms the card uses, and the `asked` field is itself a breaking change
-  (`docs/compatibility.md:12`).
+- **`bug-measured-page-is-not-the-asked-page`** — **made detectable in this release, and it stays in this
+  section.** `#621` (merged `51eb7116`) adds a sentence to the reply; **it does not stop the figures being
+  of the other pane's page.** Its own deterministic test asserts exactly that: asked `tall.html`, measured
+  `hairline.html`, and the reply now names it. By `docs/release-gate.md:86-90` — *"A wrong answer that
+  cannot be fixed in time can be **made detectable**: the reply says the figure may be wrong, and says why.
+  Then it is no longer silent, and it belongs in 'Known, not fixed' with everything else"* — this is the
+  hatch, not a fix, and `:146-147` requires the notes to **name the warning that made it detectable**.
+  **Draft line for the notes:** *under Obsrv's sync bus, a live `inspect`, `audit` or `lint` can still
+  measure the page the other pane reached rather than the one you asked for — and now says so, naming the
+  page the figures are of.* The `asked` field is a separate, unbuilt convenience and is itself a breaking
+  change (`docs/compatibility.md:12`).
+
+  **I had this wrong twice** (room `#4743`, and the first version of this section): I called the note "the
+  half that retires the class", and wrote that building it would remove this item from the notes. It does
+  neither. @Idris corrected it at `#4747` against the gate's own text.
 
 ---
 
 ## The gate, item by item (`docs/release-gate.md`)
+
+**A distinction this draft got wrong first time, and it governs the section above.** `docs/release-gate.md:86-90`
+separates **fixed** from **made detectable**, and the escape hatch from class 1 is instrumentation: the reply
+says the figure may be wrong and why, and the defect then belongs in *"Known, not fixed"*. `:146-147` adds
+that a downgraded class 1 **must name the warning**. So `#621` moves measured-page from *silent* to
+*detectable*, and the count of open class 1 at the cut does **not** drop because of it — what drops is the
+silence. The same test applies to anything else that lands before the cut.
 
 **Satisfied:**
 - **Every changed public field or sentence is in the register.** `docs/breaking-changes.md:27` carries the
@@ -114,7 +132,7 @@ two that would ship open:
   unverified prose until that run exists.
 
 **The two numbers published with each release:**
-1. **Open class 1 bugs at the cut.** Target zero. **Today it is two** — the two cards above. Neither can be
+1. **Open class 1 bugs at the cut.** Target zero. **Today it is two** — the two cards above. `#621` did not reduce it: a class made detectable stays counted and is named with its warning (`:146-147`). Neither can be
    silently dropped: the gate says a downgraded class 1 must name the warning that made it detectable.
 2. **The share of the product's own sentences shown firing with a control.** The gate says to take this
    **from the inventory's own table rather than recomputing it**, and gives `89 of 122 on 2026-09-17` as the
