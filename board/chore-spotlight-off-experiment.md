@@ -4,7 +4,6 @@ column: backlog
 kind: chore
 release: later
 owner: "Dogu"
-waiting: "Opeyemi: yes or no on the ci.yml experiment (indexing off on alternate runs, kill-line rate counted per arm; its own PR and gate). The longer probe has run, see below"
 order: 132
 ---
 
@@ -64,3 +63,13 @@ Spotlight out; **fewer hits** would be a mitigation, not proof that it is the ca
 
 Whether anything in the hang depends on Spotlight (no suite ran on either arm); the runner-to-runner spread, which one pair cannot give; whether the quiet after minute 16 is typical or this pair's; and where in uptime the hangs fall, which three timed snapshots put at about 14.5 to 21.7 minutes. The earlier questions,
 whether Spotlight is busy at minute 10 to 18 of a job and whether the switch changes that, now have one pair's answer above.
+
+## SKIPPED FOR NOW BY OPEYEMI, 2026-10-12, as relayed from the Resolver session
+
+Asked yes or no on the `ci.yml` experiment, Opeyemi answered in Resolver's session, just before 22:53:10Z:
+**"Skip the Spotlight experiment for now"**. Nobody else can read that session, so this is Resolver's account. It
+sits under the same night's priority call, which parks flake and CI forensics unless CI is red. CI was green on
+`main`'s last three full suites. **Nothing was built:** `ci.yml` is untouched, and the probe branch
+`probe/mdutil-effect` was deleted on Opeyemi's word (room `#4788`, `#4790`). The probe's result above stands as
+recorded. The card stays in backlog with no `waiting:` line, so it leaves the Awaiting-Opeyemi lane, until they reopen it.
+
