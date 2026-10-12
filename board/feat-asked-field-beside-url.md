@@ -4,11 +4,13 @@ column: backlog
 kind: feat
 criterion: C5
 order: 135
-waiting: "Opeyemi: keep the `asked` field, knowing it is breaking (docs/compatibility.md:12) and needs a breaking-changes.md entry, or drop it now that the note has cleared the class 1"
+waiting: "Opeyemi: keep the `asked` field, knowing it is breaking (docs/compatibility.md:12) and needs a breaking-changes.md entry, or drop it now that the note in #621 makes the wrong answer detectable"
 ---
 
 SPLIT 2026-10-12 from `bug-measured-page-is-not-the-asked-page`. The shape relayed from Opeyemi for that card was
-"Note + `asked` field". The note shipped in `#621` and cleared the class 1 on its own. This card is the field.
+"Note + `asked` field". The note merged in `#621`. It made the wrong answer detectable, not fixed: that card
+stays open and counted (`docs/release-gate.md:86-90`). This card is the field, which is a second way of saying
+the same thing, for machines.
 
 ## What it is
 
