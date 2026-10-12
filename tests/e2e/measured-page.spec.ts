@@ -1,11 +1,13 @@
 import { test, expect, type ElectronApplication } from '@playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
-import { request } from 'node:http'
+import { createServer, request, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { CONTROL_FILE_NAME, isDisabledStance, parseControlFile, type ControlInfo } from '../../src/shared/control'
 import { launchApp, rendererWindow } from './launch'
 import { holdNativeOutOf } from './holdNativeOut'
+import { historyMoveNote } from '../../src/shared/measureBudget'
 
 /**
  * "Did I get the page I asked for?" (bug-measured-page-is-not-the-asked-page).
@@ -163,3 +165,49 @@ test('a page that redirects itself is named by exactly one sentence, whichever p
   expect(naming.length, `asked for redirect.html, measured hairline.html; the sentences that said so: ${JSON.stringify(notes)}`).toBe(1)
   expect(naming[0]).toContain('hairline.html')
 })
+
+// The two sentences that already name the page measured, each of which the new one must leave alone. The
+// behaviour above passes with either guard removed, so these are what holds them (Idris, room #4734).
+
+test('a load a server redirected to a login page is named by the landed sentence alone', async () => {
+  // The commonest redirect there is: the route 302s to /login, so the page measured is not the page asked for,
+  // and `landedElsewhereNote` already says so. The new sentence repeating it would say the pane "moved there
+  // without the page moving itself", which is false: the server moved it.
+  const server: Server = createServer((req, res) => {
+    if ((req.url ?? '').startsWith('/private')) {
+      res.writeHead(302, { Location: '/login' })
+      res.end()
+      return
+    }
+    res.setHeader('Content-Type', 'text/html')
+    res.end('<!doctype html><html lang="en"><body style="font:16px system-ui"><h1>Sign in</h1></body></html>')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', r))
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  try {
+    await call('navigate', { url: `${origin}/private` })
+    await expect.poll(targetUrl, { timeout: 10_000 }).toBe(`${origin}/login`)
+    const notes = await notesNow()
+    const landed = notes.find(n => n.includes('ended at'))
+    expect(landed, `the landed sentence is missing: ${JSON.stringify(notes)}`).toContain(`${origin}/login`)
+    expect(elsewhereIn(notes), `the landing was already named, and said again: ${JSON.stringify(notes)}`).toBeUndefined()
+  } finally {
+    await new Promise<void>(r => server.close(() => r()))
+  }
+})
+
+test('a Back the agent issued is named by the history sentence alone', async () => {
+  // After a Back the page measured is not the one the last navigate asked for, and the history sentence says
+  // which page it is and why. The new sentence adding to it would blame the sync for a move the agent made.
+  await call('navigate', { url: TALL })
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(TALL)
+  await call('navigate', { url: HAIRLINE })
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(HAIRLINE)
+  await call('back')
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(TALL)
+
+  const notes = await notesNow()
+  expect(notes, `the history sentence is missing: ${JSON.stringify(notes)}`).toContain(historyMoveNote({ kind: 'back', by: 'agent' }, TALL, HAIRLINE))
+  expect(elsewhereIn(notes), `the Back was already named, and said again: ${JSON.stringify(notes)}`).toBeUndefined()
+})
+
