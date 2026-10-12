@@ -27,7 +27,7 @@ The failure direction is the safe one for the scope job (a full suite where a ch
 
 ## Not shown
 
-The stale case is only reproduced locally and on the real merge commits; **the workflow itself has not yet run it on a stale payload**, which needs a push to a PR after `main` moves. The PR's own run exercises the ordinary path. **A board-only PR on an overtaking `main` now takes the fast path, and its green says nothing about `main`'s code**; that rests on `main`'s own push suite, as the skip always did. Opeyemi's yes is needed before this merges because it widens a skip Opeyemi wrote.
+The stale case is only reproduced locally and on the real merge commits; **the workflow itself has not yet run it on a stale payload**, which needs a push to a PR after `main` moves (since observed, once, at the list level: see the last section). The PR's own run exercises the ordinary path. **A board-only PR on an overtaking `main` now takes the fast path, and its green says nothing about `main`'s code**; that rests on `main`'s own push suite, as the skip always did. Opeyemi's yes is needed before this merges because it widens a skip Opeyemi wrote.
 
 ## MERGED 2026-10-12 as `#610`, and the yes/no this card waited on was answered
 
@@ -36,8 +36,13 @@ Opeyemi answered the hold in the room (`#4651`, to Henry): *"you shouldn't wait 
 `be1d8570…`), and counted its suite and main's push suite green (`#4652`, `#4667`). `ci.yml` calls
 `scripts/ci-base.sh` on `main`.
 
-**Still not shown, and it stays that way for this card:** the workflow has not yet run the stale case, a push to a
-PR after `main` moved (Henry, `#4689`). A re-run does not show it, because it replays the same `github.sha`
-(`#4685`). The case will show itself on the first PR that is opened before a merge and pushed after one. Read its
-`scope` job's `changed files:` list then. A throwaway PR to force the case was parked on 2026-10-12, along with the
-rest of the flake and CI forensics.
+## OBSERVED 2026-10-12 on `#627`: the stale case, once, at the list level
+
+`#627` (the note-inventory headline) was opened when `main` was `f61596aa` and pushed `e186523e` after `#625` merged, so `main` was `ad112897`. The case nobody staged. Run `38322802223`, `scope` job `115054639563` (raw `gh api` log: 57,162 bytes, 538 lines, md5 `50a3e59c634d27ea708fdbb6d5122f72`); the checkout line (`:447`) is `HEAD is now at bfb7c3b Merge e186523e… into ad112897…`.
+
+- **The precondition that makes the case count:** the PR's recorded `base.sha` is `f61596aa`, and the merge commit's first parent is `ad112897`. They differ. (Henry's test on `#616` failed this check: both were `d32fb87a` while `main` was already ahead.) The merge commit `bfb7c3b5e9cd4ea90e6ad85c7bd87f89b71232ec` has two parents, the second being the PR head `e186523e`, so `ci-base.sh`'s guards passed.
+- **Executed:** `changed files:` lists exactly `docs/note-inventory.md`, then `touches more than the board`.
+- **Counterfactual from objects:** `git diff --name-only f61596aa bfb7c3b5` (the old rule's base) lists five files, `#625`'s four cards (`bug-measured-page-is-not-the-asked-page`, `bug-vision-47-normal-not-red`, `chore-spotlight-off-experiment`, `feat-asked-field-beside-url`) and `docs/note-inventory.md`; `git diff --name-only ad112897 bfb7c3b5` (the new rule's base) lists the one. So the printed list went from five to one.
+- **Read three times from objects and the raw log:** Dogu (`#4809`), Wren (`#4810`), Henry (`#4811`); the same scope-job bytes, so one log read three times, each re-derived from objects.
+
+**Not shown, and it stays open for this card:** the decision flip. `#627` touches a docs file, so it takes the full macOS suite under either rule; the list changed and `board_only` did not. The case this card was written for, a board-only PR in the same position (the `#608` and `#611` shape), would flip from a full suite to the fast path, and nothing has yet run that. It will show itself on the first board-only PR that is opened before a merge and pushed after one; read its `scope` job's `changed files:` and decision line, and take `git diff --name-only <base.sha> <the run's merge commit>` beside them. A throwaway PR to force it stays parked, along with the rest of the flake and CI forensics.
