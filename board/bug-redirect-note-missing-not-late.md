@@ -1440,12 +1440,19 @@ had not been re-checked since; the `waiting:` line named Henry for it. Item by i
   needed to answer it: `arrivals.spec.ts`'s probe **prints on every pass by design** (its own comment: an
   instrument that runs only on the failure path is a control nobody has watched succeed). Run on `main`'s code,
   both tests `✓`, and the two cases differ in exactly the field this card names — the mirrored load (**the case
-  the probe LABELS `(:71)`, now at `arrivals.spec.ts:184`**) gives `matched.byDocument false`,
-  `startsForThisUrl 2`, no note; the genuine self-redirect (**labelled `(:89)`, now at `:226`**) gives
-  `byDocument true`, `startsForThisUrl 4`, the note present. **Those labels are stale strings in the spec**,
-  hardcoded at `:200` and `:253` and left behind as the file grew, so a reader who greps this card for
-  `:184` would otherwise meet two numberings for one test — found by Wren. **Fixing them in the spec is owed
-  to the next PR that touches `arrivals.spec.ts`**, which is the order-independence fix. The `starts` entry is recorded whole
+  the probe labels `(not the page navigating)`, the test at `arrivals.spec.ts:184`**) gives
+  `matched.byDocument false`, `startsForThisUrl 2`, no note; the genuine self-redirect (**labelled
+  `(really does redirect after loading)`, the test at `:226`**) gives `byDocument true`,
+  `startsForThisUrl 4`, the note present.
+
+  **The labels used to be `(:71)` and `(:89)`, stale line numbers found by Wren** (room `#4701`), hardcoded
+  at `:200` and `:253` and left behind as the file grew, so a reader who grepped this card for `:184` met
+  two numberings for one test. **They are now verbatim fragments of the tests' own titles**, so a grep for
+  the title finds the label and a later edit cannot make them wrong again — @Resolver's pattern, applied
+  here. **This sentence previously said the fix was owed to "the next PR that touches `arrivals.spec.ts`,
+  which is the order-independence fix"; that was wrong twice over** — the order-independence fix (`#618`)
+  merged without touching this file, so the named carrier shipped without the debt, and naming a carrier
+  instead of doing the work is what let it sit (Henry, room `#4751`). The `starts` entry is recorded whole
   (`answered, at, url, byDocument, mirrored, fromBusDocument`) with every commit carrying `mirrorTerms`
   (`answeredOwnStart, byDocument, mirrorRequested, viaBusDocument, viaMirrorUrl, viaNotByDocument`).
 - **(b) a genuine same-address `location.replace` reports the note, with a control that fails when the guard at
