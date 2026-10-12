@@ -1,7 +1,7 @@
 ---
 title: "Two first-run views only a desk can show: a browser-downloaded DMG, and an MCP call launching the app"
 column: backlog
-waiting: "Opeyemi: say when to run view 2; it launches the app and takes your desk (view 1 is done)"
+waiting: "Opeyemi: run the LAUNCH half of view 2 yourself (Obsrv quit, then an obsrv_snap from a fresh session), or allow it on a disposable profile; an agent session reaching for your real profile stays refused"
 kind: chore
 criterion: A3
 order: 81
@@ -70,4 +70,63 @@ the focus behaviour and the reply recorded — still needs his desk and is still
 `Electron Helper … XPC error for connection com.apple.backupd.sandbox.xpc` lines every CLI run showed on
 the runners. Nobody looked while he was installing, and inventing an answer for it would defeat the
 point of the view.
+
+## VIEW 2, THE RUNNING-APP HALF, RUN 2026-10-12 ON OPEYEMI'S WORD; the launch half is still unobserved
+
+**Relayed and unreproduced, so read it as Resolver's account.** Opeyemi's words below ("Run cold-run view 2
+now", "I have launched the app") were typed in the Resolver session, which nobody else can read. The reply, the
+pid and uptime, the focus watcher and the backups' md5s are Resolver's own observations, and no other session has
+reproduced them (Idris, `#4800`).
+
+**How it ran, and why only half.** Opeyemi said "Run cold-run view 2 now" in the Resolver session. Resolver's
+first `obsrv_snap` call, with Obsrv not running, was **refused by the session's permission classifier** as
+"Irreversible Local Destruction": a launch on the real profile rewrites `tabs.json` and `history.json`. Nothing
+ran. Opeyemi then launched the installed app themselves ("I have launched the app"; pid 15446, up 1 m 35 s at
+22:57:05Z) and repeated the instruction. So this records **an MCP call driving an already-running app**, not one
+launching it. Before anything ran, Resolver backed up `tabs.json` and `history.json` (md5 `1bb02408…`,
+`58da21f1…`), into the Resolver session's scratchpad, `view2-backup/`. That directory is
+session-local and swept with the session, so restore from it soon or not at all; quit Obsrv first, or the app
+rewrites the files on its next save.
+
+**The call:** `obsrv_snap { url: "https://example.com" }` from the Resolver session, default `mode: auto`. The
+MCP was the published `getobsrv@0.63.1`, the pinned release; its schema still lists `orientation`. The installed
+app is 0.63.1.
+
+**What the reply said:**
+- `mode: "live"`, `navigated: true`, `settled: true`, `warnings: []`.
+- No `launched` field, which fits an app that was already running.
+- **`preset: "sxga-19"`** (1280×1024): the preset the app was already on, with no preset passed. **The reply is
+  truthful, and the behaviour is right on the merits** (Henry, `#4796`): a live call should not silently change
+  the screen the person is looking at. **But the input contract says otherwise, and that is a documentation
+  defect** (Henry `#4799`/`#4802`, Wren `#4798`/`#4801`, Idris `#4800`). Per tool:
+  - **`obsrv_snap`:** input `src/mcp/server.ts:273` (in `snapInputShape`, from `:268`) reads "Mutually exclusive
+    with width/height. Default: 1080p-24.", with no live qualifier. The live behaviour is stated only on the
+    output, `:360` (in `snapOutputShape`, from `:340`): "Headless, the one applied; live, the one selected in the
+    app."
+  - **`obsrv_audit`:** the same pair, input `:1334` against output `:1406` ("Live: the app's preset").
+  - **The 1x tool:** input `:469` also says "Default: 1080p-24." unqualified.
+  - **Already right:** `:1663` and `:1982` read "Headless: the target screen. Default: 1080p-24."
+
+  A caller reads the input to decide what to send, so a live call with no preset is promised `1080p-24` and gets
+  the app's preset. It is detectable from the reply, so it is not class 1. The fix is to give `:273`, `:469` and
+  `:1334` the `:1663` wording: scope the default to headless and say what live does. `1080p-24` is
+  `DEFAULT_PRESET` (`src/cli/args.ts:175`). This run is the first time anyone watched the live branch of that
+  field fire on a real app.
+- `orientation: "portrait"` is still in the reply; 0.64.0 removes it.
+
+**What appeared on screen** (the returned window capture): tab 1 navigated to `https://example.com/`, the
+toolbar carries an amber **AGENT** badge at top right, and **no consent bar is visible**.
+
+**Focus:** Claude was frontmost at 22:57:05Z. A watcher polling `lsappinfo front` every 100 ms, started in the
+same instant as the call, read Obsrv frontmost on its first sample (22:57:11Z), and Obsrv stayed there through
+22:57:25Z. **This cannot say the call fronted the app**, because the watcher had no sample from before the call.
+
+**The profile:** `history.json` changed when the app launched, before the call. After the call `tabs.json`
+(370 → 349 bytes) and `history.json` both changed, as tab 1 was replaced by example.com. The pre-launch backups
+exist.
+
+**Still not observed:** the launch half (Obsrv not running, so the call launches it): whether a consent bar
+appears on a launch, and whether a launch takes focus. It needs Opeyemi to quit Obsrv first, and either run the
+call themselves or allow it in the Resolver session. The six `Electron Helper … XPC error` lines on a desk CLI
+run are still unexamined.
 
