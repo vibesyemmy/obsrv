@@ -167,7 +167,8 @@ lint of a page that reloads to the same address says it moved". **Cite them by t
 above are as of 10-06, and the lint control sits at `:998` after `#618`.
 
 **The control this card asked for was met, in its own order.** Idris ran the card's red order (the audit control,
-"a live audit of another page", "after a Back the agent issued", then the lint control), `--retries=0`, both sides
+"a live audit of a page that stays put says nothing about navigating", "after a Back the agent issued, a live
+audit, lint and inspect say which page they measured", then the lint control), `--retries=0`, both sides
 of `#618`: `✓ ✓ ✓ ✘` on `384f43a0` before it, and `✓ ✓ ✓ ✓` on `main` `9e434cd6` after it (room `#4728`). Other
 local runs, `--retries=0`, each by the session named: Resolver, the three-test order (audit, Back, lint), ✘ on
 lint unfixed, then ✓✓✓ twice fixed; Idris, the pair (audit, lint), ✘ on lint on `main`, then ✓✓ twice and the
