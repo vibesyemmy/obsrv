@@ -57,7 +57,7 @@ field beside `url` for machines."* The alternatives, also put to them, were a no
 
 So the reply keeps its measurements. It carries a note that names both addresses, and an `asked` field beside
 `url`. The counter-case below is unchanged: when the caller never asked the target to move
-(`arrivals.spec.ts:176`), there is no note.
+(`arrivals.spec.ts`, "the target mirroring the native pane is not the page navigating"), there is no note.
 
 ## What is NOT decided here, deliberately
 
@@ -71,7 +71,8 @@ shapes exist, and they are not equivalent:
 
 **No code is written and no option is recommended on this card**, because choosing one is choosing what
 Obsrv owes a caller when its own plumbing moves the page. The counter-case is already in the suite and
-must keep passing: `arrivals.spec.ts:176`, where the caller never asked the target to move and **no note is
+must keep passing: `arrivals.spec.ts`, "the target mirroring the native pane is not the page navigating"
+(it sat at `:176` when this card was written and has moved since; cite it by title), where the caller never asked the target to move and **no note is
 the right answer**.
 
 ## What would make this urgent
