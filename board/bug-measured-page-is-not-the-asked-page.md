@@ -81,8 +81,10 @@ No code is written yet. The counter-case is already in the suite and must keep p
 has moved since, so cite it by title). There the caller never asked the target to move, and **no note is the
 right answer**.
 
-**Whoever touches `arrivals.spec.ts` also renames its guard labels `(:71)` and `(:89)` to test titles.** They cite
-lines that have been wrong since before `a0615e4` (Wren, room `#4701`).
+**DONE.** The guard labels in `arrivals.spec.ts` were `(:71)` and `(:89)`, citing lines wrong since before
+`a0615e4` (Wren, room `#4701`). They are now verbatim fragments of the tests' own titles —
+`(not the page navigating)` and `(really does redirect after loading)` — so a grep for the title finds the
+label and a later edit cannot make them stale again.
 
 ## What would make this urgent
 
