@@ -4,7 +4,7 @@ column: backlog
 kind: chore
 release: later
 owner: "Dogu"
-waiting: "Opeyemi: yes or no on the longer probe (about 38 macOS minutes for the pair, a throwaway branch, nothing in ci.yml); a ci.yml experiment needs your OK after it"
+waiting: "Opeyemi: yes or no on the ci.yml experiment (indexing off on alternate runs, kill-line rate counted per arm; its own PR and gate). The longer probe has run, see below"
 order: 132
 ---
 
@@ -26,14 +26,33 @@ so a busy Spotlight is ordinary on this image. It is a reason to run an experime
 Two runners in one run, both macOS 14.8.9 with 3 cores, one with `sudo mdutil -a -i off` and one without. **The command works there:** exit 0, and `mdutil -a -s` reads `Indexing disabled.` on `/`,
 `/System/Volumes/Data` and `/System/Volumes/Preboot` afterwards. Spotlight's summed CPU (a `top` delta), mean over the first ~100 s: **on 137.1 before `npm ci` and 106.8 after, off 24.3 and 24.9.**
 **One pair, and not a clean one:** the `on` runner had been up 4 minutes (load 7.5) and the `off` runner 1 minute (load 59.7), so a boot-time indexing burst that had not yet started in `off` could be the
-whole gap. `npm ci` took 8 s, so there was almost no file-writing load. Only the first ~100 s of a job was sampled, and the hangs are 12 to 15 minutes in. It says the switch is real and removes a large CPU consumer
+whole gap. `npm ci` took 8 s, so there was almost no file-writing load. Only the first ~100 s of a job was sampled, and the three timed hangs are 12.8 to 21.0 minutes into a job (see the longer probe below). It says the switch is real and removes a large CPU consumer
 here; it says nothing about the hang rate.
 
-## The longer probe (what the yes is for)
+## The longer probe (run `38244210986`, `probe/mdutil-effect` at `13a57f18`, 2026-10-12)
 
-Built, committed locally on the probe branch (`13a57f1`), **not pushed**, because a push to that branch starts it. Same two arms, but **aligned by uptime**: each waits until the machine has been up 6 minutes before the switch
-and the sampler (Wren, room message 4104), and the sampler runs 12 minutes, covering minutes 6 to 18 after boot, which contains both snapshots. Every sample row carries its uptime, and the summary is per 2-minute bin of uptime.
-**About 19 macOS minutes a job and 38 for the pair.** It answers whether Spotlight is still busy late in a job and whether the switch changes that then. It does not run the suite and cannot say anything about hangs.
+Pushed on Opeyemi's go. Same two arms on two runners in one run, both macOS 14.8.9 with 3 cores, `sudo mdutil -a -i off` on one. It was built to align the arms by uptime (each waits until the machine has been up 6 minutes before the
+switch and the sampler, Wren, room message 4104) and to sample for 12 minutes. **It cost about 24.5 macOS minutes for the pair, not the 38 first estimated:** `spotlight indexing off` ran 11:40:59Z to 11:53:16Z (12 min 17 s) and
+`spotlight indexing on` 11:41:00Z to 11:53:14Z (12 min 14 s). **The 6-minute wait took 0 s on both**, because the runners were already up 542 s and 431 s when their jobs started; 38 (6 + 12 + setup, twice) is the cost on a fresh
+runner, not what this run paid. Raw job logs read by Dogu: off job `114793956669` (618 lines, 50,142 bytes, md5 `2d2cd6a4…`), on job `114793956906` (598 lines, 49,408 bytes, md5 `b28d2534…`).
+
+Spotlight's summed CPU (`top`'s `%CPU`, the second of two samples taken 2 s apart, `top -l 2 -s 2 -n 60 -o cpu`, summed over every command starting `mds`, `mdworker`, `mds_stores`, `mdsync` or `corespotlightd`; 300 is the ceiling on 3 cores), mean / max per 2-minute bin of uptime (325 rows for `on`, uptime 431 to 1149 s; 328 for `off`, 543 to 1263 s):
+
+| uptime | indexing on | indexing off |
+| --- | --- | --- |
+| 6 to 8 min | 165.8 / 288.9 | not sampled |
+| 8 to 10 | 187.1 / 290.3 | 29.7 / 77.2 (27 rows; the switch is in this bin) |
+| 10 to 12 | 213.2 / 290.3 | 0.5 / 6.0 |
+| 12 to 14 | 221.5 / 288.3 | 0.8 / 5.3 |
+| 14 to 16 | 199.6 / 257.1 | 0.5 / 5.4 |
+| 16 to 18 | 15.4 / 131.6 | 0.4 / 2.7 |
+| 18 to 20 | 0.5 / 8.0 | 0.4 / 4.1 |
+| 20 to 22 | not sampled | 0.4 / 2.8 |
+
+**What it shows:** on this image, on an otherwise idle runner, with indexing on, Spotlight's processes used about two of the three cores (bin means 166 to 222) from minute 7 (where that arm's sampling began, at 431 s) to about minute 16 of uptime, and were quiet by minutes 18 to 20; with
+indexing off the same processes sat near 0.5 after the first two minutes. **Which clock the hangs are on matters.** The three hangs timed here (job start from the API, kill line from the log) fall at job minutes 18.7, 12.8 and 21.0, and at runner uptimes of about 21.5, at least 14.5 and about 21.7 minutes (the `elapsed` of the oldest host process in each snapshot; the middle one is a lower bound). The probe's axis is runner uptime, but it ran no suite on an otherwise idle runner, so its quiet after minute 16 does not say Spotlight is quiet during a suite: the three snapshots differ: in the 21.7-minute hang's `mds_stores` is at 133.8% and `mds` at 68.9%, in the `controls.spec.ts:54` hang (at least 14.5 minutes) four `mdworker_shared` and `mds_stores` fill the five busiest rows, and the `mirror-302` hang (about 21.5 minutes) has no Spotlight process among its five busiest rows. The card draws no inference from the timing; the `ci.yml` experiment is what would tell whether any of this matters during a suite. One sighting each; no rate. **What it does not show:** it ran no suite, so it says nothing about whether Spotlight has
+anything to do with a hang or whether switching it off removes any. It is one pair, on two different machines. The arms were not aligned: the wait did not bind, so sampling started at about 543 s of uptime for `off` and 431 s for
+`on`. Each reading is an interval over about 2 s, and `-n 60` keeps only the 60 busiest processes, so a Spotlight process outside the top 60 is not counted; the `off` bin at 8 to 10 minutes includes the switch itself.
 
 ## The `ci.yml` experiment, after that (needs a separate OK, its own PR and its own gate)
 
@@ -43,4 +62,5 @@ Spotlight out; **fewer hits** would be a mitigation, not proof that it is the ca
 
 ## Not known
 
-Whether Spotlight is busy at minute 10 to 18 of a job; whether the switch changes that; whether anything in the hang depends on it; and the runner-to-runner spread, which one pair cannot give.
+Whether anything in the hang depends on Spotlight (no suite ran on either arm); the runner-to-runner spread, which one pair cannot give; whether the quiet after minute 16 is typical or this pair's; and where in uptime the hangs fall, which three timed snapshots put at about 14.5 to 21.7 minutes. The earlier questions,
+whether Spotlight is busy at minute 10 to 18 of a job and whether the switch changes that, now have one pair's answer above.
