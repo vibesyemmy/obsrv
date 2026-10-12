@@ -1,10 +1,9 @@
 ---
 title: "a measurement reply carries the address asked for beside `url`, for machines"
-column: backlog
+column: done
 kind: feat
 criterion: C5
 order: 135
-waiting: "Opeyemi: keep the `asked` field, knowing it is breaking (docs/compatibility.md:12) and needs a breaking-changes.md entry, or drop it now that the note in #621 makes the wrong answer detectable"
 ---
 
 SPLIT 2026-10-12 from `bug-measured-page-is-not-the-asked-page`. The shape relayed from Opeyemi for that card was
@@ -31,4 +30,12 @@ that release than in a later one.
 - whether the CLI's JSON carries it too.
 
 Henry's sequencing (room `#4719`): the note first, then the field as a second, small PR with its register entry.
+
+## DROPPED BY OPEYEMI, 2026-10-12, as relayed from the Resolver session; not built
+
+Opeyemi was told the cost (breaking per `docs/compatibility.md:12`, plus a `docs/breaking-changes.md` entry) and that
+the note in `#621` already makes the wrong answer detectable. Just before 22:51:14Z, in Resolver's session, they
+answered: **"Drop the asked field and delete the probe branch"** (room `#4788`). Nobody else can read that session,
+so this is Resolver's account. The field is not in 0.64.0 and is not planned. `done` here means decided, not
+built. If a machine-readable "which page" is wanted later, it is a new card with this one's cost section as its start.
 

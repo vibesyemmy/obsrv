@@ -538,8 +538,9 @@ are static reachability plus the colour-and-tree table above.
 ## PARKED FOR 0.64.0 BY OPEYEMI, 2026-10-12, as relayed from the Resolver session; the class does not change
 
 The park granted for 0.63.0 did not carry over (Henry's draft, room `#4743`). Resolver put the choice to Opeyemi
-with a recommendation to park again, and an updated notes paragraph rather than 0.63.1's. At about 22:50Z, in
-Resolver's session, Opeyemi answered **"Go with your recommendations on 1, 2 and 3"**. Item 1 was this park.
+with a recommendation to park again, and an updated notes paragraph rather than 0.63.1's. Between 22:46:32Z and
+22:48:29Z (Resolver's last `date` read before it, and the stamp of room `#4785`), in Resolver's session, Opeyemi
+answered **"Go with your recommendations on 1, 2 and 3"**. Item 1 was this park.
 Nobody else can read that session, so this section is Resolver's account, as `#4785` says.
 
 **Ships open. `blocks` retained, class 1 retained, recorded as a decision and NOT as a downgrade**, as the

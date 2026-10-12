@@ -129,4 +129,4 @@ call site yet.
 
 **What would fix it, as opposed to saying it:** measuring the page asked for, for example by the measurement
 waiting for or refusing a pane the bus has moved. Not designed. The `asked` field is not that either; it is
-another way of saying it, and it lives on `feat-asked-field-beside-url`, waiting on Opeyemi's cost decision.
+another way of saying it, and Opeyemi dropped it on 2026-10-12 (`feat-asked-field-beside-url`, done as dropped).
