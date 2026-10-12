@@ -97,9 +97,12 @@ the authorisation was typed there.**
 
 **Decided and dropped:** the `asked` field. Opeyemi answered in the same session shortly after the three
 above (relayed, room `#4788`), verbatim: *"Drop the asked field and delete the probe branch"*. So 0.64.0
-ships without it **by decision, not by omission**; its card records the drop. (Which board column a
-dropped card belongs in is board truth and not settled here — @Wren's `#4794` shows `done` renders as
-*"Merged."* per `scripts/build-board.js:121`, so this draft deliberately does not name a column.) **That matters for how the notes read:** the reply names the page it measured and
+ships without it **by decision, not by omission**. Its card was **deleted** rather than filed in a column
+(`#625` removes `board/feat-asked-field-beside-url.md`, −34): @Wren's `#4794` showed `done` renders as
+*"Merged."* per `scripts/build-board.js:121`, and backlog would invite someone to build it, so neither
+column tells the truth about a dropped feature. **The record of the drop therefore lives on the
+measured-page card and in the room, not on a card of its own** — worth knowing for anyone who later greps
+the board for it and finds nothing. **That matters for how the notes read:** the reply names the page it measured and
 there is **no machine-readable `asked` field coming**, so a caller who wants to compare must keep the
 address it asked for on its own side.
 
