@@ -259,3 +259,35 @@ export function landedElsewhereNote(asked: string, landed: string, status?: numb
   const causes = status !== undefined && status >= 400 ? 'a route that has moved, or a redirect the server chose' : 'a login wall, a route that has moved, or a redirect the server chose'
   return `the load of ${sent} ended at ${landed}: ${causes} — the figures are of the page it landed on, not of the one asked for`
 }
+
+/**
+ * The page a live measurement's figures are of, when it is not the page the
+ * last navigate asked for and no sentence before this one has named it
+ * (bug-measured-page-is-not-the-asked-page). The arrivals count answers "who
+ * made this commit", and when the sync bus loads the other pane's page into
+ * the target the honest answer is "the bus did", so it rightly counts nothing
+ * and the navigated note rightly stays quiet. That left the caller's own
+ * question, "did I get the page I asked for?", with no answer at all: with the
+ * target slowed, the bus's mirrored landing beat a page's own redirect in 21
+ * runs of 30, and the figures were of a page nobody asked for, silently.
+ *
+ * `named` is the address the sentences before this one already say the figures
+ * are of: the address asked for when they said nothing, the landing when the
+ * load ended elsewhere, the arrival when the page navigated after it loaded.
+ * Null when the measured page is that one, so a journey is described once. It
+ * never says the page navigated: that sentence is about the page, and this one
+ * is about which page was measured.
+ */
+export function measuredElsewhereNote(asked: string, named: string, measured: string): string | null {
+  if (measured === '' || sameAddress(named, measured)) return null
+  let sent = asked
+  try {
+    sent = normalizeUrl(asked)
+  } catch {
+    sent = asked
+  }
+  return (
+    `the figures are of ${measured}, not of ${sent}, which the last navigate asked for: ` +
+    `this pane moved there after the navigate without the page moving itself, most often Obsrv's sync loading the page its other pane reached`
+  )
+}

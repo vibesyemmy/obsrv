@@ -197,7 +197,7 @@ test('the target mirroring the native pane is not the page navigating', async ()
 
   const notes = await notesNow()
   const note = movedIn(notes)
-  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (:71)' : 'note PRESENT where none was expected (:71)', note !== undefined, notes)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'baseline, note absent as expected (not the page navigating)' : 'note PRESENT where none was expected (not the page navigating)', note !== undefined, notes)
   expect(note, `the pane was never asked to move, and it ended where it began: ${note}`).toBeUndefined()
 
   // **No mechanism control for this direction, and that is a decision with
@@ -250,7 +250,7 @@ test('a page that really does redirect after loading still says so', async () =>
   // failure into a slow one that reads like a timeout.
   const notes = await notesNow()
   const note = movedIn(notes)
-  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (:89)' : 'baseline, note present as expected (:89)', note === undefined, notes)
+  const seen = await sayWhatTheGuardSaw(app, note === undefined ? 'note MISSING where one was expected (really does redirect after loading)' : 'baseline, note present as expected (really does redirect after loading)', note === undefined, notes)
   // **A failure that names its own cause.** Held out, the native pane never lands `hairline`, so the bus has
   // nothing to mirror into the target after the redirect page starts. A mirrored `hairline` start there means
   // the hold-out is not in force and this run is not the case the test is about; say so before the product's

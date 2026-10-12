@@ -1,6 +1,6 @@
 ---
 title: "the recorded scroll lags a scroll the page makes within 120 ms of an agent scroll, so pageRect is wrong for that long"
-column: backlog
+column: done
 kind: bug
 order: 124
 ---
@@ -55,7 +55,7 @@ tell is wrong is the first class; against that, the window is 120 ms, it needs t
 it, and the selector click turns it into a refusal. Whether that is `later` or `disclose` is the Lead's call, and
 the card says it is not decided rather than defaulting to the lower one.
 
-## What would fix it (not decided, not built)
+## What would fix it (as written before the fix; superseded, see the foot of this card)
 
 - **Read the scroll in the same instant as the rect.** `inspect`'s page script reports the root scroll alongside the
   box, and `pageRect` is built from the page's own number, not the record. No published shape moves (`pageRect`
@@ -72,3 +72,28 @@ the card says it is not decided rather than defaulting to the lower one.
   to the page's real `scrollY` (today: 400 of 400 reads are stale);
 - that test, sabotaged by restoring the record as the source, fails;
 - `flow-selector-click.spec.ts:270` stops failing first attempt for this reason.
+
+## MERGED 2026-10-04 in `#550`, unreleased; the card never recorded it
+
+Found stale on 2026-10-12 by Henry (room `#4707`), who checked for prior work before building, and verified
+by Wren (`#4708`). The fix is commit `3ac9380631bc56dc63cc7266e884aeb538e3fc83`, *"fix: pageRect comes from the
+scroll the page reports with the box, not from a record that lags"*. It was committed at 00:32:20+01:00, 22
+minutes after this card's last edit (`e77e1bc`, 00:10:05+01:00), and merged as `#550` (`dcceb920e`) at
+2026-10-04T13:46:05Z. **It is unreleased:** no tag contains `3ac93806`, `v0.63.1` (09-30) predates it, and it is
+part of what 0.64.0 would deliver (Idris, `#4715`; Henry checked `git tag --contains`, `#4716`).
+
+It is the first bullet of "What would fix it" above. `src/shared/inspect.ts` takes the scroll beside the box
+in one synchronous run, and `tests/e2e/inspect-pagerect-scroll.spec.ts` runs the sequence that failed: scroll
+through the app, scroll at the page level, read at once. The record's one remaining reader, `targetView` in
+`src/main/ipc.ts`, uses it as the app's last applied scroll, which is the correct use (Henry, `#4707`). The
+`release:` class question above is moot.
+
+**Acceptance, item by item:** the pinning test exists (`inspect-pagerect-scroll.spec.ts`); the sabotage is met
+(`#550`'s body: eleven sabotages, all caught); **the third, `flow-selector-click.spec.ts:270` no longer failing
+first attempt for this reason, was never shown.** `#550`'s body says the flow-level failure could not be
+reproduced locally, and the register has no `:270` entry after the fix either way (Idris, `#4715`).
+
+**For the next card, from this one (Wren, `#4708`, corrected in `#4711`):** before building from a card, grep
+`main` for the fix's own words, and check the card's last edit against the history of the file it names. A
+search of commit messages for the slug missed this fix. A `git grep` of the slug in `src/` and `tests/` finds
+it, in four files. That is a lead, not proof.
