@@ -1,6 +1,6 @@
 ---
 title: "a reply can measure a page the caller never asked for, and say nothing about it"
-column: next
+column: backlog
 kind: bug
 release: blocks
 criterion: C5
@@ -32,7 +32,7 @@ was one where the answers coincided.
 
 ## The evidence, which is Idris's
 
-Her reproduction (`#3752`) is the record: with the target's renderer on the repo's own `cpu-4x` preset,
+Their reproduction (`#3752`) is the record: with the target's renderer on the repo's own `cpu-4x` preset,
 **21 of 30 runs** take this path; idle, the margin between the page's own redirect start and the bus's
 mirrored load is **4 to 6 ms**. In **22 of 22** failing runs a `console.log` placed before the fixture's
 `location.replace` never printed — the document was gone before its script ran — and there was **no
@@ -88,3 +88,43 @@ lines that have been wrong since before `a0615e4` (Wren, room `#4701`).
 
 A field report of a measurement attributed to the wrong page — an audit, lint or snap result a user acted
 on, where the address in the reply was not the address they drove to.
+
+## MADE DETECTABLE 2026-10-12 in `#621` (merged `51eb7116`), not fixed; still counted, and listed as known
+
+**What changed is that the reply now says so, not which page is measured.** Under the bus race a live
+measurement can still be of the page the other pane reached. The deterministic test asserts exactly that:
+asked `tall.html`, measured `hairline.html`. By `docs/release-gate.md:86-90`, a wrong answer made detectable
+"is no longer silent, and it belongs in 'Known, not fixed'". This card stays open with `release: blocks` and is
+counted among the open class 1 at a cut (Henry, `#4749`; Idris, `#4747`; Wren, `#4750`). As `:146-147` requires,
+this is the warning that made it detectable: `measuredElsewhereNote` (`src/shared/measureBudget.ts`), wired into
+`whichPage` (`src/main/ipc.ts`):
+
+> the figures are of ‹measured›, not of ‹asked›, which the last navigate asked for: this pane moved there after
+> the navigate without the page moving itself, most often Obsrv's sync loading the page its other pane reached
+
+It is compared, not counted. It fires only when the page measured is none of the addresses the earlier sentences
+named (asked, landed, arrived at), and it never says the page navigated: "who made this commit" stays the
+count's question (Henry, `#4723`).
+
+**Which surfaces carry it:** the four live handlers that call `whichPage` on `main` `51eb7116`: inspect (`:1882`),
+audit (`:1938`), lint (`:1996`) and `observeText` (`:2049`) (Idris's `grep -n`, `#4747`; same four lines by
+Resolver's). **Live snap (`captureTarget`) and the report do not call it.** By Idris's reading of `liveSnap` in
+`src/mcp/server.ts`, the snap reply's `url` is the status URL at capture, which a caller could compare with what
+they asked for. Not probed.
+
+**For 0.64.0's "Known, not fixed":** under Obsrv's sync bus, a live inspect, audit or lint can still measure the
+page the other pane reached rather than the one asked for, and now says so, naming the page the figures are of.
+
+**Pinned by** `tests/e2e/measured-page.spec.ts`, which drives the mechanism every run rather than the card's
+race. On `main` before `#621`, the inspect test failed with "the reply carried NO notes at all". Idris ran five
+mutants of the wiring and all five were caught (`#4741`). Suite job `114988475283`: 668 passed, 1 skipped, `✘` 0,
+retries 0 (one log, md5 `627561ca…`, counted by Wren, Idris and Henry). The counter-case, "the target mirroring
+the native pane is not the page navigating", passed first time in `#621`'s suite.
+
+**Not covered:** live snap and the report (above); the real race under `cpu-4x`, which the deterministic test
+stands in for; the CLI's headless path (one pane, no bus); `docs/note-inventory.md`, which does not list the new
+call site yet.
+
+**What would fix it, as opposed to saying it:** measuring the page asked for, for example by the measurement
+waiting for or refusing a pane the bus has moved. Not designed. The `asked` field is not that either; it is
+another way of saying it, and it lives on `feat-asked-field-beside-url`, waiting on Opeyemi's cost decision.
