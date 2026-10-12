@@ -73,6 +73,11 @@ point of the view.
 
 ## VIEW 2, THE RUNNING-APP HALF, RUN 2026-10-12 ON OPEYEMI'S WORD; the launch half is still unobserved
 
+**Relayed and unreproduced, so read it as Resolver's account.** Opeyemi's words below ("Run cold-run view 2
+now", "I have launched the app") were typed in the Resolver session, which nobody else can read. The reply, the
+pid and uptime, the focus watcher and the backups' md5s are Resolver's own observations, and no other session has
+reproduced them (Idris, `#4800`).
+
 **How it ran, and why only half.** Opeyemi said "Run cold-run view 2 now" in the Resolver session. Resolver's
 first `obsrv_snap` call, with Obsrv not running, was **refused by the session's permission classifier** as
 "Irreversible Local Destruction": a launch on the real profile rewrites `tabs.json` and `history.json`. Nothing
@@ -90,14 +95,23 @@ app is 0.63.1.
 **What the reply said:**
 - `mode: "live"`, `navigated: true`, `settled: true`, `warnings: []`.
 - No `launched` field, which fits an app that was already running.
-- **`preset: "sxga-19"`** (1280×1024): the preset the app was already on, with no preset passed. **That is the
-  output's documented contract**: `src/mcp/server.ts:1406` says "Live: the app's preset", and Henry argued it on
-  the merits (`#4796`): a live call should not silently change the screen the person is looking at. **But the
-  input's own description disagrees for this case.** `src/mcp/server.ts:273` (and `:1334`) describe `preset` as
-  "Mutually exclusive with width/height. Default: 1080p-24.", with no live qualifier, so a caller reading the
-  input expects `1080p-24`. `1080p-24` is `DEFAULT_PRESET` (`src/cli/args.ts:175`), the headless default. This
-  is the first time anyone has watched the live branch of that field fire on a real app. No defect filed; the
-  input description's wording is Henry's call.
+- **`preset: "sxga-19"`** (1280×1024): the preset the app was already on, with no preset passed. **The reply is
+  truthful, and the behaviour is right on the merits** (Henry, `#4796`): a live call should not silently change
+  the screen the person is looking at. **But the input contract says otherwise, and that is a documentation
+  defect** (Henry `#4799`/`#4802`, Wren `#4798`/`#4801`, Idris `#4800`). Per tool:
+  - **`obsrv_snap`:** input `src/mcp/server.ts:273` (in `snapInputShape`, from `:268`) reads "Mutually exclusive
+    with width/height. Default: 1080p-24.", with no live qualifier. The live behaviour is stated only on the
+    output, `:360` (in `snapOutputShape`, from `:340`): "Headless, the one applied; live, the one selected in the
+    app."
+  - **`obsrv_audit`:** the same pair, input `:1334` against output `:1406` ("Live: the app's preset").
+  - **The 1x tool:** input `:469` also says "Default: 1080p-24." unqualified.
+  - **Already right:** `:1663` and `:1982` read "Headless: the target screen. Default: 1080p-24."
+
+  A caller reads the input to decide what to send, so a live call with no preset is promised `1080p-24` and gets
+  the app's preset. It is detectable from the reply, so it is not class 1. The fix is to give `:273`, `:469` and
+  `:1334` the `:1663` wording: scope the default to headless and say what live does. `1080p-24` is
+  `DEFAULT_PRESET` (`src/cli/args.ts:175`). This run is the first time anyone watched the live branch of that
+  field fire on a real app.
 - `orientation: "portrait"` is still in the reply; 0.64.0 removes it.
 
 **What appeared on screen** (the returned window capture): tab 1 navigated to `https://example.com/`, the
