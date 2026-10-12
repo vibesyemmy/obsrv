@@ -59,7 +59,8 @@ What room `#4695` carries: the chosen option, **"Note + `asked` field"**, which 
 `url` for machines."* Resolver adds one disclosure: it marked that option as its recommendation when it put the
 question.
 
-So the reply keeps its measurements, carries a note naming both addresses, and has an `asked` field beside `url`.
+So the reply keeps its measurements and carries a note naming both addresses. **The `asked` field half was dropped
+on 2026-10-12**, relayed from the Resolver session (room `#4788`): see the last section.
 
 ## The shapes that were open (kept for the record)
 
@@ -70,13 +71,13 @@ Before the choice above, three shapes were open, and they are not equivalent:
 - **a field**: `asked` beside `url`, leaving the caller to compare, which is the cheapest to build and the
   easiest to ignore.
 
-## What is still open after the shape
+## What was still open after the shape (written before `#621`; settled there, see "MADE DETECTABLE" below)
 
-- the note's exact wording;
-- the type and nullability of the `asked` field;
-- which replies carry it (snap, audit, lint, inspect, report, drive), and which CLI output prints the note.
+- the note's exact wording: settled in `#621`;
+- which replies carry it (snap, audit, lint, inspect, report, drive), and which CLI output prints the note:
+  four live handlers carry it, and live snap and the report do not.
 
-No code is written yet. The counter-case is already in the suite and must keep passing: `arrivals.spec.ts`,
+When this section was written, no code existed. The counter-case is already in the suite and must keep passing: `arrivals.spec.ts`,
 "the target mirroring the native pane is not the page navigating" (it was at `:176` when this card was written and
 has moved since, so cite it by title). There the caller never asked the target to move, and **no note is the
 right answer**.
@@ -129,4 +130,7 @@ call site yet.
 
 **What would fix it, as opposed to saying it:** measuring the page asked for, for example by the measurement
 waiting for or refusing a pane the bus has moved. Not designed. The `asked` field is not that either; it is
-another way of saying it, and it lives on `feat-asked-field-beside-url`, waiting on Opeyemi's cost decision.
+another way of saying it, and **Opeyemi dropped it on 2026-10-12**, relayed from the Resolver session (room
+`#4788`): *"Drop the asked field and delete the probe branch"*. Its own card, `feat-asked-field-beside-url`, was
+deleted rather than closed, because `done` means merged (Wren's ruling, `#4794`). `git log --diff-filter=D --
+board/feat-asked-field-beside-url.md` finds its text, including the cost section and Henry's sequencing note.

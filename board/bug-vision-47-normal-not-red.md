@@ -534,3 +534,22 @@ recollection of writing it.
 code at all** and by its `calibration.ts` removals being unreachable from this spec; `#599` is excluded by
 being present in one white and one black and absent from the first black. Neither exclusion is a run; both
 are static reachability plus the colour-and-tree table above.
+
+## PARKED FOR 0.64.0 BY OPEYEMI, 2026-10-12, as relayed from the Resolver session; the class does not change
+
+The park granted for 0.63.0 did not carry over (Henry's draft, room `#4743`). Resolver put the choice to Opeyemi
+with a recommendation to park again, and an updated notes paragraph rather than 0.63.1's. Between 22:46:32Z and
+22:48:29Z (Resolver's last `date` read before it, and the stamp of room `#4785`), in Resolver's session, Opeyemi
+answered **"Go with your recommendations on 1, 2 and 3"**. Item 1 was this park.
+Nobody else can read that session, so this section is Resolver's account, as `#4785` says.
+
+**Ships open. `blocks` retained, class 1 retained, recorded as a decision and NOT as a downgrade**, as the
+0.63.0 section above insists. It is one of the two open class 1 at the 0.64.0 cut, with
+`bug-measured-page-is-not-the-asked-page` (made detectable). Shipping at two was item 3 of the same answer.
+
+**What the notes must say, and why 0.63.1's paragraph will not do:** that paragraph described two sightings,
+both white. This card now records **seven** sightings (counts section above): four recorded `[255,255,255]`,
+one read as white from two channels, and **two `[0,0,0]`**, with the colours alternating. It also records that
+the rotate PRs in this release are excluded by static reachability, not by a run, and that whether white and
+black reach the capture through the same unpainted-frame path is unread.
+
