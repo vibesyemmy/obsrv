@@ -582,9 +582,12 @@ call `whichPage`: inspect, audit, lint and `observeText` (Idris's `grep -n` on `
 call, and no test was written to produce the sentence through them. Live snap and the report do not call `whichPage`.
 
 **Its absence is held too, which a search for the words will not find.** Three tests in the same file assert the
-sentence is **not** in the reply: a pane carried away and back, a server's 302 to a login page, and an
-agent-issued Back. One more asserts that exactly one sentence names a self-redirect. Those four are what caught
-Idris's mutants of the wiring (`#4741`). The file's own lesson applies: the words are in `elsewhereIn`'s
+sentence is **not** in the reply: a pane carried away and back (`:135`), a server's 302 to a login page
+(`:172`), and an agent-issued Back (`:199`). One more (`:149`) asserts that exactly one sentence names a
+self-redirect. Idris's five mutants of the wiring (`#4741`, `#4762`) were caught as follows. The whole call
+removed: by the two positive tests (`:99`, `:123`). The arrival's address not passed on: by `:149`. The asked
+address passed instead of `named`: by `:149` and `:172`. The landing not passed on: by `:172`. The history-move
+guard removed: by `:199`. `:135` caught none of them; it is a negative control for a case no mutant reached. The file's own lesson applies: the words are in `elsewhereIn`'s
 `'without the page moving itself'`, not in each assertion, so search for the helper as well as the text.
 
 ## Sentences outside the notes/warnings net, counted 2026-09-23
