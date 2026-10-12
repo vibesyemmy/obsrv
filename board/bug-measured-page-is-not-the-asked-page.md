@@ -1,6 +1,6 @@
 ---
 title: "a reply can measure a page the caller never asked for, and say nothing about it"
-column: backlog
+column: next
 kind: bug
 release: blocks
 criterion: C5
@@ -47,6 +47,17 @@ one address and is handed measurements of another, with no note, cannot detect i
 reply looks exactly like a successful measurement of what they asked for. `release: blocks` on that
 reading; a reviewer who thinks the caller can detect it from `status.url` should say so and downgrade it,
 naming the field that makes it detectable.
+
+## DECIDED 2026-10-12 by Opeyemi: a note, plus an `asked` field
+
+Opeyemi was asked in the Resolver session (about 18:45Z): *"When Obsrv measures a page other than the one the
+caller asked for, what should the reply do?"* The option they chose: **"Note + `asked` field"**. It was described
+to them as *"Keep measuring, add a note saying the measured address differs from the asked one, plus an `asked`
+field beside `url` for machines."* The alternatives, also put to them, were a note only, a refusal, or a field only.
+
+So the reply keeps its measurements. It carries a note that names both addresses, and an `asked` field beside
+`url`. The counter-case below is unchanged: when the caller never asked the target to move
+(`arrivals.spec.ts:176`), there is no note.
 
 ## What is NOT decided here, deliberately
 

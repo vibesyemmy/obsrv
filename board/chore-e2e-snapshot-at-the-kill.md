@@ -1,6 +1,6 @@
 ---
 title: "when the e2e harness kills a hung app it prints the app's log tail and nothing about what the machine and the process were doing"
-column: doing
+column: backlog
 kind: chore
 release: later
 owner: "Dogu"
