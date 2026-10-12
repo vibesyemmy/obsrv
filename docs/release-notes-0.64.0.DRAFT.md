@@ -82,8 +82,8 @@ that asked for it.
 
 ## The three decisions this release rests on
 
-**Relayed, not typed where this draft is written.** Opeyemi answered in Resolver's session at about 22:50Z
-(room `#4785`), verbatim: *"Go with your recommendations on 1, 2 and 3"*, against Resolver's numbered list.
+**Relayed, not typed where this draft is written.** Opeyemi answered in Resolver's session **between 22:46:32Z and 22:48:29Z**
+(room `#4785`; Resolver's "about 22:50Z" was corrected by @Wren at `#4787` against the message's own stamp), verbatim: *"Go with your recommendations on 1, 2 and 3"*, against Resolver's numbered list.
 Nobody else can read that session, so this section is Resolver's account — the same standing the
 measured-page shape carried on its card, and it should be read the same way. **Resolver runs the cut, since
 the authorisation was typed there.**
@@ -95,7 +95,12 @@ the authorisation was typed there.**
    population, then quoted from there.
 3. **0.64.0 ships with two open class 1**, both under "Known, not fixed".
 
-**Not decided, so not in this release:** the `asked` field. 0.64.0 ships without it.
+**Decided and dropped:** the `asked` field. Opeyemi answered in the same session shortly after the three
+above (relayed, room `#4788`), verbatim: *"Drop the asked field and delete the probe branch"*. So 0.64.0
+ships without it **by decision, not by omission** — `feat-asked-field-beside-url` goes to `done` under
+"DROPPED BY OPEYEMI". **That matters for how the notes read:** the reply names the page it measured and
+there is **no machine-readable `asked` field coming**, so a caller who wants to compare must keep the
+address it asked for on its own side.
 
 ## Known, not fixed
 
@@ -150,8 +155,10 @@ explicit: *"A wrong answer that cannot be fixed in time can be **made detectable
 figure may be wrong, and says why. Then it is no longer silent, and it belongs in 'Known, not fixed' with
 everything else."* So this is the escape hatch used properly — **the warning is in the reply, where a
 caller is**, not only in these notes — and `:146-147` requires the notes to name it, which the paragraph
-above does. The `asked` field is a separate, unbuilt convenience and would itself be a breaking change
-(`docs/compatibility.md:12`); it is not in this release.
+above does. The `asked` field — a machine-readable copy of the address asked for, beside `url` — was considered and
+**dropped** (relayed, `#4788`), so it is not coming in a later release either unless that is revisited; it
+would have been a breaking change (`docs/compatibility.md:12`). **A caller that wants to compare should
+hold the address it asked for itself** and read the sentence above.
 
 **I had this wrong twice** (room `#4743`, and the first version of this section): I called the note "the
 half that retires the class", and wrote that building it would remove this item from the notes. It does
