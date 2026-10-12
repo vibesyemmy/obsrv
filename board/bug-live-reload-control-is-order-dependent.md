@@ -1,5 +1,5 @@
 ---
-title: "the two controls for the self-reload note go green-but-blind depending on which test runs before them"
+title: "the two controls for the self-reload note go red with no defect present, depending on which test runs before them"
 column: backlog
 kind: bug
 criterion: C5
@@ -12,8 +12,10 @@ tree.
 `tests/e2e/mcp-live.spec.ts:746` (live audit) and `:997` (live lint) are the controls that make that card's
 acceptance item (b) real: they drive `tests/fixtures/reloads-during-walk.html`, which reloads itself **to
 the same address** during the walk, and they are red when the guard at `src/main/ipc.ts:245` is loosened
-(Idris measured that, room #4087). **They hold in the suite's current order.** They also go **green while
-measuring nothing** when a particular test precedes them, and that is this card.
+(Idris measured that, room #4087). **They hold in the suite's current order.** They also go **red with no
+defect present** when a particular test precedes them, and that is this card. (Corrected 2026-10-12: this
+sentence and the title said "green while measuring nothing", the opposite of the table below, where every
+failing order is a ✘. Henry, room `#4712`.)
 
 ## The reproduction, measured
 
@@ -34,9 +36,9 @@ All runs local, `--retries=0`, the bundle's guard printed before each one (`if (
 
 **So the suite is not at risk today** — the full file passes, and so does each test alone. **The risk is
 that the control's power depends on test order**: a reorder, a shard, a `-g` subset, or a new test
-inserted above it makes `:997` pass while seeing nothing. A control that passes while measuring nothing is
-the failure mode the whole `bug-redirect-note-missing-not-late` family exists for, and `:997` is one of two
-controls for a `release: blocks` item.
+inserted above it makes `:997` fail with no defect present. (Corrected 2026-10-12: this sentence said "pass
+while seeing nothing". What was measured is a false red. The cost is a spurious failure that invites loosening
+the assertion, not a blind control.) `:997` is one of two controls for a `release: blocks` item.
 
 ## Three hypotheses, read with the corrections below — ONE of them was refuted, not three
 
