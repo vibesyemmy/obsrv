@@ -1,5 +1,5 @@
 import { awaitContent, emptyDocumentNote, isEmptyAuditReport, isEmptyLintReport } from '../shared/emptyDocument'
-import { historyMoveNote, httpStatusNote, landedElsewhereNote, measureTimeoutNote, navigatedAfterLoadNote, type HistoryMove } from '../shared/measureBudget'
+import { historyMoveNote, httpStatusNote, landedElsewhereNote, measureTimeoutNote, measuredElsewhereNote, navigatedAfterLoadNote, type HistoryMove } from '../shared/measureBudget'
 import { app, ipcMain, nativeImage, screen, shell, type BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { auditFindings, DEFAULT_TAP_MM, DEFAULT_TEXT_MM } from '../cli/audit'
 import { DEFAULT_THIN_PX, lintFindings, slimGroups } from '../cli/lint'
@@ -259,19 +259,37 @@ export function registerIpc(ctx: AppContext): () => void {
     const asked = askedOf.get(s)
     const pre: string[] = []
     if (asked) {
+      // The address the sentences below say the figures are of, so the last
+      // check can tell whether the page measured is one they named.
+      let named = asked.asked
       // Where the navigate's load landed describes the page it loaded, which a
       // history move has since replaced; the move is the news instead.
       if (s.historyMove !== null) pre.push(historyMoveNote(s.historyMove, s.url, asked.asked))
       else {
         const landed = landedElsewhereNote(asked.asked, asked.landedAt, st.code)
-        if (landed !== null) pre.push(landed)
+        if (landed !== null) {
+          pre.push(landed)
+          named = asked.landedAt
+        }
       }
       // A navigation committed after the load settled: the page moved under the
       // agent between `navigate` and this measurement. Counted, not compared: a
       // page that reloads itself to the same address moves just as much as a
       // redirect to another one, and comparing addresses cannot see it.
       const seen = arrivals(s)
-      if (seen.count > asked.atCount && seen.url) pre.push(navigatedAfterLoadNote(asked.asked, seen.url))
+      if (seen.count > asked.atCount && seen.url) {
+        pre.push(navigatedAfterLoadNote(asked.asked, seen.url))
+        named = seen.url
+      }
+      // Compared, not counted: the page measured against every address named
+      // above. A commit the count rightly leaves out, such as the bus loading
+      // the other pane's page into this one, still changes which page the
+      // figures are of (bug-measured-page-is-not-the-asked-page). A history
+      // move's sentence already names the page measured.
+      if (s.historyMove === null) {
+        const elsewhere = measuredElsewhereNote(asked.asked, named, st.url)
+        if (elsewhere !== null) pre.push(elsewhere)
+      }
     }
     const statusNote = httpStatusNote(st.code, st.text, st.url, asked?.asked)
     if (statusNote !== null) pre.push(statusNote)
