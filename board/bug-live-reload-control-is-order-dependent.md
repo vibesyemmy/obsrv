@@ -166,13 +166,16 @@ on `'obsrv-walk-reload:' + location.search`, and each control loads it with its 
 lint of a page that reloads to the same address says it moved". **Cite them by those titles.** The line numbers
 above are as of 10-06, and the lint control sits at `:998` after `#618`.
 
-**The control this card asked for was met.** With the audit control, then "after a Back the agent issued", then
-the lint control, `--retries=0`: on `main` before the fix, lint went ✘ with no note; after the fix, ✓✓✓, run twice
-by Resolver and again by Idris. **The controls are not blind:** sabotaging the product guard (`ipc.ts:245`
+**The control this card asked for was met, in its own order.** Idris ran the card's red order (the audit control,
+"a live audit of another page", "after a Back the agent issued", then the lint control), `--retries=0`, both sides
+of `#618`: `✓ ✓ ✓ ✘` on `384f43a0` before it, and `✓ ✓ ✓ ✓` on `main` `9e434cd6` after it (room `#4728`). Other
+local runs, `--retries=0`, each by the session named: Resolver, the three-test order (audit, Back, lint), ✘ on
+lint unfixed, then ✓✓✓ twice fixed; Idris, the pair (audit, lint), ✘ on lint on `main`, then ✓✓ twice and the
+three-test order once on the PR head. None of these local runs was reproduced by Wren. **The controls are not blind:** sabotaging the product guard (`ipc.ts:245`
 without `&& !byDocument`, rebuilt) reddens both. Idris also reddened the lint control with each of three
 mutants of the PR: the global key, no queries, and a shared query. So the key change and the per-test
 queries are each necessary. The macOS suite on `#618` was 662 passed, 1 skipped, `✘` 0, retries 0 (job
-`114967316083`, md5 `a87b9bce…`, counted by Idris, Wren and Resolver). That shows nothing else broke, not
+`114967316083`, md5 `a87b9bce…`: one job log, pulled and counted by Idris, Wren and Resolver). That shows nothing else broke, not
 that the fix works: in file order the controls already passed.
 
 **Not covered:** sharded orders, and the fixture's one other consumer, `scripts/b5-fixture-sweep.js`, which
