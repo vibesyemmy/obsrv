@@ -10,6 +10,15 @@ no run anyone had seen — a name for a state the project believed in and had ne
 A schema entry is a claim about the world; a test that asserts the entry is *legal* is a claim
 about the schema. Only a run that produced it is evidence.
 
+**Headline, 2026-10-12: 40 of the 125 producers counted have a control this file records, and 113 of the 125 have been seen to fire.** The first is the release gate's
+figure ("shown firing with a control"); the second is beside it for context. A control here is a test that asserts the whole sentence and was shown to fail when it is
+altered: the 40 in "Fired since, pinned by a test". "Seen to fire" is the bar the rest of this file sets, a run that produced the sentence, so the other 73 observed
+sentences are recorded as produced and not as asserted. Of the 125, 11 more are named reasons and not observations, 1 is a label too short to match, and 0 are unfired.
+The population is 121 at the 2026-09-17 pass, plus 3 that `#293` wrote and 1 made when `#338` split the return-to-top note in two. **This is the arithmetic of this
+file's own categories, summed from the split table and the sections that supersede it ("What is left"), and not a recount of `src/`:** no section states it as a total,
+so this line is where it is written down. Still counted though gone from the tree: 2 deleted with `#293`, and 1 removed with the orientation flag on 2026-10-06 (the
+struck-through row). Not counted: `measuredElsewhereNote` (`#621`), seen to fire on 2 of its 4 live replies.
+
 ## Method, and what it cannot tell you
 
 Emitted notes were collected mechanically: every `warnings.push(...)`, `warn(...)` and
