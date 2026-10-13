@@ -70,7 +70,11 @@ reply carrying the new field; re-list after upgrading. Register: `docs/breaking-
 
 A tool handed a key it does not know used to **drop it** and answer as if it had not been passed — so a
 caller still sending the removed `orientation` got an unrotated screen with no error and no warning. Unknown
-top-level input keys are now refused, and the refusal names the flag to use instead, per tool.
+top-level input keys are now refused, and the refusal names the flag to use instead, per tool. In the same
+surface, `obsrv_snap`'s and `obsrv_audit`'s `preset` descriptions now say what each tool does with a preset
+on a live call — snap applies it to the running app, audit ignores it with a note. Both previously read
+`Default: 1080p-24.` and **said nothing about mode at all**, so nothing told a caller that the same input is
+honoured by one tool and discarded by the other. Two description strings; no behaviour, no published shape.
 
 ### The tools refuse an app older than 0.58.0
 
