@@ -553,3 +553,90 @@ one read as white from two channels, and **two `[0,0,0]`**, with the colours alt
 the rotate PRs in this release are excluded by static reachability, not by a run, and that whether white and
 black reach the capture through the same unpainted-frame path is unread.
 
+
+
+## THE CAPTURE-PATH READING, 2026-10-13 (Henry) — the two colours cannot be one path, and `painted()` excludes neither
+
+The question this card has carried unanswered — *"whether `[0,0,0]` is reachable through the same
+unpainted-frame path the white readings are attributed to, or only through a different one… that is a
+reading of the capture path, not a sweep, and nobody has done it"* — now has an answer **as a reading**.
+`main` was frozen for the 0.64.0 cut, so this is the read I owed the card. **It is static: no run, no app
+launched, no desk.** Every claim below is a file and a line in the tree at `86712211`.
+
+**What composites where the sample is taken.** The sample is the middle pixel of `.target-pane canvas`
+(`tests/e2e/vision.spec.ts:51-68`, the `middle()` helper), through `win.webContents.capturePage(rect)` on
+the **main** window.
+
+- The GL context for that canvas is created with **`alpha: false`** (`src/renderer/src/gl/renderer.ts:159-165`).
+  An opaque drawing buffer with nothing drawn into it composites as **opaque black** — `[0,0,0]` — not as
+  transparent, and not as whatever sits behind it.
+- **Nothing sits behind it to show through anyway:** `.target-canvas` has no background
+  (`src/renderer/src/styles.css:594`, `display: block; image-rendering: pixelated;` and nothing else), and
+  the window's own `backgroundColor` is **`#111111`** (`src/main/window.ts:72`) — `[17,17,17]`, which is
+  neither reading.
+- The **offscreen target** window is created with **no `backgroundColor`**
+  (`src/main/targetSource.ts:443-462`), so its blank surface rasters at Electron's default **white**.
+
+**So the two readings sit on opposite sides of the same pipeline:**
+
+| reading | what it requires | side |
+| --- | --- | --- |
+| `[0,0,0]` | the canvas's buffer holds **no draw** at the instant of capture (`alpha: false` makes that black) | **renderer** |
+| `[255,255,255]` | a draw **did** happen, of a frame whose source raster was blank — the target's own white surface | **target** |
+
+A white reading **cannot** come from an unfilled canvas, because an unfilled canvas here is black. A black
+reading cannot come from drawing the target's blank page, because drawing white yields white. **One path
+does not reach both**, which is what the card asked. This replaces the card's earlier guess that white "fits
+a surface never filled" — on this reading, a never-filled surface is the *black* case.
+
+**And the gate the card added excludes neither.** `painted()`
+(`tests/e2e/vision.spec.ts:89-98`) polls `frameSent()` to `{ready: true}` and `lastSeq > 0`, then two
+`requestAnimationFrame`s. In `src/main/frameBus.ts`, `ready` is set **on the renderer's subscribe**
+(`:85-87`) and that handler immediately calls `source?.invalidate()`; `seq++` happens per frame shipped
+(`:79-81`). So **`lastSeq` reaches 1 on a forced repaint of whatever the target holds at that moment** — a
+blank white surface included. The gate proves a frame was *sent* and that two rAFs elapsed; it proves
+neither that the frame had content (white case) nor that the buffer still holds it at capture (black case).
+
+**What would settle it in one firing, with no new mechanism.** The app already numbers frames and already
+asks the renderer which one it drew: `flushRendererDraw` (`src/main/ipc.ts:1592`) sends `IPC.drawNow` and
+resolves the seq the renderer answers on `IPC.drewNow` (`:1616-1619`), read against `frameSent()` by
+`frameIdentityWarning(acked, latest, ready)` (`src/main/frameCheck.ts:25-29`; its three constants are
+`NOT_DELIVERED` (`:19`), `NO_ACKNOWLEDGEMENT` (`:21`) and `OLDER_FRAME` (`:23`)). Putting `acked`, `lastSeq` and `ready`
+into the assertion message would read:
+
+- black with **`acked === null`** → no draw was acknowledged;
+- black with **`acked === lastSeq`** → a real draw whose buffer was gone by the capture (the GPU-reset /
+  lost-context class, `gpu-reset-webgl-stall`);
+- white with **`acked === lastSeq`** → a faithful draw of a blank target raster.
+
+**`acked === null` is two facts, not one, and I nearly wrote it as one.** `flushRendererDraw` also resolves
+`null` on a **400 ms timeout** (`DRAW_FLUSH_MS`, `:1587`, `:1609`), so a null means *no answer in 400 ms* —
+nothing drawn **or** a renderer too busy to answer. It separates the black cases from each other only if the
+timeout is reported alongside it.
+
+`flushDraw` is **not** on `AppContext` (`src/main/context.ts:7`), so `__obsrv` does not expose it
+(`src/main/testHooks.ts:36-52` spreads the context) — but a spec can run the same two-channel handshake
+inside `app.evaluate`, so this is a **test-only** change. **The pattern is already in the suite:**
+`tests/e2e/vision-confirm.spec.ts:92-97` launches a second app with `OBSRV_TEST_NO_DRAW_ACK: '1'` to drive
+exactly the no-acknowledgement branch (`src/main/ipc.ts:1605-1608`), for the sibling card
+`bug-vision-47-shader-after-normal`. So the acknowledgement is already a tested, reachable signal; this card
+has simply never read it at the moment of a bad pixel. Not written: `main` is frozen for the cut, and this
+belongs in its own PR after it.
+
+**What this answers, in the card's own words.** “Where that leaves the card” (above) states the open
+question as a hypothesis — **“one unpainted-frame path that can read either `[0,0,0]` or `[255,255,255]`
+depending on the runner, on one build”** — and says that reading, not the next sighting, is what the card
+needs. **On this reading that hypothesis is false:** one path cannot produce both, because the canvas is
+opaque (`alpha: false`) and an unfilled opaque buffer is black, so no unfilled surface anywhere in this
+pipeline reads white. The runner then explains **which** failure a machine falls into, not one value becoming
+the other. The park section's closing clause, that this is “unread”, is answered to the extent a static
+reading answers anything — and no further.
+
+**The limits, named.** This is a reading of five files, not a run, and a code reading is a candidate until
+run — the shape it predicts has never been produced on purpose. It does not say **why** a buffer would be
+empty after an acked draw, nor why a target's shipped frame would be blank on the five white
+occasions the counts section records (four recorded `[255,255,255]` plus the 09-17 reading from two
+channels) and not on every other run of this spec. It does not touch the `[255,255,0]`
+shader-still-applied branch, which stays ruled out for every sighting the card records. And the
+instrumentation above would make the **next** firing answer itself; it explains none of the **seven**
+already recorded, whose logs are what they are.
