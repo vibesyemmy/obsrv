@@ -553,3 +553,127 @@ one read as white from two channels, and **two `[0,0,0]`**, with the colours alt
 the rotate PRs in this release are excluded by static reachability, not by a run, and that whether white and
 black reach the capture through the same unpainted-frame path is unread.
 
+
+
+## THE CAPTURE-PATH READING, 2026-10-13 (Henry) — two routes to a bad pixel, not shown to be the only ones, and `painted()` excludes none of them
+
+The question this card has carried unanswered — *"whether `[0,0,0]` is reachable through the same
+unpainted-frame path the white readings are attributed to, or only through a different one… that is a
+reading of the capture path, not a sweep, and nobody has done it"* — now has an answer **as a reading**.
+`main` was frozen for the 0.64.0 cut, so this is the read I owed the card. **It is static: no run, no app
+launched, no desk.** Every claim below is a file and a line in the tree at `86712211`, **with two
+exceptions, each named where it is used.** The first: that a blank window surface rasters white is
+Electron's documented default
+(`backgroundColor` — *"Default is `#FFF` (white)"*, `node_modules/electron/electron.d.ts:3817` in the
+installed 43.4.1, pinned `^43.4.1` at `package.json:61`), not a line in this repo, and whether an offscreen
+`webContents` paints that default is **not** read from the tree either. The second is named in the third
+route below — that an unfilled texel reads zero is WebGL spec behaviour, not a line in this repo.
+
+**What composites where the sample is taken.** The sample is the middle pixel of `.target-pane canvas`
+(`tests/e2e/vision.spec.ts:51-69`, the `middle()` helper), through `win.webContents.capturePage(rect)` on
+the **main** window.
+
+- The GL context for that canvas is created with **`alpha: false`** (`src/renderer/src/gl/renderer.ts:159-165`).
+  An opaque drawing buffer with nothing drawn into it composites as **opaque black** — `[0,0,0]` — not as
+  transparent, and not as whatever sits behind it.
+- **Nothing sits behind it to show through anyway:** `.target-canvas` has no background
+  (`src/renderer/src/styles.css:594`, `display: block; image-rendering: pixelated;` and nothing else), and
+  the window's own `backgroundColor` is **`#111111`** (`src/main/window.ts:72`) — `[17,17,17]`, which is
+  neither reading.
+- The **offscreen target** window is created with **no `backgroundColor`**
+  (`src/main/targetSource.ts:443-462`), so its blank surface rasters at Electron's default **white**.
+
+**So the reading finds two routes, at opposite ends of the pipeline:**
+
+| reading | what produces it on this reading | side |
+| --- | --- | --- |
+| `[0,0,0]` | the canvas's buffer holds **no draw** at the instant of capture (`alpha: false` makes that black) | **renderer** |
+| `[255,255,255]` | a draw **did** happen, of a frame whose source raster was blank — the target's own white surface | **target** |
+
+**What this corrects on the card, and it is the white half, not the black.** `:64` says *"White is what an
+unpainted surface looks like"*, and `:275-276` says *"White fits an unpainted surface because white is the
+page's background"*. **Neither holds if the surface in question is this canvas**, because an unfilled opaque
+canvas is black. The same sentence's other half — *"black fits a surface never filled, or a cleared backing
+store"* — my reading **agrees** with; an earlier draft of this section quoted that half as the thing it
+replaced, which is the opposite of what it does. (@Idris caught it, gate read room `#4842`.)
+
+**And the gate the card added excludes none of them.** `painted()`
+(`tests/e2e/vision.spec.ts:90-100`) polls `frameSent()` to `{ready: true}` and `lastSeq > 0`, then two
+`requestAnimationFrame`s. In `src/main/frameBus.ts`, `ready` is set **on the renderer's subscribe**
+(`:85-87`) and that handler then calls `source?.invalidate()` — `if (enabled)`, so only while the bus is on; `seq++` happens per frame shipped
+(`:79-81`). So **`lastSeq` reaches 1 on a forced repaint of whatever the target holds at that moment** — a
+blank white surface included. The gate proves a frame was *sent* and that two rAFs elapsed; it proves
+neither that the frame had content (white case) nor that the buffer still holds it at capture (black case).
+
+**What would settle it in one firing, with no new mechanism.** The app already numbers frames and already
+asks the renderer which one it drew: `flushRendererDraw` (`src/main/ipc.ts:1592`) sends `IPC.drawNow` and
+resolves the seq the renderer answers on `IPC.drewNow` (`:1616-1619`), read against `frameSent()` by
+`frameIdentityWarning(acked, latest, ready)` (`src/main/frameCheck.ts:25-29`; its three constants are
+`NOT_DELIVERED` (`:19`), `NO_ACKNOWLEDGEMENT` (`:21`) and `OLDER_FRAME` (`:23`)). Putting `acked`, `lastSeq` and `ready`
+into the assertion message would read:
+
+- black with **`acked === null`** → no draw was acknowledged;
+- black with **`acked === lastSeq`** → a real draw, which is **two stories, not one** (below): a buffer gone
+  by the capture — the GPU-reset / lost-context class, `gpu-reset-webgl-stall` — **or** a draw over a
+  texture that holds nothing;
+- white with **`acked === lastSeq`** → a faithful draw of a blank target raster.
+
+**The third route, and it is @Idris's, from the gate read at room `#4842`** — a draw over an **empty
+texture**, which my table's “holds no draw” missed because it is a draw:
+
+- `resizeSource` reallocates with `null` data and its own comment says *"Contents are undefined until the
+  next upload"* (`src/renderer/src/gl/renderer.ts:273-281`);
+- the frame handler calls `gl.resizeSource(…)` then `gl.uploadSlice(…)` and **discards the boolean**
+  (`src/renderer/src/components/TargetCanvas.tsx:283-284`), while `upload()` returns `false` for a slice
+  that does not fit the texture (`renderer.ts:297-308`);
+- the draw is gated only on `gl.sourceWidth > 0` (`TargetCanvas.tsx:232`), which `resizeSource` has already
+  set (`sourceWidth` returns `this.width`, `renderer.ts:239-241`), and the frame is named regardless of
+  whether the slice was accepted — `if (typeof m.seq === 'number') lastSeq = m.seq`
+  (`TargetCanvas.tsx:287`) — which the `drawNow` handler then paints and replies with
+  (`TargetCanvas.tsx:304-310`).
+
+So **a draw over nothing exists in the code and would be acknowledged**, and with `alpha: false` the
+expectation is black — an expectation from the WebGL spec's zero-initialised texels and not a line in this
+tree, and I did not read the fragment shader. **Whether it is reachable is unread, by @Idris and by me.**
+A fourth instrumentation line follows from it: print `uploadSlice`'s boolean, and the texture's dimensions
+against the frame's, so an acked black says which of the two stories it is.
+
+**`acked === null` is two facts, not one, and I nearly wrote it as one.** `flushRendererDraw` also resolves
+`null` on a **400 ms timeout** (`DRAW_FLUSH_MS`, `:1587`, `:1609`), so a null means *no answer in 400 ms* —
+nothing drawn **or** a renderer too busy to answer. It separates the black cases from each other only if the
+timeout is reported alongside it.
+
+`flushDraw` is **not** on `AppContext` (`src/main/context.ts:7`), so `__obsrv` does not expose it
+(`src/main/testHooks.ts:36-52` spreads the context) — but a spec can run the same two-channel handshake
+inside `app.evaluate`, so this is a **test-only** change. **The pattern is already in the suite:**
+`tests/e2e/vision-confirm.spec.ts:92-97` launches a second app with `OBSRV_TEST_NO_DRAW_ACK: '1'` to drive
+exactly the no-acknowledgement branch (`src/main/ipc.ts:1605-1608`), for the sibling card
+`bug-vision-47-shader-after-normal`. So the acknowledgement is already a tested, reachable signal; this card
+has simply never read it at the moment of a bad pixel. Not written: `main` is frozen for the cut, and this
+belongs in its own PR after it.
+
+**What this answers, in the card's own words.** “Where that leaves the card” (above) states the open
+question as a hypothesis — **“one unpainted-frame path that can read either `[0,0,0]` or `[255,255,255]`
+depending on the runner, on one build”** — and says that reading, not the next sighting, is what the card
+needs. **My first draft called that hypothesis false. It is not, and the withdrawal is the most useful
+thing in this section.**
+
+What the files above show is **two routes at opposite ends** — and what the two files above show is a
+**third route that is a candidate single path reaching both colours**: one handler, `resizeSource` then
+`uploadSlice`, where an upload that lands a blank white raster reads **white** and an upload that is
+rejected over a freshly reallocated texture reads **black**. That is exactly the shape the card described as
+*"one unpainted-frame path that can read either value depending on the runner, on one build"*, and it is a
+mechanism nobody had named. **So the hypothesis is not excluded; it has, for the first time, a candidate.**
+
+What is honestly settled is narrower: the card's **white = unpainted surface** half is wrong for this canvas,
+and `painted()` excludes none of the routes. The park section's closing clause, that this is “unread”, is
+answered only to the extent a static reading answers anything — and no further.
+
+**The limits, named.** This is a static reading, not a run, and a code reading is a candidate until
+run — no route here has been produced on purpose. It does not say **why** a buffer would be
+empty after an acked draw, nor why a target's shipped frame would be blank on the five white
+occasions the counts section records (four recorded `[255,255,255]` plus the 09-17 reading from two
+channels) and not on every other run of this spec. It does not touch the `[255,255,0]`
+shader-still-applied branch, which stays ruled out for every sighting the card records. And the
+instrumentation above would make the **next** firing answer itself; it explains none of the **seven**
+already recorded, whose logs are what they are.
