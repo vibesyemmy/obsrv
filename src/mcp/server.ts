@@ -270,7 +270,7 @@ const snapInputShape = {
   preset: z
     .enum(PRESET_IDS)
     .optional()
-    .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
+    .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Headless: the target screen, default 1080p-24. Live: applied to the running app if passed, otherwise the screen the app is already on is used.'),
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
@@ -1331,7 +1331,7 @@ const auditInputShape = {
   preset: z
     .enum(PRESET_IDS)
     .optional()
-    .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Default: 1080p-24.'),
+    .describe('Screen preset id (list them with obsrv_presets). Mutually exclusive with width/height. Headless only: the target screen, default 1080p-24. Live: ignored, with a note, and the screen the app is already on is used.'),
   rotate: rotateField,
   width: z.number().int().min(1).optional().describe('Custom CSS viewport width in px. Needs height; mutually exclusive with preset.'),
   height: z.number().int().min(1).optional().describe('Custom CSS viewport height in px. Needs width.'),
