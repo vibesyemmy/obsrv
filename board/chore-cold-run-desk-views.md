@@ -117,7 +117,8 @@ app is 0.63.1.
   `setPreset` that is in fact `obsrv_drive`'s handler (`:2357`, registered at `:2248`). The table above is read from
   `git show 6a9472a3…:src/mcp/server.ts | grep -n` (2,847 lines), function by function, after a first pass that
   piped the file through zsh's `echo`, which expands `\n` inside string literals and pushed every later line
-  number 3 to 43 too high (Wren, `#4818`).
+  number 3 to 43 too high (Resolver, `#4820`; Wren and Idris spotted the offset, and `#4818` is Wren's own
+  correction about `:2357`).
 
   A caller reads the input to decide what to send, so on snap and audit a live call is promised `1080p-24` and
   gets the app's preset, applied or kept on snap and ignored on audit. It is detectable from the reply, so it reads
