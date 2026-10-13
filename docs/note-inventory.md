@@ -10,6 +10,20 @@ no run anyone had seen — a name for a state the project believed in and had ne
 A schema entry is a claim about the world; a test that asserts the entry is *legal* is a claim
 about the schema. Only a run that produced it is evidence.
 
+**Headline, 2026-10-12: at least 47 of the 125 producers counted have a control this file records, and 113 of the 125 have been seen to fire.** The first is the release
+gate's figure ("shown firing with a control"), as a floor; the second is beside it for context. A control here is a test that asserts the whole sentence and was shown to
+fail when it is altered. The file records one for the 40 in "Fired since, pinned by a test", and in prose for four more that table does not hold: `src/cli/walk.ts:129`,
+`src/mcp/walk.ts:108` and `:213`, and `src/shared/walkCoverage.ts:174` (`#358`: "five sentences altered, five reds", under "What is left"). **This paragraph records three
+more, from the descriptions of the PRs that pinned them, where each control went red:** `src/cli/lint.ts:94` (`#360`: the singular arm broken, the new singular assertion
+fails), `src/mcp/lib.ts:581` (`#360` and `#362`: the Settings label renamed, the cross-layer test fails) and `src/cli/capture.ts:347` (`#389`: "not page content" changed to
+"not CONTROL content", the uncovered test fails). It is a floor because the PR descriptions of the other 66 observed sentences were not searched for a control run. "Seen to
+fire" is the bar the rest of this file sets, a run that produced the sentence: for those 66 it records that a run produced them, and not what asserts them. Of the 125, 11 more
+are named reasons and not observations, 1 is a label too short to match, and 0 are unfired. The population is 121 at the 2026-09-17 pass, plus 3 that `#293` wrote and 1 made
+when `#338` split the return-to-top note in two. **This is the arithmetic of this file's own categories, summed from the split table and the sections that supersede it
+("What is left"), and not a recount of `src/`:** no section states it as a total, so this line is where it is written down. Still counted though gone from the tree: 2
+deleted with `#293`, and 1 removed with the orientation flag on 2026-10-06 (the struck-through row). Not counted: `measuredElsewhereNote` (`#621`), seen to fire on 2 of its 4
+live replies.
+
 ## Method, and what it cannot tell you
 
 Emitted notes were collected mechanically: every `warnings.push(...)`, `warn(...)` and
