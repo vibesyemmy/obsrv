@@ -90,9 +90,10 @@ the authorisation was typed there.**
 
 1. **`bug-vision-47-normal-not-red`: parked again, for 0.64.0** — a fresh park, not an inherited one, with
    an updated notes paragraph rather than 0.63.1's.
-2. **The gate's second number: `40 of 125` with a recorded control** is the gate's figure, with
+2. **The gate's second number: at least `47 of 125` with a recorded control** is the gate's figure, with
    `113 of 125` seen to fire beside it — written into `docs/note-inventory.md` **first**, with its
-   population, then quoted from there.
+   population, then quoted from there. (The figure put to Opeyemi was 40; @Dogu's recount before it
+   landed made it **at least 47**, and the merged file is what the notes quote.)
 3. **0.64.0 ships with two open class 1**, both under "Known, not fixed".
 
 **Decided and dropped:** the `asked` field. Opeyemi answered in the same session shortly after the three
@@ -195,19 +196,21 @@ silence. The same test applies to anything else that lands before the cut.
 **The two numbers published with each release:**
 1. **Open class 1 bugs at the cut.** Target zero. **Two at this cut, and that is the decided position** (decision 3, relayed): measured-page, made detectable, and vision-47, parked again. `#621` did not reduce it — a class made detectable stays counted and is named with its warning (`:146-147`). Neither can be
    silently dropped: the gate says a downgraded class 1 must name the warning that made it detectable.
-2. **The share of the product's own sentences shown firing with a control — `40 of 125`,** with
-   **`113 of 125` seen to fire** published beside it. **Decided** (relayed, `#4785`) after @Dogu
-   established that the inventory stated no figure in the gate's form: *"with a control"* appeared **0**
-   times in it, and 0.63's `89 of 122` mixed populations, so it is **not** a precedent for publishing a
-   derived number.
+2. **The share of the product's own sentences shown firing with a control.** **Quote `docs/note-inventory.md`
+   verbatim**, which is now possible because the figure is in the file: *"at least 47 of the 125 producers
+   counted have a control this file records, and 113 of the 125 have been seen to fire"* (its Headline,
+   dated 2026-10-12, landed in `#627` as `d6d51f88`).
 
-   **Order matters here and it is not cosmetic.** The gate asks for that share **and** says to take it
-   *"from the inventory's own table rather than recomputing it: that file states its population and what
-   moved it, which is the half most counts leave out."* Both clauses can only hold if the figure is
-   **written into `docs/note-inventory.md` first, with its population**, and then quoted. @Dogu's
-   `docs/note-inventory-headline` lands before these notes do. **Until that PR is merged, the figure above
-   is derived and must not be published** — quoting it from this draft rather than from the file would be
-   the exact thing the gate's second clause forbids.
+   **Publish the "at least".** It is a **floor**, not a count: @Dogu's paragraph says the PR descriptions of
+   the other 66 observed sentences were not searched, so the true number is ≥ 47. Dropping the hedge would
+   turn a floor into a measurement — the same move 0.63's `89 of 122` made when it mixed populations, which
+   is why that figure is not a precedent.
+
+   **The order this needed, now satisfied.** The gate asks for that share **and** says to take it *"from the
+   inventory's own table rather than recomputing it: that file states its population and what moved it,
+   which is the half most counts leave out."* Both clauses hold only if the figure is written down first,
+   which `#627` did. **The figure put to Opeyemi was 40; the merged figure is at least 47** — so quoting the
+   decision rather than the file would already have published a stale number.
 
 ---
 
