@@ -561,11 +561,13 @@ The question this card has carried unanswered — *"whether `[0,0,0]` is reachab
 unpainted-frame path the white readings are attributed to, or only through a different one… that is a
 reading of the capture path, not a sweep, and nobody has done it"* — now has an answer **as a reading**.
 `main` was frozen for the 0.64.0 cut, so this is the read I owed the card. **It is static: no run, no app
-launched, no desk.** Every claim below is a file and a line in the tree at `86712211`, **with one exception
-named where it is used**: that a blank window surface rasters white is Electron's documented default
+launched, no desk.** Every claim below is a file and a line in the tree at `86712211`, **with two
+exceptions, each named where it is used.** The first: that a blank window surface rasters white is
+Electron's documented default
 (`backgroundColor` — *"Default is `#FFF` (white)"*, `node_modules/electron/electron.d.ts:3817` in the
 installed 43.4.1, pinned `^43.4.1` at `package.json:61`), not a line in this repo, and whether an offscreen
-`webContents` paints that default is **not** read from the tree either.
+`webContents` paints that default is **not** read from the tree either. The second is named in the third
+route below — that an unfilled texel reads zero is WebGL spec behaviour, not a line in this repo.
 
 **What composites where the sample is taken.** The sample is the middle pixel of `.target-pane canvas`
 (`tests/e2e/vision.spec.ts:51-69`, the `middle()` helper), through `win.webContents.capturePage(rect)` on
@@ -625,7 +627,10 @@ texture**, which my table's “holds no draw” missed because it is a draw:
   (`src/renderer/src/components/TargetCanvas.tsx:283-284`), while `upload()` returns `false` for a slice
   that does not fit the texture (`renderer.ts:297-308`);
 - the draw is gated only on `gl.sourceWidth > 0` (`TargetCanvas.tsx:232`), which `resizeSource` has already
-  set, and the acknowledgement names the frame regardless (`TargetCanvas.tsx:285-286`).
+  set (`sourceWidth` returns `this.width`, `renderer.ts:239-241`), and the frame is named regardless of
+  whether the slice was accepted — `if (typeof m.seq === 'number') lastSeq = m.seq`
+  (`TargetCanvas.tsx:287`) — which the `drawNow` handler then paints and replies with
+  (`TargetCanvas.tsx:304-310`).
 
 So **a draw over nothing exists in the code and would be acknowledged**, and with `alpha: false` the
 expectation is black — an expectation from the WebGL spec's zero-initialised texels and not a line in this
@@ -653,7 +658,7 @@ depending on the runner, on one build”** — and says that reading, not the ne
 needs. **My first draft called that hypothesis false. It is not, and the withdrawal is the most useful
 thing in this section.**
 
-What the files above show is **two routes at opposite ends** — and what the three files above show is a
+What the files above show is **two routes at opposite ends** — and what the two files above show is a
 **third route that is a candidate single path reaching both colours**: one handler, `resizeSource` then
 `uploadSlice`, where an upload that lands a blank white raster reads **white** and an upload that is
 rejected over a freshly reallocated texture reads **black**. That is exactly the shape the card described as
