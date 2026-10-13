@@ -136,8 +136,8 @@ each one detectable, as `docs/release-gate.md:146-147` requires.
 >
 > The timing cause behind the first two sightings was removed in `#458`, so it is no longer available as an
 > explanation. Whether the white and the black frames arrive through the same unpainted-frame path is still
-> not known. The capture path has now been read for it, and the reading found a candidate that would
-> account for both colours — but nothing has reproduced it, and a reading is not a cause.
+> not known. The capture path has now been read for it, and the reading found a candidate that **could**
+> account for both colours **if that path is reachable, which nobody has shown**. A reading is not a cause.
 
 **Why the paragraph changed, for whoever reviews it:** the park is a **fresh** decision for 0.64.0, and the
 evidence moved under it. Two of the seven firings are `[0,0,0]`; the colours alternate rather than
