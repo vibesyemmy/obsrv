@@ -142,7 +142,9 @@ each one detectable, as `docs/release-gate.md:146-147` requires.
 **Why the paragraph changed, for whoever reviews it:** the park is a **fresh** decision for 0.64.0, and the
 evidence moved under it. Two of the seven firings are `[0,0,0]`; the colours alternate rather than
 progressing, so neither belongs to a closed past; and **both rotate changes shipping in this release
-(`#592`, `#599`) are excluded as causes by measurement**, not by argument. `blocks` and class 1 are
+(`#592`, `#599`) are excluded as causes by tree facts and static reachability — neither exclusion is a
+run.** The tree facts under them are measured (merge-base ancestry per base, `git grep` counts with a
+control); the exclusion drawn from them is an argument, and the card says so twice (`:508`, `:535-536`). `blocks` and class 1 are
 retained as a decision and explicitly not a downgrade — the card has refused three downgrades and the
 record should not gain a fourth by implication.
 ### A measurement can still be of the page Obsrv's sync carried the target to — and now says which
