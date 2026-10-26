@@ -59,9 +59,17 @@ the value from step 1's `security find-identity -v -p codesigning` output,
 character for character: the check is a substring match against it.
 
 Notarisation is a round trip to Apple's service — usually 2–15 minutes, and the
-build blocks on it. electron-builder staples the ticket to the DMG when it
-succeeds, which is what lets the app open on a machine that has never been
-online.
+build blocks on it.
+
+**That round trip only covers the `.app`.** `--config.mac.notarize=true` makes
+electron-builder notarise and staple the `.app` bundle; dmg-builder never
+submits the `.dmg` it wraps that bundle in, so the DMG itself comes out
+unsigned and unstapled — `codesign` on it says "code object is not signed at
+all" even though the `.app` one level in is fine. `dist:signed` closes that
+gap itself: after electron-builder, `scripts/signDmgs.js` code-signs each
+`.dmg`, submits it to `notarytool --wait`, and staples the returned ticket,
+before `verifySigningIdentity.js` checks that every `.dmg` actually is
+stapled. Same four env vars as above; nothing extra to export.
 
 ### Two things this command will not tell you
 
