@@ -74,10 +74,9 @@ $OBSRV diff http://localhost:5173 --preset laptop-768 --out-dir shots/diff
 $OBSRV snap http://localhost:5173 --preset laptop-768 --text-scale 1.5 --out shots/laptop-150.png
 
 # The screen turned a quarter turn (0.61.0+): a phone held landscape, a monitor stood on end.
-# --rotate turns the preset however it is stored. --orientation is deprecated and keeps its
-# meaning, which is relative to how the preset is stored: portrait is the preset as stored,
-# landscape is it turned, so --orientation landscape on 1080p-24 (stored landscape) is a
-# PORTRAIT screen. A --rotate and --orientation that disagree are refused.
+# --rotate turns the preset however it is stored, and is the only way to ask: the old
+# --orientation named the preset's STORED form, so --orientation landscape on 1080p-24
+# (stored landscape) was a PORTRAIT screen. Removed in the breaking release.
 $OBSRV snap http://localhost:5173 --preset iphone-61 --rotate --out shots/iphone-landscape.png
 
 # How it feels on a budget phone over 3G with a slow CPU: settledMs in the JSON, next to
@@ -122,12 +121,10 @@ alone.
 **Rotation (0.61.0+).** `rotate: true` on `obsrv_snap`, `obsrv_audit`,
 `obsrv_lint`, `obsrv_inspect`, `obsrv_report` and `obsrv_drive` turns the screen
 a quarter turn, however the preset is stored: `iphone-61` becomes landscape,
-and `1080p-24` becomes a monitor stood on end. `orientation` is deprecated and
-keeps its meaning, which is relative to how the preset is stored: `portrait`
-is the preset as stored and `landscape` is it turned, so
-`orientation: 'landscape'` on a desktop preset (stored landscape) gives a
-portrait screen. A `rotate` and `orientation` that
-disagree are refused. `obsrv_snap` and `obsrv_drive` answer `rotated`.
+and `1080p-24` becomes a monitor stood on end. **`rotate` is the only way to ask**:
+the old `orientation` named the preset's STORED form, so `'landscape'` produced a
+**portrait** screen on every monitor, and it was removed in the breaking release
+(`docs/breaking-changes.md`). `obsrv_snap` and `obsrv_drive` answer `rotated`.
 `screenShape`, the shape itself, comes back from the live app — `obsrv_drive`,
 and a snap that drove it — because a headless render has no app screen to
 report; a headless snap says the same thing through `rotated` and the
@@ -177,9 +174,11 @@ clean run of five. A clause it cannot resolve refuses the whole flow rather than
 running part of it, and clicking an element by *name* is not resolvable — a
 sentence names an intent, not an element — so an interaction stated in words needs
 `steps`. A step clicks by selector: `{"action":"click","target":".checkout-button"}`,
-which Obsrv inspects, scrolls into view if it is below the fold, and presses at the
-centre of the part on screen. It then checks what is drawn at that point — a wrapped link's box
-spans both lines and the gap between them, which the block around it paints — so no
+which Obsrv inspects, scrolls into view if it is below the fold, and presses at a point of
+it: the centre of its largest visible line box (`lineRects` on `obsrv_inspect`'s readout), then
+fixed points inside its box if that is not the element. It checks what is drawn at that point
+first — a wrapped link's box spans both lines and the gap between them, which the block around
+it paints — so no
 match, no area, could-not-be-scrolled-to, no-point-resolves-to-it and
 could-not-check are five separate refusals. `expect` on a step
 states what you expected there, and Obsrv reads the rendered page for that text
