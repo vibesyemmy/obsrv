@@ -42,6 +42,8 @@ for (const rel of ENTRIES) {
     for (const source of bundleSources(rel)) {
       expect(source).not.toContain('api.github.com')
       expect(source).not.toContain('OBSRV_RELEASES_API')
+      // The download half (autoUpdate.ts) is main-only for the same reason.
+      expect(source).not.toContain('electron-updater')
     }
   })
 }

@@ -19,6 +19,16 @@ mac:
       arch:
         - arm64
         - x64
+    # Squirrel.Mac — what electron-updater actually downloads and applies —
+    # updates a .app from a zip, never a dmg. The dmg stays the thing a human
+    # downloads by hand; this is the thing the app downloads for itself. Both
+    # wrap the same already-signed-and-notarised .app, so this needs no
+    # changes to signDmgs.js or verifySigningIdentity.js: codesign stapled
+    # the .app itself before either wrapper was built.
+    - target: zip
+      arch:
+        - arm64
+        - x64
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
@@ -29,3 +39,14 @@ mac:
 
 dmg:
   artifactName: ${productName}-${version}-${arch}.dmg
+
+# Not an upload target — `ci.yml` always builds `--publish never` and attaches
+# the DMGs itself (docs/signing.md). This is what makes electron-builder write
+# `latest-mac.yml` and bake `app-update.yml` into the bundle at all: both are
+# generated from a configured provider, explicit here rather than left to
+# `repository` in package.json so a renamed remote cannot silently change
+# what electron-updater asks a user's machine to fetch.
+publish:
+  - provider: github
+    owner: vibesyemmy
+    repo: obsrv

@@ -250,6 +250,13 @@ export interface ObsrvApi {
    * Resolves false when there is no stored URL to open.
    */
   openRelease(): Promise<boolean>
+  /**
+   * Restarts the app into the update `electron-updater` already downloaded.
+   * Resolves false when nothing has finished downloading yet, so a stale
+   * click (a race with the download still running) is a quiet no-op rather
+   * than quitting into whatever happens to be on disk.
+   */
+  quitAndInstall(): Promise<boolean>
   onUpdateStatus(cb: (s: UpdateState) => void): () => void
   /**
    * Every stored address, ranked. The whole list rather than a query: it is

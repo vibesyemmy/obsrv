@@ -2,7 +2,7 @@ import { test, expect, type ElectronApplication, type Page } from '@playwright/t
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { UpdateState } from '../../src/shared/types'
-import { launchApp, openSettings, rendererWindow } from './launch'
+import { closeSettings, launchApp, openSettings, rendererWindow } from './launch'
 
 /**
  * The update path end to end against a loopback stand-in for the GitHub
@@ -40,6 +40,25 @@ test.afterAll(async () => {
 })
 
 const check = (): Promise<UpdateState> => page.evaluate(() => window.obsrv.checkUpdate())
+
+/**
+ * `downloading`/`downloaded` come from `electron-updater`'s own events, not
+ * from this loopback server — faking a real Squirrel.Mac feed (a signed zip,
+ * a `latest-mac.yml` with a matching sha512) is out of reach for a network-
+ * free e2e suite, and would only prove electron-updater works, not that this
+ * app wires it up right. So these states are pushed straight down the real
+ * channel main already uses (`IPC.updateStatus`), the same way
+ * `diagonal-hint.spec.ts` pushes a synthetic display change: every renderer
+ * path under test — the toolbar button, the Settings row, `quitAndInstall` —
+ * is the production one, and only the thing that would decide to send it is
+ * skipped.
+ */
+const pushUpdateState = (state: UpdateState): Promise<number> =>
+  app.evaluate(({ BrowserWindow }, s) => {
+    const wins = BrowserWindow.getAllWindows()
+    for (const w of wins) w.webContents.send('obsrv:update-status', s)
+    return wins.length
+  }, state)
 
 test('the boot check reports the newer release', async () => {
   await expect
@@ -128,6 +147,48 @@ test('the Settings block reports every state', async () => {
   await check()
   await expect(page.locator('.version-latest')).toHaveText('Couldn’t check')
   await expect(page.locator('.version-checked')).not.toHaveText('never')
+})
+
+test('downloaded offers a toolbar button that reaches quitAndInstall', async () => {
+  // The settings modal's backdrop sits over the toolbar, so a button behind
+  // it cannot be clicked — closed defensively rather than trusting whatever
+  // the previous test left open.
+  await closeSettings(page)
+  await pushUpdateState({ status: 'downloaded', current: '0.0.1', latest: '99.0.0', checkedAt: Date.now() })
+  await expect(page.locator('.update-button')).toHaveText('v99.0.0 ↻')
+
+  // The click reaches the real `quitAndInstall` handler in main — main's own
+  // `update` was never touched by the synthetic push above (it only reached
+  // the renderer), so this proves the button is wired up and the app survives
+  // the round trip, not that it restarts. The gate that decides whether it
+  // actually would is covered next, from main's own state rather than this
+  // test's fake one.
+  await page.click('.update-button')
+  await expect.poll(() => page.evaluate(() => window.obsrv.getUpdate())).not.toBeNull()
+})
+
+test('quitAndInstall is a no-op until main itself has something downloaded', async () => {
+  expect(await page.evaluate(() => window.obsrv.quitAndInstall())).toBe(false)
+})
+
+test('the Settings block shows download progress, then the restart link', async () => {
+  await openSettings(page, 'updates')
+
+  const sent = await pushUpdateState({
+    status: 'downloading',
+    current: '0.0.1',
+    latest: '99.0.0',
+    checkedAt: Date.now(),
+    progress: 57,
+  })
+  expect(sent, 'no window to push a download-progress event to').toBeGreaterThan(0)
+  // Nothing to click while it downloads itself — the toolbar's usual zero
+  // footprint for a state with no action, not a dropped feature.
+  await expect(page.locator('.update-button')).toHaveCount(0)
+  await expect(page.locator('.version-latest')).toContainText('Downloading 57%')
+
+  await pushUpdateState({ status: 'downloaded', current: '0.0.1', latest: '99.0.0', checkedAt: Date.now() })
+  await expect(page.locator('.version-latest')).toContainText('Restart to update')
 })
 
 test('the automatic-check toggle round-trips through main', async () => {

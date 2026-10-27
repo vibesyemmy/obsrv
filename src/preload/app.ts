@@ -134,6 +134,7 @@ const api: ObsrvApi = {
   getUpdate: () => ipcRenderer.invoke(IPC.getUpdate),
   checkUpdate: () => ipcRenderer.invoke(IPC.checkUpdate),
   openRelease: () => ipcRenderer.invoke(IPC.openRelease),
+  quitAndInstall: () => ipcRenderer.invoke(IPC.quitAndInstall),
   onUpdateStatus: cb => subscribe<UpdateState>(IPC.updateStatus, cb),
   getHistory: () => ipcRenderer.invoke(IPC.getHistory),
   clearHistory: () => ipcRenderer.invoke(IPC.clearHistory),

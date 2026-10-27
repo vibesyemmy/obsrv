@@ -646,14 +646,22 @@ jobs:
       # local identity (docs/signing.md), and `codesign`/`spctl` both accept
       # that happily — so "signed" was the answer that was true then and wrong.
       # The app's update check reads this release's tag, so the tag is the
-      # version users are offered. Blockmaps are useless to the check-only
-      # client and are attached because electron-updater wants them if
-      # signing ever lands.
+      # version users are offered.
+      #
+      # Signing landed (v0.64.2), so `*.zip` and `latest-mac.yml` are real now
+      # rather than placeholders: electron-updater's GitHub provider fetches
+      # `latest-mac.yml` from this same release to learn the zip's name and
+      # sha512, then downloads and applies that zip, never the dmg a human
+      # downloads. Blockmaps are useless to either client and attached because
+      # they cost nothing to include.
       - name: Publish the release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.dmg
             dist/*.blockmap
+            dist/*.zip
+            dist/*.zip.blockmap
+            dist/latest-mac.yml
           fail_on_unmatched_files: true
           generate_release_notes: true

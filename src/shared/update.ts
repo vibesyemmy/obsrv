@@ -16,6 +16,16 @@ export const RELEASE_URL_PREFIX = 'https://github.com/vibesyemmy/obsrv/releases/
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 export const CHECK_TIMEOUT_MS = 5_000
 
+/**
+ * electron-updater's `download-progress` reports `percent` as a float that
+ * can overshoot 100 by a hair (rounding in its own byte-count math) and is
+ * never negative in practice, but nothing enforces that at the type level —
+ * clamped here so a provider quirk cannot show a nonsense percent in the UI.
+ */
+export function clampPercent(percent: number): number {
+  return Math.min(100, Math.max(0, Math.round(percent)))
+}
+
 /** `1.2.3-rc.1` → { parts: [1,2,3], pre: true }. Null when unparseable. */
 function parseVersion(raw: string): { parts: number[]; pre: boolean } | null {
   const trimmed = raw.trim().replace(/^v/i, '')

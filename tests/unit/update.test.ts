@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CHECK_INTERVAL_MS,
+  clampPercent,
   formatAge,
   isCheckDue,
   isNewer,
@@ -109,5 +110,16 @@ describe('formatAge', () => {
   })
   it('reads a future stamp as just now rather than a negative age', () => {
     expect(formatAge(NOW + 60_000, NOW)).toBe('just now')
+  })
+})
+
+describe('clampPercent', () => {
+  it('rounds to the nearest whole percent', () => {
+    expect(clampPercent(41.6)).toBe(42)
+    expect(clampPercent(41.4)).toBe(41)
+  })
+  it('clamps below 0 and above 100, so a provider quirk cannot show a nonsense percent', () => {
+    expect(clampPercent(-3)).toBe(0)
+    expect(clampPercent(140)).toBe(100)
   })
 })
