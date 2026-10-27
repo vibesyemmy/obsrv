@@ -81,6 +81,18 @@ claude plugin marketplace update obsrv
 claude plugin update obsrv@obsrv
 ```
 
+Claude Code can also do that part itself: open `/plugin` → **Marketplaces** →
+obsrv and turn on auto-update, or set `autoUpdate: true` on this marketplace's
+entry in your own Claude Code config (see [the marketplace
+reference](https://code.claude.com/docs/en/plugins/marketplace-reference)) —
+it's a setting on your install, not something this repo ships on by default.
+Claude Code detects a newer release by the `version` in `plugin.json`, which
+`scripts/sync-plugin-version.js` bumps every release, so this works against
+any tagged version without further changes here. A background auto-update
+still only updates the files on disk; the MCP server's pinned `npx` version
+lives in `.mcp.json`'s `args`, so a session already running keeps the old one
+until you start a new session (or run `/reload-plugins --force`).
+
 **Both together** — install the app *and* the tools, then flip **Agent control**
 on in the app's toolbar: agent testing now drives the window you are watching
 instead of rendering invisibly.
