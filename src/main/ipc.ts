@@ -34,7 +34,8 @@ import { loadTabs, saveTabs, type StoredTabs } from '../shared/tabsFile'
 import type { HostInfo, InputModifier, Orientation, ScrollReport, ScrollRequest, Settings, TargetInputEvent, UpdateState } from '../shared/types'
 import { BLANK_GRACE_MS, isFlatFrame, SETTLE_QUIET_MS } from '../shared/paint'
 import { isBlankUrl, normalizeUrl } from '../shared/url'
-import { isCheckDue, isReleaseUrl } from '../shared/update'
+import { clampPercent, isCheckDue, isReleaseUrl } from '../shared/update'
+import { quitAndInstall, startDownload, wireAutoUpdate } from './autoUpdate'
 import type { AppContext } from './context'
 import { ControlServer } from './controlServer'
 import type { TabSession } from './tabSession'
@@ -1290,11 +1291,20 @@ export function registerIpc(ctx: AppContext): () => void {
   let update: UpdateState = { status: 'current', current: appVersion, checkedAt: 0 }
   let releaseUrl = ''
 
+  const pushUpdate = (next: UpdateState): void => {
+    update = next
+    if (!win.isDestroyed()) win.webContents.send(IPC.updateStatus, update)
+  }
+
   const runUpdateCheck = async (): Promise<UpdateState> => {
     const now = Date.now()
     const { state, url } = await checkForUpdate(appVersion, now)
-    update = state
     releaseUrl = state.status === 'available' && isReleaseUrl(url) ? url : ''
+    pushUpdate(state)
+    // The download half: this check already named the release, so
+    // electron-updater's own (separate, latest-mac.yml-based) check is just
+    // the thing that lets it fetch and verify the matching artefact.
+    if (state.status === 'available') startDownload()
     // Stamped on failures too, so an offline machine retries once a day
     // rather than on every launch.
     const next = { ...settings, lastUpdateCheck: now }
@@ -1305,9 +1315,18 @@ export function registerIpc(ctx: AppContext): () => void {
       // A read-only settings file must not break the app; the check simply
       // repeats next launch.
     }
-    if (!win.isDestroyed()) win.webContents.send(IPC.updateStatus, state)
     return state
   }
+
+  // A background download failing leaves `update` exactly where the last
+  // check left it (`available`, with its manual Download link still good) —
+  // logged, not surfaced, the same as every other row in updateCheck's error
+  // table.
+  wireAutoUpdate({
+    onProgress: percent => pushUpdate({ ...update, status: 'downloading', progress: clampPercent(percent) }),
+    onDownloaded: () => pushUpdate({ ...update, status: 'downloaded', progress: undefined }),
+    onError: message => log.warn('auto-update download failed', message),
+  })
 
   handle(IPC.getUpdate, e => {
     assertRenderer(e)
@@ -1321,6 +1340,12 @@ export function registerIpc(ctx: AppContext): () => void {
     assertRenderer(e)
     if (releaseUrl === '') return false
     await shell.openExternal(releaseUrl)
+    return true
+  })
+  handle(IPC.quitAndInstall, e => {
+    assertRenderer(e)
+    if (update.status !== 'downloaded') return false
+    quitAndInstall()
     return true
   })
 

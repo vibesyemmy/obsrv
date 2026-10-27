@@ -236,7 +236,14 @@ export interface ScrollReport {
   pageHeight?: number
 }
 
-export type UpdateStatus = 'current' | 'available' | 'error'
+/**
+ * `downloading`/`downloaded` are new: once a build is genuinely signed and
+ * notarised (it is, as of v0.64.2), `available` also starts a background
+ * `electron-updater` download of the same release this already found, rather
+ * than only offering the release page to open by hand. See the update spec
+ * §10, which named this exact upgrade and its precondition.
+ */
+export type UpdateStatus = 'current' | 'available' | 'downloading' | 'downloaded' | 'error'
 
 /**
  * What the renderer knows about updates. The release URL is deliberately not
@@ -254,4 +261,6 @@ export interface UpdateState {
   latest?: string
   /** Epoch ms of the last completed attempt, success or failure. 0 = never. */
   checkedAt: number
+  /** 0–100. Present only while status is `downloading`. */
+  progress?: number
 }

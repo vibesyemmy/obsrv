@@ -89,6 +89,7 @@ export const IPC = {
   getUpdate: 'obsrv:get-update',
   checkUpdate: 'obsrv:check-update',
   openRelease: 'obsrv:open-release',
+  quitAndInstall: 'obsrv:quit-and-install',
   updateStatus: 'obsrv:update-status',
   getHistory: 'obsrv:get-history',
   clearHistory: 'obsrv:clear-history',

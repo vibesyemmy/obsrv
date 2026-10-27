@@ -408,6 +408,19 @@ export function Toolbar({ drawer, onTogglePanel, onToggleSettings }: ToolbarProp
               v{update.latest} ↓
             </button>
           )}
+          {/* `downloading` shows nothing: it is automatic now, so there is
+              nothing to click, and an unclickable button is worse than the
+              toolbar's usual zero footprint for a state with no action. */}
+          {update?.status === 'downloaded' && update.latest !== undefined && (
+            <button
+              className="update-button"
+              type="button"
+              title={`Obsrv ${update.latest} is ready — click to restart and finish updating`}
+              onClick={() => void window.obsrv.quitAndInstall()}
+            >
+              v{update.latest} ↻
+            </button>
+          )}
         </div>
 
         {/* Settings is a modal and gets its one button here; the drawer's

@@ -458,6 +458,22 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
                 </button>
               </>
             )}
+            {update?.status === 'downloading' && update.latest !== undefined && (
+              <>
+                <span className="num">{update.latest}</span>
+                {' · '}
+                Downloading{update.progress !== undefined ? ` ${update.progress}%` : '…'}
+              </>
+            )}
+            {update?.status === 'downloaded' && update.latest !== undefined && (
+              <>
+                <span className="num">{update.latest}</span>
+                {' · '}
+                <button type="button" className="link" onClick={() => void window.obsrv.quitAndInstall()}>
+                  Restart to update
+                </button>
+              </>
+            )}
           </span>
         </div>
         <div className="version-row">
@@ -482,7 +498,8 @@ export function SettingsPanel({ section }: { section: SettingsSection }) {
       </button>
 
       <p className="muted">
-        One unauthenticated request to GitHub, at most once a day. No identifiers are sent.
+        One unauthenticated request to GitHub, at most once a day. No identifiers are sent. An
+        update found this way downloads in the background and finishes on restart.
       </p>
         </>
       )}
