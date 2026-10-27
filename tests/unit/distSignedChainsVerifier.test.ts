@@ -21,6 +21,7 @@ import { join } from 'node:path'
  */
 const ROOT = join(__dirname, '..', '..')
 const VERIFIER = 'scripts/verifySigningIdentity.js'
+const SIGN_DMGS = 'scripts/signDmgs.js'
 
 const distSigned = (): string => {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
@@ -46,5 +47,34 @@ describe('dist:signed chains the identity assertion', () => {
     const verified = script.indexOf(VERIFIER)
     expect(built, 'dist:signed does not run electron-builder').toBeGreaterThanOrEqual(0)
     expect(verified).toBeGreaterThan(built)
+  })
+})
+
+/**
+ * electron-builder's `notarize` option never touches the `.dmg` it wraps the
+ * signed `.app` in — only `signDmgs.js` signs, notarises and staples the DMG
+ * itself. `verifySigningIdentity.js`'s "every .dmg must be stapled" rule
+ * asserts that happened, so it has to run AFTER signDmgs, not before it: a
+ * build that forgot this line would staple nothing and still read as a pass
+ * if the verifier ran first and saw no DMG yet, or never ran at all if the
+ * line were simply deleted and nothing noticed.
+ */
+describe('dist:signed chains the DMG signer', () => {
+  it('runs signDmgs.js', () => {
+    expect(distSigned()).toContain(`node ${SIGN_DMGS}`)
+  })
+
+  it('names a signer that is actually in the tree', () => {
+    expect(existsSync(join(ROOT, SIGN_DMGS))).toBe(true)
+  })
+
+  it('runs it after electron-builder and before the verifier', () => {
+    const script = distSigned()
+    const built = script.indexOf('electron-builder')
+    const signed = script.indexOf(SIGN_DMGS)
+    const verified = script.indexOf(VERIFIER)
+    expect(built, 'dist:signed does not run electron-builder').toBeGreaterThanOrEqual(0)
+    expect(signed).toBeGreaterThan(built)
+    expect(verified).toBeGreaterThan(signed)
   })
 })

@@ -27,9 +27,9 @@
  * the same change that introduces it — rewriting a working release gate and
  * introducing its replacement at once means a failure has two possible causes.
  */
-const { execFileSync } = require('node:child_process')
 const { readdirSync, statSync } = require('node:fs')
 const { join } = require('node:path')
+const { runCaptured } = require('./lib/run')
 
 /** The exact authority line a build must carry, from the environment. */
 const IDENTITY_VAR = 'SIGNING_IDENTITY'
@@ -155,8 +155,7 @@ module.exports = { IDENTITY_VAR, identityVerdict, gatekeeperVerdict, appsUnder, 
 
 if (require.main === module) {
   const expected = process.env[IDENTITY_VAR] ?? ''
-  const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-  const result = verify({ apps: appsUnder('dist'), dmgs: dmgsUnder('dist'), expected, run })
+  const result = verify({ apps: appsUnder('dist'), dmgs: dmgsUnder('dist'), expected, run: runCaptured })
   if (!result.ok) {
     console.error('signing identity: this build is NOT what it claims to be.')
     for (const f of result.failures) console.error(`  - ${f}`)

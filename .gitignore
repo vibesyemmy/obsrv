@@ -6,6 +6,12 @@ playwright-report/
 .vitest/
 .DS_Store
 *.tsbuildinfo
+
+# Signing material exported locally to base64 into GitHub secrets (docs/signing.md
+# §5). Never meant to be committed; the repo secret is the only copy that should
+# outlive the terminal session that made it.
+*.p12
+Certificates.p12
 # No rule for stray `obsrv-*/` directories: every mkdtemp in this repo roots
 # at os.tmpdir(), so one appearing here is a bug (1,401 of them accumulated
 # under the old rule, unnoticed). Leave them visible in `git status`.
