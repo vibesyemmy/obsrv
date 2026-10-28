@@ -1,8 +1,8 @@
 ---
 title: "a reply can measure a page the caller never asked for, and say nothing about it"
-column: backlog
+column: done
 kind: bug
-release: blocks
+owner: "Claude"
 criterion: C5
 order: 91
 ---
@@ -134,3 +134,45 @@ another way of saying it, and **Opeyemi dropped it on 2026-10-12**, relayed from
 `#4788`): *"Drop the asked field and delete the probe branch"*. Its own card, `feat-asked-field-beside-url`, was
 deleted rather than closed, because `done` means merged (Wren's ruling, `#4794`). `git log --diff-filter=D --
 board/feat-asked-field-beside-url.md` finds its text, including the cost section and Henry's sequencing note.
+
+## FIXED 2026-10-28 — refuses, on Opeyemi's explicit decision between the two live options
+
+**The choice this card left open ("the call fails rather than return figures for a page nobody asked
+about" vs. keeping the note) was put to Opeyemi directly, because the project's own reviewers had left
+it as a product decision rather than an engineering one.** He chose refuse. A note said the figures
+were of the wrong page; a refusal means no figures reach the caller in the first place.
+
+**Where it refuses, and where it still only notes.** `whichPage` (`src/main/ipc.ts`) now separates
+`measuredElsewhereNote`'s result from the other three sentences it computes (`historyMoveNote`,
+`landedElsewhereNote`, `navigatedAfterLoadNote`): those three stay notes, because each is about the
+caller's own page or the agent's own action, and the caller still gets figures of a page it can account
+for. Only the bus-mirror case — Obsrv's own plumbing standing in for an answer — refuses. `inspect`,
+`audit` and `lint` (the direct MCP tools) return `{ refused: <the note's own text> }` in place of a
+reply; `observeText` (the flow runner's internal primitive, no direct caller) returns it in the same
+shape, which `flowObserve.ts`'s existing `parseObserveReport` already treats as an unparseable report —
+so a flow step reads the observation as `unknown`, exactly the fallback it already had for a report the
+checks refused, with no changes needed there.
+
+**`controlServer.ts` passes the refusal through as a 200, not a 409.** A 409 would reject through
+`controlCall` into the generic `catch (e) { toolError(liveFailure(e)) }` path, and `liveFailure` always
+appends *"If the Obsrv app was closed or Agent control was toggled off mid-call..."* — exactly the kind
+of generic tail misnaming a specific refusal that `bug-refused-throttle-names-none-in-timeout` is about.
+`liveAudit`/`liveLint`/`liveInspect` each check `answer['refused']` immediately after their own
+`controlCall` and return `toolError` directly, before that tail could ever attach.
+
+**Verified, not just reasoned through.** Disabled the check in `inspect` alone, confirmed the rewritten
+e2e tests fail for exactly that reason (not a compile error), restored it, same again at the MCP-tool
+layer (`liveInspect`) — both caught the regression. Full unit suite: 141 files, 2122 passed, 1 skipped
+(pre-existing), no change. e2e: `measured-page.spec.ts` (8), `arrivals.spec.ts` (2), `mcp-live.spec.ts`
+(full file, 51), `sync.spec.ts` (10), and the three `flow-*.spec.ts` files (26) — 97 tests across the
+whole measurement/sync/flow surface this change touches, all green, run after the fix rather than before.
+
+**New test:** `mcp-live.spec.ts` drives the real MCP tools (`obsrv_inspect`/`obsrv_audit`/`obsrv_lint`)
+against the deterministic bus-mirror mechanism `measured-page.spec.ts` already used (load the native
+pane directly, bypassing `navigate`, so the bus's mirror is the only thing that moves the target),
+asserts `isError: true` with both addresses named, and asserts the `liveFailure` tail is absent.
+
+**Not covered, same as before this pass:** live snap and the report, per Idris's own reading that
+`liveSnap`'s `url` is comparable by the caller without this mechanism; the real race under `cpu-4x`,
+which every test here still stands in for deterministically; the CLI's headless path (one pane, no
+bus, not exposed to this race at all).

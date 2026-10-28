@@ -2,6 +2,7 @@ import { test, expect, type ElectronApplication } from '@playwright/test'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp } from './launch'
+import { framePaintState } from './helpers/framePaintState'
 
 const THIN = pathToFileURL(resolve(__dirname, '../fixtures/thin-text.html')).href
 const HAIRLINE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
@@ -162,7 +163,8 @@ test('the target really rasterises at 1x: half the rows of ink, darker glyphs', 
   }, { url: THIN, capture: `(${captureBoth.toString()})` })
 
   // The 1x frame is the CSS box, not the device box.
-  if (!seen) throw new Error('no full 600x400 paint within 10s')
+  // bug-target-no-frame-family: on a recurrence, whose side went quiet.
+  if (!seen) throw new Error(`no full 600x400 paint within 10s. ${await framePaintState(app)}`)
   expect(seen.targetWidth).toBe(600)
   expect(seen.targetHeight).toBe(400)
   expect(seen.target).toBeGreaterThan(3)
@@ -230,12 +232,14 @@ test('a 0.5px hairline does not scale with the raster: one device row in both pa
     }
   }, { url: HAIRLINE, capture: `(${captureBoth.toString()})` })
 
-  if (!seen) throw new Error('no full 600x400 paint within 10s')
+  // bug-target-no-frame-family: on a recurrence, whose side went quiet.
+  if (!seen) throw new Error(`no full 600x400 paint within 10s. ${await framePaintState(app)}`)
   test.skip(seen.sf < 2, 'needs a HiDPI host — the whole premise of the product')
 
   // Chromium snaps a 0.5px border to one device row at either scale, so each
   // of the fixture's two hairlines is exactly one row of ink in both rasters…
-  if (!seen) throw new Error('no full 600x400 paint within 10s')
+  // bug-target-no-frame-family: on a recurrence, whose side went quiet.
+  if (!seen) throw new Error(`no full 600x400 paint within 10s. ${await framePaintState(app)}`)
   expect(seen.targetHairlines).toHaveLength(2)
   expect(seen.nativeHairlines).toHaveLength(2)
 

@@ -66,9 +66,11 @@ const loadNativeOnly = (url: string): Promise<void> =>
     await (globalThis as any).__obsrv.native.load(u)
   }, url)
 
+/** An inspect call, raw: either `{ readout, notes }` or a refusal, `{ refused }`. */
+const inspectNow = (): Promise<Record<string, unknown>> => call('inspect', { selector: 'body' })
 /** Every note an inspect reply carried. All of them, so a failure says what WAS said. */
 const notesNow = async (): Promise<string[]> => {
-  const r = await call('inspect', { selector: 'body' })
+  const r = await inspectNow()
   return (r.notes as string[] | undefined) ?? []
 }
 /** The sentence under test, by the words only it uses. */
@@ -96,31 +98,29 @@ test.afterEach(async () => {
   releaseNative = undefined
 })
 
-test('a measurement of a page the bus carried the target to says which page it measured', async () => {
+test('a measurement of a page the bus carried the target to is refused, not measured', async () => {
   await call('navigate', { url: TALL })
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(TALL)
-  // The baseline, in the same app: the page asked for is the page measured, and nothing is said.
-  const before = await notesNow()
-  expect(elsewhereIn(before), `nothing moved yet, and the reply said: ${JSON.stringify(before)}`).toBeUndefined()
+  // The baseline, in the same app: the page asked for is the page measured, and nothing is refused.
+  const before = await inspectNow()
+  expect(before.refused, `nothing moved yet, and the reply refused: ${JSON.stringify(before)}`).toBeUndefined()
+  expect(before.readout).not.toBeUndefined()
 
   await loadNativeOnly(HAIRLINE)
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(HAIRLINE)
 
-  const notes = await notesNow()
-  const note = elsewhereIn(notes)
-  expect(
-    note,
-    notes.length === 0
-      ? 'asked for tall.html, measured hairline.html, and the reply carried NO notes at all: the silence this card is filed on'
-      : `the sentence is missing, but the reply carried ${notes.length} other note(s): ${JSON.stringify(notes)}`,
-  ).toBeDefined()
-  // Both addresses, measured first, so a caller can act on it without a second call.
-  expect(note).toContain(`the figures are of ${HAIRLINE}, not of ${TALL}`)
-  // About which page was measured, never about the page moving: the bus moved the pane, and the count is right to say nothing.
-  expect(movedIn(notes), `the bus's commit was reported as the page navigating: ${JSON.stringify(notes)}`).toBeUndefined()
+  const r = await inspectNow()
+  // Refused, not a figures-of-the-wrong-page answer with a note attached: no
+  // readout, no notes — the caller gets nothing to act on by mistake.
+  expect(r.refused, `asked for tall.html, measured hairline.html, and the reply measured anyway: ${JSON.stringify(r)}`).toBeDefined()
+  expect(r.readout, `a refusal still carried a readout: ${JSON.stringify(r)}`).toBeUndefined()
+  // Both addresses, named first, so a caller can act on it without a second call.
+  expect(r.refused).toContain(`the figures are of ${HAIRLINE}, not of ${TALL}`)
+  // About which page would have been measured, never about the page moving: the bus moved the pane.
+  expect(r.refused).not.toContain('navigated after it loaded')
 })
 
-test('a live lint carries the same sentence, since all three measurements say which page in one place', async () => {
+test('a live lint refuses the same way, since all three measurements say which page in one place', async () => {
   await call('navigate', { url: TALL })
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(TALL)
   await loadNativeOnly(HAIRLINE)
@@ -128,8 +128,8 @@ test('a live lint carries the same sentence, since all three measurements say wh
 
   const r = await call('lint', {})
   expect(r.ok, JSON.stringify(r).slice(0, 300)).toBe(true)
-  const said = [...((r.warnings as string[] | undefined) ?? []), ...((r.notes as string[] | undefined) ?? [])]
-  expect(elsewhereIn(said), `said: ${JSON.stringify(said)}`).toContain(`the figures are of ${HAIRLINE}, not of ${TALL}`)
+  expect(r.refused, `the lint measured the wrong page instead of refusing: ${JSON.stringify(r).slice(0, 300)}`).toBeDefined()
+  expect(r.refused).toContain(`the figures are of ${HAIRLINE}, not of ${TALL}`)
 })
 
 test('a pane the bus moved and brought back to the page asked for says nothing', async () => {
@@ -146,24 +146,31 @@ test('a pane the bus moved and brought back to the page asked for says nothing',
   expect(elsewhereIn(notes), `the page measured is the page asked for, and the reply said: ${JSON.stringify(notes)}`).toBeUndefined()
 })
 
-test('a page that redirects itself is named by exactly one sentence, whichever pane won', async () => {
-  // When the page moves itself, the navigated note names where it went, and this sentence must not repeat
-  // it. When the bus's mirrored landing wins instead (the race this card was filed on), the count rightly
-  // says nothing and this sentence is the only one left to say it. Either way the caller asked for
-  // redirect.html and the figures are of hairline.html, so EXACTLY ONE of the two names it: both is the
-  // journey said twice, neither is the silence. The native pane is held out of the redirect page, as in
-  // `arrivals.spec`'s "a page that really does redirect after loading still says so", so the page's own
-  // redirect usually wins, but nothing here depends on which one did.
+test('a page that redirects itself is named by exactly one of a note or a refusal, whichever pane won', async () => {
+  // When the page moves itself, the navigated note names where it went, and nothing refuses. When the
+  // bus's mirrored landing wins instead (the race this card was filed on), the count rightly says
+  // nothing and the call refuses rather than measuring the wrong page silently. Either way the caller
+  // asked for redirect.html and the figures would be of hairline.html, so EXACTLY ONE of the two
+  // mechanisms explains it: both is the journey said twice, neither is the silence this card was filed
+  // on. The native pane is held out of the redirect page, as in `arrivals.spec`'s "a page that really
+  // does redirect after loading still says so", so the page's own redirect usually wins, but nothing
+  // here depends on which one did.
   await call('navigate', { url: HAIRLINE })
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(HAIRLINE)
   releaseNative = await holdNativeOutOf(app, [REDIRECT])
   await call('navigate', { url: REDIRECT })
   await expect.poll(targetUrl, { timeout: 10_000 }).toBe(HAIRLINE)
 
-  const notes = await notesNow()
-  const naming = [movedIn(notes), elsewhereIn(notes)].filter((n): n is string => n !== undefined)
-  expect(naming.length, `asked for redirect.html, measured hairline.html; the sentences that said so: ${JSON.stringify(notes)}`).toBe(1)
-  expect(naming[0]).toContain('hairline.html')
+  const r = await inspectNow()
+  if (r.refused !== undefined) {
+    expect(r.refused).toContain('hairline.html')
+    expect(r.readout, `a refusal still carried a readout: ${JSON.stringify(r)}`).toBeUndefined()
+    return
+  }
+  const notes = (r.notes as string[] | undefined) ?? []
+  const note = movedIn(notes)
+  expect(note, `asked for redirect.html, measured hairline.html, and neither the moved note nor a refusal said so: ${JSON.stringify(r)}`).toBeDefined()
+  expect(note).toContain('hairline.html')
 })
 
 // The two sentences that already name the page measured, each of which the new one must leave alone. The

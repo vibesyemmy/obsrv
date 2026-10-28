@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
 import { choose } from './helpers/select'
+import { framePaintState } from './helpers/framePaintState'
 
 const ORIENTATION = pathToFileURL(resolve(__dirname, '../fixtures/orientation.html')).href
 const NO_VIEWPORT = pathToFileURL(resolve(__dirname, '../fixtures/no-viewport.html')).href
@@ -134,7 +135,8 @@ test('rotating a phone preset swaps the real raster, not just the store', async 
     if (!m) return null
     return { width: m.frameWidth, height: m.frameHeight, dsf: ctx.target.getDeviceScaleFactor() }
   })
-  if (!f) throw new Error('no 2556x1179 paint within 10s')
+  // bug-target-no-frame-family: on a recurrence, whose side went quiet.
+  if (!f) throw new Error(`no 2556x1179 paint within 10s. ${await framePaintState(app)}`)
   expect(f).toEqual({ width: 2556, height: 1179, dsf: 3 })
 
   // The density is untouched: rotation is the same panel turned sideways.

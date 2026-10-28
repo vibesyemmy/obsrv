@@ -1517,6 +1517,12 @@ async function liveAudit(app: LiveApp, input: AuditHandlerInput, notes: string[]
       ...(input.textMm !== undefined ? { textMm: input.textMm } : {}),
     }
     const answer = await controlCall(info, 'audit', payload, LIVE_AUDIT_TIMEOUT_MS)
+    // The app declined rather than measuring a page nobody asked for
+    // (bug-measured-page-is-not-the-asked-page) — checked ahead of `liveFailure`,
+    // whose "the app was closed or Agent control was toggled off" tail would
+    // misname this refusal the way it already does for an unrelated one
+    // (bug-refused-throttle-names-none-in-timeout).
+    if (typeof answer['refused'] === 'string') return toolError(answer['refused'])
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
     for (const k of ['preset', 'rotate', 'textScale', 'throttle', 'waitMs', 'timeoutMs'] as const) {
@@ -1820,6 +1826,9 @@ async function liveLint(app: LiveApp, input: LintHandlerInput, notes: string[], 
     }
     const payload = input.thinPx !== undefined ? { thinPx: input.thinPx } : {}
     const answer = await controlCall(info, 'lint', payload, LIVE_LINT_TIMEOUT_MS)
+    // See the same check in `liveAudit`: a refusal, not a measurement of the
+    // wrong page, and not routed through `liveFailure`'s own tail.
+    if (typeof answer['refused'] === 'string') return toolError(answer['refused'])
     const status = parseControlStatus(await controlCall(info, 'status', {}, LIVE_APPLY_TIMEOUT_MS))
     if (!status) return toolError('the running app answered `status` with something this server could not parse')
     for (const k of ['preset', 'rotate', 'textScale', 'throttle', 'profile', 'waitMs', 'timeoutMs'] as const) {
@@ -2540,6 +2549,9 @@ async function liveInspect(app: LiveApp, input: InspectHandlerInput, notes: stri
     }
     const payload = input.at !== undefined ? { x: input.at.x, y: input.at.y } : { selector: input.selector!.trim() }
     const answer = await controlCall(info, 'inspect', payload, LIVE_APPLY_TIMEOUT_MS)
+    // See the same check in `liveAudit`: a refusal, not a measurement of the
+    // wrong page, and not routed through `liveFailure`'s own tail.
+    if (typeof answer['refused'] === 'string') return toolError(answer['refused'])
     // Which page the element was read on, ahead of the call's own notes —
     // the order the headless surface uses, and the order that matters: a
     // reader learns it is looking at the login page before anything else.

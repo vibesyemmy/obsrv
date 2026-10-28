@@ -255,10 +255,19 @@ export function registerIpc(ctx: AppContext): () => void {
    * the status its server answered. One place for inspect, audit and lint,
    * which said these separately and drifted (lint compared addresses where
    * audit counted commits).
+   *
+   * `refused` is set instead of adding to `pre` when the figures would be of a
+   * page nobody asked for and the bus is why (bug-measured-page-is-not-the-asked-page):
+   * a caller who asked for one address is not handed measurements of another
+   * with no way to tell. A real redirect the page made itself, or a history
+   * move, still only gets a note — `pre` says so, same as always — because
+   * those are the caller's own page or the agent's own action, not Obsrv's
+   * plumbing standing in for an answer.
    */
-  const whichPage = (s: TabSession, st: { code: number; text: string; url: string }): string[] => {
+  const whichPage = (s: TabSession, st: { code: number; text: string; url: string }): { pre: string[]; refused: string | null } => {
     const asked = askedOf.get(s)
     const pre: string[] = []
+    let refused: string | null = null
     if (asked) {
       // The address the sentences below say the figures are of, so the last
       // check can tell whether the page measured is one they named.
@@ -285,16 +294,13 @@ export function registerIpc(ctx: AppContext): () => void {
       // Compared, not counted: the page measured against every address named
       // above. A commit the count rightly leaves out, such as the bus loading
       // the other pane's page into this one, still changes which page the
-      // figures are of (bug-measured-page-is-not-the-asked-page). A history
-      // move's sentence already names the page measured.
-      if (s.historyMove === null) {
-        const elsewhere = measuredElsewhereNote(asked.asked, named, st.url)
-        if (elsewhere !== null) pre.push(elsewhere)
-      }
+      // figures are of. A history move's sentence already names the page
+      // measured, so this is not asked there either.
+      if (s.historyMove === null) refused = measuredElsewhereNote(asked.asked, named, st.url)
     }
     const statusNote = httpStatusNote(st.code, st.text, st.url, asked?.asked)
     if (statusNote !== null) pre.push(statusNote)
-    return pre
+    return { pre, refused }
   }
 
   // An explicit `navigate` drives both panes. History moves (back, forward,
@@ -1890,6 +1896,14 @@ export function registerIpc(ctx: AppContext): () => void {
     },
     inspect: async req => {
       const t = tab().target
+      // Which page this element is about to be read on, before anything about
+      // the element — and before the read itself, so a bus-mirrored pane
+      // refuses rather than inspecting the wrong page for nothing
+      // (bug-measured-page-is-not-the-asked-page). Same sentences, same
+      // order, the headless inspect uses (cli/main.ts:945-953).
+      const st = t.httpStatus()
+      const { pre, refused } = whichPage(tab(), st)
+      if (refused !== null) return { refused }
       const answer = 'selector' in req ? await t.inspectSelector(req.selector) : await t.inspectAt(req.x, req.y)
       // The same three answers the headless surface has: an element, nothing
       // there, and a string the browser would not accept as a selector. The
@@ -1897,14 +1911,6 @@ export function registerIpc(ctx: AppContext): () => void {
       // say which page was asked, which is worth as much on a typo as on a hit.
       const report = answer === 'invalid-selector' ? null : answer
       const vp = t.getViewport()
-      // Which page this element was read on, before anything about the
-      // element. The same three sentences the headless inspect says
-      // (cli/main.ts:945-953) and in the same order — audit and lint have
-      // said them live since 0.60.0 and inspect was not carried across, so a
-      // live inspect of a route that redirects, or of a 404, described the
-      // page it landed on and never said it had landed anywhere.
-      const st = t.httpStatus()
-      const pre = whichPage(tab(), st)
       // A point the screen does not have, in the same words as the headless
       // inspect: the viewport the point was read inside is this tab's, now.
       const offScreen = 'selector' in req ? null : pointOffScreenNote(req, vp)
@@ -1960,7 +1966,8 @@ export function registerIpc(ctx: AppContext): () => void {
       // it. Same order the headless path settled on: where the load landed,
       // then the status, then the contents.
       const st = t.httpStatus()
-      const pre = whichPage(tab(), st)
+      const { pre, refused } = whichPage(tab(), st)
+      if (refused !== null) return { refused }
       const held = await awaitContent(() => t.auditPage(LIVE_MEASURE_BUDGET_MS), isEmptyAuditReport)
       let report = held.report
       const notes: string[] = [...pre]
@@ -2018,7 +2025,8 @@ export function registerIpc(ctx: AppContext): () => void {
       // it. Same order the headless path settled on: where the load landed,
       // then the status, then the contents.
       const st = t.httpStatus()
-      const pre = whichPage(tab(), st)
+      const { pre, refused } = whichPage(tab(), st)
+      if (refused !== null) return { refused }
       const held = await awaitContent(() => t.lintPage(1 / (deviceScaleFactor * textScale), LIVE_MEASURE_BUDGET_MS), isEmptyLintReport)
       let report = held.report
       const notes: string[] = [...pre]
@@ -2071,7 +2079,8 @@ export function registerIpc(ctx: AppContext): () => void {
       // Which page this was read on, before anything about what it found —
       // same convention `audit`/`inspect`/`lint` already follow.
       const st = t.httpStatus()
-      const pre = whichPage(tab(), st)
+      const { pre, refused } = whichPage(tab(), st)
+      if (refused !== null) return { refused }
       // No empty-document grace and no motion recheck here, unlike
       // `audit`/`lint`: the only caller today (`flowRunner.ts#recordObservations`)
       // asks this exclusively after a step's own settle check has already

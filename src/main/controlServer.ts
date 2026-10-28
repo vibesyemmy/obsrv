@@ -191,7 +191,7 @@ export interface ControlDeps {
    * the readout rather than in it because the readout's own notes are about
    * the figures. It arrives even when the readout is null.
    */
-  inspect(req: InspectRequest): Promise<{ readout: InspectReadout | null; notes: string[] }>
+  inspect(req: InspectRequest): Promise<{ readout: InspectReadout | null; notes: string[] } | MeasureRefused>
   /**
    * How the last page ask ended, when the caller can say: a report the
    * checks refused is not a page that never answered, and the reader is
@@ -206,13 +206,13 @@ export interface ControlDeps {
    * did not answer, or answered a report the checks refused; `askOutcome`
    * says which.
    */
-  audit(req: AuditRequest): Promise<LiveAudit | null>
+  audit(req: AuditRequest): Promise<LiveAudit | MeasureRefused | null>
   /**
    * The lint on the page in front: sub-pixel edges, light text, contrast
    * on the panel in force, image scale, judged on the screen in force as
    * `obsrv lint` judges a headless load. Null when the page did not answer.
    */
-  lint(req: LintRequest): Promise<LiveLint | null>
+  lint(req: LintRequest): Promise<LiveLint | MeasureRefused | null>
   /**
    * The exact-text reader on the page in front, for a flow step's stated
    * observations (`board/feat-flow-observations.md`): per stated text, how
@@ -220,7 +220,7 @@ export interface ControlDeps {
    * exist but are not rendered. Null when the page did not answer;
    * `askOutcome` says which, same as `audit`/`lint`.
    */
-  observeText(req: ObserveRequest): Promise<LiveObserve | null>
+  observeText(req: ObserveRequest): Promise<LiveObserve | MeasureRefused | null>
   /** The strip as the user sees it, and the cap. */
   tabs(): { tabs: ControlTab[]; maxTabs: number }
   /** Opens a tab and brings it to the front; null at the cap. */
@@ -231,6 +231,17 @@ export interface ControlDeps {
   closeTab(id: string): { ok: true; activeId: string } | { ok: false; error: string }
   /** An authenticated command arrived — nudge the toolbar's AGENT indicator. */
   activity(): void
+}
+
+/**
+ * A live measurement declined to answer because the figures would be of a
+ * page nobody asked for, and Obsrv's own sync bus is why
+ * (bug-measured-page-is-not-the-asked-page): a caller who asked for one
+ * address gets no figures at all rather than figures of another with no way
+ * to tell. `refused` names both addresses, same words as the note it replaces.
+ */
+export interface MeasureRefused {
+  refused: string
 }
 
 /** What a live audit answers: the screen it was measured on, then `obsrv audit`'s own result. */
@@ -586,7 +597,9 @@ export class ControlServer {
       case 'inspect': {
         const req = parseInspectRequest(payload)
         if (typeof req === 'string') return reply(400, { error: req })
-        const { readout, notes } = await this.deps.inspect(req)
+        const result = await this.deps.inspect(req)
+        if ('refused' in result) return reply(200, { ok: true, refused: result.refused })
+        const { readout, notes } = result
         return reply(200, { ok: true, found: readout !== null, readout, ...(notes.length > 0 ? { notes } : {}) })
       }
 
