@@ -4,6 +4,7 @@ column: backlog
 kind: bug
 release: later
 criterion: 
+waiting: "event: uninstallRemoveEndToEnd.test.ts failing inside a full-suite run again, with the exact pool/worker state captured"
 order: 117
 ---
 

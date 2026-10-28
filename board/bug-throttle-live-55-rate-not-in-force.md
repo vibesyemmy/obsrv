@@ -2,6 +2,7 @@
 title: "The live throttle menu says a CPU rate is in force while the same work runs at 1.0x, once as a final red on main"
 column: backlog
 kind: bug
+waiting: "event: throttle-live.spec.ts failing as a final red (not rescued by retry) on either CPU-rate assertion, read against the [throttle-live] line"
 order: 122
 ---
 

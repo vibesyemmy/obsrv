@@ -2,6 +2,7 @@
 title: "Three tests on main in 14 hours waited for a frame that did not arrive; each was rescued by its retry, and none printed whether the target was painting"
 column: backlog
 kind: bug
+waiting: "event: target-source:106, visibility:66, orientation:114 or rendering:90/:189 failing again, now readable against the painting/lastSeq print added 2026-10-28"
 order: 123
 ---
 

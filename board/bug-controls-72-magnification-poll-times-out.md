@@ -3,6 +3,7 @@ title: "`controls.spec:72`: the backing width never halved, once, and the retry 
 column: backlog
 kind: bug
 release: later
+waiting: "event: tests/e2e/controls.spec.ts:83 (\"a bigger host diagonal means a smaller magnification\") failing its poll again"
 order: 93
 ---
 

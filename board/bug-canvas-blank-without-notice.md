@@ -3,6 +3,7 @@ title: "The target canvas can stay blank in CI: once with the app's no-frames no
 column: backlog
 kind: bug
 release: disclose
+waiting: "event: panes.spec \"the target canvas shows the page, not a blank\" failing again, read against the painting/lastSeq print (#267)"
 order: 72
 ---
 

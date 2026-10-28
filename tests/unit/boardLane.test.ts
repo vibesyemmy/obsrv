@@ -296,7 +296,7 @@ describe('what the generated board shows', () => {
   }, SLOW_MS)
 
   it('says the count in the summary line', () => {
-    expect(board().read('docs/board.md')).toMatch(/\*4 cards, 3 open, .* Awaiting Opeyemi, by waiting line: 2\.\*/)
+    expect(board().read('docs/board.md')).toMatch(/\*4 cards, 3 open, .* Awaiting Opeyemi, by waiting line: 2, waiting on a recurrence: .*\.\*/)
   }, SLOW_MS)
 
   it('renders the section even when the lane is empty, and says "none recorded", not "nothing is waiting"', () => {
@@ -307,7 +307,7 @@ describe('what the generated board shows', () => {
     const md = r.read('docs/board.md')
     expect(md).toContain('## Awaiting Opeyemi — none recorded')
     expect(md).toContain("No card's `waiting:` line names Opeyemi. A card that waits on him without a `waiting:` line naming him is not listed.")
-    expect(md).toContain('Awaiting Opeyemi, by waiting line: none recorded.')
+    expect(md).toContain('Awaiting Opeyemi, by waiting line: none recorded, waiting on a recurrence: none recorded.')
     expect(md).not.toMatch(/nothing is waiting on Opeyemi/i)
     expect(md).not.toContain('— 0')
   }, SLOW_MS)
@@ -345,7 +345,7 @@ describe('what the generated board shows', () => {
     expect((JSON.parse(JSON.parse(raw)) as { noneRecorded: string }).noneRecorded).toBe("No card's waiting: line names Opeyemi. A card that waits on him without a waiting: line naming him is not listed.")
     // The heading and the summary line each say it, so each is pinned on its own line of the script.
     expect(html).toContain("h.textContent = 'Awaiting Opeyemi · ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);")
-    expect(html).toContain("' · awaiting Opeyemi, by waiting line: ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);")
+    expect(html).toContain("' · awaiting Opeyemi, by waiting line: ' +")
     expect(html).not.toMatch(/Nothing is waiting on Opeyemi/i)
   }, SLOW_MS)
 

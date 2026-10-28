@@ -5,6 +5,7 @@ kind: bug
 release: blocks
 owner: "Henry"
 criterion: B5
+waiting: "event: vision.spec.ts:114 (or :47) failing again — reading acked/lastSeq/ready at the bad pixel is named but not yet wired in"
 order: 84
 ---
 
