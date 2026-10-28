@@ -24,6 +24,14 @@ also carries the constraint that decides most of them — on the MCP surface,
 
 ## Next release — *unreleased*
 
+**The `orientation` entry below has shipped — this section heading has not been updated to say so.**
+`main`'s current code (`REMOVED_FLAGS` in `src/cli/args.ts`, `additionalProperties: false` on every
+MCP input, `setRotation` on control) is an ancestor of `v0.64.0` (published 2026-10-26), confirmed by
+`git merge-base --is-ancestor`. The skill and README are already updated to say the input was
+removed. **Whether the other entries below this heading shipped with it is not checked here** — this
+correction covers only the orientation entry, named because it is what [the board's Doing
+column](../board/chore-remove-orientation-flag.md) pointed at.
+
 ### The `orientation` input is removed from the CLI, MCP and control — and so is the `orientation` output
 
 **Decided by Opeyemi 2026-10-04** (*"Remove it in the next release"*, `#3363`), closing the deprecation that
