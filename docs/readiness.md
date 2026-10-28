@@ -18,21 +18,30 @@ C1-C5, D1-D3, E1-E2.
 
 ## A. A stranger can install it and get an answer
 
-**A1. The app is signed and notarised.** Today every DMG says "Obsrv is
-damaged and can't be opened" on first launch and the release notes carry an
-`xattr` command. `electron-builder.yml` has `hardenedRuntime: true` and
-`notarize: false`; the wiring waits on `chore/signing`. The blocker is a
-**Developer ID Application** certificate — the one in `~/Documents/obsrv-signing`
-is an Apple Distribution certificate for Voicify Limited, which is the wrong
-type for direct distribution.
+**A1. The app is signed and notarised.** The CI secrets landed 2026-10-27
+(`CSC_LINK`, the Apple API key, `SIGNING_IDENTITY`), and the signing pipeline's
+own bugs were found and fixed the same day (`#633`, `#635`). CI's own identity
+assertion — `codesign` authority equals `SIGNING_IDENTITY`, `spctl` says
+Notarized Developer ID, `xcrun stapler validate` passes per DMG — has now run
+on three published releases (`0.64.1`–`0.64.3`) and passed each time, or those
+releases would not exist.
 *Check:* download the DMG on a Mac that has never run Obsrv, open it, and
-reach the window without a terminal. **Status: not met.**
+reach the window without a terminal. **Status: engineering complete and
+CI-verified on three real releases, 2026-10-27; the literal stranger's-Mac
+download-and-open has not been re-run on a signed build — not yet met by the
+letter of this check. See [`board/a1.md`](../board/a1.md).**
 
-**A2. A user on an old version finds out.** The updater checks GitHub once a
-day and offers the release page; it never installs. Two releases shipped
-today. Someone on 0.57.0 has no way to know.
+**A2. A user on an old version finds out.** `#637` (merged `0.64.3`,
+2026-10-27) wraps `electron-updater`: once a daily check says `available`, it
+downloads in the background and offers "Restart to update" — no page to
+open by hand. `v0.64.3` is the first release carrying the `latest-mac.yml`
+feed and `.zip`/`.blockmap` pairs the update needs, confirmed on the real
+GitHub release. The real download/install round trip has no e2e coverage
+(out of reach for a network-free suite); what's covered is the renderer and
+IPC wiring down to `quitAndInstall`.
 *Check:* on a machine running version *n-2*, see the app say so and reach the
-new version without leaving it. **Status: not met.**
+new version without leaving it. **Status: shipped 2026-10-27, not yet run
+end-to-end on a real n-2 install — see [`board/a2.md`](../board/a2.md).**
 
 **A3. First run is survivable on each surface, on a cold machine.** The one
 never driven: `npm i -g getobsrv && obsrv snap example.com` on a machine with
