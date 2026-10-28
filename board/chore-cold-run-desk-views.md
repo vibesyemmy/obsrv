@@ -1,7 +1,6 @@
 ---
 title: "Two first-run views only a desk can show: a browser-downloaded DMG, and an MCP call launching the app"
-column: backlog
-waiting: "Opeyemi: run the LAUNCH half of view 2 yourself (Obsrv quit, then an obsrv_snap from a fresh session), or allow it on a disposable profile; an agent session reaching for your real profile stays refused"
+column: done
 kind: chore
 criterion: A3
 order: 81
@@ -142,4 +141,44 @@ exist.
 appears on a launch, and whether a launch takes focus. It needs Opeyemi to quit Obsrv first, and either run the
 call themselves or allow it in the Resolver session. The six `Electron Helper … XPC error` lines on a desk CLI
 run are still unexamined.
+
+## VIEW 2, THE LAUNCH HALF, RUN 2026-10-28 — on Opeyemi's own desk, on the dev lane's disposable profile
+
+**Opeyemi's choice, offered directly:** run it himself, or allow it on a disposable profile with an agent
+session driving it. He chose the latter. The real, running `Obsrv.app` (pid 37658, his actual session) was
+never touched — pointed `npm run lane` at this checkout instead (`scripts/lane.js --no-app`: points and builds,
+launches nothing), confirmed with `ps` that nothing was running on `~/.obsrv-dev/profile` first, so the
+launch below is a genuine first boot, not a relaunch of something already up.
+
+**The call, and why it is a real MCP call rather than a hand-launch.** `src/mcp/launch.ts:116` —
+`resolveDefaultTarget()` branches to `resolveDevTarget()` when `OBSRV_DEV=1`, which spawns *this checkout's*
+build with `--user-data-dir=~/.obsrv-dev/profile`, never `/Applications/Obsrv.app`. So: spawned
+`bin/obsrv-mcp.js` with `OBSRV_DEV=1` (no `OBSRV_CONTROL_FILE`, no pre-launch — unlike `mcp-live.spec.ts`,
+which always launches first and points the server at an already-running app), connected an MCP client over
+stdio with the SDK (`@modelcontextprotocol/sdk`), and called `obsrv_snap({ url: "https://example.com" })`
+with Obsrv not running on that profile — exactly the shape this card asks for, just answered by a session
+Opeyemi explicitly authorised for it rather than left unobserved.
+
+**What the reply said:** `launched: true`, `mode: "live"`, `navigated: true`, `settled: true`, `warnings: []`,
+no `isError`, 3.8 s end to end. A capture came back too (inlined PNG).
+
+**Consent bar: none.** The call succeeded immediately as a live launch with no decline and no block.
+`launchApp` (`src/mcp/launch.ts:96`) force-sets `OBSRV_AGENT_CONTROL=1` on every agent-initiated launch, and a
+fresh profile has no stored preference to override it — so there is nothing to click. This matches, and now
+extends to an actual launch, what Resolver already found 2026-10-12 driving an already-running app: "no
+consent bar is visible."
+
+**Focus: yes, the launch takes it.** `lsappinfo front` / `osascript ... frontmost` read **`Electron`**
+immediately after the call — not `Obsrv`, which is what the *installed, packaged* app would report; the dev
+lane runs the raw `node_modules/electron` binary unpackaged, so `Electron` frontmost is unambiguously *this*
+launch, not the real app sitting behind it. Stopped cleanly afterward (`devLane.stopApp`, confirmed by `ps`
+and by focus returning); the real `Obsrv.app`'s 8 processes were unaffected throughout, checked before and
+after as the card's own rule asks.
+
+**Still not examined, named rather than assumed:** the six `Electron Helper … XPC error for connection
+com.apple.backupd.sandbox.xpc` lines — `launchApp` spawns with `stdio: 'ignore'`, so this method cannot see
+them either; a desk run that captures the launched process's own stderr would still be needed for that one.
+
+**View 2 is closed except for that one XPC question.** Both things the original card asked for — a consent
+bar, and whether a launch takes focus — now have a direct, desk-run answer: no, and yes.
 
