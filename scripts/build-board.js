@@ -612,8 +612,11 @@ function renderHtml(stampText) {
   .close { position: sticky; bottom: 0; display: block; width: 100%; padding: 11px; border: 0; border-top: 1px solid var(--line); background: var(--panel); color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; border-radius: 0 0 12px 12px; }
   .empty { color: var(--dim); font-style: italic; font-size: 12px; }
   .lane { background: var(--panel); border: 1px solid var(--doing); border-radius: 10px; padding: 12px; margin: 0 0 14px; }
-  .lane h2 { font-size: 13px; margin: 0 0 2px; text-transform: uppercase; letter-spacing: .06em; color: var(--doing); }
-  .lane .blurb { margin-bottom: 8px; }
+  .lane summary { cursor: pointer; }
+  .lane summary::marker { color: var(--doing); }
+  .lane[open] summary { margin-bottom: 2px; }
+  .lane h2 { font-size: 13px; margin: 0; display: inline; text-transform: uppercase; letter-spacing: .06em; color: var(--doing); }
+  .lane .blurb { margin: 6px 0 8px; }
   .lane ul { list-style: none; margin: 0; padding: 0; }
   .lane li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 6px 4px; border-top: 1px solid var(--line); cursor: pointer; }
   .lane li:first-child { border-top: 0; }
@@ -626,8 +629,8 @@ ${bodyOpen}<div class="wrap">
   <h1>The Obsrv board</h1>
   <p class="sub" id="sub"></p>
   <p class="stamp" id="stamp"></p>
-  <section class="lane" id="lane"></section>
-  <section class="lane" id="recurrenceLane"></section>
+  <details class="lane" id="lane"></details>
+  <details class="lane" id="recurrenceLane"></details>
   <div class="cols" id="cols"></div>
 </div>
 <dialog id="dlg">
@@ -716,12 +719,16 @@ for (const col of DATA.columns) {
 (function () {
   const lane = document.getElementById('lane');
   // Cleared first: paint() runs again on every repaint, and an uncleared lane
-  // stacks a second copy under the first.
+  // stacks a second copy under the first. The open/closed state is a
+  // property of the details element itself, not a child, so clearing
+  // children this way leaves whatever the reader toggled alone.
   lane.textContent = '';
+  const summary = document.createElement('summary');
   const h = document.createElement('h2'); h.textContent = 'Awaiting Opeyemi · ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);
+  summary.append(h);
   const b = document.createElement('p'); b.className = 'blurb';
   b.textContent = 'Cards whose waiting line names him, in any column but Done. Derived from that line, not a column; the pull request that acts on his answer deletes it. Oldest first.';
-  lane.append(h, b);
+  lane.append(summary, b);
   if (DATA.lane.length === 0) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = DATA.noneRecorded; lane.append(e); }
   else {
   const ul = document.createElement('ul');
@@ -749,10 +756,12 @@ for (const col of DATA.columns) {
 (function () {
   const lane = document.getElementById('recurrenceLane');
   lane.textContent = '';
+  const summary = document.createElement('summary');
   const h = document.createElement('h2'); h.textContent = 'Waiting on a recurrence · ' + (DATA.recurrenceLane.length === 0 ? 'none recorded' : DATA.recurrenceLane.length);
+  summary.append(h);
   const b = document.createElement('p'); b.className = 'blurb';
   b.textContent = "Cards whose waiting line names event, in any column but Done — a specific CI failure happening again. Still real, already-diagnosed work; nothing left to do until it fires. Oldest first.";
-  lane.append(h, b);
+  lane.append(summary, b);
   if (DATA.recurrenceLane.length === 0) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = "No card's waiting: line names event."; lane.append(e); }
   else {
   const ul = document.createElement('ul');
