@@ -302,6 +302,32 @@ const NOT_LISTED = 'A card that waits on him without a `waiting:` line naming hi
 const noneRecorded = "No card's `waiting:` line names Opeyemi."
 const sinceText = since => (since === null ? 'age unknown (no git history for this line here)' : `since ${utc(since)}`)
 
+/**
+ * The Waiting on a recurrence lane: every card that is not Done and whose
+ * `waiting:` line names `event` — the existing `chore-waiting-field`
+ * vocabulary for "what nobody can force" — in whatever column it sits.
+ *
+ * Same derived-lane shape as Awaiting Opeyemi, for the opposite reason: most
+ * of this board's open bugs are recurrence-waiters (a CI flake with nothing
+ * left to do until it fails again), and reading the Backlog column as "N
+ * things to pick up" when most of N cannot be worked yet is the thing this
+ * lane exists to stop — by saying so, not by deleting the cards that hold
+ * real, already-diagnosed evidence a future sighting still needs.
+ */
+const waitsOnEvent = c => c.column !== 'done' && waitingOn(c).toLowerCase() === 'event'
+const recurrenceLane = cards
+  .filter(waitsOnEvent)
+  .map(c => ({ c, since: waitingSince(c) }))
+  .sort((a, b) => (a.since ?? Infinity) - (b.since ?? Infinity) || (a.c.order || 0) - (b.c.order || 0) || a.c.id.localeCompare(b.c.id))
+
+// `--recurrences` prints just this lane and writes nothing, the same
+// contract `--lane` has for Opeyemi's.
+if (process.argv.includes('--recurrences')) {
+  console.log(recurrenceLane.length === 0 ? 'Waiting on a recurrence: none recorded' : `Waiting on a recurrence: ${recurrenceLane.length}`)
+  for (const { c, since } of recurrenceLane) console.log(`- ${c.id} [${colName(c.column)}] ${askOf(c)} (${sinceText(since)})`)
+  process.exit(0)
+}
+
 // `--lane` prints just this lane and writes nothing, for a tool to read
 // (`npm run status` can quote it) and for a person who wants the answer to one question.
 if (process.argv.includes('--lane')) {
@@ -335,7 +361,10 @@ const doingSummary =
 const out = []
 out.push('# The Obsrv board')
 out.push('')
-out.push(`*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed. ${doingSummary}. Awaiting Opeyemi, by waiting line: ${lane.length === 0 ? 'none recorded' : lane.length}.*`)
+out.push(
+  `*${cards.length} cards, ${open.length} open, ${unclaimed} of those unclaimed. ${doingSummary}. Awaiting Opeyemi, by waiting line: ` +
+    `${lane.length === 0 ? 'none recorded' : lane.length}, waiting on a recurrence: ${recurrenceLane.length === 0 ? 'none recorded' : recurrenceLane.length}.*`,
+)
 out.push('')
 out.push('**This file is generated. The board is [`board/`](../board), one file per')
 out.push('card — edit those.** `npm run board` regenerates this locally, and the')
@@ -403,6 +432,21 @@ if (mentionsHim.length > 0) {
   out.push('')
   out.push(`*${mentionsHim.length} more \`waiting:\` line${mentionsHim.length === 1 ? '' : 's'} mention${mentionsHim.length === 1 ? 's' : ''} him and ${mentionsHim.length === 1 ? 'is' : 'are'} not listed, because ${mentionsHim.length === 1 ? 'it does' : 'they do'} not start with his name: ${mentionsHim.map(c => `[\`${esc(c.id)}\`](../board/${esc(c.id)}.md)`).join(', ')}.*`)
 }
+out.push('')
+
+// Same reasoning as the lane above, the opposite direction: most of this board's open
+// bugs wait on an event nobody can force, and a Backlog that does not say so reads as
+// work to pick up rather than evidence parked until a CI failure happens again.
+out.push('---')
+out.push('')
+out.push(`## Waiting on a recurrence — ${recurrenceLane.length === 0 ? 'none recorded' : recurrenceLane.length}`)
+out.push('')
+out.push('*Cards whose `waiting:` line names `event`, in any column but Done — a specific CI failure happening')
+out.push('again, which nobody can force. Derived from that line, not a column; still real, already-diagnosed')
+out.push('work, just with nothing left to do until it fires. Oldest first.*')
+out.push('')
+if (recurrenceLane.length === 0) out.push("*No card's `waiting:` line names `event`.*")
+for (const { c, since } of recurrenceLane) out.push(`- [\`${esc(c.id)}\`](../board/${esc(c.id)}.md) · ${colName(c.column)} · ${esc(askOf(c))} · ${sinceText(since)}`)
 out.push('')
 
 for (const col of COLUMNS) {
@@ -480,7 +524,21 @@ function boardData(stampText) {
   // JSON, so a lane built only into the HTML would vanish on the first repaint.
   const mentionData = mentionsHim.map(c => c.id)
   const laneData = lane.map(({ c, since }) => ({ id: c.id, title: c.title, column: c.column, columnName: colName(c.column), ask: askOf(c), waitingSince: since }))
-  return JSON.stringify({ columns: data, lane: laneData, mentions: mentionData, noneRecorded: noneRecorded.replace(/`/g, '') + ' ' + NOT_LISTED.replace(/`/g, ''), open: open.length, unclaimed, total: cards.length, doingSummary, stamp: stampText, auto, autoRef })
+  const recurrenceLaneData = recurrenceLane.map(({ c, since }) => ({ id: c.id, title: c.title, column: c.column, columnName: colName(c.column), ask: askOf(c), waitingSince: since }))
+  return JSON.stringify({
+    columns: data,
+    lane: laneData,
+    mentions: mentionData,
+    noneRecorded: noneRecorded.replace(/`/g, '') + ' ' + NOT_LISTED.replace(/`/g, ''),
+    recurrenceLane: recurrenceLaneData,
+    open: open.length,
+    unclaimed,
+    total: cards.length,
+    doingSummary,
+    stamp: stampText,
+    auto,
+    autoRef,
+  })
 }
 
 function renderHtml(stampText) {
@@ -569,6 +627,7 @@ ${bodyOpen}<div class="wrap">
   <p class="sub" id="sub"></p>
   <p class="stamp" id="stamp"></p>
   <section class="lane" id="lane"></section>
+  <section class="lane" id="recurrenceLane"></section>
   <div class="cols" id="cols"></div>
 </div>
 <dialog id="dlg">
@@ -583,9 +642,23 @@ const COLOR = { next: 'var(--next)', doing: 'var(--doing)', review: 'var(--revie
 // server (scripts/board-serve.js) calls when main moves. A reload would lose
 // the reader's scroll and close an open card, and a page that jumps while
 // being read is its own kind of wrong answer.
+// How long ago a wait was set, at the moment the page is read: the page is
+// built once and read for hours, so a "3 h ago" baked in at build time would
+// be the stale value this exists to expose. Top-level, not inside paint():
+// open_() (the card-detail dialog) calls it too, and open_() is declared
+// outside paint()'s scope — a card whose waiting: line has a real committed
+// age threw ReferenceError: ago is not defined the moment its dialog opened,
+// until this moved. The existing lane tests never caught it because their
+// fixtures never gave a card a real, committed waitingSince — only a repo
+// with real git history reaches the branch that calls ago() from open_().
+const ago = ms => {
+  const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  return min < 60 ? min + ' min ago' : min < 2880 ? Math.round(min / 60) + ' h ago' : Math.round(min / 1440) + ' d ago';
+};
 function paint(DATA) {
 document.getElementById('sub').textContent =
-  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary + ' · awaiting Opeyemi, by waiting line: ' + (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length);
+  DATA.total + ' cards · ' + DATA.open + ' open · ' + DATA.unclaimed + ' unclaimed · ' + DATA.doingSummary + ' · awaiting Opeyemi, by waiting line: ' +
+  (DATA.lane.length === 0 ? 'none recorded' : DATA.lane.length) + ' · waiting on a recurrence: ' + (DATA.recurrenceLane.length === 0 ? 'none recorded' : DATA.recurrenceLane.length);
 const st = document.getElementById('stamp');
 if (st && DATA.stamp) {
   const where = '<b>' + DATA.stamp.replace(/[<>&]/g, '') + '</b>';
@@ -596,13 +669,6 @@ if (st && DATA.stamp) {
     ? 'Built from ' + where + ' and rebuilt on every push to main. The cards in <code>board/</code> are the source.'
     : 'Snapshot of ' + where + ' — this page does not update itself. The cards in <code>board/</code> are the source; if they disagree, the repo is right.';
 } else if (st) { st.remove(); }
-// How long ago a wait was set, at the moment the page is read: the page is
-// built once and read for hours, so a "3 h ago" baked in at build time would
-// be the stale value this exists to expose.
-const ago = ms => {
-  const min = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  return min < 60 ? min + ' min ago' : min < 2880 ? Math.round(min / 60) + ' h ago' : Math.round(min / 1440) + ' d ago';
-};
 const cols = document.getElementById('cols');
 cols.textContent = '';
 const byId = {};
@@ -675,6 +741,32 @@ for (const col of DATA.columns) {
     const m = document.createElement('p'); m.className = 'blurb';
     m.textContent = DATA.mentions.length + ' more waiting line' + (DATA.mentions.length === 1 ? ' mentions' : 's mention') + ' him and ' + (DATA.mentions.length === 1 ? 'is' : 'are') + ' not listed, because ' + (DATA.mentions.length === 1 ? 'it does' : 'they do') + ' not start with his name: ' + DATA.mentions.join(', ') + '.';
     lane.append(m);
+  }
+})();
+// Waiting on a recurrence: same shape as the Opeyemi lane above, for cards
+// whose waiting line names event instead of him — a CI failure happening
+// again, which nobody can force. Most of this board's open bugs are these.
+(function () {
+  const lane = document.getElementById('recurrenceLane');
+  lane.textContent = '';
+  const h = document.createElement('h2'); h.textContent = 'Waiting on a recurrence · ' + (DATA.recurrenceLane.length === 0 ? 'none recorded' : DATA.recurrenceLane.length);
+  const b = document.createElement('p'); b.className = 'blurb';
+  b.textContent = "Cards whose waiting line names event, in any column but Done — a specific CI failure happening again. Still real, already-diagnosed work; nothing left to do until it fires. Oldest first.";
+  lane.append(h, b);
+  if (DATA.recurrenceLane.length === 0) { const e = document.createElement('p'); e.className = 'empty'; e.textContent = "No card's waiting: line names event."; lane.append(e); }
+  else {
+  const ul = document.createElement('ul');
+  for (const x of DATA.recurrenceLane) {
+    const li = document.createElement('li');
+    const ask = document.createElement('span'); ask.className = 'ask'; ask.textContent = x.ask;
+    const id = document.createElement('span'); id.className = 'id'; id.textContent = x.id + ' · ' + x.columnName;
+    const age = document.createElement('span'); age.className = 'age' + (x.waitingSince ? '' : ' unknown');
+    age.textContent = x.waitingSince ? 'set ' + ago(x.waitingSince) : 'age unknown';
+    li.append(ask, id, age);
+    li.addEventListener('click', () => { const hit = byId[x.id]; if (hit) open_(hit.c, hit.col); });
+    ul.append(li);
+  }
+  lane.append(ul);
   }
 })();
 }

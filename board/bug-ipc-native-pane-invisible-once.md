@@ -4,6 +4,7 @@ column: backlog
 owner: "Dogu"
 kind: bug
 release: later
+waiting: "event: ipc.spec.ts:31/:134/:173 failing together again, to read against what the macOS runner's window server was doing"
 order: 60
 ---
 

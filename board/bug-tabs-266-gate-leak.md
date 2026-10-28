@@ -4,6 +4,7 @@ column: backlog
 kind: bug
 release: later
 criterion: B5
+waiting: "event: tabs.spec \"entering an image-mode tab stops delivery\" failing again, with the frame record's seqs against lastSeq()"
 order: 82
 ---
 

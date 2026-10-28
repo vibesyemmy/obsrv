@@ -3,6 +3,7 @@ title: "`controls.spec:85`: `locator.blur` times out on a resolved input, and tw
 column: backlog
 kind: bug
 release: later
+waiting: "event: controls.spec:85 locator.blur timing out again, read against the main-process ping's timestamped window (#229)"
 order: 50
 ---
 
