@@ -1,8 +1,7 @@
 ---
 title: "Remove the deprecated `orientation` input once a breaking release is scheduled"
-column: doing
+column: done
 owner: "Henry"
-waiting: ""
 kind: chore
 criterion: C2
 order: 75
@@ -139,3 +138,24 @@ for the cases a text scan gets wrong and a non-vacuity check so an unmatched pat
 **It immediately found a fourth site nobody had named**, `devMcp.test.ts`, pre-existing on `main`: the
 dev-lane proxy, which lists tools and never drives a live one, so it was not firing — fenced anyway, because
 a uniform invariant is worth more than an exemption (measured: 13 of 13 either way).
+
+## DONE — found already shipped, 2026-10-28
+
+**The board said "Doing, moving" for three weeks after the work finished.** `7f28716e` (the last commit
+on this card, 2026-10-07) is an ancestor of `v0.64.0` — published 2026-10-26, confirmed with
+`git merge-base --is-ancestor` and `npm view getobsrv@0.64.0 version`. Checked against the card's own
+remaining items, not assumed:
+
+- `--orientation` on the CLI refuses with a message naming `--rotate` (`REMOVED_FLAGS`, `src/cli/args.ts:339`).
+- Every MCP input schema is `additionalProperties: false` and no tool's shape lists `orientation`
+  (`src/mcp/server.ts`).
+- `obsrv_presets`' field is `rotation`; `obsrv_report`'s is `screenShape`; the MCP reply no longer carries
+  `orientation` beside `rotated`.
+- Control has `setRotation`; `setOrientation` is still accepted, deliberately, per Opeyemi's shape.
+- Skill (`skills/obsrv-screens/SKILL.md:124-127`) and README (`README.md:184-187`) both already say the
+  input "was removed in the breaking release."
+- `docs/breaking-changes.md`'s own entry still said *"Next release — unreleased"* — corrected there too,
+  separately, because a register that outlives its own release is the exact failure this file exists to
+  prevent.
+
+Nothing here is new work. The card just never got moved once the last commit landed.
