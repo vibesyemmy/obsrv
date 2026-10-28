@@ -837,6 +837,42 @@ test('no history move, and a page that redirects itself, draw no history sentenc
   expect(redirected, `said: ${redirected}`).not.toMatch(HISTORY_SENTENCE)
 })
 
+/**
+ * bug-measured-page-is-not-the-asked-page: when the sync bus, not the page
+ * itself, lands the target somewhere the caller never asked for, a live
+ * measurement now refuses rather than answering for the wrong page with a
+ * note attached. The native pane is loaded on its own (bypassing `navigate`,
+ * which would drive both panes) so the bus's mirror is the only thing that
+ * moves the target — deterministic, unlike the real race this card was
+ * filed on.
+ */
+const loadNativeOnly = (url: string): Promise<void> =>
+  app.evaluate(async (_e, u: string) => {
+    await (globalThis as any).__obsrv.native.load(u)
+  }, url)
+
+test('a live measurement refuses, through the real MCP tools, when the bus carried the target elsewhere', async () => {
+  const asked = fixture('audit.html')
+  const measured = fixture('hairline.html')
+  expect((await call('obsrv_drive', { url: asked })).isError).toBeFalsy()
+  await loadNativeOnly(measured)
+  await expect.poll(targetUrl, { timeout: 10_000 }).toBe(measured)
+
+  for (const [tool, args] of [
+    ['obsrv_inspect', { mode: 'live', selector: 'body' }],
+    ['obsrv_audit', { mode: 'live', groupsOnly: true }],
+    ['obsrv_lint', { mode: 'live', groupsOnly: true }],
+  ] as const) {
+    const r = await call(tool, args)
+    expect(r.isError, `${tool} measured the wrong page instead of refusing: ${JSON.stringify(r.content).slice(0, 300)}`).toBe(true)
+    const text = (r.content as { type: string; text?: string }[])[0]?.text ?? ''
+    expect(text, `${tool} said: ${text}`).toContain(`the figures are of ${measured}, not of ${asked}`)
+    // The generic "app was closed or Agent control was toggled off" tail must not
+    // be attached to this refusal — it would misname why the call failed.
+    expect(text).not.toContain('toggled off')
+  }
+})
+
 test("after a Back, the navigate record's own sentences stop describing the page it left", async () => {
   const server: Server = createServer((req, res) => {
     const path = req.url ?? ''

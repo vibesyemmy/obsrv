@@ -67,3 +67,35 @@ and the retry passed in 260 ms. Read from the raw log. The sweep's 168 logs held
 is a new name in the same family, not a recount of the three. It waited for a frame, as `orientation:114` does. Same
 position as the others: nothing printed whether the target was painting, so the next sighting says *a frame did not
 arrive* and no more. The first piece of work (the `painting` / `lastSeq` print on failure) should cover it too.
+
+## FIRST PIECE OF WORK DONE 2026-10-28 — the print exists now; still waiting on a recurrence to read it
+
+**This card's own acceptance names two things: the print, and reading a recurrence against it.** Only the
+first is done. `panes.spec.ts`'s account (`#267`, `bug-canvas-blank-without-notice`) — "main sent frame N
+(delivery subscribed, session painting). lastSeq 0 or ready false means main never sent one; a high
+lastSeq means it did and nothing drew it" — is now a shared helper, `tests/e2e/helpers/framePaintState.ts`,
+and all three of this card's still-uninstrumented members print it on failure: `visibility.spec.ts` ("hiding
+the window stops the target rasterising, and showing it resumes"), `orientation.spec.ts` ("rotating a phone
+preset swaps the real raster, not just the store"), and `rendering.spec.ts` (both of its frame waits — "the
+target really rasterises at 1x" and "a 0.5px hairline does not scale with the raster"). `target-source.spec:106`
+already has its own, richer trace (`#240`) and was left alone rather than duplicated.
+
+**Verified the print itself works, not just that it compiles.** Each of the four files' happy path still
+passes (29 tests, unaffected — the new code only runs on failure). To check what it reads on a REAL failure
+rather than trust the wiring, forced one: in `orientation.spec.ts`, swapped the real frame predicate for one
+that can never match, re-ran, and read the thrown message twice —
+
+    no 2556x1179 paint within 10s. main sent frame 4 (delivery subscribed: true, session painting: true).
+    no 2556x1179 paint within 10s. main sent frame 6 (delivery subscribed: true, session painting: true).
+
+— a real, non-zero `lastSeq` with `painting: true`, which by the card's own key means *main sent frames and
+the renderer should have drawn one*. (This was a forced failure on a healthy app, not a real sighting — the
+reading above is what the instrument says in that controlled case, not a diagnosis of the family's actual
+cause.) Reverted the forced predicate immediately after reading it; the file is back to testing the real
+thing.
+
+**Still exactly where this card was:** no recurrence has fired through the new print yet, so "whose side
+went quiet" for `visibility:66`, `orientation:114` or `rendering:90`/`:189` remains unanswered. The card's
+own acceptance is explicit that reading a real sighting against the print is what closes it, and that is
+unchanged — this just means the next one will, where before it would have said only "a frame did not
+arrive" again.

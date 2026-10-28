@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, openSettings, rendererWindow } from './launch'
 import { choose } from './helpers/select'
+import { framePaintState } from './helpers/framePaintState'
 
 const FIXTURE = pathToFileURL(resolve(__dirname, '../fixtures/hairline.html')).href
 
@@ -123,22 +124,7 @@ test('the target canvas shows the page, not a blank', async () => {
     // closed app is one of the states this test can fail in. An exception here
     // would replace the failure and lose both the account and the original
     // message (Wren's read of #267).
-    let state = ''
-    try {
-      const sent = await app.evaluate(() => {
-        const g = globalThis as unknown as { __obsrv: { tabs: { frameSent(): { lastSeq: number; ready: boolean } }; session: { painting: boolean } } }
-        return { ...g.__obsrv.tabs.frameSent(), painting: g.__obsrv.session.painting }
-      })
-      state =
-        `main sent frame ${sent.lastSeq} (delivery subscribed: ${sent.ready}, session painting: ${sent.painting}). ` +
-        `lastSeq 0 or ready false means main never sent one; a high lastSeq with a blank canvas means it did ` +
-        // One bus, re-pointed across tabs by `setSource` with a single counter
-        // (`frameBus.ts:77`), so this count is NOT scoped to this tab: a
-        // non-zero value can predate a tab switch with nothing sent since.
-        `and nothing drew it — but the count is the bus's, not this tab's, so a non-zero value may predate a switch.`
-    } catch (e) {
-      state = `main's state could not be read: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`
-    }
+    const state = await framePaintState(app)
     let px = { white: -1, total: -1, distinct: -1 }
     try {
       px = await canvasPixels()

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { launchApp, rendererWindow } from './launch'
 import { DESK_STATE_REASON, hideEventsFire, skipWithoutHideEvents } from './helpers/deskState'
+import { framePaintState } from './helpers/framePaintState'
 
 /**
  * Nobody is looking at a hidden window. The active target rasterises at a
@@ -73,7 +74,13 @@ test('hiding the window stops the target rasterising, and showing it resumes', a
 
   await setShown(true)
   await expect.poll(painting).toBe(true)
-  expect(await paintsOver(700)).toBeGreaterThan(2)
+  // bug-target-no-frame-family: on a recurrence, whose side went quiet —
+  // main never resuming the bus, or the renderer not drawing what arrived.
+  try {
+    expect(await paintsOver(700)).toBeGreaterThan(2)
+  } catch (failure) {
+    throw new Error(`${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)} ${await framePaintState(app)}`)
+  }
 })
 
 test('minimising counts as hidden', async () => {
