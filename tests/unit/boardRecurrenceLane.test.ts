@@ -183,7 +183,7 @@ describe('what the generated board shows', () => {
 
   it('has a recurrence-lane element in the page, filled in by the script', () => {
     const html = board().read('docs/board.html')
-    expect(html).toContain('<section class="lane" id="recurrenceLane"></section>')
+    expect(html).toContain('<details class="lane" id="recurrenceLane"></details>')
     expect(html).toContain("'Waiting on a recurrence · '")
   }, SLOW_MS)
 

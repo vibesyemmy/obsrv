@@ -322,6 +322,9 @@ describe('board-serve in a browser', () => {
       expect(mention.lane.asks.length).toBe(2)
       expect(mention.lane.blurbs.filter(b => /1 more waiting line mentions him/.test(b))).toHaveLength(1)
 
+      // The lane is a <details>, collapsed by default (chore-waiting-field, decluttering the backlog) — its
+      // entries are not clickable until it is open, same as a reader would have to open it first.
+      await page.evaluate(() => { (document.getElementById('lane') as HTMLDetailsElement).open = true })
       // The entry opens the CURRENT card after several repaints (the id lookup is rebuilt per paint).
       await page.locator('#lane li', { hasText: 'second thing' }).click()
       expect(await page.evaluate(() => document.getElementById('dtitle')?.textContent)).toBe('second ask')
@@ -337,6 +340,43 @@ describe('board-serve in a browser', () => {
       const back = await until('an ask returns', () => snap(page), s => s.lane.asks.length === 1)
       expect(back.lane).toMatchObject({ sections: 1, headings: 1, empties: 0, asks: ['back again'] })
       expect(errors).toEqual([])
+    },
+    TEST_MS,
+  )
+
+  it(
+    'both lanes are collapsed by default and open on a click of their summary, same as the user asked',
+    async () => {
+      const f = fixture()
+      const { url } = await serve(f.clone)
+      const { page } = await onPage(url)
+      const ask = (title: string, column: string, waiting: string) => card(title, { column, waiting: JSON.stringify(waiting), owner: 'Idris' })
+      f.push({
+        'zz-opeyemi.md': ask('An Opeyemi ask', 'backlog', 'Opeyemi: pick a class'),
+        'zz-event.md': ask('A recurrence wait', 'backlog', 'event: a specific CI failure'),
+      })
+      await until('both lanes are painted', () => snap(page), s => s.lane.asks.length === 1)
+
+      const openState = () =>
+        page.evaluate(() => ({
+          lane: (document.getElementById('lane') as HTMLDetailsElement).open,
+          recurrenceLane: (document.getElementById('recurrenceLane') as HTMLDetailsElement).open,
+        }))
+      expect(await openState()).toEqual({ lane: false, recurrenceLane: false })
+
+      // The li is not clickable while its <details> is collapsed.
+      expect(await page.locator('#lane li', { hasText: 'pick a class' }).isVisible()).toBe(false)
+
+      await page.locator('#lane summary').click()
+      expect(await openState()).toEqual({ lane: true, recurrenceLane: false })
+      await page.locator('#lane li', { hasText: 'pick a class' }).click()
+      expect(await page.evaluate(() => document.getElementById('dtitle')?.textContent)).toBe('An Opeyemi ask')
+      await page.evaluate(() => (document.getElementById('dlg') as HTMLDialogElement).close())
+
+      await page.locator('#recurrenceLane summary').click()
+      expect(await openState()).toEqual({ lane: true, recurrenceLane: true })
+      await page.locator('#recurrenceLane li', { hasText: 'a specific CI failure' }).click()
+      expect(await page.evaluate(() => document.getElementById('dtitle')?.textContent)).toBe('A recurrence wait')
     },
     TEST_MS,
   )

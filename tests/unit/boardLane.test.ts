@@ -331,7 +331,7 @@ describe('what the generated board shows', () => {
 
   it('has a lane element in the page, filled in by the script', () => {
     const html = board().read('docs/board.html')
-    expect(html).toContain('<section class="lane" id="lane"></section>')
+    expect(html).toContain('<details class="lane" id="lane"></details>')
     expect(html).toContain("'Awaiting Opeyemi · '")
   }, SLOW_MS)
 
